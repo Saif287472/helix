@@ -1,22 +1,91 @@
 # Agent Workflow
 
-This repository is a privacy-focused LAN messenger. Treat transport, crypto,
-identity, trust, storage, and wipe behavior as security-sensitive.
+This repository is a privacy-focused two-product messenger monorepo.
+Treat transport, crypto, identity, trust, storage, and wipe behavior as
+security-sensitive across **both** products.
+
+## Repository Layout
+
+```
+apps/helix_local/    — Helix Local Flutter app (LAN-only, ephemeral)
+apps/helix_remote/   — Helix Remote Flutter app (internet, persistent)
+packages/            — Internal packages (all currently Local-classified)
+  helix_domain/      — Local domain contracts and ProductDescriptor
+  helix_protocol/    — LAN wire protocol
+  helix_crypto/      — Local crypto primitives
+  helix_transport/   — Local secure channel
+  helix_discovery/   — mDNS LAN discovery
+  helix_storage/     — Local secure storage adapters
+  helix_platform/    — Local platform integration (notifications, tray, foreground)
+  helix_groups/      — Session-only LAN lobby
+  helix_messaging/   — Ephemeral LAN messaging
+  helix_calls/       — LAN WebRTC call engine
+  helix_transfer/    — LAN file transfer
+  shared/            — EMPTY placeholder (shared primitives, Phase 4+)
+  remote/            — EMPTY placeholder (Remote packages, Phase 8+)
+tool/                — Architecture boundary checker
+scripts/             — verify.ps1 / verify.sh
+docs/                — ADRs, product contracts, architecture docs
+ownership-blast-radius.yaml — Package ownership and risk levels
+```
+
+## Product Boundary Rules (Phase 4)
+
+These rules are mechanically enforced by `tool/check_boundaries.dart` and
+`docs/architecture/module_boundaries.json`. Violations must not be suppressed.
+
+### Hard prohibitions
+
+- `apps/helix_local/**` must not import `packages/remote/**`
+- `apps/helix_remote/**` must not import `packages/local/**` (once renamed)
+- `packages/shared/**` must not import `packages/local/**` or `packages/remote/**`
+- No package may import `apps/helix_local/**` or `apps/helix_remote/**`
+
+### Current package classification
+
+All packages under `packages/` are **Local-classified** until explicitly
+extracted via the shared-code eligibility checklist (master plan section 3.3).
+
+`packages/shared/` and `packages/remote/` are empty boundary placeholders.
+Do not add code to them without following the extraction checklist.
+
+### Identifier isolation
+
+| Concern | Local value | Remote value |
+|---|---|---|
+| Android application ID | `com.helix.local` | `com.helix.remote` |
+| Kotlin namespace | `com.helix.local` | `com.helix.remote` |
+| Secure storage prefix | `helix_local_v1_` | `helix_remote_v1_` |
+| Method channel namespace | `com.helix.local/` | `com.helix.remote/` |
+| Android signing env vars | `HELIX_LOCAL_*` | `HELIX_REMOTE_*` |
+| Keystore filename | `helix_local.keystore` | `helix_remote.keystore` |
+
+If you add a new identifier (notification channel ID, URL scheme, database
+name, tray icon, GUID) it must be product-scoped. Never reuse a Local
+identifier in Remote or vice versa.
+
+### ProductDescriptor
+
+All product-specific runtime values are injected via `ProductDescriptor`
+(`LocalProductDescriptor` / `RemoteProductDescriptor` in `helix_domain`).
+Do not add new hard-coded product strings to package code. Add the value to
+the descriptor and inject it through the composition root.
 
 ## Required Flow
 
 1. Understand the task and identify affected features.
-2. Read the relevant roadmap, workflow doc, and contracts before editing.
-3. Make a short implementation plan for non-trivial work.
-4. Keep changes small and scoped to the requested stage.
-5. Run targeted checks while developing.
-6. Run the full verification pipeline before completion:
+2. Read `HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN.md` for the current phase.
+3. Read relevant ADRs in `docs/adr/` and workflow docs in `docs/workflows/`.
+4. Make a short implementation plan for non-trivial work.
+5. Keep changes small and scoped to the requested stage.
+6. Run targeted checks while developing.
+7. Run the full verification pipeline before completion:
 
    ```powershell
    .\scripts\verify.ps1
    ```
 
-7. Report changed files, verification results, risks, and unresolved issues.
+8. Report changed files, verification results, risks, and unresolved issues.
 
 ## Search Rules
 
@@ -24,6 +93,8 @@ identity, trust, storage, and wipe behavior as security-sensitive.
 - Do not scan `build/`, `.dart_tool/`, generated files, lockfiles, large assets,
   or unrelated modules.
 - Prefer the workflow docs in `docs/workflows/` before reading large UI files.
+- Check `ownership-blast-radius.yaml` to understand which packages are
+  high-risk before making changes.
 
 ## Forbidden Actions
 
@@ -42,6 +113,13 @@ identity, trust, storage, and wipe behavior as security-sensitive.
 - Never perform broad refactors unrelated to the current stage.
 - Never read, print, commit, or modify forbidden files listed in
   `docs/security/FORBIDDEN_FILES.md`.
+- Never add a default constructor that silently selects Local or Remote
+  infrastructure — inject via ProductDescriptor and composition root.
+- Never add a destructive method whose product scope is ambiguous.
+- Never move code into `packages/shared/` without passing the shared-code
+  eligibility checklist.
+- Never start Remote messaging, storage, calls, or group features before
+  Phases 4–7 are complete (see master plan section 11).
 
 ## Completion Report
 
