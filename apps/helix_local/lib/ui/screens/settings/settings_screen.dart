@@ -6,7 +6,6 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -364,22 +363,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       try {
-        final db = await ref.read(databaseProvider.future);
-        db.clearAll();
-        // Delete only keys scoped to this product's prefix, never all keys.
-        // An unscoped deleteAll() would also wipe any Helix Remote keys.
-        const storage = FlutterSecureStorage();
-        final prefix = ref.read(productDescriptorProvider).secureStoragePrefix;
-        final allKeys = await storage.readAll();
-        for (final key in allKeys.keys) {
-          if (key.startsWith(prefix)) {
-            await storage.delete(key: key);
+        final orchestrator =
+            await ref.read(panicWipeOrchestratorProvider.future);
+        final result = await orchestrator.execute();
+
+        if (result.succeeded) {
+          if (Platform.isAndroid) {
+            await SystemNavigator.pop();
+          } else {
+            exit(0);
           }
-        }
-        if (Platform.isAndroid) {
-          await SystemNavigator.pop();
         } else {
-          exit(0);
+          if (mounted) {
+            Navigator.of(context).pop(); // Dismiss loading dialog
+            showDialog<void>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Partial Wipe'),
+                content: Text(
+                  'Wipe completed with errors:\n\n${result.errors.join('\n')}',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+          }
         }
       } catch (e) {
         if (mounted) {

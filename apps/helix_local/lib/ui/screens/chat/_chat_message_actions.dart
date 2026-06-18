@@ -129,32 +129,6 @@ mixin _ChatMessageActionsMixin on _ChatScreenBase {
   }
 
   // ---------------------------------------------------------------------------
-  // Pin / Unpin
-  // ---------------------------------------------------------------------------
-
-  void _pinMessage(String messageId) {
-    final db = ref.read(databaseProvider).value;
-    if (db == null) return;
-    try {
-      db.pinMessage(widget.threadId, messageId);
-      _loadPinnedIds();
-    } on StateError catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    }
-  }
-
-  void _unpinMessage(String messageId) {
-    final db = ref.read(databaseProvider).value;
-    if (db == null) return;
-    db.unpinMessage(widget.threadId, messageId);
-    _loadPinnedIds();
-  }
-
-  // ---------------------------------------------------------------------------
   // Context menu
   // ---------------------------------------------------------------------------
 
@@ -162,8 +136,6 @@ mixin _ChatMessageActionsMixin on _ChatScreenBase {
     final isLocal = message.origin == MessageOrigin.local;
     final copyEnabled =
         ref.read(profileServiceProvider).profile?.copyEnabled ?? false;
-    final isPinned = _pinnedMessageIds.contains(message.messageId);
-    final canPin = !isPinned && _pinnedMessageIds.length < 5;
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -187,22 +159,6 @@ mixin _ChatMessageActionsMixin on _ChatScreenBase {
                 _showEmojiPicker(message);
               },
             ),
-            if (!message.isDeleted && !message.isSystem)
-              ListTile(
-                leading: Icon(
-                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                ),
-                title: Text(isPinned ? 'Unpin' : 'Pin'),
-                enabled: isPinned || canPin,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (isPinned) {
-                    _unpinMessage(message.messageId);
-                  } else {
-                    _pinMessage(message.messageId);
-                  }
-                },
-              ),
             if (isLocal && !message.isDeleted && !message.isFile)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),

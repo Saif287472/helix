@@ -24,7 +24,6 @@ import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/core/identity_phrase.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/app_providers.dart';
-import 'package:helix_local_storage/data/database.dart';
 import 'package:helix/providers/controllers/ephemeral_media_service.dart';
 import 'package:helix/ui/app_theme.dart';
 import 'package:helix/ui/widgets/status_badge.dart';
@@ -95,17 +94,12 @@ abstract class _ChatScreenBase extends ConsumerState<ChatScreen> {
 
   // Saved in initState so dispose() never touches ref after unmount.
   late final StateController<String?> _threadIdController;
-  HelixDatabase? _db;
 
   // Search
   bool _searchActive = false;
   String _searchQuery = '';
   List<int> _searchHitIndices = [];
   int _searchHitIndex = 0;
-
-  // Pinned messages
-  List<String> _pinnedMessageIds = [];
-  bool _pinnedRailCollapsed = false;
 
   /// Non-null while the user is composing a reply.
   ChatMessage? _replyTo;
@@ -142,11 +136,6 @@ abstract class _ChatScreenBase extends ConsumerState<ChatScreen> {
     _qualityTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (mounted) setState(() {});
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _db = ref.read(databaseProvider).value;
-      _loadDraft();
-      _loadPinnedIds();
-    });
   }
 
   @override
@@ -156,31 +145,11 @@ abstract class _ChatScreenBase extends ConsumerState<ChatScreen> {
     _typingDebounce?.cancel();
     _scrollController.removeListener(_handleScroll);
     _threadIdController.state = null;
-    _saveDraft();
     _textController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
-  }
-
-  void _loadDraft() {
-    if (_db == null || !mounted) return;
-    final draft = _db!.getDraft(widget.threadId);
-    if (draft.isNotEmpty) {
-      _textController.text = draft;
-      setState(() {});
-    }
-  }
-
-  void _saveDraft() {
-    _db?.saveDraft(widget.threadId, _textController.text);
-  }
-
-  void _loadPinnedIds() {
-    if (_db == null || !mounted) return;
-    final ids = _db!.getPinnedMessageIds(widget.threadId);
-    setState(() => _pinnedMessageIds = ids);
   }
 
   // ---------------------------------------------------------------------------
@@ -296,13 +265,6 @@ class _ChatScreenState extends _ChatScreenBase
       _lastMessageCount = currentCount;
       _scrollToBottom();
     }
-
-    final pinnedMessages = _pinnedMessageIds
-        .map(
-          (id) => thread.messages.where((m) => m.messageId == id).firstOrNull,
-        )
-        .whereType<ChatMessage>()
-        .toList();
 
     final appBarTitle = _searchActive
         ? TextField(
@@ -585,15 +547,6 @@ class _ChatScreenState extends _ChatScreenBase
                               child: const Text('Reconnect'),
                             )
                           : null,
-                    ),
-                  if (pinnedMessages.isNotEmpty)
-                    _PinnedRail(
-                      messages: pinnedMessages,
-                      collapsed: _pinnedRailCollapsed,
-                      onToggleCollapse: () => setState(
-                        () => _pinnedRailCollapsed = !_pinnedRailCollapsed,
-                      ),
-                      onChipTap: (msg) => _scrollToMessage(msg.messageId),
                     ),
                   Expanded(
                     child: thread.messages.isEmpty && !peerTyping

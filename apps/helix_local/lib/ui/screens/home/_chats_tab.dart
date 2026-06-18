@@ -15,46 +15,15 @@ class _ChatsTabState extends ConsumerState<_ChatsTab> {
   final _searchController = TextEditingController();
   String _query = '';
 
-  // Archived IDs tracked locally against the DB.
-  final Set<String> _archivedIds = {};
-  bool _archivedExpanded = false;
-
   @override
   void initState() {
     super.initState();
-    _loadArchivedIds();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadArchivedIds() async {
-    final db = await ref.read(databaseProvider.future);
-    final archived = db.getArchivedThreads();
-    if (mounted) {
-      setState(() {
-        _archivedIds
-          ..clear()
-          ..addAll(archived.map((t) => t.threadId));
-      });
-    }
-  }
-
-  Future<void> _setArchived(String threadId, {required bool archive}) async {
-    final db = await ref.read(databaseProvider.future);
-    db.archiveThread(threadId, archive: archive);
-    if (mounted) {
-      setState(() {
-        if (archive) {
-          _archivedIds.add(threadId);
-        } else {
-          _archivedIds.remove(threadId);
-        }
-      });
-    }
   }
 
   Future<void> _confirmWipe() async {
@@ -104,12 +73,7 @@ class _ChatsTabState extends ConsumerState<_ChatsTab> {
         return bTime.compareTo(aTime);
       });
 
-    final active = allSorted
-        .where((t) => !_archivedIds.contains(t.threadId) && _matches(t))
-        .toList();
-    final archived = allSorted
-        .where((t) => _archivedIds.contains(t.threadId) && _matches(t))
-        .toList();
+    final visible = allSorted.where(_matches).toList();
 
     if (threads.isEmpty) {
       return Center(
@@ -175,55 +139,9 @@ class _ChatsTabState extends ConsumerState<_ChatsTab> {
         ),
         Expanded(
           child: ListView(
-            children: [
-              ...active.map(
-                (t) => _ChatThreadTile(
-                  thread: t,
-                  isArchived: false,
-                  onArchiveToggle: () =>
-                      _setArchived(t.threadId, archive: true),
-                ),
-              ),
-              if (archived.isNotEmpty) ...[
-                InkWell(
-                  onTap: () =>
-                      setState(() => _archivedExpanded = !_archivedExpanded),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _archivedExpanded
-                              ? Icons.expand_less
-                              : Icons.expand_more,
-                          size: 18,
-                          color: theme.colorScheme.onSurface.withAlpha(160),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Archived (${archived.length})',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.onSurface.withAlpha(160),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_archivedExpanded)
-                  ...archived.map(
-                    (t) => _ChatThreadTile(
-                      thread: t,
-                      isArchived: true,
-                      onArchiveToggle: () =>
-                          _setArchived(t.threadId, archive: false),
-                    ),
-                  ),
-              ],
-            ],
+            children: visible
+                .map((t) => _ChatThreadTile(thread: t))
+                .toList(),
           ),
         ),
       ],
@@ -232,14 +150,8 @@ class _ChatsTabState extends ConsumerState<_ChatsTab> {
 }
 
 class _ChatThreadTile extends StatelessWidget {
-  const _ChatThreadTile({
-    required this.thread,
-    required this.isArchived,
-    required this.onArchiveToggle,
-  });
+  const _ChatThreadTile({required this.thread});
   final ChatThread thread;
-  final bool isArchived;
-  final VoidCallback onArchiveToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -304,30 +216,6 @@ class _ChatThreadTile extends StatelessWidget {
       onTap: () => Navigator.of(
         context,
       ).pushNamed('${AppRoutes.chat}/${thread.threadId}'),
-      onLongPress: () => _showContextMenu(context),
-    );
-  }
-
-  void _showContextMenu(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(
-                isArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
-              ),
-              title: Text(isArchived ? 'Unarchive' : 'Archive'),
-              onTap: () {
-                Navigator.pop(ctx);
-                onArchiveToggle();
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 

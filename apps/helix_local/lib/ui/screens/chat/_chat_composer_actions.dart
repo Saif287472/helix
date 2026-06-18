@@ -40,7 +40,6 @@ mixin _ChatComposerMixin on _ChatScreenBase {
     setState(() => _sending = true);
     final replyId = _replyTo?.messageId;
     _textController.clear();
-    _saveDraft();
     setState(() => _replyTo = null);
     try {
       await ref

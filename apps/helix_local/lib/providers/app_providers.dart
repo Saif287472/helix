@@ -30,6 +30,8 @@ import 'package:helix/providers/controllers/secret_code_service.dart';
 import 'package:helix_local_platform/platform/android_foreground.dart';
 import 'package:helix/providers/controllers/trust_service.dart';
 import 'package:helix/app/composition_root.dart' show LocalCompositionRoot;
+import 'package:helix/application/wipe/local_panic_wipe_orchestrator.dart';
+import 'package:helix/services/app_logger.dart';
 import 'package:helix_local_domain/application/contracts/repositories.dart';
 import 'package:helix_local_protocol/application/contracts/gateways.dart';
 import 'package:helix_local_protocol/application/contracts/use_cases.dart';
@@ -1402,3 +1404,27 @@ Future<Directory> _helixMediaDir(String mimeType) async {
   await dir.create(recursive: true);
   return dir;
 }
+
+// ---------------------------------------------------------------------------
+// Panic wipe orchestrator (P6-024)
+// ---------------------------------------------------------------------------
+
+/// Resolves to a fully-wired [LocalPanicWipeOrchestrator] scoped to this
+/// Riverpod container. Async because it needs the database handle.
+final panicWipeOrchestratorProvider =
+    FutureProvider<LocalPanicWipeOrchestrator>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  final descriptor = ref.watch(productDescriptorProvider);
+  return LocalPanicWipeOrchestrator(
+    messaging: ref.watch(messagingServiceProvider),
+    discovery: ref.watch(discoveryCoordinatorProvider),
+    groupService: ref.watch(groupServiceProvider),
+    wipeScheduler: ref.watch(disconnectWipeSchedulerProvider),
+    database: db,
+    reconnect: ref.watch(reconnectServiceProvider),
+    tcpServer: ref.watch(tcpServerServiceProvider),
+    storagePrefix: descriptor.secureStoragePrefix,
+    notifications: ref.watch(notificationGatewayProvider),
+    onClearLogs: AppLogger.instance.clearLogs,
+  );
+});
