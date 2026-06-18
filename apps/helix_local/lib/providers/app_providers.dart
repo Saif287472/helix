@@ -51,6 +51,8 @@ import 'package:helix_calls/infrastructure/call/call_signaling_gateway_adapter.d
 import 'package:helix_calls/services/call_service.dart';
 import 'package:helix_discovery/helix_discovery.dart';
 import 'package:helix_groups/helix_groups.dart';
+import 'package:helix_groups/platform/multicast_lock_android.dart';
+import 'package:helix_groups/platform/multicast_lock_stub.dart';
 import 'package:helix_messaging/helix_messaging.dart';
 import 'package:helix_transfer/helix_transfer.dart';
 
@@ -58,6 +60,7 @@ export 'package:flutter_riverpod/legacy.dart';
 
 export 'package:helix/providers/session_provider.dart'
     show
+        productDescriptorProvider,
         profileServiceProvider,
         appInitProvider,
         profileProvider,
@@ -71,7 +74,8 @@ export 'package:helix/providers/session_provider.dart'
 // ---------------------------------------------------------------------------
 
 final compositionRootProvider = Provider<AppCompositionRoot>((ref) {
-  final root = AppCompositionRoot.production();
+  final descriptor = ref.watch(productDescriptorProvider);
+  final root = AppCompositionRoot.production(descriptor);
   ref.onDispose(root.dispose);
   return root;
 });
@@ -288,8 +292,13 @@ final knownPeersProvider = StreamProvider<List<KnownPeer>>((ref) {
 });
 
 final discoveryCoordinatorProvider = Provider<DiscoveryCoordinator>((ref) {
+  final descriptor = ref.watch(productDescriptorProvider);
   final coordinator = DiscoveryCoordinator(
     secretCodeUseCase: ref.watch(secretCodeUseCaseProvider),
+    mdns: MdnsDiscovery(
+      methodChannelName: '${descriptor.methodChannelNamespace}/mdns',
+      eventChannelName: '${descriptor.methodChannelNamespace}/mdns/events',
+    ),
   );
   ref.onDispose(() => coordinator.dispose().ignore());
   return coordinator;
@@ -331,7 +340,8 @@ final databaseProvider = FutureProvider<HelixDatabase>((ref) async {
   ref.onDispose(() {
     DatabaseProvider.close();
   });
-  return DatabaseProvider.initialize();
+  final descriptor = ref.watch(productDescriptorProvider);
+  return DatabaseProvider.initialize(databaseFilename: descriptor.databaseFilename);
 });
 
 /// Application lifecycle state.
@@ -1210,7 +1220,12 @@ final groupMessagesProvider = StateNotifierProvider.family<GroupMessagesNotifier
 // ---------------------------------------------------------------------------
 
 final lanLobbyServiceProvider = Provider<LanLobbyService>((ref) {
-  final service = LanLobbyService();
+  final descriptor = ref.watch(productDescriptorProvider);
+  final service = LanLobbyService(
+    multicastLock: Platform.isAndroid
+        ? MulticastLockAndroid('${descriptor.methodChannelNamespace}/multicast_lock')
+        : MulticastLockStub(),
+  );
   ref.onDispose(service.dispose);
   return service;
 });

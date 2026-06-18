@@ -12,7 +12,9 @@ import 'package:helix_domain/core/constants.dart';
 class AndroidForegroundService {
   AndroidForegroundService._();
 
-  static const MethodChannel _channel = MethodChannel(kMethodChannelName);
+  static const String channelName = kMethodChannelName;
+
+  static MethodChannel get _channel => MethodChannel(channelName);
 
   /// Starts the Kotlin [HelixForegroundService].
   ///

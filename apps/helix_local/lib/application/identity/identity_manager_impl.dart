@@ -17,6 +17,9 @@ import 'package:helix_protocol/application/contracts/use_cases.dart';
 class IdentityManagerImpl implements IdentityManager {
   final ProfileRepository _profileRepository;
   final SecureIdentityStore _secureIdentityStore;
+  // Windows flutter_secure_storage uses a file under the product's appDataFolder.
+  // Injected so callers can override without hardcoding the path here.
+  final String _appDataFolder;
 
   Profile? _profile;
   DeviceIdentity? _identity;
@@ -27,9 +30,12 @@ class IdentityManagerImpl implements IdentityManager {
       StreamController<Profile>.broadcast();
 
   IdentityManagerImpl({
-    required this._profileRepository,
-    required this._secureIdentityStore,
-  });
+    required ProfileRepository profileRepository,
+    required SecureIdentityStore secureIdentityStore,
+    String appDataFolder = 'com.helix/helix',
+  })  : _profileRepository = profileRepository, // ignore: prefer_initializing_formals
+        _secureIdentityStore = secureIdentityStore, // ignore: prefer_initializing_formals
+        _appDataFolder = appDataFolder; // ignore: prefer_initializing_formals
 
   @override
   Profile? get profile => _profile;
@@ -199,9 +205,11 @@ class IdentityManagerImpl implements IdentityManager {
     final appData = Platform.environment['APPDATA'];
     if (appData == null || appData.isEmpty) return;
 
+    // _appDataFolder is the product-scoped relative path (e.g. "com.helix/helix").
+    // Using injected value prevents hardcoding the Local product path here.
+    final relativeParts = _appDataFolder.replaceAll('/', Platform.pathSeparator);
     final file = File(
-      '$appData${Platform.pathSeparator}com.helix'
-      '${Platform.pathSeparator}helix'
+      '$appData${Platform.pathSeparator}$relativeParts'
       '${Platform.pathSeparator}flutter_secure_storage.dat',
     );
     try {

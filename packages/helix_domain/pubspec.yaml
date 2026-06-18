@@ -11,3 +11,6 @@ resolution: workspace
 dependencies:
   meta: any
   crypto: any
+
+dev_dependencies:
+  test: any

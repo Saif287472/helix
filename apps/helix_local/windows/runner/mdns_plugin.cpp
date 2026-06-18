@@ -75,7 +75,7 @@ std::unique_ptr<HelixMdnsPlugin> HelixMdnsPlugin::Create(
     flutter::BinaryMessenger* messenger) {
     auto method_channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
         messenger,
-        "com.helix.app/mdns",
+        "com.helix.local/mdns",
         &flutter::StandardMethodCodec::GetInstance());
 
     auto plugin = std::make_unique<HelixMdnsPlugin>(
@@ -84,7 +84,7 @@ std::unique_ptr<HelixMdnsPlugin> HelixMdnsPlugin::Create(
     // Set up the event channel.
     auto event_channel = std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
         messenger,
-        "com.helix.app/mdns/events",
+        "com.helix.local/mdns/events",
         &flutter::StandardMethodCodec::GetInstance());
 
     auto* plugin_ptr = plugin.get();

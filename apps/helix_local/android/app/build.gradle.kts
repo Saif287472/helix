@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.helix.helix"
+    namespace = "com.helix.local"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -16,10 +16,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.helix.helix"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.helix.local"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -28,9 +25,26 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use product-scoped env vars (HELIX_LOCAL_*) so that Local and Remote
+            // release builds can never accidentally share the same signing credentials.
+            val keystoreFile = project.rootProject.file("helix_local.keystore")
+            if (keystoreFile.exists()) {
+                signingConfig = signingConfigs.create("release") {
+                    storeFile = keystoreFile
+                    storePassword = System.getenv("HELIX_LOCAL_STORE_PASSWORD") ?: ""
+                    keyAlias = System.getenv("HELIX_LOCAL_KEY_ALIAS") ?: ""
+                    keyPassword = System.getenv("HELIX_LOCAL_KEY_PASSWORD") ?: ""
+                }
+            } else {
+                val isCI = System.getenv("CI") != null || System.getenv("STRICT_MODE") != null
+                if (isCI) {
+                    throw org.gradle.api.GradleException(
+                        "Release build requires helix_local.keystore and HELIX_LOCAL_* signing env vars. " +
+                        "Do not use the shared release.keystore for Helix Local."
+                    )
+                }
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }

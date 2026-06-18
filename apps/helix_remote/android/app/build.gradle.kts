@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.helix_remote.helix_remote"
+    namespace = "com.helix.remote"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,10 +15,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.helix_remote.helix_remote"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.helix.remote"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -27,9 +24,26 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use product-scoped env vars (HELIX_REMOTE_*) so that Local and Remote
+            // release builds can never accidentally share the same signing credentials.
+            val keystoreFile = project.rootProject.file("helix_remote.keystore")
+            if (keystoreFile.exists()) {
+                signingConfig = signingConfigs.create("release") {
+                    storeFile = keystoreFile
+                    storePassword = System.getenv("HELIX_REMOTE_STORE_PASSWORD") ?: ""
+                    keyAlias = System.getenv("HELIX_REMOTE_KEY_ALIAS") ?: ""
+                    keyPassword = System.getenv("HELIX_REMOTE_KEY_PASSWORD") ?: ""
+                }
+            } else {
+                val isCI = System.getenv("CI") != null || System.getenv("STRICT_MODE") != null
+                if (isCI) {
+                    throw org.gradle.api.GradleException(
+                        "Release build requires helix_remote.keystore and HELIX_REMOTE_* signing env vars. " +
+                        "Do not use the shared release.keystore for Helix Remote."
+                    )
+                }
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }

@@ -27,7 +27,7 @@ class HelixApp extends ConsumerStatefulWidget {
 
 class _HelixAppState extends ConsumerState<HelixApp>
     with WindowListener, WidgetsBindingObserver {
-  static const _platformChannel = MethodChannel(kMethodChannelName);
+  late final MethodChannel _platformChannel;
 
   HelixWindowListener? _windowListener;
   final WindowsTrayService _trayService = WindowsTrayService();
@@ -44,6 +44,9 @@ class _HelixAppState extends ConsumerState<HelixApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    final descriptor = ref.read(productDescriptorProvider);
+    _platformChannel = MethodChannel('${descriptor.methodChannelNamespace}/foreground');
+
     if (isDesktop) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
@@ -51,6 +54,7 @@ class _HelixAppState extends ConsumerState<HelixApp>
         windowManager.addListener(_windowListener!);
         windowManager.setPreventClose(true);
         await _trayService.init(
+          displayName: descriptor.displayName,
           onOpenWindow: () async {
             await windowManager.show();
             await windowManager.focus();

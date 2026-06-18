@@ -167,15 +167,37 @@ List<_ImportRef> _extractImports(String content) {
   return refs;
 }
 
+// Maps workspace package names to their source roots (relative to repo root).
+// Update this map whenever a new package is added to the workspace.
+const _workspacePackageRoots = <String, String>{
+  'helix': 'apps/helix_local/lib/',
+  'helix_remote': 'apps/helix_remote/lib/',
+  'helix_domain': 'packages/helix_domain/lib/',
+  'helix_protocol': 'packages/helix_protocol/lib/',
+  'helix_crypto': 'packages/helix_crypto/lib/',
+  'helix_transport': 'packages/helix_transport/lib/',
+  'helix_storage': 'packages/helix_storage/lib/',
+  'helix_platform': 'packages/helix_platform/lib/',
+  'helix_calls': 'packages/helix_calls/lib/',
+  'helix_messaging': 'packages/helix_messaging/lib/',
+  'helix_transfer': 'packages/helix_transfer/lib/',
+  'helix_groups': 'packages/helix_groups/lib/',
+  'helix_discovery': 'packages/helix_discovery/lib/',
+};
+
 String? _resolveImport(String source, String uri) {
   if (uri.startsWith('dart:') || uri.startsWith('package:flutter/')) {
     return null;
   }
-  if (uri.startsWith('package:helix/')) {
-    return 'lib/${uri.substring('package:helix/'.length)}';
-  }
   if (uri.startsWith('package:')) {
-    return null;
+    final rest = uri.substring('package:'.length);
+    final slashIdx = rest.indexOf('/');
+    if (slashIdx == -1) return null;
+    final packageName = rest.substring(0, slashIdx);
+    final relativePath = rest.substring(slashIdx + 1);
+    final root = _workspacePackageRoots[packageName];
+    if (root == null) return null; // External package — not in workspace
+    return '$root$relativePath';
   }
   if (uri.startsWith('asset:')) {
     return null;

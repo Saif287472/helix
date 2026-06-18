@@ -1,3 +1,4 @@
+import 'package:helix_domain/core/product_descriptor.dart';
 import 'package:helix_protocol/application/contracts/gateways.dart';
 import 'package:helix_domain/application/contracts/repositories.dart';
 import 'package:helix_calls/infrastructure/call/webrtc_call_engine.dart';
@@ -31,16 +32,22 @@ class AppCompositionRoot {
     required this.callEngine,
   });
 
-  factory AppCompositionRoot.production() => AppCompositionRoot._(
+  factory AppCompositionRoot.production(ProductDescriptor descriptor) => AppCompositionRoot._(
     conversationRepository: InMemoryConversationRepository(),
     connectionRequestRepository: InMemoryConnectionRequestRepository(),
     groupRepository: InMemoryGroupRepository(),
     transferRepository: InMemoryTransferRepository(),
     ephemeralMediaCache: InMemoryEphemeralMediaCache(),
-    trustRepository: const SecureTrustRepository(),
-    sessionRepository: const SecureSessionRepository(),
+    trustRepository: SecureTrustRepository(keyPrefix: descriptor.secureStoragePrefix),
+    sessionRepository: SecureSessionRepository(keyPrefix: descriptor.secureStoragePrefix),
     foregroundServiceGateway: const AndroidForegroundServiceGateway(),
-    notificationGateway: PlatformNotificationGateway(),
+    notificationGateway: PlatformNotificationGateway(
+      appName: descriptor.displayName,
+      appUserModelId: descriptor.packageId,
+      windowsNotificationGuid: descriptor.windowsNotificationGuid,
+      channelPrefix: descriptor.logNamespace,
+      methodChannelNamespace: descriptor.methodChannelNamespace,
+    ),
     diagnosticsGateway: PlatformDiagnosticsGateway(),
     callEngine: WebRtcCallEngine(),
   );

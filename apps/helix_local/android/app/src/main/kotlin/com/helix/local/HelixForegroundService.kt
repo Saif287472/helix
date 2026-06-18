@@ -1,5 +1,5 @@
-// android/app/src/main/kotlin/com/helix/helix/HelixForegroundService.kt
-package com.helix.helix
+// android/app/src/main/kotlin/com/helix/local/HelixForegroundService.kt
+package com.helix.local
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -28,7 +28,7 @@ class HelixForegroundService : Service() {
         const val CHANNEL_ID = "helix_session_channel"
         const val CHANNEL_NAME = "Helix Session"
         const val NOTIFICATION_ID = 1001
-        const val ACTION_STOP = "com.helix.helix.ACTION_STOP"
+        const val ACTION_STOP = "com.helix.local.ACTION_STOP"
         const val EXTRA_NOTIFICATION_TEXT = "notification_text"
         const val EXTRA_IN_CALL = "in_call"
     }

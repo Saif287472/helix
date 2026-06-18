@@ -240,6 +240,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _exportLog() async {
+    final descriptor = ref.read(productDescriptorProvider);
     final file = await AppLogger.instance.getLogFile();
     if (!mounted) return;
     if (file == null) {
@@ -250,19 +251,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     if (isDesktop) {
-      // On Windows, copy to Documents\Helix\ and open Explorer there.
+      // On Windows, copy to Documents\<AppName>\ and open Explorer there.
       try {
         final docs = await getApplicationDocumentsDirectory();
-        final destDir = Directory(p.join(docs.path, 'Helix'));
+        final destDir = Directory(p.join(docs.path, descriptor.displayName));
         await destDir.create(recursive: true);
-        final dest = p.join(destDir.path, 'helix_anomaly_log.txt');
+        final dest = p.join(destDir.path, '${descriptor.exportPrefix}.txt');
         await file.copy(dest);
         await AppLogger.instance.clearLogs();
         // Open Explorer with the file selected.
         await Process.run('explorer', ['/select,', dest]);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Log saved to Documents\\Helix\\')),
+          SnackBar(content: Text('Log saved to Documents\\${descriptor.displayName}\\')),
         );
       } catch (e) {
         if (!mounted) return;
@@ -275,8 +276,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     await SharePlus.instance.share(
       ShareParams(
-        files: [XFile(file.path, name: 'helix_anomaly_log.txt', mimeType: 'text/plain')],
-        subject: 'Helix Anomaly Log',
+        files: [XFile(file.path, name: '${descriptor.exportPrefix}.txt', mimeType: 'text/plain')],
+        subject: '${descriptor.displayName} Anomaly Log',
       ),
     );
     await AppLogger.instance.clearLogs();
@@ -365,7 +366,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       try {
         final db = await ref.read(databaseProvider.future);
         db.clearAll();
-        await const FlutterSecureStorage().deleteAll();
+        // Delete only keys scoped to this product's prefix, never all keys.
+        // An unscoped deleteAll() would also wipe any Helix Remote keys.
+        const storage = FlutterSecureStorage();
+        final prefix = ref.read(productDescriptorProvider).secureStoragePrefix;
+        final allKeys = await storage.readAll();
+        for (final key in allKeys.keys) {
+          if (key.startsWith(prefix)) {
+            await storage.delete(key: key);
+          }
+        }
         if (Platform.isAndroid) {
           await SystemNavigator.pop();
         } else {

@@ -77,20 +77,23 @@ bool get isAndroid => Platform.isAndroid;
 bool get isWindows => Platform.isWindows;
 bool get isDesktop => Platform.isWindows;
 
-// Android foreground service method channel
-const String kMethodChannelName = 'com.helix.app/foreground';
+// Android foreground service method channel — Helix Local (com.helix.local)
+// Must match HelixForegroundService channel registered in MainActivity.kt.
+const String kMethodChannelName = 'com.helix.local/foreground';
 
 // App branding
 const String kAppLogoAsset = 'assets/logo.png';
 
-// Windows local-notification identity (flutter_local_notifications requires
-// these to be fixed and stable across launches — do not regenerate the GUID).
-const String kWindowsAppUserModelId = 'com.helix.app';
+// Windows local-notification identity for Helix Local.
+// These are stable per-product values: do not reuse for Helix Remote.
+const String kWindowsAppUserModelId = 'com.helix.local';
 const String kWindowsNotificationGuid = '17b09742-cd2c-45d4-b0fe-52814bfd70ae';
 
-// mDNS platform channels (native NsdManager on Android, WinRT on Windows)
-const String kMdnsMethodChannel = 'com.helix.app/mdns';
-const String kMdnsEventChannel = 'com.helix.app/mdns/events';
+// mDNS platform channels — Helix Local.
+// Must match HelixMdnsService channels in MainActivity.kt (Android) and
+// mdns_plugin.cpp (Windows).
+const String kMdnsMethodChannel = 'com.helix.local/mdns';
+const String kMdnsEventChannel = 'com.helix.local/mdns/events';
 
 // QR code discovery
 const Duration kQrValidityDuration = Duration(minutes: 5);

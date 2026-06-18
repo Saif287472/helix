@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:helix_domain/core/product_descriptor.dart';
 import 'package:helix_protocol/application/contracts/gateways.dart';
 import 'package:helix_platform/infrastructure/platform/platform_notification_gateway.dart';
 
@@ -10,8 +11,7 @@ class NotificationService {
   final NotificationGateway _notificationGateway;
 
   NotificationService({NotificationGateway? notificationGateway})
-    : _notificationGateway =
-          notificationGateway ?? PlatformNotificationGateway();
+    : _notificationGateway = notificationGateway ?? _defaultLocalGateway();
 
   Stream<NotificationActionIntent> get actions => _notificationGateway.actions;
   Stream<String> get taps => _notificationGateway.taps;
@@ -64,4 +64,15 @@ class NotificationService {
   void dispose() {
     _notificationGateway.dispose();
   }
+}
+
+PlatformNotificationGateway _defaultLocalGateway() {
+  const d = LocalProductDescriptor();
+  return PlatformNotificationGateway(
+    appName: d.displayName,
+    appUserModelId: d.packageId,
+    windowsNotificationGuid: d.windowsNotificationGuid,
+    channelPrefix: d.logNamespace,
+    methodChannelNamespace: d.methodChannelNamespace,
+  );
 }

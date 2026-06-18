@@ -1,5 +1,5 @@
-// android/app/src/main/kotlin/com/helix/helix/HelixMdnsService.kt
-package com.helix.helix
+// android/app/src/main/kotlin/com/helix/local/HelixMdnsService.kt
+package com.helix.local
 
 import android.content.Context
 import android.net.nsd.NsdManager
@@ -12,8 +12,8 @@ import io.flutter.plugin.common.EventChannel
 /**
  * Wraps Android NsdManager to advertise and browse _helix._tcp services.
  *
- * Driven by the "com.helix.app/mdns" MethodChannel (registered in
- * MainActivity) and sends peer events through the "com.helix.app/mdns/events"
+ * Driven by the "com.helix.local/mdns" MethodChannel (registered in
+ * MainActivity) and sends peer events through the "com.helix.local/mdns/events"
  * EventChannel.
  */
 class HelixMdnsService(private val context: Context) {

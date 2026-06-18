@@ -9,6 +9,7 @@ function Invoke-Step {
     Write-Host ""
     Write-Host "==> $Name"
     & $Command
+    if (-not $?) { throw "Step '$Name' failed." }
 }
 
 Invoke-Step "Dart format check" {
@@ -27,7 +28,7 @@ Invoke-Step "Secret scan" {
     dart run tool/check_secrets.dart
 }
 
-Invoke-Step "Flutter tests (Local)" {
+Invoke-Step "Flutter tests (helix_local)" {
     Push-Location apps/helix_local
     try {
         flutter test
@@ -36,7 +37,7 @@ Invoke-Step "Flutter tests (Local)" {
     }
 }
 
-Invoke-Step "Flutter tests (Remote)" {
+Invoke-Step "Flutter tests (helix_remote)" {
     Push-Location apps/helix_remote
     try {
         flutter test
@@ -45,12 +46,32 @@ Invoke-Step "Flutter tests (Remote)" {
     }
 }
 
+# Run tests for each package that has a test/ directory
+foreach ($pkg in (Get-ChildItem packages -Directory)) {
+    $testDir = Join-Path $pkg.FullName "test"
+    if (Test-Path $testDir) {
+        Invoke-Step "Tests: packages/$($pkg.Name)" {
+            Push-Location $pkg.FullName
+            try {
+                $pubspec = Get-Content (Join-Path $pkg.FullName "pubspec.yaml") -Raw
+                if ($pubspec -match 'sdk: flutter') {
+                    flutter test
+                } else {
+                    dart test
+                }
+            } finally {
+                Pop-Location
+            }
+        }
+    }
+}
+
 Invoke-Step "Dependency health advisory" {
     flutter pub outdated
 }
 
 if ($env:HELIX_VERIFY_BUILD -eq "1") {
-    Invoke-Step "Debug build (Local)" {
+    Invoke-Step "Debug build: helix_local (Windows)" {
         Push-Location apps/helix_local
         try {
             flutter build windows --debug
@@ -58,9 +79,48 @@ if ($env:HELIX_VERIFY_BUILD -eq "1") {
             Pop-Location
         }
     }
+
+    Invoke-Step "Debug build: helix_local (Android APK)" {
+        Push-Location apps/helix_local
+        try {
+            flutter build apk --debug
+        } finally {
+            Pop-Location
+        }
+    }
+
+    Invoke-Step "Debug build: helix_remote (Windows)" {
+        Push-Location apps/helix_remote
+        try {
+            flutter build windows --debug
+        } finally {
+            Pop-Location
+        }
+    }
+
+    Invoke-Step "Debug build: helix_remote (Android APK)" {
+        Push-Location apps/helix_remote
+        try {
+            flutter build apk --debug
+        } finally {
+            Pop-Location
+        }
+    }
+
+    # Signing credential isolation check — each product must use product-scoped env vars.
+    # HELIX_LOCAL_STORE_PASSWORD and HELIX_REMOTE_STORE_PASSWORD must either be absent
+    # (non-release CI) or contain distinct values (release CI).
+    Invoke-Step "Signing credential isolation check" {
+        $localPass  = $env:HELIX_LOCAL_STORE_PASSWORD
+        $remotePass = $env:HELIX_REMOTE_STORE_PASSWORD
+        if ($localPass -and $remotePass -and ($localPass -eq $remotePass)) {
+            throw "HELIX_LOCAL_STORE_PASSWORD and HELIX_REMOTE_STORE_PASSWORD must differ. " +
+                  "Do not share signing credentials between products."
+        }
+        Write-Host "Signing env var check passed (passwords differ or not set)."
+    }
 } else {
     Write-Host ""
-    Write-Host "==> Debug build"
-    Write-Host "Skipped. Set HELIX_VERIFY_BUILD=1 to run flutter build windows --debug."
+    Write-Host "==> Debug builds"
+    Write-Host "Skipped. Set HELIX_VERIFY_BUILD=1 to run all four platform debug builds."
 }
-

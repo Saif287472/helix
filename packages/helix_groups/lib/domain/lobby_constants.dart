@@ -15,7 +15,8 @@ const int kLobbyMaxUdpBytes      = 1400;
 const int kLobbyMaxTcpFrameBytes = 65536;
 const int kLobbyMsgIdCacheSize   = 500;
 
-const String kLobbyMulticastChannel = 'com.helix.app/multicast_lock';
+// Must match the multicast_lock channel registered in MainActivity.kt.
+const String kLobbyMulticastChannel = 'com.helix.local/multicast_lock';
 
 // Frame type constants
 const String kFtAnnounce          = 'A';

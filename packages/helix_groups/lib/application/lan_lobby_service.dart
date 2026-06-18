@@ -18,7 +18,11 @@ enum _LobbyRole { idle, discovering, hosting, joining, joined, leaving }
 
 /// Public API for the LAN Lobby system.
 class LanLobbyService {
-  LanLobbyService() : _lock = Platform.isAndroid ? MulticastLockAndroid() : MulticastLockStub();
+  LanLobbyService({MulticastLock? multicastLock})
+      : _lock = multicastLock ??
+            (Platform.isAndroid
+                ? MulticastLockAndroid(kLobbyMulticastChannel)
+                : MulticastLockStub());
 
   final MulticastLock     _lock;
   final _discovery        = LanLobbyDiscovery();

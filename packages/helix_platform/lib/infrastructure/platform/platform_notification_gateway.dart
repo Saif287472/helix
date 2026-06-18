@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:helix_domain/core/constants.dart';
 import 'package:helix_protocol/application/contracts/gateways.dart';
 
 // Notification IDs — stable so we can cancel by ID
@@ -11,12 +10,6 @@ const _kIdIncomingRequestBase = 100; // +hash of requestId for uniqueness
 const _kIdNewMessage = 200;
 const _kIdIncomingCallBase = 300; // +hash of callId for uniqueness
 
-// Android notification channel IDs
-const _kChannelForeground = 'helix_foreground';
-const _kChannelRequests = 'helix_requests';
-const _kChannelMessages = 'helix_messages';
-const _kChannelMessagesSilent = 'helix_messages_silent';
-const _kChannelCalls = 'helix_calls';
 const _kActionReply = 'reply';
 const _kActionMarkRead = 'mark_read';
 const _kActionAcceptCall = 'accept_call';
@@ -25,9 +18,31 @@ const _kCallPayloadPrefix = 'call:';
 
 class PlatformNotificationGateway implements NotificationGateway {
   final FlutterLocalNotificationsPlugin _plugin;
+  final String _appName;
+  final String _appUserModelId;
+  final String _windowsNotificationGuid;
+  final String _channelPrefix;
+  final String _methodChannelNamespace;
 
-  PlatformNotificationGateway({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  PlatformNotificationGateway({
+    FlutterLocalNotificationsPlugin? plugin,
+    required String appName,
+    required String appUserModelId,
+    required String windowsNotificationGuid,
+    required String channelPrefix,
+    required String methodChannelNamespace,
+  })  : _appName = appName, // ignore: prefer_initializing_formals
+        _appUserModelId = appUserModelId, // ignore: prefer_initializing_formals
+        _windowsNotificationGuid = windowsNotificationGuid, // ignore: prefer_initializing_formals
+        _channelPrefix = channelPrefix, // ignore: prefer_initializing_formals
+        _methodChannelNamespace = methodChannelNamespace, // ignore: prefer_initializing_formals
+        _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+
+  String get _channelForeground => '${_channelPrefix}_foreground';
+  String get _channelRequests => '${_channelPrefix}_requests';
+  String get _channelMessages => '${_channelPrefix}_messages';
+  String get _channelMessagesSilent => '${_channelPrefix}_messages_silent';
+  String get _channelCalls => '${_channelPrefix}_calls';
 
   bool _initialized = false;
   bool _canUseFullScreenIntent = true;
@@ -49,12 +64,12 @@ class PlatformNotificationGateway implements NotificationGateway {
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
-    const windowsSettings = WindowsInitializationSettings(
-      appName: 'Helix',
-      appUserModelId: kWindowsAppUserModelId,
-      guid: kWindowsNotificationGuid,
+    final windowsSettings = WindowsInitializationSettings(
+      appName: _appName,
+      appUserModelId: _appUserModelId,
+      guid: _windowsNotificationGuid,
     );
-    const initSettings = InitializationSettings(
+    final initSettings = InitializationSettings(
       android: androidSettings,
       windows: windowsSettings,
     );
@@ -71,10 +86,10 @@ class PlatformNotificationGateway implements NotificationGateway {
         >();
 
     await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        _kChannelForeground,
-        'Helix Service',
-        description: 'Keeps Helix running in the background.',
+      AndroidNotificationChannel(
+        _channelForeground,
+        '$_appName Service',
+        description: 'Keeps $_appName running in the background.',
         importance: Importance.low,
         playSound: false,
         enableVibration: false,
@@ -83,8 +98,8 @@ class PlatformNotificationGateway implements NotificationGateway {
     );
 
     await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        _kChannelRequests,
+      AndroidNotificationChannel(
+        _channelRequests,
         'Connection Requests',
         description: 'Alerts for incoming connection requests.',
         importance: Importance.high,
@@ -93,8 +108,8 @@ class PlatformNotificationGateway implements NotificationGateway {
     );
 
     await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        _kChannelMessages,
+      AndroidNotificationChannel(
+        _channelMessages,
         'Messages',
         description: 'Alerts for new encrypted messages.',
         importance: Importance.high,
@@ -103,8 +118,8 @@ class PlatformNotificationGateway implements NotificationGateway {
     );
 
     await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        _kChannelMessagesSilent,
+      AndroidNotificationChannel(
+        _channelMessagesSilent,
         'Messages (silent)',
         description: 'Silent alerts for new encrypted messages.',
         importance: Importance.high,
@@ -114,8 +129,8 @@ class PlatformNotificationGateway implements NotificationGateway {
     );
 
     await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        _kChannelCalls,
+      AndroidNotificationChannel(
+        _channelCalls,
         'Incoming Calls',
         description: 'Alerts for incoming voice calls.',
         importance: Importance.max,
@@ -129,7 +144,7 @@ class PlatformNotificationGateway implements NotificationGateway {
     // Cache it so showIncomingCall can fall back gracefully if not granted.
     if (Platform.isAndroid) {
       try {
-        final granted = await const MethodChannel('com.helix.app/foreground')
+        final granted = await MethodChannel('$_methodChannelNamespace/foreground')
             .invokeMethod<bool>('canUseFullScreenIntent');
         _canUseFullScreenIntent = granted ?? true;
       } catch (_) {}
@@ -142,13 +157,13 @@ class PlatformNotificationGateway implements NotificationGateway {
   Future<void> showForegroundServiceNotification() async {
     await _plugin.show(
       id: _kIdForeground,
-      title: 'Helix is running',
+      title: '$_appName is running',
       body: 'Listening for nearby devices.',
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _kChannelForeground,
-          'Helix Service',
-          channelDescription: 'Keeps Helix running in the background.',
+          _channelForeground,
+          '$_appName Service',
+          channelDescription: 'Keeps $_appName running in the background.',
           importance: Importance.low,
           priority: Priority.low,
           ongoing: true,
@@ -172,9 +187,9 @@ class PlatformNotificationGateway implements NotificationGateway {
       id: notifId,
       title: 'Connection request',
       body: '$requesterName wants to connect.',
-      notificationDetails: const NotificationDetails(
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _kChannelRequests,
+          _channelRequests,
           'Connection Requests',
           channelDescription: 'Alerts for incoming connection requests.',
           importance: Importance.high,
@@ -196,11 +211,11 @@ class PlatformNotificationGateway implements NotificationGateway {
     const title = 'New secure message';
     final body = (showSender && senderName != null && senderName.isNotEmpty)
         ? 'From $senderName'
-        : 'Tap to open Helix.';
+        : 'Tap to open $_appName.';
 
     final channelId = soundEnabled
-        ? _kChannelMessages
-        : _kChannelMessagesSilent;
+        ? _channelMessages
+        : _channelMessagesSilent;
     final channelName = soundEnabled ? 'Messages' : 'Messages (silent)';
 
     await _plugin.show(
@@ -242,7 +257,7 @@ class PlatformNotificationGateway implements NotificationGateway {
       body: '$peerDisplayName is calling…',
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _kChannelCalls,
+          _channelCalls,
           'Incoming Calls',
           channelDescription: 'Alerts for incoming voice calls.',
           importance: Importance.max,

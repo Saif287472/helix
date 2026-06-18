@@ -1,5 +1,5 @@
-// android/app/src/main/kotlin/com/helix/helix/MainActivity.kt
-package com.helix.helix
+// android/app/src/main/kotlin/com/helix/local/MainActivity.kt
+package com.helix.local
 
 import android.content.Intent
 import android.net.Uri
@@ -11,9 +11,9 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Main activity for Helix.
+ * Main activity for Helix Local.
  *
- * Registers the "com.helix.app/foreground" method channel so that the
+ * Registers the "com.helix.local/foreground" method channel so that the
  * Dart layer can start/stop/update [HelixForegroundService].
  *
  * Also provides a static hook ([notifyTaskRemoved]) that the service calls
@@ -23,9 +23,9 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     companion object {
-        private const val CHANNEL         = "com.helix.app/foreground"
-        private const val MDNS_CHANNEL    = "com.helix.app/mdns"
-        private const val MDNS_EVT_CHANNEL = "com.helix.app/mdns/events"
+        private const val CHANNEL         = "com.helix.local/foreground"
+        private const val MDNS_CHANNEL    = "com.helix.local/mdns"
+        private const val MDNS_EVT_CHANNEL = "com.helix.local/mdns/events"
 
         // Nullable static — only valid while the activity is alive.
         private var _channel: MethodChannel? = null
@@ -137,7 +137,7 @@ class MainActivity : FlutterActivity() {
         // ── Multicast lock channel ────────────────────────────────────────
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "com.helix.app/multicast_lock",
+            "com.helix.local/multicast_lock",
         ).setMethodCallHandler { call, result ->
             try {
                 val wifi = applicationContext.getSystemService(android.content.Context.WIFI_SERVICE)

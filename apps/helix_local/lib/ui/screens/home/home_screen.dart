@@ -178,7 +178,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Prompt once per launch so users know where to enable full-screen call alerts.
       if (Platform.isAndroid && mounted) {
         try {
-          final granted = await const MethodChannel('com.helix.app/foreground')
+          final descriptor = ref.read(productDescriptorProvider);
+          final foregroundChannel = MethodChannel('${descriptor.methodChannelNamespace}/foreground');
+          final granted = await foregroundChannel
               .invokeMethod<bool>('canUseFullScreenIntent') ?? true;
           if (!granted && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -190,7 +192,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 action: SnackBarAction(
                   label: 'Allow',
                   onPressed: () {
-                    const MethodChannel('com.helix.app/foreground')
+                    foregroundChannel
                         .invokeMethod<void>('openFullScreenIntentSettings')
                         .ignore();
                   },

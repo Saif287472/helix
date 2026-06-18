@@ -7,13 +7,24 @@ import 'package:helix_domain/application/contracts/repositories.dart';
 
 class SecureTrustRepository implements TrustRepository {
   final FlutterSecureStorage _storage;
+  final String keyPrefix;
 
-  const SecureTrustRepository({this._storage = const FlutterSecureStorage()});
+  const SecureTrustRepository({
+    this._storage = const FlutterSecureStorage(),
+    this.keyPrefix = '',
+  });
 
   @override
   Future<List<KnownPeer>> loadKnownPeers() async {
     try {
-      final raw = await _storage.read(key: kKeyKnownPeers);
+      var raw = await _storage.read(key: '$keyPrefix$kKeyKnownPeers');
+      if (raw == null && keyPrefix.startsWith('helix_local_')) {
+        raw = await _storage.read(key: kKeyKnownPeers);
+        if (raw != null) {
+          await _storage.write(key: '$keyPrefix$kKeyKnownPeers', value: raw);
+          await _storage.delete(key: kKeyKnownPeers);
+        }
+      }
       if (raw != null && raw.isNotEmpty) {
         final list = jsonDecode(raw) as List<dynamic>;
         return list
@@ -29,6 +40,6 @@ class SecureTrustRepository implements TrustRepository {
   @override
   Future<void> saveKnownPeers(List<KnownPeer> peers) async {
     final json = jsonEncode(peers.map((p) => p.toJson()).toList());
-    await _storage.write(key: kKeyKnownPeers, value: json);
+    await _storage.write(key: '$keyPrefix$kKeyKnownPeers', value: json);
   }
 }

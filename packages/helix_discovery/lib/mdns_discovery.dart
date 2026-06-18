@@ -6,16 +6,21 @@ import 'package:helix_domain/core/constants.dart';
 import 'package:helix_domain/domain/models.dart';
 
 class MdnsDiscovery {
+  final MethodChannel _method;
+  final EventChannel _event;
+
+  MdnsDiscovery({
+    String methodChannelName = kMdnsMethodChannel,
+    String eventChannelName = kMdnsEventChannel,
+  })  : _method = MethodChannel(methodChannelName),
+        _event = EventChannel(eventChannelName);
+
   bool _running = false;
   bool _discoverable = false;
 
   String _sessionId = '';
   String _displayName = '';
   String _deviceSuffix = '';
-
-  // Platform channels
-  static const _method = MethodChannel(kMdnsMethodChannel);
-  static const _event = EventChannel(kMdnsEventChannel);
 
   // Streams
   final StreamController<Peer> _discoveredController =

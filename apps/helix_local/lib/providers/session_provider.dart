@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import 'package:helix_domain/core/product_descriptor.dart';
 import 'package:helix_domain/domain/models.dart';
 import 'package:helix/providers/controllers/profile_service.dart';
 import 'package:helix_domain/application/contracts/repositories.dart';
@@ -14,18 +15,26 @@ import 'package:helix/application/identity/identity_manager_impl.dart';
 // ProfileService provider
 // ─────────────────────────────────────────────────────────────────────────────
 
+final productDescriptorProvider = Provider<ProductDescriptor>((ref) {
+  return const LocalProductDescriptor();
+});
+
 final secureIdentityStoreProvider = Provider<SecureIdentityStore>((ref) {
-  return const FlutterSecureIdentityStore();
+  final descriptor = ref.watch(productDescriptorProvider);
+  return FlutterSecureIdentityStore(keyPrefix: descriptor.secureStoragePrefix);
 });
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
-  return const FlutterProfileRepository();
+  final descriptor = ref.watch(productDescriptorProvider);
+  return FlutterProfileRepository(keyPrefix: descriptor.secureStoragePrefix);
 });
 
 final identityManagerProvider = Provider<IdentityManager>((ref) {
+  final descriptor = ref.watch(productDescriptorProvider);
   final manager = IdentityManagerImpl(
     profileRepository: ref.watch(profileRepositoryProvider),
     secureIdentityStore: ref.watch(secureIdentityStoreProvider),
+    appDataFolder: descriptor.appDataFolder,
   );
   ref.onDispose(manager.dispose);
   return manager;

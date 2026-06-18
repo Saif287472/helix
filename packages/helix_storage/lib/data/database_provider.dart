@@ -27,12 +27,12 @@ class DatabaseProvider {
   ///
   /// Safe to call multiple times — concurrent calls share a single in-flight
   /// future so only one SQLite connection is ever opened.
-  static Future<HelixDatabase> initialize() =>
-      _initializing ??= _initializeOnce();
+  static Future<HelixDatabase> initialize({String databaseFilename = 'helix.db'}) =>
+      _initializing ??= _initializeOnce(databaseFilename);
 
-  static Future<HelixDatabase> _initializeOnce() async {
+  static Future<HelixDatabase> _initializeOnce(String filename) async {
     final docsDir = await getApplicationDocumentsDirectory();
-    final dbFile = File(p.join(docsDir.path, 'helix.db'));
+    final dbFile = File(p.join(docsDir.path, filename));
     final db = HelixDatabase(dbFile);
     db.initialize();
     _instance = db;

@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'package:helix_domain/core/product_descriptor.dart';
 import 'package:helix/app.dart';
 import 'package:helix_domain/core/constants.dart';
 import 'package:helix/providers/app_providers.dart';
@@ -28,15 +29,16 @@ void main() {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-      await AppLogger.instance.init();
+      const descriptor = LocalProductDescriptor();
+      await AppLogger.instance.init(descriptor);
 
       // ── Platform: Windows ─────────────────────────────────────────────────────
       if (isDesktop) {
         await windowManager.ensureInitialized();
 
-        const windowOptions = WindowOptions(
-          minimumSize: Size(480, 640),
-          title: 'Helix',
+        final windowOptions = WindowOptions(
+          minimumSize: const Size(480, 640),
+          title: descriptor.displayName,
           center: true,
         );
 
@@ -55,12 +57,12 @@ void main() {
       const androidInitSettings = AndroidInitializationSettings(
         '@mipmap/ic_launcher',
       );
-      const windowsInitSettings = WindowsInitializationSettings(
-        appName: 'Helix',
-        appUserModelId: kWindowsAppUserModelId,
-        guid: kWindowsNotificationGuid,
+      final windowsInitSettings = WindowsInitializationSettings(
+        appName: descriptor.displayName,
+        appUserModelId: descriptor.packageId,
+        guid: descriptor.windowsNotificationGuid,
       );
-      const initSettings = InitializationSettings(
+      final initSettings = InitializationSettings(
         android: androidInitSettings,
         windows: windowsInitSettings,
       );

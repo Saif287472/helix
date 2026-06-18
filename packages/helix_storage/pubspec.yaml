@@ -21,3 +21,7 @@ dependencies:
   sqlite3_flutter_libs: any
   helix_domain:
     path: ../helix_domain
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

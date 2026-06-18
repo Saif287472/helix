@@ -1,4 +1,4 @@
-package com.example.helix_remote.helix_remote
+package com.helix.remote
 
 import io.flutter.embedding.android.FlutterActivity
 

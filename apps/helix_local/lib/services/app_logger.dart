@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:helix_domain/core/product_descriptor.dart';
 
 /// Persistent anomaly logger. Survives app restarts; accumulates entries across
 /// sessions. Call [init] once on startup, then [error] / [warn] anywhere.
@@ -18,11 +19,11 @@ class AppLogger {
   static const int _maxLines = 5000;
   static const int _maxAgeDays = 7;
 
-  Future<void> init() async {
+  Future<void> init(ProductDescriptor descriptor) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      _logFile = File('${dir.path}/helix_anomaly_log.txt');
-      _counterFile = File('${dir.path}/helix_session_counter.txt');
+      _logFile = File('${dir.path}/${descriptor.logNamespace}_anomaly_log.txt');
+      _counterFile = File('${dir.path}/${descriptor.logNamespace}_session_counter.txt');
 
       int counter = 0;
       if (await _counterFile!.exists()) {

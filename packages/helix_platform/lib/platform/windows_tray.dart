@@ -23,11 +23,13 @@ class WindowsTrayService with TrayListener {
   FutureOr<void> Function()? _onExitSession;
   bool Function()? _isDiscoverable;
 
+  String _displayName = 'Helix';
   bool _initialised = false;
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
   Future<void> init({
+    required String displayName,
     required FutureOr<void> Function() onOpenWindow,
     required FutureOr<void> Function() onToggleDiscoverability,
     required FutureOr<void> Function() onExitSession,
@@ -35,6 +37,7 @@ class WindowsTrayService with TrayListener {
   }) async {
     if (!isDesktop) return;
 
+    _displayName = displayName;
     _onOpenWindow = onOpenWindow;
     _onToggleDiscoverability = onToggleDiscoverability;
     _onExitSession = onExitSession;
@@ -46,7 +49,7 @@ class WindowsTrayService with TrayListener {
     if (iconPath != null) {
       await trayManager.setIcon(iconPath);
     }
-    await trayManager.setToolTip('Helix');
+    await trayManager.setToolTip(_displayName);
     await _rebuildMenu(isDiscoverable());
 
     _initialised = true;
@@ -56,6 +59,10 @@ class WindowsTrayService with TrayListener {
     final candidates = [
       if (Platform.isWindows) 'assets/tray_icon.ico',
       if (Platform.isWindows) 'windows/runner/resources/app_icon.ico',
+      if (Platform.isWindows) 'apps/helix_local/assets/tray_icon.ico',
+      if (Platform.isWindows) 'apps/helix_local/windows/runner/resources/app_icon.ico',
+      if (Platform.isWindows) 'apps/helix_remote/assets/tray_icon.ico',
+      if (Platform.isWindows) 'apps/helix_remote/windows/runner/resources/app_icon.ico',
     ];
     for (final path in candidates) {
       if (File(path).existsSync()) return path;
@@ -111,7 +118,7 @@ class WindowsTrayService with TrayListener {
 
     final menu = Menu(
       items: [
-        MenuItem(key: 'open', label: 'Open Helix'),
+        MenuItem(key: 'open', label: 'Open $_displayName'),
         MenuItem.separator(),
         MenuItem(
           key: 'disc_status',
@@ -120,7 +127,7 @@ class WindowsTrayService with TrayListener {
         ),
         MenuItem(key: 'toggle_discoverable', label: 'Toggle discoverability'),
         MenuItem.separator(),
-        MenuItem(key: 'exit', label: 'End session and exit'),
+        MenuItem(key: 'exit', label: 'End $_displayName session and exit'),
       ],
     );
 
