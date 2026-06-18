@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:helix_domain/domain/call/call_state.dart';
+import 'package:helix_local_domain/domain/call/call_state.dart';
 import 'package:helix/providers/app_providers.dart';
 
 /// Keeps the screen on during active video calls. Without a wake lock the

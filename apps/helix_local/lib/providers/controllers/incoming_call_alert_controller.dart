@@ -7,8 +7,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vibration/vibration.dart';
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/call/call_state.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/call/call_state.dart';
 import 'package:helix/providers/app_providers.dart';
 
 const _vibrationPattern = [0, 1000, 1000];

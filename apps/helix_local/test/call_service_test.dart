@@ -4,10 +4,10 @@ import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_protocol/application/contracts/gateways.dart';
-import 'package:helix_domain/domain/call/call_state.dart';
-import 'package:helix_protocol/protocol/protocol_messages.dart';
-import 'package:helix_calls/services/call_service.dart';
+import 'package:helix_local_protocol/application/contracts/gateways.dart';
+import 'package:helix_local_domain/domain/call/call_state.dart';
+import 'package:helix_local_protocol/protocol/protocol_messages.dart';
+import 'package:helix_local_calls/services/call_service.dart';
 
 // ---------------------------------------------------------------------------
 // Mock CallEngine

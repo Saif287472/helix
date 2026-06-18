@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix/providers/app_providers.dart';
 import 'package:helix/providers/controllers/group_service.dart';
-import 'package:helix_groups/helix_groups.dart';
+import 'package:helix_local_groups/helix_groups.dart';
 
 class GroupScreen extends ConsumerStatefulWidget {
   const GroupScreen({super.key, required this.groupId});

@@ -5,7 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:helix_domain/domain/call/call_state.dart';
+import 'package:helix_local_domain/domain/call/call_state.dart';
 import 'package:helix/providers/app_providers.dart';
 
 /// Full-screen overlay shown for incoming, outgoing, and active calls.

@@ -1,0 +1,27 @@
+name: helix_local_storage
+description: SQLite database, secure storage, and in-memory repository implementations.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  basic_utils: any
+  convert: any
+  crypto: any
+  flutter_secure_storage: any
+  path: any
+  path_provider: any
+  sqlite3: any
+  sqlite3_flutter_libs: any
+  helix_local_domain:
+    path: ../helix_local_domain
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

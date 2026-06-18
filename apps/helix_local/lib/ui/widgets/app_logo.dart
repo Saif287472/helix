@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:helix_domain/core/constants.dart';
+import 'package:helix_local_domain/core/constants.dart';
 
 class AppLogo extends StatelessWidget {
   const AppLogo({super.key, this.size = 64});

@@ -5,7 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:proximity_sensor/proximity_sensor.dart';
-import 'package:helix_domain/domain/call/call_state.dart';
+import 'package:helix_local_domain/domain/call/call_state.dart';
 import 'package:helix/providers/app_providers.dart';
 
 /// Turns the screen off when the phone is held to the ear during an active

@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:cbor/cbor.dart';
-import 'package:helix_protocol/application/contracts/use_cases.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_domain/domain/models.dart';
 
 class QrCodeUseCaseImpl implements QrCodeUseCase {
   const QrCodeUseCaseImpl();

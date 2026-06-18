@@ -8,20 +8,20 @@ workspace:
   - apps/helix_local
   - apps/helix_remote
   - tool
-  - packages/local/helix_domain
-  - packages/local/helix_protocol
-  - packages/local/helix_crypto
-  - packages/local/helix_transport
-  - packages/local/helix_storage
-  - packages/local/helix_platform
-  - packages/local/helix_calls
-  - packages/local/helix_messaging
-  - packages/local/helix_transfer
-  - packages/local/helix_groups
-  - packages/local/helix_discovery
+  - packages/local/helix_local_domain
+  - packages/local/helix_local_protocol
+  - packages/local/helix_local_crypto
+  - packages/local/helix_local_transport
+  - packages/local/helix_local_storage
+  - packages/local/helix_local_platform
+  - packages/local/helix_local_calls
+  - packages/local/helix_local_messaging
+  - packages/local/helix_local_transfer
+  - packages/local/helix_local_groups
+  - packages/local/helix_local_discovery
 
 dependencies:
-  helix_domain:
-    path: packages/local/helix_domain
-  helix_protocol:
-    path: packages/local/helix_protocol
+  helix_local_domain:
+    path: packages/local/helix_local_domain
+  helix_local_protocol:
+    path: packages/local/helix_local_protocol

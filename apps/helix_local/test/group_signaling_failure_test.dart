@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_domain/domain/models.dart';
-import 'package:helix_groups/helix_groups.dart';
-import 'package:helix_protocol/application/contracts/gateways.dart';
-import 'package:helix_protocol/protocol/protocol_messages.dart';
-import 'package:helix_storage/infrastructure/storage/in_memory_group_repository.dart';
+import 'package:helix_local_domain/domain/models.dart';
+import 'package:helix_local_groups/helix_groups.dart';
+import 'package:helix_local_protocol/application/contracts/gateways.dart';
+import 'package:helix_local_protocol/protocol/protocol_messages.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_group_repository.dart';
 
 void main() {
   group('group signaling failure handling', () {

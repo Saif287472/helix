@@ -1,14 +1,12 @@
-// Runs the architecture boundary checker as a test suite so violations are
-// surfaced by `dart test tool/boundary_test.dart` as well as the standalone
-// `dart run tool/check_boundaries.dart`.
-//
-// Phase 4 — P4-010: Forbidden import tests for both products.
+// Runs the architecture boundary checker and cycle detector as a test suite.
+// P4-010: Forbidden import tests; P4-015: Circular dependency detection.
 
 import 'dart:io';
 
 import 'package:test/test.dart';
 
 import 'check_boundaries.dart';
+import 'dep_graph.dart' as graph;
 
 void main() {
   late Directory root;
@@ -74,6 +72,15 @@ void main() {
       sharedToProduct,
       isEmpty,
       reason: 'Shared packages must not import from either product package tree',
+    );
+  });
+
+  test('workspace dependency graph has no cycles (P4-015)', () async {
+    final cycles = await graph.detectCycles(root);
+    expect(
+      cycles,
+      isEmpty,
+      reason: 'Circular dependencies detected:\n${cycles.join('\n')}',
     );
   });
 }

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_domain/application/state_machines/workflow_states.dart';
-import 'package:helix_domain/application/state_machines/workflow_transitions.dart';
+import 'package:helix_local_domain/application/state_machines/workflow_states.dart';
+import 'package:helix_local_domain/application/state_machines/workflow_transitions.dart';
 
 void main() {
   test('peer connection state machine accepts expected happy path', () {

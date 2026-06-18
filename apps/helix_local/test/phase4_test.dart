@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_domain/core/constants.dart';
+import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix/providers/controllers/group_service.dart';
-import 'package:helix_protocol/protocol/protocol_messages.dart';
+import 'package:helix_local_protocol/protocol/protocol_messages.dart';
 
 void main() {
   group('Phase 4 protocol frames', () {

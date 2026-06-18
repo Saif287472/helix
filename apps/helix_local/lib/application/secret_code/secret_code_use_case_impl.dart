@@ -5,9 +5,9 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart' as cryptography;
-import 'package:helix_protocol/application/contracts/use_cases.dart';
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
 
 const _kTypeChallenge = 0x10;
 const _kTypeResponse = 0x11;

@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:helix_domain/domain/models.dart';
-import 'package:helix_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_domain/domain/models.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
 import 'package:helix/application/identity/identity_manager_impl.dart';
-import 'package:helix_storage/infrastructure/storage/flutter_profile_repository.dart';
-import 'package:helix_storage/infrastructure/storage/flutter_secure_identity_store.dart';
+import 'package:helix_local_storage/infrastructure/storage/flutter_profile_repository.dart';
+import 'package:helix_local_storage/infrastructure/storage/flutter_secure_identity_store.dart';
 
 class ProfileService {
   final IdentityManager _identityManager;

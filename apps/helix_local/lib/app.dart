@@ -7,10 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/main.dart' show HelixWindowListener;
-import 'package:helix_platform/platform/windows_tray.dart';
+import 'package:helix_local_platform/platform/windows_tray.dart';
 import 'package:helix/providers/app_providers.dart';
 import 'package:helix/ui/app_router.dart';
 import 'package:helix/ui/app_theme.dart';

@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:helix_domain/core/product_descriptor.dart';
-import 'package:helix_protocol/application/contracts/gateways.dart';
-import 'package:helix_platform/infrastructure/platform/platform_notification_gateway.dart';
+import 'package:helix_local_domain/core/product_descriptor.dart';
+import 'package:helix_local_protocol/application/contracts/gateways.dart';
+import 'package:helix_local_platform/infrastructure/platform/platform_notification_gateway.dart';
 
-export 'package:helix_protocol/application/contracts/gateways.dart'
+export 'package:helix_local_protocol/application/contracts/gateways.dart'
     show NotificationActionIntent;
 
 class NotificationService {

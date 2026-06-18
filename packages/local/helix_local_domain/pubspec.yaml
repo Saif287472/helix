@@ -1,0 +1,16 @@
+name: helix_local_domain
+description: Domain entities, core constants, repository contracts, and state machines.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  meta: any
+  crypto: any
+
+dev_dependencies:
+  test: any

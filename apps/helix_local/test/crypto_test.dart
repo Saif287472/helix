@@ -8,7 +8,7 @@ import 'package:crypto/crypto.dart' as pkg_crypto;
 import 'package:cryptography/cryptography.dart' as cryptography;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:helix_domain/core/constants.dart';
+import 'package:helix_local_domain/core/constants.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers that mirror the production logic in ProfileService

@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:helix_domain/domain/models.dart';
-import 'package:helix_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_domain/domain/models.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
 import 'package:helix/application/session/active_session_tracker_impl.dart';
-import 'package:helix_storage/infrastructure/storage/secure_session_repository.dart';
-import 'package:helix_platform/infrastructure/platform/android_foreground_service_gateway.dart';
+import 'package:helix_local_storage/infrastructure/storage/secure_session_repository.dart';
+import 'package:helix_local_platform/infrastructure/platform/android_foreground_service_gateway.dart';
 
 class SessionService {
   final ActiveSessionTracker _activeSessionTracker;

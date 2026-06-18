@@ -9,10 +9,10 @@ environment:
 resolution: workspace
 
 dependencies:
-  helix_domain:
-    path: ../packages/local/helix_domain
-  helix_protocol:
-    path: ../packages/local/helix_protocol
+  helix_local_domain:
+    path: ../packages/local/helix_local_domain
+  helix_local_protocol:
+    path: ../packages/local/helix_local_protocol
 
 dev_dependencies:
   test: any

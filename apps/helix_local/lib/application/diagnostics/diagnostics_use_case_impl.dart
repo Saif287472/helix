@@ -1,7 +1,7 @@
-import 'package:helix_protocol/application/contracts/gateways.dart';
-import 'package:helix_protocol/application/contracts/use_cases.dart';
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_protocol/application/contracts/gateways.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
 
 class DiagnosticsUseCaseImpl implements DiagnosticsUseCase {
   final DiagnosticsGateway _gateway;

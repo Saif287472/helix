@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:helix_domain/domain/call/call_state.dart';
+import 'package:helix_local_domain/domain/call/call_state.dart';
 import 'package:helix/providers/app_providers.dart';
 import 'package:helix/ui/screens/call/call_screen.dart';
 

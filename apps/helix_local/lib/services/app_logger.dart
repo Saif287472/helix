@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:helix_domain/core/product_descriptor.dart';
+import 'package:helix_local_domain/core/product_descriptor.dart';
 
 /// Persistent anomaly logger. Survives app restarts; accumulates entries across
 /// sessions. Call [init] once on startup, then [error] / [warn] anywhere.

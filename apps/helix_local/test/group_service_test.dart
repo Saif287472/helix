@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix/providers/controllers/group_service.dart';
-import 'package:helix_storage/infrastructure/storage/in_memory_group_repository.dart';
-import 'package:helix_protocol/protocol/protocol_messages.dart';
-import 'package:helix_transport/services/transport/secure_channel.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_group_repository.dart';
+import 'package:helix_local_protocol/protocol/protocol_messages.dart';
+import 'package:helix_local_transport/services/transport/secure_channel.dart';
 
 class FakeSecureChannel extends Fake implements SecureChannel {
   FakeSecureChannel(this.threadId);

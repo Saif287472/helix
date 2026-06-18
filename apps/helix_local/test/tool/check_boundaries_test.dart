@@ -10,7 +10,7 @@ void main() {
     final project = await _project({
       'lib/core/constants.dart': 'const appName = "Helix";',
       'lib/services/chat.dart':
-          "import 'package:helix_domain/core/constants.dart';\n"
+          "import 'package:helix_local_domain/core/constants.dart';\n"
           'final name = appName;\n',
       'docs/architecture/module_boundaries.json': _config(),
     });

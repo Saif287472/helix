@@ -8,9 +8,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'package:helix_domain/core/product_descriptor.dart';
+import 'package:helix_local_domain/core/product_descriptor.dart';
 import 'package:helix/app.dart';
-import 'package:helix_domain/core/constants.dart';
+import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix/providers/app_providers.dart';
 import 'package:helix/services/app_logger.dart';
 

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/controllers/diagnostics_service.dart';
 import 'package:helix/providers/controllers/qr_code_service.dart';
 import 'package:helix/providers/controllers/session_service.dart';

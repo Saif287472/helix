@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_protocol/protocol/protocol_messages.dart';
-import 'package:helix_transport/services/transport/frame_io.dart';
+import 'package:helix_local_protocol/protocol/protocol_messages.dart';
+import 'package:helix_local_transport/services/transport/frame_io.dart';
 
 void main() {
   test('encodeFrame prefixes a protocol payload length', () {

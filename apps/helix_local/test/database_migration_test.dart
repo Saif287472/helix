@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:helix_storage/data/database.dart';
+import 'package:helix_local_storage/data/database.dart';
 
 void main() {
   late Directory tempDir;

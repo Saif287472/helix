@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/ui/app_theme.dart';
 
 class StatusBadge extends StatelessWidget {

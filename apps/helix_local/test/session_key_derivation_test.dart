@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_crypto/crypto/session_key_derivation.dart';
+import 'package:helix_local_crypto/crypto/session_key_derivation.dart';
 
 void main() {
   test('identity proof payload preserves legacy format', () {

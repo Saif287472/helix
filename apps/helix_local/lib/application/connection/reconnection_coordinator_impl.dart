@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
-import 'package:helix_discovery/helix_discovery.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
+import 'package:helix_local_discovery/helix_discovery.dart';
 import 'package:helix/providers/controllers/messaging_service.dart';
 import 'package:helix/providers/controllers/profile_service.dart';
 import 'package:helix/providers/controllers/request_service.dart';
 import 'package:helix/providers/controllers/session_service.dart';
-import 'package:helix_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
 
 class ReconnectionCoordinatorImpl implements ReconnectionCoordinator {
   ReconnectionCoordinatorImpl({

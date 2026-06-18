@@ -9,18 +9,19 @@ security-sensitive across **both** products.
 ```
 apps/helix_local/    — Helix Local Flutter app (LAN-only, ephemeral)
 apps/helix_remote/   — Helix Remote Flutter app (internet, persistent)
-packages/            — Internal packages (all currently Local-classified)
-  helix_domain/      — Local domain contracts and ProductDescriptor
-  helix_protocol/    — LAN wire protocol
-  helix_crypto/      — Local crypto primitives
-  helix_transport/   — Local secure channel
-  helix_discovery/   — mDNS LAN discovery
-  helix_storage/     — Local secure storage adapters
-  helix_platform/    — Local platform integration (notifications, tray, foreground)
-  helix_groups/      — Session-only LAN lobby
-  helix_messaging/   — Ephemeral LAN messaging
-  helix_calls/       — LAN WebRTC call engine
-  helix_transfer/    — LAN file transfer
+packages/
+  local/
+    helix_local_domain/    — Local domain contracts and ProductDescriptor
+    helix_local_protocol/  — LAN wire protocol
+    helix_local_crypto/    — Local crypto primitives
+    helix_local_transport/ — Local secure channel
+    helix_local_discovery/ — mDNS LAN discovery
+    helix_local_storage/   — Local secure storage adapters
+    helix_local_platform/  — Local platform integration
+    helix_local_groups/    — Session-only LAN lobby
+    helix_local_messaging/ — Ephemeral LAN messaging
+    helix_local_calls/     — LAN WebRTC call engine
+    helix_local_transfer/  — LAN file transfer
   shared/            — EMPTY placeholder (shared primitives, Phase 4+)
   remote/            — EMPTY placeholder (Remote packages, Phase 8+)
 tool/                — Architecture boundary checker

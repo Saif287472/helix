@@ -6,12 +6,12 @@ import 'dart:typed_data';
 import 'package:uuid/uuid.dart';
 import 'package:helix/application/connection/connection_request_use_case_impl.dart';
 import 'package:helix/providers/controllers/trust_service.dart';
-import 'package:helix_domain/application/contracts/repositories.dart';
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
-import 'package:helix_protocol/protocol/protocol_messages.dart';
-import 'package:helix_storage/infrastructure/storage/in_memory_connection_request_repository.dart';
-import 'package:helix_transport/services/transport/secure_channel.dart';
+import 'package:helix_local_domain/application/contracts/repositories.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
+import 'package:helix_local_protocol/protocol/protocol_messages.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_connection_request_repository.dart';
+import 'package:helix_local_transport/services/transport/secure_channel.dart';
 
 class RequestConnectionResult {
   const RequestConnectionResult({required this.request, this.channel});

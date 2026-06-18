@@ -1,17 +1,17 @@
-import 'package:helix_domain/core/product_descriptor.dart';
-import 'package:helix_protocol/application/contracts/gateways.dart';
-import 'package:helix_domain/application/contracts/repositories.dart';
-import 'package:helix_calls/infrastructure/call/webrtc_call_engine.dart';
-import 'package:helix_platform/infrastructure/platform/android_foreground_service_gateway.dart';
-import 'package:helix_platform/infrastructure/platform/platform_diagnostics_gateway.dart';
-import 'package:helix_platform/infrastructure/platform/platform_notification_gateway.dart';
-import 'package:helix_storage/infrastructure/storage/in_memory_connection_request_repository.dart';
-import 'package:helix_storage/infrastructure/storage/in_memory_conversation_repository.dart';
-import 'package:helix_storage/infrastructure/storage/in_memory_ephemeral_media_cache.dart';
-import 'package:helix_storage/infrastructure/storage/in_memory_group_repository.dart';
-import 'package:helix_storage/infrastructure/storage/in_memory_transfer_repository.dart';
-import 'package:helix_storage/infrastructure/storage/secure_session_repository.dart';
-import 'package:helix_storage/infrastructure/storage/secure_trust_repository.dart';
+import 'package:helix_local_domain/core/product_descriptor.dart';
+import 'package:helix_local_protocol/application/contracts/gateways.dart';
+import 'package:helix_local_domain/application/contracts/repositories.dart';
+import 'package:helix_local_calls/infrastructure/call/webrtc_call_engine.dart';
+import 'package:helix_local_platform/infrastructure/platform/android_foreground_service_gateway.dart';
+import 'package:helix_local_platform/infrastructure/platform/platform_diagnostics_gateway.dart';
+import 'package:helix_local_platform/infrastructure/platform/platform_notification_gateway.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_connection_request_repository.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_conversation_repository.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_ephemeral_media_cache.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_group_repository.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_transfer_repository.dart';
+import 'package:helix_local_storage/infrastructure/storage/secure_session_repository.dart';
+import 'package:helix_local_storage/infrastructure/storage/secure_trust_repository.dart';
 
 /// Single wiring point where every concrete infrastructure implementation is
 /// bound to its domain interface.  Riverpod providers expose these bindings

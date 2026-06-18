@@ -17,8 +17,11 @@ flutter analyze
 step "Architecture boundary check"
 dart run tool/check_boundaries.dart
 
-step "Forbidden import tests (P4-010)"
+step "Forbidden import tests + cycle detection (P4-010/P4-015)"
 dart test tool/boundary_test.dart
+
+step "Dependency graph (P4-014)"
+dart run tool/dep_graph.dart
 
 step "Secret scan"
 dart run tool/check_secrets.dart

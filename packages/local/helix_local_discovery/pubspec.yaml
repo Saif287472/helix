@@ -1,0 +1,19 @@
+name: helix_local_discovery
+description: LAN discovery via DNS-SD/mDNS and UDP Broadcasts
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  network_info_plus: ^8.1.0
+  connectivity_plus: ^7.1.1
+  helix_local_domain:
+    path: ../helix_local_domain
+  helix_local_protocol:
+    path: ../helix_local_protocol

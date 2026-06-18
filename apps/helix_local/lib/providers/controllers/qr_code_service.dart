@@ -1,8 +1,8 @@
-import 'package:helix_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
 import 'package:helix/application/qr/qr_code_use_case_impl.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_domain/domain/models.dart';
 
-export 'package:helix_domain/domain/qr/qr_payload.dart';
+export 'package:helix_local_domain/domain/qr/qr_payload.dart';
 
 class QrCodeService {
   static QrCodeUseCase? globalUseCase;

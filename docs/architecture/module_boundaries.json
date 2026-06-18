@@ -34,76 +34,76 @@
       "reason": "Shared packages must be product-neutral and may not import from either product package tree or app code."
     },
     {
-      "source": "packages/local/helix_domain/**",
+      "source": "packages/local/helix_local_domain/**",
       "imports": [
-        "packages/local/helix_protocol/**",
-        "packages/local/helix_crypto/**",
-        "packages/local/helix_storage/**",
-        "packages/local/helix_platform/**",
-        "packages/local/helix_transport/**",
-        "packages/local/helix_calls/**",
-        "packages/local/helix_messaging/**",
-        "packages/local/helix_transfer/**",
-        "packages/local/helix_groups/**",
-        "packages/local/helix_discovery/**",
+        "packages/local/helix_local_protocol/**",
+        "packages/local/helix_local_crypto/**",
+        "packages/local/helix_local_storage/**",
+        "packages/local/helix_local_platform/**",
+        "packages/local/helix_local_transport/**",
+        "packages/local/helix_local_calls/**",
+        "packages/local/helix_local_messaging/**",
+        "packages/local/helix_local_transfer/**",
+        "packages/local/helix_local_groups/**",
+        "packages/local/helix_local_discovery/**",
         "apps/**"
       ],
       "reason": "Domain types and contracts must not depend on any other local package or app code."
     },
     {
-      "source": "packages/local/helix_protocol/**",
+      "source": "packages/local/helix_local_protocol/**",
       "imports": [
-        "packages/local/helix_crypto/**",
-        "packages/local/helix_storage/**",
-        "packages/local/helix_platform/**",
-        "packages/local/helix_transport/**",
-        "packages/local/helix_calls/**",
-        "packages/local/helix_messaging/**",
-        "packages/local/helix_transfer/**",
-        "packages/local/helix_groups/**",
-        "packages/local/helix_discovery/**",
+        "packages/local/helix_local_crypto/**",
+        "packages/local/helix_local_storage/**",
+        "packages/local/helix_local_platform/**",
+        "packages/local/helix_local_transport/**",
+        "packages/local/helix_local_calls/**",
+        "packages/local/helix_local_messaging/**",
+        "packages/local/helix_local_transfer/**",
+        "packages/local/helix_local_groups/**",
+        "packages/local/helix_local_discovery/**",
         "apps/**"
       ],
       "reason": "Protocol definitions must stay reusable outside transport, storage, and app code."
     },
     {
-      "source": "packages/local/helix_crypto/**",
+      "source": "packages/local/helix_local_crypto/**",
       "imports": [
-        "packages/local/helix_storage/**",
-        "packages/local/helix_platform/**",
-        "packages/local/helix_transport/**",
-        "packages/local/helix_calls/**",
-        "packages/local/helix_messaging/**",
-        "packages/local/helix_transfer/**",
-        "packages/local/helix_groups/**",
-        "packages/local/helix_discovery/**",
+        "packages/local/helix_local_storage/**",
+        "packages/local/helix_local_platform/**",
+        "packages/local/helix_local_transport/**",
+        "packages/local/helix_local_calls/**",
+        "packages/local/helix_local_messaging/**",
+        "packages/local/helix_local_transfer/**",
+        "packages/local/helix_local_groups/**",
+        "packages/local/helix_local_discovery/**",
         "apps/**"
       ],
       "reason": "Crypto primitives must not depend on storage, platform, transport, or app code."
     },
     {
-      "source": "packages/local/helix_storage/**",
+      "source": "packages/local/helix_local_storage/**",
       "imports": [
-        "packages/local/helix_platform/**",
-        "packages/local/helix_transport/**",
-        "packages/local/helix_calls/**",
-        "packages/local/helix_messaging/**",
-        "packages/local/helix_transfer/**",
-        "packages/local/helix_groups/**",
-        "packages/local/helix_discovery/**",
+        "packages/local/helix_local_platform/**",
+        "packages/local/helix_local_transport/**",
+        "packages/local/helix_local_calls/**",
+        "packages/local/helix_local_messaging/**",
+        "packages/local/helix_local_transfer/**",
+        "packages/local/helix_local_groups/**",
+        "packages/local/helix_local_discovery/**",
         "apps/**"
       ],
       "reason": "Storage implementations must not depend on platform UI, transport, or app code."
     },
     {
-      "source": "packages/local/helix_platform/**",
+      "source": "packages/local/helix_local_platform/**",
       "imports": [
-        "packages/local/helix_transport/**",
-        "packages/local/helix_calls/**",
-        "packages/local/helix_messaging/**",
-        "packages/local/helix_transfer/**",
-        "packages/local/helix_groups/**",
-        "packages/local/helix_discovery/**",
+        "packages/local/helix_local_transport/**",
+        "packages/local/helix_local_calls/**",
+        "packages/local/helix_local_messaging/**",
+        "packages/local/helix_local_transfer/**",
+        "packages/local/helix_local_groups/**",
+        "packages/local/helix_local_discovery/**",
         "apps/**"
       ],
       "reason": "Platform wrappers must not depend on transport or higher-level feature packages."
@@ -111,14 +111,14 @@
     {
       "source": "apps/helix_local/lib/ui/**",
       "imports": [
-        "packages/local/helix_transport/**"
+        "packages/local/helix_local_transport/**"
       ],
       "reason": "UI screens and widgets must not talk directly to transport internals."
     },
     {
       "source": "apps/helix_remote/lib/ui/**",
       "imports": [
-        "packages/local/helix_transport/**"
+        "packages/local/helix_local_transport/**"
       ],
       "reason": "UI screens and widgets must not talk directly to transport internals."
     }

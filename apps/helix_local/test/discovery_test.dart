@@ -1,9 +1,9 @@
 // test/discovery_test.dart
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
-import 'package:helix_discovery/peer_registry.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
+import 'package:helix_local_discovery/peer_registry.dart';
 
 // Helper: build a Peer with sensible defaults, overriding only what the test
 // cares about.

@@ -1,6 +1,6 @@
 // lib/ui/app_theme.dart
 import 'package:flutter/material.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_domain/domain/models.dart';
 
 class HelixTokens {
   HelixTokens._();

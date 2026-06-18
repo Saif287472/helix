@@ -7,11 +7,11 @@ import 'package:convert/convert.dart' as cvt;
 import 'package:crypto/crypto.dart' as pkg_crypto;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/controllers/messaging_service.dart';
 import 'package:helix/providers/controllers/request_service.dart';
-import 'package:helix_transport/services/transport/secure_channel.dart';
+import 'package:helix_local_transport/services/transport/secure_channel.dart';
 
 void main() {
   test(

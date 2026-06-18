@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_protocol/protocol/protocol_messages.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_protocol/protocol/protocol_messages.dart';
 
 void main() {
   test('protocol v$kProtocolMajor.$kProtocolMinor fixtures decode', () {

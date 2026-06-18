@@ -8,11 +8,11 @@ import 'package:convert/convert.dart' as cvt;
 import 'package:crypto/crypto.dart' as pkg_crypto;
 import 'package:flutter/services.dart' show rootBundle;
 
-import 'package:helix_domain/core/constants.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_domain/core/constants.dart';
+import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/controllers/secret_code_service.dart';
-import 'package:helix_domain/application/contracts/repositories.dart';
-import 'package:helix_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_domain/application/contracts/repositories.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
 
 class IdentityManagerImpl implements IdentityManager {
   final ProfileRepository _profileRepository;

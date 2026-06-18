@@ -2,13 +2,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
-import 'package:helix_domain/core/product_descriptor.dart';
-import 'package:helix_domain/domain/models.dart';
+import 'package:helix_local_domain/core/product_descriptor.dart';
+import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/controllers/profile_service.dart';
-import 'package:helix_domain/application/contracts/repositories.dart';
-import 'package:helix_protocol/application/contracts/use_cases.dart';
-import 'package:helix_storage/infrastructure/storage/flutter_profile_repository.dart';
-import 'package:helix_storage/infrastructure/storage/flutter_secure_identity_store.dart';
+import 'package:helix_local_domain/application/contracts/repositories.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_storage/infrastructure/storage/flutter_profile_repository.dart';
+import 'package:helix_local_storage/infrastructure/storage/flutter_secure_identity_store.dart';
 import 'package:helix/application/identity/identity_manager_impl.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────

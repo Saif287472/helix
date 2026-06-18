@@ -1,0 +1,21 @@
+name: helix_local_transfer
+description: Clean File and Ephemeral Media Transfer Use Cases and Adapters for Helix
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  crypto: any
+  uuid: any
+  image: any
+  path: any
+  helix_local_domain:
+    path: ../helix_local_domain
+  helix_local_protocol:
+    path: ../helix_local_protocol
+  helix_local_transport:
+    path: ../helix_local_transport

@@ -13,28 +13,28 @@ dependencies:
     sdk: flutter
 
   # Extracted internal packages
-  helix_domain:
-    path: ../../packages/local/helix_domain
-  helix_protocol:
-    path: ../../packages/local/helix_protocol
-  helix_crypto:
-    path: ../../packages/local/helix_crypto
-  helix_transport:
-    path: ../../packages/local/helix_transport
-  helix_storage:
-    path: ../../packages/local/helix_storage
-  helix_platform:
-    path: ../../packages/local/helix_platform
-  helix_calls:
-    path: ../../packages/local/helix_calls
-  helix_messaging:
-    path: ../../packages/local/helix_messaging
-  helix_transfer:
-    path: ../../packages/local/helix_transfer
-  helix_groups:
-    path: ../../packages/local/helix_groups
-  helix_discovery:
-    path: ../../packages/local/helix_discovery
+  helix_local_domain:
+    path: ../../packages/local/helix_local_domain
+  helix_local_protocol:
+    path: ../../packages/local/helix_local_protocol
+  helix_local_crypto:
+    path: ../../packages/local/helix_local_crypto
+  helix_local_transport:
+    path: ../../packages/local/helix_local_transport
+  helix_local_storage:
+    path: ../../packages/local/helix_local_storage
+  helix_local_platform:
+    path: ../../packages/local/helix_local_platform
+  helix_local_calls:
+    path: ../../packages/local/helix_local_calls
+  helix_local_messaging:
+    path: ../../packages/local/helix_local_messaging
+  helix_local_transfer:
+    path: ../../packages/local/helix_local_transfer
+  helix_local_groups:
+    path: ../../packages/local/helix_local_groups
+  helix_local_discovery:
+    path: ../../packages/local/helix_local_discovery
 
   # State management
   flutter_riverpod: ^3.3.2

@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
-import 'package:helix_protocol/application/contracts/use_cases.dart';
-import 'package:helix_protocol/protocol/protocol_messages.dart';
-import 'package:helix_transport/services/transport/secure_channel.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
+import 'package:helix_local_protocol/protocol/protocol_messages.dart';
+import 'package:helix_local_transport/services/transport/secure_channel.dart';
 
-import 'package:helix_storage/infrastructure/storage/in_memory_transfer_repository.dart';
-import 'package:helix_transfer/helix_transfer.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_transfer_repository.dart';
+import 'package:helix_local_transfer/helix_transfer.dart';
 
 class FileTransferService {
   FileTransferService({
