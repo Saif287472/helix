@@ -1,0 +1,71 @@
+version: 1
+default_verification: "scripts/verify.ps1"
+
+classifications:
+  - classification: Critical
+    areas:
+      - packages/helix_transport/lib/services/transport/secure_channel.dart
+      - lib/providers/controllers/profile_service.dart
+      - lib/providers/controllers/trust_service.dart
+      - lib/core/identity_phrase.dart
+      - lib/main.dart
+      - lib/app.dart
+      - pubspec.yaml
+      - android/**
+      - windows/**
+    minimum_verification:
+      - dart format --set-exit-if-changed lib test tool
+      - flutter analyze
+      - dart run tool/check_boundaries.dart
+      - dart run tool/check_secrets.dart
+      - flutter test
+      - explicit risk report
+    notes: "Identity, crypto, bootstrap, platform permissions, and release configuration require human review."
+
+  - classification: High
+    areas:
+      - packages/helix_protocol/lib/protocol/**
+      - lib/providers/controllers/request_service.dart
+      - lib/providers/controllers/group_service.dart
+      - lib/data/database.dart
+      - lib/routing/**
+      - lib/ui/app_router.dart
+      - lib/providers/controllers/secret_code_service.dart
+    minimum_verification:
+      - dart format --set-exit-if-changed lib test tool
+      - flutter analyze
+      - dart run tool/check_boundaries.dart
+      - dart run tool/check_secrets.dart
+      - flutter test
+    notes: "Protocol, request, group, database, and navigation changes can alter user-visible contracts."
+
+  - classification: Medium
+    areas:
+      - lib/providers/controllers/messaging_service.dart
+      - lib/providers/controllers/file_transfer_service.dart
+      - lib/providers/controllers/ephemeral_media_service.dart
+      - lib/providers/controllers/reconnect_service.dart
+      - lib/providers/controllers/session_service.dart
+      - lib/providers/controllers/notification_service.dart
+      - lib/providers/controllers/tcp_server_service.dart
+      - lib/providers/controllers/diagnostics_service.dart
+      - packages/helix_discovery/**
+      - packages/helix_messaging/**
+      - packages/helix_transfer/**
+      - future/webrtc/**
+    minimum_verification:
+      - targeted tests for affected service
+      - flutter analyze
+      - flutter test
+    notes: "Application behavior, timers, sockets, and media paths require targeted regression tests."
+
+  - classification: Low
+    areas:
+      - lib/ui/**
+      - lib/theme/**
+      - assets/**
+      - docs/**
+    minimum_verification:
+      - flutter analyze
+      - affected widget/unit tests
+    notes: "UI and docs still need visual/manual review when behavior is visible."

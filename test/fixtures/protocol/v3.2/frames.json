@@ -1,0 +1,148 @@
+{
+  "protocolMajor": 3,
+  "protocolMinor": 2,
+  "wireFormat": "legacy-cbor-payload",
+  "generatedBy": "tool/generate_protocol_fixtures.dart",
+  "fixtures": [
+    {
+      "name": "request",
+      "type": 1,
+      "payloadBase64": "qgABAWdyZXEtMDAxAmVBbGljZQNkYTFiMgR4IGFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhBXggMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYGAwcCCBkQkgkbAAABjiPxTAA="
+    },
+    {
+      "name": "accept",
+      "type": 2,
+      "payloadBase64": "ogACAWdyZXEtMDAx"
+    },
+    {
+      "name": "reject",
+      "type": 3,
+      "payloadBase64": "owADAWdyZXEtMDAxAmZkZW5pZWQ="
+    },
+    {
+      "name": "cancel",
+      "type": 4,
+      "payloadBase64": "ogAEAWdyZXEtMDAx"
+    },
+    {
+      "name": "identity",
+      "type": 5,
+      "payloadBase64": "pAAFAUQBAgMEAkQFBgcIA3ggYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE="
+    },
+    {
+      "name": "identity_ack",
+      "type": 6,
+      "payloadBase64": "owAGAfUCeCBhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ=="
+    },
+    {
+      "name": "capability",
+      "type": 7,
+      "payloadBase64": "pQAHAQMCAgOBaGJhc2VsaW5lBBkB/w=="
+    },
+    {
+      "name": "chat_message",
+      "type": 8,
+      "payloadBase64": "pQAIAWdtc2ctMDAxAmVoZWxsbwMbAAABjiPxTAEEZ21zZy0wMDA="
+    },
+    {
+      "name": "chat_ack",
+      "type": 9,
+      "payloadBase64": "owAJAWdtc2ctMDAxAvU="
+    },
+    {
+      "name": "keepalive",
+      "type": 10,
+      "payloadBase64": "ogAKAQc="
+    },
+    {
+      "name": "close",
+      "type": 11,
+      "payloadBase64": "ogALAWZub3JtYWw="
+    },
+    {
+      "name": "profile_update",
+      "type": 12,
+      "payloadBase64": "ogAMAWdBbGljZSAy"
+    },
+    {
+      "name": "busy",
+      "type": 13,
+      "payloadBase64": "oQAN"
+    },
+    {
+      "name": "version_mismatch",
+      "type": 14,
+      "payloadBase64": "owAOAQMCAg=="
+    },
+    {
+      "name": "typing_indicator",
+      "type": 16,
+      "payloadBase64": "ogAQAfU="
+    },
+    {
+      "name": "read_receipt",
+      "type": 17,
+      "payloadBase64": "ogARAYJnbXNnLTAwMWdtc2ctMDAy"
+    },
+    {
+      "name": "reaction",
+      "type": 18,
+      "payloadBase64": "pAASAWdtc2ctMDAxAmIrMQP0"
+    },
+    {
+      "name": "file_transfer",
+      "type": 19,
+      "payloadBase64": "qAATAWhmaWxlLTAwMQJobm90ZS50eHQDanRleHQvcGxhaW4EBAUABgEHRAkIBwY="
+    },
+    {
+      "name": "edit_message",
+      "type": 20,
+      "payloadBase64": "pAAUAWdtc2ctMDAxAmZlZGl0ZWQDGwAAAY4j8UwC"
+    },
+    {
+      "name": "delete_message",
+      "type": 21,
+      "payloadBase64": "ogAVAWdtc2ctMDAx"
+    },
+    {
+      "name": "wipe",
+      "type": 22,
+      "payloadBase64": "oQAW"
+    },
+    {
+      "name": "file_probe",
+      "type": 23,
+      "payloadBase64": "pgAXAWhmaWxlLTAwMQJobm90ZS50eHQDanRleHQvcGxhaW4EBAV4QDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+    },
+    {
+      "name": "file_resume",
+      "type": 24,
+      "payloadBase64": "owAYGAFoZmlsZS0wMDECAA=="
+    },
+    {
+      "name": "file_complete",
+      "type": 25,
+      "payloadBase64": "owAYGQFoZmlsZS0wMDECeEAxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTEx"
+    },
+    {
+      "name": "file_cancel",
+      "type": 26,
+      "payloadBase64": "owAYGgFoZmlsZS0wMDECa3VzZXItY2FuY2Vs"
+    },
+    {
+      "name": "ephemeral_media",
+      "type": 27,
+      "payloadBase64": "pwAYGwFpbWVkaWEtMDAxAmppbWFnZS9qcGVnAwMEAAUBBkMBAQI="
+    },
+    {
+      "name": "group_control",
+      "type": 28,
+      "payloadBase64": "qgAYHAFscHVibGljLWxvYmJ5AmdldnQtMDAxA21ob3N0LWFubm91bmNlBHggMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYGeCAwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZgdxMTkyLjE2OC4xLjEwOjQyNDIIAQkCChsAAAGOJCg6gA=="
+    },
+    {
+      "name": "group_message",
+      "type": 29,
+      "payloadBase64": "qAAYHQFscHVibGljLWxvYmJ5AmhnbXNnLTAwMQN4IDAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmBAEFAgYbAAABjiPxTAMHRQMBBAEF"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "notes": [
+    "Stage 7/Phase 3 rules are adapted to the package-extracted structure.",
+    "Legacy lib/services files have been removed; UI-facing compatibility facades now live under lib/providers/controllers."
+  ],
+  "forbidden": [
+    {
+      "source": "lib/core/**",
+      "imports": [
+        "lib/data/**",
+        "lib/platform/**",
+        "lib/providers/**",
+        "lib/ui/**"
+      ],
+      "reason": "Core utilities must stay dependency-light and feature-neutral."
+    },
+    {
+      "source": "lib/domain/**",
+      "imports": [
+        "lib/data/**",
+        "lib/platform/**",
+        "lib/providers/**",
+        "lib/ui/**"
+      ],
+      "reason": "Domain models may be impure during Stage 1, but they must not depend on app features."
+    },
+    {
+      "source": "lib/data/**",
+      "imports": [
+        "lib/platform/**",
+        "lib/providers/**",
+        "lib/ui/**"
+      ],
+      "reason": "Persistence code must not depend on presentation or platform UI glue."
+    },
+    {
+      "source": "lib/providers/controllers/**",
+      "imports": [
+        "lib/ui/**"
+      ],
+      "reason": "Presentation controllers expose behavior to providers/UI; they must not import widgets or screens."
+    },
+    {
+      "source": "lib/platform/**",
+      "imports": [
+        "lib/data/**",
+        "lib/providers/**",
+        "lib/ui/**"
+      ],
+      "reason": "Platform wrappers should stay narrow and composable."
+    },
+    {
+      "source": "lib/crypto/**",
+      "imports": [
+        "lib/data/**",
+        "lib/platform/**",
+        "lib/providers/**",
+        "lib/ui/**"
+      ],
+      "reason": "Crypto primitives must not depend on application, transport, storage, platform, or presentation code."
+    },
+    {
+      "source": "lib/protocol/**",
+      "imports": [
+        "lib/data/**",
+        "lib/platform/**",
+        "lib/providers/**",
+        "lib/ui/**"
+      ],
+      "reason": "Protocol definitions and codecs must stay reusable outside transport and UI."
+    },
+    {
+      "source": "lib/ui/**",
+      "imports": [
+        "packages/helix_transport/**"
+      ],
+      "reason": "Screens and widgets should not talk directly to transport internals."
+    }
+  ]
+}

@@ -1,0 +1,163 @@
+name: helix
+description: Local-only peer-to-peer encrypted LAN messenger.
+publish_to: none
+version: 2.0.0+1
+
+workspace:
+  - packages/helix_domain
+  - packages/helix_protocol
+  - packages/helix_crypto
+  - packages/helix_transport
+  - packages/helix_storage
+  - packages/helix_platform
+  - packages/helix_calls
+  - packages/helix_messaging
+  - packages/helix_transfer
+  - packages/helix_groups
+  - packages/helix_discovery
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Extracted internal packages
+  helix_domain:
+    path: packages/helix_domain
+  helix_protocol:
+    path: packages/helix_protocol
+  helix_crypto:
+    path: packages/helix_crypto
+  helix_transport:
+    path: packages/helix_transport
+  helix_storage:
+    path: packages/helix_storage
+  helix_platform:
+    path: packages/helix_platform
+  helix_calls:
+    path: packages/helix_calls
+  helix_messaging:
+    path: packages/helix_messaging
+  helix_transfer:
+    path: packages/helix_transfer
+  helix_groups:
+    path: packages/helix_groups
+  helix_discovery:
+    path: packages/helix_discovery
+
+  # State management
+  flutter_riverpod: ^3.3.2
+
+  # Secure storage (wraps Android Keystore AES / Windows DPAPI)
+  flutter_secure_storage: ^10.3.1
+
+  # Network interface enumeration and connectivity events
+  network_info_plus: ^8.1.0
+  connectivity_plus: ^7.1.1
+
+  # Local notifications
+  flutter_local_notifications: ^22.0.1
+
+  # Windows system tray
+  tray_manager: ^0.5.3
+
+  # Windows window management (close-to-tray, restore)
+  window_manager: ^0.5.1
+
+  # Cryptography: Argon2id, HKDF, SHA-256, ChaCha20-Poly1305
+  cryptography: ^2.7.0
+  cryptography_flutter: ^2.3.2
+
+  # X.509 certificate generation and PEM utilities (TLS identity certs)
+  basic_utils: ^5.8.2
+
+  # RSA/EC key types used by basic_utils (transitive dep; declared directly for imports)
+  pointycastle: ^4.0.0
+
+  # Protocol binary encoding (deterministic CBOR per RFC 8949 §4.2)
+  cbor: ^6.3.2
+
+  # UUID v4 for request IDs, session IDs
+  uuid: ^4.5.1
+
+  # Hex encoding utilities
+  convert: ^3.1.1
+
+  # SHA-256 for device fingerprints
+  crypto: ^3.0.6
+
+  # Annotations (@immutable, @protected, @visibleForTesting)
+  meta: ^1.18.0
+
+  # Persistent storage — raw SQLite via sqlite3 + native libs
+  sqlite3: ^3.3.3
+  sqlite3_flutter_libs: ^0.6.0+eol
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+  # QR code generation (all platforms)
+  qr_flutter: ^4.1.0
+
+  # QR code scanning via camera (Android only in Helix)
+  mobile_scanner: ^7.2.0
+
+  # File transfer — sender picks files, receiver opens them
+  file_picker: ^12.0.0-beta.5
+  open_file: ^4.0.0
+
+  # In-app media players
+  audioplayers: ^6.1.0
+  video_player: ^2.9.2
+
+  # Ephemeral media — pure-Dart JPEG decode/re-encode strips EXIF in-memory
+  image: ^4.9.1
+
+  # Thread export (Phase 1.3)
+  share_plus: ^13.1.0
+
+  # Markdown rendering (Phase 3.1)
+  markdown: ^7.2.2
+
+  # Tappable links (Phase 3.3)
+  url_launcher: ^6.3.1
+
+  # Biometric lock (Phase 5.1)
+  local_auth: ^3.0.1
+
+  # WebRTC voice/video calls (Stage 6: LAN-only one-to-one)
+  flutter_webrtc: ^1.5.1
+
+  # Vibration patterns for incoming-call alerts (Android only)
+  vibration: ^3.1.3
+
+  # Keep the screen on during active video calls
+  wakelock_plus: ^1.1.4
+
+  # Proximity sensor — turns the screen off near the ear during a call (Android only)
+  proximity_sensor: ^1.0.3
+  flutter_markdown_plus: ^1.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  fake_async: ^1.3.1
+
+flutter_launcher_icons:
+  image_path: assets/logo.png
+  android: true
+  windows:
+    generate: true
+    image_path: assets/logo.png
+    icon_size: 256
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/eff_large_wordlist.txt
+    - assets/logo.png
+    - assets/sounds/
+

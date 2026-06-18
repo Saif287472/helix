@@ -1,0 +1,21 @@
+name: helix_calls
+description: WebRTC call state, call service state machine, and call signaling infrastructure.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_webrtc: any
+  uuid: any
+  helix_domain:
+    path: ../helix_domain
+  helix_protocol:
+    path: ../helix_protocol
+  helix_transport:
+    path: ../helix_transport
