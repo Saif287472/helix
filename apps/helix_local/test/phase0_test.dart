@@ -49,8 +49,12 @@ void main() {
     const aliceSessionId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     const bobSessionId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
-    final aliceRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
-    final bobRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
+    final aliceRequests = RequestService(
+      connectionRequestRepository: InMemoryConnectionRequestRepository(),
+    )..start();
+    final bobRequests = RequestService(
+      connectionRequestRepository: InMemoryConnectionRequestRepository(),
+    )..start();
 
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     server.listen(bobRequests.handleIncomingTcpConnection);
@@ -93,8 +97,12 @@ void main() {
       const Duration(seconds: 15),
     );
 
-    final aliceMessaging = aliceMessagingOverride ?? MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
-    final bobMessaging = bobMessagingOverride ?? MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
+    final aliceMessaging =
+        aliceMessagingOverride ??
+        MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
+    final bobMessaging =
+        bobMessagingOverride ??
+        MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
 
     aliceMessaging.attachChannel(
       aliceResult.channel!.threadId,
@@ -280,7 +288,12 @@ void main() {
     // Spot-check individual flags.
     expect(ctx.aliceChannel.supportsCapability(kCapFileTransfer), isTrue);
     expect(ctx.aliceChannel.supportsCapability(kCapReactions), isTrue);
-    expect(ctx.aliceChannel.supportsCapability(kCapForwardSecrecy), isTrue);
+    expect(
+      ctx.aliceChannel.supportsCapability(kCapForwardSecrecy),
+      isFalse,
+      reason:
+          'Forward secrecy must not be advertised until independently verified',
+    );
 
     // Phase 3.3 flag is now in kCapAll.
     expect(ctx.aliceChannel.supportsCapability(kCapFileResume), isTrue);
@@ -328,8 +341,14 @@ void main() {
       'auto-wipe timer fires after unexpected disconnect and removes thread',
       () async {
         final ctx = await establishChannels(
-          MessagingService(autoWipeDelay: const Duration(milliseconds: 100), wipeScheduler: TimerDisconnectWipeScheduler()),
-          MessagingService(autoWipeDelay: const Duration(milliseconds: 100), wipeScheduler: TimerDisconnectWipeScheduler()),
+          MessagingService(
+            autoWipeDelay: const Duration(milliseconds: 100),
+            wipeScheduler: TimerDisconnectWipeScheduler(),
+          ),
+          MessagingService(
+            autoWipeDelay: const Duration(milliseconds: 100),
+            wipeScheduler: TimerDisconnectWipeScheduler(),
+          ),
         );
 
         final threadId = ctx.aliceChannel.threadId;
@@ -356,8 +375,14 @@ void main() {
       'reconnect cancels the auto-wipe timer',
       () async {
         final ctx = await establishChannels(
-          MessagingService(autoWipeDelay: const Duration(milliseconds: 100), wipeScheduler: TimerDisconnectWipeScheduler()),
-          MessagingService(autoWipeDelay: const Duration(milliseconds: 100), wipeScheduler: TimerDisconnectWipeScheduler()),
+          MessagingService(
+            autoWipeDelay: const Duration(milliseconds: 100),
+            wipeScheduler: TimerDisconnectWipeScheduler(),
+          ),
+          MessagingService(
+            autoWipeDelay: const Duration(milliseconds: 100),
+            wipeScheduler: TimerDisconnectWipeScheduler(),
+          ),
         );
 
         final threadId = ctx.aliceChannel.threadId;
@@ -649,7 +674,9 @@ void main() {
 
   group('Task 3.4: ephemeral media assembly', () {
     test('reassembles valid chunks and keeps bytes in RAM', () {
-      final service = EphemeralMediaService(cache: InMemoryEphemeralMediaCache());
+      final service = EphemeralMediaService(
+        cache: InMemoryEphemeralMediaCache(),
+      );
       final first = Uint8List.fromList([1, 2, 3]);
       final second = Uint8List.fromList([4, 5]);
 
@@ -681,7 +708,9 @@ void main() {
     });
 
     test('rejects malformed chunk metadata without caching bytes', () {
-      final service = EphemeralMediaService(cache: InMemoryEphemeralMediaCache());
+      final service = EphemeralMediaService(
+        cache: InMemoryEphemeralMediaCache(),
+      );
 
       final complete = service.receiveChunk(
         EphemeralMediaFrame(
@@ -788,52 +817,66 @@ class FakeSecureChannel extends Fake implements SecureChannel {
   final String threadId;
 
   @override
-  Stream<ChatMessageFrame> get messages => StreamController<ChatMessageFrame>().stream;
+  Stream<ChatMessageFrame> get messages =>
+      StreamController<ChatMessageFrame>().stream;
 
   @override
-  Stream<ChannelState> get stateChanges => StreamController<ChannelState>().stream;
+  Stream<ChannelState> get stateChanges =>
+      StreamController<ChannelState>().stream;
 
   @override
   Stream<bool> get typingEvents => StreamController<bool>().stream;
 
   @override
-  Stream<List<String>> get receiptEvents => StreamController<List<String>>().stream;
+  Stream<List<String>> get receiptEvents =>
+      StreamController<List<String>>().stream;
 
   @override
-  Stream<ReactionFrame> get reactionEvents => StreamController<ReactionFrame>().stream;
+  Stream<ReactionFrame> get reactionEvents =>
+      StreamController<ReactionFrame>().stream;
 
   @override
-  Stream<EditMessageFrame> get editEvents => StreamController<EditMessageFrame>().stream;
+  Stream<EditMessageFrame> get editEvents =>
+      StreamController<EditMessageFrame>().stream;
 
   @override
-  Stream<DeleteMessageFrame> get deleteEvents => StreamController<DeleteMessageFrame>().stream;
+  Stream<DeleteMessageFrame> get deleteEvents =>
+      StreamController<DeleteMessageFrame>().stream;
 
   @override
   Stream<WipeFrame> get wipeEvents => StreamController<WipeFrame>().stream;
 
   @override
-  Stream<FileTransferFrame> get fileChunkEvents => StreamController<FileTransferFrame>().stream;
+  Stream<FileTransferFrame> get fileChunkEvents =>
+      StreamController<FileTransferFrame>().stream;
 
   @override
-  Stream<FileProbeFrame> get fileProbeEvents => StreamController<FileProbeFrame>().stream;
+  Stream<FileProbeFrame> get fileProbeEvents =>
+      StreamController<FileProbeFrame>().stream;
 
   @override
-  Stream<FileCompleteFrame> get fileCompleteEvents => StreamController<FileCompleteFrame>().stream;
+  Stream<FileCompleteFrame> get fileCompleteEvents =>
+      StreamController<FileCompleteFrame>().stream;
 
   @override
-  Stream<FileCancelFrame> get fileCancelEvents => StreamController<FileCancelFrame>().stream;
+  Stream<FileCancelFrame> get fileCancelEvents =>
+      StreamController<FileCancelFrame>().stream;
 
   @override
-  Stream<EphemeralMediaFrame> get ephemeralMediaEvents => StreamController<EphemeralMediaFrame>().stream;
+  Stream<EphemeralMediaFrame> get ephemeralMediaEvents =>
+      StreamController<EphemeralMediaFrame>().stream;
 
   @override
-  Stream<GroupControlFrame> get groupControlEvents => StreamController<GroupControlFrame>().stream;
+  Stream<GroupControlFrame> get groupControlEvents =>
+      StreamController<GroupControlFrame>().stream;
 
   @override
-  Stream<GroupMessageFrame> get groupMessageEvents => StreamController<GroupMessageFrame>().stream;
+  Stream<GroupMessageFrame> get groupMessageEvents =>
+      StreamController<GroupMessageFrame>().stream;
 
   @override
-  Stream<CallSignalFrame> get callSignalEvents => StreamController<CallSignalFrame>().stream;
+  Stream<CallSignalFrame> get callSignalEvents =>
+      StreamController<CallSignalFrame>().stream;
 
   @override
   Future<void> close() async {}

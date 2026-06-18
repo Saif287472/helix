@@ -24,7 +24,6 @@ const int kCapAll =
     kCapReactions |
     kCapTypingIndicator |
     kCapReadReceipt |
-    kCapForwardSecrecy |
     kCapFileResume |
     kCapEphemeralMedia |
     kCapGroups |
@@ -186,7 +185,8 @@ const int kDicewareWordCount = 3;
 
 // Frame / TCP
 const int kFrameLengthPrefixBytes = 4;
-const int kMaxFrameBytes = 16 * 1024 * 1024; // 16 MiB — accommodates file chunks
+const int kMaxFrameBytes =
+    16 * 1024 * 1024; // 16 MiB — accommodates file chunks
 const int kMaxTextFrameBytes = 65536; // 64 KiB cap for text/control frames
 const int kMaxFileFrameBytes =
     16 * 1024 * 1024; // 16 MiB for file transfer chunks

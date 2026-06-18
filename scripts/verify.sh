@@ -26,6 +26,12 @@ dart run tool/dep_graph.dart
 step "Secret scan"
 dart run tool/check_secrets.dart
 
+step "Release hardening checks (P7)"
+dart run tool/check_release_hardening.dart
+
+step "SBOM/license inventory check (P7)"
+dart run tool/generate_local_sbom.dart --check-only
+
 step "Flutter tests (helix_local)"
 (cd apps/helix_local && flutter test)
 

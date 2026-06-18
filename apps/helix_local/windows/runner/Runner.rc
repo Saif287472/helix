@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.helix" "\0"
-            VALUE "FileDescription", "helix" "\0"
+            VALUE "CompanyName", "Helix" "\0"
+            VALUE "FileDescription", "Helix Local" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "helix" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.helix. All rights reserved." "\0"
-            VALUE "OriginalFilename", "helix.exe" "\0"
-            VALUE "ProductName", "helix" "\0"
+            VALUE "InternalName", "helix_local" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Helix. All rights reserved." "\0"
+            VALUE "OriginalFilename", "helix_local.exe" "\0"
+            VALUE "ProductName", "Helix Local" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

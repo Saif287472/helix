@@ -36,6 +36,14 @@ Invoke-Step "Secret scan" {
     dart run tool/check_secrets.dart
 }
 
+Invoke-Step "Release hardening checks (P7)" {
+    dart run tool/check_release_hardening.dart
+}
+
+Invoke-Step "SBOM/license inventory check (P7)" {
+    dart run tool/generate_local_sbom.dart --check-only
+}
+
 Invoke-Step "Flutter tests (helix_local)" {
     Push-Location apps/helix_local
     try {

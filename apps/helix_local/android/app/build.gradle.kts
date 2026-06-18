@@ -28,22 +28,23 @@ android {
             // Use product-scoped env vars (HELIX_LOCAL_*) so that Local and Remote
             // release builds can never accidentally share the same signing credentials.
             val keystoreFile = project.rootProject.file("helix_local.keystore")
-            if (keystoreFile.exists()) {
-                signingConfig = signingConfigs.create("release") {
-                    storeFile = keystoreFile
-                    storePassword = System.getenv("HELIX_LOCAL_STORE_PASSWORD") ?: ""
-                    keyAlias = System.getenv("HELIX_LOCAL_KEY_ALIAS") ?: ""
-                    keyPassword = System.getenv("HELIX_LOCAL_KEY_PASSWORD") ?: ""
-                }
-            } else {
-                val isCI = System.getenv("CI") != null || System.getenv("STRICT_MODE") != null
-                if (isCI) {
-                    throw org.gradle.api.GradleException(
-                        "Release build requires helix_local.keystore and HELIX_LOCAL_* signing env vars. " +
-                        "Do not use the shared release.keystore for Helix Local."
-                    )
-                }
-                signingConfig = signingConfigs.getByName("debug")
+            val storePassword = System.getenv("HELIX_LOCAL_STORE_PASSWORD") ?: ""
+            val keyAlias = System.getenv("HELIX_LOCAL_KEY_ALIAS") ?: ""
+            val keyPassword = System.getenv("HELIX_LOCAL_KEY_PASSWORD") ?: ""
+            if (!keystoreFile.exists() ||
+                storePassword.isBlank() ||
+                keyAlias.isBlank() ||
+                keyPassword.isBlank()) {
+                throw org.gradle.api.GradleException(
+                    "Release build requires helix_local.keystore and HELIX_LOCAL_STORE_PASSWORD, " +
+                    "HELIX_LOCAL_KEY_ALIAS, HELIX_LOCAL_KEY_PASSWORD. Debug signing is forbidden for Helix Local release."
+                )
+            }
+            signingConfig = signingConfigs.create("release") {
+                storeFile = keystoreFile
+                this.storePassword = storePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
             }
         }
     }

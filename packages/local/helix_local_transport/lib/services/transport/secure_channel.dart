@@ -596,7 +596,9 @@ class SecureChannel {
     // Store the intersection of what both sides support.
     _negotiatedCapabilities = kCapAll & peerCap.capabilities;
 
-    // Initialise forward-secrecy chain keys from the TLS shared secret.
+    // Initialise per-message chain keys. Do not advertise this as forward
+    // secrecy until the authenticated key agreement has been externally
+    // reviewed and the capability flag is re-enabled deliberately.
     await _initChainKeys();
   }
 
