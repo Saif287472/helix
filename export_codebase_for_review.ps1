@@ -12,6 +12,7 @@ $OutputPath = Join-Path $Root $OutputFile
 
 # Project-authored areas to inspect.
 $IncludedTopDirectories = @(
+    "apps",
     "lib",
     "packages",
     "docs",

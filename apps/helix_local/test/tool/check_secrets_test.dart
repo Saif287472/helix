@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../tool/check_secrets.dart';
+import '../../../../tool/check_secrets.dart';
 
 void main() {
   test('placeholder examples pass', () async {

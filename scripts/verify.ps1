@@ -12,7 +12,7 @@ function Invoke-Step {
 }
 
 Invoke-Step "Dart format check" {
-    dart format --output=none --set-exit-if-changed lib test tool packages
+    dart format --output=none --set-exit-if-changed apps packages tool
 }
 
 Invoke-Step "Flutter analyze" {
@@ -27,8 +27,22 @@ Invoke-Step "Secret scan" {
     dart run tool/check_secrets.dart
 }
 
-Invoke-Step "Flutter tests" {
-    flutter test
+Invoke-Step "Flutter tests (Local)" {
+    Push-Location apps/helix_local
+    try {
+        flutter test
+    } finally {
+        Pop-Location
+    }
+}
+
+Invoke-Step "Flutter tests (Remote)" {
+    Push-Location apps/helix_remote
+    try {
+        flutter test
+    } finally {
+        Pop-Location
+    }
 }
 
 Invoke-Step "Dependency health advisory" {
@@ -36,11 +50,17 @@ Invoke-Step "Dependency health advisory" {
 }
 
 if ($env:HELIX_VERIFY_BUILD -eq "1") {
-    Invoke-Step "Debug build" {
-        flutter build windows --debug
+    Invoke-Step "Debug build (Local)" {
+        Push-Location apps/helix_local
+        try {
+            flutter build windows --debug
+        } finally {
+            Pop-Location
+        }
     }
 } else {
     Write-Host ""
     Write-Host "==> Debug build"
     Write-Host "Skipped. Set HELIX_VERIFY_BUILD=1 to run flutter build windows --debug."
 }
+

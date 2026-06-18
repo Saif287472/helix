@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../tool/check_boundaries.dart';
+import '../../../../tool/check_boundaries.dart';
 
 void main() {
   test('valid imports pass', () async {

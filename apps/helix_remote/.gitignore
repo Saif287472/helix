@@ -30,8 +30,8 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-**/build/
-**/coverage/
+/build/
+/coverage/
 
 # Symbolication related
 app.*.symbols
@@ -40,34 +40,6 @@ app.*.symbols
 app.*.map.json
 
 # Android Studio will place build artifacts here
-**/android/app/debug
-**/android/app/profile
-**/android/app/release
-
-# Local configuration and secrets
-.env
-.env.*
-!.env.example
-*.keystore
-*.jks
-*.p12
-*.pfx
-*.pem
-*.key
-*.crt
-*.cer
-*.csr
-service-account*.json
-google-services.json
-GoogleService-Info.plist
-firebase_options.dart
-secrets/
-private/
-local.properties
-
-# Local databases and diagnostic exports
-*.db
-*.sqlite
-*.sqlite3
-diagnostics-*.json
-audit-export-*.json
+/android/app/debug
+/android/app/profile
+/android/app/release

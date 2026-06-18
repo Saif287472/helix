@@ -693,40 +693,40 @@ Append this under the relevant phase:
 
 ### Tasks
 
-- [ ] **P2-001:** Create `apps/helix_local`.
-- [ ] **P2-002:** Move the current Flutter app shell, Android project, Windows project, assets, and app tests into `apps/helix_local`.
-- [ ] **P2-003:** Preserve current package imports through temporary compatibility exports where needed.
-- [ ] **P2-004:** Keep existing internal packages building during the move.
-- [ ] **P2-005:** Convert the root `pubspec.yaml` into a workspace coordinator.
-- [ ] **P2-006:** Include both apps and all packages in the workspace.
-- [ ] **P2-007:** Update scripts to resolve paths from repository root.
-- [ ] **P2-008:** Update codebase export scripts for `apps/`, `packages/`, `services/`, `contracts/`, and `infra/`.
-- [ ] **P2-009:** Update `.gitignore` for multiple Flutter build trees and backend artifacts.
-- [ ] **P2-010:** Update root README to describe the product family.
-- [ ] **P2-011:** Create `apps/helix_remote` as a minimal Flutter shell with no imports from Local packages.
-- [ ] **P2-012:** Give Remote a placeholder screen proving the app shell launches.
-- [ ] **P2-013:** Do not copy Local providers, Local storage, Local platform code, or Local permissions into Remote.
-- [ ] **P2-014:** Add app-specific test directories.
-- [ ] **P2-015:** Add root commands for analyze/test/build per app.
-- [ ] **P2-016:** Add a workspace-wide dependency resolution check.
-- [ ] **P2-017:** Add a rollback script or documented reverse move.
+- [x] **P2-001:** Create `apps/helix_local`.
+- [x] **P2-002:** Move the current Flutter app shell, Android project, Windows project, assets, and app tests into `apps/helix_local`.
+- [x] **P2-003:** Preserve current package imports through temporary compatibility exports where needed.
+- [x] **P2-004:** Keep existing internal packages building during the move.
+- [x] **P2-005:** Convert the root `pubspec.yaml` into a workspace coordinator.
+- [x] **P2-006:** Include both apps and all packages in the workspace.
+- [x] **P2-007:** Update scripts to resolve paths from repository root.
+- [x] **P2-008:** Update codebase export scripts for `apps/`, `packages/`, `services/`, `contracts/`, and `infra/`.
+- [x] **P2-009:** Update `.gitignore` for multiple Flutter build trees and backend artifacts.
+- [x] **P2-010:** Update root README to describe the product family.
+- [x] **P2-011:** Create `apps/helix_remote` as a minimal Flutter shell with no imports from Local packages.
+- [x] **P2-012:** Give Remote a placeholder screen proving the app shell launches.
+- [x] **P2-013:** Do not copy Local providers, Local storage, Local platform code, or Local permissions into Remote.
+- [x] **P2-014:** Add app-specific test directories.
+- [x] **P2-015:** Add root commands for analyze/test/build per app.
+- [x] **P2-016:** Add a workspace-wide dependency resolution check.
+- [x] **P2-017:** Add a rollback script or documented reverse move.
 
 ### Verification
 
-- [ ] Helix Local behavior matches the baseline.
-- [ ] Helix Local Android debug build succeeds.
-- [ ] Helix Local Windows debug build succeeds.
-- [ ] Helix Remote Android debug shell builds.
-- [ ] Helix Remote Windows debug shell builds.
-- [ ] Both apps can be opened from the same checkout.
-- [ ] No Remote source imports a Local package.
+- [x] Helix Local behavior matches the baseline.
+- [x] Helix Local Android debug build succeeds.
+- [x] Helix Local Windows debug build succeeds.
+- [x] Helix Remote Android debug shell builds.
+- [x] Helix Remote Windows debug shell builds.
+- [x] Both apps can be opened from the same checkout.
+- [x] No Remote source imports a Local package.
 
 ### Exit criteria
 
-- [ ] Two app shells exist.
-- [ ] Existing product behavior is preserved in Local.
-- [ ] Remote is a separate binary, not a flavor or runtime mode.
-- [ ] The root no longer behaves as the only Flutter app.
+- [x] Two app shells exist.
+- [x] Existing product behavior is preserved in Local.
+- [x] Remote is a separate binary, not a flavor or runtime mode.
+- [x] The root no longer behaves as the only Flutter app.
 
 ---
 

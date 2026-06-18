@@ -1,20 +1,35 @@
-# Helix
+# Helix Workspace
 
-Helix is a local-only, peer-to-peer encrypted LAN messenger built with
-Flutter. It uses local discovery, QR/direct-IP fallback, and device-local
-identity material. There are no accounts and no cloud service.
+Helix is a privacy-focused peer-to-peer encrypted messenger family. The codebase is organized as a Dart/Flutter monorepo workspace containing two applications:
 
-## Platforms
+- **Helix Local** (`apps/helix_local`): LAN-only, ephemeral, peer-to-peer messenger with local discovery, zero persistence, and real-time audio/video calls.
+- **Helix Remote** (`apps/helix_remote`): Cross-network, persistent, end-to-end encrypted (E2EE) messenger.
 
-Current targets:
+## Workspace Structure
 
-- Android
-- Windows
+- `apps/`
+  - `helix_local/`: Local app shell (Flutter)
+  - `helix_remote/`: Remote app shell (Flutter)
+- `packages/`: Shared packages containing protocol, storage, cryptography, calls, and networking logic.
+- `tool/`: Workspace tooling (boundary checking, security scanning).
 
 ## Development
 
-```sh
+Get all dependencies and run verification across the workspace:
+
+```powershell
+# Get all dependencies
 flutter pub get
-flutter analyze
-flutter test
+
+# Run formatting, analysis, boundaries, secrets, and tests across all packages
+.\scripts\verify.ps1
 ```
+
+To run tests or builds for a specific app, navigate to its directory under `apps/` and use standard flutter commands:
+
+```sh
+cd apps/helix_local
+flutter test
+flutter run
+```
+
