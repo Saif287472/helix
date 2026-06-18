@@ -11,6 +11,8 @@ import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/controllers/messaging_service.dart';
 import 'package:helix/providers/controllers/request_service.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_connection_request_repository.dart';
+import 'package:helix/infrastructure/scheduler/timer_disconnect_wipe_scheduler.dart';
 import 'package:helix_local_transport/services/transport/secure_channel.dart';
 
 void main() {
@@ -22,10 +24,10 @@ void main() {
       const aliceSessionId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
       const bobSessionId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
-      final aliceRequests = RequestService()..start();
-      final bobRequests = RequestService()..start();
-      final aliceMessaging = MessagingService();
-      final bobMessaging = MessagingService();
+      final aliceRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
+      final bobRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
+      final aliceMessaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
+      final bobMessaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
       ServerSocket? server;
       StreamSubscription<Socket>? serverSub;
 
@@ -162,8 +164,8 @@ void main() {
       const aliceSessionId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
       const bobSessionId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
-      final aliceRequests = RequestService()..start();
-      final bobRequests = RequestService()..start();
+      final aliceRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
+      final bobRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
       ServerSocket? server;
       StreamSubscription<Socket>? serverSub;
 
@@ -248,9 +250,9 @@ void main() {
       final aliceIdentity = _generateIdentity();
       const aliceSessionId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-      final aliceRequests = RequestService()..start();
-      final bobRequests = RequestService()..start();
-      final bobMessaging = MessagingService();
+      final aliceRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
+      final bobRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
+      final bobMessaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
       ServerSocket? server;
       StreamSubscription<Socket>? serverSub;
 

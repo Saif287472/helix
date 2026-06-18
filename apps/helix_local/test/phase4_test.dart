@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix/providers/controllers/group_service.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_group_repository.dart';
 import 'package:helix_local_protocol/protocol/protocol_messages.dart';
 
 void main() {
@@ -207,7 +208,7 @@ void main() {
 }
 
 GroupService _configuredService(String fingerprint) {
-  final service = GroupService();
+  final service = GroupService(repository: InMemoryGroupRepository());
   service.configureLocalIdentity(
     fingerprint: fingerprint,
     displayName: fingerprint,

@@ -12,8 +12,6 @@ import 'package:helix_local_domain/application/contracts/repositories.dart';
 import 'package:helix_local_protocol/application/contracts/use_cases.dart';
 import 'package:helix_local_groups/helix_groups.dart';
 
-import 'package:helix_local_storage/infrastructure/storage/in_memory_group_repository.dart';
-
 export 'package:helix_local_domain/domain/models.dart'
     show
         GroupVisibility,
@@ -37,12 +35,12 @@ class GroupCommands {
 
 class GroupService {
   GroupService({
-    GroupRepository? repository,
+    required GroupRepository repository,
     CreateGroupUseCase? createGroupUseCase,
     GroupElectionEngineImpl? electionEngine,
     GroupMessageRouterImpl? messageRouter,
   }) {
-    _repository = repository ?? InMemoryGroupRepository();
+    _repository = repository;
     final gateway = GroupSignalingGatewayAdapter(
       (peerFingerprint) => getChannel(peerFingerprint),
     );

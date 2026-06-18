@@ -29,7 +29,7 @@ import 'package:helix/providers/controllers/qr_code_service.dart';
 import 'package:helix/providers/controllers/secret_code_service.dart';
 import 'package:helix_local_platform/platform/android_foreground.dart';
 import 'package:helix/providers/controllers/trust_service.dart';
-import 'package:helix/app/composition_root.dart';
+import 'package:helix/app/composition_root.dart' show LocalCompositionRoot;
 import 'package:helix_local_domain/application/contracts/repositories.dart';
 import 'package:helix_local_protocol/application/contracts/gateways.dart';
 import 'package:helix_local_protocol/application/contracts/use_cases.dart';
@@ -39,7 +39,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:helix/application/trust/trust_use_case_impl.dart';
-import 'package:helix/infrastructure/scheduler/timer_disconnect_wipe_scheduler.dart';
+
 import 'package:helix/application/connection/reconnection_coordinator_impl.dart';
 import 'package:helix/application/session/active_session_tracker_impl.dart';
 import 'package:helix/application/diagnostics/diagnostics_use_case_impl.dart';
@@ -73,9 +73,9 @@ export 'package:helix/providers/session_provider.dart'
 // Composition root — single wiring point for all concrete implementations
 // ---------------------------------------------------------------------------
 
-final compositionRootProvider = Provider<AppCompositionRoot>((ref) {
+final compositionRootProvider = Provider<LocalCompositionRoot>((ref) {
   final descriptor = ref.watch(productDescriptorProvider);
-  final root = AppCompositionRoot.production(descriptor);
+  final root = LocalCompositionRoot.production(descriptor);
   ref.onDispose(root.dispose);
   return root;
 });
@@ -172,7 +172,7 @@ final requestServiceProvider = Provider<RequestService>((ref) {
 final disconnectWipeSchedulerProvider = Provider<DisconnectWipeScheduler>((
   ref,
 ) {
-  return TimerDisconnectWipeScheduler();
+  return ref.watch(compositionRootProvider).wipeScheduler;
 });
 
 final messagingServiceProvider = Provider<MessagingService>((ref) {

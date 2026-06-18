@@ -20,6 +20,9 @@ import 'package:helix/providers/controllers/ephemeral_media_service.dart';
 import 'package:helix/providers/controllers/file_transfer_service.dart';
 import 'package:helix/providers/controllers/messaging_service.dart';
 import 'package:helix/providers/controllers/request_service.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_connection_request_repository.dart';
+import 'package:helix_local_storage/infrastructure/storage/in_memory_ephemeral_media_cache.dart';
+import 'package:helix/infrastructure/scheduler/timer_disconnect_wipe_scheduler.dart';
 import 'package:helix_local_protocol/protocol/protocol_messages.dart';
 import 'package:helix_local_transport/services/transport/secure_channel.dart';
 
@@ -46,8 +49,8 @@ void main() {
     const aliceSessionId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     const bobSessionId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
-    final aliceRequests = RequestService()..start();
-    final bobRequests = RequestService()..start();
+    final aliceRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
+    final bobRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
 
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     server.listen(bobRequests.handleIncomingTcpConnection);
@@ -90,8 +93,8 @@ void main() {
       const Duration(seconds: 15),
     );
 
-    final aliceMessaging = aliceMessagingOverride ?? MessagingService();
-    final bobMessaging = bobMessagingOverride ?? MessagingService();
+    final aliceMessaging = aliceMessagingOverride ?? MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
+    final bobMessaging = bobMessagingOverride ?? MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
 
     aliceMessaging.attachChannel(
       aliceResult.channel!.threadId,
@@ -308,6 +311,7 @@ void main() {
     test('wipeThread removes thread and notifies listeners', () async {
       final messaging = MessagingService(
         autoWipeDelay: const Duration(milliseconds: 50),
+        wipeScheduler: TimerDisconnectWipeScheduler(),
       );
 
       // Seed a thread directly via createThread.
@@ -324,8 +328,8 @@ void main() {
       'auto-wipe timer fires after unexpected disconnect and removes thread',
       () async {
         final ctx = await establishChannels(
-          MessagingService(autoWipeDelay: const Duration(milliseconds: 100)),
-          MessagingService(autoWipeDelay: const Duration(milliseconds: 100)),
+          MessagingService(autoWipeDelay: const Duration(milliseconds: 100), wipeScheduler: TimerDisconnectWipeScheduler()),
+          MessagingService(autoWipeDelay: const Duration(milliseconds: 100), wipeScheduler: TimerDisconnectWipeScheduler()),
         );
 
         final threadId = ctx.aliceChannel.threadId;
@@ -352,8 +356,8 @@ void main() {
       'reconnect cancels the auto-wipe timer',
       () async {
         final ctx = await establishChannels(
-          MessagingService(autoWipeDelay: const Duration(milliseconds: 100)),
-          MessagingService(autoWipeDelay: const Duration(milliseconds: 100)),
+          MessagingService(autoWipeDelay: const Duration(milliseconds: 100), wipeScheduler: TimerDisconnectWipeScheduler()),
+          MessagingService(autoWipeDelay: const Duration(milliseconds: 100), wipeScheduler: TimerDisconnectWipeScheduler()),
         );
 
         final threadId = ctx.aliceChannel.threadId;
@@ -645,7 +649,7 @@ void main() {
 
   group('Task 3.4: ephemeral media assembly', () {
     test('reassembles valid chunks and keeps bytes in RAM', () {
-      final service = EphemeralMediaService();
+      final service = EphemeralMediaService(cache: InMemoryEphemeralMediaCache());
       final first = Uint8List.fromList([1, 2, 3]);
       final second = Uint8List.fromList([4, 5]);
 
@@ -677,7 +681,7 @@ void main() {
     });
 
     test('rejects malformed chunk metadata without caching bytes', () {
-      final service = EphemeralMediaService();
+      final service = EphemeralMediaService(cache: InMemoryEphemeralMediaCache());
 
       final complete = service.receiveChunk(
         EphemeralMediaFrame(

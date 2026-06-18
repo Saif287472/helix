@@ -4,10 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/app_providers.dart';
 import 'package:helix/providers/controllers/messaging_service.dart';
+import 'package:helix/infrastructure/scheduler/timer_disconnect_wipe_scheduler.dart';
 
 void main() {
   test('thread provider updates when messaging service mutates', () async {
-    final messaging = MessagingService();
+    final messaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
     final container = ProviderContainer(
       overrides: [messagingServiceProvider.overrideWithValue(messaging)],
     );
@@ -44,7 +45,7 @@ void main() {
   });
 
   test('one-way inbox updates when a one-way message is received', () async {
-    final messaging = MessagingService();
+    final messaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
     final container = ProviderContainer(
       overrides: [messagingServiceProvider.overrideWithValue(messaging)],
     );

@@ -10,7 +10,7 @@ import 'package:helix_local_domain/application/contracts/repositories.dart';
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix_local_protocol/protocol/protocol_messages.dart';
-import 'package:helix_local_storage/infrastructure/storage/in_memory_connection_request_repository.dart';
+
 import 'package:helix_local_transport/services/transport/secure_channel.dart';
 
 class RequestConnectionResult {
@@ -61,11 +61,10 @@ class _SourceTracker {
 
 class RequestService implements RequestValidator {
   RequestService({
-    ConnectionRequestRepository? connectionRequestRepository,
+    required ConnectionRequestRepository connectionRequestRepository,
     ConnectionRequestUseCaseImpl? connectionRequestUseCase,
   }) {
-    _connectionRequestRepository =
-        connectionRequestRepository ?? InMemoryConnectionRequestRepository();
+    _connectionRequestRepository = connectionRequestRepository;
     _connectionRequestUseCase =
         connectionRequestUseCase ??
         ConnectionRequestUseCaseImpl(

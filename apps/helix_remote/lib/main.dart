@@ -1,16 +1,32 @@
 import 'package:flutter/material.dart';
 
+import 'app/composition_root.dart';
+
 void main() {
-  runApp(const HelixRemoteApp());
+  final root = RemoteCompositionRoot.production();
+  runApp(HelixRemoteApp(root: root));
 }
 
-class HelixRemoteApp extends StatelessWidget {
-  const HelixRemoteApp({super.key});
+class HelixRemoteApp extends StatefulWidget {
+  const HelixRemoteApp({super.key, required this.root});
+
+  final RemoteCompositionRoot root;
+
+  @override
+  State<HelixRemoteApp> createState() => _HelixRemoteAppState();
+}
+
+class _HelixRemoteAppState extends State<HelixRemoteApp> {
+  @override
+  void dispose() {
+    widget.root.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Helix Remote',
+      title: widget.root.config.displayName,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(

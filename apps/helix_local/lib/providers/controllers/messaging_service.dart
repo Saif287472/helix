@@ -10,7 +10,6 @@ import 'package:helix_local_transport/services/transport/secure_channel.dart';
 import 'package:helix/providers/controllers/trust_service.dart';
 import 'package:helix_local_domain/application/contracts/repositories.dart';
 import 'package:helix_local_protocol/application/contracts/use_cases.dart';
-import 'package:helix/infrastructure/scheduler/timer_disconnect_wipe_scheduler.dart';
 
 typedef FileChunkHandler =
     Future<void> Function(
@@ -73,8 +72,8 @@ class MessagingService {
     this._sendMessageUseCase,
     this._receiveMessageCoordinator,
     this._deliveryReceiptTracker,
-    DisconnectWipeScheduler? wipeScheduler,
-  }) : _wipeScheduler = wipeScheduler ?? TimerDisconnectWipeScheduler();
+    required this._wipeScheduler,
+  });
 
   final Duration autoWipeDelay;
   final ConversationRepository? _conversationRepository;

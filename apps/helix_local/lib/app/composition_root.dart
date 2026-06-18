@@ -12,13 +12,14 @@ import 'package:helix_local_storage/infrastructure/storage/in_memory_group_repos
 import 'package:helix_local_storage/infrastructure/storage/in_memory_transfer_repository.dart';
 import 'package:helix_local_storage/infrastructure/storage/secure_session_repository.dart';
 import 'package:helix_local_storage/infrastructure/storage/secure_trust_repository.dart';
+import 'package:helix_local_protocol/application/contracts/use_cases.dart';
+import 'package:helix/infrastructure/scheduler/timer_disconnect_wipe_scheduler.dart';
 
-/// Single wiring point where every concrete infrastructure implementation is
-/// bound to its domain interface.  Riverpod providers expose these bindings
-/// to the rest of the app; nothing outside this file instantiates concrete
-/// infrastructure classes directly.
-class AppCompositionRoot {
-  AppCompositionRoot._({
+// Single wiring point for all concrete Local infrastructure. Riverpod providers
+// expose these bindings; nothing outside this file instantiates concrete
+// infrastructure classes directly.
+class LocalCompositionRoot {
+  LocalCompositionRoot._({
     required this.conversationRepository,
     required this.connectionRequestRepository,
     required this.groupRepository,
@@ -30,27 +31,34 @@ class AppCompositionRoot {
     required this.notificationGateway,
     required this.diagnosticsGateway,
     required this.callEngine,
+    required this.wipeScheduler,
   });
 
-  factory AppCompositionRoot.production(ProductDescriptor descriptor) => AppCompositionRoot._(
-    conversationRepository: InMemoryConversationRepository(),
-    connectionRequestRepository: InMemoryConnectionRequestRepository(),
-    groupRepository: InMemoryGroupRepository(),
-    transferRepository: InMemoryTransferRepository(),
-    ephemeralMediaCache: InMemoryEphemeralMediaCache(),
-    trustRepository: SecureTrustRepository(keyPrefix: descriptor.secureStoragePrefix),
-    sessionRepository: SecureSessionRepository(keyPrefix: descriptor.secureStoragePrefix),
-    foregroundServiceGateway: const AndroidForegroundServiceGateway(),
-    notificationGateway: PlatformNotificationGateway(
-      appName: descriptor.displayName,
-      appUserModelId: descriptor.packageId,
-      windowsNotificationGuid: descriptor.windowsNotificationGuid,
-      channelPrefix: descriptor.logNamespace,
-      methodChannelNamespace: descriptor.methodChannelNamespace,
-    ),
-    diagnosticsGateway: PlatformDiagnosticsGateway(),
-    callEngine: WebRtcCallEngine(),
-  );
+  factory LocalCompositionRoot.production(ProductDescriptor descriptor) =>
+      LocalCompositionRoot._(
+        conversationRepository: InMemoryConversationRepository(),
+        connectionRequestRepository: InMemoryConnectionRequestRepository(),
+        groupRepository: InMemoryGroupRepository(),
+        transferRepository: InMemoryTransferRepository(),
+        ephemeralMediaCache: InMemoryEphemeralMediaCache(),
+        trustRepository: SecureTrustRepository(
+          keyPrefix: descriptor.secureStoragePrefix,
+        ),
+        sessionRepository: SecureSessionRepository(
+          keyPrefix: descriptor.secureStoragePrefix,
+        ),
+        foregroundServiceGateway: const AndroidForegroundServiceGateway(),
+        notificationGateway: PlatformNotificationGateway(
+          appName: descriptor.displayName,
+          appUserModelId: descriptor.packageId,
+          windowsNotificationGuid: descriptor.windowsNotificationGuid,
+          channelPrefix: descriptor.logNamespace,
+          methodChannelNamespace: descriptor.methodChannelNamespace,
+        ),
+        diagnosticsGateway: PlatformDiagnosticsGateway(),
+        callEngine: WebRtcCallEngine(),
+        wipeScheduler: TimerDisconnectWipeScheduler(),
+      );
 
   final ConversationRepository conversationRepository;
   final ConnectionRequestRepository connectionRequestRepository;
@@ -63,6 +71,7 @@ class AppCompositionRoot {
   final NotificationGateway notificationGateway;
   final DiagnosticsGateway diagnosticsGateway;
   final CallEngine callEngine;
+  final DisconnectWipeScheduler wipeScheduler;
 
   void dispose() {
     notificationGateway.dispose();
