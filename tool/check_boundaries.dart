@@ -172,17 +172,17 @@ List<_ImportRef> _extractImports(String content) {
 const _workspacePackageRoots = <String, String>{
   'helix': 'apps/helix_local/lib/',
   'helix_remote': 'apps/helix_remote/lib/',
-  'helix_domain': 'packages/helix_domain/lib/',
-  'helix_protocol': 'packages/helix_protocol/lib/',
-  'helix_crypto': 'packages/helix_crypto/lib/',
-  'helix_transport': 'packages/helix_transport/lib/',
-  'helix_storage': 'packages/helix_storage/lib/',
-  'helix_platform': 'packages/helix_platform/lib/',
-  'helix_calls': 'packages/helix_calls/lib/',
-  'helix_messaging': 'packages/helix_messaging/lib/',
-  'helix_transfer': 'packages/helix_transfer/lib/',
-  'helix_groups': 'packages/helix_groups/lib/',
-  'helix_discovery': 'packages/helix_discovery/lib/',
+  'helix_domain': 'packages/local/helix_domain/lib/',
+  'helix_protocol': 'packages/local/helix_protocol/lib/',
+  'helix_crypto': 'packages/local/helix_crypto/lib/',
+  'helix_transport': 'packages/local/helix_transport/lib/',
+  'helix_storage': 'packages/local/helix_storage/lib/',
+  'helix_platform': 'packages/local/helix_platform/lib/',
+  'helix_calls': 'packages/local/helix_calls/lib/',
+  'helix_messaging': 'packages/local/helix_messaging/lib/',
+  'helix_transfer': 'packages/local/helix_transfer/lib/',
+  'helix_groups': 'packages/local/helix_groups/lib/',
+  'helix_discovery': 'packages/local/helix_discovery/lib/',
 };
 
 String? _resolveImport(String source, String uri) {

@@ -854,19 +854,19 @@ Append this under the relevant phase:
 
 ### Tasks
 
-- [ ] **P4-001:** Move existing product-specific packages under `packages/local/`.
+- [x] **P4-001:** Move existing product-specific packages under `packages/local/`.
 - [ ] **P4-002:** Rename generic current packages to `helix_local_*`, using compatibility shims temporarily.
 - [x] **P4-003:** Classify current `helix_domain` as Local domain.
 - [x] **P4-004:** Classify current protocol, transport, discovery, groups, storage, calls, messaging, transfer, and platform packages as Local unless reviewed otherwise.
 - [x] **P4-005:** Create empty `packages/shared/`, `packages/remote/`, and `packages/local/` boundaries.
 - [ ] **P4-006:** Extract only demonstrably product-neutral presentation primitives into shared packages.
 - [ ] **P4-007:** Do not move `ChatThread`, `Peer`, `KnownPeer`, `DeviceIdentity`, Local `Group`, or Local `CallState` into shared merely to reduce duplication.
-- [ ] **P4-008:** Extend `module_boundaries.json` for app and product package rules.
-- [ ] **P4-009:** Extend the boundary checker to understand `apps/local`, `apps/remote`, `packages/local`, `packages/remote`, and `packages/shared`.
-- [ ] **P4-010:** Add forbidden import tests for both products.
-- [ ] **P4-011:** Fail CI if Remote imports Local.
-- [ ] **P4-012:** Fail CI if Local imports Remote.
-- [ ] **P4-013:** Fail CI if Shared imports either product.
+- [x] **P4-008:** Extend `module_boundaries.json` for app and product package rules.
+- [x] **P4-009:** Extend the boundary checker to understand `apps/local`, `apps/remote`, `packages/local`, `packages/remote`, and `packages/shared`.
+- [x] **P4-010:** Add forbidden import tests for both products.
+- [x] **P4-011:** Fail CI if Remote imports Local.
+- [x] **P4-012:** Fail CI if Local imports Remote.
+- [x] **P4-013:** Fail CI if Shared imports either product.
 - [ ] **P4-014:** Add a dependency graph artifact to CI.
 - [ ] **P4-015:** Detect circular dependencies.
 - [ ] **P4-016:** Remove concrete infrastructure default constructors from reusable controllers.

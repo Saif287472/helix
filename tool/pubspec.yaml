@@ -1,0 +1,18 @@
+name: helix_tool
+description: Architecture boundary checker and tooling scripts.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  helix_domain:
+    path: ../packages/local/helix_domain
+  helix_protocol:
+    path: ../packages/local/helix_protocol
+
+dev_dependencies:
+  test: any

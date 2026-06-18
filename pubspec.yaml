@@ -7,20 +7,21 @@ environment:
 workspace:
   - apps/helix_local
   - apps/helix_remote
-  - packages/helix_domain
-  - packages/helix_protocol
-  - packages/helix_crypto
-  - packages/helix_transport
-  - packages/helix_storage
-  - packages/helix_platform
-  - packages/helix_calls
-  - packages/helix_messaging
-  - packages/helix_transfer
-  - packages/helix_groups
-  - packages/helix_discovery
+  - tool
+  - packages/local/helix_domain
+  - packages/local/helix_protocol
+  - packages/local/helix_crypto
+  - packages/local/helix_transport
+  - packages/local/helix_storage
+  - packages/local/helix_platform
+  - packages/local/helix_calls
+  - packages/local/helix_messaging
+  - packages/local/helix_transfer
+  - packages/local/helix_groups
+  - packages/local/helix_discovery
 
 dependencies:
   helix_domain:
-    path: packages/helix_domain
+    path: packages/local/helix_domain
   helix_protocol:
-    path: packages/helix_protocol
+    path: packages/local/helix_protocol

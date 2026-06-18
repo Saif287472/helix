@@ -17,6 +17,9 @@ flutter analyze
 step "Architecture boundary check"
 dart run tool/check_boundaries.dart
 
+step "Forbidden import tests (P4-010)"
+dart test tool/boundary_test.dart
+
 step "Secret scan"
 dart run tool/check_secrets.dart
 
@@ -26,10 +29,10 @@ step "Flutter tests (helix_local)"
 step "Flutter tests (helix_remote)"
 (cd apps/helix_remote && flutter test)
 
-for pkg in packages/*/; do
+for pkg in packages/local/*/ packages/shared/*/ packages/remote/*/; do
+  [ -d "$pkg" ] || continue
   if [ -d "${pkg}test" ]; then
-    step "Tests: ${pkg}"
-    # Run as flutter test if the package has a flutter dependency, otherwise dart test.
+    step "Tests: ${pkg%/}"
     if grep -q 'flutter:$\|sdk: flutter' "${pkg}pubspec.yaml" 2>/dev/null; then
       (cd "$pkg" && flutter test)
     else

@@ -24,6 +24,10 @@ Invoke-Step "Architecture boundary check" {
     dart run tool/check_boundaries.dart
 }
 
+Invoke-Step "Forbidden import tests (P4-010)" {
+    dart test tool/boundary_test.dart
+}
+
 Invoke-Step "Secret scan" {
     dart run tool/check_secrets.dart
 }
@@ -46,21 +50,25 @@ Invoke-Step "Flutter tests (helix_remote)" {
     }
 }
 
-# Run tests for each package that has a test/ directory
-foreach ($pkg in (Get-ChildItem packages -Directory)) {
-    $testDir = Join-Path $pkg.FullName "test"
-    if (Test-Path $testDir) {
-        Invoke-Step "Tests: packages/$($pkg.Name)" {
-            Push-Location $pkg.FullName
-            try {
-                $pubspec = Get-Content (Join-Path $pkg.FullName "pubspec.yaml") -Raw
-                if ($pubspec -match 'sdk: flutter') {
-                    flutter test
-                } else {
-                    dart test
+# Run tests for each package under packages/local/, packages/shared/, packages/remote/
+foreach ($scope in @("local", "shared", "remote")) {
+    $scopeDir = Join-Path "packages" $scope
+    if (-not (Test-Path $scopeDir)) { continue }
+    foreach ($pkg in (Get-ChildItem $scopeDir -Directory)) {
+        $testDir = Join-Path $pkg.FullName "test"
+        if (Test-Path $testDir) {
+            Invoke-Step "Tests: packages/$scope/$($pkg.Name)" {
+                Push-Location $pkg.FullName
+                try {
+                    $pubspec = Get-Content (Join-Path $pkg.FullName "pubspec.yaml") -Raw
+                    if ($pubspec -match 'sdk: flutter') {
+                        flutter test
+                    } else {
+                        dart test
+                    }
+                } finally {
+                    Pop-Location
                 }
-            } finally {
-                Pop-Location
             }
         }
     }
