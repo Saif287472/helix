@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:helix_local_storage/data/database.dart';
 import 'package:helix_local_storage/data/database_provider.dart';
+import 'package:helix_local_domain/core/product_descriptor.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix/providers/session_provider.dart';
@@ -343,7 +344,9 @@ final databaseProvider = FutureProvider<HelixDatabase>((ref) async {
     DatabaseProvider.close();
   });
   final descriptor = ref.watch(productDescriptorProvider);
-  return DatabaseProvider.initialize(databaseFilename: descriptor.databaseFilename);
+  return DatabaseProvider.initialize(
+    databaseFilename: descriptor.databaseFilename,
+  );
 });
 
 /// Application lifecycle state.
@@ -384,11 +387,7 @@ final trustedPeersWithPresenceProvider = Provider<List<TrustedPeerPresence>>((
   ref,
 ) {
   final trusted =
-      ref
-          .watch(knownPeersProvider)
-          .value
-          ?.where((p) => p.trusted)
-          .toList() ??
+      ref.watch(knownPeersProvider).value?.where((p) => p.trusted).toList() ??
       [];
   final nearby = ref.watch(nearbyPeersProvider).value ?? [];
   return trusted.map((p) {
@@ -686,9 +685,12 @@ final notificationActionBridgeProvider = Provider<void>((ref) {
         final text = intent.input?.trim() ?? '';
         if (text.isNotEmpty) {
           unawaited(
-            messaging.sendMessage(threadId, text).then((_) {
-              return notif.cancelAll();
-            }).catchError((_) {}),
+            messaging
+                .sendMessage(threadId, text)
+                .then((_) {
+                  return notif.cancelAll();
+                })
+                .catchError((_) {}),
           );
         }
       case 'mark_read':
@@ -919,40 +921,48 @@ final foregroundServiceBridgeProvider = Provider<void>((ref) {
   }
 
   void sync() {
-    operation = operation.then((_) async {
-      final chatCount = ref.read(activeChatCountProvider);
-      final call = ref.read(currentCallProvider).value;
-      final inCall = call != null && call.isInProgress;
-      final shouldRun = inCall || chatCount > 0;
+    operation = operation
+        .then((_) async {
+          final chatCount = ref.read(activeChatCountProvider);
+          final call = ref.read(currentCallProvider).value;
+          final inCall = call != null && call.isInProgress;
+          final shouldRun = inCall || chatCount > 0;
 
-      if (!shouldRun) {
-        if (running) {
-          await AndroidForegroundService.stopService().catchError((_) {});
+          if (!shouldRun) {
+            if (running) {
+              await AndroidForegroundService.stopService().catchError((_) {});
+              running = false;
+            }
+            return;
+          }
+
+          final text = inCall
+              ? callText(call)
+              : (chatCount == 1
+                    ? 'Keeping 1 chat active in memory'
+                    : 'Keeping $chatCount chats active in memory');
+
+          if (!running) {
+            try {
+              await AndroidForegroundService.startService(inCall: inCall);
+              running = true;
+              await AndroidForegroundService.updateNotificationText(
+                text,
+                inCall: inCall,
+              );
+            } catch (_) {
+              running = false;
+            }
+          } else {
+            await AndroidForegroundService.updateNotificationText(
+              text,
+              inCall: inCall,
+            ).catchError((_) {});
+          }
+        })
+        .catchError((_) {
           running = false;
-        }
-        return;
-      }
-
-      final text = inCall
-          ? callText(call)
-          : (chatCount == 1
-                ? 'Keeping 1 chat active in memory'
-                : 'Keeping $chatCount chats active in memory');
-
-      if (!running) {
-        try {
-          await AndroidForegroundService.startService(inCall: inCall);
-          running = true;
-          await AndroidForegroundService.updateNotificationText(text, inCall: inCall);
-        } catch (_) {
-          running = false;
-        }
-      } else {
-        await AndroidForegroundService.updateNotificationText(text, inCall: inCall).catchError((_) {});
-      }
-    }).catchError((_) {
-      running = false;
-    });
+        });
   }
 
   ref.listen<int>(activeChatCountProvider, (_, _) => sync());
@@ -1004,14 +1014,16 @@ final groupBridgeProvider = Provider<void>((ref) {
     )!;
 
     try {
-      final result = await ref.read(requestServiceProvider).sendRequest(
-        peer,
-        RequestSourceMethod.nearby,
-        identity!,
-        ref.read(sessionServiceProvider).sessionId,
-        profile?.displayName ?? '',
-        localTcpPort: port > 0 ? port : portVal,
-      );
+      final result = await ref
+          .read(requestServiceProvider)
+          .sendRequest(
+            peer,
+            RequestSourceMethod.nearby,
+            identity!,
+            ref.read(sessionServiceProvider).sessionId,
+            profile?.displayName ?? '',
+            localTcpPort: port > 0 ? port : portVal,
+          );
       return result.channel;
     } catch (_) {
       return null;
@@ -1027,7 +1039,9 @@ final groupBridgeProvider = Provider<void>((ref) {
         endpoint: '',
       );
     }
-    final thread = ref.read(conversationRepositoryProvider).getThread(fingerprint);
+    final thread = ref
+        .read(conversationRepositoryProvider)
+        .getThread(fingerprint);
     if (thread != null) {
       return (
         displayName: thread.peerDisplayName,
@@ -1070,10 +1084,16 @@ final groupBridgeProvider = Provider<void>((ref) {
       (g) => g!.groupId == GroupService.publicLobbyId,
       orElse: () => null,
     );
-    if (lobby != null && lobby.hostFingerprint == threadId && threadId != identity?.staticPublicKeyFingerprint) {
+    if (lobby != null &&
+        lobby.hostFingerprint == threadId &&
+        threadId != identity?.staticPublicKeyFingerprint) {
       final active = lobby.members
           .map((m) => m.fingerprint)
-          .where((fp) => fp == identity?.staticPublicKeyFingerprint || messaging.getChannel(fp) != null)
+          .where(
+            (fp) =>
+                fp == identity?.staticPublicKeyFingerprint ||
+                messaging.getChannel(fp) != null,
+          )
           .toList();
 
       if (active.isNotEmpty) {
@@ -1082,16 +1102,23 @@ final groupBridgeProvider = Provider<void>((ref) {
           activeFingerprints: active,
         );
         if (elected.hostFingerprint != identity?.staticPublicKeyFingerprint) {
-          unawaited(groupService.joinGroup(
-            groupId: GroupService.publicLobbyId,
-            hostFingerprint: elected.hostFingerprint,
-            hostEndpoint: elected.hostEndpoint,
-            epoch: elected.epoch,
-          ).catchError((Object e, StackTrace s) {}));
+          unawaited(
+            groupService
+                .joinGroup(
+                  groupId: GroupService.publicLobbyId,
+                  hostFingerprint: elected.hostFingerprint,
+                  hostEndpoint: elected.hostEndpoint,
+                  epoch: elected.epoch,
+                )
+                .catchError((Object e, StackTrace s) {}),
+          );
         }
       } else {
-        unawaited(groupService.leaveGroup(GroupService.publicLobbyId)
-            .catchError((Object e, StackTrace s) {}));
+        unawaited(
+          groupService
+              .leaveGroup(GroupService.publicLobbyId)
+              .catchError((Object e, StackTrace s) {}),
+        );
       }
     }
   });
@@ -1101,15 +1128,20 @@ final groupBridgeProvider = Provider<void>((ref) {
       final payloadStr = utf8.decode(receipt.encryptedPayload);
       final json = jsonDecode(payloadStr);
       if (json is Map && json['type'] == 'sync') {
-        final membersJson = (json['members'] as List).cast<Map<String, dynamic>>();
-        final newMembers = membersJson.map((m) => GroupMember(
-          fingerprint: m['fingerprint'] as String,
-          displayName: m['displayName'] as String,
-          deviceSuffix: m['deviceSuffix'] as String,
-          endpoint: m['endpoint'] as String,
-          joinedAt: DateTime.now(),
-          isAdmin: m['isAdmin'] as bool? ?? false,
-        )).toList();
+        final membersJson = (json['members'] as List)
+            .cast<Map<String, dynamic>>();
+        final newMembers = membersJson
+            .map(
+              (m) => GroupMember(
+                fingerprint: m['fingerprint'] as String,
+                displayName: m['displayName'] as String,
+                deviceSuffix: m['deviceSuffix'] as String,
+                endpoint: m['endpoint'] as String,
+                joinedAt: DateTime.now(),
+                isAdmin: m['isAdmin'] as bool? ?? false,
+              ),
+            )
+            .toList();
 
         final repo = ref.read(groupRepositoryProvider);
         final group = repo.loadGroup(receipt.groupId);
@@ -1137,7 +1169,6 @@ final groupBridgeProvider = Provider<void>((ref) {
     subThreadChanges.cancel();
     subMessageReceipts.cancel();
   });
-
 });
 
 final groupSnapshotsProvider = StreamProvider<List<GroupSnapshot>>((
@@ -1181,7 +1212,9 @@ class GroupMessagesNotifier extends StateNotifier<List<GroupMessage>> {
           );
           final nextState = [...state, msg];
           if (nextState.length > kMaxRetainedGroupMessages) {
-            state = nextState.sublist(nextState.length - kMaxRetainedGroupMessages);
+            state = nextState.sublist(
+              nextState.length - kMaxRetainedGroupMessages,
+            );
           } else {
             state = nextState;
           }
@@ -1201,10 +1234,7 @@ class GroupMessagesNotifier extends StateNotifier<List<GroupMessage>> {
   }
 
   Future<void> sendMessage(String text) async {
-    final payload = jsonEncode({
-      'type': 'text',
-      'text': text,
-    });
+    final payload = jsonEncode({'type': 'text', 'text': text});
     await _groupService.sendGroupPayload(
       groupId: _groupId,
       encryptedPayload: utf8.encode(payload),
@@ -1212,10 +1242,15 @@ class GroupMessagesNotifier extends StateNotifier<List<GroupMessage>> {
   }
 }
 
-final groupMessagesProvider = StateNotifierProvider.family<GroupMessagesNotifier, List<GroupMessage>, String>((ref, groupId) {
-  final groupService = ref.watch(groupServiceProvider);
-  return GroupMessagesNotifier(groupService, groupId);
-});
+final groupMessagesProvider =
+    StateNotifierProvider.family<
+      GroupMessagesNotifier,
+      List<GroupMessage>,
+      String
+    >((ref, groupId) {
+      final groupService = ref.watch(groupServiceProvider);
+      return GroupMessagesNotifier(groupService, groupId);
+    });
 
 // ---------------------------------------------------------------------------
 // LAN Lobby providers
@@ -1225,7 +1260,9 @@ final lanLobbyServiceProvider = Provider<LanLobbyService>((ref) {
   final descriptor = ref.watch(productDescriptorProvider);
   final service = LanLobbyService(
     multicastLock: Platform.isAndroid
-        ? MulticastLockAndroid('${descriptor.methodChannelNamespace}/multicast_lock')
+        ? MulticastLockAndroid(
+            '${descriptor.methodChannelNamespace}/multicast_lock',
+          )
         : MulticastLockStub(),
   );
   ref.onDispose(service.dispose);
@@ -1260,8 +1297,8 @@ class _LanLobbyMessagesNotifier extends StateNotifier<List<LobbyMessage>> {
 
 final lanLobbyMessagesProvider =
     StateNotifierProvider<_LanLobbyMessagesNotifier, List<LobbyMessage>>((ref) {
-  return _LanLobbyMessagesNotifier(ref.watch(lanLobbyServiceProvider));
-});
+      return _LanLobbyMessagesNotifier(ref.watch(lanLobbyServiceProvider));
+    });
 
 // ---------------------------------------------------------------------------
 // Typing state (Phase 3.2)
@@ -1292,8 +1329,9 @@ final totalUnreadProvider = Provider<int>((ref) {
 
 /// Count of pending incoming requests (for badge).
 final incomingRequestCountProvider = Provider<int>((ref) {
-  final Map<String, ConnectionRequest> requests =
-      ref.watch(pendingRequestsProvider);
+  final Map<String, ConnectionRequest> requests = ref.watch(
+    pendingRequestsProvider,
+  );
   return requests.values
       .where(
         (r) =>
@@ -1405,6 +1443,89 @@ Future<Directory> _helixMediaDir(String mimeType) async {
   return dir;
 }
 
+Future<void> _deleteDirectoryContents(Directory dir) async {
+  if (!await dir.exists()) return;
+  await for (final entity in dir.list(followLinks: false)) {
+    try {
+      await entity.delete(recursive: true);
+    } catch (_) {}
+  }
+}
+
+Future<void> _clearLocalAppPrivateFiles(ProductDescriptor descriptor) async {
+  final cacheDir = await getApplicationCacheDirectory();
+  if (isPathInScopeForDestructiveOperation(
+    cacheDir.absolute.path,
+    descriptor,
+  )) {
+    await _deleteDirectoryContents(cacheDir);
+  }
+
+  final tempDir = await getTemporaryDirectory();
+  if (isPathInScopeForDestructiveOperation(tempDir.absolute.path, descriptor)) {
+    await _deleteDirectoryContents(tempDir);
+    return;
+  }
+
+  await for (final entity in tempDir.list(followLinks: false)) {
+    if (entity is! File) continue;
+    final name = p.basename(entity.path);
+    final isHelixTemp =
+        (name.startsWith('helix_') && name.endsWith('_export.whis')) ||
+        (name.startsWith('wa_') && name.endsWith('.tmp')) ||
+        name == '${descriptor.exportPrefix}.txt';
+    if (!isHelixTemp) continue;
+    try {
+      await entity.delete();
+    } catch (_) {}
+  }
+}
+
+Future<File> _panicWipeRecoveryMarker(ProductDescriptor descriptor) async {
+  final dir = await getApplicationSupportDirectory();
+  await dir.create(recursive: true);
+  return File(
+    p.join(dir.path, '${descriptor.logNamespace}_panic_wipe.pending'),
+  );
+}
+
+Future<void> _markPanicWipePending(ProductDescriptor descriptor) async {
+  final marker = await _panicWipeRecoveryMarker(descriptor);
+  await marker.writeAsString('pending');
+}
+
+Future<void> _clearPanicWipePending(ProductDescriptor descriptor) async {
+  final marker = await _panicWipeRecoveryMarker(descriptor);
+  if (await marker.exists()) {
+    await marker.delete();
+  }
+}
+
+Future<bool> _hasPanicWipePending(ProductDescriptor descriptor) async {
+  final marker = await _panicWipeRecoveryMarker(descriptor);
+  return marker.exists();
+}
+
+/// Local app initialization wrapper.
+///
+/// If a previous panic wipe was interrupted after the recovery marker was
+/// written, complete the wipe before profile/session initialization can resume
+/// normal app activity.
+final localAppInitProvider = FutureProvider<void>((ref) async {
+  final descriptor = ref.watch(productDescriptorProvider);
+  if (await _hasPanicWipePending(descriptor)) {
+    final orchestrator = await ref.watch(panicWipeOrchestratorProvider.future);
+    final result = await orchestrator.execute();
+    if (!result.succeeded) {
+      throw StateError(
+        'Panic wipe recovery failed: ${result.errors.join('; ')}',
+      );
+    }
+  }
+
+  await ref.watch(appInitProvider.future);
+});
+
 // ---------------------------------------------------------------------------
 // Panic wipe orchestrator (P6-024)
 // ---------------------------------------------------------------------------
@@ -1413,18 +1534,26 @@ Future<Directory> _helixMediaDir(String mimeType) async {
 /// Riverpod container. Async because it needs the database handle.
 final panicWipeOrchestratorProvider =
     FutureProvider<LocalPanicWipeOrchestrator>((ref) async {
-  final db = await ref.watch(databaseProvider.future);
-  final descriptor = ref.watch(productDescriptorProvider);
-  return LocalPanicWipeOrchestrator(
-    messaging: ref.watch(messagingServiceProvider),
-    discovery: ref.watch(discoveryCoordinatorProvider),
-    groupService: ref.watch(groupServiceProvider),
-    wipeScheduler: ref.watch(disconnectWipeSchedulerProvider),
-    database: db,
-    reconnect: ref.watch(reconnectServiceProvider),
-    tcpServer: ref.watch(tcpServerServiceProvider),
-    storagePrefix: descriptor.secureStoragePrefix,
-    notifications: ref.watch(notificationGatewayProvider),
-    onClearLogs: AppLogger.instance.clearLogs,
-  );
-});
+      final db = await ref.watch(databaseProvider.future);
+      final descriptor = ref.watch(productDescriptorProvider);
+      return LocalPanicWipeOrchestrator(
+        messaging: ref.watch(messagingServiceProvider),
+        discovery: ref.watch(discoveryCoordinatorProvider),
+        groupService: ref.watch(groupServiceProvider),
+        wipeScheduler: ref.watch(disconnectWipeSchedulerProvider),
+        database: db,
+        reconnect: ref.watch(reconnectServiceProvider),
+        tcpServer: ref.watch(tcpServerServiceProvider),
+        storagePrefix: descriptor.secureStoragePrefix,
+        notifications: ref.watch(notificationGatewayProvider),
+        session: ref.watch(sessionServiceProvider),
+        profile: ref.watch(profileServiceProvider),
+        callService: ref.watch(callServiceProvider),
+        fileTransfer: ref.watch(fileTransferServiceProvider),
+        ephemeralMedia: ref.watch(ephemeralMediaServiceProvider),
+        onClearLogs: AppLogger.instance.clearLogs,
+        onClearAppPrivateFiles: () => _clearLocalAppPrivateFiles(descriptor),
+        onMarkWipePending: () => _markPanicWipePending(descriptor),
+        onClearWipePending: () => _clearPanicWipePending(descriptor),
+      );
+    });

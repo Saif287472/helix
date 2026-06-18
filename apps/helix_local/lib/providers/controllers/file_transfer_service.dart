@@ -98,6 +98,10 @@ class FileTransferService {
     await _receiveFileCoordinator.cancelTransfer(fileId);
   }
 
+  Future<void> cancelAllTransfers() async {
+    await _receiveFileCoordinator.cancelAllTransfers();
+  }
+
   Future<void> cleanupOldFiles() async {
     if (_receiveFileCoordinator is ReceiveFileCoordinatorImpl) {
       await (_receiveFileCoordinator).cleanupOldFiles();

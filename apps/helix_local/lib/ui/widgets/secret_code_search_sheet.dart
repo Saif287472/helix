@@ -58,14 +58,6 @@ class _SecretCodeSearchSheetState extends ConsumerState<SecretCodeSearchSheet> {
   Timer? _timeoutTimer;
 
   @override
-  void initState() {
-    super.initState();
-    ref.read(profileServiceProvider).getSecretCode().then((code) {
-      if (mounted) setState(() => _ownCode = code);
-    });
-  }
-
-  @override
   void dispose() {
     _codeController.dispose();
     _codeFocus.dispose();

@@ -45,7 +45,9 @@ class _HelixAppState extends ConsumerState<HelixApp>
     WidgetsBinding.instance.addObserver(this);
 
     final descriptor = ref.read(productDescriptorProvider);
-    _platformChannel = MethodChannel('${descriptor.methodChannelNamespace}/foreground');
+    _platformChannel = MethodChannel(
+      '${descriptor.methodChannelNamespace}/foreground',
+    );
 
     if (isDesktop) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -191,7 +193,7 @@ class _HelixAppState extends ConsumerState<HelixApp>
 
   @override
   Widget build(BuildContext context) {
-    final initAsync = ref.watch(appInitProvider);
+    final initAsync = ref.watch(localAppInitProvider);
 
     return initAsync.when(
       loading: () => const _SplashScreen(),
@@ -244,7 +246,9 @@ class _HelixAppState extends ConsumerState<HelixApp>
       initialRoute: initialRoute,
       debugShowCheckedModeBanner: false,
       builder: (context, child) => Overlay(
-        initialEntries: [OverlayEntry(builder: (_) => CallOverlay(child: child))],
+        initialEntries: [
+          OverlayEntry(builder: (_) => CallOverlay(child: child)),
+        ],
       ),
     );
   }

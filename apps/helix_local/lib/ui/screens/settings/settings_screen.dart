@@ -120,8 +120,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _savingCode = false);
@@ -222,14 +223,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(trustServiceProvider).clearAllPeers();
       await ref.read(profileServiceProvider).reset();
       if (mounted) {
-        Navigator.of(context)
-            .pushNamedAndRemoveUntil(AppRoutes.setup, (r) => false);
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil(AppRoutes.setup, (r) => false);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _resetting = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Reset failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Reset failed: $e')));
       }
     }
   }
@@ -238,7 +241,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Panic wipe
   // ---------------------------------------------------------------------------
 
+  Future<bool> _confirmExternalExportWarning() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Export outside wipe protection'),
+        content: const Text(
+          'Exported files leave Helix Local storage. Panic Wipe cannot recall '
+          'or delete copies saved, shared, or backed up outside the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   Future<void> _exportLog() async {
+    if (!await _confirmExternalExportWarning()) return;
+
     final descriptor = ref.read(productDescriptorProvider);
     final file = await AppLogger.instance.getLogFile();
     if (!mounted) return;
@@ -262,28 +291,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         await Process.run('explorer', ['/select,', dest]);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Log saved to Documents\\${descriptor.displayName}\\')),
+          SnackBar(
+            content: Text(
+              'Log saved to Documents\\${descriptor.displayName}\\',
+            ),
+          ),
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
       }
       return;
     }
 
     await SharePlus.instance.share(
       ShareParams(
-        files: [XFile(file.path, name: '${descriptor.exportPrefix}.txt', mimeType: 'text/plain')],
+        files: [
+          XFile(
+            file.path,
+            name: '${descriptor.exportPrefix}.txt',
+            mimeType: 'text/plain',
+          ),
+        ],
         subject: '${descriptor.displayName} Anomaly Log',
       ),
     );
     await AppLogger.instance.clearLogs();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Log exported and cleared.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Log exported and cleared.')));
   }
 
   void _handleVersionTap() {
@@ -315,6 +354,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               'WARNING: This will instantly delete ALL data, '
               'including the database and secure storage, then exit the app.',
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Files you exported or shared outside the app cannot be recalled '
+              'or deleted by Panic Wipe.',
             ),
             const SizedBox(height: 16),
             const Text('Type DELETE to confirm:'),
@@ -363,8 +407,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       try {
-        final orchestrator =
-            await ref.read(panicWipeOrchestratorProvider.future);
+        final orchestrator = await ref.read(
+          panicWipeOrchestratorProvider.future,
+        );
         final result = await orchestrator.execute();
 
         if (result.succeeded) {
@@ -421,11 +466,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ref.watch(profileProvider).when(
-      data: (profile) => _buildContent(context, theme, profile),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, s) => Center(child: Text('Error loading profile: $e')),
-    );
+    return ref
+        .watch(profileProvider)
+        .when(
+          data: (profile) => _buildContent(context, theme, profile),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, s) => Center(child: Text('Error loading profile: $e')),
+        );
   }
 
   // ---------------------------------------------------------------------------
@@ -433,7 +480,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ---------------------------------------------------------------------------
 
   void _showEditNameDialog(
-      BuildContext context, ThemeData theme, Profile profile) {
+    BuildContext context,
+    ThemeData theme,
+    Profile profile,
+  ) {
     final ctrl = TextEditingController();
     String? nameErr;
     showDialog<void>(
@@ -458,8 +508,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
             TextButton(
               onPressed: nameErr == null && ctrl.text.isNotEmpty
                   ? () async {
@@ -473,13 +524,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         if (mounted) {
                           messenger.showSnackBar(
                             const SnackBar(
-                                content: Text('Display name updated.')),
+                              content: Text('Display name updated.'),
+                            ),
                           );
                         }
                       } catch (e) {
                         if (mounted) {
                           messenger.showSnackBar(
-                              SnackBar(content: Text('Error: $e')));
+                            SnackBar(content: Text('Error: $e')),
+                          );
                         }
                       }
                     }
@@ -555,8 +608,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Close')),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -617,8 +671,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color:
-                      Theme.of(ctx).colorScheme.outlineVariant,
+                  color: Theme.of(ctx).colorScheme.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -627,15 +680,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Text(
                   'Incoming call ringtone',
                   style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Expanded(
                 child: Consumer(
                   builder: (ctx, ref, _) {
-                    final currentProfile =
-                        ref.watch(profileProvider).value;
+                    final currentProfile = ref.watch(profileProvider).value;
                     if (currentProfile == null) return const SizedBox();
                     return RadioGroup<String>(
                       groupValue: currentProfile.ringtoneAsset,
@@ -663,8 +715,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     ? Icons.stop_circle_outlined
                                     : Icons.play_circle_outline,
                               ),
-                              tooltip:
-                                  isPreviewing ? 'Stop preview' : 'Preview',
+                              tooltip: isPreviewing
+                                  ? 'Stop preview'
+                                  : 'Preview',
                               onPressed: () async {
                                 await _toggleRingtonePreview(asset);
                                 setSheetState(() {});
@@ -694,26 +747,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _SecurityLimitationItem(
-                  'An attacker with physical access to your device.'),
+                'An attacker with physical access to your device.',
+              ),
               _SecurityLimitationItem(
-                  'Malicious software already running on this device.'),
+                'Malicious software already running on this device.',
+              ),
               _SecurityLimitationItem(
-                  'A peer who deliberately shares or screenshots messages.'),
+                'A peer who deliberately shares or screenshots messages.',
+              ),
               _SecurityLimitationItem(
-                  'Traffic analysis revealing that two devices are communicating.'),
+                'Traffic analysis revealing that two devices are communicating.',
+              ),
               _SecurityLimitationItem(
-                  'Network-level attackers on the same LAN observing packet metadata.'),
+                'Network-level attackers on the same LAN observing packet metadata.',
+              ),
               _SecurityLimitationItem(
-                  'Client isolation bypass at the router/access point level.'),
+                'Client isolation bypass at the router/access point level.',
+              ),
               _SecurityLimitationItem(
-                  'Screen capture tools that operate at the OS or GPU level.'),
+                'Screen capture tools that operate at the OS or GPU level.',
+              ),
             ],
           ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Close')),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -749,14 +810,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             _confirmCodeError = null;
                           });
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e')));
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
                         }
                       },
                       icon: const Icon(Icons.auto_awesome, size: 14),
                       label: const Text('Generate'),
                       style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact),
+                        visualDensity: VisualDensity.compact,
+                      ),
                     ),
                   ],
                 ),
@@ -768,11 +831,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     labelText: 'New secret sentence',
                     errorText: _newCodeError,
                     suffixIcon: IconButton(
-                      icon: Icon(_newCodeVisible
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () => setDs(
-                          () => _newCodeVisible = !_newCodeVisible),
+                      icon: Icon(
+                        _newCodeVisible
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () =>
+                          setDs(() => _newCodeVisible = !_newCodeVisible),
                     ),
                   ),
                   onChanged: (v) {
@@ -790,18 +855,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     labelText: 'Confirm new code',
                     errorText: _confirmCodeError,
                     suffixIcon: IconButton(
-                      icon: Icon(_confirmCodeVisible
-                          ? Icons.visibility_off
-                          : Icons.visibility),
+                      icon: Icon(
+                        _confirmCodeVisible
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
                       onPressed: () => setDs(
-                          () => _confirmCodeVisible = !_confirmCodeVisible),
+                        () => _confirmCodeVisible = !_confirmCodeVisible,
+                      ),
                     ),
                   ),
                   onChanged: (v) {
-                    setDs(() => _confirmCodeError =
-                        v != _newCodeController.text
-                            ? 'Codes do not match.'
-                            : null);
+                    setDs(
+                      () => _confirmCodeError = v != _newCodeController.text
+                          ? 'Codes do not match.'
+                          : null,
+                    );
                   },
                 ),
               ],
@@ -809,10 +878,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
             TextButton(
-              onPressed: (_savingCode ||
+              onPressed:
+                  (_savingCode ||
                       _newCodeController.text.isEmpty ||
                       _confirmCodeController.text.isEmpty ||
                       _newCodeError != null ||
@@ -837,28 +908,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildTrustedDevicesCard(ThemeData theme) {
     final trusted =
         ref.watch(knownPeersProvider).value?.where((p) => p.trusted).toList() ??
-            [];
+        [];
     final trust = ref.read(trustServiceProvider);
 
     if (trusted.isEmpty) {
-      return _SettingsCard(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Row(
-            children: [
-              _SettingsIcon(Icons.verified_user_outlined, color: Colors.teal),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  'No trusted devices yet. Open a chat → ⋮ → Verify identity to trust a device.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(160)),
+      return _SettingsCard(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(
+              children: [
+                _SettingsIcon(Icons.verified_user_outlined, color: Colors.teal),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'No trusted devices yet. Open a chat → ⋮ → Verify identity to trust a device.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(160),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ]);
+        ],
+      );
     }
 
     return _SettingsCard(
@@ -876,20 +950,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ? (peer.nickname ?? peer.lastPublicName)[0].toUpperCase()
                   : '?',
               style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.teal),
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Colors.teal,
+              ),
             ),
           ),
           title: Text(peer.nickname ?? peer.lastPublicName),
-          subtitle: Text('Trusted since $since',
-              style: theme.textTheme.bodySmall),
+          subtitle: Text(
+            'Trusted since $since',
+            style: theme.textTheme.bodySmall,
+          ),
           trailing: PopupMenuButton<String>(
             onSelected: (action) async {
               switch (action) {
                 case 'rename':
                   final ctrl = TextEditingController(
-                      text: peer.nickname ?? peer.lastPublicName);
+                    text: peer.nickname ?? peer.lastPublicName,
+                  );
                   final nick = await showDialog<String>(
                     context: context,
                     builder: (ctx) => AlertDialog(
@@ -897,19 +975,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       content: TextField(
                         controller: ctrl,
                         autofocus: true,
-                        decoration:
-                            const InputDecoration(labelText: 'Nickname'),
-                        onSubmitted: (_) =>
-                            Navigator.of(ctx).pop(ctrl.text),
+                        decoration: const InputDecoration(
+                          labelText: 'Nickname',
+                        ),
+                        onSubmitted: (_) => Navigator.of(ctx).pop(ctrl.text),
                       ),
                       actions: [
                         TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(null),
-                            child: const Text('Cancel')),
+                          onPressed: () => Navigator.of(ctx).pop(null),
+                          child: const Text('Cancel'),
+                        ),
                         FilledButton(
-                            onPressed: () =>
-                                Navigator.of(ctx).pop(ctrl.text),
-                            child: const Text('Save')),
+                          onPressed: () => Navigator.of(ctx).pop(ctrl.text),
+                          child: const Text('Save'),
+                        ),
                       ],
                     ),
                   );
@@ -925,12 +1004,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'rename', child: Text('Rename')),
-              PopupMenuItem(
-                  value: 'untrust', child: Text('Remove trust')),
+              PopupMenuItem(value: 'untrust', child: Text('Remove trust')),
               PopupMenuItem(
                 value: 'forget',
-                child: Text('Forget device',
-                    style: TextStyle(color: Colors.red)),
+                child: Text(
+                  'Forget device',
+                  style: TextStyle(color: Colors.red),
+                ),
               ),
             ],
           ),
@@ -943,8 +1023,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Main content
   // ---------------------------------------------------------------------------
 
-  Widget _buildContent(
-      BuildContext context, ThemeData theme, Profile profile) {
+  Widget _buildContent(BuildContext context, ThemeData theme, Profile profile) {
     final themeModeLabel = switch (profile.themeMode) {
       'light' => 'Light',
       'dark' => 'Dark',
@@ -965,7 +1044,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(
-                color: theme.colorScheme.outlineVariant.withAlpha(80)),
+              color: theme.colorScheme.outlineVariant.withAlpha(80),
+            ),
           ),
           color: theme.colorScheme.primaryContainer.withAlpha(80),
           child: Padding(
@@ -993,14 +1073,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     children: [
                       Text(
                         profile.displayName,
-                        style: theme.textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       Text(
                         'Your display name',
                         style: theme.textTheme.bodySmall?.copyWith(
-                            color:
-                                theme.colorScheme.onSurface.withAlpha(160)),
+                          color: theme.colorScheme.onSurface.withAlpha(160),
+                        ),
                       ),
                     ],
                   ),
@@ -1008,8 +1089,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
                   tooltip: 'Edit name',
-                  onPressed: () =>
-                      _showEditNameDialog(context, theme, profile),
+                  onPressed: () => _showEditNameDialog(context, theme, profile),
                 ),
               ],
             ),
@@ -1018,256 +1098,291 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 16),
 
         // ── Discoverable ─────────────────────────────────────────────────────
-        _SettingsCard(children: [
-          SwitchListTile(
-            secondary: _SettingsIcon(
-              profile.discoverability == DiscoverabilityState.discoverable
-                  ? Icons.wifi_tethering
-                  : Icons.wifi_tethering_off,
-              color: Colors.blue,
+        _SettingsCard(
+          children: [
+            SwitchListTile(
+              secondary: _SettingsIcon(
+                profile.discoverability == DiscoverabilityState.discoverable
+                    ? Icons.wifi_tethering
+                    : Icons.wifi_tethering_off,
+                color: Colors.blue,
+              ),
+              title: const Text('Discoverable'),
+              subtitle: const Text('Peers on the same network can find you.'),
+              value:
+                  profile.discoverability == DiscoverabilityState.discoverable,
+              onChanged: (v) async {
+                final next = v
+                    ? DiscoverabilityState.discoverable
+                    : DiscoverabilityState.hidden;
+                await ref
+                    .read(profileServiceProvider)
+                    .updateDiscoverability(next);
+                await ref
+                    .read(discoveryCoordinatorProvider)
+                    .updateDiscoverability(v);
+              },
             ),
-            title: const Text('Discoverable'),
-            subtitle:
-                const Text('Peers on the same network can find you.'),
-            value: profile.discoverability ==
-                DiscoverabilityState.discoverable,
-            onChanged: (v) async {
-              final next = v
-                  ? DiscoverabilityState.discoverable
-                  : DiscoverabilityState.hidden;
-              await ref
-                  .read(profileServiceProvider)
-                  .updateDiscoverability(next);
-              await ref
-                  .read(discoveryCoordinatorProvider)
-                  .updateDiscoverability(v);
-            },
-          ),
-        ]),
+          ],
+        ),
         const SizedBox(height: 20),
 
         // ── Messaging ────────────────────────────────────────────────────────
         const _SectionLabel('Messaging'),
-        _SettingsCard(children: [
-          SwitchListTile(
-            secondary: _SettingsIcon(Icons.done_all_outlined,
-                color: Colors.indigo),
-            title: const Text('Read receipts'),
-            subtitle:
-                const Text('Send read status while a chat is open.'),
-            value: profile.readReceiptsEnabled,
-            onChanged: (v) => ref
-                .read(profileServiceProvider)
-                .updatePreferences(readReceiptsEnabled: v),
-          ),
-          SwitchListTile(
-            secondary:
-                _SettingsIcon(Icons.more_horiz, color: Colors.indigo),
-            title: const Text('Typing indicators'),
-            subtitle:
-                const Text('Show peers when you\'re composing.'),
-            value: profile.typingIndicatorsEnabled,
-            onChanged: (v) => ref
-                .read(profileServiceProvider)
-                .updatePreferences(typingIndicatorsEnabled: v),
-          ),
-          SwitchListTile(
-            secondary: _SettingsIcon(Icons.notifications_outlined,
-                color: Colors.orange),
-            title: const Text('Show sender in notifications'),
-            subtitle: const Text('When off, only shows "New message".'),
-            value: profile.notifyShowSender,
-            onChanged: (v) => ref
-                .read(profileServiceProvider)
-                .updatePreferences(notifyShowSender: v),
-          ),
-          SwitchListTile(
-            secondary: _SettingsIcon(Icons.volume_up_outlined,
-                color: const Color(0xFF43A047)),
-            title: const Text('Message sound'),
-            subtitle:
-                const Text('Play sound for incoming messages.'),
-            value: profile.notifySound,
-            onChanged: (v) => ref
-                .read(profileServiceProvider)
-                .updatePreferences(notifySound: v),
-          ),
-          SwitchListTile(
-            secondary: _SettingsIcon(Icons.content_copy_outlined,
-                color: Colors.blueGrey),
-            title: const Text('Allow copying messages'),
-            subtitle: const Text(
-                'Long-press to copy. Clipboard cleared after 30 s.'),
-            value: profile.copyEnabled,
-            onChanged: (v) async {
-              if (v) {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Enable message copying?'),
-                    content: const Text(
-                      'Clipboard contents may be read by other apps. '
-                      'Helix will try to clear the clipboard after 30 seconds.',
-                    ),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(false),
-                          child: const Text('Cancel')),
-                      TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(true),
-                          child: const Text('Enable')),
-                    ],
-                  ),
-                );
-                if (confirmed != true) return;
-              }
-              await ref
+        _SettingsCard(
+          children: [
+            SwitchListTile(
+              secondary: _SettingsIcon(
+                Icons.done_all_outlined,
+                color: Colors.indigo,
+              ),
+              title: const Text('Read receipts'),
+              subtitle: const Text('Send read status while a chat is open.'),
+              value: profile.readReceiptsEnabled,
+              onChanged: (v) => ref
                   .read(profileServiceProvider)
-                  .updatePreferences(copyEnabled: v);
-            },
-          ),
-        ]),
+                  .updatePreferences(readReceiptsEnabled: v),
+            ),
+            SwitchListTile(
+              secondary: _SettingsIcon(Icons.more_horiz, color: Colors.indigo),
+              title: const Text('Typing indicators'),
+              subtitle: const Text('Show peers when you\'re composing.'),
+              value: profile.typingIndicatorsEnabled,
+              onChanged: (v) => ref
+                  .read(profileServiceProvider)
+                  .updatePreferences(typingIndicatorsEnabled: v),
+            ),
+            SwitchListTile(
+              secondary: _SettingsIcon(
+                Icons.notifications_outlined,
+                color: Colors.orange,
+              ),
+              title: const Text('Show sender in notifications'),
+              subtitle: const Text('When off, only shows "New message".'),
+              value: profile.notifyShowSender,
+              onChanged: (v) => ref
+                  .read(profileServiceProvider)
+                  .updatePreferences(notifyShowSender: v),
+            ),
+            SwitchListTile(
+              secondary: _SettingsIcon(
+                Icons.volume_up_outlined,
+                color: const Color(0xFF43A047),
+              ),
+              title: const Text('Message sound'),
+              subtitle: const Text('Play sound for incoming messages.'),
+              value: profile.notifySound,
+              onChanged: (v) => ref
+                  .read(profileServiceProvider)
+                  .updatePreferences(notifySound: v),
+            ),
+            SwitchListTile(
+              secondary: _SettingsIcon(
+                Icons.content_copy_outlined,
+                color: Colors.blueGrey,
+              ),
+              title: const Text('Allow copying messages'),
+              subtitle: const Text(
+                'Long-press to copy. Clipboard cleared after 30 s.',
+              ),
+              value: profile.copyEnabled,
+              onChanged: (v) async {
+                if (v) {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Enable message copying?'),
+                      content: const Text(
+                        'Clipboard contents may be read by other apps. '
+                        'Helix will try to clear the clipboard after 30 seconds.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          child: const Text('Enable'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed != true) return;
+                }
+                await ref
+                    .read(profileServiceProvider)
+                    .updatePreferences(copyEnabled: v);
+              },
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
 
         // ── Privacy & Security ───────────────────────────────────────────────
         const _SectionLabel('Privacy & Security'),
-        _SettingsCard(children: [
-          SwitchListTile(
-            secondary:
-                _SettingsIcon(Icons.fingerprint, color: Colors.red),
-            title: const Text('Biometric lock'),
-            subtitle:
-                const Text('Require biometrics to open the app.'),
-            value: profile.biometricLock,
-            onChanged: _handleBiometricLockToggle,
-          ),
-          ListTile(
-            enabled: profile.biometricLock,
-            leading: _SettingsIcon(Icons.timer_outlined,
-                color: Colors.orange),
-            title: const Text('Auto-lock after idle'),
-            subtitle: Text(_lockLabel(profile.lockAfterMinutes)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: profile.biometricLock
-                ? () => _showAutoLockDialog(context, profile)
-                : null,
-          ),
-          SwitchListTile(
-            secondary: _SettingsIcon(Icons.screenshot_monitor_outlined,
-                color: Colors.purple),
-            title: const Text('Screenshot protection'),
-            subtitle: const Text(
-                'Best-effort — not guaranteed on all platforms.'),
-            value: profile.screenshotProtect,
-            onChanged: (v) => ref
-                .read(profileServiceProvider)
-                .updatePreferences(screenshotProtect: v),
-          ),
-          ListTile(
-            leading: _SettingsIcon(Icons.vpn_key_outlined,
-                color: Colors.red.shade700),
-            title: const Text('Change secret sentence'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showChangeCodeDialog(context, theme),
-          ),
-        ]),
+        _SettingsCard(
+          children: [
+            SwitchListTile(
+              secondary: _SettingsIcon(Icons.fingerprint, color: Colors.red),
+              title: const Text('Biometric lock'),
+              subtitle: const Text('Require biometrics to open the app.'),
+              value: profile.biometricLock,
+              onChanged: _handleBiometricLockToggle,
+            ),
+            ListTile(
+              enabled: profile.biometricLock,
+              leading: _SettingsIcon(
+                Icons.timer_outlined,
+                color: Colors.orange,
+              ),
+              title: const Text('Auto-lock after idle'),
+              subtitle: Text(_lockLabel(profile.lockAfterMinutes)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: profile.biometricLock
+                  ? () => _showAutoLockDialog(context, profile)
+                  : null,
+            ),
+            SwitchListTile(
+              secondary: _SettingsIcon(
+                Icons.screenshot_monitor_outlined,
+                color: Colors.purple,
+              ),
+              title: const Text('Screenshot protection'),
+              subtitle: const Text(
+                'Best-effort — not guaranteed on all platforms.',
+              ),
+              value: profile.screenshotProtect,
+              onChanged: (v) => ref
+                  .read(profileServiceProvider)
+                  .updatePreferences(screenshotProtect: v),
+            ),
+            ListTile(
+              leading: _SettingsIcon(
+                Icons.vpn_key_outlined,
+                color: Colors.red.shade700,
+              ),
+              title: const Text('Change secret sentence'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showChangeCodeDialog(context, theme),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
 
         // ── Appearance ───────────────────────────────────────────────────────
         const _SectionLabel('Appearance'),
-        _SettingsCard(children: [
-          ListTile(
-            leading: _SettingsIcon(Icons.brightness_auto_outlined,
-                color: Colors.pink),
-            title: const Text('Theme'),
-            subtitle: Text(themeModeLabel),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showThemeDialog(context, profile),
-          ),
-          ListTile(
-            leading: _SettingsIcon(Icons.palette_outlined,
-                color: Colors.pinkAccent),
-            title: const Text('Accent color'),
-            subtitle: Text(currentAccent.label),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: currentAccent.seed,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.chevron_right),
-              ],
+        _SettingsCard(
+          children: [
+            ListTile(
+              leading: _SettingsIcon(
+                Icons.brightness_auto_outlined,
+                color: Colors.pink,
+              ),
+              title: const Text('Theme'),
+              subtitle: Text(themeModeLabel),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showThemeDialog(context, profile),
             ),
-            onTap: () => _showAccentDialog(context, profile),
-          ),
-          SwitchListTile(
-            secondary: _SettingsIcon(Icons.contrast,
-                color: Colors.grey.shade800),
-            title: const Text('AMOLED black in dark mode'),
-            value: profile.amoledDark,
-            onChanged: (v) => ref
-                .read(profileServiceProvider)
-                .updatePreferences(amoledDark: v),
-          ),
-        ]),
+            ListTile(
+              leading: _SettingsIcon(
+                Icons.palette_outlined,
+                color: Colors.pinkAccent,
+              ),
+              title: const Text('Accent color'),
+              subtitle: Text(currentAccent.label),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: currentAccent.seed,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: () => _showAccentDialog(context, profile),
+            ),
+            SwitchListTile(
+              secondary: _SettingsIcon(
+                Icons.contrast,
+                color: Colors.grey.shade800,
+              ),
+              title: const Text('AMOLED black in dark mode'),
+              value: profile.amoledDark,
+              onChanged: (v) => ref
+                  .read(profileServiceProvider)
+                  .updatePreferences(amoledDark: v),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
 
         // ── Notifications ────────────────────────────────────────────────────
         const _SectionLabel('Notifications'),
-        _SettingsCard(children: [
-          ListTile(
-            leading: _SettingsIcon(Icons.music_note_outlined,
-                color: Colors.teal),
-            title: const Text('Incoming call ringtone'),
-            subtitle: Text(_ringtoneLabel(profile.ringtoneAsset)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showRingtoneSheet(context),
-          ),
-        ]),
+        _SettingsCard(
+          children: [
+            ListTile(
+              leading: _SettingsIcon(
+                Icons.music_note_outlined,
+                color: Colors.teal,
+              ),
+              title: const Text('Incoming call ringtone'),
+              subtitle: Text(_ringtoneLabel(profile.ringtoneAsset)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showRingtoneSheet(context),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
 
         // ── Advanced ─────────────────────────────────────────────────────────
         const _SectionLabel('Advanced'),
-        _SettingsCard(children: [
-          ListTile(
-            leading: _SettingsIcon(Icons.network_check_outlined,
-                color: Colors.blueGrey),
-            title: const Text('Network diagnostics'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () =>
-                Navigator.of(context).pushNamed(AppRoutes.diagnostics),
-          ),
-          ListTile(
-            leading:
-                _SettingsIcon(Icons.restart_alt, color: Colors.blueGrey),
-            title: const Text('Restart discovery'),
-            subtitle: const Text('Rebind local discovery services.'),
-            onTap: () async {
-              await ref.read(discoveryCoordinatorProvider).restart();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Discovery restart requested.')),
-                );
-              }
-            },
-          ),
-          ListTile(
-            leading: _SettingsIcon(
+        _SettingsCard(
+          children: [
+            ListTile(
+              leading: _SettingsIcon(
+                Icons.network_check_outlined,
+                color: Colors.blueGrey,
+              ),
+              title: const Text('Network diagnostics'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () =>
+                  Navigator.of(context).pushNamed(AppRoutes.diagnostics),
+            ),
+            ListTile(
+              leading: _SettingsIcon(Icons.restart_alt, color: Colors.blueGrey),
+              title: const Text('Restart discovery'),
+              subtitle: const Text('Rebind local discovery services.'),
+              onTap: () async {
+                await ref.read(discoveryCoordinatorProvider).restart();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Discovery restart requested.'),
+                    ),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: _SettingsIcon(
                 Icons.settings_backup_restore_outlined,
-                color: Colors.orange),
-            title: const Text('Reset to default settings'),
-            subtitle: const Text(
-                'Restores preferences. Identity and chats are kept.'),
-            onTap: _confirmResetPreferences,
-          ),
-        ]),
+                color: Colors.orange,
+              ),
+              title: const Text('Reset to default settings'),
+              subtitle: const Text(
+                'Restores preferences. Identity and chats are kept.',
+              ),
+              onTap: _confirmResetPreferences,
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
 
         // ── Trusted Devices ──────────────────────────────────────────────────
@@ -1277,37 +1392,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
         // ── About ────────────────────────────────────────────────────────────
         const _SectionLabel('About'),
-        _SettingsCard(children: [
-          ListTile(
-            leading: _SettingsIcon(Icons.schema_outlined,
-                color: Colors.indigo),
-            title: const Text('Protocol version'),
-            trailing: Text('v$kProtocolMajor.$kProtocolMinor',
-                style: theme.textTheme.bodySmall),
-          ),
-          ListTile(
-            leading:
-                _SettingsIcon(Icons.apps_outlined, color: Colors.blue),
-            title: const Text('App version'),
-            trailing: Text('7.2.4', style: theme.textTheme.bodySmall),
-            onTap: _handleVersionTap,
-          ),
-          ListTile(
-            leading: _SettingsIcon(Icons.bug_report_outlined,
-                color: Colors.deepOrange),
-            title: const Text('Anomaly Log'),
-            subtitle: const Text('Export & clear device log'),
-            trailing: const Icon(Icons.ios_share_outlined),
-            onTap: _exportLog,
-          ),
-          ListTile(
-            leading: _SettingsIcon(Icons.security_outlined,
-                color: Colors.grey),
-            title: const Text('Security limitations'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showSecurityLimitationsDialog(context),
-          ),
-        ]),
+        _SettingsCard(
+          children: [
+            ListTile(
+              leading: _SettingsIcon(
+                Icons.schema_outlined,
+                color: Colors.indigo,
+              ),
+              title: const Text('Protocol version'),
+              trailing: Text(
+                'v$kProtocolMajor.$kProtocolMinor',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            ListTile(
+              leading: _SettingsIcon(Icons.apps_outlined, color: Colors.blue),
+              title: const Text('App version'),
+              trailing: Text('7.2.4', style: theme.textTheme.bodySmall),
+              onTap: _handleVersionTap,
+            ),
+            ListTile(
+              leading: _SettingsIcon(
+                Icons.bug_report_outlined,
+                color: Colors.deepOrange,
+              ),
+              title: const Text('Anomaly Log'),
+              subtitle: const Text('Export & clear device log'),
+              trailing: const Icon(Icons.ios_share_outlined),
+              onTap: _exportLog,
+            ),
+            ListTile(
+              leading: _SettingsIcon(
+                Icons.security_outlined,
+                color: Colors.grey,
+              ),
+              title: const Text('Security limitations'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showSecurityLimitationsDialog(context),
+            ),
+          ],
+        ),
         const SizedBox(height: 24),
 
         // ── Danger zone ──────────────────────────────────────────────────────
@@ -1318,7 +1442,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
                 )
               : const Icon(Icons.delete_forever_outlined, size: 18),
           label: Text(_resetting ? 'Resetting...' : 'Reset Helix'),
@@ -1327,7 +1453,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 52),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
         const SizedBox(height: 32),
@@ -1370,11 +1497,13 @@ class _SettingsCard extends StatelessWidget {
     for (var i = 0; i < children.length; i++) {
       items.add(children[i]);
       if (i < children.length - 1) {
-        items.add(Divider(
-          height: 1,
-          indent: 68,
-          color: theme.colorScheme.outlineVariant.withAlpha(80),
-        ));
+        items.add(
+          Divider(
+            height: 1,
+            indent: 68,
+            color: theme.colorScheme.outlineVariant.withAlpha(80),
+          ),
+        );
       }
     }
     return Card(
@@ -1382,8 +1511,7 @@ class _SettingsCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-            color: theme.colorScheme.outlineVariant.withAlpha(80)),
+        side: BorderSide(color: theme.colorScheme.outlineVariant.withAlpha(80)),
       ),
       color: theme.colorScheme.surface,
       child: ClipRRect(
@@ -1427,12 +1555,13 @@ class _SecurityLimitationItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.remove_circle_outline,
-              size: 14,
-              color: theme.colorScheme.onSurface.withAlpha(120)),
+          Icon(
+            Icons.remove_circle_outline,
+            size: 14,
+            color: theme.colorScheme.onSurface.withAlpha(120),
+          ),
           const SizedBox(width: 8),
-          Expanded(
-              child: Text(text, style: theme.textTheme.bodySmall)),
+          Expanded(child: Text(text, style: theme.textTheme.bodySmall)),
         ],
       ),
     );

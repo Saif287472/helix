@@ -44,7 +44,7 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
   final Map<String, int> _fileWritePositions = {};
   // Mutable in-place chunk sets — avoids O(n²) Set.of() copy on every chunk.
   final Map<String, Set<int>> _chunkSets = {};
-  
+
   final Map<String, Future<dynamic>> _fileOperations = {};
 
   Future<T> _serialize<T>(String fileId, Future<T> Function() operation) {
@@ -134,7 +134,9 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
       var raf = _openFiles[frame.fileId];
       if (raf == null) {
         final isResuming = transfer.usingProbeProtocol;
-        final resumeOffset = isResuming ? transfer.resumeStartChunk * kFileChunkSize : 0;
+        final resumeOffset = isResuming
+            ? transfer.resumeStartChunk * kFileChunkSize
+            : 0;
         if (resumeOffset > 0 && await partFile.exists()) {
           raf = await partFile.open(mode: FileMode.writeOnlyAppend);
           await raf.truncate(resumeOffset);
@@ -148,7 +150,9 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
       }
 
       // Use the in-coordinator mutable set — avoids O(n²) Set.of() copy per chunk.
-      final chunkSet = _chunkSets[frame.fileId] ??= Set.of(transfer.receivedChunks);
+      final chunkSet = _chunkSets[frame.fileId] ??= Set.of(
+        transfer.receivedChunks,
+      );
 
       // Write chunk — skip seek when chunks arrive sequentially (common case).
       if (!chunkSet.contains(frame.chunkIndex)) {
@@ -157,7 +161,8 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
           await raf.setPosition(expectedPos);
         }
         await raf.writeFrom(frame.chunkData);
-        _fileWritePositions[frame.fileId] = expectedPos + frame.chunkData.length;
+        _fileWritePositions[frame.fileId] =
+            expectedPos + frame.chunkData.length;
         chunkSet.add(frame.chunkIndex);
       }
 
@@ -194,7 +199,12 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
 
       if (success && outFile != null) {
         await _repository.removeTransfer(frame.fileId);
-        _onProgressUpdate(threadId, messageId, null, localFilePath: outFile.path);
+        _onProgressUpdate(
+          threadId,
+          messageId,
+          null,
+          localFilePath: outFile.path,
+        );
         return outFile;
       } else {
         await _cancelTransfer(frame.fileId);
@@ -247,7 +257,8 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
 
       if (transfer != null) {
         // Active in-progress transfer from this session — find last consecutive chunk.
-        final chunks = _chunkSets[frame.fileId] ?? Set.of(transfer.receivedChunks);
+        final chunks =
+            _chunkSets[frame.fileId] ?? Set.of(transfer.receivedChunks);
         int consecutive = 0;
         while (chunks.contains(consecutive)) {
           consecutive++;
@@ -309,7 +320,9 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
       // Open file (preserve existing if offset > 0)
       await _closeFile(frame.fileId);
       final raf = await partFile.open(
-        mode: verifiedOffset > 0 ? FileMode.writeOnlyAppend : FileMode.writeOnly,
+        mode: verifiedOffset > 0
+            ? FileMode.writeOnlyAppend
+            : FileMode.writeOnly,
       );
       _openFiles[frame.fileId] = raf;
       _fileWritePositions[frame.fileId] = verifiedOffset;
@@ -374,7 +387,12 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
 
       if (success && outFile != null) {
         await _repository.removeTransfer(fileId);
-        _onProgressUpdate(threadId, messageId, null, localFilePath: outFile.path);
+        _onProgressUpdate(
+          threadId,
+          messageId,
+          null,
+          localFilePath: outFile.path,
+        );
       } else {
         try {
           if (await partFile.exists()) {
@@ -412,6 +430,19 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
   @override
   Future<void> cancelTransfer(String fileId) {
     return _serialize(fileId, () => _cancelTransfer(fileId));
+  }
+
+  @override
+  Future<void> cancelAllTransfers() async {
+    final ids = _repository.listTransfers().map((t) => t.fileId).toList();
+    for (final id in ids) {
+      await cancelTransfer(id);
+    }
+    for (final id in List<String>.of(_openFiles.keys)) {
+      await _closeFile(id);
+    }
+    await _repository.clear();
+    await _deleteTransferPartFiles();
   }
 
   Future<void> cleanupOldFiles() async {
@@ -476,6 +507,24 @@ class ReceiveFileCoordinatorImpl implements ReceiveFileCoordinator {
     if (raf != null) {
       await raf.close();
     }
+  }
+
+  Future<void> _deleteTransferPartFiles() async {
+    try {
+      final cacheDir = await _getCacheDirectory();
+      final transferDir = Directory(p.join(cacheDir.path, 'transfers'));
+      if (!await transferDir.exists()) return;
+
+      final root = p.normalize(transferDir.absolute.path);
+      await for (final entity in transferDir.list()) {
+        if (entity is! File || !entity.path.endsWith('.part')) continue;
+        final normalized = p.normalize(entity.absolute.path);
+        if (!p.isWithin(root, normalized)) continue;
+        try {
+          await entity.delete();
+        } catch (_) {}
+      }
+    } catch (_) {}
   }
 
   static Future<String> _computeFileSha256(File file) async {

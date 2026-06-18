@@ -75,6 +75,11 @@ class EphemeralMediaService {
     return _receiveEphemeralMediaCoordinator.isAssembling(mediaId);
   }
 
+  void clearAll() {
+    _receiveEphemeralMediaCoordinator.dispose();
+    _cache.clear();
+  }
+
   static const _uuid = Uuid();
   static String generateMediaId() => _uuid.v4();
 }

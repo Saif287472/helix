@@ -23,20 +23,18 @@ void main() {
   File tempFile(String name) => File('${tempDir.path}/$name');
 
   group('database migration', () {
-    test('fresh database initializes at schema version 3', () {
+    test('fresh database initializes at schema version 4', () {
       final db = HelixDatabase(tempFile('fresh.db'));
       db.initialize();
       addTearDown(db.close);
-      expect(db.schemaVersion, equals(3));
+      expect(db.schemaVersion, equals(4));
     });
 
-    test('fresh database has all current-schema tables', () {
+    test('fresh database keeps only Local metadata tables', () {
       final db = HelixDatabase(tempFile('full.db'));
       db.initialize();
       addTearDown(db.close);
 
-      // pinned_messages is only created by migration 3; if it exists,
-      // the migration ran.
       final raw = sqlite3.open(tempFile('full.db').path);
       addTearDown(raw.close);
       final tables = raw
@@ -44,16 +42,22 @@ void main() {
           .map((r) => r['name'] as String)
           .toSet();
 
-      expect(tables, containsAll(['threads', 'messages', 'pinned_messages']));
+      expect(tables, contains('peers_cache'));
+      expect(tables, isNot(contains('threads')));
+      expect(tables, isNot(contains('messages')));
+      expect(tables, isNot(contains('one_way_messages')));
+      expect(tables, isNot(contains('pinned_messages')));
     });
 
-    test('v0 database migrates to schema version 3', () {
-      final path = tempFile('v0.db').path;
+    test(
+      'v0 database migrates to schema version 4 and drops content tables',
+      () {
+        final path = tempFile('v0.db').path;
 
-      // Build a pre-migration (v0) database — threads table lacks
-      // draft_text and is_archived; no pinned_messages table.
-      final raw = sqlite3.open(path);
-      raw.execute('''
+        // Build a pre-migration (v0) database — threads table lacks
+        // draft_text and is_archived; no pinned_messages table.
+        final raw = sqlite3.open(path);
+        raw.execute('''
         CREATE TABLE threads (
           thread_id                   TEXT PRIMARY KEY,
           peer_display_name           TEXT NOT NULL,
@@ -69,7 +73,7 @@ void main() {
           updated_at                  INTEGER NOT NULL
         );
       ''');
-      raw.execute('''
+        raw.execute('''
         CREATE TABLE messages (
           message_id      TEXT PRIMARY KEY,
           thread_id       TEXT NOT NULL REFERENCES threads(thread_id)
@@ -80,7 +84,7 @@ void main() {
           delivery_status INTEGER NOT NULL
         );
       ''');
-      raw.execute('''
+        raw.execute('''
         CREATE TABLE one_way_messages (
           message_id                  TEXT PRIMARY KEY,
           peer_display_name           TEXT NOT NULL,
@@ -93,7 +97,7 @@ void main() {
           timestamp                   INTEGER NOT NULL
         );
       ''');
-      raw.execute('''
+        raw.execute('''
         CREATE TABLE peers_cache (
           session_id     TEXT PRIMARY KEY,
           display_name   TEXT NOT NULL,
@@ -107,35 +111,31 @@ void main() {
           is_favorite    INTEGER NOT NULL DEFAULT 0
         );
       ''');
-      // user_version stays at 0
-      raw.close();
+        // user_version stays at 0
+        raw.close();
 
-      // Run migration
-      final db = HelixDatabase(File(path));
-      db.initialize();
-      addTearDown(db.close);
+        // Run migration
+        final db = HelixDatabase(File(path));
+        db.initialize();
+        addTearDown(db.close);
 
-      expect(db.schemaVersion, equals(3));
+        expect(db.schemaVersion, equals(4));
 
-      // Verify draft column was added (getDraft / saveDraft use it)
-      final raw2 = sqlite3.open(path);
-      addTearDown(raw2.close);
-      final colNames = raw2
-          .select('PRAGMA table_info(threads)')
-          .map((r) => r['name'] as String)
-          .toList();
-      expect(colNames, contains('draft_text'));
-      expect(colNames, contains('is_archived'));
+        final raw2 = sqlite3.open(path);
+        addTearDown(raw2.close);
+        final tables = raw2
+            .select("SELECT name FROM sqlite_master WHERE type='table'")
+            .map((r) => r['name'] as String)
+            .toSet();
+        expect(tables, contains('peers_cache'));
+        expect(tables, isNot(contains('threads')));
+        expect(tables, isNot(contains('messages')));
+        expect(tables, isNot(contains('one_way_messages')));
+        expect(tables, isNot(contains('pinned_messages')));
+      },
+    );
 
-      final hasPinned = raw2
-          .select(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='pinned_messages'",
-          )
-          .isNotEmpty;
-      expect(hasPinned, isTrue);
-    });
-
-    test('existing thread data is preserved after migration', () {
+    test('legacy thread data is deleted during migration', () {
       final path = tempFile('data.db').path;
       final now = DateTime.now().millisecondsSinceEpoch;
 
@@ -200,16 +200,18 @@ void main() {
       db.initialize();
       addTearDown(db.close);
 
-      final thread = db.getThread('thread-alice');
-      expect(thread, isNotNull);
-      expect(thread!.peerDisplayName, equals('Alice'));
-      expect(thread.peerDeviceSuffix, equals('a'));
-      // draft_text defaults to '' after migration
-      expect(thread.draftText, equals(''));
-      expect(thread.isArchived, isFalse);
+      final raw2 = sqlite3.open(path);
+      addTearDown(raw2.close);
+      final tables = raw2
+          .select("SELECT name FROM sqlite_master WHERE type='table'")
+          .map((r) => r['name'] as String)
+          .toSet();
+      expect(tables, isNot(contains('threads')));
+      expect(tables, isNot(contains('messages')));
+      expect(tables, isNot(contains('one_way_messages')));
     });
 
-    test('already-migrated database (v3) is not re-migrated', () {
+    test('already-migrated database (v4) is not re-migrated', () {
       final file = tempFile('already_v3.db');
 
       final db1 = HelixDatabase(file);
@@ -220,7 +222,7 @@ void main() {
       final db2 = HelixDatabase(file);
       db2.initialize();
       addTearDown(db2.close);
-      expect(db2.schemaVersion, equals(3));
+      expect(db2.schemaVersion, equals(4));
     });
 
     test('migration is rolled back when a step fails', () {
@@ -277,7 +279,7 @@ void main() {
       final db = HelixDatabase(File(path));
       expect(db.initialize, returnsNormally);
       addTearDown(db.close);
-      expect(db.schemaVersion, equals(3));
+      expect(db.schemaVersion, equals(4));
     });
 
     test('corrupted file produces a controlled failure, not a crash', () {

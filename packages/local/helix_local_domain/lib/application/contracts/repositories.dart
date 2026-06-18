@@ -72,6 +72,7 @@ abstract interface class TransferRepository {
   FileTransferSession? loadTransfer(String fileId);
   Future<void> saveTransfer(FileTransferSession transfer);
   Future<void> removeTransfer(String fileId);
+  Future<void> clear();
 }
 
 abstract interface class EphemeralMediaCache {

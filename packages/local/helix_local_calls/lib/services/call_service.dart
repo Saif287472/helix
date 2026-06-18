@@ -180,7 +180,10 @@ class CallService {
     await _engine.switchCamera(callId);
   }
 
-  Future<void> declineIncomingCall({bool timedOut = false, String? targetCallId}) async {
+  Future<void> declineIncomingCall({
+    bool timedOut = false,
+    String? targetCallId,
+  }) async {
     final call = _currentCall;
     if (call == null) return;
     final callId = call.callId;
@@ -223,6 +226,21 @@ class CallService {
       );
     } catch (_) {}
     await _terminate(callId);
+  }
+
+  /// Releases local call media for panic wipe without signaling the peer.
+  Future<void> releaseLocalMediaForWipe() async {
+    final call = _currentCall;
+    _autoEndTimer?.cancel();
+    _autoEndTimer = null;
+    _pendingOfferSdp = null;
+    _pendingOfferIsVideo = false;
+    if (call == null) return;
+
+    await _engine.endCall(call.callId).catchError((_) {});
+    if (_currentCall?.callId == call.callId) {
+      _updateState(null);
+    }
   }
 
   Future<void> toggleMute() async {
@@ -345,7 +363,9 @@ class CallService {
 
   Future<void> _handleVideoOffer(CallSignalFrame frame) async {
     final call = _currentCall;
-    if (call == null || call.callId != frame.callId || frame.sdp == null) return;
+    if (call == null || call.callId != frame.callId || frame.sdp == null) {
+      return;
+    }
     final callId = frame.callId;
     final answerSdp = await _engine.createAnswer(
       callId,
@@ -406,16 +426,18 @@ class CallService {
         final call = _currentCall;
         if (call == null || call.callId != event.callId) return;
         unawaited(
-          _signalingGateway.sendCallSignal(
-            call.peerId,
-            CallSignalFrame(
-              callId: event.callId,
-              signalType: 'ice',
-              candidate: event.candidate,
-              mlineIndex: event.mlineIndex,
-              sdpMid: event.sdpMid,
-            ),
-          ).catchError((_) {}),
+          _signalingGateway
+              .sendCallSignal(
+                call.peerId,
+                CallSignalFrame(
+                  callId: event.callId,
+                  signalType: 'ice',
+                  candidate: event.candidate,
+                  mlineIndex: event.mlineIndex,
+                  sdpMid: event.sdpMid,
+                ),
+              )
+              .catchError((_) {}),
         );
       case CallConnectionStateEvent():
         final call = _currentCall;
@@ -449,14 +471,16 @@ class CallService {
         final call = _currentCall;
         if (call == null || call.callId != event.callId) return;
         unawaited(
-          _signalingGateway.sendCallSignal(
-            call.peerId,
-            CallSignalFrame(
-              callId: event.callId,
-              signalType: 'video-offer',
-              sdp: event.sdp,
-            ),
-          ).catchError((_) {}),
+          _signalingGateway
+              .sendCallSignal(
+                call.peerId,
+                CallSignalFrame(
+                  callId: event.callId,
+                  signalType: 'video-offer',
+                  sdp: event.sdp,
+                ),
+              )
+              .catchError((_) {}),
         );
     }
   }
@@ -480,7 +504,10 @@ class CallService {
     }
     await _engine.endCall(callId).catchError((_) {});
     _updateState(
-      _currentCall!.copyWith(status: CallStatus.ended, endReason: CallEndReason.noAnswer),
+      _currentCall!.copyWith(
+        status: CallStatus.ended,
+        endReason: CallEndReason.noAnswer,
+      ),
     );
     _scheduleCleanup(callId);
   }

@@ -130,60 +130,144 @@ void main() {
       storage = FakeSecureStorage();
     });
 
-    test('profile repository migrates unprefixed keys when prefix is helix_local_v1_', () async {
-      await storage.write(key: kKeyDisplayName, value: 'Alice');
-      await storage.write(key: kKeyThemeMode, value: 'dark');
+    test(
+      'profile repository migrates unprefixed keys when prefix is helix_local_v1_',
+      () async {
+        await storage.write(key: kKeyDisplayName, value: 'Alice');
+        await storage.write(key: kKeyThemeMode, value: 'dark');
 
-      final repo = FlutterProfileRepository(storage: storage, keyPrefix: 'helix_local_v1_');
-      final profile = await repo.loadProfile();
+        final repo = FlutterProfileRepository(
+          storage: storage,
+          keyPrefix: 'helix_local_v1_',
+        );
+        final profile = await repo.loadProfile();
 
-      expect(profile, isNotNull);
-      expect(profile!.displayName, equals('Alice'));
-      expect(profile.themeMode, equals('dark'));
+        expect(profile, isNotNull);
+        expect(profile!.displayName, equals('Alice'));
+        expect(profile.themeMode, equals('dark'));
 
-      // Verify old keys were deleted
-      expect(await storage.read(key: kKeyDisplayName), isNull);
-      expect(await storage.read(key: kKeyThemeMode), isNull);
+        // Verify old keys were deleted
+        expect(await storage.read(key: kKeyDisplayName), isNull);
+        expect(await storage.read(key: kKeyThemeMode), isNull);
 
-      // Verify new prefixed keys exist
-      expect(await storage.read(key: 'helix_local_v1_$kKeyDisplayName'), equals('Alice'));
-      expect(await storage.read(key: 'helix_local_v1_$kKeyThemeMode'), equals('dark'));
-    });
+        // Verify new prefixed keys exist
+        expect(
+          await storage.read(key: 'helix_local_v1_$kKeyDisplayName'),
+          equals('Alice'),
+        );
+        expect(
+          await storage.read(key: 'helix_local_v1_$kKeyThemeMode'),
+          equals('dark'),
+        );
+      },
+    );
 
-    test('profile repository does not migrate keys when prefix is helix_remote_v1_', () async {
-      await storage.write(key: kKeyDisplayName, value: 'Alice');
+    test(
+      'product secure-storage prefixes are product-scoped and versioned',
+      () {
+        const local = LocalProductDescriptor();
+        const remote = RemoteProductDescriptor();
+        final versionedPrefix = RegExp(r'^helix_(local|remote)_v[0-9]+_$');
 
-      final repo = FlutterProfileRepository(storage: storage, keyPrefix: 'helix_remote_v1_');
-      final profile = await repo.loadProfile();
+        expect(local.secureStoragePrefix, matches(versionedPrefix));
+        expect(remote.secureStoragePrefix, matches(versionedPrefix));
+        expect(local.secureStoragePrefix, isNot(remote.secureStoragePrefix));
+      },
+    );
 
-      expect(profile, isNull);
-      expect(await storage.read(key: kKeyDisplayName), equals('Alice'));
-      expect(await storage.read(key: 'helix_remote_v1_$kKeyDisplayName'), isNull);
-    });
+    test(
+      'profile repository does not migrate keys when prefix is helix_remote_v1_',
+      () async {
+        await storage.write(key: kKeyDisplayName, value: 'Alice');
 
-    test('identity store migrates identity keys when prefix is helix_local_v1_', () async {
-      await storage.write(key: kKeySecretCode, value: 'secret-code');
-      await storage.write(key: kKeyFirstRunDone, value: '1');
+        final repo = FlutterProfileRepository(
+          storage: storage,
+          keyPrefix: 'helix_remote_v1_',
+        );
+        final profile = await repo.loadProfile();
 
-      final store = FlutterSecureIdentityStore(storage: storage, keyPrefix: 'helix_local_v1_');
+        expect(profile, isNull);
+        expect(await storage.read(key: kKeyDisplayName), equals('Alice'));
+        expect(
+          await storage.read(key: 'helix_remote_v1_$kKeyDisplayName'),
+          isNull,
+        );
+      },
+    );
 
-      expect(await store.loadSecretCode(), equals('secret-code'));
-      expect(await store.isFirstRun(), isFalse);
+    test(
+      'identity store migrates verifier keys when prefix is helix_local_v1_',
+      () async {
+        await storage.write(key: kKeySecretCode, value: 'secret-code');
+        await storage.write(key: kKeySecretCodeVerifier, value: 'verifier');
+        await storage.write(key: kKeyFirstRunDone, value: '1');
 
-      expect(await storage.read(key: kKeySecretCode), isNull);
-      expect(await storage.read(key: kKeyFirstRunDone), isNull);
-      expect(await storage.read(key: 'helix_local_v1_$kKeySecretCode'), equals('secret-code'));
-      expect(await storage.read(key: 'helix_local_v1_$kKeyFirstRunDone'), equals('1'));
-    });
+        final store = FlutterSecureIdentityStore(
+          storage: storage,
+          keyPrefix: 'helix_local_v1_',
+        );
 
-    test('identity store does not migrate keys when prefix is helix_remote_v1_', () async {
-      await storage.write(key: kKeySecretCode, value: 'secret-code');
+        expect(await store.loadSecretCode(), isNull);
+        expect(await store.loadSecretCodeVerifier(), equals('verifier'));
+        expect(await store.isFirstRun(), isFalse);
 
-      final store = FlutterSecureIdentityStore(storage: storage, keyPrefix: 'helix_remote_v1_');
+        expect(await storage.read(key: kKeySecretCode), isNull);
+        expect(await storage.read(key: kKeySecretCodeVerifier), isNull);
+        expect(await storage.read(key: kKeyFirstRunDone), isNull);
+        expect(
+          await storage.read(key: 'helix_local_v1_$kKeySecretCode'),
+          isNull,
+        );
+        expect(
+          await storage.read(key: 'helix_local_v1_$kKeySecretCodeVerifier'),
+          equals('verifier'),
+        );
+        expect(
+          await storage.read(key: 'helix_local_v1_$kKeyFirstRunDone'),
+          equals('1'),
+        );
+      },
+    );
+
+    test(
+      'identity store does not migrate keys when prefix is helix_remote_v1_',
+      () async {
+        await storage.write(key: kKeySecretCode, value: 'secret-code');
+        await storage.write(key: kKeySecretCodeVerifier, value: 'verifier');
+
+        final store = FlutterSecureIdentityStore(
+          storage: storage,
+          keyPrefix: 'helix_remote_v1_',
+        );
+
+        expect(await store.loadSecretCode(), isNull);
+        expect(await storage.read(key: kKeySecretCode), equals('secret-code'));
+        expect(
+          await storage.read(key: kKeySecretCodeVerifier),
+          equals('verifier'),
+        );
+        expect(
+          await storage.read(key: 'helix_remote_v1_$kKeySecretCode'),
+          isNull,
+        );
+        expect(
+          await storage.read(key: 'helix_remote_v1_$kKeySecretCodeVerifier'),
+          isNull,
+        );
+      },
+    );
+
+    test('saving a secret sentence stores no plaintext', () async {
+      final store = FlutterSecureIdentityStore(
+        storage: storage,
+        keyPrefix: 'helix_local_v1_',
+      );
+
+      await store.saveSecretCode('secret-code');
 
       expect(await store.loadSecretCode(), isNull);
-      expect(await storage.read(key: kKeySecretCode), equals('secret-code'));
-      expect(await storage.read(key: 'helix_remote_v1_$kKeySecretCode'), isNull);
+      expect(await storage.read(key: kKeySecretCode), isNull);
+      expect(await storage.read(key: 'helix_local_v1_$kKeySecretCode'), isNull);
     });
   });
 
@@ -206,8 +290,14 @@ void main() {
 
     Future<void> seedNamespace(String prefix, String displayName) async {
       await storage.write(key: '${prefix}display_name', value: displayName);
-      await storage.write(key: '${prefix}identity_cert_pem', value: 'cert-$prefix');
-      await storage.write(key: '${prefix}last_session_id', value: 'sess-$prefix');
+      await storage.write(
+        key: '${prefix}identity_cert_pem',
+        value: 'cert-$prefix',
+      );
+      await storage.write(
+        key: '${prefix}last_session_id',
+        value: 'sess-$prefix',
+      );
     }
 
     Future<void> runLocalScopedReset() async {
@@ -228,7 +318,10 @@ void main() {
 
       // Local keys must be gone
       expect(await storage.read(key: '${localPrefix}display_name'), isNull);
-      expect(await storage.read(key: '${localPrefix}identity_cert_pem'), isNull);
+      expect(
+        await storage.read(key: '${localPrefix}identity_cert_pem'),
+        isNull,
+      );
       expect(await storage.read(key: '${localPrefix}last_session_id'), isNull);
 
       // Remote keys must be untouched
@@ -297,12 +390,9 @@ void main() {
         storage: storage,
         keyPrefix: localPrefix,
       );
-      await localTrust.saveKnownPeers([]);  // write empty list
+      await localTrust.saveKnownPeers([]); // write empty list
       // Remote trust key is untouched (we never wrote one via Remote prefix)
-      expect(
-        await storage.read(key: '${remotePrefix}known_peers'),
-        isNull,
-      );
+      expect(await storage.read(key: '${remotePrefix}known_peers'), isNull);
     });
   });
 }

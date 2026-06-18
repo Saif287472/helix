@@ -81,6 +81,7 @@ abstract interface class ReceiveFileCoordinator {
   });
 
   Future<void> cancelTransfer(String fileId);
+  Future<void> cancelAllTransfers();
   Future<void> dispose();
 }
 

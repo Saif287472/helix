@@ -24,10 +24,9 @@ void main() {
     expect(violations, isEmpty);
   });
 
-  test('forbidden package imports fail', () async {
+  test('forbidden imports fail', () async {
     final project = await _project({
-      'lib/core/constants.dart':
-          "import 'package:helix/services/chat.dart';\n",
+      'lib/core/constants.dart': "import '../services/chat.dart';\n",
       'lib/services/chat.dart': 'class ChatService {}\n',
       'docs/architecture/module_boundaries.json': _config(),
     });

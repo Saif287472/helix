@@ -23,4 +23,9 @@ class InMemoryTransferRepository implements TransferRepository {
   Future<void> removeTransfer(String fileId) async {
     _transfers.remove(fileId);
   }
+
+  @override
+  Future<void> clear() async {
+    _transfers.clear();
+  }
 }

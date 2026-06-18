@@ -19,20 +19,38 @@ class FlutterSecureIdentityStore implements SecureIdentityStore {
 
   @override
   Future<DeviceIdentity?> loadIdentity() async {
-    final hasPrefixedCert = await _storage.read(key: '$keyPrefix$kKeyIdentityCert');
+    final hasPrefixedCert = await _storage.read(
+      key: '$keyPrefix$kKeyIdentityCert',
+    );
     if (hasPrefixedCert == null && keyPrefix.startsWith('helix_local_')) {
       final oldCert = await _storage.read(key: kKeyIdentityCert);
       final oldPrivate = await _storage.read(key: kKeyIdentityPrivate);
-      final oldSecret = await _storage.read(key: kKeySecretCode);
       final oldVerifier = await _storage.read(key: kKeySecretCodeVerifier);
       final oldFirstRun = await _storage.read(key: kKeyFirstRunDone);
 
       if (oldCert != null) {
-        await _storage.write(key: '$keyPrefix$kKeyIdentityCert', value: oldCert);
-        if (oldPrivate != null) await _storage.write(key: '$keyPrefix$kKeyIdentityPrivate', value: oldPrivate);
-        if (oldSecret != null) await _storage.write(key: '$keyPrefix$kKeySecretCode', value: oldSecret);
-        if (oldVerifier != null) await _storage.write(key: '$keyPrefix$kKeySecretCodeVerifier', value: oldVerifier);
-        if (oldFirstRun != null) await _storage.write(key: '$keyPrefix$kKeyFirstRunDone', value: oldFirstRun);
+        await _storage.write(
+          key: '$keyPrefix$kKeyIdentityCert',
+          value: oldCert,
+        );
+        if (oldPrivate != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyIdentityPrivate',
+            value: oldPrivate,
+          );
+        }
+        if (oldVerifier != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeySecretCodeVerifier',
+            value: oldVerifier,
+          );
+        }
+        if (oldFirstRun != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyFirstRunDone',
+            value: oldFirstRun,
+          );
+        }
 
         await _storage.delete(key: kKeyIdentityCert);
         await _storage.delete(key: kKeyIdentityPrivate);
@@ -43,7 +61,9 @@ class FlutterSecureIdentityStore implements SecureIdentityStore {
     }
 
     final certPem = await _storage.read(key: '$keyPrefix$kKeyIdentityCert');
-    final privateKeyPem = await _storage.read(key: '$keyPrefix$kKeyIdentityPrivate');
+    final privateKeyPem = await _storage.read(
+      key: '$keyPrefix$kKeyIdentityPrivate',
+    );
 
     if (certPem == null || privateKeyPem == null) {
       return null;
@@ -54,7 +74,10 @@ class FlutterSecureIdentityStore implements SecureIdentityStore {
 
   @override
   Future<void> saveIdentity(DeviceIdentity identity) async {
-    await _storage.write(key: '$keyPrefix$kKeyIdentityCert', value: identity.certPem);
+    await _storage.write(
+      key: '$keyPrefix$kKeyIdentityCert',
+      value: identity.certPem,
+    );
     await _storage.write(
       key: '$keyPrefix$kKeyIdentityPrivate',
       value: identity.privateKeyPem,
@@ -63,30 +86,33 @@ class FlutterSecureIdentityStore implements SecureIdentityStore {
 
   @override
   Future<String?> loadSecretCode() async {
-    final hasPrefixedSecret = await _storage.read(key: '$keyPrefix$kKeySecretCode');
-    if (hasPrefixedSecret == null && keyPrefix.startsWith('helix_local_')) {
-      final oldSecret = await _storage.read(key: kKeySecretCode);
-      if (oldSecret != null) {
-        await _storage.write(key: '$keyPrefix$kKeySecretCode', value: oldSecret);
-        await _storage.delete(key: kKeySecretCode);
-        return oldSecret;
-      }
+    await _storage.delete(key: '$keyPrefix$kKeySecretCode');
+    if (keyPrefix.startsWith('helix_local_')) {
+      await _storage.delete(key: kKeySecretCode);
     }
-    return _storage.read(key: '$keyPrefix$kKeySecretCode');
+    return null;
   }
 
   @override
   Future<void> saveSecretCode(String secretCode) async {
-    await _storage.write(key: '$keyPrefix$kKeySecretCode', value: secretCode);
+    await _storage.delete(key: '$keyPrefix$kKeySecretCode');
+    if (keyPrefix.startsWith('helix_local_')) {
+      await _storage.delete(key: kKeySecretCode);
+    }
   }
 
   @override
   Future<String?> loadSecretCodeVerifier() async {
-    final hasPrefixedVerifier = await _storage.read(key: '$keyPrefix$kKeySecretCodeVerifier');
+    final hasPrefixedVerifier = await _storage.read(
+      key: '$keyPrefix$kKeySecretCodeVerifier',
+    );
     if (hasPrefixedVerifier == null && keyPrefix.startsWith('helix_local_')) {
       final oldVerifier = await _storage.read(key: kKeySecretCodeVerifier);
       if (oldVerifier != null) {
-        await _storage.write(key: '$keyPrefix$kKeySecretCodeVerifier', value: oldVerifier);
+        await _storage.write(
+          key: '$keyPrefix$kKeySecretCodeVerifier',
+          value: oldVerifier,
+        );
         await _storage.delete(key: kKeySecretCodeVerifier);
         return oldVerifier;
       }
@@ -96,21 +122,31 @@ class FlutterSecureIdentityStore implements SecureIdentityStore {
 
   @override
   Future<void> saveSecretCodeVerifier(String verifier) async {
-    await _storage.write(key: '$keyPrefix$kKeySecretCodeVerifier', value: verifier);
+    await _storage.write(
+      key: '$keyPrefix$kKeySecretCodeVerifier',
+      value: verifier,
+    );
   }
 
   @override
   Future<bool> isFirstRun() async {
-    final hasPrefixedFirstRun = await _storage.read(key: '$keyPrefix$kKeyFirstRunDone');
+    final hasPrefixedFirstRun = await _storage.read(
+      key: '$keyPrefix$kKeyFirstRunDone',
+    );
     if (hasPrefixedFirstRun == null && keyPrefix.startsWith('helix_local_')) {
       final oldFirstRun = await _storage.read(key: kKeyFirstRunDone);
       if (oldFirstRun != null) {
-        await _storage.write(key: '$keyPrefix$kKeyFirstRunDone', value: oldFirstRun);
+        await _storage.write(
+          key: '$keyPrefix$kKeyFirstRunDone',
+          value: oldFirstRun,
+        );
         await _storage.delete(key: kKeyFirstRunDone);
         return false;
       }
     }
-    final firstRunDone = await _storage.read(key: '$keyPrefix$kKeyFirstRunDone');
+    final firstRunDone = await _storage.read(
+      key: '$keyPrefix$kKeyFirstRunDone',
+    );
     return firstRunDone == null;
   }
 

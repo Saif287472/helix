@@ -37,14 +37,25 @@ mixin _ChatMessageActionsMixin on _ChatScreenBase {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Set export password'),
-        content: TextField(
-          controller: passwordCtrl,
-          obscureText: true,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Password',
-            helperText: 'You will need this to open the exported file.',
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Exported files leave Helix Local storage. Panic Wipe cannot '
+              'recall or delete copies saved, shared, or backed up outside '
+              'the app.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passwordCtrl,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                helperText: 'You will need this to open the exported file.',
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -240,9 +251,7 @@ mixin _ChatMessageActionsMixin on _ChatScreenBase {
                   decoration: BoxDecoration(
                     color: alreadyReacted
                         ? Theme.of(context).colorScheme.primary.withAlpha(40)
-                        : Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                     border: alreadyReacted
                         ? Border.all(
