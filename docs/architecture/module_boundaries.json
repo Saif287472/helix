@@ -51,6 +51,14 @@
       "reason": "Remote API client must not import local packages or app code."
     },
     {
+      "source": "packages/remote/helix_remote_crypto/**",
+      "imports": [
+        "packages/local/**",
+        "apps/**"
+      ],
+      "reason": "Remote crypto must not import local packages or app code."
+    },
+    {
       "source": "packages/local/helix_local_domain/**",
       "imports": [
         "packages/local/helix_local_protocol/**",

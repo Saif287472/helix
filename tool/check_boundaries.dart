@@ -185,6 +185,7 @@ const _workspacePackageRoots = <String, String>{
   'helix_local_discovery': 'packages/local/helix_local_discovery/lib/',
   'helix_remote_domain': 'packages/remote/helix_remote_domain/lib/',
   'helix_remote_api': 'packages/remote/helix_remote_api/lib/',
+  'helix_remote_crypto': 'packages/remote/helix_remote_crypto/lib/',
 };
 
 String? _resolveImport(String source, String uri) {
