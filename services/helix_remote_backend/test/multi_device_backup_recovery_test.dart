@@ -6,6 +6,8 @@ import 'package:helix_remote_backend/helix_remote_backend.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
+import 'test_registration.dart';
+
 void main() {
   late BackendServer server;
   late int port;
@@ -43,15 +45,22 @@ void main() {
       );
       final alice2KeyPair = await ed25519.newKeyPair();
       final alice2Public = await alice2KeyPair.extractPublicKey();
+      final aliceLaptopMaterial = await createTestRegistrationMaterial(
+        accountId: 'alice',
+        username: 'alice_user',
+        deviceId: 'alice_laptop',
+        deviceName: 'Alice Laptop',
+      );
 
       final directRegister =
           await _postJson(client, port, '/api/v1/accounts/register', {
-            'account_id': 'alice',
-            'username': 'alice_user',
-            'identity_public_key': 'alice_identity',
-            'device_id': 'alice_laptop',
-            'device_public_key': _base64Url(alice2Public.bytes),
-            'device_name': 'Alice Laptop',
+            ...registrationBody(
+              accountId: 'alice',
+              username: 'alice_user',
+              deviceId: 'alice_laptop',
+              deviceName: 'Alice Laptop',
+              material: aliceLaptopMaterial,
+            ),
           });
       expect(directRegister.statusCode, equals(403));
 
@@ -450,15 +459,20 @@ Future<_AuthTokens> _registerAndLogin(
   required String deviceId,
   required String deviceName,
 }) async {
-  final keyPair = await ed25519.newKeyPair();
-  final publicKey = await keyPair.extractPublicKey();
+  final material = await createTestRegistrationMaterial(
+    accountId: accountId,
+    username: username,
+    deviceId: deviceId,
+    deviceName: deviceName,
+  );
   final register = await _postJson(client, port, '/api/v1/accounts/register', {
-    'account_id': accountId,
-    'username': username,
-    'identity_public_key': '${accountId}_identity_public_key',
-    'device_id': deviceId,
-    'device_public_key': _base64Url(publicKey.bytes),
-    'device_name': deviceName,
+    ...registrationBody(
+      accountId: accountId,
+      username: username,
+      deviceId: deviceId,
+      deviceName: deviceName,
+      material: material,
+    ),
   });
   expect(register.statusCode, equals(200));
   return _login(
@@ -467,7 +481,7 @@ Future<_AuthTokens> _registerAndLogin(
     ed25519,
     accountId: accountId,
     deviceId: deviceId,
-    keyPair: keyPair,
+    keyPair: material.deviceSigningKeyPair,
   );
 }
 

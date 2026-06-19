@@ -298,9 +298,9 @@ abstract class _InboundSyncEvent {
     );
   }
 
-  static int? optionalInt(RemoteRealtimeEnvelope env, String key) {
+  static String? optionalString(RemoteRealtimeEnvelope env, String key) {
     final value = env.payload[key];
-    return value is int ? value : null;
+    return value is String && value.isNotEmpty ? value : null;
   }
 }
 
@@ -324,7 +324,8 @@ class _MessageCreatedEvent extends _InboundSyncEvent {
       messageId: messageId,
       conversationId: conversationId,
       senderAccountId: env.payload['sender_account_id'] as String? ?? 'unknown',
-      senderDeviceId: env.payload['sender_device_id'] as int? ?? 0,
+      senderDeviceId:
+          env.payload['sender_device_id'] as String? ?? 'unknown_device',
       ciphertext: env.payload['ciphertext'] as String? ?? '',
     );
 
@@ -408,7 +409,7 @@ class _ReceiptEvent extends _InboundSyncEvent {
       messageId: _InboundSyncEvent.requireString(env, 'message_id'),
       conversationId: _InboundSyncEvent.requireString(env, 'conversation_id'),
       accountId: _InboundSyncEvent.requireString(env, 'account_id'),
-      deviceId: _InboundSyncEvent.optionalInt(env, 'device_id'),
+      deviceId: _InboundSyncEvent.optionalString(env, 'device_id'),
       receiptType: receiptType,
       timestamp: env.payload['timestamp'] as int? ?? env.timestamp,
     );

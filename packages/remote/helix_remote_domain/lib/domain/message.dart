@@ -10,7 +10,7 @@ class RemoteMessage {
   final String messageId;
   final String conversationId;
   final String senderAccountId;
-  final int senderDeviceId;
+  final String senderDeviceId;
   final String ciphertext;
 
   Map<String, dynamic> toJson() => {
@@ -26,7 +26,7 @@ class RemoteMessage {
       messageId: json['message_id'] as String,
       conversationId: json['conversation_id'] as String,
       senderAccountId: json['sender_account_id'] as String,
-      senderDeviceId: json['sender_device_id'] as int,
+      senderDeviceId: json['sender_device_id'] as String,
       ciphertext: json['ciphertext'] as String,
     );
   }

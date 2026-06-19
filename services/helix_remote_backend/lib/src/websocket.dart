@@ -32,10 +32,13 @@ class WebSocketRelay implements MessageRelay {
   }
 
   FutureOr<Response> handleUpgrade(Request request) {
-    final token = request.url.queryParameters['token'];
+    final authHeader = request.headers['authorization'];
+    final token = authHeader != null && authHeader.startsWith('Bearer ')
+        ? authHeader.substring('Bearer '.length)
+        : null;
     if (token == null) {
       return Response.forbidden(
-        jsonEncode({'error': 'Missing token query parameter'}),
+        jsonEncode({'error': 'Missing Authorization bearer token'}),
       );
     }
 

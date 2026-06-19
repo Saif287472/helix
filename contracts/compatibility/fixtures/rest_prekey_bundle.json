@@ -1,6 +1,6 @@
 {
   "account_id": "acc_01h9w2m8g8qpr88v75v1w7jx8q",
-  "device_id": 1,
+  "device_id": "device1",
   "identity_key": "3053020101300506032b657004220420d41d8cd98f00b204e9800998ecf8427e",
   "signed_prekey": "3053020101300506032b65700422042078652d80d22d1df7b788a1e2d7870422",
   "signed_prekey_signature": "64bytesofsignaturebytesherehexencodedsoitlookslikeavalidsignature",

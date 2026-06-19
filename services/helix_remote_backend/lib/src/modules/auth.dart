@@ -12,10 +12,13 @@ class AuthModule {
   final JwtHelper jwt;
   final void Function(String deviceId, Map<String, dynamic> payload)?
   notifyDevice;
-  final Map<String, String> _challenges = {}; // key: "account_id:device_id"
+  final DateTime Function() _now;
+  final Map<String, _LoginChallenge> _challenges =
+      {}; // key: "account_id:device_id"
   final crypto.Ed25519 _ed25519 = crypto.Ed25519();
 
-  AuthModule(this.db, this.jwt, {this.notifyDevice});
+  AuthModule(this.db, this.jwt, {this.notifyDevice, DateTime Function()? now})
+    : _now = now ?? DateTime.now;
 
   Router get router {
     final router = Router();
@@ -44,20 +47,47 @@ class AuthModule {
           jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final accountId = body['account_id'] as String?;
       final username = body['username'] as String?;
-      final identityPublicKey = body['identity_public_key'] as String?;
+      final registrationVersion = body['registration_version'];
+      final identityPublicKey = body['account_identity_public_key'] as String?;
       final deviceId = body['device_id'] as String?;
-      final devicePublicKey = body['device_public_key'] as String?;
+      final deviceSigningPublicKey =
+          body['device_signing_public_key'] as String?;
+      final deviceAgreementPublicKey =
+          body['device_agreement_public_key'] as String?;
+      final accountRegistrationSignature =
+          body['account_registration_signature'] as String?;
+      final deviceRegistrationSignature =
+          body['device_registration_signature'] as String?;
       final deviceName = body['device_name'] as String?;
 
-      if (accountId == null ||
+      if (registrationVersion != 2 ||
+          accountId == null ||
           username == null ||
           identityPublicKey == null ||
           deviceId == null ||
-          devicePublicKey == null ||
+          deviceSigningPublicKey == null ||
+          deviceAgreementPublicKey == null ||
+          accountRegistrationSignature == null ||
+          deviceRegistrationSignature == null ||
           deviceName == null) {
         return Response.badRequest(
           body: jsonEncode({'error': 'Missing required fields'}),
         );
+      }
+
+      final keyValidation = await _validateRegistrationKeys(
+        accountId: accountId,
+        username: username,
+        accountIdentityPublicKey: identityPublicKey,
+        deviceId: deviceId,
+        deviceSigningPublicKey: deviceSigningPublicKey,
+        deviceAgreementPublicKey: deviceAgreementPublicKey,
+        deviceName: deviceName,
+        accountRegistrationSignature: accountRegistrationSignature,
+        deviceRegistrationSignature: deviceRegistrationSignature,
+      );
+      if (keyValidation != null) {
+        return Response.badRequest(body: jsonEncode({'error': keyValidation}));
       }
 
       final existingAccount = db.getAccount(accountId);
@@ -79,7 +109,13 @@ class AuthModule {
         );
       }
 
-      db.registerDevice(deviceId, accountId, devicePublicKey, deviceName);
+      db.registerDevice(
+        deviceId,
+        accountId,
+        deviceSigningPublicKey,
+        deviceAgreementPublicKey,
+        deviceName,
+      );
       db.logAudit(
         accountId,
         deviceId,
@@ -106,6 +142,7 @@ class AuthModule {
     final params = request.url.queryParameters;
     final accountId = params['account_id'];
     final deviceId = params['device_id'];
+    final purpose = params['purpose'] ?? 'login';
 
     if (accountId == null || deviceId == null) {
       return Response.badRequest(
@@ -113,14 +150,37 @@ class AuthModule {
       );
     }
 
+    if (purpose.isEmpty) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Missing purpose'}),
+      );
+    }
+
     final key = '$accountId:$deviceId';
     final random = Random.secure();
     final challengeBytes = List<int>.generate(32, (i) => random.nextInt(256));
-    final challenge = base64UrlEncode(challengeBytes);
+    final issuedAt = _now();
+    final expiresAt = issuedAt.add(const Duration(minutes: 5));
+    final challenge = _LoginChallenge(
+      accountId: accountId,
+      deviceId: deviceId,
+      nonce: base64UrlEncode(challengeBytes).replaceAll('=', ''),
+      purpose: purpose,
+      issuedAt: issuedAt,
+      expiresAt: expiresAt,
+      audience: _serverAudience(request),
+    );
 
     _challenges[key] = challenge;
 
-    return Response.ok(jsonEncode({'challenge': challenge}));
+    return Response.ok(
+      jsonEncode({
+        'challenge': challenge.signedPayload,
+        'purpose': challenge.purpose,
+        'expires_at': challenge.expiresAt.millisecondsSinceEpoch,
+        'audience': challenge.audience,
+      }),
+    );
   }
 
   Future<Response> _loginHandler(Request request) async {
@@ -130,6 +190,7 @@ class AuthModule {
       final accountId = body['account_id'] as String?;
       final deviceId = body['device_id'] as String?;
       final signatureBase64 = body['signature'] as String?;
+      final purpose = body['purpose'] as String? ?? 'login';
 
       if (accountId == null || deviceId == null || signatureBase64 == null) {
         return Response.badRequest(
@@ -140,10 +201,19 @@ class AuthModule {
       }
 
       final key = '$accountId:$deviceId';
-      final challenge = _challenges[key];
+      final challenge = _challenges.remove(key);
       if (challenge == null) {
         return Response.forbidden(
           jsonEncode({'error': 'Challenge not found or expired'}),
+        );
+      }
+      if (challenge.accountId != accountId ||
+          challenge.deviceId != deviceId ||
+          challenge.purpose != purpose ||
+          challenge.purpose != 'login' ||
+          !_now().isBefore(challenge.expiresAt)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'Challenge not valid for this login'}),
         );
       }
 
@@ -160,7 +230,7 @@ class AuthModule {
         );
       }
 
-      final devicePubKeyStr = device['device_public_key'] as String;
+      final devicePubKeyStr = device['device_signing_public_key'] as String;
 
       // Verify signature
       try {
@@ -181,7 +251,7 @@ class AuthModule {
         );
 
         final isValid = await _ed25519.verify(
-          utf8.encode(challenge),
+          utf8.encode(challenge.signedPayload),
           signature: signature,
         );
 
@@ -193,9 +263,6 @@ class AuthModule {
           jsonEncode({'error': 'Signature verification failed'}),
         );
       }
-
-      // Clear challenge
-      _challenges.remove(key);
 
       // Generate Access Token (1 hour expiry)
       final accessToken = jwt.generateToken({
@@ -398,6 +465,7 @@ class AuthModule {
       db.registerDevice(
         newDeviceId,
         accountId,
+        link['new_device_public_key'] as String,
         link['new_device_public_key'] as String,
         link['new_device_name'] as String,
       );
@@ -648,6 +716,10 @@ class AuthModule {
 
       final accountId = claims['account_id'] as String;
       final deviceId = claims['device_id'] as String;
+      if (!db.isDeviceActive(accountId, deviceId)) {
+        db.revokeAllRefreshTokensForDevice(accountId, deviceId);
+        return Response.forbidden(jsonEncode({'error': 'Device revoked'}));
+      }
 
       final tokenHash = crypto_pkg.sha256
           .convert(utf8.encode(refreshToken))
@@ -708,5 +780,146 @@ class AuthModule {
         body: jsonEncode({'error': 'Internal server error'}),
       );
     }
+  }
+
+  Future<String?> _validateRegistrationKeys({
+    required String accountId,
+    required String username,
+    required String accountIdentityPublicKey,
+    required String deviceId,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceName,
+    required String accountRegistrationSignature,
+    required String deviceRegistrationSignature,
+  }) async {
+    final accountKey = _decodePublicKey(accountIdentityPublicKey);
+    final signingKey = _decodePublicKey(deviceSigningPublicKey);
+    final agreementKey = _decodePublicKey(deviceAgreementPublicKey);
+    if (accountKey == null) return 'Invalid account identity key';
+    if (signingKey == null) return 'Invalid device signing key';
+    if (agreementKey == null) return 'Invalid device agreement key';
+    if (deviceSigningPublicKey == deviceAgreementPublicKey) {
+      return 'Device signing and agreement keys must be distinct';
+    }
+
+    final transcript = _registrationTranscript(
+      accountId: accountId,
+      username: username,
+      accountIdentityPublicKey: accountIdentityPublicKey,
+      deviceId: deviceId,
+      deviceSigningPublicKey: deviceSigningPublicKey,
+      deviceAgreementPublicKey: deviceAgreementPublicKey,
+      deviceName: deviceName,
+    );
+    final accountOk = await _verifyEd25519(
+      publicKeyBytes: accountKey,
+      signedPayload: transcript,
+      signatureBase64: accountRegistrationSignature,
+    );
+    if (!accountOk) return 'Invalid account registration signature';
+    final deviceOk = await _verifyEd25519(
+      publicKeyBytes: signingKey,
+      signedPayload: transcript,
+      signatureBase64: deviceRegistrationSignature,
+    );
+    if (!deviceOk) return 'Invalid device registration signature';
+    return null;
+  }
+
+  List<int>? _decodePublicKey(String value) {
+    try {
+      final bytes = base64Url.decode(base64Url.normalize(value));
+      return bytes.length == 32 ? bytes : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> _verifyEd25519({
+    required List<int> publicKeyBytes,
+    required String signedPayload,
+    required String signatureBase64,
+  }) async {
+    try {
+      final publicKey = crypto.SimplePublicKey(
+        publicKeyBytes,
+        type: crypto.KeyPairType.ed25519,
+      );
+      final signatureBytes = base64Url.decode(
+        base64Url.normalize(signatureBase64),
+      );
+      return _ed25519.verify(
+        utf8.encode(signedPayload),
+        signature: crypto.Signature(signatureBytes, publicKey: publicKey),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _registrationTranscript({
+    required String accountId,
+    required String username,
+    required String accountIdentityPublicKey,
+    required String deviceId,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceName,
+  }) {
+    return [
+      'helix.remote.registration.v2',
+      accountId,
+      username,
+      accountIdentityPublicKey,
+      deviceId,
+      deviceSigningPublicKey,
+      deviceAgreementPublicKey,
+      deviceName,
+    ].join('\n');
+  }
+
+  String _serverAudience(Request request) {
+    final host = request.requestedUri.host;
+    final port = request.requestedUri.hasPort
+        ? ':${request.requestedUri.port}'
+        : '';
+    return host.isEmpty ? 'helix_remote_backend' : '$host$port';
+  }
+}
+
+class _LoginChallenge {
+  _LoginChallenge({
+    required this.accountId,
+    required this.deviceId,
+    required this.nonce,
+    required this.purpose,
+    required this.issuedAt,
+    required this.expiresAt,
+    required this.audience,
+  });
+
+  final String accountId;
+  final String deviceId;
+  final String nonce;
+  final String purpose;
+  final DateTime issuedAt;
+  final DateTime expiresAt;
+  final String audience;
+
+  String get signedPayload {
+    final payload = {
+      'version': 1,
+      'account_id': accountId,
+      'device_id': deviceId,
+      'nonce': nonce,
+      'purpose': purpose,
+      'issued_at': issuedAt.millisecondsSinceEpoch,
+      'expires_at': expiresAt.millisecondsSinceEpoch,
+      'audience': audience,
+    };
+    return base64UrlEncode(
+      utf8.encode(jsonEncode(payload)),
+    ).replaceAll('=', '');
   }
 }

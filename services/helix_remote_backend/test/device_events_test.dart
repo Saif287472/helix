@@ -5,6 +5,8 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 
+import 'test_registration.dart';
+
 final ed25519 = crypto.Ed25519();
 
 String _b64u(List<int> bytes) => base64Url.encode(bytes).replaceAll('=', '');
@@ -59,21 +61,26 @@ Future<String> _registerAndLogin(
   String accountId,
   String username,
   String deviceId,
-  crypto.SimpleKeyPair keyPair,
-  crypto.SimplePublicKey pubKey,
+  crypto.SimpleKeyPair ignoredKeyPair,
+  crypto.SimplePublicKey ignoredPubKey,
 ) async {
-  final pubKeyStr = _b64u(pubKey.bytes);
-
+  final material = await createTestRegistrationMaterial(
+    accountId: accountId,
+    username: username,
+    deviceId: deviceId,
+    deviceName: '$username phone',
+  );
   await _postJson('127.0.0.1', port, '/api/v1/accounts/register', {
-    'account_id': accountId,
-    'username': username,
-    'identity_public_key': '${accountId}_identity',
-    'device_id': deviceId,
-    'device_public_key': pubKeyStr,
-    'device_name': '$username phone',
+    ...registrationBody(
+      accountId: accountId,
+      username: username,
+      deviceId: deviceId,
+      deviceName: '$username phone',
+      material: material,
+    ),
   });
 
-  return _loginDevice(port, accountId, deviceId, keyPair);
+  return _loginDevice(port, accountId, deviceId, material.deviceSigningKeyPair);
 }
 
 Future<String> _loginDevice(
@@ -224,7 +231,7 @@ void main() {
         aliceKeys,
         alicePub,
       );
-      await _registerAndLogin(
+      final bobToken = await _registerAndLogin(
         port,
         'bob_rest',
         'bob_rest_user',
@@ -261,13 +268,6 @@ void main() {
       }, token: aliceToken);
 
       server.rateLimiter.reset('127.0.0.1');
-
-      final bobToken = await _loginDevice(
-        port,
-        'bob_rest',
-        'bob_device_1',
-        bobKeys,
-      );
 
       final eventsRes = await _getJson(
         '127.0.0.1',

@@ -1,4 +1,5 @@
 export 'domain/account.dart';
+export 'domain/identity.dart';
 export 'domain/device.dart';
 export 'domain/contact.dart';
 export 'domain/conversation.dart';

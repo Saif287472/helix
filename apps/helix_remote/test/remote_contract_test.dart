@@ -11,6 +11,99 @@ String _base64UrlEncode(List<int> bytes) {
   return base64Url.encode(bytes).replaceAll('=', '');
 }
 
+class _RegistrationMaterial {
+  const _RegistrationMaterial({
+    required this.deviceSigningKeyPair,
+    required this.accountIdentityPublicKey,
+    required this.deviceSigningPublicKey,
+    required this.deviceAgreementPublicKey,
+    required this.accountRegistrationSignature,
+    required this.deviceRegistrationSignature,
+  });
+
+  final crypto.SimpleKeyPair deviceSigningKeyPair;
+  final String accountIdentityPublicKey;
+  final String deviceSigningPublicKey;
+  final String deviceAgreementPublicKey;
+  final String accountRegistrationSignature;
+  final String deviceRegistrationSignature;
+}
+
+Future<_RegistrationMaterial> _registrationMaterial({
+  required String accountId,
+  required String username,
+  required String deviceId,
+  required String deviceName,
+}) async {
+  final ed25519 = crypto.Ed25519();
+  final accountKeyPair = await ed25519.newKeyPair();
+  final accountPublicKey = await accountKeyPair.extractPublicKey();
+  final deviceSigningKeyPair = await ed25519.newKeyPair();
+  final deviceSigningPublicKey = await deviceSigningKeyPair.extractPublicKey();
+  final agreementKeyPair = await crypto.X25519().newKeyPair();
+  final agreementPublicKey = await agreementKeyPair.extractPublicKey();
+
+  final accountIdentityPublicKey = _base64UrlEncode(accountPublicKey.bytes);
+  final deviceSigningPublicKeyStr = _base64UrlEncode(
+    deviceSigningPublicKey.bytes,
+  );
+  final deviceAgreementPublicKey = _base64UrlEncode(agreementPublicKey.bytes);
+  final transcript = [
+    'helix.remote.registration.v2',
+    accountId,
+    username,
+    accountIdentityPublicKey,
+    deviceId,
+    deviceSigningPublicKeyStr,
+    deviceAgreementPublicKey,
+    deviceName,
+  ].join('\n');
+  final accountSignature = await ed25519.sign(
+    utf8.encode(transcript),
+    keyPair: accountKeyPair,
+  );
+  final deviceSignature = await ed25519.sign(
+    utf8.encode(transcript),
+    keyPair: deviceSigningKeyPair,
+  );
+
+  return _RegistrationMaterial(
+    deviceSigningKeyPair: deviceSigningKeyPair,
+    accountIdentityPublicKey: accountIdentityPublicKey,
+    deviceSigningPublicKey: deviceSigningPublicKeyStr,
+    deviceAgreementPublicKey: deviceAgreementPublicKey,
+    accountRegistrationSignature: _base64UrlEncode(accountSignature.bytes),
+    deviceRegistrationSignature: _base64UrlEncode(deviceSignature.bytes),
+  );
+}
+
+Future<_RegistrationMaterial> _register(
+  HelixRemoteRestClient client, {
+  required String accountId,
+  required String username,
+  required String deviceId,
+  required String deviceName,
+}) async {
+  final material = await _registrationMaterial(
+    accountId: accountId,
+    username: username,
+    deviceId: deviceId,
+    deviceName: deviceName,
+  );
+  await client.registerAccount(
+    accountId: accountId,
+    username: username,
+    accountIdentityPublicKey: material.accountIdentityPublicKey,
+    deviceId: deviceId,
+    deviceSigningPublicKey: material.deviceSigningPublicKey,
+    deviceAgreementPublicKey: material.deviceAgreementPublicKey,
+    accountRegistrationSignature: material.accountRegistrationSignature,
+    deviceRegistrationSignature: material.deviceRegistrationSignature,
+    deviceName: deviceName,
+  );
+  return material;
+}
+
 void main() {
   late BackendServer server;
   late int port;
@@ -48,16 +141,21 @@ void main() {
     test(
       'register -> challenge -> login roundtrip',
       () async {
-        final keyPair = await ed25519.newKeyPair();
-        final pubKey = await keyPair.extractPublicKey();
-        final pubKeyStr = _base64UrlEncode(pubKey.bytes);
-
+        final material = await _registrationMaterial(
+          accountId: 'test_account',
+          username: 'test_user',
+          deviceId: 'test_device_1',
+          deviceName: 'Test Phone',
+        );
         final regResult = await client.registerAccount(
           accountId: 'test_account',
           username: 'test_user',
-          identityPublicKey: 'test_identity_key',
+          accountIdentityPublicKey: material.accountIdentityPublicKey,
           deviceId: 'test_device_1',
-          devicePublicKey: pubKeyStr,
+          deviceSigningPublicKey: material.deviceSigningPublicKey,
+          deviceAgreementPublicKey: material.deviceAgreementPublicKey,
+          accountRegistrationSignature: material.accountRegistrationSignature,
+          deviceRegistrationSignature: material.deviceRegistrationSignature,
           deviceName: 'Test Phone',
         );
         expect(regResult['message'], equals('Registration successful'));
@@ -72,7 +170,7 @@ void main() {
         final challenge = challengeResult['challenge'] as String;
         final sig = await ed25519.sign(
           utf8.encode(challenge),
-          keyPair: keyPair,
+          keyPair: material.deviceSigningKeyPair,
         );
         final sigStr = _base64UrlEncode(sig.bytes);
 
@@ -100,26 +198,20 @@ void main() {
     test(
       'register rejects duplicate account',
       () async {
-        final keyPair = await ed25519.newKeyPair();
-        final pubKey = await keyPair.extractPublicKey();
-        final pubKeyStr = _base64UrlEncode(pubKey.bytes);
-
-        await client.registerAccount(
+        await _register(
+          client,
           accountId: 'dup_account',
           username: 'dup_user',
-          identityPublicKey: 'dup_identity_key',
           deviceId: 'dup_device_1',
-          devicePublicKey: pubKeyStr,
           deviceName: 'Dup Phone',
         );
 
         expect(
-          () => client.registerAccount(
+          () => _register(
+            client,
             accountId: 'dup_account',
             username: 'dup_user_alt',
-            identityPublicKey: 'dup_identity_key_alt',
             deviceId: 'dup_device_2',
-            devicePublicKey: pubKeyStr,
             deviceName: 'Dup Phone 2',
           ),
           throwsA(isA<HttpException>()),
@@ -131,16 +223,11 @@ void main() {
     test(
       'login fails with wrong signature',
       () async {
-        final keyPair = await ed25519.newKeyPair();
-        final pubKey = await keyPair.extractPublicKey();
-        final pubKeyStr = _base64UrlEncode(pubKey.bytes);
-
-        await client.registerAccount(
+        await _register(
+          client,
           accountId: 'bad_sig_account',
           username: 'bad_sig_user',
-          identityPublicKey: 'bad_sig_key',
           deviceId: 'bad_sig_device',
-          devicePublicKey: pubKeyStr,
           deviceName: 'Bad Sig Phone',
         );
 
@@ -174,16 +261,11 @@ void main() {
     test(
       'prekey publish and bundle fetch',
       () async {
-        final keyPair = await ed25519.newKeyPair();
-        final pubKey = await keyPair.extractPublicKey();
-        final pubKeyStr = _base64UrlEncode(pubKey.bytes);
-
-        await client.registerAccount(
+        final material = await _register(
+          client,
           accountId: 'prekey_account',
           username: 'prekey_user',
-          identityPublicKey: 'prekey_identity',
           deviceId: 'prekey_device',
-          devicePublicKey: pubKeyStr,
           deviceName: 'Prekey Phone',
         );
 
@@ -193,7 +275,7 @@ void main() {
         );
         final sig = await ed25519.sign(
           utf8.encode(challengeResult['challenge'] as String),
-          keyPair: keyPair,
+          keyPair: material.deviceSigningKeyPair,
         );
         final loginResult = await client.loginDevice(
           accountId: 'prekey_account',
@@ -213,24 +295,13 @@ void main() {
           ],
         );
 
-        // Fetch bundle (for another account)
-        final registerOther = await (HttpClient()).post(
-          '127.0.0.1',
-          port,
-          '/api/v1/accounts/register',
+        await _register(
+          client,
+          accountId: 'other_account',
+          username: 'other_user',
+          deviceId: 'other_device',
+          deviceName: 'Other Phone',
         );
-        registerOther.headers.contentType = ContentType.json;
-        registerOther.write(
-          jsonEncode({
-            'account_id': 'other_account',
-            'username': 'other_user',
-            'identity_public_key': 'other_identity',
-            'device_id': 'other_device',
-            'device_public_key': 'other_pub_key',
-            'device_name': 'Other Phone',
-          }),
-        );
-        await registerOther.close();
 
         final bundleResult = await client.getPreKeyBundle(
           accountId: 'prekey_account',

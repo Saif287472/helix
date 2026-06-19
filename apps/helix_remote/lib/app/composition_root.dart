@@ -292,34 +292,78 @@ class RemoteCompositionRoot {
     final identityKeyPair = await identityEd25519.newKeyPair();
     final identityPubKey = await identityKeyPair.extractPublicKey();
 
+    final deviceSigningEd25519 = crypto_pkg.Ed25519();
+    final deviceSigningKeyPair = await deviceSigningEd25519.newKeyPair();
+    final deviceSigningPubKey = await deviceSigningKeyPair.extractPublicKey();
+
     final x25519 = crypto_pkg.X25519();
-    final deviceKeyPair = await x25519.newKeyPair();
-    final devicePubKey = await deviceKeyPair.extractPublicKey();
+    final deviceAgreementKeyPair = await x25519.newKeyPair();
+    final deviceAgreementPubKey = await deviceAgreementKeyPair
+        .extractPublicKey();
 
     final accountId = _hexBytes(identityPubKey.bytes.sublist(0, 8));
-    final deviceId = 'dev_${_hexBytes(devicePubKey.bytes.sublist(0, 4))}';
+    final deviceId =
+        'dev_${_hexBytes(deviceSigningPubKey.bytes.sublist(0, 4))}';
+    final deviceName = 'Dev ${deviceId.substring(0, 8)}';
 
     final accountIdStr = accountId;
     final deviceIdStr = deviceId;
     final identityPrivList = await identityKeyPair.extractPrivateKeyBytes();
-    final devicePrivList = await deviceKeyPair.extractPrivateKeyBytes();
+    final deviceSigningPrivList = await deviceSigningKeyPair
+        .extractPrivateKeyBytes();
+    final deviceAgreementPrivList = await deviceAgreementKeyPair
+        .extractPrivateKeyBytes();
     final identityPrivBytes = Uint8List.fromList(identityPrivList);
-    final devicePrivBytes = Uint8List.fromList(devicePrivList);
+    final deviceSigningPrivBytes = Uint8List.fromList(deviceSigningPrivList);
+    final deviceAgreementPrivBytes = Uint8List.fromList(
+      deviceAgreementPrivList,
+    );
 
     final identityPubKeyBytes = Uint8List.fromList(identityPubKey.bytes);
-    final devicePubKeyBytes = Uint8List.fromList(devicePubKey.bytes);
+    final deviceSigningPubKeyBytes = Uint8List.fromList(
+      deviceSigningPubKey.bytes,
+    );
+    final deviceAgreementPubKeyBytes = Uint8List.fromList(
+      deviceAgreementPubKey.bytes,
+    );
     final pubKeyStr = _base64Url(identityPubKeyBytes);
-    final devicePubKeyStr = _base64Url(devicePubKeyBytes);
+    final deviceSigningPubKeyStr = _base64Url(deviceSigningPubKeyBytes);
+    final deviceAgreementPubKeyStr = _base64Url(deviceAgreementPubKeyBytes);
     final identityPrivStr = _base64Url(identityPrivBytes);
-    final devicePrivStr = _base64Url(devicePrivBytes);
+    final deviceSigningPrivStr = _base64Url(deviceSigningPrivBytes);
+    final deviceAgreementPrivStr = _base64Url(deviceAgreementPrivBytes);
+    final registrationTranscript = _registrationTranscript(
+      accountId: accountIdStr,
+      username: username,
+      accountIdentityPublicKey: pubKeyStr,
+      deviceId: deviceIdStr,
+      deviceSigningPublicKey: deviceSigningPubKeyStr,
+      deviceAgreementPublicKey: deviceAgreementPubKeyStr,
+      deviceName: deviceName,
+    );
+    final accountRegistrationSignature = await identityEd25519.sign(
+      utf8.encode(registrationTranscript),
+      keyPair: identityKeyPair,
+    );
+    final deviceRegistrationSignature = await deviceSigningEd25519.sign(
+      utf8.encode(registrationTranscript),
+      keyPair: deviceSigningKeyPair,
+    );
 
     await rest.registerAccount(
       accountId: accountIdStr,
       username: username,
-      identityPublicKey: pubKeyStr,
+      accountIdentityPublicKey: pubKeyStr,
       deviceId: deviceIdStr,
-      devicePublicKey: devicePubKeyStr,
-      deviceName: 'Dev ${deviceIdStr.substring(0, 8)}',
+      deviceSigningPublicKey: deviceSigningPubKeyStr,
+      deviceAgreementPublicKey: deviceAgreementPubKeyStr,
+      accountRegistrationSignature: _base64Url(
+        accountRegistrationSignature.bytes,
+      ),
+      deviceRegistrationSignature: _base64Url(
+        deviceRegistrationSignature.bytes,
+      ),
+      deviceName: deviceName,
     );
 
     final challengeResp = await rest.getChallenge(
@@ -327,9 +371,9 @@ class RemoteCompositionRoot {
       deviceId: deviceIdStr,
     );
     final challenge = challengeResp['challenge'] as String;
-    final sig = await identityEd25519.sign(
+    final sig = await deviceSigningEd25519.sign(
       utf8.encode(challenge),
-      keyPair: identityKeyPair,
+      keyPair: deviceSigningKeyPair,
     );
     final sigStr = _base64Url(sig.bytes);
 
@@ -349,12 +393,14 @@ class RemoteCompositionRoot {
     await store.write('identity_public_key', pubKeyStr);
     await store.write('identity_private_key', identityPrivStr);
     await store.write('device_id', deviceIdStr);
-    await store.write('device_public_key', devicePubKeyStr);
-    await store.write('device_private_key', devicePrivStr);
+    await store.write('device_signing_public_key', deviceSigningPubKeyStr);
+    await store.write('device_signing_private_key', deviceSigningPrivStr);
+    await store.write('device_agreement_public_key', deviceAgreementPubKeyStr);
+    await store.write('device_agreement_private_key', deviceAgreementPrivStr);
 
     ms.setCryptoKeys(
-      devicePrivateKey: devicePrivBytes,
-      devicePublicKey: devicePubKeyBytes,
+      devicePrivateKey: deviceAgreementPrivBytes,
+      devicePublicKey: deviceAgreementPubKeyBytes,
     );
 
     ms.setupAccount(
@@ -365,9 +411,10 @@ class RemoteCompositionRoot {
         createdAt: DateTime.now(),
       ),
       device: RemoteDevice(
-        deviceId: int.tryParse(deviceIdStr.replaceAll(RegExp(r'\D'), '')) ?? 1,
-        deviceName: 'Dev ${deviceIdStr.substring(0, 8)}',
-        devicePublicKey: devicePubKeyStr,
+        deviceId: deviceIdStr,
+        deviceName: deviceName,
+        deviceSigningPublicKey: deviceSigningPubKeyStr,
+        deviceAgreementPublicKey: deviceAgreementPubKeyStr,
         createdAt: DateTime.now(),
       ),
     );
@@ -400,20 +447,28 @@ class RemoteCompositionRoot {
     final username = await store.read('username');
     final pubKey = await store.read('identity_public_key');
     final deviceIdStr = await store.read('device_id');
-    final devicePubKey = await store.read('device_public_key');
-    final devicePrivStr = await store.read('device_private_key');
+    final deviceSigningPubKey =
+        await store.read('device_signing_public_key') ??
+        await store.read('device_public_key');
+    final deviceAgreementPubKey =
+        await store.read('device_agreement_public_key') ??
+        await store.read('device_public_key');
+    final deviceAgreementPrivStr =
+        await store.read('device_agreement_private_key') ??
+        await store.read('device_private_key');
     final hasUser = username != null;
     final hasKey = pubKey != null;
     final hasDeviceId = deviceIdStr != null;
-    final hasDeviceKey = devicePubKey != null;
-    final hasDevicePriv = devicePrivStr != null;
+    final hasDeviceKey =
+        deviceSigningPubKey != null && deviceAgreementPubKey != null;
+    final hasDevicePriv = deviceAgreementPrivStr != null;
     final hasSession = hasUser && hasKey && hasDeviceId && hasDeviceKey;
     if (hasSession) {
       final ms = _requireReady(_messagingService, 'messagingService');
 
       if (hasDevicePriv) {
-        final devicePrivBytes = _base64UrlDecode(devicePrivStr);
-        final devicePubBytes = _base64UrlDecode(devicePubKey);
+        final devicePrivBytes = _base64UrlDecode(deviceAgreementPrivStr);
+        final devicePubBytes = _base64UrlDecode(deviceAgreementPubKey);
         ms.setCryptoKeys(
           devicePrivateKey: devicePrivBytes,
           devicePublicKey: devicePubBytes,
@@ -428,10 +483,10 @@ class RemoteCompositionRoot {
           createdAt: DateTime.now(),
         ),
         device: RemoteDevice(
-          deviceId:
-              int.tryParse(deviceIdStr.replaceAll(RegExp(r'\D'), '')) ?? 1,
+          deviceId: deviceIdStr,
           deviceName: 'Dev ${deviceIdStr.substring(0, 8)}',
-          devicePublicKey: devicePubKey,
+          deviceSigningPublicKey: deviceSigningPubKey,
+          deviceAgreementPublicKey: deviceAgreementPubKey,
           createdAt: DateTime.now(),
         ),
       );
@@ -465,6 +520,35 @@ class RemoteCompositionRoot {
     );
     await wsClient.connect();
     _wsClient = wsClient;
+  }
+
+  Future<void> revokeCurrentDeviceAndPurgeSession() async {
+    final store = _requireReady(_keyValue, 'keyValue');
+    final deviceId = await store.read('device_id');
+    if (deviceId != null && deviceId.isNotEmpty) {
+      await _restClient?.revokeDevice(deviceId);
+    }
+    disconnectWebSocket();
+    for (final key in [
+      'access_token',
+      'refresh_token',
+      'account_id',
+      'username',
+      'identity_public_key',
+      'identity_private_key',
+      'device_id',
+      'device_public_key',
+      'device_private_key',
+      'device_signing_public_key',
+      'device_signing_private_key',
+      'device_agreement_public_key',
+      'device_agreement_private_key',
+    ]) {
+      await store.delete(key);
+    }
+    _accessToken = null;
+    _restClient?.accessToken = null;
+    _state = RemoteStartupState.unauthenticated;
   }
 
   void disconnectWebSocket() {
@@ -527,6 +611,27 @@ class RemoteCompositionRoot {
 
   static String _base64Url(List<int> bytes) {
     return base64Url.encode(bytes).replaceAll('=', '');
+  }
+
+  static String _registrationTranscript({
+    required String accountId,
+    required String username,
+    required String accountIdentityPublicKey,
+    required String deviceId,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceName,
+  }) {
+    return [
+      'helix.remote.registration.v2',
+      accountId,
+      username,
+      accountIdentityPublicKey,
+      deviceId,
+      deviceSigningPublicKey,
+      deviceAgreementPublicKey,
+      deviceName,
+    ].join('\n');
   }
 
   static Uint8List _base64UrlDecode(String str) {

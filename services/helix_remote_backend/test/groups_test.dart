@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 
 class TestHttpClient {
@@ -482,8 +481,11 @@ void main() {
       'account_id': 'bob',
       'device_id': 'dev_bob',
     }, const Duration(hours: 1));
-    final wsUri = Uri.parse('ws://127.0.0.1:$port/api/v1/ws?token=$tokenBWs');
-    final ws = WebSocketChannel.connect(wsUri);
+    final wsUri = Uri.parse('ws://127.0.0.1:$port/api/v1/ws');
+    final ws = await WebSocket.connect(
+      wsUri.toString(),
+      headers: {'Authorization': 'Bearer $tokenBWs'},
+    );
     await Future<void>.delayed(const Duration(milliseconds: 60));
 
     final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
@@ -494,7 +496,7 @@ void main() {
     });
     expect(res.status, equals(200));
 
-    await ws.sink.close();
+    await ws.close();
   });
 
   // -------------------------------------------------------------------------

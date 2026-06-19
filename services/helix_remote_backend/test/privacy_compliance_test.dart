@@ -6,6 +6,8 @@ import 'package:helix_remote_backend/helix_remote_backend.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
+import 'test_registration.dart';
+
 void main() {
   late BackendServer server;
   late HttpClient client;
@@ -307,15 +309,20 @@ Future<_AuthTokens> _registerAndLogin(
   required String username,
   required String deviceId,
 }) async {
-  final keyPair = await ed25519.newKeyPair();
-  final publicKey = await keyPair.extractPublicKey();
+  final material = await createTestRegistrationMaterial(
+    accountId: accountId,
+    username: username,
+    deviceId: deviceId,
+    deviceName: deviceId,
+  );
   final register = await _postJson(client, port, '/api/v1/accounts/register', {
-    'account_id': accountId,
-    'username': username,
-    'identity_public_key': '${accountId}_identity_public_key',
-    'device_id': deviceId,
-    'device_public_key': base64Url.encode(publicKey.bytes).replaceAll('=', ''),
-    'device_name': deviceId,
+    ...registrationBody(
+      accountId: accountId,
+      username: username,
+      deviceId: deviceId,
+      deviceName: deviceId,
+      material: material,
+    ),
   });
   expect(register.statusCode, equals(200));
 
@@ -329,7 +336,7 @@ Future<_AuthTokens> _registerAndLogin(
           as String;
   final signature = await ed25519.sign(
     utf8.encode(challengeValue),
-    keyPair: keyPair,
+    keyPair: material.deviceSigningKeyPair,
   );
   final login = await _postJson(client, port, '/api/v1/accounts/login', {
     'account_id': accountId,

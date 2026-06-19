@@ -7,7 +7,7 @@
   "payload": {
     "conversation_id": "8c59f0f9-a35c-41fb-992a-3023e3e29f8f",
     "sender_account_id": "acc_01h9w2m8g8qpr88v75v1w7jx8q",
-    "sender_device_id": 1,
+    "sender_device_id": "device1",
     "ciphertext": "opaquebase64ciphertextbytesherefromdoubleratchetpayload",
     "message_id": "msg_01h9w2m8g8qpr88v75v1w7jx8q"
   }

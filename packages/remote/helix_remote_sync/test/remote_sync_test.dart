@@ -190,7 +190,7 @@ void main() {
           payload: {
             'conversation_id': 'conv_authoritative',
             'sender_account_id': 'bob',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'hello alice decrypted text 1',
           },
         ),
@@ -203,7 +203,7 @@ void main() {
           payload: {
             'conversation_id': 'conv_authoritative',
             'sender_account_id': 'bob',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'hello alice decrypted text 2',
           },
         ),
@@ -242,7 +242,7 @@ void main() {
           payload: {
             'conversation_id': 'conv_authoritative',
             'sender_account_id': 'bob',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'deleted message',
           },
         ),
@@ -304,7 +304,7 @@ void main() {
             'message_id': 'msg_typed_1',
             'conversation_id': 'conv_typed',
             'sender_account_id': 'alice',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'opaque-ciphertext',
           },
         ),
@@ -318,7 +318,7 @@ void main() {
             'message_id': 'msg_typed_1',
             'conversation_id': 'conv_typed',
             'account_id': 'bob',
-            'device_id': 2,
+            'device_id': 'device2',
           },
         ),
         RemoteRealtimeEnvelope(
@@ -331,7 +331,7 @@ void main() {
             'message_id': 'msg_typed_1',
             'conversation_id': 'conv_typed',
             'account_id': 'bob',
-            'device_id': 2,
+            'device_id': 'device2',
           },
         ),
         RemoteRealtimeEnvelope(
@@ -344,7 +344,7 @@ void main() {
             'message_id': 'msg_typed_2',
             'conversation_id': 'conv_typed',
             'sender_account_id': 'alice',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'opaque-ciphertext-for-revision',
           },
         ),
@@ -499,7 +499,7 @@ void main() {
             'message_id': 'msg_duplicate_once',
             'conversation_id': 'conv_123',
             'sender_account_id': 'alice',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'first-copy',
           },
         );
@@ -530,7 +530,7 @@ void main() {
             'message_id': 'msg_regression',
             'conversation_id': 'conv_123',
             'sender_account_id': 'alice',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'must-not-apply',
           },
         ),
@@ -590,7 +590,7 @@ void main() {
           payload: {
             'conversation_id': 'conv_123',
             'sender_account_id': 'alice',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'ct1',
           },
         ),
@@ -603,7 +603,7 @@ void main() {
           payload: {
             'conversation_id': 'conv_123',
             'sender_account_id': 'alice',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'ct2',
           },
         ),
@@ -616,7 +616,7 @@ void main() {
           payload: {
             'conversation_id': 'conv_123',
             'sender_account_id': 'alice',
-            'sender_device_id': 1,
+            'sender_device_id': 'device1',
             'ciphertext': 'ct3',
           },
         ),
@@ -645,7 +645,7 @@ void main() {
             payload: {
               'conversation_id': 'conv_123',
               'sender_account_id': 'bob',
-              'sender_device_id': 2,
+              'sender_device_id': 'device2',
               'ciphertext': 'ct_retry',
             },
           ),

@@ -1599,7 +1599,7 @@ paths:
           description: Unauthorized
 
   # ─── WebSocket ────────────────────────────────────────────────
-  /ws:
+  /api/v1/ws:
     get:
       summary: WebSocket upgrade endpoint for real-time messaging
       operationId: webSocketConnect
@@ -1622,24 +1622,40 @@ components:
       required:
         - account_id
         - username
-        - identity_public_key
+        - registration_version
+        - account_identity_public_key
         - device_id
-        - device_public_key
+        - device_signing_public_key
+        - device_agreement_public_key
+        - account_registration_signature
+        - device_registration_signature
         - device_name
       properties:
+        registration_version:
+          type: integer
+          enum: [2]
         account_id:
           type: string
         username:
           type: string
           pattern: '^[a-zA-Z0-9._-]{3,32}$'
-        identity_public_key:
+        account_identity_public_key:
           type: string
-          description: Hex-encoded Ed25519 public key
+          description: Base64url-encoded Ed25519 account identity public key
         device_id:
           type: string
-        device_public_key:
+        device_signing_public_key:
           type: string
-          description: Hex-encoded X25519 public key
+          description: Base64url-encoded Ed25519 device authentication public key
+        device_agreement_public_key:
+          type: string
+          description: Base64url-encoded X25519 device agreement public key
+        account_registration_signature:
+          type: string
+          description: Ed25519 signature over the v2 registration transcript using the account identity key
+        device_registration_signature:
+          type: string
+          description: Ed25519 signature over the v2 registration transcript using the device signing key
         device_name:
           type: string
 
@@ -1656,7 +1672,7 @@ components:
           type: string
         signature:
           type: string
-          description: Signature of challenge signed with identity key
+          description: Signature of the bound login challenge signed with the device signing key
 
     ChallengeResponse:
       type: object
@@ -1683,14 +1699,17 @@ components:
       required:
         - device_id
         - device_name
-        - device_public_key
+        - device_signing_public_key
+        - device_agreement_public_key
         - created_at
       properties:
         device_id:
           type: string
         device_name:
           type: string
-        device_public_key:
+        device_signing_public_key:
+          type: string
+        device_agreement_public_key:
           type: string
         created_at:
           type: string

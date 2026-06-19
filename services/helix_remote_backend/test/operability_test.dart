@@ -140,14 +140,20 @@ void main() {
   });
 
   test('P19 WebSocket reconnect storms are rejected per device', () async {
-    final uri = 'ws://127.0.0.1:$port/api/v1/ws?token=$userToken';
-    final first = await WebSocket.connect(uri);
+    final uri = 'ws://127.0.0.1:$port/api/v1/ws';
+    final first = await WebSocket.connect(
+      uri,
+      headers: {'Authorization': 'Bearer $userToken'},
+    );
     await first.close();
-    final second = await WebSocket.connect(uri);
+    final second = await WebSocket.connect(
+      uri,
+      headers: {'Authorization': 'Bearer $userToken'},
+    );
     await second.close();
 
     await expectLater(
-      WebSocket.connect(uri),
+      WebSocket.connect(uri, headers: {'Authorization': 'Bearer $userToken'}),
       throwsA(isA<WebSocketException>()),
     );
 

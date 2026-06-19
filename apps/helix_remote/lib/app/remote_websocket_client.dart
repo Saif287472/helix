@@ -39,9 +39,11 @@ class RemoteWebSocketClient {
     if (_disposed) return;
     await disconnect();
 
-    final uri = _wsUri.replace(queryParameters: {'token': _token});
     try {
-      _ws = await WebSocket.connect(uri.toString());
+      _ws = await WebSocket.connect(
+        _wsUri.toString(),
+        headers: {'Authorization': 'Bearer $_token'},
+      );
       _subscription = _ws!.listen(
         _onData,
         onError: (error) {

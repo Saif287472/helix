@@ -40,7 +40,7 @@ class RemoteDecryptedMessage {
   final String messageId;
   final String conversationId;
   final String senderAccountId;
-  final int senderDeviceId;
+  final String senderDeviceId;
   final String text;
   final String status;
   final int timestamp;
@@ -108,7 +108,7 @@ class RemoteMessagingService {
   final DateTime Function() _clock;
 
   String? _accountId;
-  int? _deviceId;
+  String? _deviceId;
 
   Uint8List? _devicePrivateKey;
   Uint8List? _devicePublicKey;
@@ -146,7 +146,7 @@ class RemoteMessagingService {
     _readReceiptsEnabled = enabled;
   }
 
-  void verifyDevice({required String accountId, required int deviceId}) {
+  void verifyDevice({required String accountId, required String deviceId}) {
     final device = db
         .getDevices(accountId)
         .where((candidate) => candidate.deviceId == deviceId);
@@ -160,7 +160,8 @@ class RemoteMessagingService {
       RemoteDevice(
         deviceId: current.deviceId,
         deviceName: current.deviceName,
-        devicePublicKey: current.devicePublicKey,
+        deviceSigningPublicKey: current.deviceSigningPublicKey,
+        deviceAgreementPublicKey: current.deviceAgreementPublicKey,
         createdAt: current.createdAt,
         status: 'Verified',
       ),
@@ -875,7 +876,7 @@ class RemoteMessagingService {
           messageId: messageId,
           conversationId: conversationId,
           senderAccountId: row['sender_account_id'] as String,
-          senderDeviceId: row['sender_device_id'] as int,
+          senderDeviceId: row['sender_device_id'] as String,
           text: await protector.decryptText(
             conversationId: conversationId,
             messageId: messageId,
@@ -907,7 +908,7 @@ class RemoteMessagingService {
     return accountId;
   }
 
-  int _requireDeviceId() {
+  String _requireDeviceId() {
     final deviceId = _deviceId;
     if (deviceId == null) {
       throw StateError('Remote messaging device is not set up');

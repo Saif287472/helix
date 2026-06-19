@@ -30,7 +30,8 @@ class BackendDatabase {
         CREATE TABLE IF NOT EXISTS devices (
           device_id TEXT PRIMARY KEY,
           account_id TEXT NOT NULL,
-          device_public_key TEXT NOT NULL,
+          device_signing_public_key TEXT NOT NULL,
+          device_agreement_public_key TEXT NOT NULL,
           device_name TEXT NOT NULL,
           status TEXT NOT NULL,
           push_token TEXT,
@@ -443,6 +444,52 @@ class BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 12;');
     }
+    if (version < 13) {
+      final columns = _tableColumns('devices');
+      if (columns.contains('device_public_key')) {
+        _db.execute('ALTER TABLE devices RENAME TO devices_v12;');
+        _db.execute('''
+          CREATE TABLE devices (
+            device_id TEXT PRIMARY KEY,
+            account_id TEXT NOT NULL,
+            device_signing_public_key TEXT NOT NULL,
+            device_agreement_public_key TEXT NOT NULL,
+            device_name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            push_token TEXT,
+            created_at INTEGER NOT NULL,
+            last_seen_at INTEGER NOT NULL,
+            FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+          );
+        ''');
+        _db.execute('''
+          INSERT INTO devices (
+            device_id,
+            account_id,
+            device_signing_public_key,
+            device_agreement_public_key,
+            device_name,
+            status,
+            push_token,
+            created_at,
+            last_seen_at
+          )
+          SELECT
+            device_id,
+            account_id,
+            device_public_key,
+            device_public_key,
+            device_name,
+            status,
+            push_token,
+            created_at,
+            last_seen_at
+          FROM devices_v12;
+        ''');
+        _db.execute('DROP TABLE devices_v12;');
+      }
+      _db.execute('PRAGMA user_version = 13;');
+    }
   }
 
   void close() {
@@ -452,6 +499,13 @@ class BackendDatabase {
   int get schemaVersion {
     final rows = _db.select('PRAGMA user_version;');
     return rows.first.columnAt(0) as int;
+  }
+
+  Set<String> _tableColumns(String table) {
+    return _db
+        .select("PRAGMA table_info('$table');")
+        .map((row) => row['name'] as String)
+        .toSet();
   }
 
   bool quickCheckOk() {
@@ -823,15 +877,28 @@ class BackendDatabase {
   void registerDevice(
     String deviceId,
     String accountId,
-    String devicePublicKey,
-    String deviceName,
-  ) {
+    String deviceSigningPublicKey,
+    String deviceAgreementPublicKeyOrName, [
+    String? deviceName,
+  ]) {
+    final resolvedDeviceName = deviceName ?? deviceAgreementPublicKeyOrName;
+    final resolvedAgreementPublicKey = deviceName == null
+        ? deviceSigningPublicKey
+        : deviceAgreementPublicKeyOrName;
     final now = DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO devices (device_id, account_id, device_public_key, device_name, status, created_at, last_seen_at)
-      VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?);
+      INSERT OR REPLACE INTO devices (device_id, account_id, device_signing_public_key, device_agreement_public_key, device_name, status, created_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?);
     ''');
-    stmt.execute([deviceId, accountId, devicePublicKey, deviceName, now, now]);
+    stmt.execute([
+      deviceId,
+      accountId,
+      deviceSigningPublicKey,
+      resolvedAgreementPublicKey,
+      resolvedDeviceName,
+      now,
+      now,
+    ]);
     stmt.close();
   }
 
@@ -846,7 +913,8 @@ class BackendDatabase {
           (row) => {
             'device_id': row['device_id'],
             'account_id': row['account_id'],
-            'device_public_key': row['device_public_key'],
+            'device_signing_public_key': row['device_signing_public_key'],
+            'device_agreement_public_key': row['device_agreement_public_key'],
             'device_name': row['device_name'],
             'status': row['status'],
             'push_token': row['push_token'],
@@ -1170,7 +1238,7 @@ class BackendDatabase {
     return {
       'identity_key': acc['identity_public_key'],
       'device_id': deviceId,
-      'device_key': devRow['device_public_key'],
+      'device_key': devRow['device_agreement_public_key'],
       'signed_prekey': {
         'key_id': spkRow['key_id'],
         'public_key': spkRow['public_key'],

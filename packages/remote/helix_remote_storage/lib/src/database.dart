@@ -52,10 +52,11 @@ class HelixRemoteDatabase {
 
     _db.execute('''
       CREATE TABLE IF NOT EXISTS devices (
-        device_id INTEGER NOT NULL,
+        device_id TEXT NOT NULL,
         account_id TEXT NOT NULL,
         device_name TEXT NOT NULL,
-        device_public_key TEXT NOT NULL,
+        device_signing_public_key TEXT NOT NULL,
+        device_agreement_public_key TEXT NOT NULL,
         status TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         PRIMARY KEY (account_id, device_id),
@@ -96,7 +97,7 @@ class HelixRemoteDatabase {
         message_id TEXT PRIMARY KEY,
         conversation_id TEXT NOT NULL,
         sender_account_id TEXT NOT NULL,
-        sender_device_id INTEGER NOT NULL,
+        sender_device_id TEXT NOT NULL,
         ciphertext_blob TEXT NOT NULL,
         server_sequence INTEGER NOT NULL,
         timestamp INTEGER NOT NULL,
@@ -111,7 +112,7 @@ class HelixRemoteDatabase {
         message_id TEXT NOT NULL,
         conversation_id TEXT NOT NULL,
         account_id TEXT NOT NULL,
-        device_id INTEGER,
+        device_id TEXT,
         receipt_type TEXT NOT NULL,
         timestamp INTEGER NOT NULL
       );
@@ -289,6 +290,149 @@ class HelixRemoteDatabase {
       ''');
       _db.execute('PRAGMA user_version = 5;');
     }
+    if (version < 6) {
+      _migrateDeviceIdentifiersToText();
+      _db.execute('PRAGMA user_version = 6;');
+    }
+  }
+
+  void _migrateDeviceIdentifiersToText() {
+    final deviceColumns = _tableColumns('devices');
+    final hasLegacyDevicePublicKey = deviceColumns.contains(
+      'device_public_key',
+    );
+    _db.execute('PRAGMA foreign_keys = OFF;');
+    _db.execute('BEGIN;');
+    try {
+      if (hasLegacyDevicePublicKey) {
+        _db.execute('''
+          CREATE TABLE IF NOT EXISTS devices_v6 (
+            device_id TEXT NOT NULL,
+            account_id TEXT NOT NULL,
+            device_name TEXT NOT NULL,
+            device_signing_public_key TEXT NOT NULL,
+            device_agreement_public_key TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY (account_id, device_id),
+            FOREIGN KEY (account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+          );
+        ''');
+        _db.execute('''
+          INSERT OR REPLACE INTO devices_v6 (
+            device_id,
+            account_id,
+            device_name,
+            device_signing_public_key,
+            device_agreement_public_key,
+            status,
+            created_at
+          )
+          SELECT
+            CAST(device_id AS TEXT),
+            account_id,
+            device_name,
+            device_public_key,
+            device_public_key,
+            status,
+            created_at
+          FROM devices;
+        ''');
+        _db.execute('DROP TABLE devices;');
+        _db.execute('ALTER TABLE devices_v6 RENAME TO devices;');
+      }
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS messages_v6 (
+          message_id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          sender_account_id TEXT NOT NULL,
+          sender_device_id TEXT NOT NULL,
+          ciphertext_blob TEXT NOT NULL,
+          server_sequence INTEGER NOT NULL,
+          timestamp INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          FOREIGN KEY (conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        INSERT OR REPLACE INTO messages_v6 (
+          message_id,
+          conversation_id,
+          sender_account_id,
+          sender_device_id,
+          ciphertext_blob,
+          server_sequence,
+          timestamp,
+          status
+        )
+        SELECT
+          message_id,
+          conversation_id,
+          sender_account_id,
+          CAST(sender_device_id AS TEXT),
+          ciphertext_blob,
+          server_sequence,
+          timestamp,
+          status
+        FROM messages;
+      ''');
+      _db.execute('DROP TABLE messages;');
+      _db.execute('ALTER TABLE messages_v6 RENAME TO messages;');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_messages_conv_seq
+        ON messages(conversation_id, server_sequence ASC);
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS message_receipts_v6 (
+          receipt_id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL,
+          conversation_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          device_id TEXT,
+          receipt_type TEXT NOT NULL,
+          timestamp INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('''
+        INSERT OR REPLACE INTO message_receipts_v6 (
+          receipt_id,
+          message_id,
+          conversation_id,
+          account_id,
+          device_id,
+          receipt_type,
+          timestamp
+        )
+        SELECT
+          receipt_id,
+          message_id,
+          conversation_id,
+          account_id,
+          CAST(device_id AS TEXT),
+          receipt_type,
+          timestamp
+        FROM message_receipts;
+      ''');
+      _db.execute('DROP TABLE message_receipts;');
+      _db.execute(
+        'ALTER TABLE message_receipts_v6 RENAME TO message_receipts;',
+      );
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    } finally {
+      _db.execute('PRAGMA foreign_keys = ON;');
+    }
+  }
+
+  Set<String> _tableColumns(String table) {
+    return _db
+        .select("PRAGMA table_info('$table');")
+        .map((row) => row['name'] as String)
+        .toSet();
   }
 
   void close() => _db.close();
@@ -352,18 +496,20 @@ class HelixRemoteDatabase {
 
   void upsertDevice(String accountId, RemoteDevice device) {
     final stmt = _db.prepare('''
-      INSERT INTO devices (device_id, account_id, device_name, device_public_key, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (device_id, account_id, device_name, device_signing_public_key, device_agreement_public_key, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(account_id, device_id) DO UPDATE SET
         device_name = excluded.device_name,
-        device_public_key = excluded.device_public_key,
+        device_signing_public_key = excluded.device_signing_public_key,
+        device_agreement_public_key = excluded.device_agreement_public_key,
         status = excluded.status;
     ''');
     stmt.execute([
       device.deviceId,
       accountId,
       device.deviceName,
-      device.devicePublicKey,
+      device.deviceSigningPublicKey,
+      device.deviceAgreementPublicKey,
       device.status,
       device.createdAt.millisecondsSinceEpoch,
     ]);
@@ -377,9 +523,11 @@ class HelixRemoteDatabase {
     return res
         .map(
           (row) => RemoteDevice(
-            deviceId: row['device_id'] as int,
+            deviceId: row['device_id'] as String,
             deviceName: row['device_name'] as String,
-            devicePublicKey: row['device_public_key'] as String,
+            deviceSigningPublicKey: row['device_signing_public_key'] as String,
+            deviceAgreementPublicKey:
+                row['device_agreement_public_key'] as String,
             createdAt: DateTime.fromMillisecondsSinceEpoch(
               row['created_at'] as int,
             ),
@@ -718,7 +866,7 @@ class HelixRemoteDatabase {
     required String accountId,
     required String receiptType,
     required int timestamp,
-    int? deviceId,
+    String? deviceId,
   }) {
     final stmt = _db.prepare('''
       INSERT OR REPLACE INTO message_receipts (

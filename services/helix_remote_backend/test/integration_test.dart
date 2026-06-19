@@ -5,6 +5,8 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 
+import 'test_registration.dart';
+
 void main() {
   late BackendServer server;
   late int port;
@@ -31,47 +33,48 @@ void main() {
     () async {
       final client = HttpClient();
 
-      // 1. Generate keys for Alice & Bob
-      final aliceKeyPair = await ed25519.newKeyPair();
-      final alicePubKey = await aliceKeyPair.extractPublicKey();
-      final alicePubKeyStr = base64UrlEncode(alicePubKey.bytes);
-
-      final bobKeyPair = await ed25519.newKeyPair();
-      final bobPubKey = await bobKeyPair.extractPublicKey();
-      final bobPubKeyStr = base64UrlEncode(bobPubKey.bytes);
-
-      // 2. Register Alice and Bob
+      // 1. Register Alice and Bob
+      final aliceMaterial = await createTestRegistrationMaterial(
+        accountId: 'alice',
+        username: 'alice_user',
+        deviceId: 'alice_device_1',
+        deviceName: 'Alice Phone',
+      );
       final regAliceRes = await _postJson(
         client,
         'localhost',
         port,
         '/api/v1/accounts/register',
-        {
-          'account_id': 'alice',
-          'username': 'alice_user',
-          'identity_public_key': 'alice_identity_public_key',
-          'device_id': 'alice_device_1',
-          'device_public_key': alicePubKeyStr,
-          'device_name': 'Alice Phone',
-        },
+        registrationBody(
+          accountId: 'alice',
+          username: 'alice_user',
+          deviceId: 'alice_device_1',
+          deviceName: 'Alice Phone',
+          material: aliceMaterial,
+        ),
       );
       expect(regAliceRes.statusCode, equals(200));
 
       server.rateLimiter.reset('127.0.0.1');
 
+      final bobMaterial = await createTestRegistrationMaterial(
+        accountId: 'bob',
+        username: 'bob_user',
+        deviceId: 'bob_device_1',
+        deviceName: 'Bob Phone',
+      );
       final regBobRes = await _postJson(
         client,
         'localhost',
         port,
         '/api/v1/accounts/register',
-        {
-          'account_id': 'bob',
-          'username': 'bob_user',
-          'identity_public_key': 'bob_identity_public_key',
-          'device_id': 'bob_device_1',
-          'device_public_key': bobPubKeyStr,
-          'device_name': 'Bob Phone',
-        },
+        registrationBody(
+          accountId: 'bob',
+          username: 'bob_user',
+          deviceId: 'bob_device_1',
+          deviceName: 'Bob Phone',
+          material: bobMaterial,
+        ),
       );
       expect(regBobRes.statusCode, equals(200));
 
@@ -90,7 +93,7 @@ void main() {
       // Sign challenge
       final aliceSig = await ed25519.sign(
         utf8.encode(aliceChallenge),
-        keyPair: aliceKeyPair,
+        keyPair: aliceMaterial.deviceSigningKeyPair,
       );
       final aliceSigStr = base64UrlEncode(aliceSig.bytes);
 
@@ -127,7 +130,7 @@ void main() {
       // Sign challenge
       final bobSig = await ed25519.sign(
         utf8.encode(bobChallenge),
-        keyPair: bobKeyPair,
+        keyPair: bobMaterial.deviceSigningKeyPair,
       );
       final bobSigStr = base64UrlEncode(bobSig.bytes);
 
@@ -256,7 +259,8 @@ void main() {
 
       // Bob connects to WebSocket to receive messages in real time
       final bobWs = await WebSocket.connect(
-        'ws://localhost:$port/api/v1/ws?token=$bobToken',
+        'ws://localhost:$port/api/v1/ws',
+        headers: {'Authorization': 'Bearer $bobToken'},
       );
       final wsMessages = <Map<String, dynamic>>[];
       final wsDone = bobWs.listen((data) {
@@ -357,23 +361,24 @@ void main() {
     final client = HttpClient();
 
     // 1. Register a device for a new account "carol"
-    final keyPair = await ed25519.newKeyPair();
-    final pubKey = await keyPair.extractPublicKey();
-    final pubKeyStr = base64UrlEncode(pubKey.bytes);
-
+    final carolMaterial = await createTestRegistrationMaterial(
+      accountId: 'carol',
+      username: 'carol_user',
+      deviceId: 'carol_device_1',
+      deviceName: 'Carol Phone',
+    );
     final regRes = await _postJson(
       client,
       'localhost',
       port,
       '/api/v1/accounts/register',
-      {
-        'account_id': 'carol',
-        'username': 'carol_user',
-        'identity_public_key': 'carol_identity_pub_key',
-        'device_id': 'carol_device_1',
-        'device_public_key': pubKeyStr,
-        'device_name': 'Carol Phone',
-      },
+      registrationBody(
+        accountId: 'carol',
+        username: 'carol_user',
+        deviceId: 'carol_device_1',
+        deviceName: 'Carol Phone',
+        material: carolMaterial,
+      ),
     );
     expect(regRes.statusCode, equals(200));
 
@@ -389,7 +394,10 @@ void main() {
         (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge']
             as String;
 
-    final sig = await ed25519.sign(utf8.encode(challenge), keyPair: keyPair);
+    final sig = await ed25519.sign(
+      utf8.encode(challenge),
+      keyPair: carolMaterial.deviceSigningKeyPair,
+    );
     final sigStr = base64UrlEncode(sig.bytes);
 
     final loginRes = await _postJson(
@@ -457,19 +465,26 @@ void main() {
     final client = HttpClient();
 
     // 1. Get tokens for Alice
-    final keyPair = await ed25519.newKeyPair();
-    final pubKey = await keyPair.extractPublicKey();
-    final pubKeyStr = base64UrlEncode(pubKey.bytes);
-
     // Register & Login Alice
-    await _postJson(client, 'localhost', port, '/api/v1/accounts/register', {
-      'account_id': 'alice_del_test',
-      'username': 'alice_del',
-      'identity_public_key': 'alice_identity_public_key',
-      'device_id': 'alice_device_del',
-      'device_public_key': pubKeyStr,
-      'device_name': 'Alice Phone',
-    });
+    final aliceDelMaterial = await createTestRegistrationMaterial(
+      accountId: 'alice_del_test',
+      username: 'alice_del',
+      deviceId: 'alice_device_del',
+      deviceName: 'Alice Phone',
+    );
+    await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/register',
+      registrationBody(
+        accountId: 'alice_del_test',
+        username: 'alice_del',
+        deviceId: 'alice_device_del',
+        deviceName: 'Alice Phone',
+        material: aliceDelMaterial,
+      ),
+    );
 
     final challengeRes = await _getJson(
       client,
@@ -480,7 +495,10 @@ void main() {
     final challenge =
         (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge']
             as String;
-    final sig = await ed25519.sign(utf8.encode(challenge), keyPair: keyPair);
+    final sig = await ed25519.sign(
+      utf8.encode(challenge),
+      keyPair: aliceDelMaterial.deviceSigningKeyPair,
+    );
     final loginRes =
         await _postJson(client, 'localhost', port, '/api/v1/accounts/login', {
           'account_id': 'alice_del_test',
@@ -573,18 +591,25 @@ void main() {
     }
 
     // Now try to send a message via API, should be rejected due to mailbox quota
-    final aliceKeyPair = await ed25519.newKeyPair();
-    final pubKey = await aliceKeyPair.extractPublicKey();
-    final pubKeyStr = base64UrlEncode(pubKey.bytes);
-
-    await _postJson(client, 'localhost', port, '/api/v1/accounts/register', {
-      'account_id': 'alice_quota',
-      'username': 'alice_quota_user',
-      'identity_public_key': 'alice_quota_identity_public_key',
-      'device_id': 'alice_quota_device',
-      'device_public_key': pubKeyStr,
-      'device_name': 'Alice Quota Phone',
-    });
+    final aliceQuotaMaterial = await createTestRegistrationMaterial(
+      accountId: 'alice_quota',
+      username: 'alice_quota_user',
+      deviceId: 'alice_quota_device',
+      deviceName: 'Alice Quota Phone',
+    );
+    await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/register',
+      registrationBody(
+        accountId: 'alice_quota',
+        username: 'alice_quota_user',
+        deviceId: 'alice_quota_device',
+        deviceName: 'Alice Quota Phone',
+        material: aliceQuotaMaterial,
+      ),
+    );
 
     final challengeRes = await _getJson(
       client,
@@ -597,7 +622,7 @@ void main() {
             as String;
     final sig = await ed25519.sign(
       utf8.encode(challenge),
-      keyPair: aliceKeyPair,
+      keyPair: aliceQuotaMaterial.deviceSigningKeyPair,
     );
     final loginRes =
         await _postJson(client, 'localhost', port, '/api/v1/accounts/login', {

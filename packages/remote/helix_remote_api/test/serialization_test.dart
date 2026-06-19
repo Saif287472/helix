@@ -21,16 +21,19 @@ void main() {
 
     test('RemoteDevice fromJson and toJson', () {
       final json = {
-        'device_id': 2,
+        'device_id': 'device2',
         'device_name': 'My Laptop',
-        'device_public_key': 'pubkey',
+        'device_signing_public_key': 'signing_pubkey',
+        'device_agreement_public_key': 'agreement_pubkey',
         'created_at': '2026-06-19T06:00:00.000Z',
         'status': 'Active',
       };
       final device = RemoteDevice.fromJson(json);
-      expect(device.deviceId, 2);
+      expect(device.deviceId, 'device2');
       expect(device.deviceName, 'My Laptop');
-      expect(device.toJson()['device_id'], 2);
+      expect(device.deviceSigningPublicKey, 'signing_pubkey');
+      expect(device.deviceAgreementPublicKey, 'agreement_pubkey');
+      expect(device.toJson()['device_id'], 'device2');
     });
 
     test('RemoteContact fromJson and toJson', () {
@@ -65,12 +68,12 @@ void main() {
         'message_id': 'msg_1',
         'conversation_id': 'conv_1',
         'sender_account_id': 'sender_1',
-        'sender_device_id': 1,
+        'sender_device_id': 'device1',
         'ciphertext': 'encrypted_stuff',
       };
       final msg = RemoteMessage.fromJson(json);
       expect(msg.messageId, 'msg_1');
-      expect(msg.senderDeviceId, 1);
+      expect(msg.senderDeviceId, 'device1');
       expect(msg.toJson()['ciphertext'], 'encrypted_stuff');
     });
 
@@ -135,7 +138,7 @@ void main() {
         'payload': {
           'conversation_id': '8c59f0f9-a35c-41fb-992a-3023e3e29f8f',
           'sender_account_id': 'acc_01h9w2m8g8qpr88v75v1w7jx8q',
-          'sender_device_id': 1,
+          'sender_device_id': 'device1',
           'ciphertext': 'opaquebase64ciphertextbytes',
           'message_id': 'msg_01h9w2m8g8qpr88v75v1w7jx8q',
         },
@@ -199,7 +202,7 @@ void main() {
       final data = RemoteCompatibilityFixtures.loadFixture(
         'rest_login_response.json',
       );
-      expect(data['device_id'], 1);
+      expect(data['device_id'], 'device1');
       expect(data['access_token'], isNotEmpty);
     });
 
@@ -208,7 +211,7 @@ void main() {
         'rest_prekey_bundle.json',
       );
       expect(data['account_id'], 'acc_01h9w2m8g8qpr88v75v1w7jx8q');
-      expect(data['device_id'], 1);
+      expect(data['device_id'], 'device1');
       expect(data['identity_key'], isNotEmpty);
       expect(data['signed_prekey'], isNotEmpty);
     });

@@ -59,9 +59,12 @@ class _FakeRestClient implements HelixRemoteRestClient {
   Future<Map<String, dynamic>> registerAccount({
     required String accountId,
     required String username,
-    required String identityPublicKey,
+    required String accountIdentityPublicKey,
     required String deviceId,
-    required String devicePublicKey,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String accountRegistrationSignature,
+    required String deviceRegistrationSignature,
     required String deviceName,
   }) async => {};
   @override
@@ -209,9 +212,10 @@ void main() {
         createdAt: clock(),
       ),
       device: RemoteDevice(
-        deviceId: 1,
+        deviceId: 'alice_device_1',
         deviceName: 'Alice phone',
-        devicePublicKey: 'alice_device_key',
+        deviceSigningPublicKey: 'alice_device_signing_key',
+        deviceAgreementPublicKey: 'alice_device_agreement_key',
         createdAt: clock(),
       ),
     );
@@ -227,13 +231,14 @@ void main() {
       db.upsertDevice(
         'alice',
         RemoteDevice(
-          deviceId: 2,
+          deviceId: 'alice_device_2',
           deviceName: 'Alice laptop',
-          devicePublicKey: 'alice_laptop_key',
+          deviceSigningPublicKey: 'alice_laptop_signing_key',
+          deviceAgreementPublicKey: 'alice_laptop_agreement_key',
           createdAt: clock(),
         ),
       );
-      service.verifyDevice(accountId: 'alice', deviceId: 2);
+      service.verifyDevice(accountId: 'alice', deviceId: 'alice_device_2');
       expect(db.getDevices('alice').last.status, 'Verified');
 
       service.addContact(peerAccountId: 'bob', nickname: 'Bob');
@@ -298,7 +303,7 @@ void main() {
         payload: {
           'conversation_id': conversationId,
           'sender_account_id': 'bob',
-          'sender_device_id': 1,
+          'sender_device_id': 'bob_device_1',
           'ciphertext': await cipher('msg_in_1', 'first offline message'),
         },
       ),
@@ -311,7 +316,7 @@ void main() {
         payload: {
           'conversation_id': conversationId,
           'sender_account_id': 'bob',
-          'sender_device_id': 1,
+          'sender_device_id': 'bob_device_1',
           'ciphertext': await cipher('msg_in_2', 'second offline message'),
         },
       ),

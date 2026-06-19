@@ -30,6 +30,7 @@ class BackendServer {
   final String turnSecret;
   final String turnUrl;
   final Set<String> adminAccountIds;
+  final DateTime Function() now;
   HttpServer? _httpServer;
   HttpServer? get httpServer => _httpServer;
 
@@ -43,6 +44,7 @@ class BackendServer {
     this.turnSecret = '',
     this.turnUrl = '',
     this.adminAccountIds = const {'admin'},
+    required this.now,
   });
 
   factory BackendServer.create({
@@ -56,6 +58,7 @@ class BackendServer {
     Set<String> adminAccountIds = const {'admin'},
     bool pushProviderAvailable = true,
     int wsReconnectsPerMinute = 30,
+    DateTime Function()? now,
   }) {
     final db = BackendDatabase(sqliteDb);
     final jwt = JwtHelper(jwtSecret);
@@ -83,13 +86,19 @@ class BackendServer {
       turnSecret: turnSecret,
       turnUrl: turnUrl,
       adminAccountIds: adminAccountIds,
+      now: now ?? DateTime.now,
     );
   }
 
   Handler getHandler() {
     final router = Router();
 
-    final authModule = AuthModule(db, jwt, notifyDevice: wsRelay.sendToDevice);
+    final authModule = AuthModule(
+      db,
+      jwt,
+      notifyDevice: wsRelay.sendToDevice,
+      now: now,
+    );
     final prekeysModule = PrekeysModule(db);
     final contactsModule = ContactsModule(db, adminAccountIds: adminAccountIds);
     final backupsModule = BackupsModule(db);

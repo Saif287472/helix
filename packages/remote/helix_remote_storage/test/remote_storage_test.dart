@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
   setUpAll(() {
@@ -59,9 +60,10 @@ void main() {
     expect(retrievedAcc.identityPublicKey, equals('alice_identity_public_key'));
 
     final device = RemoteDevice(
-      deviceId: 1,
+      deviceId: 'device1',
       deviceName: 'Alice iPhone',
-      devicePublicKey: 'alice_device_public_key',
+      deviceSigningPublicKey: 'alice_device_signing_public_key',
+      deviceAgreementPublicKey: 'alice_device_agreement_public_key',
       createdAt: DateTime.now(),
       status: 'Active',
     );
@@ -70,8 +72,16 @@ void main() {
 
     final devices = db.getDevices('acc_123');
     expect(devices.length, equals(1));
-    expect(devices.first.deviceId, equals(1));
+    expect(devices.first.deviceId, equals('device1'));
     expect(devices.first.deviceName, equals('Alice iPhone'));
+    expect(
+      devices.first.deviceSigningPublicKey,
+      equals('alice_device_signing_public_key'),
+    );
+    expect(
+      devices.first.deviceAgreementPublicKey,
+      equals('alice_device_agreement_public_key'),
+    );
   });
 
   test('Contact CRUD and blocking validation', () {
@@ -115,7 +125,7 @@ void main() {
       messageId: 'msg_1',
       conversationId: 'conv_123',
       senderAccountId: 'alice',
-      senderDeviceId: 1,
+      senderDeviceId: 'device1',
       ciphertext: 'hello bob decrypted text',
     );
 
@@ -138,6 +148,100 @@ void main() {
     db.updateSyncCursor('conv_123', 5);
     final cursor = db.getSyncCursor('conv_123');
     expect(cursor, equals(5));
+  });
+
+  test('P1 v6 migration converts integer device identifiers to text', () {
+    final dir = Directory.systemTemp.createTempSync('helix_remote_v5_');
+    final file = File(p.join(dir.path, 'remote.db'));
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    final oldDb = sqlite.sqlite3.open(file.path);
+    oldDb
+      ..execute('''
+        CREATE TABLE accounts (
+          account_id TEXT PRIMARY KEY,
+          username TEXT NOT NULL,
+          identity_public_key TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          status TEXT NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE devices (
+          device_id INTEGER NOT NULL,
+          account_id TEXT NOT NULL,
+          device_name TEXT NOT NULL,
+          device_public_key TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (account_id, device_id)
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE conversations (
+          conversation_id TEXT PRIMARY KEY,
+          title TEXT,
+          type TEXT NOT NULL,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE messages (
+          message_id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          sender_account_id TEXT NOT NULL,
+          sender_device_id INTEGER NOT NULL,
+          ciphertext_blob TEXT NOT NULL,
+          server_sequence INTEGER NOT NULL,
+          timestamp INTEGER NOT NULL,
+          status TEXT NOT NULL
+        );
+      ''')
+      ..execute('''
+        CREATE TABLE message_receipts (
+          receipt_id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL,
+          conversation_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          device_id INTEGER,
+          receipt_type TEXT NOT NULL,
+          timestamp INTEGER NOT NULL
+        );
+      ''')
+      ..execute('''
+        INSERT INTO accounts VALUES ('acc_v5', 'alice', 'identity', 1000, 'Active');
+      ''')
+      ..execute('''
+        INSERT INTO devices VALUES (1, 'acc_v5', 'Legacy Phone', 'legacy_key', 'Active', 1000);
+      ''')
+      ..execute('''
+        INSERT INTO conversations VALUES ('conv_v5', 'Legacy', 'DIRECT', 1, 1000);
+      ''')
+      ..execute('''
+        INSERT INTO messages VALUES ('msg_v5', 'conv_v5', 'acc_v5', 1, 'cipher', 1, 1001, 'DELIVERED');
+      ''')
+      ..execute('''
+        INSERT INTO message_receipts VALUES ('receipt_v5', 'msg_v5', 'conv_v5', 'acc_v5', 1, 'READ', 1002);
+      ''')
+      ..execute('PRAGMA user_version = 5;')
+      ..close();
+
+    final migrated = HelixRemoteDatabase(file);
+    migrated.initialize();
+    addTearDown(migrated.close);
+
+    expect(migrated.schemaVersion, equals(6));
+    final devices = migrated.getDevices('acc_v5');
+    expect(devices.single.deviceId, equals('1'));
+    expect(devices.single.deviceSigningPublicKey, equals('legacy_key'));
+    expect(devices.single.deviceAgreementPublicKey, equals('legacy_key'));
+    expect(migrated.getMessageById('msg_v5')!['sender_device_id'], equals('1'));
+    expect(
+      migrated.getMessageReceipts('msg_v5').single['device_id'],
+      equals('1'),
+    );
   });
 
   test('Outbound Queue Operations and Tombstones', () {
@@ -172,9 +276,10 @@ void main() {
       db.upsertDevice(
         'acc_restore',
         RemoteDevice(
-          deviceId: 1,
+          deviceId: 'device1',
           deviceName: 'Restore Phone',
-          devicePublicKey: 'restore_device_key',
+          deviceSigningPublicKey: 'restore_device_signing_key',
+          deviceAgreementPublicKey: 'restore_device_agreement_key',
           createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
         ),
       );
@@ -193,7 +298,7 @@ void main() {
           messageId: 'msg_keep',
           conversationId: 'conv_restore',
           senderAccountId: 'acc_restore',
-          senderDeviceId: 1,
+          senderDeviceId: 'device1',
           ciphertext: 'ciphertext_to_keep',
         ),
         1,
@@ -205,7 +310,7 @@ void main() {
           messageId: 'msg_deleted',
           conversationId: 'conv_restore',
           senderAccountId: 'acc_restore',
-          senderDeviceId: 1,
+          senderDeviceId: 'device1',
           ciphertext: 'ciphertext_to_remove',
         ),
         2,

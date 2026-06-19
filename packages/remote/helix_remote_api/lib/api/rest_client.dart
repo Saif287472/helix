@@ -4,9 +4,12 @@ abstract class HelixRemoteRestClient {
   Future<Map<String, dynamic>> registerAccount({
     required String accountId,
     required String username,
-    required String identityPublicKey,
+    required String accountIdentityPublicKey,
     required String deviceId,
-    required String devicePublicKey,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String accountRegistrationSignature,
+    required String deviceRegistrationSignature,
     required String deviceName,
   });
 
