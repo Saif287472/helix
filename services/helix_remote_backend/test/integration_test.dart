@@ -295,9 +295,12 @@ void main() {
 
       expect(wsMessages.length, equals(1));
       final relayedMsg = wsMessages.first;
-      expect(relayedMsg['message_id'], equals('msg_abc'));
+      expect(relayedMsg['type'], equals('chat_message'));
+      expect(relayedMsg['event_id'], startsWith('evt_msg_abc_'));
+      final msgPayload = relayedMsg['payload'] as Map<String, dynamic>;
+      expect(msgPayload['message_id'], equals('msg_abc'));
       expect(
-        relayedMsg['ciphertext'],
+        msgPayload['ciphertext'],
         equals('alice_encrypted_ciphertext_envelope_for_bob_device_1'),
       );
 

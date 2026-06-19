@@ -464,14 +464,11 @@ void main() {
         fileHash: 'new_unreferenced',
         createdAt: recentTime,
       );
-      server.db.updateAttachmentProgress(
-        'new_unreferenced',
-        75,
-        'COMPLETED',
-      );
+      server.db.updateAttachmentProgress('new_unreferenced', 75, 'COMPLETED');
 
-      final expired =
-          module.runLifecycleRules(retainFor: const Duration(days: 30));
+      final expired = module.runLifecycleRules(
+        retainFor: const Duration(days: 30),
+      );
 
       expect(expired, equals(1));
       expect(server.db.getAttachment('old_unreferenced'), isNull);
@@ -542,7 +539,9 @@ void main() {
     uploadReq.headers.set('Authorization', 'Bearer $token');
     uploadReq.headers.set('Content-Type', 'application/json');
     uploadReq.add(
-      utf8.encode(jsonEncode({'file_size': bytes.length, 'file_hash': fileHash})),
+      utf8.encode(
+        jsonEncode({'file_size': bytes.length, 'file_hash': fileHash}),
+      ),
     );
     var resp = await uploadReq.close();
     expect(resp.statusCode, equals(200));

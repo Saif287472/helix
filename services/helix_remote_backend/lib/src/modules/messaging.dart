@@ -21,6 +21,7 @@ class MessagingModule {
     router.get('/sync', _syncMessagesHandler);
     router.post('/cursor', _updateCursorHandler);
     router.post('/delete', _deleteMessageHandler);
+    router.get('/device-events', _deviceEventsHandler);
     return router;
   }
 
@@ -69,7 +70,7 @@ class MessagingModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -205,16 +206,35 @@ class MessagingModule {
           ciphertext: ciphertext,
         );
 
+        // Write device event for cursor-based catch-up
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final eventId = 'evt_${messageId}_$recipientDeviceId';
+        final deviceSeq = db.writeDeviceEvent(
+          eventId: eventId,
+          recipientDeviceId: recipientDeviceId,
+          eventType: 'chat_message',
+          payload: jsonEncode({
+            'message_id': messageId,
+            'conversation_id': conversationId,
+            'sender_account_id': senderAccountId,
+            'sender_device_id': senderDeviceId,
+            'ciphertext': ciphertext,
+          }),
+        );
+
         final envelopePayload = {
-          'type': 'message',
-          'message_id': messageId,
-          'conversation_id': conversationId,
-          'sender_account_id': senderAccountId,
-          'sender_device_id': senderDeviceId,
-          'recipient_device_id': recipientDeviceId,
-          'ciphertext': ciphertext,
-          'server_sequence': allocatedSeq,
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'event_id': eventId,
+          'schema_version': 1,
+          'timestamp': now,
+          'type': 'chat_message',
+          'payload': {
+            'message_id': messageId,
+            'conversation_id': conversationId,
+            'sender_account_id': senderAccountId,
+            'sender_device_id': senderDeviceId,
+            'ciphertext': ciphertext,
+          },
+          'server_sequence': deviceSeq,
         };
 
         // Enqueue transaction outbox for push notification worker
@@ -251,7 +271,7 @@ class MessagingModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -288,7 +308,7 @@ class MessagingModule {
       return Response.ok(jsonEncode({'messages': messages}));
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -319,7 +339,7 @@ class MessagingModule {
       return Response.ok(jsonEncode({'message': 'Sync cursor updated'}));
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -379,13 +399,18 @@ class MessagingModule {
         for (final dev in memberDevices) {
           final targetDeviceId = dev['device_id'] as String;
           if (targetDeviceId != deviceId) {
+            final now = DateTime.now().millisecondsSinceEpoch;
             final deletePayload = {
-              'type': 'message_deleted',
               'message_id': messageId,
               'conversation_id': conversationId,
-              'timestamp': DateTime.now().millisecondsSinceEpoch,
             };
-            relay.sendToDevice(targetDeviceId, deletePayload);
+            final envelope = BackendDatabase.buildEnvelope(
+              eventId: 'del_${messageId}_$targetDeviceId',
+              type: 'message_deleted',
+              payload: deletePayload,
+              timestamp: now,
+            );
+            relay.sendToDevice(targetDeviceId, envelope);
           }
         }
       }
@@ -406,7 +431,47 @@ class MessagingModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+
+  Future<Response> _deviceEventsHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    final deviceId = auth['device_id'] as String;
+    final sinceStr = request.url.queryParameters['since_sequence'];
+    final sinceSequence = sinceStr != null ? int.tryParse(sinceStr) ?? 0 : 0;
+
+    try {
+      final events = db.getDeviceEvents(deviceId, sinceSequence);
+      final envelopes = events.map((row) {
+        final eventId = row['event_id'] as String;
+        final deviceSeq = row['device_sequence'] as int;
+        final schemaVersion = row['schema_version'] as int;
+        final eventType = row['event_type'] as String;
+        final timestamp = row['timestamp'] as int;
+        final payload =
+            jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+        return {
+          'event_id': eventId,
+          'schema_version': schemaVersion,
+          'timestamp': timestamp,
+          'type': eventType,
+          'payload': payload,
+          'server_sequence': deviceSeq,
+        };
+      }).toList();
+
+      return Response.ok(
+        jsonEncode({'events': envelopes, 'device_id': deviceId}),
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }

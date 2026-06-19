@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
+import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
@@ -47,6 +48,87 @@ class _FakeProtector implements RemoteMessageProtector {
     expect(envelope['message_id'], messageId);
     return envelope['body'] as String;
   }
+}
+
+class _FakeRestClient implements HelixRemoteRestClient {
+  @override
+  set accessToken(String? token) {}
+  @override
+  Future<void> close() async {}
+  @override
+  Future<Map<String, dynamic>> registerAccount({
+    required String accountId,
+    required String username,
+    required String identityPublicKey,
+    required String deviceId,
+    required String devicePublicKey,
+    required String deviceName,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> getChallenge({
+    required String accountId,
+    required String deviceId,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> loginDevice({
+    required String accountId,
+    required String deviceId,
+    required String signature,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> refreshToken({
+    required String refreshToken,
+  }) async => {};
+  @override
+  Future<List<RemoteDevice>> listDevices() async => [];
+  @override
+  Future<void> revokeDevice(String deviceId) async {}
+  @override
+  Future<void> uploadPreKeys({
+    required int signedPrekeyId,
+    required String signedPrekey,
+    required String signedPrekeySignature,
+    required List<Map<String, dynamic>> oneTimePrekeys,
+  }) async {}
+  @override
+  Future<Map<String, dynamic>> getPreKeyBundle({
+    required String accountId,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> sendContactRequest({
+    required String peerAccountId,
+  }) async => {};
+  @override
+  Future<void> acceptContactRequest(String requestId) async {}
+  @override
+  Future<Map<String, dynamic>> requestAttachmentUpload({
+    required int fileSize,
+    required String fileHash,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> requestAttachmentDownload(String fileId) async =>
+      {};
+  @override
+  Future<void> requestAccountDeletion({required String confirmation}) async {}
+  @override
+  Future<Map<String, dynamic>> exportData() async => {};
+  @override
+  Future<Map<String, dynamic>> uploadBackup({
+    required String backupId,
+    required String backupData,
+    required int version,
+    required String kdf,
+    required String salt,
+    String backupKeyHint = '',
+    int deletionWatermark = 0,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> downloadBackup() async => {};
+  @override
+  Future<Map<String, dynamic>> sendCallSignal({
+    required String targetDeviceId,
+    required Map<String, dynamic> payload,
+  }) async => {};
 }
 
 class _FakeGateway implements SyncGateway {
@@ -115,6 +197,7 @@ void main() {
       syncEngine: RemoteSyncEngine(db),
       gateway: gateway,
       protector: _FakeProtector(),
+      restClient: _FakeRestClient(),
       clock: clock,
     );
 

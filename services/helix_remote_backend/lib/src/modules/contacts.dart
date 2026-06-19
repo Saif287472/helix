@@ -121,7 +121,7 @@ class ContactsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -213,7 +213,7 @@ class ContactsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -247,7 +247,7 @@ class ContactsModule {
       return Response.ok(jsonEncode({'message': 'Contact removed'}));
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -284,7 +284,7 @@ class ContactsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -321,7 +321,7 @@ class ContactsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -382,7 +382,7 @@ class ContactsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -453,7 +453,7 @@ class ContactsModule {
       return Response.ok(jsonEncode({'report_id': reportId}));
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -509,7 +509,7 @@ class ContactsModule {
       return Response.ok(jsonEncode({'action_id': actionId}));
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -560,7 +560,7 @@ class ContactsModule {
       return Response.ok(jsonEncode({'message': 'Contact request $action'}));
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }

@@ -13,15 +13,17 @@ class RemoteAttachmentService {
     required this.authToken,
     required this.db,
     required this.tempDir,
+    required this.wrappingKey,
     RemoteAttachmentCrypto? crypto,
     HttpClient? httpClient,
   }) : _crypto = crypto ?? RemoteAttachmentCrypto(),
        _httpClient = httpClient ?? HttpClient();
 
   final String baseUrl;
-  final String authToken;
+  String authToken;
   final HelixRemoteDatabase db;
   final Directory tempDir;
+  final Uint8List wrappingKey;
   final RemoteAttachmentCrypto _crypto;
   final HttpClient _httpClient;
 
@@ -44,37 +46,39 @@ class RemoteAttachmentService {
     final plaintext = await plaintextFile.readAsBytes();
     final ciphertext = await _crypto.encryptFile(plaintext, keyBytes, ivBytes);
 
-    // Write ciphertext to a temp file
-    final filename = p.basename(plaintextFile.path);
-    final tempCipherFile = File(p.join(tempDir.path, '$filename.enc'));
+    // Compute ciphertext hash
+    final sha256Hash = await _computeSha256(ciphertext);
+
+    // Write ciphertext to a temp file named with attachment id
+    final tempCipherFile = File(p.join(tempDir.path, '$sha256Hash.enc'));
     if (!tempCipherFile.parent.existsSync()) {
       tempCipherFile.parent.createSync(recursive: true);
     }
     await tempCipherFile.writeAsBytes(ciphertext);
 
-    // Compute ciphertext hash
-    final sha256Hash = await _computeSha256(ciphertext);
-
-    // Save locally to database
-    final encKeyStr = base64UrlEncode(keyBytes);
-    final encIvStr = base64UrlEncode(ivBytes);
-    final keyWithIv = '$encKeyStr:$encIvStr';
+    // Wrap key material before storing in DB
+    final wrappedKey = await _crypto.wrapAttachmentKey(
+      keyBytes,
+      ivBytes,
+      wrappingKey,
+    );
+    final wrappedKeyStr = base64Url.encode(wrappedKey);
 
     db.saveAttachment(
       attachmentId: sha256Hash,
-      filename: filename,
+      filename: p.basename(plaintextFile.path),
       sizeBytes: ciphertext.length,
-      encryptedKey: keyWithIv,
+      encryptedKey: wrappedKeyStr,
       localPath: plaintextFile.path,
       status: 'PENDING',
     );
 
     final result = <String, dynamic>{
       'attachment_id': sha256Hash,
-      'filename': filename,
+      'filename': p.basename(plaintextFile.path),
       'size_bytes': ciphertext.length,
       'file_hash': sha256Hash,
-      'encrypted_key': keyWithIv,
+      'encrypted_key': wrappedKeyStr,
       'ciphertext_path': tempCipherFile.path,
     };
 
@@ -94,33 +98,35 @@ class RemoteAttachmentService {
         thumbIvBytes,
       );
 
-      final thumbFilename = '$filename.thumb';
+      final thumbSha256Hash = await _computeSha256(thumbCiphertext);
+
       final tempThumbCipherFile = File(
-        p.join(tempDir.path, '$thumbFilename.enc'),
+        p.join(tempDir.path, '$thumbSha256Hash.enc'),
       );
       await tempThumbCipherFile.writeAsBytes(thumbCiphertext);
 
-      final thumbSha256Hash = await _computeSha256(thumbCiphertext);
-
-      final thumbEncKeyStr = base64UrlEncode(thumbKeyBytes);
-      final thumbEncIvStr = base64UrlEncode(thumbIvBytes);
-      final thumbKeyWithIv = '$thumbEncKeyStr:$thumbEncIvStr';
+      final thumbWrapped = await _crypto.wrapAttachmentKey(
+        thumbKeyBytes,
+        thumbIvBytes,
+        wrappingKey,
+      );
+      final thumbWrappedStr = base64Url.encode(thumbWrapped);
 
       db.saveAttachment(
         attachmentId: thumbSha256Hash,
-        filename: thumbFilename,
+        filename: '${p.basename(plaintextFile.path)}.thumb',
         sizeBytes: thumbCiphertext.length,
-        encryptedKey: thumbKeyWithIv,
+        encryptedKey: thumbWrappedStr,
         localPath: thumbnailFile.path,
         status: 'PENDING',
       );
 
       result['thumbnail'] = {
         'attachment_id': thumbSha256Hash,
-        'filename': thumbFilename,
+        'filename': '${p.basename(plaintextFile.path)}.thumb',
         'size_bytes': thumbCiphertext.length,
         'file_hash': thumbSha256Hash,
-        'encrypted_key': thumbKeyWithIv,
+        'encrypted_key': thumbWrappedStr,
         'ciphertext_path': tempThumbCipherFile.path,
       };
     }
@@ -141,7 +147,6 @@ class RemoteAttachmentService {
 
     final totalSize = cipherFile.lengthSync();
 
-    // 1. Request upload session
     final requestUrl = Uri.parse('$baseUrl/api/v1/attachments/upload');
     final req = await _httpClient.postUrl(requestUrl);
     req.headers.set('Authorization', 'Bearer $authToken');
@@ -161,7 +166,6 @@ class RemoteAttachmentService {
     final uploadPath = respBody['upload_url'] as String;
     final uploadUrl = Uri.parse('$baseUrl$uploadPath');
 
-    // 2. Query upload status to get current offset
     final statusUrl = Uri.parse(
       '$baseUrl/api/v1/attachments/upload/status/$attachmentId',
     );
@@ -176,7 +180,6 @@ class RemoteAttachmentService {
             as Map<String, dynamic>;
     int offset = statusBody['uploaded_bytes'] as int;
 
-    // 3. Upload loop
     while (offset < totalSize) {
       final uploadChunkUrl = uploadUrl.replace(
         queryParameters: {'offset': offset.toString()},
@@ -185,7 +188,6 @@ class RemoteAttachmentService {
       uploadReq.headers.set('Authorization', 'Bearer $authToken');
       uploadReq.headers.set('Content-Type', 'application/octet-stream');
 
-      // Slice the file from offset
       final stream = cipherFile.openRead(offset);
       await uploadReq.addStream(stream);
 
@@ -211,7 +213,6 @@ class RemoteAttachmentService {
       }
     }
 
-    // Update local status
     final localAttachment = db.getAttachment(attachmentId);
     if (localAttachment != null) {
       db.saveAttachment(
@@ -231,7 +232,6 @@ class RemoteAttachmentService {
     required String savePath,
     void Function(double progress)? onProgress,
   }) async {
-    // 1. Request download URL
     final requestUrl = Uri.parse(
       '$baseUrl/api/v1/attachments/download/$attachmentId',
     );
@@ -249,7 +249,6 @@ class RemoteAttachmentService {
     final downloadPath = respBody['download_url'] as String;
     final downloadUrl = Uri.parse('$baseUrl$downloadPath');
 
-    // 2. Setup local download file
     final destFile = File(savePath);
     int offset = 0;
     if (destFile.existsSync()) {
@@ -258,7 +257,6 @@ class RemoteAttachmentService {
       destFile.createSync(recursive: true);
     }
 
-    // 3. Initiate download request with Range header if offset > 0
     final downloadReq = await _httpClient.getUrl(downloadUrl);
     downloadReq.headers.set('Authorization', 'Bearer $authToken');
     if (offset > 0) {
@@ -277,7 +275,6 @@ class RemoteAttachmentService {
         ? int.tryParse(totalLengthHeader) ?? 0
         : 0;
     if (downloadResp.statusCode == 206) {
-      // Content-Range: bytes start-end/total
       final contentRange = downloadResp.headers.value('content-range');
       if (contentRange != null) {
         final parts = contentRange.split('/');
@@ -301,26 +298,33 @@ class RemoteAttachmentService {
     }
     await sink.close();
 
-    // 4. Decrypt and verify integrity
+    // Stream hash verification and decryption without loading full file
     final localAttachment = db.getAttachment(attachmentId);
     if (localAttachment == null) {
       throw StateError('Attachment metadata not found locally');
     }
 
-    final keyWithIv = localAttachment['encrypted_key'] as String;
-    final parts = keyWithIv.split(':');
-    final keyBytes = base64Url.decode(parts[0]);
-    final ivBytes = base64Url.decode(parts[1]);
+    final wrappedKeyStr = localAttachment['encrypted_key'] as String;
+    final wrappedKey = base64Url.decode(wrappedKeyStr);
 
-    final ciphertext = await destFile.readAsBytes();
-    final actualHash = await _computeSha256(ciphertext);
+    // Verify integrity via streaming hash
+    final actualHash = await _computeSha256File(destFile);
     if (actualHash != attachmentId) {
       throw StateError('Downloaded file hash mismatch');
     }
 
+    // Unwrap attachment key
+    final unwrapped = await _crypto.unwrapAttachmentKey(
+      wrappedKey,
+      wrappingKey,
+    );
+    final keyBytes = unwrapped['key']!;
+    final ivBytes = unwrapped['iv']!;
+
+    // Open the ciphertext as secret box and decrypt
+    final ciphertext = await destFile.readAsBytes();
     final plaintext = await _crypto.decryptFile(ciphertext, keyBytes, ivBytes);
 
-    // Overwrite the file with plaintext or save to desired path
     final plaintextFile = File(
       savePath.endsWith('.enc')
           ? savePath.substring(0, savePath.length - 4)
@@ -328,7 +332,6 @@ class RemoteAttachmentService {
     );
     await plaintextFile.writeAsBytes(plaintext);
 
-    // Update database status
     db.saveAttachment(
       attachmentId: attachmentId,
       filename: localAttachment['filename'] as String,
@@ -341,9 +344,6 @@ class RemoteAttachmentService {
     return plaintextFile;
   }
 
-  /// Removes the locally cached plaintext file for [attachmentId] without
-  /// touching the server copy. Status is set to CACHE_EVICTED so a future
-  /// download can recover the file.
   void evictLocalCache(String attachmentId) {
     final localAttachment = db.getAttachment(attachmentId);
     if (localAttachment == null) return;
@@ -366,20 +366,15 @@ class RemoteAttachmentService {
     );
   }
 
-  /// Packages the plaintext [attachmentKey] into per-device slots for
-  /// multi-device key delivery. [encryptForDevice] should encrypt the key to
-  /// each device's public key; when omitted the raw key is used (test-only).
   AttachmentKeyPackage buildKeyDeliveryPackage({
     required String attachmentId,
     required String attachmentKey,
     required List<String> deviceIds,
-    String Function(String deviceId, String key)? encryptForDevice,
+    required String Function(String deviceId, String key) encryptForDevice,
   }) {
     final deviceKeys = <String, String>{};
     for (final deviceId in deviceIds) {
-      deviceKeys[deviceId] = encryptForDevice != null
-          ? encryptForDevice(deviceId, attachmentKey)
-          : attachmentKey;
+      deviceKeys[deviceId] = encryptForDevice(deviceId, attachmentKey);
     }
     return AttachmentKeyPackage(
       attachmentId: attachmentId,
@@ -389,6 +384,19 @@ class RemoteAttachmentService {
 
   Future<String> _computeSha256(Uint8List data) async {
     final hash = await crypto_pkg.Sha256().hash(data);
+    return hash.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  /// Computes SHA-256 hash of a file by reading it in chunks, avoiding
+  /// loading the full file into memory.
+  Future<String> _computeSha256File(File file) async {
+    final sink = crypto_pkg.Sha256().newHashSink();
+    final stream = file.openRead();
+    await for (final chunk in stream) {
+      sink.add(chunk);
+    }
+    sink.close();
+    final hash = await sink.hash();
     return hash.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 

@@ -49,9 +49,9 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 - [x] **P12-001:** Account sign-in/setup UI.
 - [x] **P12-002:** Device verification UI.
-- [ ] **P12-003:** Add contact by username, QR, or invitation.
+- [x] **P12-003:** Add contact by username, QR, or invitation.
 - [x] **P12-004:** One-to-one conversation creation.
-- [ ] **P12-005:** E2EE text send.
+- [x] **P12-005:** E2EE text send.
 - [x] **P12-006:** Offline receive.
 - [x] **P12-007:** Persistent conversation list.
 - [x] **P12-008:** Persistent message history.
@@ -634,6 +634,84 @@ The foundation is complete only when all are true:
 3. After each Phase 12 slice, run the relevant Remote API/storage/sync/crypto/app/backend tests plus architecture and secret checks.
 4. Continue through Phases 13-20 in order unless an ADR-approved dependency requires reordering.
 5. Do not block normal product development on DB encryption, external review, staging, or full DH/skipped-key ratchet, but do not mark their security gates complete until real evidence exists.
+
+---
+
+# Phase 12-20 Closure Correction (2026-06-19)
+
+The following annotation corrects overstated checkboxes in the Phase 12-20
+implementation evidence sections above. Historical evidence is preserved; this
+correction is appended. See `docs/architecture/PHASE_12_20_CLOSURE.md` for the
+complete audit.
+
+## Core Finding
+
+The library/package code for Phases 12-20 is substantial and useful, but the
+**Remote Flutter app has no real integration**. `RemoteCompositionRoot` wires
+only key storage, database, and sync engine. The app UI (`main.dart`) uses
+in-memory `_contacts`, `_messages`, and `_UiMessage` lists with `setState`
+calls — no service, backend, or persistence connection.
+
+Fresh install fails because `db_key` is required but no first-run generation
+exists.
+
+## Checklist Corrections
+
+### Phase 12
+- ALL checked items: correct that **component-level code exists**; incorrect that
+  the **app has working integration**. Change classification to DISCONNECTED or
+  PARTIAL. The app UI is a demo shell with hardcoded `bob` contact and sample
+  message text.
+
+### Phase 13
+- ALL checked items: correct at the **backend/service level**; incorrect that
+  the **app uses them**. No contact request, accept/reject, block/unblock, privacy
+  settings, profile, presence, or report screens are wired in the app.
+
+### Phase 14
+- ALL checked items: correct that **attachment primitives exist**; incomplete/
+  defective in that **raw-key fallback is available** (`buildKeyDeliveryPackage`
+  without `encryptForDevice`). The app does not use attachment services. Upload/
+  download reads entire content into memory.
+
+### Phase 15
+- ALL checked items: **OVERSTATED**. `RemoteCallEngine` is an **abstract
+  interface** — no concrete `RemoteWebRtcCallEngine` exists. The comment `// A
+  production implementation exists` in `RemoteCallService` is false. Abstract
+  service and 24 tests verify component behavior, but no engine can be composed.
+
+### Phase 16
+- ALL checked items: correct that **group service/backend/storage exist**;
+  defective in that **deterministic fallback key** `key_<group>_epoch_0` is
+  used when no encryption-key provider is supplied. Key rotation bumps epoch
+  but does not prove real key generation or per-device encrypted distribution.
+
+### Phase 17
+- ALL checked items: correct that **backend and crypto primitives exist**;
+  incorrect that they are **usable from the app**. No device management, backup,
+  or recovery screens or services are wired in the composition root.
+
+### Phase 18
+- P18-011 (account deletion): checked as complete but **backed only by backend
+  endpoint** — no app-level deletion orchestration exists.
+
+### Phase 19
+- P19-010 (WebSocket storm): checked as complete but **backend-side only**;
+  no client-side storm test exists.
+- P19-005/006/007/008/009/011/012/014/015/018/019/020/021/022: marked complete
+  but are **OUT OF STUDENT SCOPE** (production documentation only).
+
+### Phase 20
+- P20-011 (Database migration tests): marked complete but **no dedicated
+  migration test file exists**.
+- P20-002/003/012/013/014/016/018-021/026/027: marked complete but are
+  **OUT OF STUDENT SCOPE** (blocked by signing material, production infra).
+
+## Ongoing Work
+
+The `phase_12-20_closure_and_repair_pass.md` document defines 13 stages to
+close these gaps. Stage 0 (this baseline) is complete. Stages 1-13 address the
+wiring, security, and integration deficits identified above.
 
 # Completion Report Requirements For Future Phases
 

@@ -78,7 +78,7 @@ class BackupsModule {
       return Response.ok(jsonEncode({'message': 'Backup stored successfully'}));
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -122,7 +122,7 @@ class BackupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }

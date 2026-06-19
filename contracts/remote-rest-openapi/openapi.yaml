@@ -1,175 +1,148 @@
 openapi: 3.0.0
 info:
   title: Helix Remote REST API
-  description: Contract-first REST API definitions for Helix Remote (Phase 8).
+  description: Contract-first REST API definitions for Helix Remote.
   version: 1.0.0
 servers:
   - url: https://api.remote.helix.com/api/v1
     description: Production server
 paths:
-  /auth/register:
+  # ─── Auth: Accounts ───────────────────────────────────────────
+  /accounts/register:
     post:
-      summary: Register a new account
+      summary: Register a new account with an initial device
       operationId: registerAccount
+      tags: [Auth]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - username
-                - identity_public_key
-              properties:
-                username:
-                  type: string
-                  pattern: '^[a-zA-Z0-9._-]{3,32}$'
-                identity_public_key:
-                  type: string
-                  description: Hex-encoded Ed25519 public key
+              $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: Created
+          description: Account and device created
           content:
             application/json:
               schema:
                 type: object
-                required:
-                  - account_id
-                  - created_at
+                required: [message, account_id, device_id]
                 properties:
+                  message:
+                    type: string
                   account_id:
                     type: string
-                  created_at:
+                  device_id:
                     type: string
-                    format: date-time
         '400':
-          description: Invalid username or key format
+          description: Invalid input
         '409':
-          description: Username already taken
+          description: Account or device already exists
 
-  /auth/login:
+  /accounts/challenge:
+    get:
+      summary: Request a challenge for authentication
+      operationId: getChallenge
+      tags: [Auth]
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: device_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Challenge generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResponse'
+
+  /accounts/login:
     post:
-      summary: Authenticate device and get session tokens
+      summary: Authenticate device and obtain session tokens
       operationId: loginDevice
+      tags: [Auth]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - username
-                - device_public_key
-                - device_name
-                - signature
-              properties:
-                username:
-                  type: string
-                device_public_key:
-                  type: string
-                  description: Hex-encoded X25519 public key
-                device_name:
-                  type: string
-                signature:
-                  type: string
-                  description: Signature of challenge or timestamp signed with identity key
+              $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Ok
+          description: Authenticated
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - access_token
-                  - refresh_token
-                  - device_id
-                properties:
-                  access_token:
-                    type: string
-                  refresh_token:
-                    type: string
-                  device_id:
-                    type: integer
+                allOf:
+                  - $ref: '#/components/schemas/TokenResponse'
+                  - type: object
+                    properties:
+                      message:
+                        type: string
         '401':
           description: Invalid credentials or signature
 
-  /auth/token/refresh:
+  /accounts/refresh:
     post:
       summary: Rotate auth token using refresh token
       operationId: refreshToken
+      tags: [Auth]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - refresh_token
+              required: [refresh_token]
               properties:
                 refresh_token:
                   type: string
       responses:
         '200':
-          description: Ok
+          description: Tokens refreshed
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - access_token
-                  - refresh_token
-                properties:
-                  access_token:
-                    type: string
-                  refresh_token:
-                    type: string
+                $ref: '#/components/schemas/TokenResponse'
         '401':
           description: Invalid or expired refresh token
 
-  /devices:
+  # ─── Auth: Devices ────────────────────────────────────────────
+  /accounts/devices:
     get:
-      summary: List all active devices for the account
+      summary: List all active devices for the authenticated account
       operationId: listDevices
+      tags: [Auth]
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Ok
+          description: Device list
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Device'
+                type: object
+                required: [devices]
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
         '401':
           description: Unauthorized
 
-  /devices/{deviceId}:
-    delete:
+  /accounts/devices/revoke:
+    post:
       summary: Revoke a specific device
       operationId: revokeDevice
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: deviceId
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '204':
-          description: No Content
-        '401':
-          description: Unauthorized
-        '404':
-          description: Device not found
-
-  /devices/link/request:
-    post:
-      summary: Request linking a new device from an active device
-      operationId: requestDeviceLink
+      tags: [Auth]
       security:
         - BearerAuth: []
       requestBody:
@@ -178,10 +151,40 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - device_id
-                - device_public_key
-                - device_name
+              required: [device_id]
+              properties:
+                device_id:
+                  type: string
+      responses:
+        '200':
+          description: Device revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Device not found
+
+  /accounts/devices/link/request:
+    post:
+      summary: Request linking a new device from an active device
+      operationId: requestDeviceLink
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id, device_public_key, device_name]
               properties:
                 device_id:
                   type: string
@@ -191,16 +194,27 @@ paths:
                   type: string
       responses:
         '200':
-          description: Pending link request and out-of-band verification code
+          description: Link request created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [link_id, verification_code, status]
+                properties:
+                  link_id:
+                    type: string
+                  verification_code:
+                    type: string
+                  status:
+                    type: string
         '401':
           description: Unauthorized
-        '403':
-          description: Device id already registered or requester inactive
 
-  /devices/link/verify:
+  /accounts/devices/link/verify:
     post:
-      summary: Approve a pending device link using the out-of-band code
+      summary: Approve a pending device link using out-of-band code
       operationId: verifyDeviceLink
+      tags: [Auth]
       security:
         - BearerAuth: []
       requestBody:
@@ -209,9 +223,7 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - link_id
-                - verification_code
+              required: [link_id, verification_code]
               properties:
                 link_id:
                   type: string
@@ -219,14 +231,23 @@ paths:
                   type: string
       responses:
         '200':
-          description: Link request approved
+          description: Link verified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
         '403':
           description: Verification failed
 
-  /devices/link/complete:
+  /accounts/devices/link/complete:
     post:
-      summary: Register the approved linked device public key
+      summary: Complete the device link process
       operationId: completeDeviceLink
+      tags: [Auth]
       security:
         - BearerAuth: []
       requestBody:
@@ -235,21 +256,31 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - link_id
+              required: [link_id]
               properties:
                 link_id:
                   type: string
       responses:
         '200':
-          description: Device linked and ready for challenge login
+          description: Device linked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, device_id]
+                properties:
+                  status:
+                    type: string
+                  device_id:
+                    type: string
         '403':
-          description: Link request is not approved
+          description: Link not approved
 
-  /devices/lost-device:
+  /accounts/devices/lost-device:
     post:
-      summary: Report a lost device and purge its pending mailbox
+      summary: Report a lost device and purge its data
       operationId: reportLostDevice
+      tags: [Auth]
       security:
         - BearerAuth: []
       requestBody:
@@ -258,104 +289,178 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - device_id
+              required: [device_id]
               properties:
                 device_id:
                   type: string
       responses:
         '200':
-          description: Lost device revoked
-        '401':
-          description: Unauthorized
-
-  /keys/prekeys:
-    post:
-      summary: Upload a new batch of prekeys
-      operationId: uploadPreKeys
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - signed_prekey
-                - signed_prekey_signature
-                - one_time_prekeys
-              properties:
-                signed_prekey:
-                  type: string
-                signed_prekey_signature:
-                  type: string
-                one_time_prekeys:
-                  type: array
-                  items:
-                    type: string
-      responses:
-        '204':
-          description: No Content
-        '401':
-          description: Unauthorized
-
-  /keys/prekeys/{accountId}/{deviceId}:
-    get:
-      summary: Get prekey bundle for a device to establish E2EE session
-      operationId: getPreKeyBundle
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: accountId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: deviceId
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: Ok
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PreKeyBundle'
-        '401':
-          description: Unauthorized
-        '404':
-          description: Bundle not found
-
-  /contacts/requests:
-    post:
-      summary: Send a contact/friend request
-      operationId: sendContactRequest
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - target_username
-              properties:
-                target_username:
-                  type: string
-      responses:
-        '201':
-          description: Created
+          description: Lost device reported
           content:
             application/json:
               schema:
                 type: object
-                required:
-                  - request_id
-                  - status
+                required: [message, device_id]
+                properties:
+                  message:
+                    type: string
+                  device_id:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  /accounts/username:
+    post:
+      summary: Update or set the display username
+      operationId: updateUsername
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username:
+                  type: string
+      responses:
+        '200':
+          description: Username updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, username]
+                properties:
+                  message:
+                    type: string
+                  username:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  # ─── Prekeys ──────────────────────────────────────────────────
+  /prekeys/publish:
+    post:
+      summary: Publish signed prekey and one-time prekeys
+      operationId: publishPreKeys
+      tags: [Prekeys]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrekeyPublishRequest'
+      responses:
+        '200':
+          description: Prekeys published
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  /prekeys/bundle:
+    get:
+      summary: Get prekey bundle for an account to establish E2EE
+      operationId: getPreKeyBundle
+      tags: [Prekeys]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Prekey bundle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreKeyBundleResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Account not found
+
+  # ─── Contacts ─────────────────────────────────────────────────
+  /contacts/:
+    get:
+      summary: List contacts for the authenticated account
+      operationId: listContacts
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Contact list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contacts]
+                properties:
+                  contacts:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Unauthorized
+
+  /contacts/requests:
+    get:
+      summary: List pending contact requests
+      operationId: listContactRequests
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Pending requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Send a contact request
+      operationId: sendContactRequest
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+      responses:
+        '201':
+          description: Request sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request_id, status]
                 properties:
                   request_id:
                     type: string
@@ -366,30 +471,11 @@ paths:
         '404':
           description: Target user not found
 
-  /contacts/requests/{requestId}/accept:
+  /contacts/requests/accept:
     post:
       summary: Accept a pending contact request
       operationId: acceptContactRequest
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: requestId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '204':
-          description: No Content
-        '401':
-          description: Unauthorized
-        '404':
-          description: Request not found
-
-  /attachments/upload:
-    post:
-      summary: Request a pre-signed URL to upload an encrypted attachment
-      operationId: requestAttachmentUpload
+      tags: [Contacts]
       security:
         - BearerAuth: []
       requestBody:
@@ -398,42 +484,519 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - file_size
-                - file_hash
+              required: [request_id]
               properties:
-                file_size:
-                  type: integer
-                file_hash:
+                request_id:
                   type: string
-                  description: SHA-256 hash of the ciphertext file
       responses:
         '200':
-          description: Ok
+          description: Request accepted
+        '401':
+          description: Unauthorized
+        '404':
+          description: Request not found
+
+  /contacts/requests/reject:
+    post:
+      summary: Reject a pending contact request
+      operationId: rejectContactRequest
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id]
+              properties:
+                request_id:
+                  type: string
+      responses:
+        '200':
+          description: Request rejected
+        '401':
+          description: Unauthorized
+        '404':
+          description: Request not found
+
+  /contacts/requests/cancel:
+    post:
+      summary: Cancel an outgoing contact request
+      operationId: cancelContactRequest
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id]
+              properties:
+                request_id:
+                  type: string
+      responses:
+        '200':
+          description: Request cancelled
+        '401':
+          description: Unauthorized
+        '404':
+          description: Request not found
+
+  /contacts/add:
+    post:
+      summary: Add a contact directly
+      operationId: addContact
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [peer_account_id]
+              properties:
+                peer_account_id:
+                  type: string
+                nickname:
+                  type: string
+      responses:
+        '200':
+          description: Contact added
+        '401':
+          description: Unauthorized
+
+  /contacts/remove:
+    post:
+      summary: Remove a contact
+      operationId: removeContact
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [peer_account_id]
+              properties:
+                peer_account_id:
+                  type: string
+      responses:
+        '200':
+          description: Contact removed
+        '401':
+          description: Unauthorized
+
+  /contacts/block:
+    post:
+      summary: Block a contact
+      operationId: blockContact
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [peer_account_id]
+              properties:
+                peer_account_id:
+                  type: string
+      responses:
+        '200':
+          description: Contact blocked
+        '401':
+          description: Unauthorized
+
+  /contacts/unblock:
+    post:
+      summary: Unblock a contact
+      operationId: unblockContact
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [peer_account_id]
+              properties:
+                peer_account_id:
+                  type: string
+      responses:
+        '200':
+          description: Contact unblocked
+        '401':
+          description: Unauthorized
+
+  /contacts/search:
+    get:
+      summary: Search for users by username
+      operationId: searchContacts
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
           content:
             application/json:
               schema:
                 type: object
-                required:
-                  - file_id
-                  - upload_url
-                  - headers
                 properties:
-                  file_id:
-                    type: string
-                  upload_url:
-                    type: string
-                  headers:
-                    type: object
-                    additionalProperties:
-                      type: string
+                  results:
+                    type: array
+                    items:
+                      type: object
         '401':
           description: Unauthorized
 
-  /attachments/download/{fileId}:
+  /contacts/privacy:
     get:
-      summary: Request a pre-signed URL to download an encrypted attachment
-      operationId: requestAttachmentDownload
+      summary: Get privacy settings
+      operationId: getPrivacySettings
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Privacy settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  search_discoverable:
+                    type: boolean
+                  presence_visibility:
+                    type: string
+                  last_seen_visibility:
+                    type: string
+        '401':
+          description: Unauthorized
+    post:
+      summary: Update privacy settings
+      operationId: updatePrivacySettings
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                search_discoverable:
+                  type: boolean
+                presence_visibility:
+                  type: string
+                last_seen_visibility:
+                  type: string
+      responses:
+        '200':
+          description: Settings updated
+        '401':
+          description: Unauthorized
+
+  /contacts/presence:
+    post:
+      summary: Send presence heartbeat
+      operationId: presenceHeartbeat
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Heartbeat received
+        '401':
+          description: Unauthorized
+
+  /contacts/presence/{accountId}:
+    get:
+      summary: Get presence status for a contact
+      operationId: getPresence
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Presence status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account_id:
+                    type: string
+                  status:
+                    type: string
+                  last_seen:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+
+  /contacts/report:
+    post:
+      summary: Report a contact
+      operationId: reportContact
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reported_account_id:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Report submitted
+        '401':
+          description: Unauthorized
+
+  /contacts/reports/action:
+    post:
+      summary: Take action on a report (admin)
+      operationId: takeReportAction
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                report_id:
+                  type: string
+                action:
+                  type: string
+      responses:
+        '200':
+          description: Action taken
+        '403':
+          description: Admin privileges required
+
+  # ─── Messages ─────────────────────────────────────────────────
+  /messages/conversations/create:
+    post:
+      summary: Create a new conversation
+      operationId: createConversation
+      tags: [Messages]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversation_id, type, members]
+              properties:
+                conversation_id:
+                  type: string
+                type:
+                  type: string
+                  enum: [direct, group]
+                title:
+                  type: string
+                members:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      account_id:
+                        type: string
+                      device_id:
+                        type: string
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation_id:
+                    type: string
+                  status:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  /messages/send:
+    post:
+      summary: Send a message with encrypted envelopes
+      operationId: sendMessage
+      tags: [Messages]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageSendRequest'
+      responses:
+        '201':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  sequence:
+                    type: integer
+        '401':
+          description: Unauthorized
+
+  /messages/sync:
+    get:
+      summary: Sync messages for a conversation since a sequence number
+      operationId: syncMessages
+      tags: [Messages]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversation_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: since_sequence
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Synced messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+        '401':
+          description: Unauthorized
+
+  /messages/cursor:
+    post:
+      summary: Update the read cursor for a conversation
+      operationId: updateCursor
+      tags: [Messages]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversation_id, sequence]
+              properties:
+                conversation_id:
+                  type: string
+                sequence:
+                  type: integer
+      responses:
+        '200':
+          description: Cursor updated
+        '401':
+          description: Unauthorized
+
+  /messages/delete:
+    post:
+      summary: Delete a message
+      operationId: deleteMessage
+      tags: [Messages]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message_id]
+              properties:
+                message_id:
+                  type: string
+      responses:
+        '200':
+          description: Message deleted
+        '401':
+          description: Unauthorized
+
+  # ─── Attachments ──────────────────────────────────────────────
+  /attachments/upload:
+    post:
+      summary: Request pre-signed URL for attachment upload
+      operationId: requestAttachmentUpload
+      tags: [Attachments]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachmentUploadRequest'
+      responses:
+        '200':
+          description: Upload URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [upload_url]
+                properties:
+                  upload_url:
+                    type: string
+                  file_id:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+
+  /attachments/upload/status/{fileId}:
+    get:
+      summary: Check upload status for a file
+      operationId: getUploadStatus
+      tags: [Attachments]
       security:
         - BearerAuth: []
       parameters:
@@ -444,25 +1007,476 @@ paths:
             type: string
       responses:
         '200':
-          description: Ok
+          description: Upload status
           content:
             application/json:
               schema:
                 type: object
-                required:
-                  - download_url
+                properties:
+                  file_id:
+                    type: string
+                  status:
+                    type: string
+                  uploaded_bytes:
+                    type: integer
+                  total_bytes:
+                    type: integer
+        '401':
+          description: Unauthorized
+
+  /attachments/upload/file/{fileId}:
+    put:
+      summary: Upload file bytes at a given offset
+      operationId: uploadFileChunk
+      tags: [Attachments]
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Chunk uploaded
+        '206':
+          description: Partial upload accepted
+        '401':
+          description: Unauthorized
+
+  /attachments/download/{fileId}:
+    get:
+      summary: Request pre-signed URL for attachment download
+      operationId: requestAttachmentDownload
+      tags: [Attachments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Download URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [download_url]
                 properties:
                   download_url:
                     type: string
+                  expires_at:
+                    type: string
+                    format: date-time
         '401':
           description: Unauthorized
         '404':
           description: File not found
 
-  /backups:
+  /attachments/download/file/{fileId}:
+    get:
+      summary: Download an attachment file (supports Range header)
+      operationId: downloadFile
+      tags: [Attachments]
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Partial content (Range request)
+        '401':
+          description: Unauthorized
+        '404':
+          description: File not found
+
+  /attachments/register-reference:
     post:
-      summary: Upload an opaque encrypted, versioned account backup envelope
+      summary: Register a reference from a message to an attachment
+      operationId: registerAttachmentReference
+      tags: [Attachments]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_id, message_id]
+              properties:
+                file_id:
+                  type: string
+                message_id:
+                  type: string
+      responses:
+        '200':
+          description: Reference registered
+        '401':
+          description: Unauthorized
+
+  # ─── Calls ────────────────────────────────────────────────────
+  /calls/turn-credentials:
+    get:
+      summary: Get TURN server credentials for WebRTC calls
+      operationId: getTurnCredentials
+      tags: [Calls]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: TURN credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username:
+                    type: string
+                  credential:
+                    type: string
+                  urls:
+                    type: array
+                    items:
+                      type: string
+                  ttl:
+                    type: integer
+        '401':
+          description: Unauthorized
+
+  /calls/signal:
+    post:
+      summary: Relay a WebRTC signaling message to a target device
+      operationId: relayCallSignal
+      tags: [Calls]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_device_id, payload]
+              properties:
+                target_device_id:
+                  type: string
+                payload:
+                  type: object
+      responses:
+        '200':
+          description: Signal relayed
+        '401':
+          description: Unauthorized
+
+  # ─── Groups ───────────────────────────────────────────────────
+  /groups/create:
+    post:
+      summary: Create a new group
+      operationId: createGroup
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+                title:
+                  type: string
+                members:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Group created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group_id:
+                    type: string
+                  status:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  /groups/info:
+    get:
+      summary: Get group information
+      operationId: getGroupInfo
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: group_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Group info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group_id:
+                    type: string
+                  title:
+                    type: string
+                  member_count:
+                    type: integer
+                  created_at:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Group not found
+
+  /groups/members:
+    get:
+      summary: List group members with pagination
+      operationId: listGroupMembers
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: group_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Group members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  members:
+                    type: array
+                    items:
+                      type: object
+                  total:
+                    type: integer
+        '401':
+          description: Unauthorized
+
+  /groups/invite:
+    post:
+      summary: Invite a user to a group
+      operationId: inviteToGroup
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+                invitee_account_id:
+                  type: string
+      responses:
+        '200':
+          description: Invitation sent
+        '401':
+          description: Unauthorized
+
+  /groups/invite/respond:
+    post:
+      summary: Respond to a group invitation
+      operationId: respondToGroupInvite
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+                accept:
+                  type: boolean
+      responses:
+        '200':
+          description: Response recorded
+        '401':
+          description: Unauthorized
+
+  /groups/update:
+    post:
+      summary: Update group settings or title
+      operationId: updateGroup
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+                title:
+                  type: string
+      responses:
+        '200':
+          description: Group updated
+        '401':
+          description: Unauthorized
+
+  /groups/member-role:
+    post:
+      summary: Change a member's role in a group
+      operationId: changeMemberRole
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+                account_id:
+                  type: string
+                role:
+                  type: string
+      responses:
+        '200':
+          description: Role changed
+        '401':
+          description: Unauthorized
+
+  /groups/leave:
+    post:
+      summary: Leave a group
+      operationId: leaveGroup
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+      responses:
+        '200':
+          description: Left group
+        '401':
+          description: Unauthorized
+
+  /groups/remove:
+    post:
+      summary: Remove a member from a group
+      operationId: removeGroupMember
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+                account_id:
+                  type: string
+      responses:
+        '200':
+          description: Member removed
+        '401':
+          description: Unauthorized
+
+  /groups/delete:
+    post:
+      summary: Delete a group
+      operationId: deleteGroup
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id:
+                  type: string
+      responses:
+        '200':
+          description: Group deleted
+        '401':
+          description: Unauthorized
+
+  # ─── Backups ──────────────────────────────────────────────────
+  /backups/:
+    post:
+      summary: Upload an encrypted account backup
       operationId: uploadBackup
+      tags: [Backups]
       security:
         - BearerAuth: []
       requestBody:
@@ -475,68 +1489,80 @@ paths:
         '200':
           description: Backup stored
         '400':
-          description: Missing metadata, unsupported version, or key material supplied
+          description: Invalid backup data
         '401':
           description: Unauthorized
     get:
-      summary: Download the caller account's opaque encrypted backup envelope
+      summary: Download the caller's encrypted backup envelope
       operationId: downloadBackup
+      tags: [Backups]
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Backup envelope metadata and opaque ciphertext
-        '404':
-          description: No backup exists for this account
+          description: Backup envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncryptedBackupUpload'
         '401':
           description: Unauthorized
+        '404':
+          description: No backup exists
 
+  # ─── Health & Ops ─────────────────────────────────────────────
   /health/live:
     get:
-      summary: Liveness probe for the Helix Remote backend process
+      summary: Liveness probe
       operationId: getLiveness
+      tags: [Health]
       responses:
         '200':
           description: Process is alive
 
   /health/ready:
     get:
-      summary: Readiness probe for database-backed request serving
+      summary: Readiness probe
       operationId: getReadiness
+      tags: [Health]
       responses:
         '200':
-          description: Backend is ready to serve traffic
+          description: Backend ready
         '503':
-          description: Backend is not ready
+          description: Backend not ready
 
   /ops/metrics:
     get:
-      summary: Read aggregate operational metrics as an allow-listed admin
+      summary: Read operational metrics (admin)
       operationId: readOperationalMetrics
+      tags: [Ops]
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Aggregate SLI/SLO, outbox, WebSocket, storage, and database metrics without message content
+          description: Metrics payload
         '403':
           description: Admin privileges required
 
+  # ─── Privacy & Account ────────────────────────────────────────
   /privacy/export:
     get:
-      summary: Export server-visible account data for the authenticated account
+      summary: Export account data for the authenticated user
       operationId: exportAccountData
+      tags: [Privacy]
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Exported account, device, contact, mailbox, backup, report, and audit metadata
+          description: Exported data
         '401':
           description: Unauthorized
 
   /privacy/admin/audit:
     get:
-      summary: Read redacted audit records as an allow-listed admin
+      summary: Read redacted audit records (admin)
       operationId: readAdminAudit
+      tags: [Privacy]
       security:
         - BearerAuth: []
       parameters:
@@ -547,14 +1573,15 @@ paths:
             type: string
       responses:
         '200':
-          description: Redacted audit records
+          description: Audit records
         '403':
           description: Admin privileges required
 
   /account/delete:
     delete:
-      summary: Delete the authenticated Remote account after explicit confirmation
+      summary: Delete the authenticated account
       operationId: deleteAccount
+      tags: [Account]
       security:
         - BearerAuth: []
       requestBody:
@@ -562,45 +1589,24 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - confirmation
-              properties:
-                confirmation:
-                  type: string
-                  description: Must equal DELETE followed by the authenticated account id
+              $ref: '#/components/schemas/AccountDeleteRequest'
       responses:
         '200':
           description: Account deleted
         '400':
           description: Invalid confirmation
-        '403':
-          description: Device inactive or token invalid
-
-  /account:
-    delete:
-      summary: Request account deletion (marks data for erasure)
-      operationId: requestAccountDeletion
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - confirmation_phrase
-              properties:
-                confirmation_phrase:
-                  type: string
-      responses:
-        '204':
-          description: Deletion scheduled
         '401':
           description: Unauthorized
-        '400':
-          description: Invalid confirmation phrase
+
+  # ─── WebSocket ────────────────────────────────────────────────
+  /ws:
+    get:
+      summary: WebSocket upgrade endpoint for real-time messaging
+      operationId: webSocketConnect
+      tags: [WebSocket]
+      responses:
+        '101':
+          description: Switching Protocols (WebSocket upgrade)
 
 components:
   securitySchemes:
@@ -608,7 +1614,70 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
   schemas:
+    # ─── Auth Schemas ───────────────────────────────────────────
+    RegisterRequest:
+      type: object
+      required:
+        - account_id
+        - username
+        - identity_public_key
+        - device_id
+        - device_public_key
+        - device_name
+      properties:
+        account_id:
+          type: string
+        username:
+          type: string
+          pattern: '^[a-zA-Z0-9._-]{3,32}$'
+        identity_public_key:
+          type: string
+          description: Hex-encoded Ed25519 public key
+        device_id:
+          type: string
+        device_public_key:
+          type: string
+          description: Hex-encoded X25519 public key
+        device_name:
+          type: string
+
+    LoginRequest:
+      type: object
+      required:
+        - account_id
+        - device_id
+        - signature
+      properties:
+        account_id:
+          type: string
+        device_id:
+          type: string
+        signature:
+          type: string
+          description: Signature of challenge signed with identity key
+
+    ChallengeResponse:
+      type: object
+      required:
+        - challenge
+      properties:
+        challenge:
+          type: string
+
+    TokenResponse:
+      type: object
+      required:
+        - token
+        - refresh_token
+      properties:
+        token:
+          type: string
+        refresh_token:
+          type: string
+
+    # ─── Device ─────────────────────────────────────────────────
     Device:
       type: object
       required:
@@ -618,7 +1687,7 @@ components:
         - created_at
       properties:
         device_id:
-          type: integer
+          type: string
         device_name:
           type: string
         device_public_key:
@@ -626,35 +1695,164 @@ components:
         created_at:
           type: string
           format: date-time
-    PreKeyBundle:
+        last_seen_at:
+          type: string
+          format: date-time
+
+    # ─── Prekey Schemas ─────────────────────────────────────────
+    PrekeyPublishRequest:
+      type: object
+      required:
+        - signed_prekey_id
+        - signed_prekey
+        - signature
+        - one_time_prekeys
+      properties:
+        signed_prekey_id:
+          type: integer
+        signed_prekey:
+          type: string
+        signature:
+          type: string
+        one_time_prekeys:
+          type: array
+          items:
+            $ref: '#/components/schemas/OneTimePrekey'
+
+    OneTimePrekey:
+      type: object
+      required:
+        - key_id
+        - public_key
+      properties:
+        key_id:
+          type: integer
+        public_key:
+          type: string
+
+    PreKeyBundleResponse:
       type: object
       required:
         - account_id
-        - device_id
-        - identity_key
-        - signed_prekey
-        - signed_prekey_signature
+        - devices
       properties:
         account_id:
           type: string
-        device_id:
+        devices:
+          type: array
+          items:
+            type: object
+            required:
+              - device_id
+              - identity_key
+              - signed_prekey
+              - signed_prekey_signature
+            properties:
+              device_id:
+                type: string
+              identity_key:
+                type: string
+              signed_prekey:
+                type: string
+              signed_prekey_signature:
+                type: string
+              one_time_prekeys:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OneTimePrekey'
+
+    # ─── Contact Schemas ────────────────────────────────────────
+    ContactRequest:
+      type: object
+      minProperties: 1
+      maxProperties: 1
+      properties:
+        peer_account_id:
+          type: string
+        peer_username:
+          type: string
+
+    # ─── Message Schemas ────────────────────────────────────────
+    MessageSendRequest:
+      type: object
+      required:
+        - message_id
+        - conversation_id
+        - envelopes
+      properties:
+        message_id:
+          type: string
+        conversation_id:
+          type: string
+        envelopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageEnvelope'
+
+    MessageEnvelope:
+      type: object
+      required:
+        - recipient_device_id
+        - ciphertext
+      properties:
+        recipient_device_id:
+          type: string
+        ciphertext:
+          type: string
+
+    SyncResponse:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              message_id:
+                type: string
+              sender_device_id:
+                type: string
+              conversation_id:
+                type: string
+              sequence:
+                type: integer
+              ciphertext:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+
+    # ─── Attachment Schemas ─────────────────────────────────────
+    AttachmentUploadRequest:
+      type: object
+      required:
+        - file_size
+        - file_hash
+      properties:
+        file_size:
           type: integer
-        identity_key:
+          minimum: 1
+        file_hash:
           type: string
-        signed_prekey:
+          description: SHA-256 hash of the ciphertext file
+
+    # ─── Account Schemas ────────────────────────────────────────
+    AccountDeleteRequest:
+      type: object
+      required:
+        - confirmation
+      properties:
+        confirmation:
           type: string
-        signed_prekey_signature:
-          type: string
-        one_time_prekey:
-          type: string
-          description: A single OTK fetched and consumed. Can be null if exhausted.
+          description: Must equal "DELETE <accountId>"
+
+    # ─── Backup Schema ──────────────────────────────────────────
     EncryptedBackupUpload:
       type: object
       required:
-        - backup_id
         - version
-        - kdf
-        - salt
         - backup_data
       properties:
         backup_id:
@@ -669,10 +1867,6 @@ components:
           description: Base64url encoded KDF salt
         backup_key_hint:
           type: string
-          description: User-visible hint only; never the backup key or phrase
         backup_data:
           type: string
           description: Opaque encrypted backup payload
-        deletion_watermark:
-          type: integer
-          description: Latest deletion timestamp included in the encrypted backup

@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -44,7 +45,16 @@ void main() {
   final tempStorageDir = Directory('test_remote_attachments_storage');
   final clientTempDir = Directory('test_client_temp');
 
+  late Uint8List wrappingKey;
+
+  Uint8List generateWrappingKey() {
+    final rand = Random.secure();
+    return Uint8List.fromList(List.generate(32, (_) => rand.nextInt(256)));
+  }
+
   setUp(() async {
+    wrappingKey = generateWrappingKey();
+
     if (tempStorageDir.existsSync()) {
       tempStorageDir.deleteSync(recursive: true);
     }
@@ -105,6 +115,7 @@ void main() {
         authToken: token,
         db: db,
         tempDir: clientTempDir,
+        wrappingKey: wrappingKey,
       );
 
       // 1. Create a dummy plaintext file (1000 bytes)
@@ -206,6 +217,7 @@ void main() {
       authToken: token,
       db: db,
       tempDir: clientTempDir,
+      wrappingKey: wrappingKey,
     );
 
     // Create a mock File that claims to be 11MB
@@ -228,6 +240,7 @@ void main() {
         authToken: token,
         db: db,
         tempDir: clientTempDir,
+        wrappingKey: wrappingKey,
       );
 
       // 1. Setup plaintext primary and thumbnail files
@@ -313,6 +326,7 @@ void main() {
         authToken: token,
         db: db,
         tempDir: clientTempDir,
+        wrappingKey: wrappingKey,
       );
 
       // 1. Prepare and upload a file
@@ -383,34 +397,25 @@ void main() {
       authToken: token,
       db: db,
       tempDir: clientTempDir,
+      wrappingKey: wrappingKey,
     );
 
     const attachmentId = 'test_attachment_id';
     const rawKey = 'base64encodedattachmentkey==';
     final deviceIds = ['device_A', 'device_B', 'device_C'];
 
-    // Without custom encryptor — raw key placeholder in each slot
+    // Per-device encryption — raw-key fallback is no longer allowed (P14-015)
     final package = service.buildKeyDeliveryPackage(
-      attachmentId: attachmentId,
-      attachmentKey: rawKey,
-      deviceIds: deviceIds,
-    );
-
-    expect(package.attachmentId, equals(attachmentId));
-    expect(package.deviceKeys.keys, containsAll(deviceIds));
-    for (final did in deviceIds) {
-      expect(package.deviceKeys[did], equals(rawKey));
-    }
-
-    // With a custom per-device encryptor
-    final packageEncrypted = service.buildKeyDeliveryPackage(
       attachmentId: attachmentId,
       attachmentKey: rawKey,
       deviceIds: deviceIds,
       encryptForDevice: (did, key) => '$did:$key',
     );
-    expect(packageEncrypted.deviceKeys['device_A'], equals('device_A:$rawKey'));
-    expect(packageEncrypted.deviceKeys['device_B'], equals('device_B:$rawKey'));
+
+    expect(package.attachmentId, equals(attachmentId));
+    expect(package.deviceKeys.keys, containsAll(deviceIds));
+    expect(package.deviceKeys['device_A'], equals('device_A:$rawKey'));
+    expect(package.deviceKeys['device_B'], equals('device_B:$rawKey'));
 
     // Round-trip serialization
     final json = package.toJson();
@@ -426,6 +431,7 @@ void main() {
       authToken: token,
       db: db,
       tempDir: clientTempDir,
+      wrappingKey: wrappingKey,
     );
     // Should not throw
     expect(() => service.evictLocalCache('nonexistent_id'), returnsNormally);

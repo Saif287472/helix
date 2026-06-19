@@ -87,7 +87,7 @@ class AttachmentsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -97,6 +97,7 @@ class AttachmentsModule {
     if (auth == null) {
       return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
     }
+    final accountId = auth['account_id'] as String;
 
     try {
       final body =
@@ -113,11 +114,23 @@ class AttachmentsModule {
         );
       }
 
+      final attachment = db.getAttachment(fileId);
+      if (attachment == null) {
+        return Response.notFound(jsonEncode({'error': 'Attachment not found'}));
+      }
+      if (attachment['account_id'] != accountId) {
+        return Response.forbidden(
+          jsonEncode({
+            'error': 'Access denied: attachment belongs to another account',
+          }),
+        );
+      }
+
       db.registerAttachmentReference(fileId, messageId);
       return Response.ok(jsonEncode({'message': 'Reference registered'}));
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -145,8 +158,9 @@ class AttachmentsModule {
   /// Deletes uploads that never completed and are older than [staleAfter].
   /// Returns the count of orphans removed.
   int cleanupOrphans({required Duration staleAfter}) {
-    final threshold =
-        DateTime.now().subtract(staleAfter).millisecondsSinceEpoch;
+    final threshold = DateTime.now()
+        .subtract(staleAfter)
+        .millisecondsSinceEpoch;
     final orphanIds = db.getOrphanAttachmentIds(threshold);
     var count = 0;
     for (final fileId in orphanIds) {
@@ -163,8 +177,7 @@ class AttachmentsModule {
   /// Expires completed attachments that have no message references and are
   /// older than [retainFor]. Returns the count of objects removed.
   int runLifecycleRules({required Duration retainFor}) {
-    final threshold =
-        DateTime.now().subtract(retainFor).millisecondsSinceEpoch;
+    final threshold = DateTime.now().subtract(retainFor).millisecondsSinceEpoch;
     final candidateIds = db.getAttachmentsOlderThan(threshold);
     var count = 0;
     for (final fileId in candidateIds) {
@@ -185,10 +198,17 @@ class AttachmentsModule {
     if (auth == null) {
       return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
     }
-
     final attachment = db.getAttachment(fileId);
     if (attachment == null) {
       return Response.notFound(jsonEncode({'error': 'Attachment not found'}));
+    }
+    final accountId = auth['account_id'] as String;
+    if (attachment['account_id'] != accountId) {
+      return Response.forbidden(
+        jsonEncode({
+          'error': 'Access denied: attachment belongs to another account',
+        }),
+      );
     }
 
     final file = File('${storageDir.path}/$fileId');
@@ -222,10 +242,13 @@ class AttachmentsModule {
     if (auth == null) {
       return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
     }
-
     final attachment = db.getAttachment(fileId);
     if (attachment == null) {
       return Response.notFound(jsonEncode({'error': 'Attachment not found'}));
+    }
+    final accountId = auth['account_id'] as String;
+    if (attachment['account_id'] != accountId) {
+      return Response.forbidden(jsonEncode({'error': 'Access denied'}));
     }
 
     final queryParams = request.url.queryParameters;
@@ -323,7 +346,7 @@ class AttachmentsModule {
     } catch (e) {
       await sink.close();
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -336,11 +359,19 @@ class AttachmentsModule {
     if (auth == null) {
       return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
     }
+    final accountId = auth['account_id'] as String;
 
     final attachment = db.getAttachment(fileId);
     if (attachment == null || attachment['status'] != 'COMPLETED') {
       return Response.notFound(
         jsonEncode({'error': 'Attachment not found or incomplete'}),
+      );
+    }
+    if (attachment['account_id'] != accountId) {
+      return Response.forbidden(
+        jsonEncode({
+          'error': 'Access denied: attachment belongs to another account',
+        }),
       );
     }
 
@@ -355,6 +386,19 @@ class AttachmentsModule {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
       return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+    final accountId = auth['account_id'] as String;
+
+    final attachment = db.getAttachment(fileId);
+    if (attachment == null) {
+      return Response.notFound(jsonEncode({'error': 'Attachment not found'}));
+    }
+    if (attachment['account_id'] != accountId) {
+      return Response.forbidden(
+        jsonEncode({
+          'error': 'Access denied: attachment belongs to another account',
+        }),
+      );
     }
 
     final file = File('${storageDir.path}/$fileId');

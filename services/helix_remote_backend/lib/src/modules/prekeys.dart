@@ -71,7 +71,7 @@ class PrekeysModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -120,7 +120,7 @@ class PrekeysModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }

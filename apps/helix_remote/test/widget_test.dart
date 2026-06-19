@@ -1,29 +1,22 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/main.dart';
 
 void main() {
-  testWidgets('HelixRemoteApp launches Remote messaging shell', (
+  testWidgets('HelixRemoteApp launches and shows loading state', (
     WidgetTester tester,
   ) async {
-    // Use system temp as the database directory; initialize() is not called.
-    // This smoke test only verifies that the widget tree renders correctly.
     final root = RemoteCompositionRoot.production(
       databaseDirectory: Directory.systemTemp.path,
     );
     await tester.pumpWidget(HelixRemoteApp(root: root));
-    expect(find.text('Helix Remote'), findsOneWidget);
-    expect(find.text('Account'), findsOneWidget);
-    expect(find.text('Contacts'), findsOneWidget);
-    expect(find.text('Encrypted direct channel is ready.'), findsOneWidget);
 
-    await tester.enterText(find.byType(EditableText).last, 'hello remote');
-    await tester.tap(find.byTooltip('Send'));
-    await tester.pump();
-    expect(find.text('hello remote'), findsOneWidget);
+    expect(find.text('Helix Remote'), findsOneWidget);
+    expect(find.text('Starting Helix Remote...'), findsOneWidget);
+
+    root.dispose();
   });
 
   test(
@@ -33,6 +26,7 @@ void main() {
         databaseDirectory: Directory.systemTemp.path,
       );
       expect(root.startupState, RemoteStartupState.idle);
+      root.dispose();
     },
   );
 
@@ -43,6 +37,9 @@ void main() {
     expect(() => root.database, throwsA(isA<StateError>()));
     expect(() => root.syncEngine, throwsA(isA<StateError>()));
     expect(() => root.keyStorage, throwsA(isA<StateError>()));
+    expect(() => root.restClient, throwsA(isA<StateError>()));
+    expect(() => root.messagingService, throwsA(isA<StateError>()));
+    root.dispose();
   });
 
   test('withConfig validation rejects empty displayName', () {

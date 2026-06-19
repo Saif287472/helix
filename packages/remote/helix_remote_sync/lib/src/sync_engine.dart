@@ -100,6 +100,59 @@ class RemoteSyncEngine {
     return appliedCount;
   }
 
+  /// Handles a single incoming envelope from WebSocket push.
+  /// Returns true if the event was applied, false if already processed or unknown.
+  bool handleIncomingEnvelope(RemoteRealtimeEnvelope env) {
+    final seq = env.serverSequence ?? 0;
+    final lastSeq = db.getSyncCursor(_globalSyncCursorId);
+
+    if (db.hasProcessedEventId(env.eventId)) {
+      return false;
+    }
+
+    if (seq <= lastSeq) {
+      return false;
+    }
+
+    try {
+      if (env.type == 'call_signal' && onCallSignal != null) {
+        onCallSignal!(env.payload);
+        _recordProcessedEvent(env, seq);
+        if (seq > lastSeq) {
+          db.updateSyncCursor(_globalSyncCursorId, seq);
+        }
+        return true;
+      }
+
+      final event = _InboundSyncEvent.tryParse(env);
+      if (event == null) {
+        _recordUnknownEvent(env);
+        _recordProcessedEvent(env, seq);
+        if (seq > lastSeq) {
+          db.updateSyncCursor(_globalSyncCursorId, seq);
+        }
+        return false;
+      }
+
+      if (event is _SyncMarkerEvent) {
+        _recordProcessedEvent(env, seq);
+        if (seq > lastSeq) {
+          db.updateSyncCursor(_globalSyncCursorId, seq);
+        }
+        return true;
+      }
+
+      final applied = event.apply(db, env);
+      _recordProcessedEvent(env, seq);
+      if (seq > lastSeq) {
+        db.updateSyncCursor(_globalSyncCursorId, seq);
+      }
+      return applied;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _recordUnknownEvent(RemoteRealtimeEnvelope env) {
     diagnostics?.call(
       'Unknown Remote sync event skipped '

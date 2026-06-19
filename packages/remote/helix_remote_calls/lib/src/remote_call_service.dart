@@ -110,6 +110,8 @@ class RemoteCallService {
   RemoteCallStatus? _activeCall;
   RemoteCallStatus? get activeCall => _activeCall;
 
+  String? _pendingOfferSdp;
+
   StreamSubscription<RemoteCallEngineEvent>? _engineSub;
 
   // Calls older than this (ms) are treated as stale on recovery.
@@ -209,6 +211,7 @@ class RemoteCallService {
       );
       return;
     }
+    _pendingOfferSdp = signal.sdp;
     _activeCall = RemoteCallStatus(
       callId: signal.callId,
       peerId: signal.peerId ?? '',
@@ -221,7 +224,13 @@ class RemoteCallService {
   Future<void> acceptIncomingCall() async {
     final call = _activeCall;
     if (call == null || call.state != RemoteCallState.ringing) return;
-    final sdp = await engine.createAnswer(call.callId, '', video: call.isVideo);
+    final offerSdp = _pendingOfferSdp ?? '';
+    _pendingOfferSdp = null;
+    final sdp = await engine.createAnswer(
+      call.callId,
+      offerSdp,
+      video: call.isVideo,
+    );
     _activeCall = RemoteCallStatus(
       callId: call.callId,
       peerId: call.peerId,

@@ -45,14 +45,17 @@ class CallsModule {
     if (count >= _maxCredentialsPerHour) {
       return Response(
         429,
-        body: jsonEncode({'error': 'TURN credential quota exceeded. Try again later.'}),
+        body: jsonEncode({
+          'error': 'TURN credential quota exceeded. Try again later.',
+        }),
         headers: {'Content-Type': 'application/json'},
       );
     }
 
     final now = DateTime.now();
     final issuedAt = now.millisecondsSinceEpoch;
-    final expiresAtSeconds = now.millisecondsSinceEpoch ~/ 1000 + _credentialValiditySeconds;
+    final expiresAtSeconds =
+        now.millisecondsSinceEpoch ~/ 1000 + _credentialValiditySeconds;
 
     // TURN REST API credential format: "<expiry_unix>:<account_id>"
     final username = '$expiresAtSeconds:$accountId';
@@ -91,7 +94,8 @@ class CallsModule {
       );
     }
 
-    final body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
     final targetDeviceId = body['target_device_id'] as String?;
     final payload = body['payload'];
 

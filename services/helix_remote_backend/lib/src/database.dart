@@ -425,6 +425,24 @@ class BackendDatabase {
       // tables are required.
       _db.execute('PRAGMA user_version = 11;');
     }
+
+    if (version < 12) {
+      // Stage 3: per-device event stream for proper cursor tracking
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS device_events (
+          event_id TEXT NOT NULL,
+          recipient_device_id TEXT NOT NULL,
+          device_sequence INTEGER NOT NULL,
+          schema_version INTEGER NOT NULL DEFAULT 1,
+          event_type TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          payload TEXT NOT NULL,
+          PRIMARY KEY(recipient_device_id, device_sequence),
+          FOREIGN KEY(recipient_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 12;');
+    }
   }
 
   void close() {
@@ -1851,6 +1869,80 @@ class BackendDatabase {
         .toList();
   }
 
+  int writeDeviceEvent({
+    required String eventId,
+    required String recipientDeviceId,
+    required String eventType,
+    required String payload,
+  }) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final seqStmt = _db.prepare(
+        'SELECT COALESCE(MAX(device_sequence), 0) + 1 FROM device_events WHERE recipient_device_id = ?;',
+      );
+      final seqRes = seqStmt.select([recipientDeviceId]);
+      seqStmt.close();
+      final nextSeq = seqRes.first.columnAt(0) as int;
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final stmt = _db.prepare('''
+        INSERT INTO device_events (event_id, recipient_device_id, device_sequence, schema_version, event_type, timestamp, payload)
+        VALUES (?, ?, ?, 1, ?, ?, ?);
+      ''');
+      stmt.execute([
+        eventId,
+        recipientDeviceId,
+        nextSeq,
+        eventType,
+        now,
+        payload,
+      ]);
+      stmt.close();
+      _db.execute('COMMIT;');
+      return nextSeq;
+    } catch (e) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  List<Map<String, dynamic>> getDeviceEvents(
+    String deviceId,
+    int sinceSequence,
+  ) {
+    final stmt = _db.prepare('''
+      SELECT * FROM device_events
+      WHERE recipient_device_id = ? AND device_sequence > ?
+      ORDER BY device_sequence ASC;
+    ''');
+    final res = stmt.select([deviceId, sinceSequence]);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'event_id': row['event_id'],
+            'recipient_device_id': row['recipient_device_id'],
+            'device_sequence': row['device_sequence'],
+            'schema_version': row['schema_version'],
+            'event_type': row['event_type'],
+            'timestamp': row['timestamp'],
+            'payload': row['payload'],
+          },
+        )
+        .toList();
+  }
+
+  int? getLastDeviceSequence(String deviceId) {
+    final stmt = _db.prepare(
+      'SELECT MAX(device_sequence) FROM device_events WHERE recipient_device_id = ?;',
+    );
+    final res = stmt.select([deviceId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final val = res.first.columnAt(0);
+    return val as int?;
+  }
+
   // Backup operations
   void setBackup(
     String accountId,
@@ -2450,6 +2542,7 @@ class BackendDatabase {
     return res.first.columnAt(0) as int;
   }
 
+  /// Returns the number of group invites sent by an inviter in the last hour.
   int countGroupInvitesLastHour(String inviterId) {
     final since = DateTime.now().millisecondsSinceEpoch - 3600000;
     final stmt = _db.prepare('''
@@ -2460,5 +2553,26 @@ class BackendDatabase {
     stmt.close();
     if (res.isEmpty) return 0;
     return res.first.columnAt(0) as int;
+  }
+
+  /// Builds a consistent envelope map for realtime delivery.
+  /// All modules must use this method to ensure clients receive uniform
+  /// RemoteRealtimeEnvelope-compatible payloads.
+  static Map<String, dynamic> buildEnvelope({
+    required String eventId,
+    required String type,
+    required Map<String, dynamic> payload,
+    required int timestamp,
+    int schemaVersion = 1,
+    int? serverSequence,
+  }) {
+    return {
+      'event_id': eventId,
+      'schema_version': schemaVersion,
+      'timestamp': timestamp,
+      'type': type,
+      'payload': payload,
+      'server_sequence': ?serverSequence,
+    };
   }
 }

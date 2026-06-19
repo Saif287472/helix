@@ -433,7 +433,11 @@ void main() {
     // If this test file compiles without importing any helix_local_* package,
     // the boundary is enforced. The group service depends only on
     // helix_remote_domain and helix_remote_storage per pubspec.yaml.
-    final svc = RemoteGroupService(db: db, generateId: () => 'id');
+    final svc = RemoteGroupService(
+      db: db,
+      generateId: () => 'id',
+      encryptionKeyProvider: (gid, epoch) => 'key_for_test',
+    );
     expect(svc, isNotNull);
   });
 }

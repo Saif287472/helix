@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show stderr;
 
 import 'package:helix_remote_backend/src/database.dart';
 
@@ -54,8 +55,8 @@ class OutboxWorker {
           processed['failed'] = processed['failed']! + 1;
         }
       }
-    } catch (_) {
-      // Ignore background errors and let health metrics surface backlog state.
+    } catch (e) {
+      stderr.writeln('OutboxWorker error: $e');
     }
     return processed;
   }

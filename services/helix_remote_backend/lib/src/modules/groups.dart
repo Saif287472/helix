@@ -115,7 +115,7 @@ class GroupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -247,16 +247,22 @@ class GroupsModule {
 
       // P16-011: Relay invite event to online devices of the invitee.
       final inviteeDevices = db.getDevices(inviteeId);
-      final invitePayload = {
-        'type': 'group_invite',
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final bodyPayload = {
         'invite_id': inviteId,
         'group_id': groupId,
         'inviter_id': accountId,
-        'created_at': DateTime.now().millisecondsSinceEpoch,
+        'created_at': now,
       };
       for (final dev in inviteeDevices) {
         final devId = dev['device_id'] as String;
-        wsRelay.sendToDevice(devId, invitePayload);
+        final envelope = BackendDatabase.buildEnvelope(
+          eventId: 'group_invite_${inviteId}_$devId',
+          type: 'group_invite',
+          payload: bodyPayload,
+          timestamp: now,
+        );
+        wsRelay.sendToDevice(devId, envelope);
         // Queue push for offline invitee devices.
         db.enqueueOutbox(
           'grp_invite_${inviteId}_$devId',
@@ -274,7 +280,7 @@ class GroupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -345,7 +351,7 @@ class GroupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -400,7 +406,7 @@ class GroupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -452,7 +458,7 @@ class GroupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -495,7 +501,7 @@ class GroupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -554,7 +560,7 @@ class GroupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -610,7 +616,7 @@ class GroupsModule {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'error': e.toString()}),
+        body: jsonEncode({'error': 'Internal server error'}),
       );
     }
   }
@@ -625,6 +631,10 @@ class GroupsModule {
     String? excludeDeviceId,
     String? excludeAccountId,
   }) {
+    final eventType = payload['type'] as String?;
+    if (eventType == null) return;
+    final bodyPayload = Map<String, dynamic>.from(payload)..remove('type');
+
     final members = db.getConversationMembers(groupId);
     for (final memberId in members) {
       if (memberId == excludeAccountId) continue;
@@ -632,7 +642,14 @@ class GroupsModule {
       for (final dev in devices) {
         final devId = dev['device_id'] as String;
         if (devId == excludeDeviceId) continue;
-        wsRelay.sendToDevice(devId, payload);
+        final eventId = '${eventType}_${groupId}_$devId';
+        final envelope = BackendDatabase.buildEnvelope(
+          eventId: eventId,
+          type: eventType,
+          payload: bodyPayload,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        );
+        wsRelay.sendToDevice(devId, envelope);
       }
     }
   }

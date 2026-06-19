@@ -48,20 +48,30 @@ void main() {
     );
 
     server.db.createAccount('alice', 'alice_user', 'alice_key');
-    server.db.registerDevice('dev_alice', 'alice', 'alice_device_key', 'Alice Phone');
+    server.db.registerDevice(
+      'dev_alice',
+      'alice',
+      'alice_device_key',
+      'Alice Phone',
+    );
     server.db.createAccount('bob', 'bob_user', 'bob_key');
     server.db.registerDevice('dev_bob', 'bob', 'bob_device_key', 'Bob Phone');
     server.db.createAccount('carol', 'carol_user', 'carol_key');
-    server.db.registerDevice('dev_carol', 'carol', 'carol_device_key', 'Carol Phone');
+    server.db.registerDevice(
+      'dev_carol',
+      'carol',
+      'carol_device_key',
+      'Carol Phone',
+    );
 
-    tokenA = server.jwt.generateToken(
-      {'account_id': 'alice', 'device_id': 'dev_alice'},
-      const Duration(hours: 1),
-    );
-    tokenB = server.jwt.generateToken(
-      {'account_id': 'bob', 'device_id': 'dev_bob'},
-      const Duration(hours: 1),
-    );
+    tokenA = server.jwt.generateToken({
+      'account_id': 'alice',
+      'device_id': 'dev_alice',
+    }, const Duration(hours: 1));
+    tokenB = server.jwt.generateToken({
+      'account_id': 'bob',
+      'device_id': 'dev_bob',
+    }, const Duration(hours: 1));
 
     await server.start('127.0.0.1', 0);
     port = server.httpServer!.port;
@@ -158,9 +168,8 @@ void main() {
     final members = body['members'] as List;
     expect(members.length, equals(2));
 
-    final adminEntry = members.firstWhere(
-      (m) => (m as Map)['account_id'] == 'alice',
-    ) as Map;
+    final adminEntry =
+        members.firstWhere((m) => (m as Map)['account_id'] == 'alice') as Map;
     expect(adminEntry['role'], equals('ADMIN'));
   });
 
@@ -314,12 +323,14 @@ void main() {
     });
 
     final outbox = server.db.getPendingOutbox();
-    final pushItems =
-        outbox.where((e) => e['type'] == 'PUSH_NOTIFICATION').toList();
+    final pushItems = outbox
+        .where((e) => e['type'] == 'PUSH_NOTIFICATION')
+        .toList();
     expect(pushItems, isNotEmpty);
 
     final payload =
-        jsonDecode(pushItems.first['payload'] as String) as Map<String, dynamic>;
+        jsonDecode(pushItems.first['payload'] as String)
+            as Map<String, dynamic>;
     expect(payload['notification_type'], equals('group_invite'));
     // Notification must NOT contain invite content (only type).
     expect(payload.containsKey('invite_id'), isFalse);
@@ -455,7 +466,9 @@ void main() {
     );
 
     final client = TestHttpClient('http://127.0.0.1:$port', tokenB);
-    final res = await client.post('/api/v1/groups/delete', {'group_id': 'grp16'});
+    final res = await client.post('/api/v1/groups/delete', {
+      'group_id': 'grp16',
+    });
     expect(res.status, equals(403));
     expect(server.db.isTombstoned('grp16', 'GROUP'), isFalse);
   });
@@ -465,10 +478,10 @@ void main() {
   // -------------------------------------------------------------------------
 
   test('online member receives group_created event via WebSocket', () async {
-    final tokenBWs = server.jwt.generateToken(
-      {'account_id': 'bob', 'device_id': 'dev_bob'},
-      const Duration(hours: 1),
-    );
+    final tokenBWs = server.jwt.generateToken({
+      'account_id': 'bob',
+      'device_id': 'dev_bob',
+    }, const Duration(hours: 1));
     final wsUri = Uri.parse('ws://127.0.0.1:$port/api/v1/ws?token=$tokenBWs');
     final ws = WebSocketChannel.connect(wsUri);
     await Future<void>.delayed(const Duration(milliseconds: 60));

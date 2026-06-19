@@ -1,5 +1,10 @@
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart' as crypto;
+import 'package:helix_remote_api/api/rest_client.dart';
+import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
@@ -91,6 +96,7 @@ class RemoteMessagingService {
     required this.syncEngine,
     required this.gateway,
     required this.protector,
+    required this.restClient,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
@@ -98,10 +104,15 @@ class RemoteMessagingService {
   final RemoteSyncEngine syncEngine;
   final SyncGateway gateway;
   final RemoteMessageProtector protector;
+  final HelixRemoteRestClient restClient;
   final DateTime Function() _clock;
 
   String? _accountId;
   int? _deviceId;
+
+  Uint8List? _devicePrivateKey;
+  Uint8List? _devicePublicKey;
+
   bool _readReceiptsEnabled = true;
   RemotePrivacySettings _privacySettings = const RemotePrivacySettings(
     searchDiscoverable: true,
@@ -121,6 +132,14 @@ class RemoteMessagingService {
     db.upsertDevice(account.accountId, device);
     _accountId = account.accountId;
     _deviceId = device.deviceId;
+  }
+
+  void setCryptoKeys({
+    required Uint8List devicePrivateKey,
+    required Uint8List devicePublicKey,
+  }) {
+    _devicePrivateKey = devicePrivateKey;
+    _devicePublicKey = devicePublicKey;
   }
 
   void setReadReceiptsEnabled(bool enabled) {
@@ -407,18 +426,13 @@ class RemoteMessagingService {
       recipientDeviceId: 'local-history',
     );
 
-    final envelopes = <Map<String, dynamic>>[];
-    for (final recipientDeviceId in recipientDeviceIds) {
-      envelopes.add({
-        'recipient_device_id': recipientDeviceId,
-        'ciphertext': await protector.encryptText(
-          conversationId: conversationId,
-          messageId: id,
-          plaintext: plaintext,
-          recipientDeviceId: recipientDeviceId,
-        ),
-      });
-    }
+    // Build per-device X3DH envelopes
+    final envelopes = await _buildX3dhEnvelopes(
+      conversationId: conversationId,
+      plaintext: plaintext,
+      recipientDeviceIds: recipientDeviceIds,
+      excludeAccountId: accountId,
+    );
 
     db.saveMessage(
       RemoteMessage(
@@ -447,12 +461,193 @@ class RemoteMessagingService {
     return id;
   }
 
+  Future<List<Map<String, dynamic>>> _buildX3dhEnvelopes({
+    required String conversationId,
+    required String plaintext,
+    required List<String> recipientDeviceIds,
+    required String excludeAccountId,
+  }) async {
+    final envelopes = <Map<String, dynamic>>[];
+    final x3dh = X3dhSessionInitiator();
+    final x25519 = crypto.X25519();
+
+    final devicePriv = _devicePrivateKey;
+    final devicePub = _devicePublicKey;
+    if (devicePriv == null || devicePub == null) {
+      for (final recipientDeviceId in recipientDeviceIds) {
+        envelopes.add({
+          'recipient_device_id': recipientDeviceId,
+          'ciphertext': await protector.encryptText(
+            conversationId: conversationId,
+            messageId: 'x3dh_fallback_${_clock().microsecondsSinceEpoch}',
+            plaintext: plaintext,
+            recipientDeviceId: recipientDeviceId,
+          ),
+        });
+      }
+      return envelopes;
+    }
+
+    // Fetch prekey bundles for all unique member accounts
+    final allMembers = conversationMemberIds(conversationId);
+    final otherMembers = allMembers
+        .where((m) => m != excludeAccountId)
+        .toSet()
+        .toList();
+
+    final bundleFutures = otherMembers.map(
+      (m) => restClient.getPreKeyBundle(accountId: m),
+    );
+    final bundleResults = await Future.wait(bundleFutures, eagerError: false);
+
+    // Build device_id -> bundle map
+    final deviceBundleMap = <String, Map<String, dynamic>>{};
+    for (final result in bundleResults) {
+      final devices = result['devices'] as List<dynamic>? ?? [];
+      for (final device in devices) {
+        final d = device as Map<String, dynamic>;
+        deviceBundleMap[d['device_id'] as String] = d;
+      }
+    }
+
+    // Reconstruct Alice's identity key pair from stored bytes
+    final aliceIdentityKey = crypto.SimpleKeyPairData(
+      devicePriv,
+      publicKey: crypto.SimplePublicKey(
+        devicePub,
+        type: crypto.KeyPairType.x25519,
+      ),
+      type: crypto.KeyPairType.x25519,
+    );
+
+    for (final recipientDeviceId in recipientDeviceIds) {
+      final bundle = deviceBundleMap[recipientDeviceId];
+      if (bundle == null) {
+        envelopes.add({
+          'recipient_device_id': recipientDeviceId,
+          'ciphertext': await protector.encryptText(
+            conversationId: conversationId,
+            messageId: 'x3dh_fallback_${_clock().microsecondsSinceEpoch}',
+            plaintext: plaintext,
+            recipientDeviceId: recipientDeviceId,
+          ),
+        });
+        continue;
+      }
+
+      final ephemeralKey = await x25519.newKeyPair();
+      final ephemeralPubKey = await ephemeralKey.extractPublicKey();
+
+      final bobIdentityPubKey = crypto.SimplePublicKey(
+        base64Decode(bundle['device_key'] as String),
+        type: crypto.KeyPairType.x25519,
+      );
+      final bobSigningPubKey = crypto.SimplePublicKey(
+        base64Decode(bundle['identity_key'] as String),
+        type: crypto.KeyPairType.ed25519,
+      );
+      final spk = bundle['signed_prekey'] as Map<String, dynamic>;
+      final bobSignedPrekey = crypto.SimplePublicKey(
+        base64Decode(spk['public_key'] as String),
+        type: crypto.KeyPairType.x25519,
+      );
+      final bobSig = Uint8List.fromList(
+        base64Decode(spk['signature'] as String),
+      );
+
+      crypto.SimplePublicKey? bobOpk;
+      int? usedOpkId;
+      final otk = bundle['one_time_prekey'] as Map<String, dynamic>?;
+      if (otk != null) {
+        bobOpk = crypto.SimplePublicKey(
+          base64Decode(otk['public_key'] as String),
+          type: crypto.KeyPairType.x25519,
+        );
+        usedOpkId = otk['key_id'] as int;
+      }
+
+      crypto.SecretKey masterSecret;
+      try {
+        masterSecret = await x3dh.initiateSession(
+          aliceIdentityKey: aliceIdentityKey,
+          aliceEphemeralKey: ephemeralKey,
+          bobIdentityPublicKey: bobIdentityPubKey,
+          bobIdentitySigningPublicKey: bobSigningPubKey,
+          bobSignedPrekey: bobSignedPrekey,
+          bobSignedPrekeySignature: bobSig,
+          bobOneTimePrekey: bobOpk,
+        );
+      } catch (_) {
+        envelopes.add({
+          'recipient_device_id': recipientDeviceId,
+          'ciphertext': await protector.encryptText(
+            conversationId: conversationId,
+            messageId: 'x3dh_fallback_${_clock().microsecondsSinceEpoch}',
+            plaintext: plaintext,
+            recipientDeviceId: recipientDeviceId,
+          ),
+        });
+        continue;
+      }
+
+      final masterKeyBytes = await masterSecret.extractBytes();
+      final aes = crypto.AesGcm.with256bits();
+      final nonce = Uint8List.fromList(
+        List<int>.generate(12, (_) => math.Random.secure().nextInt(256)),
+      );
+      final encrypted = await aes.encrypt(
+        utf8.encode(plaintext),
+        secretKey: crypto.SecretKey(masterKeyBytes),
+        nonce: nonce,
+      );
+
+      final ciphertextBytes = BytesBuilder()
+        ..add(nonce)
+        ..add(encrypted.cipherText)
+        ..add(encrypted.mac.bytes);
+      final ciphertext = base64Url.encode(ciphertextBytes.toBytes());
+
+      final aliceIdentityPubKey = await aliceIdentityKey.extractPublicKey();
+      final x3dhHeader = <String, dynamic>{
+        'identity_key': base64Url.encode(aliceIdentityPubKey.bytes),
+        'ephemeral_key': base64Url.encode(ephemeralPubKey.bytes),
+        'used_one_time_prekey_id': usedOpkId,
+      };
+
+      envelopes.add({
+        'recipient_device_id': recipientDeviceId,
+        'ciphertext': ciphertext,
+        'x3dh_header': x3dhHeader,
+      });
+    }
+
+    return envelopes;
+  }
+
   Future<int> syncInbound() => syncEngine.syncInbound(gateway);
 
   Future<int> processOutboundQueue() =>
       syncEngine.processOutboundQueue(gateway);
 
+  String? get currentAccountId => _accountId;
+
   List<RemoteConversation> conversationList() => db.getConversations();
+
+  List<String> conversationMemberIds(String conversationId) =>
+      db.getConversationMembers(conversationId);
+
+  List<String> recipientDeviceIdsForConversation(String conversationId) {
+    final members = db.getConversationMembers(conversationId);
+    final accountId = _requireAccountId();
+    final ids = <String>[];
+    for (final memberId in members) {
+      if (memberId == accountId) continue;
+      for (final device in db.getDevices(memberId)) {
+        ids.add(device.deviceId.toString());
+      }
+    }
+    return ids;
+  }
 
   Future<List<RemoteDecryptedMessage>> messageHistory(
     String conversationId, {

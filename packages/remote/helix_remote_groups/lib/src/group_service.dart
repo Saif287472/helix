@@ -33,7 +33,7 @@ class RemoteGroupService {
   const RemoteGroupService({
     required this.db,
     required this.generateId,
-    this.encryptionKeyProvider,
+    required this.encryptionKeyProvider,
   });
 
   final HelixRemoteDatabase db;
@@ -44,8 +44,8 @@ class RemoteGroupService {
   /// P16-004: Injectable encryption key provider. Returns an opaque key
   /// identifier for the group at the given epoch. In production this would
   /// call into helix_remote_crypto (GroupSenderChain). In tests a stub is
-  /// supplied. Never generates production crypto internally.
-  final String Function(String groupId, int epoch)? encryptionKeyProvider;
+  /// supplied. Required — no fallback (P16-004 closure).
+  final String Function(String groupId, int epoch) encryptionKeyProvider;
 
   // ---------------------------------------------------------------------------
   // P16-001: Persistent group identity
@@ -59,8 +59,7 @@ class RemoteGroupService {
     String? avatarUri,
     List<String> initialMemberIds = const [],
   }) {
-    final encKeyId =
-        encryptionKeyProvider?.call(groupId, 0) ?? 'key_${groupId}_epoch_0';
+    final encKeyId = encryptionKeyProvider(groupId, 0);
     final now = DateTime.now().millisecondsSinceEpoch;
 
     final allMembers = [

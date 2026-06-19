@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show stderr;
 import 'package:shelf/shelf.dart';
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -23,7 +24,8 @@ class WebSocketRelay implements MessageRelay {
     if (socket != null) {
       try {
         socket.sink.add(jsonEncode(payload));
-      } catch (_) {
+      } catch (e) {
+        stderr.writeln('WebSocket sendToDevice error for $deviceId: $e');
         _connections.remove(deviceId);
       }
     }
@@ -75,14 +77,25 @@ class WebSocketRelay implements MessageRelay {
 
     _connections[deviceId] = socket;
 
-    // Send any offline/pending messages
+    // Send any pending device events as proper envelopes
     try {
-      final offlineMessages = db.getOfflineMessagesForDevice(deviceId);
-      for (final msg in offlineMessages) {
-        socket.sink.add(jsonEncode(msg));
+      final offlineEvents = db.getDeviceEvents(deviceId, 0);
+      for (final row in offlineEvents) {
+        final payload =
+            jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+        socket.sink.add(
+          jsonEncode({
+            'event_id': row['event_id'],
+            'schema_version': row['schema_version'],
+            'timestamp': row['timestamp'],
+            'type': row['event_type'],
+            'payload': payload,
+            'server_sequence': row['device_sequence'],
+          }),
+        );
       }
-    } catch (_) {
-      // Catch db/serialisation errors to avoid crashing connection
+    } catch (e) {
+      stderr.writeln('Offline event replay error for $deviceId: $e');
     }
 
     socket.stream.listen(
@@ -101,8 +114,8 @@ class WebSocketRelay implements MessageRelay {
               );
             }
           }
-        } catch (_) {
-          // Safe fail-silent for malformed client messages
+        } catch (e) {
+          stderr.writeln('Malformed WebSocket client message: $e');
         }
       },
       onDone: () {

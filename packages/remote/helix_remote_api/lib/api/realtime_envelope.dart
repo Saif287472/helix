@@ -81,6 +81,11 @@ class RemoteRealtimeEnvelope {
       'call_signal',
       'device_revocation',
       'sync_marker',
+      'group_created',
+      'group_invite',
+      'group_deleted',
+      'group_admin_event',
+      'group_key_updated',
     };
 
     final isUnrecognized = !supportedTypes.contains(type) || schemaVersion > 1;

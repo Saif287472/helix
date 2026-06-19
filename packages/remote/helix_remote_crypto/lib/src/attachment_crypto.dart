@@ -24,8 +24,6 @@ class RemoteAttachmentCrypto {
       secretKey: crypto.SecretKey(key),
       nonce: iv,
     );
-    // Return only ciphertext bytes (omit tag if tag is handled separately,
-    // or keep full concatenation so decryption is simple. Let's use concatenation).
     return Uint8List.fromList(box.concatenation());
   }
 
@@ -45,5 +43,44 @@ class RemoteAttachmentCrypto {
       secretKey: crypto.SecretKey(key),
     );
     return Uint8List.fromList(plaintext);
+  }
+
+  /// Wrap a raw attachment key+IV pair using a device-local wrapping key.
+  /// Returns a single blob containing (nonce || ciphertext || mac) suitable
+  /// for storage in the database. The wrapping key is never stored alongside
+  /// attachment metadata.
+  Future<Uint8List> wrapAttachmentKey(
+    Uint8List key,
+    Uint8List iv,
+    Uint8List wrappingKey,
+  ) async {
+    final plaintext = Uint8List.fromList([...key, ...iv]);
+    final box = await aesGcm.encrypt(
+      plaintext,
+      secretKey: crypto.SecretKey(wrappingKey),
+    );
+    return Uint8List.fromList(box.concatenation());
+  }
+
+  /// Unwrap a previously-wrapped attachment key blob using the same
+  /// device-local [wrappingKey]. Returns `{ 'key': Uint8List, 'iv': Uint8List }`.
+  Future<Map<String, Uint8List>> unwrapAttachmentKey(
+    Uint8List wrapped,
+    Uint8List wrappingKey,
+  ) async {
+    final box = crypto.SecretBox.fromConcatenation(
+      wrapped,
+      nonceLength: 12,
+      macLength: 16,
+    );
+    final decryptedList = await aesGcm.decrypt(
+      box,
+      secretKey: crypto.SecretKey(wrappingKey),
+    );
+    final decrypted = Uint8List.fromList(decryptedList);
+    return {
+      'key': Uint8List.sublistView(decrypted, 0, 32),
+      'iv': Uint8List.sublistView(decrypted, 32, 44),
+    };
   }
 }
