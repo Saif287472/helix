@@ -166,6 +166,109 @@ paths:
         '404':
           description: Device not found
 
+  /devices/link/request:
+    post:
+      summary: Request linking a new device from an active device
+      operationId: requestDeviceLink
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - device_id
+                - device_public_key
+                - device_name
+              properties:
+                device_id:
+                  type: string
+                device_public_key:
+                  type: string
+                device_name:
+                  type: string
+      responses:
+        '200':
+          description: Pending link request and out-of-band verification code
+        '401':
+          description: Unauthorized
+        '403':
+          description: Device id already registered or requester inactive
+
+  /devices/link/verify:
+    post:
+      summary: Approve a pending device link using the out-of-band code
+      operationId: verifyDeviceLink
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - link_id
+                - verification_code
+              properties:
+                link_id:
+                  type: string
+                verification_code:
+                  type: string
+      responses:
+        '200':
+          description: Link request approved
+        '403':
+          description: Verification failed
+
+  /devices/link/complete:
+    post:
+      summary: Register the approved linked device public key
+      operationId: completeDeviceLink
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - link_id
+              properties:
+                link_id:
+                  type: string
+      responses:
+        '200':
+          description: Device linked and ready for challenge login
+        '403':
+          description: Link request is not approved
+
+  /devices/lost-device:
+    post:
+      summary: Report a lost device and purge its pending mailbox
+      operationId: reportLostDevice
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - device_id
+              properties:
+                device_id:
+                  type: string
+      responses:
+        '200':
+          description: Lost device revoked
+        '401':
+          description: Unauthorized
+
   /keys/prekeys:
     post:
       summary: Upload a new batch of prekeys
@@ -356,6 +459,38 @@ paths:
         '404':
           description: File not found
 
+  /backups:
+    post:
+      summary: Upload an opaque encrypted, versioned account backup envelope
+      operationId: uploadBackup
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EncryptedBackupUpload'
+      responses:
+        '200':
+          description: Backup stored
+        '400':
+          description: Missing metadata, unsupported version, or key material supplied
+        '401':
+          description: Unauthorized
+    get:
+      summary: Download the caller account's opaque encrypted backup envelope
+      operationId: downloadBackup
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Backup envelope metadata and opaque ciphertext
+        '404':
+          description: No backup exists for this account
+        '401':
+          description: Unauthorized
+
   /account:
     delete:
       summary: Request account deletion (marks data for erasure)
@@ -427,3 +562,31 @@ components:
         one_time_prekey:
           type: string
           description: A single OTK fetched and consumed. Can be null if exhausted.
+    EncryptedBackupUpload:
+      type: object
+      required:
+        - backup_id
+        - version
+        - kdf
+        - salt
+        - backup_data
+      properties:
+        backup_id:
+          type: string
+        version:
+          type: integer
+        kdf:
+          type: string
+          example: PBKDF2-HMAC-SHA256-100000
+        salt:
+          type: string
+          description: Base64url encoded KDF salt
+        backup_key_hint:
+          type: string
+          description: User-visible hint only; never the backup key or phrase
+        backup_data:
+          type: string
+          description: Opaque encrypted backup payload
+        deletion_watermark:
+          type: integer
+          description: Latest deletion timestamp included in the encrypted backup

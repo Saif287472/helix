@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'call_quality.dart';
+import 'package:helix_remote_calls/src/call_quality.dart';
 
 /// Base class for events emitted by [RemoteCallEngine].
 abstract class RemoteCallEngineEvent {
@@ -28,10 +28,7 @@ class RemoteCallConnectionStateEvent extends RemoteCallEngineEvent {
 }
 
 class RemoteVideoStateEvent extends RemoteCallEngineEvent {
-  const RemoteVideoStateEvent({
-    required super.callId,
-    required this.enabled,
-  });
+  const RemoteVideoStateEvent({required super.callId, required this.enabled});
   final bool enabled;
 }
 
@@ -53,10 +50,7 @@ class RemoteRenegotiationOfferEvent extends RemoteCallEngineEvent {
 
 /// Periodic quality sample emitted during an active call.
 class RemoteCallQualityEvent extends RemoteCallEngineEvent {
-  const RemoteCallQualityEvent({
-    required super.callId,
-    required this.metrics,
-  });
+  const RemoteCallQualityEvent({required super.callId, required this.metrics});
   final CallQualityMetrics metrics;
 }
 

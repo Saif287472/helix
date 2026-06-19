@@ -141,8 +141,15 @@ class BackendDatabase {
       _db.execute('''
         CREATE TABLE IF NOT EXISTS backups (
           account_id TEXT PRIMARY KEY,
+          backup_id TEXT NOT NULL DEFAULT '',
+          version INTEGER NOT NULL DEFAULT 1,
+          kdf TEXT NOT NULL DEFAULT '',
+          salt TEXT NOT NULL DEFAULT '',
+          backup_key_hint TEXT NOT NULL DEFAULT '',
           backup_data TEXT NOT NULL,
           created_at INTEGER NOT NULL,
+          deletion_watermark INTEGER NOT NULL DEFAULT 0,
+          requires_reupload INTEGER NOT NULL DEFAULT 0,
           FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
         );
       ''');
@@ -356,6 +363,53 @@ class BackendDatabase {
       ''');
 
       _db.execute('PRAGMA user_version = 8;');
+    }
+
+    if (version < 9) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_device_links (
+          link_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          requested_by_device_id TEXT NOT NULL,
+          new_device_id TEXT NOT NULL,
+          new_device_public_key TEXT NOT NULL,
+          new_device_name TEXT NOT NULL,
+          verification_code_hash TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          approved_at INTEGER,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(requested_by_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS device_revocations (
+          revocation_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          revoked_device_id TEXT NOT NULL,
+          revoked_by_device_id TEXT,
+          reason TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      for (final statement in [
+        "ALTER TABLE backups ADD COLUMN backup_id TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE backups ADD COLUMN version INTEGER NOT NULL DEFAULT 1;",
+        "ALTER TABLE backups ADD COLUMN kdf TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE backups ADD COLUMN salt TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE backups ADD COLUMN backup_key_hint TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE backups ADD COLUMN deletion_watermark INTEGER NOT NULL DEFAULT 0;",
+        "ALTER TABLE backups ADD COLUMN requires_reupload INTEGER NOT NULL DEFAULT 0;",
+      ]) {
+        try {
+          _db.execute(statement);
+        } catch (_) {}
+      }
+
+      _db.execute('PRAGMA user_version = 9;');
     }
   }
 
@@ -584,6 +638,16 @@ class BackendDatabase {
     stmt.close();
   }
 
+  bool isDeviceActive(String accountId, String deviceId) {
+    final stmt = _db.prepare('''
+      SELECT 1 FROM devices
+      WHERE account_id = ? AND device_id = ? AND status = 'ACTIVE';
+    ''');
+    final res = stmt.select([accountId, deviceId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
   void updateDeviceLastSeen(String accountId, String deviceId, int timestamp) {
     final stmt = _db.prepare('''
       UPDATE devices SET last_seen_at = ?
@@ -617,6 +681,156 @@ class BackendDatabase {
           },
         )
         .toList();
+  }
+
+  void createDeviceLinkRequest({
+    required String linkId,
+    required String accountId,
+    required String requestedByDeviceId,
+    required String newDeviceId,
+    required String newDevicePublicKey,
+    required String newDeviceName,
+    required String verificationCodeHash,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT INTO pending_device_links (
+        link_id,
+        account_id,
+        requested_by_device_id,
+        new_device_id,
+        new_device_public_key,
+        new_device_name,
+        verification_code_hash,
+        status,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?);
+    ''');
+    stmt.execute([
+      linkId,
+      accountId,
+      requestedByDeviceId,
+      newDeviceId,
+      newDevicePublicKey,
+      newDeviceName,
+      verificationCodeHash,
+      now,
+    ]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getDeviceLinkRequest(String linkId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM pending_device_links WHERE link_id = ?;',
+    );
+    final res = stmt.select([linkId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'link_id': row['link_id'],
+      'account_id': row['account_id'],
+      'requested_by_device_id': row['requested_by_device_id'],
+      'new_device_id': row['new_device_id'],
+      'new_device_public_key': row['new_device_public_key'],
+      'new_device_name': row['new_device_name'],
+      'verification_code_hash': row['verification_code_hash'],
+      'status': row['status'],
+      'created_at': row['created_at'],
+      'approved_at': row['approved_at'],
+    };
+  }
+
+  bool approveDeviceLinkRequest({
+    required String linkId,
+    required String accountId,
+    required String verificationCodeHash,
+  }) {
+    final link = getDeviceLinkRequest(linkId);
+    if (link == null ||
+        link['account_id'] != accountId ||
+        link['status'] != 'PENDING' ||
+        link['verification_code_hash'] != verificationCodeHash) {
+      return false;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      UPDATE pending_device_links
+      SET status = 'APPROVED', approved_at = ?
+      WHERE link_id = ?;
+    ''');
+    stmt.execute([now, linkId]);
+    stmt.close();
+    return true;
+  }
+
+  void completeDeviceLinkRequest(String linkId) {
+    final stmt = _db.prepare(
+      "UPDATE pending_device_links SET status = 'LINKED' WHERE link_id = ?;",
+    );
+    stmt.execute([linkId]);
+    stmt.close();
+  }
+
+  void recordDeviceRevocation({
+    required String revocationId,
+    required String accountId,
+    required String revokedDeviceId,
+    required String reason,
+    String? revokedByDeviceId,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT INTO device_revocations (
+        revocation_id,
+        account_id,
+        revoked_device_id,
+        revoked_by_device_id,
+        reason,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      revocationId,
+      accountId,
+      revokedDeviceId,
+      revokedByDeviceId,
+      reason,
+      now,
+    ]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getDeviceRevocation(String accountId, String deviceId) {
+    final stmt = _db.prepare('''
+      SELECT * FROM device_revocations
+      WHERE account_id = ? AND revoked_device_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1;
+    ''');
+    final res = stmt.select([accountId, deviceId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'revocation_id': row['revocation_id'],
+      'account_id': row['account_id'],
+      'revoked_device_id': row['revoked_device_id'],
+      'revoked_by_device_id': row['revoked_by_device_id'],
+      'reason': row['reason'],
+      'created_at': row['created_at'],
+    };
+  }
+
+  void deleteMessagesForDevice(String deviceId) {
+    final stmt = _db.prepare(
+      'DELETE FROM messages WHERE recipient_device_id = ?;',
+    );
+    stmt.execute([deviceId]);
+    stmt.close();
   }
 
   // Prekey operations
@@ -1429,13 +1643,43 @@ class BackendDatabase {
   }
 
   // Backup operations
-  void setBackup(String accountId, String backupData) {
+  void setBackup(
+    String accountId,
+    String backupData, {
+    required String backupId,
+    required int version,
+    required String kdf,
+    required String salt,
+    required String backupKeyHint,
+    int deletionWatermark = 0,
+  }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO backups (account_id, backup_data, created_at)
-      VALUES (?, ?, ?);
+      INSERT OR REPLACE INTO backups (
+        account_id,
+        backup_id,
+        version,
+        kdf,
+        salt,
+        backup_key_hint,
+        backup_data,
+        created_at,
+        deletion_watermark,
+        requires_reupload
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
     ''');
-    stmt.execute([accountId, backupData, now]);
+    stmt.execute([
+      accountId,
+      backupId,
+      version,
+      kdf,
+      salt,
+      backupKeyHint,
+      backupData,
+      now,
+      deletionWatermark,
+    ]);
     stmt.close();
   }
 
@@ -1447,9 +1691,27 @@ class BackendDatabase {
     final row = res.first;
     return {
       'account_id': row['account_id'],
+      'backup_id': row['backup_id'],
+      'version': row['version'],
+      'kdf': row['kdf'],
+      'salt': row['salt'],
+      'backup_key_hint': row['backup_key_hint'],
       'backup_data': row['backup_data'],
       'created_at': row['created_at'],
+      'deletion_watermark': row['deletion_watermark'],
+      'requires_reupload': row['requires_reupload'],
     };
+  }
+
+  void markBackupNeedsReupload(String accountId, int deletionWatermark) {
+    final stmt = _db.prepare('''
+      UPDATE backups
+      SET deletion_watermark = ?,
+          requires_reupload = 1
+      WHERE account_id = ?;
+    ''');
+    stmt.execute([deletionWatermark, accountId]);
+    stmt.close();
   }
 
   // Outbox operations
@@ -1733,12 +1995,7 @@ class BackendDatabase {
     final res = stmt.select([groupId, limit, offset]);
     stmt.close();
     return res
-        .map(
-          (row) => {
-            'account_id': row['account_id'],
-            'role': row['role'],
-          },
-        )
+        .map((row) => {'account_id': row['account_id'], 'role': row['role']})
         .toList();
   }
 

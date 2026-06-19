@@ -266,22 +266,47 @@ Test results (2026-06-19):
 
 ## PHASE 17 - Multi-Device, Backup, and Recovery
 
-- [ ] **P17-001:** Link new device.
-- [ ] **P17-002:** Verify new device out of band.
-- [ ] **P17-003:** Device key registration.
-- [ ] **P17-004:** Per-device encrypted message fan-out.
-- [ ] **P17-005:** History synchronization.
-- [ ] **P17-006:** Device revocation.
-- [ ] **P17-007:** Lost-device response.
-- [ ] **P17-008:** Encrypted backup format.
-- [ ] **P17-009:** Backup key ownership.
-- [ ] **P17-010:** Recovery phrase/passkey policy.
-- [ ] **P17-011:** Backup versioning.
-- [ ] **P17-012:** Restore into a new device.
-- [ ] **P17-013:** Account recovery without server plaintext keys.
-- [ ] **P17-014:** Deletion propagation to backups.
-- [ ] **P17-015:** Recovery tests and disaster scenarios.
-- [ ] **P17-016:** Explicitly document what cannot be recovered.
+- [x] **P17-001:** Link new device.
+- [x] **P17-002:** Verify new device out of band.
+- [x] **P17-003:** Device key registration.
+- [x] **P17-004:** Per-device encrypted message fan-out.
+- [x] **P17-005:** History synchronization.
+- [x] **P17-006:** Device revocation.
+- [x] **P17-007:** Lost-device response.
+- [x] **P17-008:** Encrypted backup format.
+- [x] **P17-009:** Backup key ownership.
+- [x] **P17-010:** Recovery phrase/passkey policy.
+- [x] **P17-011:** Backup versioning.
+- [x] **P17-012:** Restore into a new device.
+- [x] **P17-013:** Account recovery without server plaintext keys.
+- [x] **P17-014:** Deletion propagation to backups.
+- [x] **P17-015:** Recovery tests and disaster scenarios.
+- [x] **P17-016:** Explicitly document what cannot be recovered.
+
+### 2026-06-19 Implementation Evidence (P17-001 to P17-016)
+
+Backend additions (`services/helix_remote_backend/`):
+- `AuthModule` now requires existing accounts to add devices through authenticated device-link requests. `POST /devices/link/request` creates a pending link and out-of-band verification code, `POST /devices/link/verify` approves the link, and `POST /devices/link/complete` registers the new device public key for normal challenge login (P17-001 to P17-003).
+- Auth middleware now rejects inactive/revoked devices even if an old access token has not expired. Device revocation revokes refresh tokens, records a revocation reason, and notifies sibling devices. Lost-device response revokes the device, revokes refresh tokens, records `LOST_DEVICE`, and purges pending mailbox entries for the lost device (P17-006, P17-007).
+- Message send now validates ciphertext-only per-device envelopes and requires an envelope for every active target device in the conversation, including sender sibling devices, while allowing the sending device to keep its local copy (P17-004).
+- Backup upload now requires version/KDF/salt/backup id metadata, rejects `backup_key`, `passphrase`, and `recovery_phrase`, stores only opaque backup data, and marks existing backups as requiring reupload after message deletion (P17-008, P17-009, P17-011, P17-013, P17-014).
+- Backend schema v9 adds pending device links, device revocation records, and versioned backup metadata.
+
+Client/package additions:
+- `RemoteBackupCrypto` now supports `RemoteBackupEnvelope` with explicit version, KDF, salt, nonce, ciphertext, MAC, key hint, and deletion watermark. Existing raw backup encrypt/decrypt helpers remain for compatibility (P17-008, P17-010, P17-011).
+- `HelixRemoteDatabase.exportBackupSnapshot` and `restoreBackupSnapshot` provide versioned local history snapshot restore. Restore applies tombstones so deleted messages from older snapshots do not reappear (P17-005, P17-012, P17-014).
+- `docs/product/remote/BACKUP_RECOVERY.md` documents recovery behavior, recovery-secret policy, and what cannot be recovered (P17-016).
+- `contracts/remote-rest-openapi/openapi.yaml` records the Phase 17 device-link, lost-device, and backup API surface.
+
+Test results (2026-06-19):
+- `services/helix_remote_backend/test/multi_device_backup_recovery_test.dart`: 4/4 pass - approved device linking, OOB verification failure, device key login, revoked-device access/refresh rejection, required fan-out envelopes, plaintext field rejection, opaque backup metadata, deletion-aware backup reupload marker, and lost-device mailbox purge.
+- `packages/remote/helix_remote_crypto/test/remote_crypto_test.dart`: 19/19 pass - includes versioned backup envelope round-trip, no uploaded key material in envelope JSON, weak recovery-secret rejection, and unsupported backup version rejection.
+- `packages/remote/helix_remote_storage/test/remote_storage_test.dart`: 6/6 pass - includes backup snapshot restore, restored history, restored device metadata, tombstone filtering, and unsupported snapshot version rejection.
+
+Remaining constraints:
+- Production database-at-rest encryption remains BLOCKED by the SQLCipher-capable library requirement documented above.
+- Independent external cryptographic/security review remains BLOCKED until an actual reviewer evaluates the exact implementation/version.
+- Full DH/skipped-key ratchet support remains BLOCKED pending a reviewed implementation; Phase 17 does not change that blocker.
 
 ---
 

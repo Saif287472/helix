@@ -305,57 +305,62 @@ void main() {
   );
 
   // P14-013: Cache eviction without deleting server history
-  test('evictLocalCache removes local plaintext file and updates status',
-      () async {
-    final service = RemoteAttachmentService(
-      baseUrl: 'http://127.0.0.1:$port',
-      authToken: token,
-      db: db,
-      tempDir: clientTempDir,
-    );
+  test(
+    'evictLocalCache removes local plaintext file and updates status',
+    () async {
+      final service = RemoteAttachmentService(
+        baseUrl: 'http://127.0.0.1:$port',
+        authToken: token,
+        db: db,
+        tempDir: clientTempDir,
+      );
 
-    // 1. Prepare and upload a file
-    final plaintextBytes = List.generate(200, (i) => i % 256);
-    final plaintextFile = File(p.join(clientTempDir.path, 'evict_test.txt'));
-    await plaintextFile.writeAsBytes(plaintextBytes);
+      // 1. Prepare and upload a file
+      final plaintextBytes = List.generate(200, (i) => i % 256);
+      final plaintextFile = File(p.join(clientTempDir.path, 'evict_test.txt'));
+      await plaintextFile.writeAsBytes(plaintextBytes);
 
-    final prepResult = await service.prepareAttachment(plaintextFile);
-    final attachmentId = prepResult['attachment_id'] as String;
-    final cipherPath = prepResult['ciphertext_path'] as String;
+      final prepResult = await service.prepareAttachment(plaintextFile);
+      final attachmentId = prepResult['attachment_id'] as String;
+      final cipherPath = prepResult['ciphertext_path'] as String;
 
-    // Register on backend and upload
-    server.db.createAttachment(
-      fileId: attachmentId,
-      accountId: 'user1',
-      fileSize: File(cipherPath).lengthSync(),
-      fileHash: attachmentId,
-    );
-    await service.uploadAttachment(
-      attachmentId: attachmentId,
-      ciphertextPath: cipherPath,
-    );
+      // Register on backend and upload
+      server.db.createAttachment(
+        fileId: attachmentId,
+        accountId: 'user1',
+        fileSize: File(cipherPath).lengthSync(),
+        fileHash: attachmentId,
+      );
+      await service.uploadAttachment(
+        attachmentId: attachmentId,
+        ciphertextPath: cipherPath,
+      );
 
-    // 2. Download to get a local plaintext cache file
-    final downloadPath = p.join(clientTempDir.path, 'evict_download.enc');
-    final decryptedFile = await service.downloadAttachment(
-      attachmentId: attachmentId,
-      savePath: downloadPath,
-    );
-    expect(decryptedFile.existsSync(), isTrue);
-    expect(db.getAttachment(attachmentId)!['status'], equals('DOWNLOADED'));
+      // 2. Download to get a local plaintext cache file
+      final downloadPath = p.join(clientTempDir.path, 'evict_download.enc');
+      final decryptedFile = await service.downloadAttachment(
+        attachmentId: attachmentId,
+        savePath: downloadPath,
+      );
+      expect(decryptedFile.existsSync(), isTrue);
+      expect(db.getAttachment(attachmentId)!['status'], equals('DOWNLOADED'));
 
-    // 3. Evict the local cache
-    service.evictLocalCache(attachmentId);
+      // 3. Evict the local cache
+      service.evictLocalCache(attachmentId);
 
-    expect(decryptedFile.existsSync(), isFalse);
-    final afterEvict = db.getAttachment(attachmentId);
-    expect(afterEvict!['status'], equals('CACHE_EVICTED'));
-    expect(afterEvict['local_path'], isNull);
+      expect(decryptedFile.existsSync(), isFalse);
+      final afterEvict = db.getAttachment(attachmentId);
+      expect(afterEvict!['status'], equals('CACHE_EVICTED'));
+      expect(afterEvict['local_path'], isNull);
 
-    // Server copy is unaffected
-    expect(server.db.getAttachment(attachmentId), isNotNull);
-    expect(server.db.getAttachment(attachmentId)!['status'], equals('COMPLETED'));
-  });
+      // Server copy is unaffected
+      expect(server.db.getAttachment(attachmentId), isNotNull);
+      expect(
+        server.db.getAttachment(attachmentId)!['status'],
+        equals('COMPLETED'),
+      );
+    },
+  );
 
   // P14-014: External export warning
   test('export warning message is accurate and verifiable', () {

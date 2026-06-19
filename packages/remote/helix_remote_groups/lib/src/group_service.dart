@@ -92,17 +92,21 @@ class RemoteGroupService {
       epoch: 0,
     );
 
+    final payload = {
+      'group_id': groupId,
+      'name': name,
+      'creator_id': creatorId,
+      'encryption_key_id': encKeyId,
+      'initial_member_ids': allMembers,
+    };
+    if (avatarUri != null) {
+      payload['avatar_uri'] = avatarUri;
+    }
+
     db.enqueueOperation(
       generateId(),
       kGroupOpCreate,
-      jsonEncode({
-        'group_id': groupId,
-        'name': name,
-        'creator_id': creatorId,
-        'encryption_key_id': encKeyId,
-        'initial_member_ids': allMembers,
-        if (avatarUri != null) 'avatar_uri': avatarUri,
-      }),
+      jsonEncode(payload),
       idempotencyKey: 'group_create_$groupId',
     );
   }
@@ -217,14 +221,18 @@ class RemoteGroupService {
       );
     }
 
+    final payload = {'group_id': groupId};
+    if (name != null) {
+      payload['name'] = name;
+    }
+    if (avatarUri != null) {
+      payload['avatar_uri'] = avatarUri;
+    }
+
     db.enqueueOperation(
       generateId(),
       kGroupOpUpdate,
-      jsonEncode({
-        'group_id': groupId,
-        if (name != null) 'name': name,
-        if (avatarUri != null) 'avatar_uri': avatarUri,
-      }),
+      jsonEncode(payload),
       idempotencyKey:
           'group_update_${groupId}_${DateTime.now().millisecondsSinceEpoch}',
     );
@@ -241,11 +249,7 @@ class RemoteGroupService {
     db.enqueueOperation(
       generateId(),
       kGroupOpMemberRole,
-      jsonEncode({
-        'group_id': groupId,
-        'account_id': accountId,
-        'role': role,
-      }),
+      jsonEncode({'group_id': groupId, 'account_id': accountId, 'role': role}),
       idempotencyKey: 'group_role_${groupId}_$accountId',
     );
   }

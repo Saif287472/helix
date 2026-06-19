@@ -426,6 +426,79 @@ void main() {
         reason: 'Wrong passphrase must fail authentication',
       );
     });
+
+    test(
+      'P17 versioned backup envelope round-trips without exposing key',
+      () async {
+        final helper = RemoteBackupCrypto();
+        final envelope = await helper.encryptBackupEnvelope(
+          plaintext: Uint8List.fromList('restorable history bytes'.codeUnits),
+          passphrase: 'six word recovery phrase policy',
+          backupId: 'backup_p17_1',
+          backupKeyHint: 'stored offline',
+          salt: Uint8List.fromList(List.generate(24, (i) => i + 1)),
+          deletionWatermark: 1234,
+        );
+
+        final json = envelope.toJson();
+        expect(
+          json['version'],
+          equals(RemoteBackupCrypto.currentBackupVersion),
+        );
+        expect(json['kdf'], equals(RemoteBackupCrypto.currentKdf));
+        expect(json.containsKey('passphrase'), isFalse);
+        expect(json.containsKey('backup_key'), isFalse);
+        expect(json['backup_key_hint'], equals('stored offline'));
+        expect(json['deletion_watermark'], equals(1234));
+
+        final restoredEnvelope = RemoteBackupEnvelope.fromJson(json);
+        final plaintext = await helper.decryptBackupEnvelope(
+          restoredEnvelope,
+          passphrase: 'six word recovery phrase policy',
+        );
+        expect(
+          String.fromCharCodes(plaintext),
+          equals('restorable history bytes'),
+        );
+      },
+    );
+
+    test(
+      'P17 recovery policy rejects weak phrase and old backup version',
+      () async {
+        final helper = RemoteBackupCrypto();
+        expect(helper.isValidRecoverySecret('short'), isFalse);
+        expect(
+          helper.isValidRecoverySecret('alpha beta gamma delta epsilon zeta'),
+          isTrue,
+        );
+
+        expect(
+          () => helper.encryptBackupEnvelope(
+            plaintext: Uint8List.fromList('data'.codeUnits),
+            passphrase: 'short',
+            backupId: 'backup_p17_weak',
+            backupKeyHint: '',
+          ),
+          throwsArgumentError,
+        );
+
+        final envelope = await helper.encryptBackupEnvelope(
+          plaintext: Uint8List.fromList('data'.codeUnits),
+          passphrase: 'valid recovery phrase policy words',
+          backupId: 'backup_p17_version',
+          backupKeyHint: '',
+        );
+        final json = envelope.toJson()..['version'] = 999;
+        expect(
+          () => helper.decryptBackupEnvelope(
+            RemoteBackupEnvelope.fromJson(json),
+            passphrase: 'valid recovery phrase policy words',
+          ),
+          throwsUnsupportedError,
+        );
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------

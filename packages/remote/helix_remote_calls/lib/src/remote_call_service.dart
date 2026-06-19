@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:uuid/uuid.dart';
+import 'package:helix_remote_calls/src/call_engine.dart';
+import 'package:helix_remote_calls/src/ice_config.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
-import 'call_engine.dart';
-import 'ice_config.dart';
 
 const String kCallDirectionOutgoing = 'OUTGOING';
 const String kCallDirectionIncoming = 'INCOMING';
@@ -164,8 +164,9 @@ class RemoteCallService {
   Future<void> endActiveCall() async {
     final call = _activeCall;
     if (call == null) return;
-    final signalType =
-        call.state == RemoteCallState.ringing ? kSignalDecline : kSignalEnd;
+    final signalType = call.state == RemoteCallState.ringing
+        ? kSignalDecline
+        : kSignalEnd;
     await signalingGateway.sendCallSignal(
       targetPeerId: call.peerId,
       signal: RemoteCallSignal(callId: call.callId, signalType: signalType),
@@ -201,7 +202,10 @@ class RemoteCallService {
     if (_activeCall != null) {
       await signalingGateway.sendCallSignal(
         targetPeerId: signal.peerId ?? '',
-        signal: RemoteCallSignal(callId: signal.callId, signalType: kSignalBusy),
+        signal: RemoteCallSignal(
+          callId: signal.callId,
+          signalType: kSignalBusy,
+        ),
       );
       return;
     }
@@ -383,10 +387,9 @@ class RemoteCallService {
   // ---------------------------------------------------------------------------
 
   void _persistCallHistory(RemoteCallStatus call, {required bool ended}) {
-    final durationSeconds =
-        (call.startedAt != null && ended)
-            ? DateTime.now().difference(call.startedAt!).inSeconds
-            : 0;
+    final durationSeconds = (call.startedAt != null && ended)
+        ? DateTime.now().difference(call.startedAt!).inSeconds
+        : 0;
     db.saveCallHistory(
       callId: call.callId,
       peerId: call.peerId,

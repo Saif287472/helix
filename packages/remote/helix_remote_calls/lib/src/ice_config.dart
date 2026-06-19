@@ -8,11 +8,7 @@ enum IpPrivacyMode {
 }
 
 class IceServerConfig {
-  const IceServerConfig({
-    required this.url,
-    this.username,
-    this.credential,
-  });
+  const IceServerConfig({required this.url, this.username, this.credential});
 
   final String url;
   final String? username;
@@ -57,7 +53,11 @@ class RemoteIceConfig {
     return RemoteIceConfig(
       iceServers: [
         ...iceServers,
-        IceServerConfig(url: turnUrl, username: username, credential: credential),
+        IceServerConfig(
+          url: turnUrl,
+          username: username,
+          credential: credential,
+        ),
       ],
       ipPrivacy: ipPrivacy,
     );

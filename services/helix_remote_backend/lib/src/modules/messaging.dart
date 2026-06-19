@@ -106,17 +106,70 @@ class MessagingModule {
         );
       }
 
+      final conversationMembers = db.getConversationMembers(conversationId);
+      final requiredRecipientDeviceIds = <String>{};
+      final allowedRecipientDeviceIds = <String>{};
+      for (final memberId in conversationMembers) {
+        for (final device in db.getDevices(memberId)) {
+          final deviceId = device['device_id'] as String;
+          allowedRecipientDeviceIds.add(deviceId);
+          if (deviceId == senderDeviceId) {
+            continue;
+          }
+          if (db.isBlocked(memberId, senderAccountId)) {
+            continue;
+          }
+          requiredRecipientDeviceIds.add(deviceId);
+        }
+      }
+
+      final envelopeByDeviceId = <String, Map<String, dynamic>>{};
+      for (final env in envelopes) {
+        final envMap = env as Map<String, dynamic>;
+        if (envMap.containsKey('plaintext') ||
+            envMap.containsKey('message_text') ||
+            envMap.containsKey('body')) {
+          return Response.badRequest(
+            body: jsonEncode({
+              'error': 'Message envelopes must be ciphertext-only',
+            }),
+          );
+        }
+        final recipientDeviceId = envMap['recipient_device_id'] as String?;
+        final ciphertext = envMap['ciphertext'] as String?;
+        if (recipientDeviceId == null ||
+            ciphertext == null ||
+            ciphertext.isEmpty) {
+          return Response.badRequest(
+            body: jsonEncode({'error': 'Invalid per-device envelope'}),
+          );
+        }
+        if (!allowedRecipientDeviceIds.contains(recipientDeviceId)) {
+          return Response.forbidden(
+            jsonEncode({'error': 'Envelope targets a non-member device'}),
+          );
+        }
+        envelopeByDeviceId[recipientDeviceId] = envMap;
+      }
+
+      final missingTargets = requiredRecipientDeviceIds
+          .where((deviceId) => !envelopeByDeviceId.containsKey(deviceId))
+          .toList();
+      if (missingTargets.isNotEmpty) {
+        return Response.badRequest(
+          body: jsonEncode({
+            'error': 'Missing per-device encrypted envelopes',
+            'missing_device_count': missingTargets.length,
+          }),
+        );
+      }
+
       int allocatedSeq = 0;
       final processedEnvelopes = <Map<String, dynamic>>[];
 
-      for (final env in envelopes) {
-        final envMap = env as Map<String, dynamic>;
-        final recipientDeviceId = envMap['recipient_device_id'] as String?;
-        final ciphertext = envMap['ciphertext'] as String?;
-
-        if (recipientDeviceId == null || ciphertext == null) {
-          continue;
-        }
+      for (final entry in envelopeByDeviceId.entries) {
+        final recipientDeviceId = entry.key;
+        final ciphertext = entry.value['ciphertext'] as String;
 
         // We'll query devices table for the owner of recipientDeviceId
         final ownerRows = db.getDevicesOfDevice(recipientDeviceId);
@@ -313,6 +366,10 @@ class MessagingModule {
 
       // Save tombstone in database (P10-018)
       db.saveTombstone(messageId, 'MESSAGE');
+      db.markBackupNeedsReupload(
+        accountId,
+        DateTime.now().millisecondsSinceEpoch,
+      );
 
       // Relay tombstone event via WebSocket to other active devices of the conversation
       final conversationMembers = db.getConversationMembers(conversationId);

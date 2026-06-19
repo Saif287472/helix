@@ -10,10 +10,12 @@ import 'package:helix_remote_backend/src/jwt.dart';
 class AuthModule {
   final BackendDatabase db;
   final JwtHelper jwt;
+  final void Function(String deviceId, Map<String, dynamic> payload)?
+  notifyDevice;
   final Map<String, String> _challenges = {}; // key: "account_id:device_id"
   final crypto.Ed25519 _ed25519 = crypto.Ed25519();
 
-  AuthModule(this.db, this.jwt);
+  AuthModule(this.db, this.jwt, {this.notifyDevice});
 
   Router get router {
     final router = Router();
@@ -26,7 +28,11 @@ class AuthModule {
 
     // Auth routes (enforced by middleware in main, but we can verify here too)
     router.get('/devices', _listDevicesHandler);
+    router.post('/devices/link/request', _requestDeviceLinkHandler);
+    router.post('/devices/link/verify', _verifyDeviceLinkHandler);
+    router.post('/devices/link/complete', _completeDeviceLinkHandler);
     router.post('/devices/revoke', _revokeDeviceHandler);
+    router.post('/devices/lost-device', _lostDeviceHandler);
     router.post('/username', _changeUsernameHandler);
 
     return router;
@@ -54,10 +60,8 @@ class AuthModule {
         );
       }
 
-      // Check if account already exists
       final existingAccount = db.getAccount(accountId);
       if (existingAccount == null) {
-        // Register new account
         db.createAccount(accountId, username, identityPublicKey);
         db.logAudit(
           accountId,
@@ -66,9 +70,15 @@ class AuthModule {
           request.context['client_ip'] as String?,
           null,
         );
+      } else {
+        return Response.forbidden(
+          jsonEncode({
+            'error':
+                'Existing accounts must link devices from an active device',
+          }),
+        );
       }
 
-      // Register device
       db.registerDevice(deviceId, accountId, devicePublicKey, deviceName);
       db.logAudit(
         accountId,
@@ -251,6 +261,178 @@ class AuthModule {
     return Response.ok(jsonEncode({'devices': devices}));
   }
 
+  Future<Response> _requestDeviceLinkHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final newDeviceId = body['device_id'] as String?;
+      final newDevicePublicKey = body['device_public_key'] as String?;
+      final newDeviceName = body['device_name'] as String?;
+
+      if (newDeviceId == null ||
+          newDevicePublicKey == null ||
+          newDeviceName == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing device link fields'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final requesterDeviceId = auth['device_id'] as String;
+      if (!db.isDeviceActive(accountId, requesterDeviceId)) {
+        return Response.forbidden(jsonEncode({'error': 'Device is inactive'}));
+      }
+      if (db.getDevicesOfDevice(newDeviceId).isNotEmpty) {
+        return Response.forbidden(
+          jsonEncode({'error': 'Device id is already registered'}),
+        );
+      }
+
+      final linkId = _randomToken('link');
+      final verificationCode = _humanVerificationCode();
+      db.createDeviceLinkRequest(
+        linkId: linkId,
+        accountId: accountId,
+        requestedByDeviceId: requesterDeviceId,
+        newDeviceId: newDeviceId,
+        newDevicePublicKey: newDevicePublicKey,
+        newDeviceName: newDeviceName,
+        verificationCodeHash: _hashVerificationCode(verificationCode),
+      );
+      db.logAudit(
+        accountId,
+        requesterDeviceId,
+        'DEVICE_LINK_REQUESTED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      return Response.ok(
+        jsonEncode({
+          'link_id': linkId,
+          'verification_code': verificationCode,
+          'status': 'PENDING',
+        }),
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+      );
+    }
+  }
+
+  Future<Response> _verifyDeviceLinkHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final linkId = body['link_id'] as String?;
+      final verificationCode = body['verification_code'] as String?;
+      if (linkId == null || verificationCode == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing link_id or verification_code'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final approved = db.approveDeviceLinkRequest(
+        linkId: linkId,
+        accountId: accountId,
+        verificationCodeHash: _hashVerificationCode(verificationCode),
+      );
+      if (!approved) {
+        return Response.forbidden(
+          jsonEncode({'error': 'Device link verification failed'}),
+        );
+      }
+
+      db.logAudit(
+        accountId,
+        auth['device_id'] as String?,
+        'DEVICE_LINK_VERIFIED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+      return Response.ok(jsonEncode({'status': 'APPROVED'}));
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+      );
+    }
+  }
+
+  Future<Response> _completeDeviceLinkHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final linkId = body['link_id'] as String?;
+      if (linkId == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing link_id'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final link = db.getDeviceLinkRequest(linkId);
+      if (link == null ||
+          link['account_id'] != accountId ||
+          link['status'] != 'APPROVED') {
+        return Response.forbidden(
+          jsonEncode({'error': 'Device link is not approved'}),
+        );
+      }
+
+      final newDeviceId = link['new_device_id'] as String;
+      db.registerDevice(
+        newDeviceId,
+        accountId,
+        link['new_device_public_key'] as String,
+        link['new_device_name'] as String,
+      );
+      db.completeDeviceLinkRequest(linkId);
+      db.logAudit(
+        accountId,
+        auth['device_id'] as String?,
+        'DEVICE_LINK_COMPLETED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      _notifySiblingDevices(
+        accountId,
+        exceptDeviceId: newDeviceId,
+        payload: {
+          'type': 'device_linked',
+          'device_id': newDeviceId,
+          'device_name': link['new_device_name'],
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        },
+      );
+
+      return Response.ok(
+        jsonEncode({'status': 'LINKED', 'device_id': newDeviceId}),
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+      );
+    }
+  }
+
   Future<Response> _revokeDeviceHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
@@ -271,6 +453,14 @@ class AuthModule {
       final accountId = auth['account_id'] as String;
 
       db.revokeDevice(accountId, deviceToRevoke);
+      db.revokeAllRefreshTokensForDevice(accountId, deviceToRevoke);
+      db.recordDeviceRevocation(
+        revocationId: _randomToken('rev'),
+        accountId: accountId,
+        revokedDeviceId: deviceToRevoke,
+        revokedByDeviceId: auth['device_id'] as String?,
+        reason: 'USER_REVOKED',
+      );
       db.logAudit(
         accountId,
         auth['device_id'] as String?,
@@ -278,9 +468,77 @@ class AuthModule {
         request.context['client_ip'] as String?,
         null,
       );
+      _notifySiblingDevices(
+        accountId,
+        exceptDeviceId: deviceToRevoke,
+        payload: {
+          'type': 'device_revoked',
+          'device_id': deviceToRevoke,
+          'reason': 'USER_REVOKED',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        },
+      );
 
       return Response.ok(
         jsonEncode({'message': 'Device revoked successfully'}),
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+      );
+    }
+  }
+
+  Future<Response> _lostDeviceHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final lostDeviceId = body['device_id'] as String?;
+      if (lostDeviceId == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing device_id'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      db.revokeDevice(accountId, lostDeviceId);
+      db.revokeAllRefreshTokensForDevice(accountId, lostDeviceId);
+      db.deleteMessagesForDevice(lostDeviceId);
+      db.recordDeviceRevocation(
+        revocationId: _randomToken('rev'),
+        accountId: accountId,
+        revokedDeviceId: lostDeviceId,
+        revokedByDeviceId: auth['device_id'] as String?,
+        reason: 'LOST_DEVICE',
+      );
+      db.logAudit(
+        accountId,
+        auth['device_id'] as String?,
+        'LOST_DEVICE_REPORTED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+      _notifySiblingDevices(
+        accountId,
+        exceptDeviceId: lostDeviceId,
+        payload: {
+          'type': 'device_revoked',
+          'device_id': lostDeviceId,
+          'reason': 'LOST_DEVICE',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        },
+      );
+
+      return Response.ok(
+        jsonEncode({
+          'message': 'Lost device revoked',
+          'device_id': lostDeviceId,
+        }),
       );
     } catch (e) {
       return Response.internalServerError(
@@ -340,6 +598,36 @@ class AuthModule {
 
   static String base64UrlEncode(List<int> bytes) {
     return base64Url.encode(bytes).replaceAll('=', '');
+  }
+
+  String _randomToken(String prefix) {
+    final random = Random.secure();
+    final bytes = List<int>.generate(18, (_) => random.nextInt(256));
+    return '${prefix}_${base64UrlEncode(bytes)}';
+  }
+
+  String _humanVerificationCode() {
+    final random = Random.secure();
+    return List.generate(6, (_) => random.nextInt(10).toString()).join();
+  }
+
+  String _hashVerificationCode(String code) {
+    return crypto_pkg.sha256.convert(utf8.encode(code)).toString();
+  }
+
+  void _notifySiblingDevices(
+    String accountId, {
+    required String exceptDeviceId,
+    required Map<String, dynamic> payload,
+  }) {
+    final notifier = notifyDevice;
+    if (notifier == null) return;
+    for (final device in db.getDevices(accountId)) {
+      final deviceId = device['device_id'] as String;
+      if (deviceId != exceptDeviceId) {
+        notifier(deviceId, payload);
+      }
+    }
   }
 
   Future<Response> _refreshHandler(Request request) async {

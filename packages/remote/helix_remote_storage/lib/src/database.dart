@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_domain/models.dart';
@@ -950,7 +951,14 @@ class HelixRemoteDatabase {
       INSERT OR REPLACE INTO call_history (call_id, peer_id, is_video, direction, duration, timestamp)
       VALUES (?, ?, ?, ?, ?, ?);
     ''');
-    stmt.execute([callId, peerId, isVideo ? 1 : 0, direction, durationSeconds, timestamp]);
+    stmt.execute([
+      callId,
+      peerId,
+      isVideo ? 1 : 0,
+      direction,
+      durationSeconds,
+      timestamp,
+    ]);
     stmt.close();
   }
 
@@ -961,14 +969,16 @@ class HelixRemoteDatabase {
     final res = stmt.select([limit]);
     stmt.close();
     return res
-        .map((row) => {
-              'call_id': row['call_id'],
-              'peer_id': row['peer_id'],
-              'is_video': row['is_video'],
-              'direction': row['direction'],
-              'duration': row['duration'],
-              'timestamp': row['timestamp'],
-            })
+        .map(
+          (row) => {
+            'call_id': row['call_id'],
+            'peer_id': row['peer_id'],
+            'is_video': row['is_video'],
+            'direction': row['direction'],
+            'duration': row['duration'],
+            'timestamp': row['timestamp'],
+          },
+        )
         .toList();
   }
 
@@ -1048,9 +1058,7 @@ class HelixRemoteDatabase {
 
   /// P16-005: Increment the key epoch after a membership change.
   void updateGroupEpoch(String groupId, int epoch) {
-    final stmt = _db.prepare(
-      'UPDATE groups SET epoch = ? WHERE group_id = ?;',
-    );
+    final stmt = _db.prepare('UPDATE groups SET epoch = ? WHERE group_id = ?;');
     stmt.execute([epoch, groupId]);
     stmt.close();
   }
@@ -1122,12 +1130,112 @@ class HelixRemoteDatabase {
     final res = stmt.select([conversationId]);
     stmt.close();
     return res
-        .map(
-          (row) => {
-            'account_id': row['account_id'],
-            'role': row['role'],
-          },
-        )
+        .map((row) => {'account_id': row['account_id'], 'role': row['role']})
         .toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Backup / restore snapshots (P17-005, P17-008, P17-012, P17-014)
+  // ---------------------------------------------------------------------------
+
+  String exportBackupSnapshot({int version = 1}) {
+    return jsonEncode({
+      'version': version,
+      'exported_at': DateTime.now().millisecondsSinceEpoch,
+      'accounts': _selectAll('accounts'),
+      'devices': _selectAll('devices'),
+      'contacts': _selectAll('contacts'),
+      'conversations': _selectAll('conversations'),
+      'members': _selectAll('members'),
+      'messages': _selectAll('messages'),
+      'message_receipts': _selectAll('message_receipts'),
+      'revisions': _selectAll('revisions'),
+      'attachments': _selectAll('attachments'),
+      'groups': _selectAll('groups'),
+      'group_invites': _selectAll('group_invites'),
+      'call_history': _selectAll('call_history'),
+      'tombstones': _selectAll('tombstones'),
+    });
+  }
+
+  void restoreBackupSnapshot(String snapshotJson) {
+    final decoded = jsonDecode(snapshotJson) as Map<String, dynamic>;
+    final version = decoded['version'] as int? ?? 0;
+    if (version != 1) {
+      throw UnsupportedError('Unsupported backup snapshot version: $version');
+    }
+
+    _db.execute('SAVEPOINT restore_backup_snapshot;');
+    try {
+      _restoreRows('accounts', decoded['accounts'] as List? ?? const []);
+      _restoreRows('devices', decoded['devices'] as List? ?? const []);
+      _restoreRows('contacts', decoded['contacts'] as List? ?? const []);
+      _restoreRows(
+        'conversations',
+        decoded['conversations'] as List? ?? const [],
+      );
+      _restoreRows('members', decoded['members'] as List? ?? const []);
+      _restoreRows('messages', decoded['messages'] as List? ?? const []);
+      _restoreRows(
+        'message_receipts',
+        decoded['message_receipts'] as List? ?? const [],
+      );
+      _restoreRows('revisions', decoded['revisions'] as List? ?? const []);
+      _restoreRows('attachments', decoded['attachments'] as List? ?? const []);
+      _restoreRows('groups', decoded['groups'] as List? ?? const []);
+      _restoreRows(
+        'group_invites',
+        decoded['group_invites'] as List? ?? const [],
+      );
+      _restoreRows(
+        'call_history',
+        decoded['call_history'] as List? ?? const [],
+      );
+      _restoreRows('tombstones', decoded['tombstones'] as List? ?? const []);
+      _applyRestoredTombstones();
+      _db.execute('RELEASE SAVEPOINT restore_backup_snapshot;');
+    } catch (_) {
+      _db.execute('ROLLBACK TO SAVEPOINT restore_backup_snapshot;');
+      _db.execute('RELEASE SAVEPOINT restore_backup_snapshot;');
+      rethrow;
+    }
+  }
+
+  List<Map<String, dynamic>> getTombstones() => _selectAll('tombstones');
+
+  List<Map<String, dynamic>> _selectAll(String table) {
+    final res = _db.select('SELECT * FROM $table;');
+    return res.map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  void _restoreRows(String table, List<dynamic> rows) {
+    for (final row in rows.cast<Map<String, dynamic>>()) {
+      if (row.isEmpty) continue;
+      final columns = row.keys.toList();
+      final placeholders = List.filled(columns.length, '?').join(', ');
+      final columnList = columns.join(', ');
+      final stmt = _db.prepare(
+        'INSERT OR REPLACE INTO $table ($columnList) VALUES ($placeholders);',
+      );
+      stmt.execute(columns.map((column) => row[column]).toList());
+      stmt.close();
+    }
+  }
+
+  void _applyRestoredTombstones() {
+    final tombstones = getTombstones();
+    for (final tombstone in tombstones) {
+      final itemId = tombstone['item_id'] as String;
+      final type = tombstone['type'] as String;
+      if (type == 'MESSAGE') {
+        deleteMessage(itemId);
+      } else if (type == 'GROUP') {
+        final stmt = _db.prepare(
+          "UPDATE groups SET status = 'DELETED' WHERE group_id = ?;",
+        );
+        stmt.execute([itemId]);
+        stmt.close();
+      }
+    }
   }
 }

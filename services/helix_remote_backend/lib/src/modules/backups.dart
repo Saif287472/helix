@@ -26,15 +26,47 @@ class BackupsModule {
       final body =
           jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final backupData = body['backup_data'] as String?;
+      final backupId = body['backup_id'] as String?;
+      final version = body['version'] as int?;
+      final kdf = body['kdf'] as String?;
+      final salt = body['salt'] as String?;
+      final backupKeyHint = body['backup_key_hint'] as String? ?? '';
+      final deletionWatermark = body['deletion_watermark'] as int? ?? 0;
 
-      if (backupData == null) {
+      if (body.containsKey('backup_key') ||
+          body.containsKey('passphrase') ||
+          body.containsKey('recovery_phrase')) {
         return Response.badRequest(
-          body: jsonEncode({'error': 'Missing backup_data'}),
+          body: jsonEncode({'error': 'Backup keys must never be uploaded'}),
+        );
+      }
+
+      if (backupData == null ||
+          backupId == null ||
+          version == null ||
+          kdf == null ||
+          salt == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing backup envelope metadata'}),
+        );
+      }
+      if (version < 1) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Unsupported backup version'}),
         );
       }
 
       final accountId = auth['account_id'] as String;
-      db.setBackup(accountId, backupData);
+      db.setBackup(
+        accountId,
+        backupData,
+        backupId: backupId,
+        version: version,
+        kdf: kdf,
+        salt: salt,
+        backupKeyHint: backupKeyHint,
+        deletionWatermark: deletionWatermark,
+      );
       db.logAudit(
         accountId,
         auth['device_id'] as String?,
@@ -77,8 +109,15 @@ class BackupsModule {
 
       return Response.ok(
         jsonEncode({
+          'backup_id': backup['backup_id'],
+          'version': backup['version'],
+          'kdf': backup['kdf'],
+          'salt': backup['salt'],
+          'backup_key_hint': backup['backup_key_hint'],
           'backup_data': backup['backup_data'],
           'created_at': backup['created_at'],
+          'deletion_watermark': backup['deletion_watermark'],
+          'requires_reupload': backup['requires_reupload'] == 1,
         }),
       );
     } catch (e) {

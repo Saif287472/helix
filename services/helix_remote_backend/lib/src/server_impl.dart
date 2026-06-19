@@ -112,7 +112,7 @@ class BackendServer {
   Handler getHandler() {
     final router = Router();
 
-    final authModule = AuthModule(db, jwt);
+    final authModule = AuthModule(db, jwt, notifyDevice: wsRelay.sendToDevice);
     final prekeysModule = PrekeysModule(db);
     final contactsModule = ContactsModule(db);
     final backupsModule = BackupsModule(db);
@@ -224,6 +224,18 @@ class BackendServer {
           return Response(
             403,
             body: jsonEncode({'error': 'Forbidden: Invalid or expired token'}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+
+        final accountId = claims['account_id'] as String?;
+        final deviceId = claims['device_id'] as String?;
+        if (accountId == null ||
+            deviceId == null ||
+            !db.isDeviceActive(accountId, deviceId)) {
+          return Response(
+            403,
+            body: jsonEncode({'error': 'Forbidden: Device inactive'}),
             headers: {'Content-Type': 'application/json'},
           );
         }

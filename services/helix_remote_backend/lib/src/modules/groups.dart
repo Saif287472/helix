@@ -56,7 +56,9 @@ class GroupsModule {
     if (db.countGroupCreationsLastDay(accountId) >= _maxGroupsPerDay) {
       return Response(
         429,
-        body: jsonEncode({'error': 'Group creation quota exceeded (5 per day)'}),
+        body: jsonEncode({
+          'error': 'Group creation quota exceeded (5 per day)',
+        }),
         headers: {'Content-Type': 'application/json'},
       );
     }
@@ -99,8 +101,13 @@ class GroupsModule {
       };
       _relayToGroupMembers(groupId, eventPayload, excludeDeviceId: null);
 
-      db.logAudit(accountId, deviceId, 'GROUP_CREATED',
-          request.context['client_ip'] as String?, null);
+      db.logAudit(
+        accountId,
+        deviceId,
+        'GROUP_CREATED',
+        request.context['client_ip'] as String?,
+        null,
+      );
 
       return Response.ok(
         jsonEncode({'group_id': groupId, 'name': name, 'members': members}),
@@ -211,7 +218,9 @@ class GroupsModule {
 
       if (inviteId == null || groupId == null || inviteeId == null) {
         return Response.badRequest(
-          body: jsonEncode({'error': 'Missing invite_id, group_id, or invitee_id'}),
+          body: jsonEncode({
+            'error': 'Missing invite_id, group_id, or invitee_id',
+          }),
         );
       }
 
@@ -223,7 +232,9 @@ class GroupsModule {
 
       if (db.hasOpenGroupInvite(groupId, inviteeId)) {
         return Response.badRequest(
-          body: jsonEncode({'error': 'Open invite already exists for this user'}),
+          body: jsonEncode({
+            'error': 'Open invite already exists for this user',
+          }),
         );
       }
 
@@ -316,7 +327,11 @@ class GroupsModule {
           'role': 'MEMBER',
           'timestamp': DateTime.now().millisecondsSinceEpoch,
         };
-        _relayToGroupMembers(groupId, memberPayload, excludeAccountId: accountId);
+        _relayToGroupMembers(
+          groupId,
+          memberPayload,
+          excludeAccountId: accountId,
+        );
       } else {
         db.rejectGroupInvite(inviteId);
       }
@@ -365,15 +380,19 @@ class GroupsModule {
 
       db.updateGroupInfo(groupId, name: name);
 
-      // Relay admin event to all member devices.
-      _relayToGroupMembers(groupId, {
+      final adminEvent = {
         'type': 'group_admin_event',
         'group_id': groupId,
         'action': 'update',
-        if (name != null) 'name': name,
         'actor_id': accountId,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
-      });
+      };
+      if (name != null) {
+        adminEvent['name'] = name;
+      }
+
+      // Relay admin event to all member devices.
+      _relayToGroupMembers(groupId, adminEvent);
 
       return Response.ok(
         jsonEncode({'group_id': groupId, 'updated': true}),
@@ -577,8 +596,13 @@ class GroupsModule {
 
       db.deleteGroup(groupId);
 
-      db.logAudit(accountId, auth['device_id'] as String?,
-          'GROUP_DELETED', request.context['client_ip'] as String?, null);
+      db.logAudit(
+        accountId,
+        auth['device_id'] as String?,
+        'GROUP_DELETED',
+        request.context['client_ip'] as String?,
+        null,
+      );
 
       return Response.ok(
         jsonEncode({'group_id': groupId, 'deleted': true}),
@@ -614,8 +638,8 @@ class GroupsModule {
   }
 
   Response _unauthorized() => Response(
-        401,
-        body: jsonEncode({'error': 'Unauthorized'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    401,
+    body: jsonEncode({'error': 'Unauthorized'}),
+    headers: {'Content-Type': 'application/json'},
+  );
 }

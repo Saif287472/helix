@@ -57,11 +57,7 @@ void main() {
   // -------------------------------------------------------------------------
 
   test('createGroup creates local conversation with type GROUP', () {
-    service.createGroup(
-      groupId: 'g1',
-      name: 'Test Group',
-      creatorId: 'alice',
-    );
+    service.createGroup(groupId: 'g1', name: 'Test Group', creatorId: 'alice');
 
     final convs = db.getConversations();
     expect(convs.length, equals(1));
@@ -86,11 +82,7 @@ void main() {
   });
 
   test('createGroup enqueues group_create operation', () {
-    service.createGroup(
-      groupId: 'g1',
-      name: 'Queue Group',
-      creatorId: 'alice',
-    );
+    service.createGroup(groupId: 'g1', name: 'Queue Group', creatorId: 'alice');
 
     final ops = db.getPendingOperations();
     expect(ops.length, equals(1));
@@ -121,9 +113,7 @@ void main() {
     );
     expect(alice['role'], equals(kRoleAdmin));
 
-    final bob = membersWithRoles.firstWhere(
-      (m) => m['account_id'] == 'bob',
-    );
+    final bob = membersWithRoles.firstWhere((m) => m['account_id'] == 'bob');
     expect(bob['role'], equals(kRoleMember));
   });
 
@@ -210,8 +200,7 @@ void main() {
     expect(service.getGroupMembers('g1'), contains('bob'));
 
     final ops = db.getPendingOperations();
-    final respondOp =
-        ops.firstWhere((o) => o['type'] == kGroupOpInviteRespond);
+    final respondOp = ops.firstWhere((o) => o['type'] == kGroupOpInviteRespond);
     final payload =
         jsonDecode(respondOp['payload'] as String) as Map<String, dynamic>;
     expect(payload['accept'], isTrue);
@@ -308,11 +297,7 @@ void main() {
       creatorId: 'alice',
       initialMemberIds: ['bob'],
     );
-    service.changeMemberRole(
-      groupId: 'g1',
-      accountId: 'bob',
-      role: kRoleAdmin,
-    );
+    service.changeMemberRole(groupId: 'g1', accountId: 'bob', role: kRoleAdmin);
 
     final ops = db.getPendingOperations();
     final roleOp = ops.firstWhere((o) => o['type'] == kGroupOpMemberRole);
@@ -356,8 +341,7 @@ void main() {
     expect(service.getGroupMembers('g1'), isNot(contains('bob')));
 
     final ops = db.getPendingOperations();
-    final removeOp =
-        ops.firstWhere((o) => o['type'] == kGroupOpRemoveMember);
+    final removeOp = ops.firstWhere((o) => o['type'] == kGroupOpRemoveMember);
     final payload =
         jsonDecode(removeOp['payload'] as String) as Map<String, dynamic>;
     expect(payload['account_id'], equals('bob'));
@@ -395,7 +379,11 @@ void main() {
   // -------------------------------------------------------------------------
 
   test('deleteGroup tombstones group and enqueues operation', () {
-    service.createGroup(groupId: 'g1', name: 'Delete Group', creatorId: 'alice');
+    service.createGroup(
+      groupId: 'g1',
+      name: 'Delete Group',
+      creatorId: 'alice',
+    );
     service.deleteGroup('g1');
 
     expect(db.isTombstoned('g1', 'GROUP'), isTrue);
@@ -411,28 +399,31 @@ void main() {
   // P16-004: Group E2EE — key provider is injected, not internal
   // -------------------------------------------------------------------------
 
-  test('encryptionKeyProvider is called with groupId and epoch 0 on create', () {
-    final calls = <Map<String, dynamic>>[];
-    final svc = RemoteGroupService(
-      db: db,
-      generateId: () => 'op_test',
-      encryptionKeyProvider: (gid, epoch) {
-        calls.add({'groupId': gid, 'epoch': epoch});
-        return 'stub_key';
-      },
-    );
+  test(
+    'encryptionKeyProvider is called with groupId and epoch 0 on create',
+    () {
+      final calls = <Map<String, dynamic>>[];
+      final svc = RemoteGroupService(
+        db: db,
+        generateId: () => 'op_test',
+        encryptionKeyProvider: (gid, epoch) {
+          calls.add({'groupId': gid, 'epoch': epoch});
+          return 'stub_key';
+        },
+      );
 
-    svc.createGroup(groupId: 'g1', name: 'E2EE Group', creatorId: 'alice');
+      svc.createGroup(groupId: 'g1', name: 'E2EE Group', creatorId: 'alice');
 
-    expect(calls.length, equals(1));
-    expect(calls.first['groupId'], equals('g1'));
-    expect(calls.first['epoch'], equals(0));
+      expect(calls.length, equals(1));
+      expect(calls.first['groupId'], equals('g1'));
+      expect(calls.first['epoch'], equals(0));
 
-    final ops = db.getPendingOperations();
-    final payload =
-        jsonDecode(ops.first['payload'] as String) as Map<String, dynamic>;
-    expect(payload['encryption_key_id'], equals('stub_key'));
-  });
+      final ops = db.getPendingOperations();
+      final payload =
+          jsonDecode(ops.first['payload'] as String) as Map<String, dynamic>;
+      expect(payload['encryption_key_id'], equals('stub_key'));
+    },
+  );
 
   // -------------------------------------------------------------------------
   // P16-016: No Local imports — verified by package boundary
@@ -442,10 +433,7 @@ void main() {
     // If this test file compiles without importing any helix_local_* package,
     // the boundary is enforced. The group service depends only on
     // helix_remote_domain and helix_remote_storage per pubspec.yaml.
-    final svc = RemoteGroupService(
-      db: db,
-      generateId: () => 'id',
-    );
+    final svc = RemoteGroupService(db: db, generateId: () => 'id');
     expect(svc, isNotNull);
   });
 }

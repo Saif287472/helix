@@ -18,12 +18,14 @@ class StubCallEngine implements RemoteCallEngine {
   Stream<RemoteCallEngineEvent> get events => _ctrl.stream;
 
   void emitCandidate(String callId, String candidate) {
-    _ctrl.add(RemoteIceCandidateEvent(
-      callId: callId,
-      candidate: candidate,
-      mlineIndex: 0,
-      sdpMid: 'audio',
-    ));
+    _ctrl.add(
+      RemoteIceCandidateEvent(
+        callId: callId,
+        candidate: candidate,
+        mlineIndex: 0,
+        sdpMid: 'audio',
+      ),
+    );
   }
 
   @override
@@ -195,13 +197,15 @@ void main() {
   // P15-002: Inbound offer sets ringing state
   test('P15-002: inbound offer sets call to ringing state', () async {
     final svc = makeService();
-    await svc.processInboundSignal(RemoteCallSignal(
-      callId: 'call_1',
-      signalType: kSignalOffer,
-      sdp: 'offer_sdp',
-      isVideo: false,
-      peerId: 'peer_alice',
-    ));
+    await svc.processInboundSignal(
+      RemoteCallSignal(
+        callId: 'call_1',
+        signalType: kSignalOffer,
+        sdp: 'offer_sdp',
+        isVideo: false,
+        peerId: 'peer_alice',
+      ),
+    );
 
     expect(svc.activeCall, isNotNull);
     expect(svc.activeCall!.state, equals(RemoteCallState.ringing));
@@ -215,11 +219,13 @@ void main() {
     await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
 
     gateway.sent.clear();
-    await svc.processInboundSignal(RemoteCallSignal(
-      callId: 'call_intruder',
-      signalType: kSignalOffer,
-      peerId: 'peer_charlie',
-    ));
+    await svc.processInboundSignal(
+      RemoteCallSignal(
+        callId: 'call_intruder',
+        signalType: kSignalOffer,
+        peerId: 'peer_charlie',
+      ),
+    );
 
     final busy = gateway.lastSignalTo('peer_charlie');
     expect(busy, isNotNull);
@@ -230,10 +236,7 @@ void main() {
   test('P15-003: RemoteIceConfig.defaultStun contains STUN server URLs', () {
     final config = RemoteIceConfig.defaultStun();
     expect(config.iceServers, isNotEmpty);
-    expect(
-      config.iceServers.any((s) => s.url.startsWith('stun:')),
-      isTrue,
-    );
+    expect(config.iceServers.any((s) => s.url.startsWith('stun:')), isTrue);
   });
 
   // P15-006: IceConfig supports both STUN and TURN for direct+relay fallback
@@ -244,15 +247,20 @@ void main() {
       credential: 'cred',
     );
     final webrtcServers = config.toWebRtcIceServers();
-    expect(webrtcServers.any((s) => (s['urls'] as String).startsWith('stun:')), isTrue);
-    expect(webrtcServers.any((s) => (s['urls'] as String).startsWith('turn:')), isTrue);
+    expect(
+      webrtcServers.any((s) => (s['urls'] as String).startsWith('stun:')),
+      isTrue,
+    );
+    expect(
+      webrtcServers.any((s) => (s['urls'] as String).startsWith('turn:')),
+      isTrue,
+    );
   });
 
   // P15-008: Call state recovery detects stale calls
   test('P15-008: recoverCallState marks stale active call as missed', () {
     // Write a marker that started 2 minutes ago (beyond 60s timeout).
-    final oldTimestamp =
-        DateTime.now().millisecondsSinceEpoch - 120000;
+    final oldTimestamp = DateTime.now().millisecondsSinceEpoch - 120000;
     db.setActiveCallMarker(
       callId: 'stale_call',
       peerId: 'peer_x',
@@ -295,7 +303,7 @@ void main() {
     await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
 
     await svc.setMuted(muted: true);
-    expect(engine.log, contains(startsWith('setMuted:') ));
+    expect(engine.log, contains(startsWith('setMuted:')));
     expect(engine.log.last, contains(':true'));
   });
 
@@ -342,11 +350,13 @@ void main() {
     await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
 
     // Simulate answer so the call becomes active with a startedAt.
-    await svc.processInboundSignal(RemoteCallSignal(
-      callId: svc.activeCall!.callId,
-      signalType: kSignalAnswer,
-      sdp: 'answer_sdp',
-    ));
+    await svc.processInboundSignal(
+      RemoteCallSignal(
+        callId: svc.activeCall!.callId,
+        signalType: kSignalAnswer,
+        sdp: 'answer_sdp',
+      ),
+    );
 
     await svc.endActiveCall();
 
@@ -358,11 +368,13 @@ void main() {
 
   test('P15-013: declined incoming call is recorded as MISSED', () async {
     final svc = makeService();
-    await svc.processInboundSignal(RemoteCallSignal(
-      callId: 'call_missed',
-      signalType: kSignalOffer,
-      peerId: 'peer_alice',
-    ));
+    await svc.processInboundSignal(
+      RemoteCallSignal(
+        callId: 'call_missed',
+        signalType: kSignalOffer,
+        peerId: 'peer_alice',
+      ),
+    );
 
     await svc.declineIncomingCall();
 
@@ -372,26 +384,40 @@ void main() {
   });
 
   // P15-014: No call media stored in DB
-  test('P15-014: call history contains only metadata — no media bytes', () async {
-    final svc = makeService();
-    await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: true);
-    await svc.endActiveCall();
+  test(
+    'P15-014: call history contains only metadata — no media bytes',
+    () async {
+      final svc = makeService();
+      await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: true);
+      await svc.endActiveCall();
 
-    final history = svc.getCallHistory();
-    expect(history, isNotEmpty);
-    final row = history.first;
-    // Only metadata columns exist; no audio/video content.
-    expect(row.keys, containsAll(['call_id', 'peer_id', 'is_video', 'direction', 'duration', 'timestamp']));
-    expect(row.keys.contains('sdp'), isFalse);
-    expect(row.keys.contains('audio_data'), isFalse);
-    expect(row.keys.contains('video_data'), isFalse);
-  });
+      final history = svc.getCallHistory();
+      expect(history, isNotEmpty);
+      final row = history.first;
+      // Only metadata columns exist; no audio/video content.
+      expect(
+        row.keys,
+        containsAll([
+          'call_id',
+          'peer_id',
+          'is_video',
+          'direction',
+          'duration',
+          'timestamp',
+        ]),
+      );
+      expect(row.keys.contains('sdp'), isFalse);
+      expect(row.keys.contains('audio_data'), isFalse);
+      expect(row.keys.contains('video_data'), isFalse);
+    },
+  );
 
   // P15-015: IP privacy — relay-only filters non-relay ICE candidates
   test('P15-015: relayOnly mode forwards only relay ICE candidates', () async {
     final svc = makeService(
-      iceConfig: RemoteIceConfig.defaultStun()
-          .withIpPrivacy(IpPrivacyMode.relayOnly),
+      iceConfig: RemoteIceConfig.defaultStun().withIpPrivacy(
+        IpPrivacyMode.relayOnly,
+      ),
     );
     await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
 
@@ -399,54 +425,73 @@ void main() {
     gateway.sent.clear();
 
     // Emit a host candidate (should be filtered out).
-    engine.emitCandidate(callId, 'candidate:1 1 UDP 2130706431 192.168.1.5 54321 typ host');
+    engine.emitCandidate(
+      callId,
+      'candidate:1 1 UDP 2130706431 192.168.1.5 54321 typ host',
+    );
     await Future<void>.delayed(Duration.zero);
     expect(gateway.sent.where((e) => e['peer'] == 'peer_bob').isEmpty, isTrue);
 
     // Emit a relay candidate (should be forwarded).
-    engine.emitCandidate(callId, 'candidate:2 1 UDP 16777215 93.184.216.1 3478 typ relay raddr 0.0.0.0 rport 0');
+    engine.emitCandidate(
+      callId,
+      'candidate:2 1 UDP 16777215 93.184.216.1 3478 typ relay raddr 0.0.0.0 rport 0',
+    );
     await Future<void>.delayed(Duration.zero);
-    expect(gateway.sent.where((e) => e['peer'] == 'peer_bob').isNotEmpty, isTrue);
+    expect(
+      gateway.sent.where((e) => e['peer'] == 'peer_bob').isNotEmpty,
+      isTrue,
+    );
   });
 
   test('P15-015: directAndRelay mode forwards all ICE candidates', () async {
     final svc = makeService(
-      iceConfig: RemoteIceConfig.defaultStun()
-          .withIpPrivacy(IpPrivacyMode.directAndRelay),
+      iceConfig: RemoteIceConfig.defaultStun().withIpPrivacy(
+        IpPrivacyMode.directAndRelay,
+      ),
     );
     await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
 
     final callId = svc.activeCall!.callId;
     gateway.sent.clear();
 
-    engine.emitCandidate(callId, 'candidate:1 1 UDP 2130706431 192.168.1.5 54321 typ host');
+    engine.emitCandidate(
+      callId,
+      'candidate:1 1 UDP 2130706431 192.168.1.5 54321 typ host',
+    );
     await Future<void>.delayed(Duration.zero);
-    expect(gateway.sent.where((e) => e['peer'] == 'peer_bob').isNotEmpty, isTrue);
+    expect(
+      gateway.sent.where((e) => e['peer'] == 'peer_bob').isNotEmpty,
+      isTrue,
+    );
   });
 
   // P15-016: CallQualityMetrics fields
-  test('P15-016: CallQualityMetrics carries transport-layer stats without content', () {
-    const metrics = CallQualityMetrics(
-      callId: 'call_q',
-      packetLossPercent: 1.5,
-      jitterMs: 12.0,
-      roundTripMs: 45.0,
-      audioBitrateKbps: 32.0,
-      videoBitrateKbps: 512.0,
-    );
+  test(
+    'P15-016: CallQualityMetrics carries transport-layer stats without content',
+    () {
+      const metrics = CallQualityMetrics(
+        callId: 'call_q',
+        packetLossPercent: 1.5,
+        jitterMs: 12.0,
+        roundTripMs: 45.0,
+        audioBitrateKbps: 32.0,
+        videoBitrateKbps: 512.0,
+      );
 
-    final map = metrics.toMap();
-    expect(map['packet_loss_percent'], equals(1.5));
-    expect(map['jitter_ms'], equals(12.0));
-    expect(map['round_trip_ms'], equals(45.0));
-    expect(map['audio_bitrate_kbps'], equals(32.0));
-    expect(map['video_bitrate_kbps'], equals(512.0));
+      final map = metrics.toMap();
+      expect(map['packet_loss_percent'], equals(1.5));
+      expect(map['jitter_ms'], equals(12.0));
+      expect(map['round_trip_ms'], equals(45.0));
+      expect(map['audio_bitrate_kbps'], equals(32.0));
+      expect(map['video_bitrate_kbps'], equals(512.0));
 
-    // No content fields.
-    expect(map.containsKey('audio_data'), isFalse);
-    expect(map.containsKey('video_data'), isFalse);
-    expect(map.containsKey('sdp'), isFalse);
-  });
+      // No content fields.
+      expect(map.containsKey('audio_data'), isFalse);
+      expect(map.containsKey('video_data'), isFalse);
+      expect(map.containsKey('sdp'), isFalse);
+    },
+  );
 
   // P15-017: Relay-only scenario (cross-network simulation)
   test('P15-017: relay-only call completes without leaking direct IP', () async {
@@ -465,9 +510,18 @@ void main() {
     gateway.sent.clear();
 
     // Emit various candidate types.
-    engine.emitCandidate(callId, 'candidate:0 1 UDP 2130706431 10.0.0.1 55000 typ host');
-    engine.emitCandidate(callId, 'candidate:1 1 UDP 1694498815 203.0.113.5 55001 typ srflx raddr 10.0.0.1 rport 55000');
-    engine.emitCandidate(callId, 'candidate:2 1 UDP 16777215 198.51.100.2 3478 typ relay raddr 0.0.0.0 rport 0');
+    engine.emitCandidate(
+      callId,
+      'candidate:0 1 UDP 2130706431 10.0.0.1 55000 typ host',
+    );
+    engine.emitCandidate(
+      callId,
+      'candidate:1 1 UDP 1694498815 203.0.113.5 55001 typ srflx raddr 10.0.0.1 rport 55000',
+    );
+    engine.emitCandidate(
+      callId,
+      'candidate:2 1 UDP 16777215 198.51.100.2 3478 typ relay raddr 0.0.0.0 rport 0',
+    );
     await Future<void>.delayed(Duration.zero);
 
     final forwarded = gateway.sent
@@ -498,32 +552,34 @@ void main() {
   });
 
   // P15-019: Local WebRTC candidate filtering unchanged
-  test('P15-019: Remote engine has no private-IP filtering — all host candidates allowed', () async {
-    // The Remote engine (stub here) does not filter candidates.
-    // In production, RemoteWebRtcCallEngine emits all candidates; the
-    // IP privacy mode in RemoteCallService decides what gets forwarded.
-    // This contrasts with the Local engine which filters at source to
-    // private-range IPs. (P15-019: Local engine file was not modified.)
-    final svc = makeService(
-      iceConfig: const RemoteIceConfig(iceServers: []),
-    );
-    await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
+  test(
+    'P15-019: Remote engine has no private-IP filtering — all host candidates allowed',
+    () async {
+      // The Remote engine (stub here) does not filter candidates.
+      // In production, RemoteWebRtcCallEngine emits all candidates; the
+      // IP privacy mode in RemoteCallService decides what gets forwarded.
+      // This contrasts with the Local engine which filters at source to
+      // private-range IPs. (P15-019: Local engine file was not modified.)
+      final svc = makeService(iceConfig: const RemoteIceConfig(iceServers: []));
+      await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
 
-    final callId = svc.activeCall!.callId;
-    gateway.sent.clear();
+      final callId = svc.activeCall!.callId;
+      gateway.sent.clear();
 
-    // A public IP host candidate is not filtered in directAndRelay mode.
-    engine.emitCandidate(
-      callId,
-      'candidate:1 1 UDP 2130706431 203.0.113.99 50000 typ host',
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(
-      gateway.sent.where((e) => e['peer'] == 'peer_bob').isNotEmpty,
-      isTrue,
-      reason: 'Remote engine must forward public-IP host candidates by default',
-    );
-  });
+      // A public IP host candidate is not filtered in directAndRelay mode.
+      engine.emitCandidate(
+        callId,
+        'candidate:1 1 UDP 2130706431 203.0.113.99 50000 typ host',
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        gateway.sent.where((e) => e['peer'] == 'peer_bob').isNotEmpty,
+        isTrue,
+        reason:
+            'Remote engine must forward public-IP host candidates by default',
+      );
+    },
+  );
 
   // Signal JSON round-trip
   test('RemoteCallSignal serializes and deserializes correctly', () {

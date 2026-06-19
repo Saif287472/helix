@@ -157,4 +157,91 @@ void main() {
     expect(db.isTombstoned('msg_1', 'MESSAGE'), isTrue);
     expect(db.isTombstoned('msg_2', 'MESSAGE'), isFalse);
   });
+
+  test(
+    'P17 backup snapshot restores history and filters tombstoned messages',
+    () {
+      final account = RemoteAccount(
+        accountId: 'acc_restore',
+        username: 'restore_user',
+        identityPublicKey: 'restore_identity',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+        status: 'Active',
+      );
+      db.upsertAccount(account);
+      db.upsertDevice(
+        'acc_restore',
+        RemoteDevice(
+          deviceId: 1,
+          deviceName: 'Restore Phone',
+          devicePublicKey: 'restore_device_key',
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+        ),
+      );
+      db.upsertConversation(
+        RemoteConversation(
+          conversationId: 'conv_restore',
+          title: 'Restored chat',
+          type: 'DIRECT',
+          lastActivitySequence: 2,
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+        ),
+        ['acc_restore'],
+      );
+      db.saveMessage(
+        RemoteMessage(
+          messageId: 'msg_keep',
+          conversationId: 'conv_restore',
+          senderAccountId: 'acc_restore',
+          senderDeviceId: 1,
+          ciphertext: 'ciphertext_to_keep',
+        ),
+        1,
+        1001,
+        'DELIVERED',
+      );
+      db.saveMessage(
+        RemoteMessage(
+          messageId: 'msg_deleted',
+          conversationId: 'conv_restore',
+          senderAccountId: 'acc_restore',
+          senderDeviceId: 1,
+          ciphertext: 'ciphertext_to_remove',
+        ),
+        2,
+        1002,
+        'DELIVERED',
+      );
+      db.saveTombstone('msg_deleted', 'MESSAGE');
+
+      final snapshot = db.exportBackupSnapshot();
+      final restored = HelixRemoteDatabase(File(':memory:'));
+      restored.initialize();
+      addTearDown(restored.close);
+
+      restored.restoreBackupSnapshot(snapshot);
+
+      expect(
+        restored.getAccount('acc_restore')!.username,
+        equals('restore_user'),
+      );
+      expect(
+        restored.getDevices('acc_restore').single.deviceName,
+        equals('Restore Phone'),
+      );
+      final messages = restored.getMessages('conv_restore');
+      expect(messages.length, equals(1));
+      expect(messages.single['message_id'], equals('msg_keep'));
+      expect(restored.isTombstoned('msg_deleted', 'MESSAGE'), isTrue);
+    },
+  );
+
+  test('P17 restore rejects unsupported snapshot versions atomically', () {
+    final before = db.getConversations();
+    expect(
+      () => db.restoreBackupSnapshot('{"version": 99, "accounts": []}'),
+      throwsUnsupportedError,
+    );
+    expect(db.getConversations(), equals(before));
+  });
 }
