@@ -114,7 +114,7 @@ void main() {
 
     final messages = db.getMessages('conv_123');
     expect(messages.length, equals(1));
-    expect(messages.first['text'], equals('hello bob decrypted text'));
+    expect(messages.first['ciphertext_blob'], equals('hello bob decrypted text'));
     expect(messages.first['server_sequence'], equals(1));
 
     // Update cursor

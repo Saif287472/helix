@@ -86,6 +86,15 @@ foreach ($scope in @("local", "shared", "remote")) {
     }
 }
 
+Invoke-Step "Tests: services/helix_remote_backend" {
+    Push-Location services/helix_remote_backend
+    try {
+        dart test
+    } finally {
+        Pop-Location
+    }
+}
+
 Invoke-Step "Dependency health advisory" {
     flutter pub outdated
 }

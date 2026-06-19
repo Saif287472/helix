@@ -21,7 +21,6 @@ class DoubleRatchetSession {
   /// Encrypt a payload using the next Sending Chain key.
   /// Ratchets the sending chain forward.
   Future<Uint8List> encrypt(Uint8List plaintext) async {
-    // Derive Message Key (MK) and next Chain Key from current Chain Key
     final derived = await _ratchetSymmetric(sendingChainKey, 'sending-message-key');
     sendingChainKey = derived.nextChainKey;
 
@@ -38,24 +37,33 @@ class DoubleRatchetSession {
   }
 
   /// Decrypt a ciphertext using the next Receiving Chain key.
-  /// Ratchets the receiving chain forward.
+  ///
+  /// SECURITY: Candidate receiving state is derived in temporary memory first.
+  /// The persisted [receivingChainKey] is only replaced AFTER authenticated
+  /// decryption succeeds. An authentication failure leaves the session state
+  /// unchanged so the caller can retry with a valid ciphertext.
   Future<Uint8List> decrypt(Uint8List ciphertextBytes) async {
+    // Step 1 — derive candidate state WITHOUT mutating persisted state.
     final derived = await _ratchetSymmetric(receivingChainKey, 'sending-message-key');
-    receivingChainKey = derived.nextChainKey;
+    final candidateNextChainKey = derived.nextChainKey;
 
     final mkBytes = await derived.messageKey.extractBytes();
-    
-    // Parse nonce & tag from GCM ciphertext concatenation: nonce (12B) || cipher || tag (16B)
+
     final box = crypto.SecretBox.fromConcatenation(
       ciphertextBytes,
       nonceLength: 12,
       macLength: 16,
     );
 
+    // Step 2 — attempt authenticated decryption. Throws on auth failure.
+    // Do NOT advance state before this call.
     final plaintext = await aesGcm.decrypt(
       box,
       secretKey: crypto.SecretKey(mkBytes),
     );
+
+    // Step 3 — auth succeeded; now advance persisted receiving chain.
+    receivingChainKey = candidateNextChainKey;
 
     return Uint8List.fromList(plaintext);
   }

@@ -1,10 +1,32 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_local_storage/data/database.dart';
 
 void main() {
+  setUpAll(() {
+    if (Platform.isWindows) {
+      var dir = Directory.current;
+      String? foundPath;
+      for (int i = 0; i < 5; i++) {
+        final candidate = p.join(dir.path, '.dart_tool', 'lib', 'sqlite3.dll');
+        if (File(candidate).existsSync()) {
+          foundPath = candidate;
+          break;
+        }
+        final parent = dir.parent;
+        if (parent.path == dir.path) break;
+        dir = parent;
+      }
+      if (foundPath != null) {
+        DynamicLibrary.open(foundPath);
+      }
+    }
+  });
+
   late Directory tempDir;
 
   setUp(() async {
@@ -287,7 +309,9 @@ void main() {
       file.writeAsBytesSync([0x00, 0x01, 0x02, 0xFF, 0xDE, 0xAD]);
 
       final db = HelixDatabase(file);
-      expect(db.initialize, throwsA(isA<Exception>()));
+      // sqlite3 throws SqliteException (which is an Error, not Exception) on
+      // corrupt files. Use throwsA(anything) to catch both Error and Exception.
+      expect(db.initialize, throwsA(anything));
     });
   });
 }

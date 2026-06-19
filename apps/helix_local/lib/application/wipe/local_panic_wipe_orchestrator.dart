@@ -45,7 +45,10 @@ class WipeResult {
   /// Per-step error strings. Empty when [phase] is [WipePhase.complete].
   final List<String> errors;
 
-  bool get succeeded => errors.isEmpty;
+  /// True only when the wipe ran to completion with no errors.
+  /// Requires [phase] == [WipePhase.complete] — an empty [errors] list with
+  /// [WipePhase.partialFailure] does not constitute success.
+  bool get succeeded => phase == WipePhase.complete && errors.isEmpty;
 }
 
 class LocalPanicWipeOrchestrator {

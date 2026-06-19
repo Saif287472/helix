@@ -13,6 +13,18 @@ import 'package:sqlite3/sqlite3.dart';
 
 import 'package:helix_local_domain/domain/models.dart';
 
+/// Thrown by [HelixDatabase.deleteFiles] when one or more database files
+/// cannot be deleted. The wipe orchestrator treats this as a partial failure
+/// and records it in [WipeResult.errors].
+class WipeDatabaseDeleteException implements Exception {
+  WipeDatabaseDeleteException(this.failedPaths);
+  final List<String> failedPaths;
+
+  @override
+  String toString() =>
+      'WipeDatabaseDeleteException: failed to delete ${failedPaths.join(', ')}';
+}
+
 /// SQLite wrapper that owns the database connection and provides typed CRUD
 /// helpers for the peers_cache table.
 class HelixDatabase {
@@ -152,18 +164,28 @@ class HelixDatabase {
   /// file and its WAL and SHM companions.
   ///
   /// After this call the [HelixDatabase] instance must not be used again.
+  ///
+  /// Throws a [WipeDatabaseDeleteException] if any file cannot be deleted.
+  /// The WAL checkpoint failure is non-fatal (the file is still deleted
+  /// without a full checkpoint), but all three file deletions are attempted
+  /// before an exception is thrown so the caller receives the full failure list.
   void deleteFiles() {
     try {
       _db.execute('PRAGMA wal_checkpoint(FULL);');
     } catch (_) {}
     _db.close();
+    final failedPaths = <String>[];
     for (final suffix in ['', '-wal', '-shm']) {
       final f = File('${_file.path}$suffix');
-      if (f.existsSync()) {
-        try {
-          f.deleteSync();
-        } catch (_) {}
+      if (!f.existsSync()) continue;
+      try {
+        f.deleteSync();
+      } catch (e) {
+        failedPaths.add('${f.path}: $e');
       }
+    }
+    if (failedPaths.isNotEmpty) {
+      throw WipeDatabaseDeleteException(failedPaths);
     }
   }
 

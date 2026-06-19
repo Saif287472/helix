@@ -11,6 +11,16 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  helix_remote_domain:
+    path: ../../packages/remote/helix_remote_domain
+  helix_remote_crypto:
+    path: ../../packages/remote/helix_remote_crypto
+  helix_remote_storage:
+    path: ../../packages/remote/helix_remote_storage
+  helix_remote_sync:
+    path: ../../packages/remote/helix_remote_sync
+  path: any
+  path_provider: any
 
 dev_dependencies:
   flutter_test:

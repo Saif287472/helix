@@ -50,6 +50,9 @@ for pkg in packages/local/*/ packages/shared/*/ packages/remote/*/; do
   fi
 done
 
+step "Tests: services/helix_remote_backend"
+(cd services/helix_remote_backend && dart test)
+
 step "Dependency health advisory"
 flutter pub outdated
 

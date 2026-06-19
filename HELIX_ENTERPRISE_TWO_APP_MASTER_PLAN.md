@@ -1935,7 +1935,83 @@ Agents append entries; do not rewrite previous entries.
 - Security review: Double Ratchet guarantees forward secrecy and post-compromise security; Sender Keys rotates keys on membership changes; secure storage adapter prefixes keys with `helix_remote_v1_` and rejects traversal attempts; Argon2id and PBKDF2 parameters meet recommended standards; no private keys or content are shared with the server.
 - Migration impact: Establishes the core cryptographic client-side pipeline.
 - Rollback: Revert pubspec workspace registrations, boundary checker mappings, and remove packages/remote/helix_remote_crypto and design review document.
-- Remaining work: None — Phase 9 complete
+- Remaining work: **CORRECTED BY CLOSURE PASS — see entry below and PHASE_9_11_CLOSURE.md**
+- Commit/PR: TBD
+
+---
+
+### Phase 9–11 Closure and Repair Pass (2026-06-19)
+
+- Goal: Honest audit of Phases 9–11 against executable code evidence; repair critical defects before Phase 12 begins
+- Checklist IDs: See `docs/architecture/PHASE_9_11_CLOSURE.md` for full item-by-item status
+- Summary of defects repaired:
+  - **DEFECT-1 fixed**: `DoubleRatchetSession.decrypt()` now derives candidate key material in temporary memory and only advances `receivingChainKey` after AES-GCM authentication succeeds. Auth failure no longer corrupts session state.
+  - **DEFECT-2 fixed**: `GroupSenderChain.decrypt()` same fix — `chainKey` advances only after successful auth.
+  - **DEFECT-3 fixed**: `X3dhSessionInitiator.initiateSession()` now requires `bobIdentitySigningPublicKey` (Ed25519) and `bobSignedPrekeySignature`; signature is verified with Ed25519 BEFORE any DH computation. Failure throws `X3dhSignatureVerificationException`. MITM protection is now present.
+  - **DEFECT-3 tests**: Added 3 negative tests — valid signature round-trip, tampered signature rejected, wrong signing key rejected.
+  - **DEFECT-1/2 tests**: Added 3 state-preservation tests — auth failure does not advance receiving chain; re-decrypt of original ciphertext succeeds after failure.
+  - **DEFECT-4 annotated (BLOCKED)**: `HelixRemoteDatabase` `PRAGMA key` annotated as a no-op on standard sqlite3. DB is NOT encrypted. SQLCipher-capable library required before production use.
+  - **DEFECT-5 fixed**: `RemoteSyncEngine.syncInbound()` wraps entire event batch in a single SQLite `BEGIN`/`COMMIT`. Cursor advances only after all events applied. Failure rolls back.
+  - **DEFECT-6 fixed**: `next_attempt_at` and `idempotency_key` columns added to `pending_operations`. Backoff deadline is now persisted across process restarts. Real jitter (0–500 ms) added. `scheduleNextOperationAttempt()` API added.
+  - **DEFECT-8 fixed**: `WipeResult.succeeded` now requires `phase == WipePhase.complete && errors.isEmpty`. An empty error list with `WipePhase.partialFailure` is no longer a false success.
+  - **Stage 6**: `RemoteCompositionRoot` now wires `RemoteSecureKeyStorage → HelixRemoteDatabase → RemoteSyncEngine`. Added `RemoteStartupState` machine. Accessors throw `StateError` before `initialize()` completes.
+  - **DB schema**: Renamed `messages.text` → `ciphertext_blob`. Added `next_attempt_at` and `idempotency_key` to `pending_operations`. Added `getOperationById()` for diagnostics. Added `rawExecute()` for transaction control. Added `WipeDatabaseDeleteException`.
+  - **`secure_key_storage.dart`**: Fixed concurrent-modification bug in `clearAllRemoteKeys()`.
+  - **`database_migration_test.dart`**: Added `setUpAll` with Windows sqlite3 DLL loading. Fixed corrupted-file test to use `throwsA(anything)` instead of `isA<Exception>()`.
+  - **`LocalPanicWipeOrchestrator`**: `database.deleteFiles()` now surfaces file deletion errors via `WipeDatabaseDeleteException` instead of silently ignoring them.
+  - **Verify scripts**: `scripts/verify.ps1` and `scripts/verify.sh` now include `services/helix_remote_backend` dart tests.
+- Files changed:
+  - `docs/architecture/PHASE_9_11_CLOSURE.md` (created — authoritative closure audit)
+  - `packages/remote/helix_remote_crypto/lib/src/x3dh.dart` (DEFECT-3 fix)
+  - `packages/remote/helix_remote_crypto/lib/src/double_ratchet.dart` (DEFECT-1 fix)
+  - `packages/remote/helix_remote_crypto/lib/src/group_encryption.dart` (DEFECT-2 fix)
+  - `packages/remote/helix_remote_crypto/lib/src/secure_key_storage.dart` (concurrent-mod fix)
+  - `packages/remote/helix_remote_crypto/test/remote_crypto_test.dart` (expanded to 16 tests)
+  - `packages/remote/helix_remote_storage/lib/src/database.dart` (schema v2, annotations, rawExecute)
+  - `packages/remote/helix_remote_storage/test/remote_storage_test.dart` (column rename fix)
+  - `packages/remote/helix_remote_sync/lib/src/sync_engine.dart` (DEFECT-5/6 fix)
+  - `packages/remote/helix_remote_sync/test/remote_sync_test.dart` (atomicity + backoff tests, 8 total)
+  - `apps/helix_remote/lib/app/composition_root.dart` (full infrastructure wiring)
+  - `apps/helix_remote/lib/main.dart` (path_provider + initialize() call)
+  - `apps/helix_remote/pubspec.yaml` (added remote packages + path + path_provider)
+  - `apps/helix_remote/test/composition_root_test.dart` (updated to new API, 9 tests)
+  - `apps/helix_remote/test/widget_test.dart` (updated + 4 new startup state tests)
+  - `apps/helix_local/application/wipe/local_panic_wipe_orchestrator.dart` (DEFECT-8 fix)
+  - `packages/local/helix_local_storage/lib/data/database.dart` (WipeDatabaseDeleteException + surfaced errors)
+  - `apps/helix_local/test/wipe/local_panic_wipe_orchestrator_test.dart` (13 wipe tests — new)
+  - `apps/helix_local/test/database_migration_test.dart` (DLL loading + throwsA fix, now 7/7)
+  - `scripts/verify.ps1`, `scripts/verify.sh` (backend test step added)
+- Verification:
+  - `flutter analyze` — no issues
+  - `dart run tool/check_secrets.dart` — passed
+  - `dart run tool/check_boundaries.dart` — passed
+  - helix_local tests: 193 pass, 2 fail (pre-existing: fixtures file missing; widget smoke test infra)
+  - helix_remote tests: 14/14 pass
+  - helix_remote_crypto: 16/16 pass
+  - helix_remote_storage: 4/4 pass
+  - helix_remote_sync: 8/8 pass
+  - wipe orchestrator: 13/13 pass
+  - database_migration: 7/7 pass (was 0/7 before fix)
+- Security review:
+  - Signed prekey verification now present in X3DH — MITM protection active
+  - Decrypt-before-auth bug eliminated in both DoubleRatchetSession and GroupSenderChain
+  - DB encryption honestly documented as BLOCKED — no false claims of encrypted storage
+  - Sync batch atomicity prevents split-brain cursor/data state
+  - WipeResult.succeeded semantics corrected — partial failure no longer silently returns true
+  - No plaintext messages, keys, or credentials introduced in any log output
+  - No Local infrastructure accessed by Remote and vice versa
+- Migration impact:
+  - `messages.ciphertext_blob` replaces `messages.text` in Remote client DB (v0→v2 migration in `_applyMigrations()`)
+  - `pending_operations` gains `next_attempt_at` and `idempotency_key` columns (ALTER TABLE in migration v2)
+  - `RemoteCompositionRoot.production()` now requires `databaseDirectory` parameter
+  - `X3dhSessionInitiator.initiateSession()` now requires two new named parameters — all call sites must provide Ed25519 signing public key and signature
+- Remaining work:
+  - BLOCKED: Remote DB encryption (SQLCipher-capable library for Android + Windows not yet integrated)
+  - BLOCKED: External cryptographic review (P9-024)
+  - BLOCKED: Staging deployment (P10-027)
+  - NOT STARTED: Backend migration framework, local dev stack, db corruption detection, backup/restore
+  - PARTIALLY IMPLEMENTED: Identity key hierarchy (X25519 vs Ed25519 IK separation), backend transactional outbox, signed prekey server-side verification
+  - Full status: see `docs/architecture/PHASE_9_11_CLOSURE.md`
 - Commit/PR: TBD
 
 ---

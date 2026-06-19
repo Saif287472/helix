@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'app/composition_root.dart';
 
-void main() {
-  final root = RemoteCompositionRoot.production();
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final appDir = await getApplicationDocumentsDirectory();
+  final root = RemoteCompositionRoot.production(
+    databaseDirectory: appDir.path,
+  );
+  await root.initialize();
   runApp(HelixRemoteApp(root: root));
 }
 

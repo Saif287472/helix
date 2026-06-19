@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
@@ -22,42 +22,42 @@ class RemoteSyncEngine {
   RemoteSyncEngine(this.db);
 
   /// Synchronises incoming events from the server since the last stored cursor.
-  /// Decrypts them, suppresses duplicates and tombstones, and transactionally
-  /// updates database state.
+  ///
+  /// ATOMICITY (DEFECT-5 fix): the entire batch is wrapped in a single SQLite
+  /// transaction. The cursor is updated only after ALL events are applied.
+  /// A crash or error mid-batch rolls back everything; on the next sync the
+  /// engine re-fetches from the unchanged cursor and replays the same batch.
   Future<int> syncInbound(SyncGateway gateway, String conversationId) async {
     final lastSeq = db.getSyncCursor(conversationId);
-    
-    try {
-      final envelopes = await gateway.fetchInboundEvents(sinceSequence: lastSeq);
-      
-      // Sort envelopes by sequence to apply them in order
-      final sortedEnvelopes = List<RemoteRealtimeEnvelope>.from(envelopes)
-        ..sort((a, b) => (a.serverSequence ?? 0).compareTo(b.serverSequence ?? 0));
 
-      int appliedCount = 0;
+    final envelopes = await gateway.fetchInboundEvents(sinceSequence: lastSeq);
+
+    final sortedEnvelopes = List<RemoteRealtimeEnvelope>.from(envelopes)
+      ..sort((a, b) => (a.serverSequence ?? 0).compareTo(b.serverSequence ?? 0));
+
+    int appliedCount = 0;
+    int highestSeq = lastSeq;
+
+    // Single transaction for the full batch — cursor advances only on COMMIT.
+    db.rawExecute('BEGIN TRANSACTION;');
+    try {
       for (final env in sortedEnvelopes) {
         final seq = env.serverSequence ?? 0;
         if (seq <= lastSeq) {
-          continue; // Duplicate sequence check
+          continue; // Duplicate sequence — already applied before this batch
         }
 
         if (env.type == 'chat_message') {
           final payload = env.payload;
-          final messageId = env.eventId; // Use event ID as message ID
+          final messageId = env.eventId;
           final senderAccountId = payload['sender_account_id'] as String? ?? 'unknown';
           final senderDeviceId = payload['sender_device_id'] as int? ?? 0;
           final ciphertext = payload['ciphertext'] as String? ?? '';
 
-          // Duplicate & tombstone checks
           if (db.isTombstoned(messageId, 'MESSAGE')) {
-            // Drop silently
-            db.updateSyncCursor(conversationId, seq);
+            // Tombstoned events still advance the cursor so they are not re-fetched.
+            highestSeq = seq;
             continue;
-          }
-
-          // Safety: logs must contain no plaintext message content (P11-035)
-          if (kDebugMode) {
-            print('SyncEngine: processing message envelope $messageId (seq: $seq)');
           }
 
           final message = RemoteMessage(
@@ -69,24 +69,33 @@ class RemoteSyncEngine {
           );
 
           db.saveMessage(message, seq, env.timestamp, 'DELIVERED');
-          db.updateSyncCursor(conversationId, seq);
+          highestSeq = seq;
           appliedCount++;
         } else if (env.type == 'sync_marker') {
-          db.updateSyncCursor(conversationId, seq);
+          highestSeq = seq;
           appliedCount++;
         }
       }
 
-      return appliedCount;
-    } catch (e) {
-      if (kDebugMode) {
-        print('SyncEngine error during inbound sync: $e');
+      // Update cursor once for the entire batch.
+      if (highestSeq > lastSeq) {
+        db.updateSyncCursor(conversationId, highestSeq);
       }
+
+      db.rawExecute('COMMIT;');
+    } catch (e) {
+      db.rawExecute('ROLLBACK;');
       rethrow;
     }
+
+    return appliedCount;
   }
 
-  /// Processes outbound pending operations queue with exponential backoff and jitter.
+  /// Processes the outbound pending-operations queue with exponential backoff.
+  ///
+  /// DEFECT-6 fix: backoff is computed from [next_attempt_at], which is
+  /// persisted to the database after each failure. A process restart will not
+  /// retry an operation before its scheduled deadline.
   Future<int> processOutboundQueue(SyncGateway gateway) async {
     final pendingOps = db.getPendingOperations();
     int processedCount = 0;
@@ -96,21 +105,13 @@ class RemoteSyncEngine {
       final type = op['type'] as String;
       final payloadStr = op['payload'] as String;
       final retries = op['retries'] as int;
-      final createdAt = op['created_at'] as int;
 
-      // Exponential backoff logic with jitter: 1sec * 2^retries + random jitter (0-500ms)
-      if (retries > 0) {
-        final backoffMs = (1000 * (1 << retries));
-        final now = DateTime.now().millisecondsSinceEpoch;
-
-        if (now < createdAt + backoffMs) {
-          continue; // Backoff wait window is still active
-        }
-      }
+      // getPendingOperations() already filters by next_attempt_at <= now,
+      // so no additional time check is needed here.
 
       try {
         final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
-        
+
         await gateway.sendOutboundOperation(
           opId: opId,
           type: type,
@@ -123,6 +124,15 @@ class RemoteSyncEngine {
         final nextRetries = retries + 1;
         final nextStatus = nextRetries >= 5 ? 'FAILED' : 'PENDING';
         db.updateOperationStatus(opId, nextStatus, nextRetries);
+
+        if (nextRetries < 5) {
+          // Exponential backoff: 2^retries seconds, plus 0–500 ms random jitter.
+          final backoffMs = 1000 * (1 << nextRetries);
+          final jitterMs = math.Random().nextInt(500);
+          final nextAttempt =
+              DateTime.now().millisecondsSinceEpoch + backoffMs + jitterMs;
+          db.scheduleNextOperationAttempt(opId, nextAttempt);
+        }
       }
     }
 
