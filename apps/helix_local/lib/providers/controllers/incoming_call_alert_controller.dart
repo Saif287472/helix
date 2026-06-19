@@ -72,17 +72,19 @@ final incomingCallAlertControllerProvider = Provider<void>((ref) {
         call.direction == CallDirection.incoming &&
         call.status == CallStatus.ringing;
 
-    operation = operation.then((_) async {
-      if (isIncomingRinging) {
-        if (alertingCallId == call.callId) return;
-        await stopAlert();
-        if (token != generation) return;
-        await startAlert(call, token);
-      } else {
-        if (alertingCallId == null) return;
-        await stopAlert();
-      }
-    }).catchError((_) {});
+    operation = operation
+        .then((_) async {
+          if (isIncomingRinging) {
+            if (alertingCallId == call.callId) return;
+            await stopAlert();
+            if (token != generation) return;
+            await startAlert(call, token);
+          } else {
+            if (alertingCallId == null) return;
+            await stopAlert();
+          }
+        })
+        .catchError((_) {});
   }
 
   ref.listen<AsyncValue<CallState?>>(currentCallProvider, (previous, next) {

@@ -104,9 +104,11 @@ class HelixDatabase {
         'ALTER TABLE threads ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;',
       );
     }
-    final hasPinned = _db.select(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='pinned_messages'",
-    ).isNotEmpty;
+    final hasPinned = _db
+        .select(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='pinned_messages'",
+        )
+        .isNotEmpty;
     if (!hasPinned) {
       _db.execute('''
         CREATE TABLE IF NOT EXISTS pinned_messages (

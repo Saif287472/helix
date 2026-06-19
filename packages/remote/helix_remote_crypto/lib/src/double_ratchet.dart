@@ -21,7 +21,10 @@ class DoubleRatchetSession {
   /// Encrypt a payload using the next Sending Chain key.
   /// Ratchets the sending chain forward.
   Future<Uint8List> encrypt(Uint8List plaintext) async {
-    final derived = await _ratchetSymmetric(sendingChainKey, 'sending-message-key');
+    final derived = await _ratchetSymmetric(
+      sendingChainKey,
+      'sending-message-key',
+    );
     sendingChainKey = derived.nextChainKey;
 
     final mkBytes = await derived.messageKey.extractBytes();
@@ -44,7 +47,10 @@ class DoubleRatchetSession {
   /// unchanged so the caller can retry with a valid ciphertext.
   Future<Uint8List> decrypt(Uint8List ciphertextBytes) async {
     // Step 1 — derive candidate state WITHOUT mutating persisted state.
-    final derived = await _ratchetSymmetric(receivingChainKey, 'sending-message-key');
+    final derived = await _ratchetSymmetric(
+      receivingChainKey,
+      'sending-message-key',
+    );
     final candidateNextChainKey = derived.nextChainKey;
 
     final mkBytes = await derived.messageKey.extractBytes();
@@ -68,7 +74,10 @@ class DoubleRatchetSession {
     return Uint8List.fromList(plaintext);
   }
 
-  Future<_RatchetStepResult> _ratchetSymmetric(crypto.SecretKey chainKey, String info) async {
+  Future<_RatchetStepResult> _ratchetSymmetric(
+    crypto.SecretKey chainKey,
+    String info,
+  ) async {
     final mk = await hkdf.deriveKey(
       secretKey: chainKey,
       nonce: List.filled(32, 0),

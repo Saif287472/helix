@@ -14,12 +14,12 @@ class RemoteDevice {
   final String status;
 
   Map<String, dynamic> toJson() => {
-        'device_id': deviceId,
-        'device_name': deviceName,
-        'device_public_key': devicePublicKey,
-        'created_at': createdAt.toIso8601String(),
-        'status': status,
-      };
+    'device_id': deviceId,
+    'device_name': deviceName,
+    'device_public_key': devicePublicKey,
+    'created_at': createdAt.toIso8601String(),
+    'status': status,
+  };
 
   factory RemoteDevice.fromJson(Map<String, dynamic> json) {
     return RemoteDevice(

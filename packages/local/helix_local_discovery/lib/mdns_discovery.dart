@@ -12,8 +12,8 @@ class MdnsDiscovery {
   MdnsDiscovery({
     String methodChannelName = kMdnsMethodChannel,
     String eventChannelName = kMdnsEventChannel,
-  })  : _method = MethodChannel(methodChannelName),
-        _event = EventChannel(eventChannelName);
+  }) : _method = MethodChannel(methodChannelName),
+       _event = EventChannel(eventChannelName);
 
   bool _running = false;
   bool _discoverable = false;

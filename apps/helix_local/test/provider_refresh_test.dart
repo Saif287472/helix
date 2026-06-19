@@ -8,7 +8,9 @@ import 'package:helix/infrastructure/scheduler/timer_disconnect_wipe_scheduler.d
 
 void main() {
   test('thread provider updates when messaging service mutates', () async {
-    final messaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
+    final messaging = MessagingService(
+      wipeScheduler: TimerDisconnectWipeScheduler(),
+    );
     final container = ProviderContainer(
       overrides: [messagingServiceProvider.overrideWithValue(messaging)],
     );
@@ -45,7 +47,9 @@ void main() {
   });
 
   test('one-way inbox updates when a one-way message is received', () async {
-    final messaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
+    final messaging = MessagingService(
+      wipeScheduler: TimerDisconnectWipeScheduler(),
+    );
     final container = ProviderContainer(
       overrides: [messagingServiceProvider.overrideWithValue(messaging)],
     );

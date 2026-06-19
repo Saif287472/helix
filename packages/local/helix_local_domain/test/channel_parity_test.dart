@@ -25,19 +25,24 @@ void main() {
       expect(
         kMdnsMethodChannel,
         equals('com.helix.local/mdns'),
-        reason: 'Must match MDNS_CHANNEL in MainActivity.kt and '
+        reason:
+            'Must match MDNS_CHANNEL in MainActivity.kt and '
             '"com.helix.local/mdns" in mdns_plugin.cpp',
       );
     });
 
-    test('mDNS event channel matches Kotlin MDNS_EVT_CHANNEL and C++ plugin', () {
-      expect(
-        kMdnsEventChannel,
-        equals('com.helix.local/mdns/events'),
-        reason: 'Must match MDNS_EVT_CHANNEL in MainActivity.kt and '
-            '"com.helix.local/mdns/events" in mdns_plugin.cpp',
-      );
-    });
+    test(
+      'mDNS event channel matches Kotlin MDNS_EVT_CHANNEL and C++ plugin',
+      () {
+        expect(
+          kMdnsEventChannel,
+          equals('com.helix.local/mdns/events'),
+          reason:
+              'Must match MDNS_EVT_CHANNEL in MainActivity.kt and '
+              '"com.helix.local/mdns/events" in mdns_plugin.cpp',
+        );
+      },
+    );
 
     test('Windows App User Model ID matches com.helix.local package', () {
       expect(

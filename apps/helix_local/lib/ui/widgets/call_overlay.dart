@@ -117,10 +117,7 @@ class _MinimizedCallBar extends ConsumerWidget {
           child: Material(
             color: Colors.green.shade800,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
                   const Icon(Icons.call, color: Colors.white, size: 18),
@@ -179,10 +176,7 @@ class _IncomingCallBanner extends ConsumerWidget {
             borderRadius: BorderRadius.circular(16),
             elevation: 6,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
                 children: [
                   CircleAvatar(
@@ -227,13 +221,15 @@ class _IncomingCallBanner extends ConsumerWidget {
                     icon: Icons.call_end,
                     color: Colors.red,
                     tooltip: 'Decline',
-                    onTap: () => ref.read(callServiceProvider).declineIncomingCall(),
+                    onTap: () =>
+                        ref.read(callServiceProvider).declineIncomingCall(),
                   ),
                   _BannerButton(
                     icon: Icons.call,
                     color: Colors.green,
                     tooltip: 'Accept',
-                    onTap: () => ref.read(callServiceProvider).acceptIncomingCall(),
+                    onTap: () =>
+                        ref.read(callServiceProvider).acceptIncomingCall(),
                   ),
                 ],
               ),
@@ -269,11 +265,7 @@ class _BannerButton extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(icon, color: color),
-        ),
+        child: SizedBox(width: 48, height: 48, child: Icon(icon, color: color)),
       ),
     );
   }

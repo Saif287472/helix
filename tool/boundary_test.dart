@@ -16,12 +16,15 @@ void main() {
   });
 
   test('no boundary violations exist', () async {
-    final configFile = File('${root.path}/docs/architecture/module_boundaries.json');
+    final configFile = File(
+      '${root.path}/docs/architecture/module_boundaries.json',
+    );
     final violations = await checkBoundaries(root, configFile);
 
     if (violations.isNotEmpty) {
       final lines = violations.map(
-        (v) => '  ${v.source}:${v.line}: ${v.importUri}\n'
+        (v) =>
+            '  ${v.source}:${v.line}: ${v.importUri}\n'
             '    -> ${v.target}\n'
             '    reason: ${v.reason}',
       );
@@ -30,7 +33,9 @@ void main() {
   });
 
   test('apps/helix_remote imports no packages/local/** files', () async {
-    final configFile = File('${root.path}/docs/architecture/module_boundaries.json');
+    final configFile = File(
+      '${root.path}/docs/architecture/module_boundaries.json',
+    );
     final violations = await checkBoundaries(root, configFile);
     final remoteToLocal = violations.where(
       (v) =>
@@ -45,7 +50,9 @@ void main() {
   });
 
   test('apps/helix_local imports no packages/remote/** files', () async {
-    final configFile = File('${root.path}/docs/architecture/module_boundaries.json');
+    final configFile = File(
+      '${root.path}/docs/architecture/module_boundaries.json',
+    );
     final violations = await checkBoundaries(root, configFile);
     final localToRemote = violations.where(
       (v) =>
@@ -60,7 +67,9 @@ void main() {
   });
 
   test('packages/shared imports no product packages', () async {
-    final configFile = File('${root.path}/docs/architecture/module_boundaries.json');
+    final configFile = File(
+      '${root.path}/docs/architecture/module_boundaries.json',
+    );
     final violations = await checkBoundaries(root, configFile);
     final sharedToProduct = violations.where(
       (v) =>
@@ -71,7 +80,8 @@ void main() {
     expect(
       sharedToProduct,
       isEmpty,
-      reason: 'Shared packages must not import from either product package tree',
+      reason:
+          'Shared packages must not import from either product package tree',
     );
   });
 

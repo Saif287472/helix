@@ -30,7 +30,11 @@ class WebRtcCallEngine implements CallEngine {
   }
 
   @override
-  Future<String> createAnswer(String callId, String offerSdp, {bool video = false}) async {
+  Future<String> createAnswer(
+    String callId,
+    String offerSdp, {
+    bool video = false,
+  }) async {
     final session = await _getOrCreateSession(callId, video: video);
     await session.pc.setRemoteDescription(
       RTCSessionDescription(offerSdp, 'offer'),
@@ -121,8 +125,12 @@ class WebRtcCallEngine implements CallEngine {
       session.localRenderer.srcObject = session.localStream;
       session.auxiliaryStreams.add(videoStream);
     } catch (_) {
-      try { await videoTrack?.stop(); } catch (_) {}
-      try { await videoStream?.dispose(); } catch (_) {}
+      try {
+        await videoTrack?.stop();
+      } catch (_) {}
+      try {
+        await videoStream?.dispose();
+      } catch (_) {}
       rethrow;
     }
   }
@@ -144,8 +152,10 @@ class WebRtcCallEngine implements CallEngine {
     }
   }
 
-  RTCVideoRenderer? localRendererFor(String callId) => _sessions[callId]?.localRenderer;
-  RTCVideoRenderer? remoteRendererFor(String callId) => _sessions[callId]?.remoteRenderer;
+  RTCVideoRenderer? localRendererFor(String callId) =>
+      _sessions[callId]?.localRenderer;
+  RTCVideoRenderer? remoteRendererFor(String callId) =>
+      _sessions[callId]?.remoteRenderer;
 
   @override
   Future<void> endCall(String callId) async {
@@ -156,7 +166,9 @@ class WebRtcCallEngine implements CallEngine {
 
     if (pending != null) {
       _CallSession? lateSession;
-      try { lateSession = await pending; } catch (_) {}
+      try {
+        lateSession = await pending;
+      } catch (_) {}
       await lateSession?.disposeBestEffort();
     }
   }
@@ -174,7 +186,9 @@ class WebRtcCallEngine implements CallEngine {
     _creating.clear();
     for (final fut in creatingFutures) {
       _CallSession? lateSession;
-      try { lateSession = await fut; } catch (_) {}
+      try {
+        lateSession = await fut;
+      } catch (_) {}
       await lateSession?.disposeBestEffort();
     }
     if (!_eventsController.isClosed) await _eventsController.close();
@@ -182,7 +196,10 @@ class WebRtcCallEngine implements CallEngine {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
-  Future<_CallSession> _getOrCreateSession(String callId, {bool video = false}) async {
+  Future<_CallSession> _getOrCreateSession(
+    String callId, {
+    bool video = false,
+  }) async {
     if (_disposed) throw StateError('Engine disposed');
 
     if (_sessions.containsKey(callId)) {
@@ -206,7 +223,10 @@ class WebRtcCallEngine implements CallEngine {
     });
   }
 
-  Future<_CallSession> _createSession(String callId, {bool video = false}) async {
+  Future<_CallSession> _createSession(
+    String callId, {
+    bool video = false,
+  }) async {
     MediaStream? stream;
     MediaStream? remoteStream;
     RTCVideoRenderer? localRenderer;
@@ -311,15 +331,27 @@ class WebRtcCallEngine implements CallEngine {
       );
     } catch (e) {
       // Dispose resources that were successfully created before the failure.
-      try { await pc?.close(); } catch (_) {}
-      try { await localRenderer?.dispose(); } catch (_) {}
-      try { await remoteRenderer?.dispose(); } catch (_) {}
-      try { await remoteStream?.dispose(); } catch (_) {}
+      try {
+        await pc?.close();
+      } catch (_) {}
+      try {
+        await localRenderer?.dispose();
+      } catch (_) {}
+      try {
+        await remoteRenderer?.dispose();
+      } catch (_) {}
+      try {
+        await remoteStream?.dispose();
+      } catch (_) {}
       if (stream != null) {
         for (final track in stream.getTracks()) {
-          try { await track.stop(); } catch (_) {}
+          try {
+            await track.stop();
+          } catch (_) {}
         }
-        try { await stream.dispose(); } catch (_) {}
+        try {
+          await stream.dispose();
+        } catch (_) {}
       }
       rethrow;
     }
@@ -369,19 +401,35 @@ class _CallSession {
 
   Future<void> disposeBestEffort() async {
     for (final track in localStream.getTracks()) {
-      try { await track.stop(); } catch (_) {}
+      try {
+        await track.stop();
+      } catch (_) {}
     }
-    try { await localStream.dispose(); } catch (_) {}
+    try {
+      await localStream.dispose();
+    } catch (_) {}
     for (final stream in auxiliaryStreams) {
       for (final track in stream.getTracks()) {
-        try { await track.stop(); } catch (_) {}
+        try {
+          await track.stop();
+        } catch (_) {}
       }
-      try { await stream.dispose(); } catch (_) {}
+      try {
+        await stream.dispose();
+      } catch (_) {}
     }
     auxiliaryStreams.clear();
-    try { await remoteStream.dispose(); } catch (_) {}
-    try { await pc.close(); } catch (_) {}
-    try { await localRenderer.dispose(); } catch (_) {}
-    try { await remoteRenderer.dispose(); } catch (_) {}
+    try {
+      await remoteStream.dispose();
+    } catch (_) {}
+    try {
+      await pc.close();
+    } catch (_) {}
+    try {
+      await localRenderer.dispose();
+    } catch (_) {}
+    try {
+      await remoteRenderer.dispose();
+    } catch (_) {}
   }
 }

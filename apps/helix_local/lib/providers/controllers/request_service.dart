@@ -157,15 +157,22 @@ class RequestService implements RequestValidator {
 
   void _pruneTrackers() {
     final now = DateTime.now();
-    _sourceTrackers.removeWhere((_, tracker) => now.difference(tracker.lastUsed).inMinutes >= 1);
-    _oneWaySendTrackers.removeWhere((_, tracker) => now.difference(tracker.lastUsed).inMinutes >= 1);
+    _sourceTrackers.removeWhere(
+      (_, tracker) => now.difference(tracker.lastUsed).inMinutes >= 1,
+    );
+    _oneWaySendTrackers.removeWhere(
+      (_, tracker) => now.difference(tracker.lastUsed).inMinutes >= 1,
+    );
   }
 
   bool tryConsumeGlobalRateLimit(int maxPerMinute) =>
       _globalTracker.tryConsume(maxPerMinute);
 
   bool tryConsumeSourceRateLimit(String fingerprint, int maxPerMinute) =>
-      (_sourceTrackers..removeWhere((_, tracker) => DateTime.now().difference(tracker.lastUsed).inMinutes >= 1))
+      (_sourceTrackers..removeWhere(
+            (_, tracker) =>
+                DateTime.now().difference(tracker.lastUsed).inMinutes >= 1,
+          ))
           .putIfAbsent(fingerprint, () => _SourceTracker())
           .tryConsume(maxPerMinute);
 
@@ -292,8 +299,9 @@ class RequestService implements RequestValidator {
       socket.destroy();
       socket = null;
 
-      acceptedSocket =
-          await secureListener.first.timeout(const Duration(seconds: 15));
+      acceptedSocket = await secureListener.first.timeout(
+        const Duration(seconds: 15),
+      );
       channel = await SecureChannel.acceptConnection(
         rawSocket: acceptedSocket,
         localIdentity: localIdentity,
@@ -574,7 +582,9 @@ class RequestService implements RequestValidator {
       await socket.flush();
       socket.destroy();
 
-      acceptedSocket = await listener.first.timeout(const Duration(seconds: 15));
+      acceptedSocket = await listener.first.timeout(
+        const Duration(seconds: 15),
+      );
       channel = await SecureChannel.acceptConnection(
         rawSocket: acceptedSocket,
         localIdentity: resumeConfig.identity,
@@ -601,7 +611,9 @@ class RequestService implements RequestValidator {
       await channel?.close().catchError((_) {});
       rethrow;
     } finally {
-      try { await listener?.close(); } catch (_) {}
+      try {
+        await listener?.close();
+      } catch (_) {}
     }
   }
 
@@ -733,9 +745,7 @@ class RequestService implements RequestValidator {
           subscription?.cancel();
           socket.destroy();
           if (!completer.isCompleted) {
-            completer.completeError(
-              StateError('Control packet too large'),
-            );
+            completer.completeError(StateError('Control packet too large'));
           }
           return;
         }
@@ -745,7 +755,9 @@ class RequestService implements RequestValidator {
         if (isPrefixed) {
           if (expectedLength == null && bytes.length >= 4) {
             final data = Uint8List.fromList(bytes.sublist(0, 4));
-            expectedLength = ByteData.view(data.buffer).getUint32(0, Endian.big);
+            expectedLength = ByteData.view(
+              data.buffer,
+            ).getUint32(0, Endian.big);
             if (expectedLength! < 0 || expectedLength! > maxPacketBytes) {
               subscription?.cancel();
               socket.destroy();

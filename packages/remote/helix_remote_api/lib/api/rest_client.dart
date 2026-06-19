@@ -13,9 +13,7 @@ abstract class HelixRemoteRestClient {
     required String signature,
   });
 
-  Future<Map<String, dynamic>> refreshToken({
-    required String refreshToken,
-  });
+  Future<Map<String, dynamic>> refreshToken({required String refreshToken});
 
   Future<List<RemoteDevice>> listDevices();
 
@@ -45,7 +43,5 @@ abstract class HelixRemoteRestClient {
 
   Future<Map<String, dynamic>> requestAttachmentDownload(String fileId);
 
-  Future<void> requestAccountDeletion({
-    required String confirmationPhrase,
-  });
+  Future<void> requestAccountDeletion({required String confirmationPhrase});
 }

@@ -14,12 +14,12 @@ class RemoteCallHistoryEntry {
   final int durationSeconds;
 
   Map<String, dynamic> toJson() => {
-        'call_id': callId,
-        'conversation_id': conversationId,
-        'direction': direction,
-        'start_time': startTime.toIso8601String(),
-        'duration_seconds': durationSeconds,
-      };
+    'call_id': callId,
+    'conversation_id': conversationId,
+    'direction': direction,
+    'start_time': startTime.toIso8601String(),
+    'duration_seconds': durationSeconds,
+  };
 
   factory RemoteCallHistoryEntry.fromJson(Map<String, dynamic> json) {
     return RemoteCallHistoryEntry(

@@ -34,14 +34,14 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, ConnectionRequest> requests =
-        ref.watch(pendingRequestsProvider);
+    final Map<String, ConnectionRequest> requests = ref.watch(
+      pendingRequestsProvider,
+    );
     final inboxAsync = ref.watch(oneWayInboxProvider);
     final theme = Theme.of(context);
 
     final allInbox =
-        inboxAsync.value ??
-        ref.read(messagingServiceProvider).oneWayInbox;
+        inboxAsync.value ?? ref.read(messagingServiceProvider).oneWayInbox;
     final inbox = allInbox.where(_matchesInbox).toList();
 
     final incoming =

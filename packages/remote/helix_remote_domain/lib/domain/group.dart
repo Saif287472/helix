@@ -12,11 +12,11 @@ class RemoteGroup {
   final String groupPublicKey;
 
   Map<String, dynamic> toJson() => {
-        'conversation_id': conversationId,
-        'group_name': groupName,
-        'avatar_uri': avatarUri,
-        'group_public_key': groupPublicKey,
-      };
+    'conversation_id': conversationId,
+    'group_name': groupName,
+    'avatar_uri': avatarUri,
+    'group_public_key': groupPublicKey,
+  };
 
   factory RemoteGroup.fromJson(Map<String, dynamic> json) {
     return RemoteGroup(

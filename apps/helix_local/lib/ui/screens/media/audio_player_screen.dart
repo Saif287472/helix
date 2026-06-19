@@ -101,11 +101,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: Center(
         child: Padding(
@@ -131,17 +127,21 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 value: progress.clamp(0.0, 1.0),
                 onChanged: _ready && total > 0
                     ? (v) => _player.seek(
-                          Duration(milliseconds: (v * total).round()),
-                        )
+                        Duration(milliseconds: (v * total).round()),
+                      )
                     : null,
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(_fmt(_position),
-                      style: Theme.of(context).textTheme.bodySmall),
-                  Text(_fmt(_duration),
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    _fmt(_position),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    _fmt(_duration),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -162,8 +162,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                       icon: const Icon(Icons.replay_10),
                       onPressed: () => _player.seek(
                         Duration(
-                          milliseconds:
-                              (_position.inMilliseconds - 10000).clamp(0, total),
+                          milliseconds: (_position.inMilliseconds - 10000)
+                              .clamp(0, total),
                         ),
                       ),
                     ),
@@ -182,8 +182,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                       icon: const Icon(Icons.forward_10),
                       onPressed: () => _player.seek(
                         Duration(
-                          milliseconds:
-                              (_position.inMilliseconds + 10000).clamp(0, total),
+                          milliseconds: (_position.inMilliseconds + 10000)
+                              .clamp(0, total),
                         ),
                       ),
                     ),

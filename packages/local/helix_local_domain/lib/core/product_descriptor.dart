@@ -131,12 +131,13 @@ bool isPathInScopeForDestructiveOperation(
 
   // Reject relative paths — a traversal attack outside the approved root would
   // resolve to a path that no longer starts with a drive letter or '/'.
-  final isAbsolute = candidate.startsWith('/') ||
-      RegExp(r'^[a-z]:').hasMatch(candidate);
+  final isAbsolute =
+      candidate.startsWith('/') || RegExp(r'^[a-z]:').hasMatch(candidate);
   if (!isAbsolute) return false;
 
-  final approvedFolder =
-      descriptor.appDataFolder.replaceAll('\\', '/').toLowerCase();
+  final approvedFolder = descriptor.appDataFolder
+      .replaceAll('\\', '/')
+      .toLowerCase();
 
   // The appDataFolder must appear as a complete directory component — bounded by
   // '/' on both sides, or by '/' on the left and end-of-string on the right.
@@ -148,12 +149,13 @@ bool isPathInScopeForDestructiveOperation(
 
   // Reject paths that also contain the other product's appDataFolder — a crafted
   // path that visits both products' directories must never be approved.
-  final otherFolder = (descriptor.productId == 'local'
-          ? const RemoteProductDescriptor()
-          : const LocalProductDescriptor())
-      .appDataFolder
-      .replaceAll('\\', '/')
-      .toLowerCase();
+  final otherFolder =
+      (descriptor.productId == 'local'
+              ? const RemoteProductDescriptor()
+              : const LocalProductDescriptor())
+          .appDataFolder
+          .replaceAll('\\', '/')
+          .toLowerCase();
 
   if (candidate.contains('/$otherFolder/') ||
       candidate.endsWith('/$otherFolder')) {
@@ -185,4 +187,3 @@ String _normalizeScopePath(String path) {
   final joined = parts.join('/');
   return startsWithSlash ? '/$joined' : joined;
 }
-

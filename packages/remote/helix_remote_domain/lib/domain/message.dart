@@ -14,12 +14,12 @@ class RemoteMessage {
   final String ciphertext;
 
   Map<String, dynamic> toJson() => {
-        'message_id': messageId,
-        'conversation_id': conversationId,
-        'sender_account_id': senderAccountId,
-        'sender_device_id': senderDeviceId,
-        'ciphertext': ciphertext,
-      };
+    'message_id': messageId,
+    'conversation_id': conversationId,
+    'sender_account_id': senderAccountId,
+    'sender_device_id': senderDeviceId,
+    'ciphertext': ciphertext,
+  };
 
   factory RemoteMessage.fromJson(Map<String, dynamic> json) {
     return RemoteMessage(

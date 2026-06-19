@@ -571,8 +571,7 @@ class _FileBubbleContent extends ConsumerWidget {
                       ),
                     )
                   : GestureDetector(
-                      onTap: () =>
-                          _openMemoryLightbox(context, ephemeralBytes),
+                      onTap: () => _openMemoryLightbox(context, ephemeralBytes),
                       child: Image.memory(
                         ephemeralBytes!,
                         width: 200,
@@ -762,8 +761,7 @@ class _FileBubbleContent extends ConsumerWidget {
   ) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            AudioPlayerScreen.fromBytes(bytes: bytes, title: title),
+        builder: (_) => AudioPlayerScreen.fromBytes(bytes: bytes, title: title),
       ),
     );
   }

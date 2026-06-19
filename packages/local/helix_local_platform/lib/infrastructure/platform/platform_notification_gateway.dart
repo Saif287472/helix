@@ -26,17 +26,12 @@ class PlatformNotificationGateway implements NotificationGateway {
 
   PlatformNotificationGateway({
     FlutterLocalNotificationsPlugin? plugin,
-    required String appName,
-    required String appUserModelId,
-    required String windowsNotificationGuid,
-    required String channelPrefix,
-    required String methodChannelNamespace,
-  })  : _appName = appName, // ignore: prefer_initializing_formals
-        _appUserModelId = appUserModelId, // ignore: prefer_initializing_formals
-        _windowsNotificationGuid = windowsNotificationGuid, // ignore: prefer_initializing_formals
-        _channelPrefix = channelPrefix, // ignore: prefer_initializing_formals
-        _methodChannelNamespace = methodChannelNamespace, // ignore: prefer_initializing_formals
-        _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    required this._appName,
+    required this._appUserModelId,
+    required this._windowsNotificationGuid,
+    required this._channelPrefix,
+    required this._methodChannelNamespace,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   String get _channelForeground => '${_channelPrefix}_foreground';
   String get _channelRequests => '${_channelPrefix}_requests';
@@ -144,8 +139,9 @@ class PlatformNotificationGateway implements NotificationGateway {
     // Cache it so showIncomingCall can fall back gracefully if not granted.
     if (Platform.isAndroid) {
       try {
-        final granted = await MethodChannel('$_methodChannelNamespace/foreground')
-            .invokeMethod<bool>('canUseFullScreenIntent');
+        final granted = await MethodChannel(
+          '$_methodChannelNamespace/foreground',
+        ).invokeMethod<bool>('canUseFullScreenIntent');
         _canUseFullScreenIntent = granted ?? true;
       } catch (_) {}
     }
@@ -213,9 +209,7 @@ class PlatformNotificationGateway implements NotificationGateway {
         ? 'From $senderName'
         : 'Tap to open $_appName.';
 
-    final channelId = soundEnabled
-        ? _channelMessages
-        : _channelMessagesSilent;
+    final channelId = soundEnabled ? _channelMessages : _channelMessagesSilent;
     final channelName = soundEnabled ? 'Messages' : 'Messages (silent)';
 
     await _plugin.show(

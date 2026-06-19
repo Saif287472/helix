@@ -158,7 +158,10 @@ void main() {
       expect(devicesRes.statusCode, equals(200));
       final devicesBody = jsonDecode(devicesRes.body) as Map<String, dynamic>;
       final devicesList = devicesBody['devices'] as List;
-      expect((devicesList.first as Map<String, dynamic>)['device_id'], equals('alice_device_1'));
+      expect(
+        (devicesList.first as Map<String, dynamic>)['device_id'],
+        equals('alice_device_1'),
+      );
 
       // 6. Bob Publishes Prekeys
       server.rateLimiter.reset('127.0.0.1');
@@ -194,8 +197,14 @@ void main() {
       final bobDevices1 = bundle1['devices'] as List;
       expect(bobDevices1.length, equals(1));
       final bobDev1 = bobDevices1.first as Map<String, dynamic>;
-      expect((bobDev1['signed_prekey'] as Map<String, dynamic>)['key_id'], equals(42));
-      expect((bobDev1['one_time_prekey'] as Map<String, dynamic>)['key_id'], equals(1001));
+      expect(
+        (bobDev1['signed_prekey'] as Map<String, dynamic>)['key_id'],
+        equals(42),
+      );
+      expect(
+        (bobDev1['one_time_prekey'] as Map<String, dynamic>)['key_id'],
+        equals(1001),
+      );
 
       // Fetch bundle again - bob_otk_1001 should be consumed, returning bob_otk_1002
       final bundleRes2 = await _getJson(
@@ -209,7 +218,10 @@ void main() {
       final bundle2 = jsonDecode(bundleRes2.body) as Map<String, dynamic>;
       final bobDevices2 = bundle2['devices'] as List;
       final bobDev2 = bobDevices2.first as Map<String, dynamic>;
-      expect((bobDev2['one_time_prekey'] as Map<String, dynamic>)['key_id'], equals(1002));
+      expect(
+        (bobDev2['one_time_prekey'] as Map<String, dynamic>)['key_id'],
+        equals(1002),
+      );
 
       // Fetch bundle again - both OTKs consumed, should return null for one_time_prekey
       server.rateLimiter.reset('127.0.0.1');
@@ -370,7 +382,9 @@ void main() {
       '/api/v1/accounts/challenge?account_id=carol&device_id=carol_device_1',
     );
     expect(challengeRes.statusCode, equals(200));
-    final challenge = (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge'] as String;
+    final challenge =
+        (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge']
+            as String;
 
     final sig = await ed25519.sign(utf8.encode(challenge), keyPair: keyPair);
     final sigStr = base64UrlEncode(sig.bytes);
@@ -401,9 +415,7 @@ void main() {
       'localhost',
       port,
       '/api/v1/accounts/refresh',
-      {
-        'refresh_token': refresh1,
-      },
+      {'refresh_token': refresh1},
     );
     expect(refreshRes.statusCode, equals(200));
     final refreshBody = jsonDecode(refreshRes.body) as Map<String, dynamic>;
@@ -420,9 +432,7 @@ void main() {
       'localhost',
       port,
       '/api/v1/accounts/refresh',
-      {
-        'refresh_token': refresh1,
-      },
+      {'refresh_token': refresh1},
     );
     expect(replayRes.statusCode, equals(403));
 
@@ -433,9 +443,7 @@ void main() {
       'localhost',
       port,
       '/api/v1/accounts/refresh',
-      {
-        'refresh_token': refresh2,
-      },
+      {'refresh_token': refresh2},
     );
     expect(invalidRes.statusCode, equals(403));
 
@@ -466,14 +474,18 @@ void main() {
       port,
       '/api/v1/accounts/challenge?account_id=alice_del_test&device_id=alice_device_del',
     );
-    final challenge = (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge'] as String;
+    final challenge =
+        (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge']
+            as String;
     final sig = await ed25519.sign(utf8.encode(challenge), keyPair: keyPair);
-    final loginRes = await _postJson(client, 'localhost', port, '/api/v1/accounts/login', {
-      'account_id': 'alice_del_test',
-      'device_id': 'alice_device_del',
-      'signature': base64UrlEncode(sig.bytes),
-    });
-    final aliceToken = (jsonDecode(loginRes.body) as Map<String, dynamic>)['token'] as String;
+    final loginRes =
+        await _postJson(client, 'localhost', port, '/api/v1/accounts/login', {
+          'account_id': 'alice_del_test',
+          'device_id': 'alice_device_del',
+          'signature': base64UrlEncode(sig.bytes),
+        });
+    final aliceToken =
+        (jsonDecode(loginRes.body) as Map<String, dynamic>)['token'] as String;
 
     // 2. Create conversation
     server.rateLimiter.reset('127.0.0.1');
@@ -493,23 +505,16 @@ void main() {
 
     // 3. Send message
     server.rateLimiter.reset('127.0.0.1');
-    await _postJson(
-      client,
-      'localhost',
-      port,
-      '/api/v1/messages/send',
-      {
-        'message_id': 'msg_del_1',
-        'conversation_id': 'conv_del_1',
-        'envelopes': [
-          {
-            'recipient_device_id': 'alice_device_del',
-            'ciphertext': 'ciphertext_payload',
-          }
-        ]
-      },
-      token: aliceToken,
-    );
+    await _postJson(client, 'localhost', port, '/api/v1/messages/send', {
+      'message_id': 'msg_del_1',
+      'conversation_id': 'conv_del_1',
+      'envelopes': [
+        {
+          'recipient_device_id': 'alice_device_del',
+          'ciphertext': 'ciphertext_payload',
+        },
+      ],
+    }, token: aliceToken);
 
     // 4. Delete message
     server.rateLimiter.reset('127.0.0.1');
@@ -518,9 +523,7 @@ void main() {
       'localhost',
       port,
       '/api/v1/messages/delete',
-      {
-        'message_id': 'msg_del_1',
-      },
+      {'message_id': 'msg_del_1'},
       token: aliceToken,
     );
     expect(delRes.statusCode, equals(200));
@@ -537,11 +540,22 @@ void main() {
     // Fill the messages table to simulate quota limit or simulate using a mock limit.
     // In our implementation, we enforce outstandingCount >= 5000.
     final testDeviceId = 'quota_test_device';
-    server.db.createAccount('alice', 'alice_quota_target', 'alice_quota_target_key');
-    server.db.registerDevice(testDeviceId, 'alice', 'dummy_pub_key', 'Quota Device');
+    server.db.createAccount(
+      'alice',
+      'alice_quota_target',
+      'alice_quota_target_key',
+    );
+    server.db.registerDevice(
+      testDeviceId,
+      'alice',
+      'dummy_pub_key',
+      'Quota Device',
+    );
 
     // Create conversation
-    server.db.createConversation('conv_quota', 'DIRECT', 'Quota Chat', ['alice']);
+    server.db.createConversation('conv_quota', 'DIRECT', 'Quota Chat', [
+      'alice',
+    ]);
 
     // Directly insert 5000 messages to hit quota
     for (int i = 0; i < 5000; i++) {
@@ -575,14 +589,21 @@ void main() {
       port,
       '/api/v1/accounts/challenge?account_id=alice_quota&device_id=alice_quota_device',
     );
-    final challenge = (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge'] as String;
-    final sig = await ed25519.sign(utf8.encode(challenge), keyPair: aliceKeyPair);
-    final loginRes = await _postJson(client, 'localhost', port, '/api/v1/accounts/login', {
-      'account_id': 'alice_quota',
-      'device_id': 'alice_quota_device',
-      'signature': base64UrlEncode(sig.bytes),
-    });
-    final aliceToken = (jsonDecode(loginRes.body) as Map<String, dynamic>)['token'] as String;
+    final challenge =
+        (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge']
+            as String;
+    final sig = await ed25519.sign(
+      utf8.encode(challenge),
+      keyPair: aliceKeyPair,
+    );
+    final loginRes =
+        await _postJson(client, 'localhost', port, '/api/v1/accounts/login', {
+          'account_id': 'alice_quota',
+          'device_id': 'alice_quota_device',
+          'signature': base64UrlEncode(sig.bytes),
+        });
+    final aliceToken =
+        (jsonDecode(loginRes.body) as Map<String, dynamic>)['token'] as String;
 
     server.rateLimiter.reset('127.0.0.1');
     final sendRes = await _postJson(
@@ -597,8 +618,8 @@ void main() {
           {
             'recipient_device_id': testDeviceId,
             'ciphertext': 'ciphertext_payload',
-          }
-        ]
+          },
+        ],
       },
       token: aliceToken,
     );

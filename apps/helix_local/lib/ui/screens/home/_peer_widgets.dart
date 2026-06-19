@@ -246,8 +246,7 @@ class _PeerTile extends ConsumerWidget {
     final staleAge = DateTime.now().difference(peer.seenAt);
     final isStale = staleAge > kPeerStaleThreshold && !isOffline;
     final opacity = isOffline ? 0.45 : (isStale ? 0.65 : 1.0);
-    final blockedPeers =
-        ref.watch(blockedPeersProvider).value ?? const {};
+    final blockedPeers = ref.watch(blockedPeersProvider).value ?? const {};
     final requestSvc = ref.read(requestServiceProvider);
     final peerFingerprint = requestSvc.fingerprintForSession(peer.sessionId);
 

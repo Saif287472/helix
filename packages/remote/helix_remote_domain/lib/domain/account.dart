@@ -14,12 +14,12 @@ class RemoteAccount {
   final String status;
 
   Map<String, dynamic> toJson() => {
-        'account_id': accountId,
-        'username': username,
-        'identity_public_key': identityPublicKey,
-        'created_at': createdAt.toIso8601String(),
-        'status': status,
-      };
+    'account_id': accountId,
+    'username': username,
+    'identity_public_key': identityPublicKey,
+    'created_at': createdAt.toIso8601String(),
+    'status': status,
+  };
 
   factory RemoteAccount.fromJson(Map<String, dynamic> json) {
     return RemoteAccount(

@@ -14,7 +14,11 @@ class RemoteAttachmentCrypto {
   }
 
   /// Encrypt a file payload.
-  Future<Uint8List> encryptFile(Uint8List plaintext, Uint8List key, Uint8List iv) async {
+  Future<Uint8List> encryptFile(
+    Uint8List plaintext,
+    Uint8List key,
+    Uint8List iv,
+  ) async {
     final box = await aesGcm.encrypt(
       plaintext,
       secretKey: crypto.SecretKey(key),
@@ -26,7 +30,11 @@ class RemoteAttachmentCrypto {
   }
 
   /// Decrypt a file payload.
-  Future<Uint8List> decryptFile(Uint8List ciphertextBytes, Uint8List key, Uint8List iv) async {
+  Future<Uint8List> decryptFile(
+    Uint8List ciphertextBytes,
+    Uint8List key,
+    Uint8List iv,
+  ) async {
     final box = crypto.SecretBox.fromConcatenation(
       ciphertextBytes,
       nonceLength: 12,

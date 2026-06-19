@@ -10,10 +10,10 @@ class RemoteContact {
   final String status; // PendingSent, PendingReceived, Accepted, Blocked
 
   Map<String, dynamic> toJson() => {
-        'peer_account_id': peerAccountId,
-        'nickname': nickname,
-        'status': status,
-      };
+    'peer_account_id': peerAccountId,
+    'nickname': nickname,
+    'status': status,
+  };
 
   factory RemoteContact.fromJson(Map<String, dynamic> json) {
     return RemoteContact(

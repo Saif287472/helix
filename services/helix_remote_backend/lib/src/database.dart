@@ -239,10 +239,67 @@ class BackendDatabase {
 
       _db.execute('PRAGMA user_version = 3;');
     }
+
+    if (version < 4) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS attachments (
+          file_id TEXT PRIMARY KEY,
+          file_size INTEGER NOT NULL,
+          file_hash TEXT NOT NULL,
+          uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 4;');
+    }
   }
 
   void close() {
     _db.close();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Attachment operations
+  // ---------------------------------------------------------------------------
+
+  void createAttachment({
+    required String fileId,
+    required int fileSize,
+    required String fileHash,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO attachments (file_id, file_size, file_hash, uploaded_bytes, status)
+      VALUES (?, ?, ?, 0, 'PENDING');
+    ''');
+    stmt.execute([fileId, fileSize, fileHash]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getAttachment(String fileId) {
+    final stmt = _db.prepare('SELECT * FROM attachments WHERE file_id = ?;');
+    final result = stmt.select([fileId]);
+    stmt.close();
+    if (result.isEmpty) return null;
+    final row = result.first;
+    return {
+      'file_id': row['file_id'],
+      'file_size': row['file_size'],
+      'file_hash': row['file_hash'],
+      'uploaded_bytes': row['uploaded_bytes'],
+      'status': row['status'],
+    };
+  }
+
+  void updateAttachmentProgress(
+    String fileId,
+    int uploadedBytes,
+    String status,
+  ) {
+    final stmt = _db.prepare('''
+      UPDATE attachments SET uploaded_bytes = ?, status = ? WHERE file_id = ?;
+    ''');
+    stmt.execute([uploadedBytes, status, fileId]);
+    stmt.close();
   }
 
   // Account operations

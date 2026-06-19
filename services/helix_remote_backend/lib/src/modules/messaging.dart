@@ -134,7 +134,10 @@ class MessagingModule {
         final outstandingCount = db.getMessageCountForDevice(recipientDeviceId);
         if (outstandingCount >= 5000) {
           return Response.forbidden(
-            jsonEncode({'error': 'Recipient device mailbox quota exceeded. Try again later.'}),
+            jsonEncode({
+              'error':
+                  'Recipient device mailbox quota exceeded. Try again later.',
+            }),
           );
         }
 
@@ -274,7 +277,8 @@ class MessagingModule {
     }
 
     try {
-      final body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final messageId = body['message_id'] as String?;
 
       if (messageId == null) {
@@ -334,7 +338,10 @@ class MessagingModule {
       );
 
       return Response.ok(
-        jsonEncode({'message': 'Message deleted successfully', 'message_id': messageId}),
+        jsonEncode({
+          'message': 'Message deleted successfully',
+          'message_id': messageId,
+        }),
       );
     } catch (e) {
       return Response.internalServerError(

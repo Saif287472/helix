@@ -51,8 +51,6 @@ class ChatThread {
 
   ChatMessage? get lastMessage => messages.isEmpty ? null : messages.last;
 
-  int get totalBytes => messages.fold(
-    0,
-    (sum, m) => sum + utf8.encode(m.text).length,
-  );
+  int get totalBytes =>
+      messages.fold(0, (sum, m) => sum + utf8.encode(m.text).length);
 }

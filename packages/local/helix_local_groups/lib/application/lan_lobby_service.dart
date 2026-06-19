@@ -19,30 +19,31 @@ enum _LobbyRole { idle, discovering, hosting, joining, joined, leaving }
 /// Public API for the LAN Lobby system.
 class LanLobbyService {
   LanLobbyService({MulticastLock? multicastLock})
-      : _lock = multicastLock ??
-            (Platform.isAndroid
-                ? MulticastLockAndroid(kLobbyMulticastChannel)
-                : MulticastLockStub());
+    : _lock =
+          multicastLock ??
+          (Platform.isAndroid
+              ? MulticastLockAndroid(kLobbyMulticastChannel)
+              : MulticastLockStub());
 
-  final MulticastLock     _lock;
-  final _discovery        = LanLobbyDiscovery();
-  final _uuid             = const Uuid();
+  final MulticastLock _lock;
+  final _discovery = LanLobbyDiscovery();
+  final _uuid = const Uuid();
 
   LanLobbyServer? _server;
   LanLobbyClient? _client;
 
   _LobbyRole _role = _LobbyRole.idle;
 
-  String _localFp  = '';
-  String _name     = '';
-  String _suffix   = '';
+  String _localFp = '';
+  String _name = '';
+  String _suffix = '';
 
   LobbyState? _state;
 
   // Bounded duplicate-message suppression set
   final _seenMsgIds = <String>[];
 
-  final _stateCtrl   = StreamController<LobbyState?>.broadcast();
+  final _stateCtrl = StreamController<LobbyState?>.broadcast();
   final _messageCtrl = StreamController<LobbyMessage>.broadcast();
 
   Timer? _announceTimer;
@@ -54,20 +55,21 @@ class LanLobbyService {
   StreamSubscription<dynamic>? _clientDisconnectSub;
 
   bool _disposed = false;
-  int  _lifecycleGeneration = 0;
-  bool _electionRunning     = false;
+  int _lifecycleGeneration = 0;
+  bool _electionRunning = false;
   Future<void>? _leaveFuture;
 
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
 
-  Stream<LobbyState?> get stateStream   => _stateCtrl.stream;
+  Stream<LobbyState?> get stateStream => _stateCtrl.stream;
   Stream<LobbyMessage> get messageStream => _messageCtrl.stream;
 
   LobbyState? get currentState => _state;
   bool get isHost => _role == _LobbyRole.hosting;
-  bool get isActive => _role == _LobbyRole.hosting || _role == _LobbyRole.joined;
+  bool get isActive =>
+      _role == _LobbyRole.hosting || _role == _LobbyRole.joined;
 
   /// Join (or create) the LAN lobby. Safe to call multiple times; subsequent
   /// calls while already active are ignored.
@@ -81,9 +83,9 @@ class LanLobbyService {
     _leaveFuture = null;
 
     _localFp = localFp;
-    _name    = name;
-    _suffix  = suffix;
-    _role    = _LobbyRole.discovering;
+    _name = name;
+    _suffix = suffix;
+    _role = _LobbyRole.discovering;
 
     try {
       await _lock.acquire();
@@ -93,11 +95,16 @@ class LanLobbyService {
       await _discovery.open();
     } catch (e) {
       _role = _LobbyRole.idle;
-      try { await _lock.release(); } catch (_) {}
+      try {
+        await _lock.release();
+      } catch (_) {}
       rethrow;
     }
 
-    _discoverySub = _discovery.incoming.listen(_onUdpFrame, cancelOnError: false);
+    _discoverySub = _discovery.incoming.listen(
+      _onUdpFrame,
+      cancelOnError: false,
+    );
 
     // Send an immediate discovery request and wait kLobbyDiscoveryWindow.
     _discovery.sendDiscoveryRequest(localFp);
@@ -121,15 +128,15 @@ class LanLobbyService {
     final state = _state;
     if (state == null || !isActive) return;
     final frame = {
-      'v':     kLobbyProtocolVersion,
-      't':     kFtMsg,
-      'sid':   state.sessionId,
-      'gen':   state.generation,
+      'v': kLobbyProtocolVersion,
+      't': kFtMsg,
+      'sid': state.sessionId,
+      'gen': state.generation,
       'msgId': _uuid.v4(),
-      'fp':    _localFp,
-      'name':  _name,
-      'text':  text,
-      'ts':    DateTime.now().millisecondsSinceEpoch,
+      'fp': _localFp,
+      'name': _name,
+      'text': text,
+      'ts': DateTime.now().millisecondsSinceEpoch,
     };
     if (isHost) {
       _deliverMessage(frame);
@@ -159,7 +166,7 @@ class LanLobbyService {
 
   void _onUdpFrameUnsafe(LobbyDatagram datagram) {
     final frame = datagram.frame;
-    final type  = frame['t'] as String?;
+    final type = frame['t'] as String?;
 
     if (type == kFtAnnounce) {
       _handleAnnounce(frame, datagram.sender, datagram.senderPort);
@@ -169,22 +176,26 @@ class LanLobbyService {
       if (state == null) return;
       final nonce = frame['nonce'] as String?;
       _discovery.sendDiscoveryResponse(
-        target:        datagram.sender,
-        targetPort:    datagram.senderPort,
-        sid:           state.sessionId,
-        gen:           state.generation,
-        hostFp:        _localFp,
-        tcpPort:       _server!.port,
-        memberCount:   state.memberCount,
-        replyToNonce:  nonce ?? '',
+        target: datagram.sender,
+        targetPort: datagram.senderPort,
+        sid: state.sessionId,
+        gen: state.generation,
+        hostFp: _localFp,
+        tcpPort: _server!.port,
+        memberCount: state.memberCount,
+        replyToNonce: nonce ?? '',
       );
     }
   }
 
-  void _handleAnnounce(Map<String, dynamic> frame, InternetAddress sender, int senderPort) {
-    final incomingGen    = (frame['gen'] as num?)?.toInt() ?? -1;
+  void _handleAnnounce(
+    Map<String, dynamic> frame,
+    InternetAddress sender,
+    int senderPort,
+  ) {
+    final incomingGen = (frame['gen'] as num?)?.toInt() ?? -1;
     final incomingHostFp = frame['hostFp'] as String? ?? '';
-    final tcpPort        = (frame['port'] as num?)?.toInt() ?? 0;
+    final tcpPort = (frame['port'] as num?)?.toInt() ?? 0;
     if (incomingGen < 0 || incomingHostFp.isEmpty || tcpPort <= 0) return;
 
     final localState = _state;
@@ -199,9 +210,9 @@ class LanLobbyService {
     if (_role == _LobbyRole.hosting || _role == _LobbyRole.discovering) {
       final localGen = localState?.generation ?? 0;
       if (localLosesConflict(
-        localGen:       localGen,
-        localFp:        _localFp,
-        incomingGen:    incomingGen,
+        localGen: localGen,
+        localFp: _localFp,
+        incomingGen: incomingGen,
         incomingHostFp: incomingHostFp,
       )) {
         _surrenderHostTo(sender.address, tcpPort, frame);
@@ -213,10 +224,7 @@ class LanLobbyService {
   // Become host
   // ---------------------------------------------------------------------------
 
-  Future<void> _becomeHost({
-    required String sid,
-    required int    gen,
-  }) async {
+  Future<void> _becomeHost({required String sid, required int gen}) async {
     final server = LanLobbyServer();
     try {
       await server.open(sid: sid, gen: gen);
@@ -236,18 +244,27 @@ class LanLobbyService {
 
     final selfMember = LobbyMember(fp: _localFp, name: _name, suffix: _suffix);
     _state = LobbyState(
-      sessionId:         sid,
-      members:           [selfMember],
-      localFp:           _localFp,
-      hostFp:            _localFp,
-      generation:        gen,
+      sessionId: sid,
+      members: [selfMember],
+      localFp: _localFp,
+      hostFp: _localFp,
+      generation: gen,
       membershipVersion: 0,
     );
     _emitState();
 
-    _serverJoinSub = server.joinRequests.listen(_onClientJoin, cancelOnError: false);
-    _serverFrameSub = server.clientFrames.listen(_onClientFrame, cancelOnError: false);
-    _serverDisconnectSub = server.disconnections.listen(_onClientDisconnect, cancelOnError: false);
+    _serverJoinSub = server.joinRequests.listen(
+      _onClientJoin,
+      cancelOnError: false,
+    );
+    _serverFrameSub = server.clientFrames.listen(
+      _onClientFrame,
+      cancelOnError: false,
+    );
+    _serverDisconnectSub = server.disconnections.listen(
+      _onClientDisconnect,
+      cancelOnError: false,
+    );
 
     _startAnnouncing();
   }
@@ -258,10 +275,10 @@ class LanLobbyService {
       final state = _state;
       if (state == null || _server == null) return;
       _discovery.sendAnnounce(
-        sid:         state.sessionId,
-        gen:         state.generation,
-        hostFp:      _localFp,
-        tcpPort:     _server!.port,
+        sid: state.sessionId,
+        gen: state.generation,
+        hostFp: _localFp,
+        tcpPort: _server!.port,
         memberCount: state.memberCount,
       );
     });
@@ -269,10 +286,10 @@ class LanLobbyService {
     final state = _state;
     if (state != null && _server != null) {
       _discovery.sendAnnounce(
-        sid:         state.sessionId,
-        gen:         state.generation,
-        hostFp:      _localFp,
-        tcpPort:     _server!.port,
+        sid: state.sessionId,
+        gen: state.generation,
+        hostFp: _localFp,
+        tcpPort: _server!.port,
         memberCount: state.memberCount,
       );
     }
@@ -288,13 +305,15 @@ class LanLobbyService {
   // ---------------------------------------------------------------------------
 
   void _onClientJoin(({Socket socket, Map<String, dynamic> frame}) event) {
-    final frame   = event.frame;
-    final fpVal   = frame['fp'];
-    final fp      = fpVal is String ? fpVal : '';
+    final frame = event.frame;
+    final fpVal = frame['fp'];
+    final fp = fpVal is String ? fpVal : '';
     final nameVal = frame['name'];
-    final name    = nameVal is String ? nameVal : (fp.isNotEmpty ? fp.substring(0, fp.length.clamp(0, 8)) : '');
+    final name = nameVal is String
+        ? nameVal
+        : (fp.isNotEmpty ? fp.substring(0, fp.length.clamp(0, 8)) : '');
     final suffixVal = frame['suffix'];
-    final suffix  = suffixVal is String ? suffixVal : '';
+    final suffix = suffixVal is String ? suffixVal : '';
     if (fp.isEmpty || fp == _localFp) return;
 
     final state = _state;
@@ -302,40 +321,44 @@ class LanLobbyService {
 
     // Reject members from a stale session/generation
     final incomingSid = frame['sid'];
-    final incomingGen = frame['gen'] is num ? (frame['gen'] as num).toInt() : -1;
+    final incomingGen = frame['gen'] is num
+        ? (frame['gen'] as num).toInt()
+        : -1;
     if (incomingSid != state.sessionId || incomingGen != state.generation) {
       _server?.sendToFp(fp, {
-        'v': kLobbyProtocolVersion, 't': kFtError,
-        'code': 'stale_gen', 'msg': 'Session or generation mismatch',
+        'v': kLobbyProtocolVersion,
+        't': kFtError,
+        'code': 'stale_gen',
+        'msg': 'Session or generation mismatch',
       });
       return;
     }
 
     final newMember = LobbyMember(fp: fp, name: name, suffix: suffix);
-    final members   = [...state.members.where((m) => m.fp != fp), newMember];
-    final newMv     = state.membershipVersion + 1;
-    final newState  = state.copyWith(members: members, membershipVersion: newMv);
+    final members = [...state.members.where((m) => m.fp != fp), newMember];
+    final newMv = state.membershipVersion + 1;
+    final newState = state.copyWith(members: members, membershipVersion: newMv);
     _state = newState;
     _emitState();
 
     // Send JOINED to the new member
     _server?.sendToFp(fp, {
-      'v':       kLobbyProtocolVersion,
-      't':       kFtJoined,
-      'sid':     newState.sessionId,
-      'gen':     newState.generation,
-      'hostFp':  _localFp,
-      'mv':      newMv,
+      'v': kLobbyProtocolVersion,
+      't': kFtJoined,
+      'sid': newState.sessionId,
+      'gen': newState.generation,
+      'hostFp': _localFp,
+      'mv': newMv,
       'members': membersToJson(members),
     });
 
     // Broadcast updated member list to everyone else
     _server?.broadcastFrame({
-      'v':       kLobbyProtocolVersion,
-      't':       kFtMemberUpdate,
-      'sid':     newState.sessionId,
-      'gen':     newState.generation,
-      'mv':      newMv,
+      'v': kLobbyProtocolVersion,
+      't': kFtMemberUpdate,
+      'sid': newState.sessionId,
+      'gen': newState.generation,
+      'mv': newMv,
       'members': membersToJson(members),
     }, exceptFp: fp);
   }
@@ -351,8 +374,7 @@ class LanLobbyService {
     final state = _state;
     if (state == null || _role != _LobbyRole.hosting) return;
 
-    if (frame['sid'] != state.sessionId ||
-        frame['gen'] != state.generation) {
+    if (frame['sid'] != state.sessionId || frame['gen'] != state.generation) {
       return;
     }
 
@@ -361,15 +383,17 @@ class LanLobbyService {
       return;
     }
 
-    final type  = frame['t'] as String?;
+    final type = frame['t'] as String?;
     if (type == kFtMsg) {
       // Relay to all other clients and deliver locally
       _deliverMessage(frame);
       _server?.broadcastFrame(frame, exceptFp: event.fp);
     } else if (type == kFtPing) {
       _server?.sendToFp(event.fp, {
-        'v': kLobbyProtocolVersion, 't': kFtPong,
-        'sid': state.sessionId, 'gen': state.generation,
+        'v': kLobbyProtocolVersion,
+        't': kFtPong,
+        'sid': state.sessionId,
+        'gen': state.generation,
       });
     } else if (type == kFtHostXferReady) {
       // Forwarded to handoff logic via server.clientFrames stream — no action here.
@@ -380,15 +404,15 @@ class LanLobbyService {
     final state = _state;
     if (state == null) return;
     final members = state.members.where((m) => m.fp != fp).toList();
-    final newMv   = state.membershipVersion + 1;
+    final newMv = state.membershipVersion + 1;
     _state = state.copyWith(members: members, membershipVersion: newMv);
     _emitState();
     _server?.broadcastFrame({
-      'v':       kLobbyProtocolVersion,
-      't':       kFtMemberUpdate,
-      'sid':     _state!.sessionId,
-      'gen':     _state!.generation,
-      'mv':      newMv,
+      'v': kLobbyProtocolVersion,
+      't': kFtMemberUpdate,
+      'sid': _state!.sessionId,
+      'gen': _state!.generation,
+      'mv': newMv,
       'members': membersToJson(members),
     });
   }
@@ -397,43 +421,60 @@ class LanLobbyService {
   // Join existing host (client role)
   // ---------------------------------------------------------------------------
 
-  void _connectToHost(String hostIp, int tcpPort, Map<String, dynamic> announceFrame) {
+  void _connectToHost(
+    String hostIp,
+    int tcpPort,
+    Map<String, dynamic> announceFrame,
+  ) {
     if (_role != _LobbyRole.discovering && _role != _LobbyRole.hosting) return;
     _role = _LobbyRole.joining;
 
     final sid = announceFrame['sid'] as String? ?? '';
     final gen = (announceFrame['gen'] as num?)?.toInt() ?? 0;
 
-    _doConnectAsClient(hostIp: hostIp, tcpPort: tcpPort, sid: sid, gen: gen).ignore();
+    _doConnectAsClient(
+      hostIp: hostIp,
+      tcpPort: tcpPort,
+      sid: sid,
+      gen: gen,
+    ).ignore();
   }
 
   Future<void> _doConnectAsClient({
     required String hostIp,
-    required int    tcpPort,
+    required int tcpPort,
     required String sid,
-    required int    gen,
+    required int gen,
   }) async {
     final generation = _lifecycleGeneration;
     final client = LanLobbyClient();
     try {
       await client.connect(
-        hostIp:   hostIp,
+        hostIp: hostIp,
         hostPort: tcpPort,
-        sid:      sid,
-        gen:      gen,
-        localFp:  _localFp,
-        name:     _name,
-        suffix:   _suffix,
+        sid: sid,
+        gen: gen,
+        localFp: _localFp,
+        name: _name,
+        suffix: _suffix,
       );
 
-      if (_disposed || generation != _lifecycleGeneration || _role != _LobbyRole.joining) {
+      if (_disposed ||
+          generation != _lifecycleGeneration ||
+          _role != _LobbyRole.joining) {
         await client.close().catchError((_) {});
         return;
       }
 
-      _client              = client;
-      _clientFrameSub      = client.frames.listen(_onHostFrame, cancelOnError: false);
-      _clientDisconnectSub = client.disconnected.listen((_) => _onHostDisconnect(), cancelOnError: false);
+      _client = client;
+      _clientFrameSub = client.frames.listen(
+        _onHostFrame,
+        cancelOnError: false,
+      );
+      _clientDisconnectSub = client.disconnected.listen(
+        (_) => _onHostDisconnect(),
+        cancelOnError: false,
+      );
     } catch (_) {
       await client.close().catchError((_) {});
       // Connection failed — try election from scratch if still in this lifecycle.
@@ -460,8 +501,7 @@ class LanLobbyService {
     final state = _state;
     if (state == null || _role != _LobbyRole.joined) return;
 
-    if (frame['sid'] != state.sessionId ||
-        frame['gen'] != state.generation) {
+    if (frame['sid'] != state.sessionId || frame['gen'] != state.generation) {
       return;
     }
 
@@ -472,8 +512,10 @@ class LanLobbyService {
         _deliverMessage(frame);
       case kFtPing:
         _client?.send({
-          'v': kLobbyProtocolVersion, 't': kFtPong,
-          'sid': state.sessionId, 'gen': state.generation,
+          'v': kLobbyProtocolVersion,
+          't': kFtPong,
+          'sid': state.sessionId,
+          'gen': state.generation,
         });
       case kFtHostXferCommit:
         _handleHostXferCommit(frame);
@@ -483,10 +525,10 @@ class LanLobbyService {
   }
 
   void _handleJoined(Map<String, dynamic> frame) {
-    final sid     = frame['sid']     as String? ?? '';
-    final gen     = (frame['gen']    as num?)?.toInt() ?? 0;
-    final hostFp  = frame['hostFp']  as String? ?? '';
-    final mv      = (frame['mv']     as num?)?.toInt() ?? 0;
+    final sid = frame['sid'] as String? ?? '';
+    final gen = (frame['gen'] as num?)?.toInt() ?? 0;
+    final hostFp = frame['hostFp'] as String? ?? '';
+    final mv = (frame['mv'] as num?)?.toInt() ?? 0;
     final members = membersFromJson(frame['members']);
 
     // Ensure we are in the member list
@@ -496,11 +538,11 @@ class LanLobbyService {
         : [...members, LobbyMember(fp: _localFp, name: _name, suffix: _suffix)];
 
     _state = LobbyState(
-      sessionId:         sid,
-      members:           allMembers,
-      localFp:           _localFp,
-      hostFp:            hostFp,
-      generation:        gen,
+      sessionId: sid,
+      members: allMembers,
+      localFp: _localFp,
+      hostFp: hostFp,
+      generation: gen,
       membershipVersion: mv,
     );
     _role = _LobbyRole.joined;
@@ -511,15 +553,12 @@ class LanLobbyService {
     final state = _state;
     if (state == null) return;
     final incomingGen = (frame['gen'] as num?)?.toInt() ?? -1;
-    final incomingMv  = (frame['mv']  as num?)?.toInt() ?? -1;
+    final incomingMv = (frame['mv'] as num?)?.toInt() ?? -1;
     if (incomingGen != state.generation) return;
     if (incomingMv <= state.membershipVersion) return;
 
     final members = membersFromJson(frame['members']);
-    _state = state.copyWith(
-      membershipVersion: incomingMv,
-      members:           members,
-    );
+    _state = state.copyWith(membershipVersion: incomingMv, members: members);
     _emitState();
   }
 
@@ -531,15 +570,15 @@ class LanLobbyService {
     final nextHostFp = frame['nextHostFp'] as String?;
     if (nextHostFp != _localFp) return; // Not our turn
     final nextGen = (frame['nextGen'] as num?)?.toInt() ?? 0;
-    final sid     = frame['sid']     as String? ?? (_state?.sessionId ?? '');
+    final sid = frame['sid'] as String? ?? (_state?.sessionId ?? '');
 
     // Close any previously opened pending server before starting a new one.
     _cancelPendingServer();
 
     final generation = _lifecycleGeneration;
     acceptHandoffPrepare(
-      sid:        sid,
-      nextGen:    nextGen,
+      sid: sid,
+      nextGen: nextGen,
       sendToHost: (f) => _client?.send(f),
     ).then((newServer) {
       if (newServer == null) return;
@@ -552,39 +591,42 @@ class LanLobbyService {
       // We are now the pending host; start broadcasting so other clients can
       // start discovering us, but wait for COMMIT before taking the host role.
       _discovery.sendAnnounce(
-        sid:         sid,
-        gen:         nextGen,
-        hostFp:      _localFp,
-        tcpPort:     newServer.port,
+        sid: sid,
+        gen: nextGen,
+        hostFp: _localFp,
+        tcpPort: newServer.port,
         memberCount: _state?.memberCount ?? 1,
       );
       // Store the server so _handleHostXferCommit can adopt it.
-      _pendingServer    = newServer;
+      _pendingServer = newServer;
       _pendingServerGen = nextGen;
-      _pendingSid       = sid;
+      _pendingSid = sid;
       // If COMMIT never arrives, clean up after a timeout.
-      _pendingCommitTimer = Timer(kLobbyHandoffCommitTimeout, _cancelPendingServer);
+      _pendingCommitTimer = Timer(
+        kLobbyHandoffCommitTimeout,
+        _cancelPendingServer,
+      );
     }).ignore();
   }
 
   LanLobbyServer? _pendingServer;
-  int             _pendingServerGen = 0;
-  String          _pendingSid       = '';
-  Timer?          _pendingCommitTimer;
+  int _pendingServerGen = 0;
+  String _pendingSid = '';
+  Timer? _pendingCommitTimer;
 
   void _cancelPendingServer() {
     _pendingCommitTimer?.cancel();
     _pendingCommitTimer = null;
     _pendingServer?.close().ignore();
-    _pendingServer    = null;
+    _pendingServer = null;
     _pendingServerGen = 0;
-    _pendingSid       = '';
+    _pendingSid = '';
   }
 
   void _handleHostXferCommit(Map<String, dynamic> frame) {
-    final newHostFp  = frame['nextHostFp'] as String? ?? '';
-    final commitSid  = frame['sid']        as String? ?? '';
-    final commitGen  = (frame['nextGen'] as num?)?.toInt() ?? 0;
+    final newHostFp = frame['nextHostFp'] as String? ?? '';
+    final commitSid = frame['sid'] as String? ?? '';
+    final commitGen = (frame['nextGen'] as num?)?.toInt() ?? 0;
     if (newHostFp == _localFp &&
         _pendingServer != null &&
         commitSid == _pendingSid &&
@@ -595,9 +637,9 @@ class LanLobbyService {
       final server = _pendingServer!;
       final adoptSid = _pendingSid;
       final adoptGen = _pendingServerGen;
-      _pendingServer    = null;
+      _pendingServer = null;
       _pendingServerGen = 0;
-      _pendingSid       = '';
+      _pendingSid = '';
       _disconnectFromHost();
       _adoptServerRole(server, adoptSid, adoptGen);
     } else {
@@ -617,23 +659,32 @@ class LanLobbyService {
 
   void _adoptServerRole(LanLobbyServer server, String sid, int gen) {
     _server = server;
-    _role   = _LobbyRole.hosting;
+    _role = _LobbyRole.hosting;
 
     // Rebuild with self as host; active list starts with just self.
     // Survivors re-JOIN within the recovery window and get added then.
     _state = LobbyState(
-      sessionId:         sid,
-      members:           [LobbyMember(fp: _localFp, name: _name, suffix: _suffix)],
-      localFp:           _localFp,
-      hostFp:            _localFp,
-      generation:        gen,
+      sessionId: sid,
+      members: [LobbyMember(fp: _localFp, name: _name, suffix: _suffix)],
+      localFp: _localFp,
+      hostFp: _localFp,
+      generation: gen,
       membershipVersion: 0,
     );
     _emitState();
 
-    _serverJoinSub       = server.joinRequests.listen(_onClientJoin, cancelOnError: false);
-    _serverFrameSub      = server.clientFrames.listen(_onClientFrame, cancelOnError: false);
-    _serverDisconnectSub = server.disconnections.listen(_onClientDisconnect, cancelOnError: false);
+    _serverJoinSub = server.joinRequests.listen(
+      _onClientJoin,
+      cancelOnError: false,
+    );
+    _serverFrameSub = server.clientFrames.listen(
+      _onClientFrame,
+      cancelOnError: false,
+    );
+    _serverDisconnectSub = server.disconnections.listen(
+      _onClientDisconnect,
+      cancelOnError: false,
+    );
 
     _startAnnouncing();
   }
@@ -649,7 +700,7 @@ class LanLobbyService {
 
     final survivors = _state?.members.map((m) => m.fp).toList() ?? [_localFp];
     final crashedFp = _state?.hostFp ?? '';
-    final aliveFps  = survivors.where((fp) => fp != crashedFp).toList();
+    final aliveFps = survivors.where((fp) => fp != crashedFp).toList();
 
     _runElection(survivors: aliveFps.isEmpty ? [_localFp] : aliveFps).ignore();
   }
@@ -674,8 +725,8 @@ class LanLobbyService {
 
       // No host found during the delay — self-elect
       final oldState = _state;
-      final sid      = oldState?.sessionId ?? _uuid.v4();
-      final gen      = (oldState?.generation ?? -1) + 1;
+      final sid = oldState?.sessionId ?? _uuid.v4();
+      final gen = (oldState?.generation ?? -1) + 1;
       await _becomeHost(sid: sid, gen: gen);
     } finally {
       _electionRunning = false;
@@ -686,25 +737,29 @@ class LanLobbyService {
   // Surrender host role (conflict resolution)
   // ---------------------------------------------------------------------------
 
-  void _surrenderHostTo(String winnerIp, int winnerPort, Map<String, dynamic> frame) {
+  void _surrenderHostTo(
+    String winnerIp,
+    int winnerPort,
+    Map<String, dynamic> frame,
+  ) {
     _stopAnnouncing();
     final server = _server;
     _server = null;
 
     // Notify our connected clients to find the new host
-    final state   = _state;
-    final sid     = frame['sid']     as String? ?? (state?.sessionId ?? '');
-    final gen     = (frame['gen']    as num?)?.toInt() ?? 0;
-    final hostFp  = frame['hostFp']  as String? ?? '';
-    final tcpPort = (frame['port']   as num?)?.toInt() ?? 0;
+    final state = _state;
+    final sid = frame['sid'] as String? ?? (state?.sessionId ?? '');
+    final gen = (frame['gen'] as num?)?.toInt() ?? 0;
+    final hostFp = frame['hostFp'] as String? ?? '';
+    final tcpPort = (frame['port'] as num?)?.toInt() ?? 0;
 
     server?.broadcastFrame({
-      'v':          kLobbyProtocolVersion,
-      't':          kFtHostXferCommit,
-      'sid':        sid,
+      'v': kLobbyProtocolVersion,
+      't': kFtHostXferCommit,
+      'sid': sid,
       'nextHostFp': hostFp,
-      'port':       tcpPort,
-      'nextGen':    gen,
+      'port': tcpPort,
+      'nextGen': gen,
     });
     server?.close().ignore();
 
@@ -773,18 +828,18 @@ class LanLobbyService {
       }
 
       if (server != null && server.isOpen) {
-        final state      = _state;
-        final memberFps  = state?.members.map((m) => m.fp).toList() ?? [];
-        final sid        = state?.sessionId ?? '';
+        final state = _state;
+        final memberFps = state?.members.map((m) => m.fp).toList() ?? [];
+        final sid = state?.sessionId ?? '';
         final currentGen = state?.generation ?? 0;
 
         try {
           final result = await runGracefulHandoff(
-            server:     server,
-            sid:        sid,
+            server: server,
+            sid: sid,
             currentGen: currentGen,
-            localFp:    _localFp,
-            memberFps:  memberFps,
+            localFp: _localFp,
+            memberFps: memberFps,
           );
           if (result != null) {
             await Future.delayed(const Duration(milliseconds: 200));
@@ -809,7 +864,7 @@ class LanLobbyService {
       } catch (_) {}
 
       _state = null;
-      _role  = _LobbyRole.idle;
+      _role = _LobbyRole.idle;
       _emitState();
     }
   }
@@ -843,20 +898,25 @@ class LanLobbyService {
     _seenMsgIds.add(msgId);
     if (_seenMsgIds.length > kLobbyMsgIdCacheSize) _seenMsgIds.removeAt(0);
 
-    final senderFp   = frame['fp']   as String? ?? '';
-    final senderName = frame['name'] as String? ?? senderFp.substring(0, senderFp.length.clamp(0, 8));
-    final text       = frame['text'] as String? ?? '';
-    final ts         = (frame['ts']  as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch;
+    final senderFp = frame['fp'] as String? ?? '';
+    final senderName =
+        frame['name'] as String? ??
+        senderFp.substring(0, senderFp.length.clamp(0, 8));
+    final text = frame['text'] as String? ?? '';
+    final ts =
+        (frame['ts'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch;
 
     if (text.isEmpty) return;
     if (!_messageCtrl.isClosed) {
-      _messageCtrl.add(LobbyMessage(
-        msgId:      msgId,
-        senderFp:   senderFp,
-        senderName: senderName,
-        text:       text,
-        sentAt:     DateTime.fromMillisecondsSinceEpoch(ts),
-      ));
+      _messageCtrl.add(
+        LobbyMessage(
+          msgId: msgId,
+          senderFp: senderFp,
+          senderName: senderName,
+          text: text,
+          sentAt: DateTime.fromMillisecondsSinceEpoch(ts),
+        ),
+      );
     }
   }
 

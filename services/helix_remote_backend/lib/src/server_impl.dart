@@ -14,6 +14,7 @@ import 'package:helix_remote_backend/src/modules/prekeys.dart';
 import 'package:helix_remote_backend/src/modules/contacts.dart';
 import 'package:helix_remote_backend/src/modules/messaging.dart';
 import 'package:helix_remote_backend/src/modules/backups.dart';
+import 'package:helix_remote_backend/src/modules/attachments.dart';
 
 class OutboxWorker {
   final BackendDatabase db;
@@ -102,6 +103,7 @@ class BackendServer {
     final contactsModule = ContactsModule(db);
     final messagingModule = MessagingModule(db, wsRelay);
     final backupsModule = BackupsModule(db);
+    final attachmentsModule = AttachmentsModule(db);
 
     // Map modules
     router.mount('/api/v1/accounts', authModule.router.call);
@@ -110,6 +112,7 @@ class BackendServer {
     router.mount('/api/v1/contacts', contactsModule.router.call);
     router.mount('/api/v1/messages', messagingModule.router.call);
     router.mount('/api/v1/backups', backupsModule.router.call);
+    router.mount('/api/v1/attachments', attachmentsModule.router.call);
 
     // WebSocket route
     router.get('/api/v1/ws', wsRelay.handleUpgrade);

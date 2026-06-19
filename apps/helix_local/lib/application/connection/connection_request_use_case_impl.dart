@@ -145,9 +145,11 @@ class ConnectionRequestUseCaseImpl implements ConnectionRequestUseCase {
 
     final incomingCount = _repository
         .listRequests()
-        .where((r) =>
-            r.direction == RequestDirection.incoming &&
-            r.status == RequestStatus.pending)
+        .where(
+          (r) =>
+              r.direction == RequestDirection.incoming &&
+              r.status == RequestStatus.pending,
+        )
         .length;
     if (incomingCount >= kMaxPendingRequests) {
       return null;

@@ -116,10 +116,7 @@ void main() {
     });
 
     test('RemoteSyncCursor fromJson and toJson', () {
-      final json = {
-        'conversation_id': 'conv_1',
-        'last_server_sequence': 100,
-      };
+      final json = {'conversation_id': 'conv_1', 'last_server_sequence': 100};
       final cursor = RemoteSyncCursor.fromJson(json);
       expect(cursor.conversationId, 'conv_1');
       expect(cursor.lastServerSequence, 100);
@@ -140,8 +137,8 @@ void main() {
           'sender_account_id': 'acc_01h9w2m8g8qpr88v75v1w7jx8q',
           'sender_device_id': 1,
           'ciphertext': 'opaquebase64ciphertextbytes',
-          'message_id': 'msg_01h9w2m8g8qpr88v75v1w7jx8q'
-        }
+          'message_id': 'msg_01h9w2m8g8qpr88v75v1w7jx8q',
+        },
       };
       final envelope = RemoteRealtimeEnvelope.fromJson(json);
       expect(envelope.eventId, '469018e6-e910-4100-84cf-d84bf27ad9a6');
@@ -149,7 +146,10 @@ void main() {
       expect(envelope.serverSequence, 14);
       expect(envelope.type, 'chat_message');
       expect(envelope.isUnrecognized, false);
-      expect(envelope.payload['conversation_id'], '8c59f0f9-a35c-41fb-992a-3023e3e29f8f');
+      expect(
+        envelope.payload['conversation_id'],
+        '8c59f0f9-a35c-41fb-992a-3023e3e29f8f',
+      );
     });
 
     test('Graceful degradation on Unrecognized Event Type (P8-042)', () {
@@ -159,9 +159,7 @@ void main() {
         'timestamp': 1781848900000,
         'type': 'future_event_type',
         'server_sequence': 15,
-        'payload': {
-          'some_data': 'goes here'
-        }
+        'payload': {'some_data': 'goes here'},
       };
       final envelope = RemoteRealtimeEnvelope.fromJson(json);
       expect(envelope.eventId, 'a90f1111-e910-4100-84cf-d84bf27ad9a6');
@@ -179,9 +177,7 @@ void main() {
         'timestamp': 1781848900000,
         'type': 'chat_message',
         'server_sequence': 16,
-        'payload': {
-          'something': 'different'
-        }
+        'payload': {'something': 'different'},
       };
       final envelope = RemoteRealtimeEnvelope.fromJson(json);
       expect(envelope.eventId, 'a90f2222-e910-4100-84cf-d84bf27ad9a6');
@@ -192,19 +188,25 @@ void main() {
 
   group('Compatibility Fixtures Validation (P8-039)', () {
     test('loads and decodes rest_register_response.json', () {
-      final data = RemoteCompatibilityFixtures.loadFixture('rest_register_response.json');
+      final data = RemoteCompatibilityFixtures.loadFixture(
+        'rest_register_response.json',
+      );
       expect(data['account_id'], 'acc_01h9w2m8g8qpr88v75v1w7jx8q');
       expect(data['created_at'], '2026-06-19T06:00:00Z');
     });
 
     test('loads and decodes rest_login_response.json', () {
-      final data = RemoteCompatibilityFixtures.loadFixture('rest_login_response.json');
+      final data = RemoteCompatibilityFixtures.loadFixture(
+        'rest_login_response.json',
+      );
       expect(data['device_id'], 1);
       expect(data['access_token'], isNotEmpty);
     });
 
     test('loads and decodes rest_prekey_bundle.json', () {
-      final data = RemoteCompatibilityFixtures.loadFixture('rest_prekey_bundle.json');
+      final data = RemoteCompatibilityFixtures.loadFixture(
+        'rest_prekey_bundle.json',
+      );
       expect(data['account_id'], 'acc_01h9w2m8g8qpr88v75v1w7jx8q');
       expect(data['device_id'], 1);
       expect(data['identity_key'], isNotEmpty);
@@ -212,20 +214,30 @@ void main() {
     });
 
     test('loads and decodes realtime_chat_message.json', () {
-      final data = RemoteCompatibilityFixtures.loadFixture('realtime_chat_message.json');
+      final data = RemoteCompatibilityFixtures.loadFixture(
+        'realtime_chat_message.json',
+      );
       final envelope = RemoteRealtimeEnvelope.fromJson(data);
       expect(envelope.eventId, '469018e6-e910-4100-84cf-d84bf27ad9a6');
       expect(envelope.type, 'chat_message');
       expect(envelope.isUnrecognized, false);
-      expect(envelope.payload['ciphertext'], 'opaquebase64ciphertextbytesherefromdoubleratchetpayload');
+      expect(
+        envelope.payload['ciphertext'],
+        'opaquebase64ciphertextbytesherefromdoubleratchetpayload',
+      );
     });
 
-    test('loads, decodes, and gracefully degrades realtime_unknown_event.json', () {
-      final data = RemoteCompatibilityFixtures.loadFixture('realtime_unknown_event.json');
-      final envelope = RemoteRealtimeEnvelope.fromJson(data);
-      expect(envelope.eventId, 'a90f1111-e910-4100-84cf-d84bf27ad9a6');
-      expect(envelope.type, 'new_unrecognized_type');
-      expect(envelope.isUnrecognized, true);
-    });
+    test(
+      'loads, decodes, and gracefully degrades realtime_unknown_event.json',
+      () {
+        final data = RemoteCompatibilityFixtures.loadFixture(
+          'realtime_unknown_event.json',
+        );
+        final envelope = RemoteRealtimeEnvelope.fromJson(data);
+        expect(envelope.eventId, 'a90f1111-e910-4100-84cf-d84bf27ad9a6');
+        expect(envelope.type, 'new_unrecognized_type');
+        expect(envelope.isUnrecognized, true);
+      },
+    );
   });
 }

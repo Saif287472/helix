@@ -139,9 +139,7 @@ class _ChatsTabState extends ConsumerState<_ChatsTab> {
         ),
         Expanded(
           child: ListView(
-            children: visible
-                .map((t) => _ChatThreadTile(thread: t))
-                .toList(),
+            children: visible.map((t) => _ChatThreadTile(thread: t)).toList(),
           ),
         ),
       ],

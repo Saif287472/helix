@@ -9,21 +9,21 @@ import 'package:helix_local_groups/domain/lobby_constants.dart';
 /// all candidates were unreachable (caller should leave without handoff).
 Future<({String newHostFp, int newPort})?> runGracefulHandoff({
   required LanLobbyServer server,
-  required String         sid,
-  required int            currentGen,
-  required String         localFp,
-  required List<String>   memberFps,
+  required String sid,
+  required int currentGen,
+  required String localFp,
+  required List<String> memberFps,
 }) async {
   final candidates = memberFps.where((fp) => fp != localFp).toList()..sort();
   if (candidates.isEmpty) return null;
 
   for (final candidate in candidates) {
     final result = await _attemptHandoff(
-      server:     server,
-      sid:        sid,
+      server: server,
+      sid: sid,
       currentGen: currentGen,
-      localFp:    localFp,
-      candidate:  candidate,
+      localFp: localFp,
+      candidate: candidate,
     );
     if (result != null) return result;
   }
@@ -32,30 +32,32 @@ Future<({String newHostFp, int newPort})?> runGracefulHandoff({
 
 Future<({String newHostFp, int newPort})?> _attemptHandoff({
   required LanLobbyServer server,
-  required String         sid,
-  required int            currentGen,
-  required String         localFp,
-  required String         candidate,
+  required String sid,
+  required int currentGen,
+  required String localFp,
+  required String candidate,
 }) async {
   final nextGen = currentGen + 1;
 
   // Phase 1: ask the candidate to open its server.
   server.sendToFp(candidate, {
-    'v':          kLobbyProtocolVersion,
-    't':          kFtHostXferPrepare,
-    'sid':        sid,
-    'nextGen':    nextGen,
+    'v': kLobbyProtocolVersion,
+    't': kFtHostXferPrepare,
+    'sid': sid,
+    'nextGen': nextGen,
     'nextHostFp': candidate,
   });
 
   // Phase 2: wait for HTR from the candidate.
   try {
     final ready = await server.clientFrames
-        .where((e) =>
-            e.fp == candidate &&
-            e.frame['t'] == kFtHostXferReady &&
-            e.frame['sid'] == sid &&
-            e.frame['nextGen'] == nextGen)
+        .where(
+          (e) =>
+              e.fp == candidate &&
+              e.frame['t'] == kFtHostXferReady &&
+              e.frame['sid'] == sid &&
+              e.frame['nextGen'] == nextGen,
+        )
         .map((e) => e.frame)
         .first
         .timeout(kLobbyHandoffReadyTimeout);
@@ -65,12 +67,12 @@ Future<({String newHostFp, int newPort})?> _attemptHandoff({
 
     // Phase 3: commit to all clients.
     server.broadcastFrame({
-      'v':          kLobbyProtocolVersion,
-      't':          kFtHostXferCommit,
-      'sid':        sid,
+      'v': kLobbyProtocolVersion,
+      't': kFtHostXferCommit,
+      'sid': sid,
       'nextHostFp': candidate,
-      'port':       newPort,
-      'nextGen':    nextGen,
+      'port': newPort,
+      'nextGen': nextGen,
     });
 
     return (newHostFp: candidate, newPort: newPort);
@@ -84,8 +86,8 @@ Future<({String newHostFp, int newPort})?> _attemptHandoff({
 /// Called by the candidate when it receives HOST_XFER_PREPARE.
 /// Opens a [LanLobbyServer] and sends HOST_XFER_READY back via the client.
 Future<LanLobbyServer?> acceptHandoffPrepare({
-  required String  sid,
-  required int     nextGen,
+  required String sid,
+  required int nextGen,
   required void Function(Map<String, dynamic>) sendToHost,
 }) async {
   try {
@@ -93,11 +95,11 @@ Future<LanLobbyServer?> acceptHandoffPrepare({
     await newServer.open(sid: sid, gen: nextGen);
 
     sendToHost({
-      'v':       kLobbyProtocolVersion,
-      't':       kFtHostXferReady,
-      'sid':     sid,
+      'v': kLobbyProtocolVersion,
+      't': kFtHostXferReady,
+      'sid': sid,
       'nextGen': nextGen,
-      'port':    newServer.port,
+      'port': newServer.port,
     });
 
     return newServer;

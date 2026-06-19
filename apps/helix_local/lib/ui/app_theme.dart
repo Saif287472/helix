@@ -48,14 +48,14 @@ class HelixTokens {
 }
 
 enum HelixAccent {
-  teal(   'teal',    'Teal',       Color(0xFF0F766E), Color(0xFFD5F3EF)),
-  emerald('emerald', 'Emerald',    Color(0xFF047857), Color(0xFFD8F3E7)),
-  ocean(  'ocean',   'Ocean Blue', Color(0xFF0369A1), Color(0xFFDCEFFC)),
-  indigo( 'indigo',  'Indigo',     Color(0xFF4F46E5), Color(0xFFE5E7FF)),
-  violet( 'violet',  'Violet',     Color(0xFF7C3AED), Color(0xFFEEE5FF)),
-  rose(   'rose',    'Rose',       Color(0xFFBE185D), Color(0xFFFCE3ED)),
-  coral(  'coral',   'Coral',      Color(0xFFD95745), Color(0xFFFBE5E1)),
-  cyan(   'cyan',    'Ocean Cyan', Color(0xFF06B6D4), Color(0xFFCFFAFE));
+  teal('teal', 'Teal', Color(0xFF0F766E), Color(0xFFD5F3EF)),
+  emerald('emerald', 'Emerald', Color(0xFF047857), Color(0xFFD8F3E7)),
+  ocean('ocean', 'Ocean Blue', Color(0xFF0369A1), Color(0xFFDCEFFC)),
+  indigo('indigo', 'Indigo', Color(0xFF4F46E5), Color(0xFFE5E7FF)),
+  violet('violet', 'Violet', Color(0xFF7C3AED), Color(0xFFEEE5FF)),
+  rose('rose', 'Rose', Color(0xFFBE185D), Color(0xFFFCE3ED)),
+  coral('coral', 'Coral', Color(0xFFD95745), Color(0xFFFBE5E1)),
+  cyan('cyan', 'Ocean Cyan', Color(0xFF06B6D4), Color(0xFFCFFAFE));
 
   const HelixAccent(this.id, this.label, this.seed, this.tint);
 

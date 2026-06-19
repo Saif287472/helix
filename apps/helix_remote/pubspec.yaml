@@ -23,8 +23,13 @@ dependencies:
     path: ../../packages/remote/helix_remote_sync
   path: any
   path_provider: any
+  cryptography: any
+  crypto: any
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   test: any
+  sqlite3: any
+  helix_remote_backend:
+    path: ../../services/helix_remote_backend

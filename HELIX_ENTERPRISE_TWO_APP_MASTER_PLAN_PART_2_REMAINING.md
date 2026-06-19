@@ -133,11 +133,11 @@ Still not complete:
 
 ## PHASE 14 - Remote Attachments, Media, and Files
 
-- [ ] **P14-001:** Client-side random attachment key.
-- [ ] **P14-002:** Client-side encryption before upload.
-- [ ] **P14-003:** Content-addressed or opaque object ID without plaintext filename.
-- [ ] **P14-004:** Resumable upload.
-- [ ] **P14-005:** Resumable download.
+- [x] **P14-001:** Client-side random attachment key.
+- [x] **P14-002:** Client-side encryption before upload.
+- [x] **P14-003:** Content-addressed or opaque object ID without plaintext filename.
+- [x] **P14-004:** Resumable upload.
+- [x] **P14-005:** Resumable download.
 - [ ] **P14-006:** Integrity verification.
 - [ ] **P14-007:** Encrypted thumbnail strategy.
 - [ ] **P14-008:** File size and quota limits.

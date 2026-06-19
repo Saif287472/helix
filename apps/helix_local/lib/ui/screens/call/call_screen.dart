@@ -89,17 +89,27 @@ class _CallScreenState extends ConsumerState<CallScreen>
         call.status == CallStatus.ringing;
 
     final svc = ref.watch(callServiceProvider);
-    final showRemoteVideo = call.isRemoteVideoEnabled && svc.remoteVideoRenderer != null;
-    final showLocalVideo = call.isVideoEnabled && svc.localVideoRenderer != null;
+    final showRemoteVideo =
+        call.isRemoteVideoEnabled && svc.remoteVideoRenderer != null;
+    final showLocalVideo =
+        call.isVideoEnabled && svc.localVideoRenderer != null;
     final isVideo = showRemoteVideo || showLocalVideo;
 
     final textStyleShadow = isVideo
-        ? const [Shadow(color: Colors.black87, blurRadius: 8.0, offset: Offset(0, 2))]
+        ? const [
+            Shadow(
+              color: Colors.black87,
+              blurRadius: 8.0,
+              offset: Offset(0, 2),
+            ),
+          ]
         : null;
 
     final mainRenderer = (_localIsMain && showLocalVideo)
         ? svc.localVideoRenderer!
-        : (showRemoteVideo ? svc.remoteVideoRenderer! : (showLocalVideo ? svc.localVideoRenderer! : null));
+        : (showRemoteVideo
+              ? svc.remoteVideoRenderer!
+              : (showLocalVideo ? svc.localVideoRenderer! : null));
     // Only mirror local video when the front ("selfie") camera is active —
     // the rear camera should display normally, like a regular viewfinder.
     final mirrorMain =
@@ -167,10 +177,14 @@ class _CallScreenState extends ConsumerState<CallScreen>
                   onPanUpdate: (details) {
                     setState(() {
                       final size = MediaQuery.of(context).size;
-                      final newX = (_pipOffset.dx + details.delta.dx)
-                          .clamp(8.0, (size.width - 108.0).clamp(8.0, double.infinity));
-                      final newY = (_pipOffset.dy + details.delta.dy)
-                          .clamp(8.0, (size.height - 148.0).clamp(8.0, double.infinity));
+                      final newX = (_pipOffset.dx + details.delta.dx).clamp(
+                        8.0,
+                        (size.width - 108.0).clamp(8.0, double.infinity),
+                      );
+                      final newY = (_pipOffset.dy + details.delta.dy).clamp(
+                        8.0,
+                        (size.height - 148.0).clamp(8.0, double.infinity),
+                      );
                       _pipOffset = Offset(newX, newY);
                     });
                   },
@@ -184,19 +198,18 @@ class _CallScreenState extends ConsumerState<CallScreen>
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: RTCVideoView(
-                      _localIsMain ? svc.remoteVideoRenderer! : svc.localVideoRenderer!,
-                      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                      _localIsMain
+                          ? svc.remoteVideoRenderer!
+                          : svc.localVideoRenderer!,
+                      objectFit:
+                          RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                       mirror: !_localIsMain && call.isFrontCamera,
                     ),
                   ),
                 ),
               ),
             if (!isIncomingRinging)
-              Positioned(
-                top: 8,
-                left: 8,
-                child: _MinimizeButton(),
-              ),
+              Positioned(top: 8, left: 8, child: _MinimizeButton()),
           ],
         ),
       ),

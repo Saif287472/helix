@@ -83,24 +83,27 @@ class LanLobbyServer {
   ServerSocket? _server;
   Timer? _pingTimer;
 
-  final _clients = <String, _ClientConn>{};     // fp → conn
-  final _pending = <_ClientConn>[];              // not yet identified
+  final _clients = <String, _ClientConn>{}; // fp → conn
+  final _pending = <_ClientConn>[]; // not yet identified
 
-  final _joinRequests  = StreamController<({Socket socket, Map<String, dynamic> frame})>.broadcast();
-  final _clientFrames  = StreamController<({String fp, Map<String, dynamic> frame})>.broadcast();
+  final _joinRequests =
+      StreamController<
+        ({Socket socket, Map<String, dynamic> frame})
+      >.broadcast();
+  final _clientFrames =
+      StreamController<({String fp, Map<String, dynamic> frame})>.broadcast();
   final _disconnections = StreamController<String>.broadcast();
 
-  Stream<({Socket socket, Map<String, dynamic> frame})> get joinRequests   => _joinRequests.stream;
-  Stream<({String fp, Map<String, dynamic> frame})>     get clientFrames   => _clientFrames.stream;
-  Stream<String>                                         get disconnections => _disconnections.stream;
+  Stream<({Socket socket, Map<String, dynamic> frame})> get joinRequests =>
+      _joinRequests.stream;
+  Stream<({String fp, Map<String, dynamic> frame})> get clientFrames =>
+      _clientFrames.stream;
+  Stream<String> get disconnections => _disconnections.stream;
 
   int get port => _server?.port ?? 0;
   bool get isOpen => _server != null;
 
-  Future<void> open({
-    required String sid,
-    required int gen,
-  }) async {
+  Future<void> open({required String sid, required int gen}) async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
     _server!.listen(
       (socket) => _acceptClient(socket, sid: sid, gen: gen),
@@ -220,7 +223,9 @@ class LanLobbyServer {
     for (final c in clients) {
       await c.close().catchError((_) {});
     }
-    try { await _server?.close(); } catch (_) {}
+    try {
+      await _server?.close();
+    } catch (_) {}
     _server = null;
     if (!_joinRequests.isClosed) {
       await _joinRequests.close().catchError((_) {});

@@ -12,11 +12,11 @@ class RemoteAttachmentManifest {
   final String mimeType;
 
   Map<String, dynamic> toJson() => {
-        'file_id': fileId,
-        'file_size': fileSize,
-        'file_hash': fileHash,
-        'mime_type': mimeType,
-      };
+    'file_id': fileId,
+    'file_size': fileSize,
+    'file_hash': fileHash,
+    'mime_type': mimeType,
+  };
 
   factory RemoteAttachmentManifest.fromJson(Map<String, dynamic> json) {
     return RemoteAttachmentManifest(

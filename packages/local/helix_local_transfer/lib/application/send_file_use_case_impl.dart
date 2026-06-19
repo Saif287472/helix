@@ -49,7 +49,9 @@ class SendFileUseCaseImpl implements SendFileUseCase {
       final resumeSub = gateway.resumeEvents
           .where((f) => f.fileId == fileId)
           .listen(
-            (f) { if (!completer.isCompleted) completer.complete(f); },
+            (f) {
+              if (!completer.isCompleted) completer.complete(f);
+            },
             onError: (Object e, StackTrace s) {
               if (!completer.isCompleted) completer.completeError(e, s);
             },
@@ -68,12 +70,11 @@ class SendFileUseCaseImpl implements SendFileUseCase {
           ),
         );
 
-        final resumeFrame = await completer.future
-            .timeout(const Duration(seconds: 30));
+        final resumeFrame = await completer.future.timeout(
+          const Duration(seconds: 30),
+        );
         final offset = resumeFrame.resumeOffset;
-        if (offset < 0 ||
-            offset > totalSize ||
-            offset % kFileChunkSize != 0) {
+        if (offset < 0 || offset > totalSize || offset % kFileChunkSize != 0) {
           throw const FormatException('Invalid resume offset');
         }
         startChunk = offset ~/ kFileChunkSize;

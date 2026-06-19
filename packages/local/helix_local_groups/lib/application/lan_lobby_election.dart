@@ -18,13 +18,17 @@ Duration electionDelay(String localFp, List<String> candidateFps) {
 /// [incomingGen] / [incomingHostFp] come from a received ANNOUNCE.
 /// Higher generation always wins; ties broken by lexicographically lower fp.
 bool localLosesConflict({
-  required int    localGen,
+  required int localGen,
   required String localFp,
-  required int    incomingGen,
+  required int incomingGen,
   required String incomingHostFp,
 }) {
-  if (incomingGen > localGen) return true;
-  if (incomingGen == localGen && incomingHostFp.compareTo(localFp) < 0) return true;
+  if (incomingGen > localGen) {
+    return true;
+  }
+  if (incomingGen == localGen && incomingHostFp.compareTo(localFp) < 0) {
+    return true;
+  }
   return false;
 }
 

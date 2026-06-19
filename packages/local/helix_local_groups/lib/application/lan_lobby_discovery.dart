@@ -84,8 +84,7 @@ class LanLobbyDiscovery {
   }
 
   /// Stream of all valid incoming datagrams (filtered to protocol version 1).
-  Stream<LobbyDatagram> get incoming =>
-      _controller?.stream ?? Stream.empty();
+  Stream<LobbyDatagram> get incoming => _controller?.stream ?? Stream.empty();
 
   /// Sends an ANNOUNCE to the multicast group.
   void sendAnnounce({
@@ -156,7 +155,8 @@ class LanLobbyDiscovery {
     } catch (_) {}
   }
 
-  String _nonce() => _random.nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0') +
+  String _nonce() =>
+      _random.nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0') +
       _random.nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0');
 
   void close() {

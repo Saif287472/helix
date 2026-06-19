@@ -18,11 +18,13 @@ final proximityScreenControllerProvider = Provider<void>((ref) {
   var pending = Future<void>.value();
 
   void setEnabled(bool value) {
-    pending = pending.then((_) async {
-      if (enabled == value) return;
-      enabled = value;
-      await ProximitySensor.setProximityScreenOff(value);
-    }).catchError((_) {});
+    pending = pending
+        .then((_) async {
+          if (enabled == value) return;
+          enabled = value;
+          await ProximitySensor.setProximityScreenOff(value);
+        })
+        .catchError((_) {});
   }
 
   ref.listen<AsyncValue<CallState?>>(currentCallProvider, (previous, next) {
@@ -30,7 +32,9 @@ final proximityScreenControllerProvider = Provider<void>((ref) {
     // During video calls the user looks at the screen — skip the proximity
     // sensor so the display doesn't turn off when they hold the phone up.
     final audioCallActive =
-        call != null && call.status == CallStatus.active && !call.isVideoEnabled;
+        call != null &&
+        call.status == CallStatus.active &&
+        !call.isVideoEnabled;
     setEnabled(audioCallActive);
   });
 

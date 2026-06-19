@@ -22,7 +22,10 @@ class RemoteBackupCrypto {
   }
 
   /// Encrypt backup payload.
-  Future<Uint8List> encryptBackup(Uint8List plaintext, crypto.SecretKey derivedKey) async {
+  Future<Uint8List> encryptBackup(
+    Uint8List plaintext,
+    crypto.SecretKey derivedKey,
+  ) async {
     final nonce = aesGcm.newNonce();
     final box = await aesGcm.encrypt(
       plaintext,
@@ -33,16 +36,16 @@ class RemoteBackupCrypto {
   }
 
   /// Decrypt backup payload.
-  Future<Uint8List> decryptBackup(Uint8List ciphertextBytes, crypto.SecretKey derivedKey) async {
+  Future<Uint8List> decryptBackup(
+    Uint8List ciphertextBytes,
+    crypto.SecretKey derivedKey,
+  ) async {
     final box = crypto.SecretBox.fromConcatenation(
       ciphertextBytes,
       nonceLength: 12,
       macLength: 16,
     );
-    final plaintext = await aesGcm.decrypt(
-      box,
-      secretKey: derivedKey,
-    );
+    final plaintext = await aesGcm.decrypt(box, secretKey: derivedKey);
     return Uint8List.fromList(plaintext);
   }
 }

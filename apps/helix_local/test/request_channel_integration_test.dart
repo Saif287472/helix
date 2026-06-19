@@ -24,10 +24,18 @@ void main() {
       const aliceSessionId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
       const bobSessionId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
-      final aliceRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
-      final bobRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
-      final aliceMessaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
-      final bobMessaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
+      final aliceRequests = RequestService(
+        connectionRequestRepository: InMemoryConnectionRequestRepository(),
+      )..start();
+      final bobRequests = RequestService(
+        connectionRequestRepository: InMemoryConnectionRequestRepository(),
+      )..start();
+      final aliceMessaging = MessagingService(
+        wipeScheduler: TimerDisconnectWipeScheduler(),
+      );
+      final bobMessaging = MessagingService(
+        wipeScheduler: TimerDisconnectWipeScheduler(),
+      );
       ServerSocket? server;
       StreamSubscription<Socket>? serverSub;
 
@@ -164,8 +172,12 @@ void main() {
       const aliceSessionId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
       const bobSessionId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
-      final aliceRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
-      final bobRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
+      final aliceRequests = RequestService(
+        connectionRequestRepository: InMemoryConnectionRequestRepository(),
+      )..start();
+      final bobRequests = RequestService(
+        connectionRequestRepository: InMemoryConnectionRequestRepository(),
+      )..start();
       ServerSocket? server;
       StreamSubscription<Socket>? serverSub;
 
@@ -250,9 +262,15 @@ void main() {
       final aliceIdentity = _generateIdentity();
       const aliceSessionId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-      final aliceRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
-      final bobRequests = RequestService(connectionRequestRepository: InMemoryConnectionRequestRepository())..start();
-      final bobMessaging = MessagingService(wipeScheduler: TimerDisconnectWipeScheduler());
+      final aliceRequests = RequestService(
+        connectionRequestRepository: InMemoryConnectionRequestRepository(),
+      )..start();
+      final bobRequests = RequestService(
+        connectionRequestRepository: InMemoryConnectionRequestRepository(),
+      )..start();
+      final bobMessaging = MessagingService(
+        wipeScheduler: TimerDisconnectWipeScheduler(),
+      );
       ServerSocket? server;
       StreamSubscription<Socket>? serverSub;
 

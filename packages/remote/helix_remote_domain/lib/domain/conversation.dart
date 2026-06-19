@@ -14,12 +14,12 @@ class RemoteConversation {
   final int lastActivitySequence;
 
   Map<String, dynamic> toJson() => {
-        'conversation_id': conversationId,
-        'type': type,
-        'title': title,
-        'created_at': createdAt.toIso8601String(),
-        'last_activity_sequence': lastActivitySequence,
-      };
+    'conversation_id': conversationId,
+    'type': type,
+    'title': title,
+    'created_at': createdAt.toIso8601String(),
+    'last_activity_sequence': lastActivitySequence,
+  };
 
   factory RemoteConversation.fromJson(Map<String, dynamic> json) {
     return RemoteConversation(

@@ -12,14 +12,26 @@ void main() {
       expect(local.packageId, isNot(equals(remote.packageId)));
       expect(local.appDataFolder, isNot(equals(remote.appDataFolder)));
       expect(local.databaseFilename, isNot(equals(remote.databaseFilename)));
-      expect(local.secureStoragePrefix, isNot(equals(remote.secureStoragePrefix)));
-      expect(local.notificationNamespace, isNot(equals(remote.notificationNamespace)));
+      expect(
+        local.secureStoragePrefix,
+        isNot(equals(remote.secureStoragePrefix)),
+      );
+      expect(
+        local.notificationNamespace,
+        isNot(equals(remote.notificationNamespace)),
+      );
       expect(local.urlScheme, isNot(equals(remote.urlScheme)));
-      expect(local.methodChannelNamespace, isNot(equals(remote.methodChannelNamespace)));
+      expect(
+        local.methodChannelNamespace,
+        isNot(equals(remote.methodChannelNamespace)),
+      );
       expect(local.logNamespace, isNot(equals(remote.logNamespace)));
       expect(local.exportPrefix, isNot(equals(remote.exportPrefix)));
       expect(local.protocolLabel, isNot(equals(remote.protocolLabel)));
-      expect(local.windowsNotificationGuid, isNot(equals(remote.windowsNotificationGuid)));
+      expect(
+        local.windowsNotificationGuid,
+        isNot(equals(remote.windowsNotificationGuid)),
+      );
     });
   });
 }

@@ -71,3 +71,11 @@ local.properties
 *.sqlite3
 diagnostics-*.json
 audit-export-*.json
+
+# Attachment storage and temporary files
+attachments_storage/
+**/attachments_storage/
+test_attachments_storage/
+test_remote_attachments_storage/
+test_attachments_storage*/
+

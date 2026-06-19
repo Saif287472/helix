@@ -346,9 +346,7 @@ class _StepDots extends StatelessWidget {
         final selected = index == step;
         return AnimatedContainer(
           duration: HelixTokens.fast,
-          margin: const EdgeInsets.symmetric(
-            horizontal: HelixTokens.space4,
-          ),
+          margin: const EdgeInsets.symmetric(horizontal: HelixTokens.space4),
           width: selected ? 28 : 8,
           height: 8,
           decoration: BoxDecoration(

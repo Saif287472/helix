@@ -23,7 +23,9 @@ class AppLogger {
     try {
       final dir = await getApplicationDocumentsDirectory();
       _logFile = File('${dir.path}/${descriptor.logNamespace}_anomaly_log.txt');
-      _counterFile = File('${dir.path}/${descriptor.logNamespace}_session_counter.txt');
+      _counterFile = File(
+        '${dir.path}/${descriptor.logNamespace}_session_counter.txt',
+      );
 
       int counter = 0;
       if (await _counterFile!.exists()) {
@@ -34,7 +36,9 @@ class AppLogger {
       await _counterFile!.writeAsString('$_sessionNumber');
 
       await _purge();
-      await _append('--- SESSION $_sessionNumber | ${_fmt(DateTime.now())} ---');
+      await _append(
+        '--- SESSION $_sessionNumber | ${_fmt(DateTime.now())} ---',
+      );
     } catch (e) {
       debugPrint('[AppLogger] init failed: $e');
     }
@@ -48,11 +52,17 @@ class AppLogger {
       _write('INFO', tag, message, null);
 
   Future<void> _write(
-      String level, String tag, String message, StackTrace? stack) async {
+    String level,
+    String tag,
+    String message,
+    StackTrace? stack,
+  ) async {
     debugPrint('[Helix $level] [$tag] $message');
-    final flat = message.replaceAll('\r\n', ' | ').replaceAll('\n', ' | ').trim();
-    final stackPart =
-        stack != null ? ' | STACK: ${_flattenStack(stack)}' : '';
+    final flat = message
+        .replaceAll('\r\n', ' | ')
+        .replaceAll('\n', ' | ')
+        .trim();
+    final stackPart = stack != null ? ' | STACK: ${_flattenStack(stack)}' : '';
     final entry =
         '[${_fmt(DateTime.now())}] [S$_sessionNumber] [$level] [$tag] $flat$stackPart';
     await _append(entry);
@@ -96,8 +106,9 @@ class AppLogger {
         return !date.isBefore(cutoff);
       }).toList();
 
-      final trimmed =
-          kept.length > _maxLines ? kept.sublist(kept.length - _maxLines) : kept;
+      final trimmed = kept.length > _maxLines
+          ? kept.sublist(kept.length - _maxLines)
+          : kept;
 
       if (trimmed.length != lines.length) {
         await _logFile!.writeAsString('${trimmed.join('\n')}\n');
@@ -122,7 +133,9 @@ class AppLogger {
       if (_logFile != null && await _logFile!.exists()) {
         await _logFile!.delete();
       }
-      await _append('--- LOG CLEARED | SESSION $_sessionNumber | ${_fmt(DateTime.now())} ---');
+      await _append(
+        '--- LOG CLEARED | SESSION $_sessionNumber | ${_fmt(DateTime.now())} ---',
+      );
     } catch (_) {}
   }
 }

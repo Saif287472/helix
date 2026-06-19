@@ -60,9 +60,11 @@ class WindowsTrayService with TrayListener {
       if (Platform.isWindows) 'assets/tray_icon.ico',
       if (Platform.isWindows) 'windows/runner/resources/app_icon.ico',
       if (Platform.isWindows) 'apps/helix_local/assets/tray_icon.ico',
-      if (Platform.isWindows) 'apps/helix_local/windows/runner/resources/app_icon.ico',
+      if (Platform.isWindows)
+        'apps/helix_local/windows/runner/resources/app_icon.ico',
       if (Platform.isWindows) 'apps/helix_remote/assets/tray_icon.ico',
-      if (Platform.isWindows) 'apps/helix_remote/windows/runner/resources/app_icon.ico',
+      if (Platform.isWindows)
+        'apps/helix_remote/windows/runner/resources/app_icon.ico',
     ];
     for (final path in candidates) {
       if (File(path).existsSync()) return path;

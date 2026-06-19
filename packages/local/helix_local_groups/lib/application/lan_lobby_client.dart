@@ -13,20 +13,20 @@ class LanLobbyClient {
 
   Future<void> _writeFuture = Future.value();
 
-  final _frames        = StreamController<Map<String, dynamic>>.broadcast();
-  final _disconnected  = StreamController<void>.broadcast();
+  final _frames = StreamController<Map<String, dynamic>>.broadcast();
+  final _disconnected = StreamController<void>.broadcast();
 
-  Stream<Map<String, dynamic>> get frames       => _frames.stream;
-  Stream<void>                 get disconnected  => _disconnected.stream;
+  Stream<Map<String, dynamic>> get frames => _frames.stream;
+  Stream<void> get disconnected => _disconnected.stream;
 
   bool get isConnected => _socket != null && !_frames.isClosed;
 
   /// Connects to the host's lobby TCP server and starts the heartbeat.
   Future<void> connect({
     required String hostIp,
-    required int    hostPort,
+    required int hostPort,
     required String sid,
-    required int    gen,
+    required int gen,
     required String localFp,
     required String name,
     required String suffix,
@@ -125,7 +125,9 @@ class LanLobbyClient {
     _timeoutTimer?.cancel();
     _timeoutTimer = null;
     await _sub?.cancel();
-    try { await _socket?.close(); } catch (_) {}
+    try {
+      await _socket?.close();
+    } catch (_) {}
     _socket = null;
     if (!_frames.isClosed) _frames.close();
     if (!_disconnected.isClosed) _disconnected.close();

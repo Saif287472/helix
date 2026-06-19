@@ -26,14 +26,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void initState() {
     super.initState();
     _controller = VideoPlayerController.file(File(widget.filePath))
-      ..initialize().then((_) {
-        if (mounted) {
-          setState(() => _ready = true);
-          _controller.play();
-        }
-      }).catchError((Object e) {
-        if (mounted) setState(() => _error = e.toString());
-      });
+      ..initialize()
+          .then((_) {
+            if (mounted) {
+              setState(() => _ready = true);
+              _controller.play();
+            }
+          })
+          .catchError((Object e) {
+            if (mounted) setState(() => _error = e.toString());
+          });
     _controller.addListener(() {
       if (mounted) setState(() {});
     });
@@ -58,11 +60,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: Text(
-          widget.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: _error != null
           ? Center(
@@ -120,8 +118,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         final pos = _controller.value.position;
                         _controller.seekTo(
                           Duration(
-                            milliseconds:
-                                (pos.inMilliseconds - 10000).clamp(0, 1 << 52),
+                            milliseconds: (pos.inMilliseconds - 10000).clamp(
+                              0,
+                              1 << 52,
+                            ),
                           ),
                         );
                       },
@@ -147,8 +147,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         final dur = _controller.value.duration;
                         _controller.seekTo(
                           Duration(
-                            milliseconds: (pos.inMilliseconds + 10000)
-                                .clamp(0, dur.inMilliseconds),
+                            milliseconds: (pos.inMilliseconds + 10000).clamp(
+                              0,
+                              dur.inMilliseconds,
+                            ),
                           ),
                         );
                       },
@@ -157,9 +159,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 ),
               ],
             )
-          : const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
+          : const Center(child: CircularProgressIndicator(color: Colors.white)),
     );
   }
 }

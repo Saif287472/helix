@@ -8,9 +8,9 @@ class RemoteSyncCursor {
   final int lastServerSequence;
 
   Map<String, dynamic> toJson() => {
-        'conversation_id': conversationId,
-        'last_server_sequence': lastServerSequence,
-      };
+    'conversation_id': conversationId,
+    'last_server_sequence': lastServerSequence,
+  };
 
   factory RemoteSyncCursor.fromJson(Map<String, dynamic> json) {
     return RemoteSyncCursor(

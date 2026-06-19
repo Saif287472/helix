@@ -23,10 +23,9 @@ class AndroidForegroundService {
   static Future<void> startService({bool inCall = false}) async {
     if (!Platform.isAndroid) return;
     try {
-      await _channel.invokeMethod<void>(
-        'startService',
-        <String, dynamic>{'inCall': inCall},
-      );
+      await _channel.invokeMethod<void>('startService', <String, dynamic>{
+        'inCall': inCall,
+      });
     } on PlatformException catch (e) {
       // Log but don't crash — the app remains functional without the service.
       // ignore: avoid_print
@@ -49,7 +48,10 @@ class AndroidForegroundService {
   ///
   /// [text] is displayed below the "Helix is active" title line.
   /// Example: "2 active chats · Discoverable"
-  static Future<void> updateNotificationText(String text, {bool inCall = false}) async {
+  static Future<void> updateNotificationText(
+    String text, {
+    bool inCall = false,
+  }) async {
     if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod<void>(

@@ -105,7 +105,11 @@ abstract interface class CallEngine {
   Future<String> createOffer(String callId, {bool video = false});
 
   /// Create an SDP answer for an incoming offer; returns the local SDP string.
-  Future<String> createAnswer(String callId, String offerSdp, {bool video = false});
+  Future<String> createAnswer(
+    String callId,
+    String offerSdp, {
+    bool video = false,
+  });
 
   /// Apply the remote peer's SDP answer to a previously created offer.
   Future<void> setRemoteAnswer(String callId, String answerSdp);

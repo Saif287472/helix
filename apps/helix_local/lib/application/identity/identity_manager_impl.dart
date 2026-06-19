@@ -30,12 +30,10 @@ class IdentityManagerImpl implements IdentityManager {
       StreamController<Profile>.broadcast();
 
   IdentityManagerImpl({
-    required ProfileRepository profileRepository,
-    required SecureIdentityStore secureIdentityStore,
-    String appDataFolder = 'com.helix/helix',
-  })  : _profileRepository = profileRepository, // ignore: prefer_initializing_formals
-        _secureIdentityStore = secureIdentityStore, // ignore: prefer_initializing_formals
-        _appDataFolder = appDataFolder; // ignore: prefer_initializing_formals
+    required this._profileRepository,
+    required this._secureIdentityStore,
+    this._appDataFolder = 'com.helix/helix',
+  });
 
   @override
   Profile? get profile => _profile;
@@ -207,7 +205,10 @@ class IdentityManagerImpl implements IdentityManager {
 
     // _appDataFolder is the product-scoped relative path (e.g. "com.helix/helix").
     // Using injected value prevents hardcoding the Local product path here.
-    final relativeParts = _appDataFolder.replaceAll('/', Platform.pathSeparator);
+    final relativeParts = _appDataFolder.replaceAll(
+      '/',
+      Platform.pathSeparator,
+    );
     final file = File(
       '$appData${Platform.pathSeparator}$relativeParts'
       '${Platform.pathSeparator}flutter_secure_storage.dat',

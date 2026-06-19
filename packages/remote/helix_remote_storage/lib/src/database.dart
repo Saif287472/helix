@@ -579,6 +579,51 @@ class HelixRemoteDatabase {
   }
 
   // ---------------------------------------------------------------------------
+  // Attachment operations
+  // ---------------------------------------------------------------------------
+
+  void saveAttachment({
+    required String attachmentId,
+    required String filename,
+    required int sizeBytes,
+    required String encryptedKey,
+    String? localPath,
+    required String status,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO attachments (attachment_id, filename, size_bytes, encrypted_key, local_path, status)
+      VALUES (?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      attachmentId,
+      filename,
+      sizeBytes,
+      encryptedKey,
+      localPath,
+      status,
+    ]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getAttachment(String attachmentId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM attachments WHERE attachment_id = ?;',
+    );
+    final res = stmt.select([attachmentId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'attachment_id': row['attachment_id'],
+      'filename': row['filename'],
+      'size_bytes': row['size_bytes'],
+      'encrypted_key': row['encrypted_key'],
+      'local_path': row['local_path'],
+      'status': row['status'],
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Message revisions
   // ---------------------------------------------------------------------------
 

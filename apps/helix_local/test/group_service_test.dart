@@ -83,7 +83,9 @@ void main() {
       serviceB.connectChannelCallback = (fp, ep) async => channelToA;
 
       // Simulate Bob receiving A's host announcement
-      final announceA = serviceA.buildHostAnnouncement(GroupService.publicLobbyId);
+      final announceA = serviceA.buildHostAnnouncement(
+        GroupService.publicLobbyId,
+      );
       await serviceB.handleControlFrame(
         peerFingerprint: 'alice',
         channel: channelToA,
@@ -149,76 +151,94 @@ void main() {
       );
 
       // Pre-fill Bob's repo with higher membership version
-      repoB.saveGroup(GroupSnapshot(
-        groupId: GroupService.publicLobbyId,
-        name: 'LAN Lobby',
-        visibility: GroupVisibility.publicLobby,
-        hostFingerprint: 'bob',
-        hostEndpoint: '127.0.0.1:4002',
-        epoch: 0,
-        membershipVersion: 2,
-        members: const [],
-        pending: const [],
-        banned: const {},
-      ));
+      repoB.saveGroup(
+        GroupSnapshot(
+          groupId: GroupService.publicLobbyId,
+          name: 'LAN Lobby',
+          visibility: GroupVisibility.publicLobby,
+          hostFingerprint: 'bob',
+          hostEndpoint: '127.0.0.1:4002',
+          epoch: 0,
+          membershipVersion: 2,
+          members: const [],
+          pending: const [],
+          banned: const {},
+        ),
+      );
 
       final accepted = serviceB.applyControlFrame(staleFrame);
       expect(accepted, isFalse);
     });
 
-    test('Private Group separation (requires approval, kick/block works)', () async {
-      final group = await serviceA.createPrivateGroup(name: 'My Group');
+    test(
+      'Private Group separation (requires approval, kick/block works)',
+      () async {
+        final group = await serviceA.createPrivateGroup(name: 'My Group');
 
-      final channelToB = FakeSecureChannel('bob');
-      serviceA.registerPeerChannel('bob', channelToB);
+        final channelToB = FakeSecureChannel('bob');
+        serviceA.registerPeerChannel('bob', channelToB);
 
-      // Bob requests to join
-      final joinRequest = GroupControlFrame(
-        groupId: group.groupId,
-        eventId: 'evt-2',
-        command: GroupCommands.joinRequest,
-        senderFingerprint: 'bob',
-        targetFingerprint: 'bob',
-        epoch: 0,
-        membershipVersion: 1,
-      );
+        // Bob requests to join
+        final joinRequest = GroupControlFrame(
+          groupId: group.groupId,
+          eventId: 'evt-2',
+          command: GroupCommands.joinRequest,
+          senderFingerprint: 'bob',
+          targetFingerprint: 'bob',
+          epoch: 0,
+          membershipVersion: 1,
+        );
 
-      await serviceA.handleControlFrame(
-        peerFingerprint: 'bob',
-        channel: channelToB,
-        frame: joinRequest,
-      );
+        await serviceA.handleControlFrame(
+          peerFingerprint: 'bob',
+          channel: channelToB,
+          frame: joinRequest,
+        );
 
-      // Verify Bob is pending
-      var updatedGroup = repoA.loadGroup(group.groupId)!;
-      expect(updatedGroup.pending.any((p) => p.fingerprint == 'bob'), isTrue);
-      expect(updatedGroup.members.any((m) => m.fingerprint == 'bob'), isFalse);
+        // Verify Bob is pending
+        var updatedGroup = repoA.loadGroup(group.groupId)!;
+        expect(updatedGroup.pending.any((p) => p.fingerprint == 'bob'), isTrue);
+        expect(
+          updatedGroup.members.any((m) => m.fingerprint == 'bob'),
+          isFalse,
+        );
 
-      // Alice decides to approve
-      await serviceA.executeDecideJoin(group.groupId, 'bob', GroupJoinDecision.approved);
+        // Alice decides to approve
+        await serviceA.executeDecideJoin(
+          group.groupId,
+          'bob',
+          GroupJoinDecision.approved,
+        );
 
-      // Verify Bob is now a member
-      updatedGroup = repoA.loadGroup(group.groupId)!;
-      expect(updatedGroup.members.any((m) => m.fingerprint == 'bob'), isTrue);
+        // Verify Bob is now a member
+        updatedGroup = repoA.loadGroup(group.groupId)!;
+        expect(updatedGroup.members.any((m) => m.fingerprint == 'bob'), isTrue);
 
-      // Alice kicks Bob
-      await serviceA.executeKick(group.groupId, 'bob');
+        // Alice kicks Bob
+        await serviceA.executeKick(group.groupId, 'bob');
 
-      // Verify Bob is removed
-      updatedGroup = repoA.loadGroup(group.groupId)!;
-      expect(updatedGroup.members.any((m) => m.fingerprint == 'bob'), isFalse);
-    });
+        // Verify Bob is removed
+        updatedGroup = repoA.loadGroup(group.groupId)!;
+        expect(
+          updatedGroup.members.any((m) => m.fingerprint == 'bob'),
+          isFalse,
+        );
+      },
+    );
 
-    test('Host leaving resets public lobby when no other members exist', () async {
-      await serviceA.createPublicLobby();
+    test(
+      'Host leaving resets public lobby when no other members exist',
+      () async {
+        await serviceA.createPublicLobby();
 
-      // Leave the lobby
-      await serviceA.leaveGroup(GroupService.publicLobbyId);
+        // Leave the lobby
+        await serviceA.leaveGroup(GroupService.publicLobbyId);
 
-      // Lobby should reset to host-only empty state
-      final lobby = repoA.loadGroup(GroupService.publicLobbyId)!;
-      expect(lobby.memberCount, 1);
-      expect(lobby.members.first.fingerprint, 'alice');
-    });
+        // Lobby should reset to host-only empty state
+        final lobby = repoA.loadGroup(GroupService.publicLobbyId)!;
+        expect(lobby.memberCount, 1);
+        expect(lobby.members.first.fingerprint, 'alice');
+      },
+    );
   });
 }

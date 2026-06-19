@@ -137,7 +137,9 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     final service = ref.read(groupServiceProvider);
     if (!service.isInitialized) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Identity is not configured yet. Please wait.')),
+        const SnackBar(
+          content: Text('Identity is not configured yet. Please wait.'),
+        ),
       );
       return;
     }
@@ -206,9 +208,9 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create group: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to create group: $e')));
       }
     }
   }
@@ -217,7 +219,9 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     final service = ref.read(groupServiceProvider);
     if (!service.isInitialized) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Identity is not configured yet. Please wait.')),
+        const SnackBar(
+          content: Text('Identity is not configured yet. Please wait.'),
+        ),
       );
       return;
     }
@@ -258,9 +262,9 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to join: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to join: $e')));
       }
     }
   }
@@ -572,8 +576,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   favoritesAsync.when(
                     data: (favs) {
                       final livePeers = peersAsync.value ?? <Peer>[];
-                      final liveIds =
-                          livePeers.map((p) => p.sessionId).toSet();
+                      final liveIds = livePeers.map((p) => p.sessionId).toSet();
                       final visibleFavs = favs
                           .where((fav) => liveIds.contains(fav.sessionId))
                           .where(_matchesFilter)
@@ -601,9 +604,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
           favoritesAsync.when(
             data: (favs) {
               final livePeers = peersAsync.value ?? [];
-              final liveBySession = {
-                for (final p in livePeers) p.sessionId: p,
-              };
+              final liveBySession = {for (final p in livePeers) p.sessionId: p};
               final visibleFavs = favs
                   .where((fav) => liveBySession.containsKey(fav.sessionId))
                   .where(_matchesFilter)
@@ -620,10 +621,8 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 forceFavorite: true,
               );
             },
-            loading: () =>
-                const SliverToBoxAdapter(child: SizedBox.shrink()),
-            error: (_, _) =>
-                const SliverToBoxAdapter(child: SizedBox.shrink()),
+            loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+            error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
           ),
 
           if (_searching)
@@ -673,9 +672,8 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 ),
               ),
             ),
-            error: (e, _) => SliverToBoxAdapter(
-              child: _DiscoveryWarningBanner(error: '$e'),
-            ),
+            error: (e, _) =>
+                SliverToBoxAdapter(child: _DiscoveryWarningBanner(error: '$e')),
           ),
           const SliverPadding(padding: EdgeInsets.only(bottom: 32)),
         ],
@@ -1012,8 +1010,9 @@ class _GroupRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return InkWell(
-      onTap: () => Navigator.of(context)
-          .pushNamed('${AppRoutes.group}/${group.groupId}'),
+      onTap: () => Navigator.of(
+        context,
+      ).pushNamed('${AppRoutes.group}/${group.groupId}'),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -1026,9 +1025,7 @@ class _GroupRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                group.isPublicLobby
-                    ? Icons.forum_outlined
-                    : Icons.lock_outline,
+                group.isPublicLobby ? Icons.forum_outlined : Icons.lock_outline,
                 size: 20,
                 color: theme.colorScheme.primary,
               ),

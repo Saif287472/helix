@@ -34,7 +34,9 @@ class RemoteSecureKeyStorage {
   /// Clears only Remote keys.
   Future<void> clearAllRemoteKeys() async {
     final allKeys = await storage.readAll();
-    final toDelete = allKeys.keys.where((k) => k.startsWith(keyPrefix)).toList();
+    final toDelete = allKeys.keys
+        .where((k) => k.startsWith(keyPrefix))
+        .toList();
     for (final key in toDelete) {
       await storage.delete(key: key);
     }

@@ -100,7 +100,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final server = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
       if (!mounted) {
-        try { await server.close(); } catch (_) {}
+        try {
+          await server.close();
+        } catch (_) {}
         return;
       }
       _tcpServer = server;
@@ -179,9 +181,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (Platform.isAndroid && mounted) {
         try {
           final descriptor = ref.read(productDescriptorProvider);
-          final foregroundChannel = MethodChannel('${descriptor.methodChannelNamespace}/foreground');
-          final granted = await foregroundChannel
-              .invokeMethod<bool>('canUseFullScreenIntent') ?? true;
+          final foregroundChannel = MethodChannel(
+            '${descriptor.methodChannelNamespace}/foreground',
+          );
+          final granted =
+              await foregroundChannel.invokeMethod<bool>(
+                'canUseFullScreenIntent',
+              ) ??
+              true;
           if (!granted && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -208,7 +215,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       debugPrint('[Helix] Session init failed: $e\n$st');
       AppLogger.instance.error('session', 'Session init failed: $e', st);
       if (_tcpServer != null) {
-        try { await _tcpServer!.close(); } catch (_) {}
+        try {
+          await _tcpServer!.close();
+        } catch (_) {}
         _tcpServer = null;
       }
       await discoverySvc.stop().catchError((_) {});
@@ -379,7 +388,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(_titles[_selectedIndex]), automaticallyImplyLeading: false),
+      appBar: AppBar(
+        title: Text(_titles[_selectedIndex]),
+        automaticallyImplyLeading: false,
+      ),
       body: body,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,

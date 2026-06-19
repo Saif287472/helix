@@ -46,14 +46,8 @@ void main() {
         isNot(same(root2.conversationRepository)),
         reason: 'Each root must own independent in-memory storage',
       );
-      expect(
-        root1.groupRepository,
-        isNot(same(root2.groupRepository)),
-      );
-      expect(
-        root1.wipeScheduler,
-        isNot(same(root2.wipeScheduler)),
-      );
+      expect(root1.groupRepository, isNot(same(root2.groupRepository)));
+      expect(root1.wipeScheduler, isNot(same(root2.wipeScheduler)));
 
       root1.dispose();
       root2.dispose();

@@ -2,9 +2,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart' as crypto;
 
 class GroupSenderChain {
-  GroupSenderChain({
-    required this.chainKey,
-  });
+  GroupSenderChain({required this.chainKey});
 
   crypto.SecretKey chainKey;
   final crypto.AesGcm aesGcm = crypto.AesGcm.with256bits();

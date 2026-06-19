@@ -30,11 +30,14 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         final identity = profileService.identity;
         final profile = profileService.profile;
         if (identity != null && profile != null) {
-          ref.read(lanLobbyServiceProvider).join(
-            localFp: identity.staticPublicKeyFingerprint,
-            name: profile.displayName,
-            suffix: identity.deviceSuffix,
-          ).ignore();
+          ref
+              .read(lanLobbyServiceProvider)
+              .join(
+                localFp: identity.staticPublicKeyFingerprint,
+                name: profile.displayName,
+                suffix: identity.deviceSuffix,
+              )
+              .ignore();
         }
       });
     }
@@ -78,12 +81,16 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
       );
     }
 
-    final List<GroupMessage> messages =
-        ref.watch(groupMessagesProvider(widget.groupId));
+    final List<GroupMessage> messages = ref.watch(
+      groupMessagesProvider(widget.groupId),
+    );
     final groupService = ref.read(groupServiceProvider);
     final localFingerprint = groupService.localFingerprint;
 
-    ref.listen<List<GroupMessage>>(groupMessagesProvider(widget.groupId), (prev, next) {
+    ref.listen<List<GroupMessage>>(groupMessagesProvider(widget.groupId), (
+      prev,
+      next,
+    ) {
       if (next.length != (prev?.length ?? 0)) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       }
@@ -107,97 +114,115 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
           IconButton(
             icon: const Icon(Icons.info_outline),
             tooltip: 'Group Info',
-            onPressed: () => _showGroupInfoSheet(context, group, localFingerprint),
+            onPressed: () =>
+                _showGroupInfoSheet(context, group, localFingerprint),
           ),
         ],
       ),
       body: SafeArea(
         child: Column(
-        children: [
-          Expanded(
-            child: messages.isEmpty
-                ? Center(
-                    child: Text(
-                      'No messages yet. Say hello!',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withAlpha(120),
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: messages.length,
-                    itemBuilder: (ctx, i) {
-                      final msg = messages[i];
-                      final isMe = msg.senderFingerprint == localFingerprint;
-
-                      final details = groupService.resolvePeerDetails?.call(msg.senderFingerprint);
-                      final displayName = isMe ? 'You' : (details?.displayName ?? msg.senderFingerprint.substring(0, 8));
-                      final suffix = (isMe || details == null || details.deviceSuffix.isEmpty) ? '' : ' (${details.deviceSuffix})';
-
-                      return Align(
-                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isMe
-                                ? theme.colorScheme.primaryContainer
-                                : theme.colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (!isMe)
-                                Text(
-                                  '$displayName$suffix',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              if (!isMe) const SizedBox(height: 4),
-                              Text(msg.text),
-                            ],
-                          ),
+          children: [
+            Expanded(
+              child: messages.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No messages yet. Say hello!',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withAlpha(120),
                         ),
-                      );
-                    },
-                  ),
-          ),
-          Divider(height: 1, color: theme.colorScheme.outlineVariant),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Type a message…',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
                       ),
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: messages.length,
+                      itemBuilder: (ctx, i) {
+                        final msg = messages[i];
+                        final isMe = msg.senderFingerprint == localFingerprint;
+
+                        final details = groupService.resolvePeerDetails?.call(
+                          msg.senderFingerprint,
+                        );
+                        final displayName = isMe
+                            ? 'You'
+                            : (details?.displayName ??
+                                  msg.senderFingerprint.substring(0, 8));
+                        final suffix =
+                            (isMe ||
+                                details == null ||
+                                details.deviceSuffix.isEmpty)
+                            ? ''
+                            : ' (${details.deviceSuffix})';
+
+                        return Align(
+                          alignment: isMe
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isMe
+                                  ? theme.colorScheme.primaryContainer
+                                  : theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (!isMe)
+                                  Text(
+                                    '$displayName$suffix',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                if (!isMe) const SizedBox(height: 4),
+                                Text(msg.text),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (val) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  icon: const Icon(Icons.send),
-                  onPressed: _sendMessage,
-                ),
-              ],
             ),
-          ),
-        ],
+            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: 'Type a message…',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                      ),
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (val) => _sendMessage(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    icon: const Icon(Icons.send),
+                    onPressed: _sendMessage,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -206,12 +231,19 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
-    ref.read(groupMessagesProvider(widget.groupId).notifier).sendMessage(text).ignore();
+    ref
+        .read(groupMessagesProvider(widget.groupId).notifier)
+        .sendMessage(text)
+        .ignore();
     _messageController.clear();
     _scrollToBottom();
   }
 
-  void _showGroupInfoSheet(BuildContext context, GroupSnapshot group, String localFingerprint) {
+  void _showGroupInfoSheet(
+    BuildContext context,
+    GroupSnapshot group,
+    String localFingerprint,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -233,14 +265,21 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
           builder: (_, scrollController) {
             return Consumer(
               builder: (ctx, ref, _) {
-                final currentGroups = ref.watch(groupSnapshotsProvider).value ?? [];
-                final currentGroup = currentGroups.cast<GroupSnapshot?>().firstWhere(
-                  (g) => g!.groupId == widget.groupId,
-                  orElse: () => null,
-                );
-                if (currentGroup == null) return const Center(child: Text('Group left.'));
+                final currentGroups =
+                    ref.watch(groupSnapshotsProvider).value ?? [];
+                final currentGroup = currentGroups
+                    .cast<GroupSnapshot?>()
+                    .firstWhere(
+                      (g) => g!.groupId == widget.groupId,
+                      orElse: () => null,
+                    );
+                if (currentGroup == null) {
+                  return const Center(child: Text('Group left.'));
+                }
 
-                final inviteCode = isPublic ? '' : groupService.buildGroupCode(widget.groupId);
+                final inviteCode = isPublic
+                    ? ''
+                    : groupService.buildGroupCode(widget.groupId);
 
                 return ListView(
                   controller: scrollController,
@@ -248,7 +287,9 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                   children: [
                     Text(
                       currentGroup.name,
-                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -268,7 +309,8 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
@@ -283,9 +325,13 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                           IconButton.filledTonal(
                             icon: const Icon(Icons.copy),
                             onPressed: () {
-                              Clipboard.setData(ClipboardData(text: inviteCode));
+                              Clipboard.setData(
+                                ClipboardData(text: inviteCode),
+                              );
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Invite code copied.')),
+                                const SnackBar(
+                                  content: Text('Invite code copied.'),
+                                ),
                               );
                             },
                           ),
@@ -294,48 +340,69 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                       const Divider(height: 32),
                     ],
 
-                    if (!isPublic && isHost && currentGroup.pending.isNotEmpty) ...[
-                      Text('Join Requests (${currentGroup.pending.length})', style: theme.textTheme.titleSmall),
+                    if (!isPublic &&
+                        isHost &&
+                        currentGroup.pending.isNotEmpty) ...[
+                      Text(
+                        'Join Requests (${currentGroup.pending.length})',
+                        style: theme.textTheme.titleSmall,
+                      ),
                       const SizedBox(height: 8),
-                      ...currentGroup.pending.map((p) => ListTile(
-                            title: Text(p.displayName),
-                            subtitle: Text(p.fingerprint.substring(0, 12)),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.check, color: Colors.green),
-                                  onPressed: () => groupService.executeDecideJoin(
-                                    currentGroup.groupId,
-                                    p.fingerprint,
-                                    GroupJoinDecision.approved,
-                                  ),
+                      ...currentGroup.pending.map(
+                        (p) => ListTile(
+                          title: Text(p.displayName),
+                          subtitle: Text(p.fingerprint.substring(0, 12)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.check,
+                                  color: Colors.green,
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.red),
-                                  onPressed: () => groupService.executeDecideJoin(
-                                    currentGroup.groupId,
-                                    p.fingerprint,
-                                    GroupJoinDecision.denied,
-                                  ),
+                                onPressed: () => groupService.executeDecideJoin(
+                                  currentGroup.groupId,
+                                  p.fingerprint,
+                                  GroupJoinDecision.approved,
                                 ),
-                              ],
-                            ),
-                          )),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.close,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => groupService.executeDecideJoin(
+                                  currentGroup.groupId,
+                                  p.fingerprint,
+                                  GroupJoinDecision.denied,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       const Divider(height: 32),
                     ],
 
-                    Text('Members (${currentGroup.memberCount})', style: theme.textTheme.titleSmall),
+                    Text(
+                      'Members (${currentGroup.memberCount})',
+                      style: theme.textTheme.titleSmall,
+                    ),
                     const SizedBox(height: 8),
                     ...currentGroup.members.map((m) {
                       final isMe = m.fingerprint == localFingerprint;
-                      final isHostMember = m.fingerprint == currentGroup.hostFingerprint;
+                      final isHostMember =
+                          m.fingerprint == currentGroup.hostFingerprint;
 
                       return ListTile(
                         leading: CircleAvatar(
-                          child: Text(m.displayName.substring(0, 1).toUpperCase()),
+                          child: Text(
+                            m.displayName.substring(0, 1).toUpperCase(),
+                          ),
                         ),
-                        title: Text(isMe ? '${m.displayName} (You)' : m.displayName),
+                        title: Text(
+                          isMe ? '${m.displayName} (You)' : m.displayName,
+                        ),
                         subtitle: Text(m.fingerprint.substring(0, 12)),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -350,11 +417,20 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                               PopupMenuButton<String>(
                                 onSelected: (val) {
                                   if (val == 'kick') {
-                                    groupService.executeKick(currentGroup.groupId, m.fingerprint);
+                                    groupService.executeKick(
+                                      currentGroup.groupId,
+                                      m.fingerprint,
+                                    );
                                   } else if (val == 'block') {
-                                    groupService.executeBlock(currentGroup.groupId, m.fingerprint);
+                                    groupService.executeBlock(
+                                      currentGroup.groupId,
+                                      m.fingerprint,
+                                    );
                                   } else if (val == 'handover') {
-                                    groupService.executeHandover(currentGroup.groupId, m.fingerprint);
+                                    groupService.executeHandover(
+                                      currentGroup.groupId,
+                                      m.fingerprint,
+                                    );
                                   }
                                 },
                                 itemBuilder: (_) => [
@@ -384,7 +460,8 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                         backgroundColor: theme.colorScheme.errorContainer,
                         foregroundColor: theme.colorScheme.onErrorContainer,
                       ),
-                      onPressed: () => _leaveGroup(context, currentGroup, localFingerprint),
+                      onPressed: () =>
+                          _leaveGroup(context, currentGroup, localFingerprint),
                       icon: const Icon(Icons.exit_to_app),
                       label: Text(isPublic ? 'Leave Lobby' : 'Leave Group'),
                     ),
@@ -398,22 +475,32 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
     );
   }
 
-  Future<void> _leaveGroup(BuildContext context, GroupSnapshot group, String localFingerprint) async {
+  Future<void> _leaveGroup(
+    BuildContext context,
+    GroupSnapshot group,
+    String localFingerprint,
+  ) async {
     final groupService = ref.read(groupServiceProvider);
 
     if (group.hostFingerprint == localFingerprint) {
-      final otherMembers = group.members.where((m) => m.fingerprint != localFingerprint).toList();
+      final otherMembers = group.members
+          .where((m) => m.fingerprint != localFingerprint)
+          .toList();
       if (otherMembers.isNotEmpty) {
         final handoverTarget = await showDialog<String>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Transfer Host Role'),
-            content: const Text('Select a member to transfer hosting duties before leaving.'),
+            content: const Text(
+              'Select a member to transfer hosting duties before leaving.',
+            ),
             actions: [
-              ...otherMembers.map((m) => TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(m.fingerprint),
-                    child: Text(m.displayName),
-                  )),
+              ...otherMembers.map(
+                (m) => TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(m.fingerprint),
+                  child: Text(m.displayName),
+                ),
+              ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(),
                 child: const Text('Cancel'),
@@ -434,9 +521,9 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to leave: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to leave: $e')));
       }
     }
   }
@@ -449,7 +536,8 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
     final theme = Theme.of(context);
     final lobbyState = ref.watch(lanLobbyStateProvider).value;
     final messages = ref.watch(lanLobbyMessagesProvider);
-    final localFp = lobbyState?.localFp ??
+    final localFp =
+        lobbyState?.localFp ??
         ref.read(profileServiceProvider).identity?.staticPublicKeyFingerprint ??
         '';
     final memberCount = lobbyState?.memberCount ?? 0;
@@ -494,7 +582,9 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
               child: messages.isEmpty
                   ? Center(
                       child: Text(
-                        lobbyState == null ? 'Joining lobby…' : 'No messages yet. Say hello!',
+                        lobbyState == null
+                            ? 'Joining lobby…'
+                            : 'No messages yet. Say hello!',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurface.withAlpha(120),
                         ),
@@ -510,10 +600,15 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                         final displayName = isMe ? 'You' : msg.senderName;
 
                         return Align(
-                          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                          alignment: isMe
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             decoration: BoxDecoration(
                               color: isMe
                                   ? theme.colorScheme.primaryContainer
@@ -557,7 +652,9 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
                       ),
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _sendLanLobbyMessage(),
@@ -585,7 +682,11 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
     _scrollToBottom();
   }
 
-  void _showLanLobbyInfoSheet(BuildContext context, LobbyState lobbyState, String localFp) {
+  void _showLanLobbyInfoSheet(
+    BuildContext context,
+    LobbyState lobbyState,
+    String localFp,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -613,7 +714,9 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                   children: [
                     Text(
                       'LAN Lobby',
-                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -623,7 +726,10 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                       ),
                     ),
                     const Divider(height: 32),
-                    Text('Members (${currentState.memberCount})', style: theme.textTheme.titleSmall),
+                    Text(
+                      'Members (${currentState.memberCount})',
+                      style: theme.textTheme.titleSmall,
+                    ),
                     const SizedBox(height: 8),
                     ...currentState.members.map((m) {
                       final isMe = m.fp == localFp;
@@ -631,7 +737,9 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                       return ListTile(
                         leading: CircleAvatar(
                           child: Text(
-                            m.name.isNotEmpty ? m.name.substring(0, 1).toUpperCase() : '?',
+                            m.name.isNotEmpty
+                                ? m.name.substring(0, 1).toUpperCase()
+                                : '?',
                           ),
                         ),
                         title: Text(isMe ? '${m.name} (You)' : m.name),

@@ -225,14 +225,13 @@ class _ChatScreenState extends _ChatScreenBase
 
     final isActive = thread.status == ThreadStatus.active;
     final supportsCalls =
-        messagingService.getChannel(widget.threadId)?.supportsCapability(
-          kCapWebRTC,
-        ) ??
+        messagingService
+            .getChannel(widget.threadId)
+            ?.supportsCapability(kCapWebRTC) ??
         false;
     final hasActiveCall = ref.watch(currentCallProvider).value != null;
     final canStartCall = isActive && supportsCalls && !hasActiveCall;
-    final hasConnectivity =
-        ref.watch(hasConnectivityProvider).value ?? true;
+    final hasConnectivity = ref.watch(hasConnectivityProvider).value ?? true;
     final isAtCapacity = messagingService.isAtCapacity(widget.threadId);
     final peerTyping =
         ref.watch(peerTypingProvider(widget.threadId)).value ?? false;
@@ -617,15 +616,13 @@ class _ChatScreenState extends _ChatScreenBase
                                 key: _keyFor(msg.messageId),
                                 children: [
                                   if (showDateDivider)
-                                    _TimestampDivider(
-                                      timestamp: msg.timestamp,
-                                    ),
+                                    _TimestampDivider(timestamp: msg.timestamp),
                                   _MessageSendAnimation(
                                     messageId: msg.messageId,
                                     child: _MessageBubble(
                                       message: msg,
-                                      peerInitial: thread
-                                              .peerDisplayName.isNotEmpty
+                                      peerInitial:
+                                          thread.peerDisplayName.isNotEmpty
                                           ? thread.peerDisplayName[0]
                                                 .toUpperCase()
                                           : 'P',
@@ -637,8 +634,7 @@ class _ChatScreenState extends _ChatScreenBase
                                       replySource: replySource,
                                       searchQuery: _searchQuery,
                                       isSearchHit: isSearchHit,
-                                      onLongPress: () =>
-                                          _showContextMenu(msg),
+                                      onLongPress: () => _showContextMenu(msg),
                                       onReplySwipe: () {
                                         setState(() => _replyTo = msg);
                                         _focusNode.requestFocus();

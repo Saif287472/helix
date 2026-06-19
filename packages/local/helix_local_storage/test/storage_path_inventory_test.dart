@@ -91,17 +91,20 @@ void main() {
 
       // ── Negative: Documents / user-space paths with matching filename ──────
 
-      test('rejects Documents path that contains Local namespace as filename substring', () {
-        // Old string-contains check incorrectly allowed this because the filename
-        // includes "helix_local" (the logNamespace).
-        expect(
-          isPathInScopeForDestructiveOperation(
-            'C:/Users/User/Documents/helix_local_anomaly_log.txt',
-            local,
-          ),
-          isFalse,
-        );
-      });
+      test(
+        'rejects Documents path that contains Local namespace as filename substring',
+        () {
+          // Old string-contains check incorrectly allowed this because the filename
+          // includes "helix_local" (the logNamespace).
+          expect(
+            isPathInScopeForDestructiveOperation(
+              'C:/Users/User/Documents/helix_local_anomaly_log.txt',
+              local,
+            ),
+            isFalse,
+          );
+        },
+      );
 
       test('rejects Desktop path for Remote namespace', () {
         expect(
@@ -173,10 +176,7 @@ void main() {
 
       test('rejects Unix syslog path', () {
         expect(
-          isPathInScopeForDestructiveOperation(
-            '/var/log/syslog',
-            remote,
-          ),
+          isPathInScopeForDestructiveOperation('/var/log/syslog', remote),
           isFalse,
         );
       });

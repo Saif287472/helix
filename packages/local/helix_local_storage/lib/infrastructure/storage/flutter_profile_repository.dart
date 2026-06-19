@@ -15,7 +15,9 @@ class FlutterProfileRepository implements ProfileRepository {
 
   @override
   Future<Profile?> loadProfile() async {
-    final hasPrefixedKey = await _storage.read(key: '$keyPrefix$kKeyDisplayName');
+    final hasPrefixedKey = await _storage.read(
+      key: '$keyPrefix$kKeyDisplayName',
+    );
     if (hasPrefixedKey == null && keyPrefix.startsWith('helix_local_')) {
       final oldDisplayName = await _storage.read(key: kKeyDisplayName);
       if (oldDisplayName != null) {
@@ -34,21 +36,94 @@ class FlutterProfileRepository implements ProfileRepository {
         final oldLockMinutes = await _storage.read(key: kKeyLockAfterMinutes);
         final oldRingtone = await _storage.read(key: kKeyRingtoneAsset);
 
-        await _storage.write(key: '$keyPrefix$kKeyDisplayName', value: oldDisplayName);
-        if (oldDisc != null) await _storage.write(key: '$keyPrefix$kKeyDiscoverable', value: oldDisc);
-        if (oldNotify != null) await _storage.write(key: '$keyPrefix$kKeyNotifyShowSender', value: oldNotify);
-        if (oldNotifySound != null) await _storage.write(key: '$keyPrefix$kKeyNotifySound', value: oldNotifySound);
-        if (oldCopy != null) await _storage.write(key: '$keyPrefix$kKeyCopyEnabled', value: oldCopy);
-        if (oldScreenshot != null) await _storage.write(key: '$keyPrefix$kKeyScreenshotProtect', value: oldScreenshot);
-        if (oldTheme != null) await _storage.write(key: '$keyPrefix$kKeyThemeMode', value: oldTheme);
-        if (oldAccent != null) await _storage.write(key: '$keyPrefix$kKeyAccentColor', value: oldAccent);
-        if (oldAmoled != null) await _storage.write(key: '$keyPrefix$kKeyAmoledDark', value: oldAmoled);
-        if (oldRead != null) await _storage.write(key: '$keyPrefix$kKeyReadReceiptsEnabled', value: oldRead);
-        if (oldTyping != null) await _storage.write(key: '$keyPrefix$kKeyTypingIndicatorsEnabled', value: oldTyping);
-        if (oldWelcome != null) await _storage.write(key: '$keyPrefix$kKeyHomeWelcomeDismissed', value: oldWelcome);
-        if (oldBiometric != null) await _storage.write(key: '$keyPrefix$kKeyBiometricLock', value: oldBiometric);
-        if (oldLockMinutes != null) await _storage.write(key: '$keyPrefix$kKeyLockAfterMinutes', value: oldLockMinutes);
-        if (oldRingtone != null) await _storage.write(key: '$keyPrefix$kKeyRingtoneAsset', value: oldRingtone);
+        await _storage.write(
+          key: '$keyPrefix$kKeyDisplayName',
+          value: oldDisplayName,
+        );
+        if (oldDisc != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyDiscoverable',
+            value: oldDisc,
+          );
+        }
+        if (oldNotify != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyNotifyShowSender',
+            value: oldNotify,
+          );
+        }
+        if (oldNotifySound != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyNotifySound',
+            value: oldNotifySound,
+          );
+        }
+        if (oldCopy != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyCopyEnabled',
+            value: oldCopy,
+          );
+        }
+        if (oldScreenshot != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyScreenshotProtect',
+            value: oldScreenshot,
+          );
+        }
+        if (oldTheme != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyThemeMode',
+            value: oldTheme,
+          );
+        }
+        if (oldAccent != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyAccentColor',
+            value: oldAccent,
+          );
+        }
+        if (oldAmoled != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyAmoledDark',
+            value: oldAmoled,
+          );
+        }
+        if (oldRead != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyReadReceiptsEnabled',
+            value: oldRead,
+          );
+        }
+        if (oldTyping != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyTypingIndicatorsEnabled',
+            value: oldTyping,
+          );
+        }
+        if (oldWelcome != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyHomeWelcomeDismissed',
+            value: oldWelcome,
+          );
+        }
+        if (oldBiometric != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyBiometricLock',
+            value: oldBiometric,
+          );
+        }
+        if (oldLockMinutes != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyLockAfterMinutes',
+            value: oldLockMinutes,
+          );
+        }
+        if (oldRingtone != null) {
+          await _storage.write(
+            key: '$keyPrefix$kKeyRingtoneAsset',
+            value: oldRingtone,
+          );
+        }
 
         await _storage.delete(key: kKeyDisplayName);
         await _storage.delete(key: kKeyDiscoverable);
@@ -72,19 +147,37 @@ class FlutterProfileRepository implements ProfileRepository {
     if (displayName == null) return null;
 
     final discRaw = await _storage.read(key: '$keyPrefix$kKeyDiscoverable');
-    final notifyRaw = await _storage.read(key: '$keyPrefix$kKeyNotifyShowSender');
-    final notifySoundRaw = await _storage.read(key: '$keyPrefix$kKeyNotifySound');
+    final notifyRaw = await _storage.read(
+      key: '$keyPrefix$kKeyNotifyShowSender',
+    );
+    final notifySoundRaw = await _storage.read(
+      key: '$keyPrefix$kKeyNotifySound',
+    );
     final copyRaw = await _storage.read(key: '$keyPrefix$kKeyCopyEnabled');
-    final screenshotRaw = await _storage.read(key: '$keyPrefix$kKeyScreenshotProtect');
+    final screenshotRaw = await _storage.read(
+      key: '$keyPrefix$kKeyScreenshotProtect',
+    );
     final themeRaw = await _storage.read(key: '$keyPrefix$kKeyThemeMode');
     final accentRaw = await _storage.read(key: '$keyPrefix$kKeyAccentColor');
     final amoledRaw = await _storage.read(key: '$keyPrefix$kKeyAmoledDark');
-    final readRaw = await _storage.read(key: '$keyPrefix$kKeyReadReceiptsEnabled');
-    final typingRaw = await _storage.read(key: '$keyPrefix$kKeyTypingIndicatorsEnabled');
-    final welcomeRaw = await _storage.read(key: '$keyPrefix$kKeyHomeWelcomeDismissed');
-    final biometricRaw = await _storage.read(key: '$keyPrefix$kKeyBiometricLock');
-    final lockMinutesRaw = await _storage.read(key: '$keyPrefix$kKeyLockAfterMinutes');
-    final ringtoneRaw = await _storage.read(key: '$keyPrefix$kKeyRingtoneAsset');
+    final readRaw = await _storage.read(
+      key: '$keyPrefix$kKeyReadReceiptsEnabled',
+    );
+    final typingRaw = await _storage.read(
+      key: '$keyPrefix$kKeyTypingIndicatorsEnabled',
+    );
+    final welcomeRaw = await _storage.read(
+      key: '$keyPrefix$kKeyHomeWelcomeDismissed',
+    );
+    final biometricRaw = await _storage.read(
+      key: '$keyPrefix$kKeyBiometricLock',
+    );
+    final lockMinutesRaw = await _storage.read(
+      key: '$keyPrefix$kKeyLockAfterMinutes',
+    );
+    final ringtoneRaw = await _storage.read(
+      key: '$keyPrefix$kKeyRingtoneAsset',
+    );
 
     return Profile(
       displayName: displayName,
@@ -111,7 +204,10 @@ class FlutterProfileRepository implements ProfileRepository {
 
   @override
   Future<void> saveProfile(Profile profile) async {
-    await _storage.write(key: '$keyPrefix$kKeyDisplayName', value: profile.displayName);
+    await _storage.write(
+      key: '$keyPrefix$kKeyDisplayName',
+      value: profile.displayName,
+    );
     await _storage.write(
       key: '$keyPrefix$kKeyDiscoverable',
       value: profile.discoverability == DiscoverabilityState.discoverable
@@ -134,8 +230,14 @@ class FlutterProfileRepository implements ProfileRepository {
       key: '$keyPrefix$kKeyScreenshotProtect',
       value: profile.screenshotProtect ? '1' : '0',
     );
-    await _storage.write(key: '$keyPrefix$kKeyThemeMode', value: profile.themeMode);
-    await _storage.write(key: '$keyPrefix$kKeyAccentColor', value: profile.accentColor);
+    await _storage.write(
+      key: '$keyPrefix$kKeyThemeMode',
+      value: profile.themeMode,
+    );
+    await _storage.write(
+      key: '$keyPrefix$kKeyAccentColor',
+      value: profile.accentColor,
+    );
     await _storage.write(
       key: '$keyPrefix$kKeyAmoledDark',
       value: profile.amoledDark ? '1' : '0',
