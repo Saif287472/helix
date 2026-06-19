@@ -419,10 +419,117 @@ class BackendDatabase {
       // version marks databases that have account export/delete helper support.
       _db.execute('PRAGMA user_version = 10;');
     }
+
+    if (version < 11) {
+      // Phase 19 adds operational health and aggregate metrics helpers. No new
+      // tables are required.
+      _db.execute('PRAGMA user_version = 11;');
+    }
   }
 
   void close() {
     _db.close();
+  }
+
+  int get schemaVersion {
+    final rows = _db.select('PRAGMA user_version;');
+    return rows.first.columnAt(0) as int;
+  }
+
+  bool quickCheckOk() {
+    final rows = _db.select('PRAGMA quick_check;');
+    return rows.isNotEmpty && rows.first.columnAt(0) == 'ok';
+  }
+
+  Map<String, int> getOperationalTableCounts() {
+    const tables = [
+      'accounts',
+      'devices',
+      'conversations',
+      'conversation_members',
+      'messages',
+      'attachments',
+      'backups',
+      'outbox',
+      'audit_logs',
+      'reports',
+      'groups',
+      'group_invites',
+      'turn_credential_log',
+    ];
+    return {for (final table in tables) table: _countRows(table)};
+  }
+
+  Map<String, int> getOperationalMailboxStats() {
+    final rows = _db.select('''
+      SELECT
+        COUNT(*) AS message_count,
+        COALESCE(MAX(timestamp), 0) AS newest_message_at,
+        COALESCE(MIN(timestamp), 0) AS oldest_message_at
+      FROM messages;
+    ''');
+    final row = rows.first;
+    return {
+      'message_count': row['message_count'] as int,
+      'newest_message_at': row['newest_message_at'] as int,
+      'oldest_message_at': row['oldest_message_at'] as int,
+    };
+  }
+
+  Map<String, int> getOperationalAttachmentStats() {
+    final rows = _db.select('''
+      SELECT
+        COUNT(*) AS object_count,
+        COALESCE(SUM(file_size), 0) AS total_bytes,
+        SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN status != 'COMPLETED' THEN 1 ELSE 0 END) AS incomplete
+      FROM attachments;
+    ''');
+    final row = rows.first;
+    return {
+      'object_count': row['object_count'] as int,
+      'total_bytes': row['total_bytes'] as int,
+      'completed': row['completed'] as int,
+      'incomplete': row['incomplete'] as int,
+    };
+  }
+
+  Map<String, int> getOutboxStatusCounts() {
+    final rows = _db.select('''
+      SELECT status, COUNT(*) AS count
+      FROM outbox
+      GROUP BY status;
+    ''');
+    final counts = <String, int>{
+      'PENDING': 0,
+      'FAILED': 0,
+      'COMPLETED': 0,
+      'DLQ': 0,
+    };
+    for (final row in rows) {
+      counts[row['status'] as String] = row['count'] as int;
+    }
+    return counts;
+  }
+
+  Map<String, dynamic>? getOutboxEvent(String eventId) {
+    final stmt = _db.prepare('SELECT * FROM outbox WHERE event_id = ?;');
+    final rows = stmt.select([eventId]);
+    stmt.close();
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return {
+      'event_id': row['event_id'],
+      'type': row['type'],
+      'status': row['status'],
+      'retries': row['retries'],
+      'created_at': row['created_at'],
+    };
+  }
+
+  int _countRows(String table) {
+    final rows = _db.select('SELECT COUNT(*) AS count FROM $table;');
+    return rows.first['count'] as int;
   }
 
   // ---------------------------------------------------------------------------
@@ -1834,7 +1941,7 @@ class BackendDatabase {
 
   List<Map<String, dynamic>> getPendingOutbox() {
     final stmt = _db.prepare(
-      "SELECT * FROM outbox WHERE status = 'PENDING' OR status = 'FAILED' AND retries < 5;",
+      "SELECT * FROM outbox WHERE status = 'PENDING' OR (status = 'FAILED' AND retries < 5);",
     );
     final res = stmt.select();
     stmt.close();

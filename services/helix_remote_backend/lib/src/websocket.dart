@@ -10,9 +10,12 @@ import 'package:helix_remote_backend/src/modules/messaging.dart';
 class WebSocketRelay implements MessageRelay {
   final BackendDatabase db;
   final JwtHelper jwt;
+  final int maxReconnectsPerMinute;
   final Map<String, WebSocketChannel> _connections = {}; // key: deviceId
+  final Map<String, List<int>> _reconnectAttempts = {};
+  int _rejectedReconnects = 0;
 
-  WebSocketRelay(this.db, this.jwt);
+  WebSocketRelay(this.db, this.jwt, {this.maxReconnectsPerMinute = 30});
 
   @override
   void sendToDevice(String deviceId, Map<String, dynamic> payload) {
@@ -38,6 +41,22 @@ class WebSocketRelay implements MessageRelay {
     if (claims == null) {
       return Response.forbidden(
         jsonEncode({'error': 'Invalid or expired auth token'}),
+      );
+    }
+
+    final accountId = claims['account_id'] as String?;
+    final deviceId = claims['device_id'] as String?;
+    if (accountId == null ||
+        deviceId == null ||
+        !db.isDeviceActive(accountId, deviceId)) {
+      return Response.forbidden(jsonEncode({'error': 'Device inactive'}));
+    }
+
+    if (!_recordReconnectAttempt(deviceId)) {
+      return Response(
+        429,
+        body: jsonEncode({'error': 'WebSocket reconnect rate exceeded'}),
+        headers: {'Content-Type': 'application/json'},
       );
     }
 
@@ -97,5 +116,25 @@ class WebSocketRelay implements MessageRelay {
 
   bool isDeviceConnected(String deviceId) {
     return _connections.containsKey(deviceId);
+  }
+
+  Map<String, dynamic> stats() => {
+    'connected_devices': _connections.length,
+    'tracked_reconnect_devices': _reconnectAttempts.length,
+    'rejected_reconnects': _rejectedReconnects,
+    'max_reconnects_per_minute': maxReconnectsPerMinute,
+  };
+
+  bool _recordReconnectAttempt(String deviceId) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final windowStart = now - const Duration(minutes: 1).inMilliseconds;
+    final attempts = _reconnectAttempts.putIfAbsent(deviceId, () => []);
+    attempts.removeWhere((timestamp) => timestamp < windowStart);
+    if (attempts.length >= maxReconnectsPerMinute) {
+      _rejectedReconnects++;
+      return false;
+    }
+    attempts.add(now);
+    return true;
   }
 }

@@ -491,6 +491,36 @@ paths:
         '401':
           description: Unauthorized
 
+  /health/live:
+    get:
+      summary: Liveness probe for the Helix Remote backend process
+      operationId: getLiveness
+      responses:
+        '200':
+          description: Process is alive
+
+  /health/ready:
+    get:
+      summary: Readiness probe for database-backed request serving
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Backend is ready to serve traffic
+        '503':
+          description: Backend is not ready
+
+  /ops/metrics:
+    get:
+      summary: Read aggregate operational metrics as an allow-listed admin
+      operationId: readOperationalMetrics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Aggregate SLI/SLO, outbox, WebSocket, storage, and database metrics without message content
+        '403':
+          description: Admin privileges required
+
   /privacy/export:
     get:
       summary: Export server-visible account data for the authenticated account

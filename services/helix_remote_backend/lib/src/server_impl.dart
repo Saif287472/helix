@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:shelf/shelf.dart';
@@ -7,6 +6,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
+import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 import 'package:helix_remote_backend/src/modules/auth.dart';
@@ -17,45 +17,8 @@ import 'package:helix_remote_backend/src/modules/backups.dart';
 import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/modules/groups.dart';
+import 'package:helix_remote_backend/src/modules/operability.dart';
 import 'package:helix_remote_backend/src/modules/privacy_compliance.dart';
-
-class OutboxWorker {
-  final BackendDatabase db;
-  Timer? _timer;
-
-  OutboxWorker(this.db);
-
-  void start() {
-    _timer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) => _processOutbox(),
-    );
-  }
-
-  void stop() {
-    _timer?.cancel();
-  }
-
-  void _processOutbox() {
-    try {
-      final items = db.getPendingOutbox();
-      for (final item in items) {
-        final eventId = item['event_id'] as String;
-        final type = item['type'] as String;
-        final retries = item['retries'] as int;
-
-        if (type == 'PUSH_NOTIFICATION') {
-          // Process mock push notification delivery
-          db.updateOutboxStatus(eventId, 'COMPLETED', retries);
-        } else {
-          db.updateOutboxStatus(eventId, 'FAILED', retries + 1);
-        }
-      }
-    } catch (_) {
-      // Ignore background errors
-    }
-  }
-}
 
 class BackendServer {
   final BackendDatabase db;
@@ -91,6 +54,8 @@ class BackendServer {
     String turnSecret = '',
     String turnUrl = '',
     Set<String> adminAccountIds = const {'admin'},
+    bool pushProviderAvailable = true,
+    int wsReconnectsPerMinute = 30,
   }) {
     final db = BackendDatabase(sqliteDb);
     final jwt = JwtHelper(jwtSecret);
@@ -98,8 +63,15 @@ class BackendServer {
       maxTokens: rateLimitMaxTokens,
       refillRatePerSecond: rateLimitRefillRate,
     );
-    final wsRelay = WebSocketRelay(db, jwt);
-    final outboxWorker = OutboxWorker(db);
+    final wsRelay = WebSocketRelay(
+      db,
+      jwt,
+      maxReconnectsPerMinute: wsReconnectsPerMinute,
+    );
+    final outboxWorker = OutboxWorker(
+      db,
+      pushProviderAvailable: pushProviderAvailable,
+    );
 
     return BackendServer._(
       db: db,
@@ -141,8 +113,18 @@ class BackendServer {
       db,
       adminAccountIds: adminAccountIds,
     );
+    final operabilityModule = OperabilityModule(
+      db: db,
+      rateLimiter: rateLimiter,
+      wsRelay: wsRelay,
+      outboxWorker: outboxWorker,
+      adminAccountIds: adminAccountIds,
+      turnUrl: turnUrl,
+    );
 
     // Map modules
+    router.mount('/api/v1/health', operabilityModule.healthRouter.call);
+    router.mount('/api/v1/ops', operabilityModule.opsRouter.call);
     router.mount('/api/v1/accounts', authModule.router.call);
     router.mount('/api/v1/devices', authModule.router.call);
     router.mount('/api/v1/prekeys', prekeysModule.router.call);
@@ -214,6 +196,8 @@ class BackendServer {
             path.endsWith('/accounts/challenge') ||
             path.endsWith('/accounts/login') ||
             path.endsWith('/accounts/refresh') ||
+            path.endsWith('/health/live') ||
+            path.endsWith('/health/ready') ||
             path.endsWith('/ws')) {
           return innerHandler(request);
         }

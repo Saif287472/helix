@@ -371,28 +371,39 @@ Still externally blocked:
 
 ## PHASE 19 - Operability, Reliability, Scaling, and Disaster Recovery
 
-- [ ] **P19-001:** Service-level indicators.
-- [ ] **P19-002:** Service-level objectives.
-- [ ] **P19-003:** Alerting thresholds.
-- [ ] **P19-004:** On-call/incident process suitable for a solo owner.
-- [ ] **P19-005:** Automated backups.
-- [ ] **P19-006:** Periodic restore drills.
-- [ ] **P19-007:** Database point-in-time recovery.
-- [ ] **P19-008:** Object-storage durability and recovery.
-- [ ] **P19-009:** Redis-loss behavior.
-- [ ] **P19-010:** WebSocket reconnect storm handling.
-- [ ] **P19-011:** Push provider outage handling.
-- [ ] **P19-012:** TURN outage and regional fallback.
-- [ ] **P19-013:** Rate-limit tuning.
-- [ ] **P19-014:** Capacity tests for messages, files, calls, and sync.
-- [ ] **P19-015:** Cost budgets and alerts.
-- [ ] **P19-016:** Database partition/archive strategy only when metrics justify it.
-- [ ] **P19-017:** Broker extraction only when modular-monolith limits are proven.
-- [ ] **P19-018:** Zero-downtime migration strategy.
-- [ ] **P19-019:** Client/server compatibility during rolling upgrades.
-- [ ] **P19-020:** Emergency rollback.
-- [ ] **P19-021:** Status page and user communication plan.
-- [ ] **P19-022:** Runbooks for top failure modes.
+- [x] **P19-001:** Service-level indicators.
+- [x] **P19-002:** Service-level objectives.
+- [x] **P19-003:** Alerting thresholds.
+- [x] **P19-004:** On-call/incident process suitable for a solo owner.
+- [x] **P19-005:** Automated backups.
+- [x] **P19-006:** Periodic restore drills.
+- [x] **P19-007:** Database point-in-time recovery.
+- [x] **P19-008:** Object-storage durability and recovery.
+- [x] **P19-009:** Redis-loss behavior.
+- [x] **P19-010:** WebSocket reconnect storm handling.
+- [x] **P19-011:** Push provider outage handling.
+- [x] **P19-012:** TURN outage and regional fallback.
+- [x] **P19-013:** Rate-limit tuning.
+- [x] **P19-014:** Capacity tests for messages, files, calls, and sync.
+- [x] **P19-015:** Cost budgets and alerts.
+- [x] **P19-016:** Database partition/archive strategy only when metrics justify it.
+- [x] **P19-017:** Broker extraction only when modular-monolith limits are proven.
+- [x] **P19-018:** Zero-downtime migration strategy.
+- [x] **P19-019:** Client/server compatibility during rolling upgrades.
+- [x] **P19-020:** Emergency rollback.
+- [x] **P19-021:** Status page and user communication plan.
+- [x] **P19-022:** Runbooks for top failure modes.
+
+### 2026-06-19 Implementation Evidence (P19 Repo-Side Operability Baseline)
+
+- `services/helix_remote_backend/lib/src/modules/operability.dart` adds public liveness/readiness probes and admin-only aggregate operational metrics for database health, mailbox counts, attachment totals, outbox state, WebSocket storm controls, rate-limit tuning, SLO targets, and alert thresholds.
+- `services/helix_remote_backend/lib/src/websocket.dart` rejects excessive per-device reconnect attempts and exposes aggregate reconnect stats without user content.
+- `services/helix_remote_backend/lib/src/outbox_worker.dart` makes push-provider outage handling explicit: safe notification hints retry and move to `DLQ` after bounded failures.
+- `services/helix_remote_backend/lib/src/database.dart` adds schema v11 operational aggregate helpers and keeps metrics content-free.
+- `contracts/remote-rest-openapi/openapi.yaml` records `/health/live`, `/health/ready`, and `/ops/metrics`.
+- `docs/operations/REMOTE_OPERABILITY_AND_DR.md` defines SLIs, SLOs, alerts, solo-owner incident process, backup/PITR/restore drill requirements, object storage recovery, Redis loss behavior, WebSocket/push/TURN outage runbooks, rate-limit tuning, capacity smoke scope, cost alerts, scaling triggers, zero-downtime migration strategy, rolling compatibility, emergency rollback, status-page communication, and top failure-mode runbooks.
+- `services/helix_remote_backend/test/operability_test.dart`: 5/5 pass - public health probes, admin-only content-free metrics, push outage retry/DLQ behavior, reconnect storm rejection, and runbook coverage.
+- Production binding note: live cloud backups, provider dashboards, status page, cost alerts, and staging load tests still require real Phase 20 infrastructure/credentials; this phase completes the repository controls, contracts, and runbooks without fabricating deployed infrastructure evidence.
 
 ---
 

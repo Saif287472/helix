@@ -45,4 +45,10 @@ class RateLimiter {
   void reset(String key) {
     _buckets.remove(key);
   }
+
+  Map<String, dynamic> stats() => {
+    'tracked_keys': _buckets.length,
+    'max_tokens': maxTokens,
+    'refill_rate_per_second': refillRatePerSecond,
+  };
 }
