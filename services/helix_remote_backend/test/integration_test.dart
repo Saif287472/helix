@@ -337,6 +337,277 @@ void main() {
 
     client.close();
   });
+
+  test('Refresh Token Rotation and Reuse Detection', () async {
+    final client = HttpClient();
+
+    // 1. Register a device for a new account "carol"
+    final keyPair = await ed25519.newKeyPair();
+    final pubKey = await keyPair.extractPublicKey();
+    final pubKeyStr = base64UrlEncode(pubKey.bytes);
+
+    final regRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/register',
+      {
+        'account_id': 'carol',
+        'username': 'carol_user',
+        'identity_public_key': 'carol_identity_pub_key',
+        'device_id': 'carol_device_1',
+        'device_public_key': pubKeyStr,
+        'device_name': 'Carol Phone',
+      },
+    );
+    expect(regRes.statusCode, equals(200));
+
+    // 2. Challenge and Login
+    final challengeRes = await _getJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/challenge?account_id=carol&device_id=carol_device_1',
+    );
+    expect(challengeRes.statusCode, equals(200));
+    final challenge = (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge'] as String;
+
+    final sig = await ed25519.sign(utf8.encode(challenge), keyPair: keyPair);
+    final sigStr = base64UrlEncode(sig.bytes);
+
+    final loginRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/login',
+      {
+        'account_id': 'carol',
+        'device_id': 'carol_device_1',
+        'signature': sigStr,
+      },
+    );
+    expect(loginRes.statusCode, equals(200));
+    final loginBody = jsonDecode(loginRes.body) as Map<String, dynamic>;
+    final token1 = loginBody['token'] as String;
+    final refresh1 = loginBody['refresh_token'] as String;
+
+    expect(token1, isNotEmpty);
+    expect(refresh1, isNotEmpty);
+
+    // 3. Refresh token rotation (use refresh1 to get access token 2 + refresh token 2)
+    server.rateLimiter.reset('127.0.0.1');
+    final refreshRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/refresh',
+      {
+        'refresh_token': refresh1,
+      },
+    );
+    expect(refreshRes.statusCode, equals(200));
+    final refreshBody = jsonDecode(refreshRes.body) as Map<String, dynamic>;
+    final token2 = refreshBody['token'] as String;
+    final refresh2 = refreshBody['refresh_token'] as String;
+
+    expect(token2, isNotEmpty);
+    expect(refresh2, isNotEmpty);
+
+    // 4. Replay attack: try using refresh1 again, should fail and invalidate refresh2
+    server.rateLimiter.reset('127.0.0.1');
+    final replayRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/refresh',
+      {
+        'refresh_token': refresh1,
+      },
+    );
+    expect(replayRes.statusCode, equals(403));
+
+    // Try using refresh2 now - should also fail because it was invalidated due to reuse detection
+    server.rateLimiter.reset('127.0.0.1');
+    final invalidRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/refresh',
+      {
+        'refresh_token': refresh2,
+      },
+    );
+    expect(invalidRes.statusCode, equals(403));
+
+    client.close();
+  });
+
+  test('Message Deletion and Tombstones', () async {
+    final client = HttpClient();
+
+    // 1. Get tokens for Alice
+    final keyPair = await ed25519.newKeyPair();
+    final pubKey = await keyPair.extractPublicKey();
+    final pubKeyStr = base64UrlEncode(pubKey.bytes);
+
+    // Register & Login Alice
+    await _postJson(client, 'localhost', port, '/api/v1/accounts/register', {
+      'account_id': 'alice_del_test',
+      'username': 'alice_del',
+      'identity_public_key': 'alice_identity_public_key',
+      'device_id': 'alice_device_del',
+      'device_public_key': pubKeyStr,
+      'device_name': 'Alice Phone',
+    });
+
+    final challengeRes = await _getJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/challenge?account_id=alice_del_test&device_id=alice_device_del',
+    );
+    final challenge = (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge'] as String;
+    final sig = await ed25519.sign(utf8.encode(challenge), keyPair: keyPair);
+    final loginRes = await _postJson(client, 'localhost', port, '/api/v1/accounts/login', {
+      'account_id': 'alice_del_test',
+      'device_id': 'alice_device_del',
+      'signature': base64UrlEncode(sig.bytes),
+    });
+    final aliceToken = (jsonDecode(loginRes.body) as Map<String, dynamic>)['token'] as String;
+
+    // 2. Create conversation
+    server.rateLimiter.reset('127.0.0.1');
+    await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/messages/conversations/create',
+      {
+        'conversation_id': 'conv_del_1',
+        'type': 'DIRECT',
+        'title': 'Delete Chat',
+        'members': ['alice_del_test'],
+      },
+      token: aliceToken,
+    );
+
+    // 3. Send message
+    server.rateLimiter.reset('127.0.0.1');
+    await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/messages/send',
+      {
+        'message_id': 'msg_del_1',
+        'conversation_id': 'conv_del_1',
+        'envelopes': [
+          {
+            'recipient_device_id': 'alice_device_del',
+            'ciphertext': 'ciphertext_payload',
+          }
+        ]
+      },
+      token: aliceToken,
+    );
+
+    // 4. Delete message
+    server.rateLimiter.reset('127.0.0.1');
+    final delRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/messages/delete',
+      {
+        'message_id': 'msg_del_1',
+      },
+      token: aliceToken,
+    );
+    expect(delRes.statusCode, equals(200));
+
+    // Verify it is tombstoned
+    expect(server.db.isTombstoned('msg_del_1', 'MESSAGE'), isTrue);
+
+    client.close();
+  });
+
+  test('Mailbox Quota Enforcement', () async {
+    final client = HttpClient();
+
+    // Fill the messages table to simulate quota limit or simulate using a mock limit.
+    // In our implementation, we enforce outstandingCount >= 5000.
+    final testDeviceId = 'quota_test_device';
+    server.db.createAccount('alice', 'alice_quota_target', 'alice_quota_target_key');
+    server.db.registerDevice(testDeviceId, 'alice', 'dummy_pub_key', 'Quota Device');
+
+    // Create conversation
+    server.db.createConversation('conv_quota', 'DIRECT', 'Quota Chat', ['alice']);
+
+    // Directly insert 5000 messages to hit quota
+    for (int i = 0; i < 5000; i++) {
+      server.db.saveMessage(
+        messageId: 'msg_quota_$i',
+        conversationId: 'conv_quota',
+        senderAccountId: 'alice',
+        senderDeviceId: testDeviceId,
+        recipientDeviceId: testDeviceId,
+        ciphertext: 'dummy ciphertext',
+      );
+    }
+
+    // Now try to send a message via API, should be rejected due to mailbox quota
+    final aliceKeyPair = await ed25519.newKeyPair();
+    final pubKey = await aliceKeyPair.extractPublicKey();
+    final pubKeyStr = base64UrlEncode(pubKey.bytes);
+
+    await _postJson(client, 'localhost', port, '/api/v1/accounts/register', {
+      'account_id': 'alice_quota',
+      'username': 'alice_quota_user',
+      'identity_public_key': 'alice_quota_identity_public_key',
+      'device_id': 'alice_quota_device',
+      'device_public_key': pubKeyStr,
+      'device_name': 'Alice Quota Phone',
+    });
+
+    final challengeRes = await _getJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/challenge?account_id=alice_quota&device_id=alice_quota_device',
+    );
+    final challenge = (jsonDecode(challengeRes.body) as Map<String, dynamic>)['challenge'] as String;
+    final sig = await ed25519.sign(utf8.encode(challenge), keyPair: aliceKeyPair);
+    final loginRes = await _postJson(client, 'localhost', port, '/api/v1/accounts/login', {
+      'account_id': 'alice_quota',
+      'device_id': 'alice_quota_device',
+      'signature': base64UrlEncode(sig.bytes),
+    });
+    final aliceToken = (jsonDecode(loginRes.body) as Map<String, dynamic>)['token'] as String;
+
+    server.rateLimiter.reset('127.0.0.1');
+    final sendRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/messages/send',
+      {
+        'message_id': 'msg_quota_fail',
+        'conversation_id': 'conv_quota',
+        'envelopes': [
+          {
+            'recipient_device_id': testDeviceId,
+            'ciphertext': 'ciphertext_payload',
+          }
+        ]
+      },
+      token: aliceToken,
+    );
+
+    // It should fail with HTTP 403 Forbidden due to quota limit exceeded
+    expect(sendRes.statusCode, equals(403));
+
+    client.close();
+  });
 }
 
 // HTTP request helpers

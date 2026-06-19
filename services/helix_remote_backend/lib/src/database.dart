@@ -161,6 +161,30 @@ class BackendDatabase {
 
       _db.execute('PRAGMA user_version = 1;');
     }
+
+    if (version < 2) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS refresh_tokens (
+          token_hash TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          device_id TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          revoked INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS tombstones (
+          item_id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          deleted_at INTEGER NOT NULL
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 2;');
+    }
   }
 
   void close() {
@@ -568,6 +592,26 @@ class BackendDatabase {
     }
   }
 
+  Map<String, dynamic>? getMessage(String messageId) {
+    final stmt = _db.prepare('SELECT * FROM messages WHERE message_id = ? LIMIT 1;');
+    final res = stmt.select([messageId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'message_id': row['message_id'],
+      'conversation_id': row['conversation_id'],
+      'sender_account_id': row['sender_account_id'],
+      'sender_device_id': row['sender_device_id'],
+    };
+  }
+
+  void deleteMessage(String messageId) {
+    final stmt = _db.prepare('DELETE FROM messages WHERE message_id = ?;');
+    stmt.execute([messageId]);
+    stmt.close();
+  }
+
   List<Map<String, dynamic>> getMessagesForDevice(
     String deviceId,
     String conversationId,
@@ -732,5 +776,74 @@ class BackendDatabase {
     ''');
     stmt.execute([uuid, accountId, deviceId, action, clientIp, userAgent, now]);
     stmt.close();
+  }
+
+  // Refresh Tokens (P10-003)
+  void saveRefreshToken({
+    required String tokenHash,
+    required String accountId,
+    required String deviceId,
+    required int expiresAt,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO refresh_tokens (token_hash, account_id, device_id, expires_at, revoked)
+      VALUES (?, ?, ?, ?, 0);
+    ''');
+    stmt.execute([tokenHash, accountId, deviceId, expiresAt]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getRefreshToken(String tokenHash) {
+    final stmt = _db.prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?;');
+    final res = stmt.select([tokenHash]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'token_hash': row['token_hash'],
+      'account_id': row['account_id'],
+      'device_id': row['device_id'],
+      'expires_at': row['expires_at'],
+      'revoked': row['revoked'],
+    };
+  }
+
+  void revokeRefreshToken(String tokenHash) {
+    final stmt = _db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE token_hash = ?;');
+    stmt.execute([tokenHash]);
+    stmt.close();
+  }
+
+  void revokeAllRefreshTokensForDevice(String accountId, String deviceId) {
+    final stmt = _db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE account_id = ? AND device_id = ?;');
+    stmt.execute([accountId, deviceId]);
+    stmt.close();
+  }
+
+  // Tombstones (P10-018)
+  void saveTombstone(String itemId, String type) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO tombstones (item_id, type, deleted_at)
+      VALUES (?, ?, ?);
+    ''');
+    stmt.execute([itemId, type, now]);
+    stmt.close();
+  }
+
+  bool isTombstoned(String itemId, String type) {
+    final stmt = _db.prepare('SELECT 1 FROM tombstones WHERE item_id = ? AND type = ?;');
+    final res = stmt.select([itemId, type]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
+  // Quotas / Backpressure (P10-021)
+  int getMessageCountForDevice(String deviceId) {
+    final stmt = _db.prepare('SELECT COUNT(*) FROM messages WHERE recipient_device_id = ?;');
+    final res = stmt.select([deviceId]);
+    stmt.close();
+    if (res.isEmpty) return 0;
+    return res.first.columnAt(0) as int;
   }
 }

@@ -19,6 +19,7 @@ class MessagingModule {
     router.post('/send', _sendMessageHandler);
     router.get('/sync', _syncMessagesHandler);
     router.post('/cursor', _updateCursorHandler);
+    router.post('/delete', _deleteMessageHandler);
     return router;
   }
 
@@ -127,6 +128,14 @@ class MessagingModule {
         if (db.isBlocked(recipientAccountId, senderAccountId)) {
           // Sender is blocked by recipient, ignore/silent drop this envelope for security/privacy
           continue;
+        }
+
+        // Check mailbox quotas (P10-021)
+        final outstandingCount = db.getMessageCountForDevice(recipientDeviceId);
+        if (outstandingCount >= 5000) {
+          return Response.forbidden(
+            jsonEncode({'error': 'Recipient device mailbox quota exceeded. Try again later.'}),
+          );
         }
 
         // Save envelope
@@ -251,6 +260,82 @@ class MessagingModule {
       db.updateSyncCursor(accountId, deviceId, conversationId, sequence);
 
       return Response.ok(jsonEncode({'message': 'Sync cursor updated'}));
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+      );
+    }
+  }
+
+  Future<Response> _deleteMessageHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final messageId = body['message_id'] as String?;
+
+      if (messageId == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing message_id'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final deviceId = auth['device_id'] as String;
+
+      // Fetch message from DB to verify owner
+      final msg = db.getMessage(messageId);
+      if (msg == null) {
+        return Response.notFound(jsonEncode({'error': 'Message not found'}));
+      }
+
+      if (msg['sender_account_id'] != accountId) {
+        return Response.forbidden(
+          jsonEncode({'error': 'You can only delete your own messages'}),
+        );
+      }
+
+      final conversationId = msg['conversation_id'] as String;
+
+      // Delete message from messages table
+      db.deleteMessage(messageId);
+
+      // Save tombstone in database (P10-018)
+      db.saveTombstone(messageId, 'MESSAGE');
+
+      // Relay tombstone event via WebSocket to other active devices of the conversation
+      final conversationMembers = db.getConversationMembers(conversationId);
+      for (final memberId in conversationMembers) {
+        // Query active devices of this member and send delete event
+        final memberDevices = db.getDevices(memberId);
+        for (final dev in memberDevices) {
+          final targetDeviceId = dev['device_id'] as String;
+          if (targetDeviceId != deviceId) {
+            final deletePayload = {
+              'type': 'message_deleted',
+              'message_id': messageId,
+              'conversation_id': conversationId,
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            };
+            relay.sendToDevice(targetDeviceId, deletePayload);
+          }
+        }
+      }
+
+      db.logAudit(
+        accountId,
+        deviceId,
+        'MESSAGE_DELETED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      return Response.ok(
+        jsonEncode({'message': 'Message deleted successfully', 'message_id': messageId}),
+      );
     } catch (e) {
       return Response.internalServerError(
         body: jsonEncode({'error': e.toString()}),

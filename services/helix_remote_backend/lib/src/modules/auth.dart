@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
+import 'package:crypto/crypto.dart' as crypto_pkg;
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
 
@@ -21,6 +22,7 @@ class AuthModule {
     router.post('/register', _registerHandler);
     router.get('/challenge', _challengeHandler);
     router.post('/login', _loginHandler);
+    router.post('/refresh', _refreshHandler);
 
     // Auth routes (enforced by middleware in main, but we can verify here too)
     router.get('/devices', _listDevicesHandler);
@@ -186,11 +188,29 @@ class AuthModule {
       // Clear challenge
       _challenges.remove(key);
 
-      // Generate JWT
-      final token = jwt.generateToken({
+      // Generate Access Token (1 hour expiry)
+      final accessToken = jwt.generateToken({
         'account_id': accountId,
         'device_id': deviceId,
+      }, const Duration(hours: 1));
+
+      // Generate Refresh Token (7 days expiry)
+      final refreshToken = jwt.generateToken({
+        'account_id': accountId,
+        'device_id': deviceId,
+        'refresh': true,
+        'jti': Random.secure().nextInt(1000000000).toString(),
       }, const Duration(days: 7));
+
+      // Hash refresh token and save in database
+      final tokenHash = crypto_pkg.sha256.convert(utf8.encode(refreshToken)).toString();
+      final expiresAt = DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch;
+      db.saveRefreshToken(
+        tokenHash: tokenHash,
+        accountId: accountId,
+        deviceId: deviceId,
+        expiresAt: expiresAt,
+      );
 
       db.logAudit(
         accountId,
@@ -201,7 +221,11 @@ class AuthModule {
       );
 
       return Response.ok(
-        jsonEncode({'token': token, 'message': 'Login successful'}),
+        jsonEncode({
+          'token': accessToken,
+          'refresh_token': refreshToken,
+          'message': 'Login successful',
+        }),
       );
     } catch (e) {
       return Response.internalServerError(
@@ -262,5 +286,69 @@ class AuthModule {
 
   static String base64UrlEncode(List<int> bytes) {
     return base64Url.encode(bytes).replaceAll('=', '');
+  }
+
+  Future<Response> _refreshHandler(Request request) async {
+    try {
+      final body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final refreshToken = body['refresh_token'] as String?;
+      if (refreshToken == null) {
+        return Response.badRequest(body: jsonEncode({'error': 'Missing refresh_token'}));
+      }
+
+      final claims = jwt.verifyToken(refreshToken);
+      if (claims == null || claims['refresh'] != true) {
+        return Response.forbidden(jsonEncode({'error': 'Invalid or expired refresh token'}));
+      }
+
+      final accountId = claims['account_id'] as String;
+      final deviceId = claims['device_id'] as String;
+
+      final tokenHash = crypto_pkg.sha256.convert(utf8.encode(refreshToken)).toString();
+      final storedToken = db.getRefreshToken(tokenHash);
+
+      if (storedToken == null) {
+        return Response.forbidden(jsonEncode({'error': 'Refresh token not recognized'}));
+      }
+
+      if (storedToken['revoked'] == 1) {
+        // REPLAY ATTACK! Revoke ALL refresh tokens for this device for safety
+        db.revokeAllRefreshTokensForDevice(accountId, deviceId);
+        return Response.forbidden(jsonEncode({'error': 'Compromised refresh token. All sessions revoked.'}));
+      }
+
+      // Revoke the used token (rotation)
+      db.revokeRefreshToken(tokenHash);
+
+      // Generate new pair
+      final newAccessToken = jwt.generateToken({
+        'account_id': accountId,
+        'device_id': deviceId,
+      }, const Duration(hours: 1));
+
+      final newRefreshToken = jwt.generateToken({
+        'account_id': accountId,
+        'device_id': deviceId,
+        'refresh': true,
+        'jti': Random.secure().nextInt(1000000000).toString(),
+      }, const Duration(days: 7));
+
+      final newTokenHash = crypto_pkg.sha256.convert(utf8.encode(newRefreshToken)).toString();
+      final expiresAt = DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch;
+
+      db.saveRefreshToken(
+        tokenHash: newTokenHash,
+        accountId: accountId,
+        deviceId: deviceId,
+        expiresAt: expiresAt,
+      );
+
+      return Response.ok(jsonEncode({
+        'token': newAccessToken,
+        'refresh_token': newRefreshToken,
+      }));
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+    }
   }
 }

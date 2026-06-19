@@ -169,6 +169,7 @@ class BackendServer {
         if (path.endsWith('/accounts/register') ||
             path.endsWith('/accounts/challenge') ||
             path.endsWith('/accounts/login') ||
+            path.endsWith('/accounts/refresh') ||
             path.endsWith('/ws')) {
           return innerHandler(request);
         }
