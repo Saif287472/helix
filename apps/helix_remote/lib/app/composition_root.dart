@@ -226,12 +226,8 @@ class RemoteCompositionRoot {
 
       _syncEngine = RemoteSyncEngine(db, onCallSignal: onCallSignal);
 
-      final conversationKeys = <String, String>{};
       String keySeedProvider(String conversationId) {
-        return conversationKeys.putIfAbsent(
-          conversationId,
-          RemoteMessageProtectorImpl.generateSeed,
-        );
+        return db.getOrCreateLocalHistorySessionSeed(conversationId);
       }
 
       _messagingService = RemoteMessagingService(
@@ -385,6 +381,7 @@ class RemoteCompositionRoot {
 
     final accessToken = loginResp['token'] as String;
     final refreshToken = loginResp['refresh_token'] as String? ?? '';
+    rest.accessToken = accessToken;
 
     await store.write('access_token', accessToken);
     await store.write('refresh_token', refreshToken);
@@ -397,6 +394,13 @@ class RemoteCompositionRoot {
     await store.write('device_signing_private_key', deviceSigningPrivStr);
     await store.write('device_agreement_public_key', deviceAgreementPubKeyStr);
     await store.write('device_agreement_private_key', deviceAgreementPrivStr);
+
+    await _publishInitialPrekeys(
+      rest: rest,
+      secureKeys: _requireReady(_keyStorage, 'keyStorage'),
+      accountIdentityKeyPair: identityKeyPair,
+      deviceId: deviceIdStr,
+    );
 
     ms.setCryptoKeys(
       devicePrivateKey: deviceAgreementPrivBytes,
@@ -425,6 +429,84 @@ class RemoteCompositionRoot {
     } catch (e) {
       _lastError = 'Registered, but WebSocket connect failed: $e';
     }
+  }
+
+  Future<void> _publishInitialPrekeys({
+    required HelixRemoteRestClient rest,
+    required RemoteSecureKeyStorage secureKeys,
+    required crypto_pkg.SimpleKeyPair accountIdentityKeyPair,
+    required String deviceId,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final manager = RemotePrekeyManager();
+    final publication = await manager.createPublication(
+      accountIdentitySigningKey: accountIdentityKeyPair,
+      signedPrekeyId: now.millisecondsSinceEpoch,
+      firstOneTimePrekeyId: now.millisecondsSinceEpoch + 1,
+      oneTimePrekeyCount: 10,
+      now: now,
+    );
+
+    final signedPrivateRef =
+        'prekey_${deviceId}_signed_${publication.signedPrekeyId}';
+    await secureKeys.writeKeyRecord(
+      signedPrivateRef,
+      RemoteSecureKeyRecord(
+        role: 'signed_prekey_private',
+        version: 1,
+        deviceId: deviceId,
+        value: publication.signedPrekeyPrivate,
+        createdAt: publication.createdAt,
+        rotationState: 'active',
+        metadata: {
+          'key_id': publication.signedPrekeyId,
+          'expires_at': publication.expiresAt.millisecondsSinceEpoch,
+        },
+      ),
+    );
+    _database?.saveLocalPrekey(
+      keyId: publication.signedPrekeyId,
+      role: 'signed_prekey',
+      deviceId: deviceId,
+      publicKey: publication.signedPrekeyPublic,
+      privateKeyRef: signedPrivateRef,
+      signature: publication.signedPrekeySignature,
+      createdAt: publication.createdAt.millisecondsSinceEpoch,
+      expiresAt: publication.expiresAt.millisecondsSinceEpoch,
+      rotationState: 'active',
+    );
+
+    for (final oneTimePrekey in publication.oneTimePrekeys) {
+      final privateRef = 'prekey_${deviceId}_otk_${oneTimePrekey.keyId}';
+      await secureKeys.writeKeyRecord(
+        privateRef,
+        RemoteSecureKeyRecord(
+          role: 'one_time_prekey_private',
+          version: 1,
+          deviceId: deviceId,
+          value: oneTimePrekey.privateKey,
+          createdAt: publication.createdAt,
+          rotationState: 'active',
+          metadata: {'key_id': oneTimePrekey.keyId},
+        ),
+      );
+      _database?.saveLocalPrekey(
+        keyId: oneTimePrekey.keyId,
+        role: 'one_time_prekey',
+        deviceId: deviceId,
+        publicKey: oneTimePrekey.publicKey,
+        privateKeyRef: privateRef,
+        createdAt: publication.createdAt.millisecondsSinceEpoch,
+        rotationState: 'active',
+      );
+    }
+
+    await rest.uploadPreKeys(
+      signedPrekeyId: publication.signedPrekeyId,
+      signedPrekey: publication.signedPrekeyPublic,
+      signedPrekeySignature: publication.signedPrekeySignature,
+      oneTimePrekeys: publication.oneTimePrekeyPublicPayloads(),
+    );
   }
 
   void setAuthenticated(String accessToken) {

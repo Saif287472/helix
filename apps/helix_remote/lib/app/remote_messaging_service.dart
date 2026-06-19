@@ -24,6 +24,15 @@ abstract class RemoteMessageProtector {
   });
 }
 
+class SecureSessionUnavailableException implements Exception {
+  const SecureSessionUnavailableException(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => 'SecureSessionUnavailableException: $reason';
+}
+
 class RemoteDecryptedMessage {
   const RemoteDecryptedMessage({
     required this.messageId,
@@ -427,46 +436,59 @@ class RemoteMessagingService {
       recipientDeviceId: 'local-history',
     );
 
-    // Build per-device X3DH envelopes
-    final envelopes = await _buildX3dhEnvelopes(
+    final localMessage = RemoteMessage(
+      messageId: id,
       conversationId: conversationId,
-      plaintext: plaintext,
-      recipientDeviceIds: recipientDeviceIds,
-      excludeAccountId: accountId,
+      senderAccountId: accountId,
+      senderDeviceId: deviceId,
+      ciphertext: localCiphertext,
     );
+    final sequence = _nextLocalSequence(conversationId);
+    final timestamp = _clock().millisecondsSinceEpoch;
 
-    db.saveMessage(
-      RemoteMessage(
-        messageId: id,
+    try {
+      final envelopes = await _buildX3dhEnvelopes(
         conversationId: conversationId,
+        messageId: id,
+        plaintext: plaintext,
+        recipientDeviceIds: recipientDeviceIds,
         senderAccountId: accountId,
         senderDeviceId: deviceId,
-        ciphertext: localCiphertext,
-      ),
-      _nextLocalSequence(conversationId),
-      _clock().millisecondsSinceEpoch,
-      'PENDING',
-    );
+      );
 
-    db.enqueueOperation(
-      'send_message_$id',
-      'SEND_MESSAGE',
-      jsonEncode({
-        'message_id': id,
-        'conversation_id': conversationId,
-        'envelopes': envelopes,
-      }),
-      idempotencyKey: 'message:$id',
-    );
+      db.saveMessageAndOperation(
+        message: localMessage,
+        sequence: sequence,
+        timestamp: timestamp,
+        status: 'PENDING',
+        opId: 'send_message_$id',
+        type: 'SEND_MESSAGE',
+        payload: jsonEncode({
+          'message_id': id,
+          'conversation_id': conversationId,
+          'envelopes': envelopes,
+        }),
+        idempotencyKey: 'message:$id',
+      );
+    } on SecureSessionUnavailableException {
+      db.saveMessage(
+        localMessage,
+        sequence,
+        timestamp,
+        'SECURE_SESSION_UNAVAILABLE',
+      );
+    }
 
     return id;
   }
 
   Future<List<Map<String, dynamic>>> _buildX3dhEnvelopes({
     required String conversationId,
+    required String messageId,
     required String plaintext,
     required List<String> recipientDeviceIds,
-    required String excludeAccountId,
+    required String senderAccountId,
+    required String senderDeviceId,
   }) async {
     final envelopes = <Map<String, dynamic>>[];
     final x3dh = X3dhSessionInitiator();
@@ -475,24 +497,15 @@ class RemoteMessagingService {
     final devicePriv = _devicePrivateKey;
     final devicePub = _devicePublicKey;
     if (devicePriv == null || devicePub == null) {
-      for (final recipientDeviceId in recipientDeviceIds) {
-        envelopes.add({
-          'recipient_device_id': recipientDeviceId,
-          'ciphertext': await protector.encryptText(
-            conversationId: conversationId,
-            messageId: 'x3dh_fallback_${_clock().microsecondsSinceEpoch}',
-            plaintext: plaintext,
-            recipientDeviceId: recipientDeviceId,
-          ),
-        });
-      }
-      return envelopes;
+      throw const SecureSessionUnavailableException(
+        'local device agreement key is unavailable',
+      );
     }
 
     // Fetch prekey bundles for all unique member accounts
     final allMembers = conversationMemberIds(conversationId);
     final otherMembers = allMembers
-        .where((m) => m != excludeAccountId)
+        .where((m) => m != senderAccountId)
         .toSet()
         .toList();
 
@@ -524,16 +537,9 @@ class RemoteMessagingService {
     for (final recipientDeviceId in recipientDeviceIds) {
       final bundle = deviceBundleMap[recipientDeviceId];
       if (bundle == null) {
-        envelopes.add({
-          'recipient_device_id': recipientDeviceId,
-          'ciphertext': await protector.encryptText(
-            conversationId: conversationId,
-            messageId: 'x3dh_fallback_${_clock().microsecondsSinceEpoch}',
-            plaintext: plaintext,
-            recipientDeviceId: recipientDeviceId,
-          ),
-        });
-        continue;
+        throw SecureSessionUnavailableException(
+          'missing prekey bundle for $recipientDeviceId',
+        );
       }
 
       final ephemeralKey = await x25519.newKeyPair();
@@ -577,22 +583,28 @@ class RemoteMessagingService {
           bobSignedPrekey: bobSignedPrekey,
           bobSignedPrekeySignature: bobSig,
           bobOneTimePrekey: bobOpk,
+          protocolVersion: '1',
+          conversationId: conversationId,
+          senderDeviceId: senderDeviceId,
+          recipientDeviceId: recipientDeviceId,
         );
       } catch (_) {
-        envelopes.add({
-          'recipient_device_id': recipientDeviceId,
-          'ciphertext': await protector.encryptText(
-            conversationId: conversationId,
-            messageId: 'x3dh_fallback_${_clock().microsecondsSinceEpoch}',
-            plaintext: plaintext,
-            recipientDeviceId: recipientDeviceId,
-          ),
-        });
-        continue;
+        throw SecureSessionUnavailableException(
+          'signed prekey verification failed for $recipientDeviceId',
+        );
       }
 
       final masterKeyBytes = await masterSecret.extractBytes();
       final aes = crypto.AesGcm.with256bits();
+      final aad = _messageAad(
+        messageId: messageId,
+        conversationId: conversationId,
+        senderDeviceId: senderDeviceId,
+        recipientDeviceId: recipientDeviceId,
+        protocolVersion: 1,
+        contentType: 'text',
+        counter: 0,
+      );
       final nonce = Uint8List.fromList(
         List<int>.generate(12, (_) => math.Random.secure().nextInt(256)),
       );
@@ -600,6 +612,7 @@ class RemoteMessagingService {
         utf8.encode(plaintext),
         secretKey: crypto.SecretKey(masterKeyBytes),
         nonce: nonce,
+        aad: aad,
       );
 
       final ciphertextBytes = BytesBuilder()
@@ -610,9 +623,18 @@ class RemoteMessagingService {
 
       final aliceIdentityPubKey = await aliceIdentityKey.extractPublicKey();
       final x3dhHeader = <String, dynamic>{
+        'protocol_version': 1,
         'identity_key': base64Url.encode(aliceIdentityPubKey.bytes),
         'ephemeral_key': base64Url.encode(ephemeralPubKey.bytes),
         'used_one_time_prekey_id': usedOpkId,
+        'aad': {
+          'message_id': messageId,
+          'conversation_id': conversationId,
+          'sender_device_id': senderDeviceId,
+          'recipient_device_id': recipientDeviceId,
+          'content_type': 'text',
+          'counter': 0,
+        },
       };
 
       envelopes.add({
@@ -648,6 +670,30 @@ class RemoteMessagingService {
       }
     }
     return ids;
+  }
+
+  void recordTrustDecision({
+    required String accountId,
+    required String deviceId,
+    required String identityFingerprint,
+    required String safetyNumber,
+    String status = 'trusted',
+  }) {
+    db.upsertTrustDecision(
+      accountId: accountId,
+      deviceId: deviceId,
+      identityFingerprint: identityFingerprint,
+      safetyNumber: safetyNumber,
+      status: status,
+      timestamp: _clock().millisecondsSinceEpoch,
+    );
+  }
+
+  Map<String, dynamic>? trustDecision({
+    required String accountId,
+    required String deviceId,
+  }) {
+    return db.getTrustDecision(accountId: accountId, deviceId: deviceId);
   }
 
   Future<List<RemoteDecryptedMessage>> messageHistory(
@@ -898,6 +944,29 @@ class RemoteMessagingService {
       return 1;
     }
     return (rows.first['server_sequence'] as int) + 1;
+  }
+
+  static List<int> _messageAad({
+    required String messageId,
+    required String conversationId,
+    required String senderDeviceId,
+    required String recipientDeviceId,
+    required int protocolVersion,
+    required String contentType,
+    required int counter,
+  }) {
+    return utf8.encode(
+      jsonEncode({
+        'domain': 'helix.remote.message.v1',
+        'message_id': messageId,
+        'conversation_id': conversationId,
+        'sender_device_id': senderDeviceId,
+        'recipient_device_id': recipientDeviceId,
+        'protocol_version': protocolVersion,
+        'content_type': contentType,
+        'counter': counter,
+      }),
+    );
   }
 
   String _requireAccountId() {

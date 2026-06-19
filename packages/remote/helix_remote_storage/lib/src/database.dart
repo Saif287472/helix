@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_domain/models.dart';
 
@@ -431,6 +432,8 @@ class HelixRemoteDatabase {
         PRIMARY KEY (item_id, type)
       );
     ''');
+
+    _createRemoteCryptoTables();
   }
 
   void _applyMigrations() {
@@ -518,6 +521,66 @@ class HelixRemoteDatabase {
       _migrateDeviceIdentifiersToText();
       _db.execute('PRAGMA user_version = 6;');
     }
+    if (version < 7) {
+      _createRemoteCryptoTables();
+      _db.execute('PRAGMA user_version = 7;');
+    }
+  }
+
+  void _createRemoteCryptoTables() {
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS crypto_sessions (
+        session_id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        peer_account_id TEXT,
+        peer_device_id TEXT,
+        role TEXT NOT NULL,
+        protocol_version INTEGER NOT NULL,
+        root_key TEXT NOT NULL,
+        sending_chain_key TEXT NOT NULL,
+        receiving_chain_key TEXT NOT NULL,
+        send_count INTEGER NOT NULL DEFAULT 0,
+        receive_count INTEGER NOT NULL DEFAULT 0,
+        previous_chain_length INTEGER NOT NULL DEFAULT 0,
+        skipped_keys_json TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    ''');
+    _db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_crypto_sessions_conversation
+      ON crypto_sessions(conversation_id);
+    ''');
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS local_prekeys (
+        key_id INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        public_key TEXT NOT NULL,
+        private_key_ref TEXT NOT NULL,
+        signature TEXT,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER,
+        rotation_state TEXT NOT NULL,
+        PRIMARY KEY (key_id, role, device_id)
+      );
+    ''');
+    _db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_local_prekeys_state
+      ON local_prekeys(device_id, role, rotation_state, expires_at);
+    ''');
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS trusted_devices (
+        account_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        identity_fingerprint TEXT NOT NULL,
+        safety_number TEXT NOT NULL,
+        status TEXT NOT NULL,
+        first_seen_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (account_id, device_id)
+      );
+    ''');
   }
 
   void _migrateDeviceIdentifiersToText() {
@@ -982,6 +1045,280 @@ class HelixRemoteDatabase {
     final stmt = _db.prepare('DELETE FROM messages WHERE message_id = ?;');
     stmt.execute([messageId]);
     stmt.close();
+  }
+
+  void saveMessageAndOperation({
+    required RemoteMessage message,
+    required int sequence,
+    required int timestamp,
+    required String status,
+    required String opId,
+    required String type,
+    required String payload,
+    required String idempotencyKey,
+  }) {
+    _db.execute('SAVEPOINT save_message_and_operation;');
+    try {
+      saveMessage(message, sequence, timestamp, status);
+      enqueueOperation(opId, type, payload, idempotencyKey: idempotencyKey);
+      _db.execute('RELEASE SAVEPOINT save_message_and_operation;');
+    } catch (_) {
+      _db.execute('ROLLBACK TO SAVEPOINT save_message_and_operation;');
+      _db.execute('RELEASE SAVEPOINT save_message_and_operation;');
+      rethrow;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Remote crypto session, prekey, and trust state
+  // ---------------------------------------------------------------------------
+
+  String getOrCreateLocalHistorySessionSeed(String conversationId) {
+    final existing = getCryptoSession('local_history:$conversationId');
+    if (existing != null) {
+      return existing['root_key'] as String;
+    }
+    final random = math.Random.secure();
+    final seed = base64Url.encode(
+      List<int>.generate(32, (_) => random.nextInt(256)),
+    );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    upsertCryptoSession(
+      sessionId: 'local_history:$conversationId',
+      conversationId: conversationId,
+      role: 'local_history',
+      protocolVersion: 1,
+      rootKey: seed,
+      sendingChainKey: seed,
+      receivingChainKey: seed,
+      createdAt: now,
+      updatedAt: now,
+    );
+    return seed;
+  }
+
+  void upsertCryptoSession({
+    required String sessionId,
+    required String conversationId,
+    required String role,
+    required int protocolVersion,
+    required String rootKey,
+    required String sendingChainKey,
+    required String receivingChainKey,
+    required int createdAt,
+    required int updatedAt,
+    String? peerAccountId,
+    String? peerDeviceId,
+    int sendCount = 0,
+    int receiveCount = 0,
+    int previousChainLength = 0,
+    String skippedKeysJson = '[]',
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO crypto_sessions (
+        session_id,
+        conversation_id,
+        peer_account_id,
+        peer_device_id,
+        role,
+        protocol_version,
+        root_key,
+        sending_chain_key,
+        receiving_chain_key,
+        send_count,
+        receive_count,
+        previous_chain_length,
+        skipped_keys_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(session_id) DO UPDATE SET
+        root_key = excluded.root_key,
+        sending_chain_key = excluded.sending_chain_key,
+        receiving_chain_key = excluded.receiving_chain_key,
+        send_count = excluded.send_count,
+        receive_count = excluded.receive_count,
+        previous_chain_length = excluded.previous_chain_length,
+        skipped_keys_json = excluded.skipped_keys_json,
+        updated_at = excluded.updated_at;
+    ''');
+    stmt.execute([
+      sessionId,
+      conversationId,
+      peerAccountId,
+      peerDeviceId,
+      role,
+      protocolVersion,
+      rootKey,
+      sendingChainKey,
+      receivingChainKey,
+      sendCount,
+      receiveCount,
+      previousChainLength,
+      skippedKeysJson,
+      createdAt,
+      updatedAt,
+    ]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getCryptoSession(String sessionId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM crypto_sessions WHERE session_id = ?;',
+    );
+    final res = stmt.select([sessionId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    return Map<String, dynamic>.from(res.first);
+  }
+
+  List<Map<String, dynamic>> getCryptoSessionsForConversation(
+    String conversationId,
+  ) {
+    final stmt = _db.prepare(
+      'SELECT * FROM crypto_sessions WHERE conversation_id = ? ORDER BY session_id;',
+    );
+    final res = stmt.select([conversationId]);
+    stmt.close();
+    return res.map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  void saveLocalPrekey({
+    required int keyId,
+    required String role,
+    required String deviceId,
+    required String publicKey,
+    required String privateKeyRef,
+    required int createdAt,
+    required String rotationState,
+    String? signature,
+    int? expiresAt,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO local_prekeys (
+        key_id,
+        role,
+        device_id,
+        public_key,
+        private_key_ref,
+        signature,
+        created_at,
+        expires_at,
+        rotation_state
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      keyId,
+      role,
+      deviceId,
+      publicKey,
+      privateKeyRef,
+      signature,
+      createdAt,
+      expiresAt,
+      rotationState,
+    ]);
+    stmt.close();
+  }
+
+  List<Map<String, dynamic>> getLocalPrekeys({
+    required String deviceId,
+    String? role,
+    String? rotationState,
+  }) {
+    final where = <String>['device_id = ?'];
+    final args = <Object?>[deviceId];
+    if (role != null) {
+      where.add('role = ?');
+      args.add(role);
+    }
+    if (rotationState != null) {
+      where.add('rotation_state = ?');
+      args.add(rotationState);
+    }
+    final stmt = _db.prepare(
+      'SELECT * FROM local_prekeys WHERE ${where.join(' AND ')} ORDER BY key_id;',
+    );
+    final res = stmt.select(args);
+    stmt.close();
+    return res.map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  int countActiveOneTimePrekeys(String deviceId) {
+    final stmt = _db.prepare('''
+      SELECT count(*) AS c FROM local_prekeys
+      WHERE device_id = ? AND role = 'one_time_prekey' AND rotation_state = 'active';
+    ''');
+    final res = stmt.select([deviceId]);
+    stmt.close();
+    return res.first['c'] as int;
+  }
+
+  void markLocalPrekeyState({
+    required int keyId,
+    required String role,
+    required String deviceId,
+    required String rotationState,
+  }) {
+    final stmt = _db.prepare('''
+      UPDATE local_prekeys
+      SET rotation_state = ?
+      WHERE key_id = ? AND role = ? AND device_id = ?;
+    ''');
+    stmt.execute([rotationState, keyId, role, deviceId]);
+    stmt.close();
+  }
+
+  void upsertTrustDecision({
+    required String accountId,
+    required String deviceId,
+    required String identityFingerprint,
+    required String safetyNumber,
+    required String status,
+    required int timestamp,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO trusted_devices (
+        account_id,
+        device_id,
+        identity_fingerprint,
+        safety_number,
+        status,
+        first_seen_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(account_id, device_id) DO UPDATE SET
+        identity_fingerprint = excluded.identity_fingerprint,
+        safety_number = excluded.safety_number,
+        status = excluded.status,
+        updated_at = excluded.updated_at;
+    ''');
+    stmt.execute([
+      accountId,
+      deviceId,
+      identityFingerprint,
+      safetyNumber,
+      status,
+      timestamp,
+      timestamp,
+    ]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getTrustDecision({
+    required String accountId,
+    required String deviceId,
+  }) {
+    final stmt = _db.prepare('''
+      SELECT * FROM trusted_devices WHERE account_id = ? AND device_id = ?;
+    ''');
+    final res = stmt.select([accountId, deviceId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    return Map<String, dynamic>.from(res.first);
   }
 
   // ---------------------------------------------------------------------------

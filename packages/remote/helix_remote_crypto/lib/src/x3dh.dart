@@ -33,6 +33,10 @@ class X3dhSessionInitiator {
     required crypto.SimplePublicKey bobSignedPrekey,
     required Uint8List bobSignedPrekeySignature,
     crypto.SimplePublicKey? bobOneTimePrekey,
+    String protocolVersion = '1',
+    String conversationId = '',
+    String senderDeviceId = '',
+    String recipientDeviceId = '',
   }) async {
     // Step 1 — verify the signed prekey signature BEFORE doing any DH work.
     final prekeyBytes = Uint8List.fromList(bobSignedPrekey.bytes);
@@ -93,7 +97,12 @@ class X3dhSessionInitiator {
     return hkdf.deriveKey(
       secretKey: crypto.SecretKey(ikm.toBytes()),
       nonce: List.filled(32, 0),
-      info: 'Helix-X3DH-MasterSecret-v1'.codeUnits,
+      info: _sessionInfo(
+        protocolVersion: protocolVersion,
+        conversationId: conversationId,
+        senderDeviceId: senderDeviceId,
+        recipientDeviceId: recipientDeviceId,
+      ),
     );
   }
 
@@ -108,6 +117,10 @@ class X3dhSessionInitiator {
     crypto.SimpleKeyPair? bobOneTimePrekey,
     required crypto.SimplePublicKey aliceIdentityPublicKey,
     required crypto.SimplePublicKey aliceEphemeralPublicKey,
+    String protocolVersion = '1',
+    String conversationId = '',
+    String senderDeviceId = '',
+    String recipientDeviceId = '',
   }) async {
     // DH1 = ECDH(SPK_Bob, IK_D_Alice)
     final dh1Bytes = await x25519.sharedSecretKey(
@@ -154,7 +167,22 @@ class X3dhSessionInitiator {
     return hkdf.deriveKey(
       secretKey: crypto.SecretKey(ikm.toBytes()),
       nonce: List.filled(32, 0),
-      info: 'Helix-X3DH-MasterSecret-v1'.codeUnits,
+      info: _sessionInfo(
+        protocolVersion: protocolVersion,
+        conversationId: conversationId,
+        senderDeviceId: senderDeviceId,
+        recipientDeviceId: recipientDeviceId,
+      ),
     );
+  }
+
+  List<int> _sessionInfo({
+    required String protocolVersion,
+    required String conversationId,
+    required String senderDeviceId,
+    required String recipientDeviceId,
+  }) {
+    return 'Helix-X3DH-MasterSecret-v1|protocol=$protocolVersion|conversation=$conversationId|sender=$senderDeviceId|recipient=$recipientDeviceId'
+        .codeUnits;
   }
 }

@@ -258,17 +258,20 @@ void main() {
       final stored = db.getMessageById(messageId);
       expect(stored, isNotNull);
       expect(stored!['ciphertext_blob'], isNot(contains('train leaves')));
+      expect(stored['status'], equals('SECURE_SESSION_UNAVAILABLE'));
 
       final pendingPayload = jsonEncode(db.getPendingOperations());
       expect(pendingPayload, isNot(contains('train leaves')));
+      expect(pendingPayload, isNot(contains('SEND_MESSAGE')));
 
       final processed = await service.processOutboundQueue();
-      expect(processed, 2);
+      expect(processed, 1);
       expect(jsonEncode(gateway.sent), isNot(contains('train leaves')));
+      expect(gateway.sent.any((op) => op['type'] == 'SEND_MESSAGE'), isFalse);
 
       final history = await service.messageHistory(conversationId);
       expect(history.single.text, 'the train leaves at nine');
-      expect(history.single.status, 'PENDING');
+      expect(history.single.status, 'SECURE_SESSION_UNAVAILABLE');
 
       final matches = await service.searchDecryptedHistory(
         conversationId: conversationId,
@@ -277,6 +280,56 @@ void main() {
       expect(matches.single.messageId, 'msg_1');
     },
   );
+
+  test('P2-07 missing secure session never enqueues network send', () async {
+    final conversationId = service.createDirectConversation(
+      peerAccountId: 'bob',
+      conversationId: 'dm_fail_closed',
+    );
+
+    await service.sendText(
+      conversationId: conversationId,
+      messageId: 'msg_no_session',
+      plaintext: 'do not downgrade this',
+      recipientDeviceIds: ['bob_device_1'],
+    );
+
+    final stored = db.getMessageById('msg_no_session')!;
+    expect(stored['status'], 'SECURE_SESSION_UNAVAILABLE');
+    final pending = db.getPendingOperations();
+    expect(pending.any((op) => op['type'] == 'SEND_MESSAGE'), isFalse);
+    expect(jsonEncode(pending), isNot(contains('do not downgrade this')));
+  });
+
+  test('P2-08 trust decisions persist key change state', () {
+    service.recordTrustDecision(
+      accountId: 'bob',
+      deviceId: 'bob_device_1',
+      identityFingerprint: 'fp_old',
+      safetyNumber: '12345',
+    );
+    expect(
+      service.trustDecision(
+        accountId: 'bob',
+        deviceId: 'bob_device_1',
+      )!['status'],
+      'trusted',
+    );
+
+    service.recordTrustDecision(
+      accountId: 'bob',
+      deviceId: 'bob_device_1',
+      identityFingerprint: 'fp_new',
+      safetyNumber: '67890',
+      status: 'key_changed',
+    );
+    final changed = service.trustDecision(
+      accountId: 'bob',
+      deviceId: 'bob_device_1',
+    )!;
+    expect(changed['identity_fingerprint'], 'fp_new');
+    expect(changed['status'], 'key_changed');
+  });
 
   test('Phase 12 offline receive, pagination, receipts, and typing', () async {
     final conversationId = service.createDirectConversation(

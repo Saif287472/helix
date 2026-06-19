@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
@@ -150,6 +151,56 @@ void main() {
         );
       },
     );
+
+    test('P2-05 transcript context changes the derived session key', () async {
+      final x25519 = crypto.X25519();
+      final bundle = await _buildBobBundle();
+      final aliceIdentity = await x25519.newKeyPair();
+      final aliceEphemeral = await x25519.newKeyPair();
+      final aliceIdentityPublic = await aliceIdentity.extractPublicKey();
+      final aliceEphemeralPublic = await aliceEphemeral.extractPublicKey();
+      final bobIdentityPublic = await bundle.bobIdentityKey.extractPublicKey();
+
+      final initiator = X3dhSessionInitiator();
+      final aliceSecret = await initiator.initiateSession(
+        aliceIdentityKey: aliceIdentity,
+        aliceEphemeralKey: aliceEphemeral,
+        bobIdentityPublicKey: bobIdentityPublic,
+        bobIdentitySigningPublicKey: bundle.bobSigningPublic,
+        bobSignedPrekey: await bundle.bobSignedPrekeyKp.extractPublicKey(),
+        bobSignedPrekeySignature: bundle.signature,
+        protocolVersion: '1',
+        conversationId: 'conv_a',
+        senderDeviceId: 'alice_device',
+        recipientDeviceId: 'bob_device',
+      );
+      final bobSecret = await initiator.receiveSession(
+        bobIdentityKey: bundle.bobIdentityKey,
+        bobSignedPrekey: bundle.bobSignedPrekeyKp,
+        aliceIdentityPublicKey: aliceIdentityPublic,
+        aliceEphemeralPublicKey: aliceEphemeralPublic,
+        protocolVersion: '1',
+        conversationId: 'conv_a',
+        senderDeviceId: 'alice_device',
+        recipientDeviceId: 'bob_device',
+      );
+      final wrongContextSecret = await initiator.receiveSession(
+        bobIdentityKey: bundle.bobIdentityKey,
+        bobSignedPrekey: bundle.bobSignedPrekeyKp,
+        aliceIdentityPublicKey: aliceIdentityPublic,
+        aliceEphemeralPublicKey: aliceEphemeralPublic,
+        protocolVersion: '1',
+        conversationId: 'conv_b',
+        senderDeviceId: 'alice_device',
+        recipientDeviceId: 'bob_device',
+      );
+
+      expect(await aliceSecret.extractBytes(), await bobSecret.extractBytes());
+      expect(
+        await aliceSecret.extractBytes(),
+        isNot(await wrongContextSecret.extractBytes()),
+      );
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -567,6 +618,84 @@ void main() {
         'other',
         reason: 'Unrelated key must survive Remote clearAll',
       );
+    });
+
+    test('P2-02 versioned key records expose redacted inventory', () async {
+      FlutterSecureStorage.setMockInitialValues({
+        'helix_remote_v1_legacy_identity_private': 'raw_legacy',
+      });
+      const adapter = RemoteSecureKeyStorage();
+
+      await adapter.migrateLegacyKey(
+        legacyKey: 'legacy_identity_private',
+        role: 'account_identity_private',
+        deviceId: 'alice_device',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+      );
+      await adapter.writeKeyRecord(
+        'device_signing_private',
+        RemoteSecureKeyRecord(
+          role: 'device_signing_private',
+          version: 1,
+          deviceId: 'alice_device',
+          value: 'secret_value',
+          createdAt: DateTime.fromMillisecondsSinceEpoch(2000),
+        ),
+      );
+
+      final migrated = await adapter.readKeyRecord('legacy_identity_private');
+      expect(migrated!.rotationState, 'legacy_migrated');
+      final inventory = await adapter.keyInventory();
+      expect(inventory, hasLength(2));
+      expect(jsonEncode(inventory), isNot(contains('secret_value')));
+      expect(jsonEncode(inventory), isNot(contains('raw_legacy')));
+      expect(
+        inventory.map((entry) => entry['role']),
+        containsAll(['account_identity_private', 'device_signing_private']),
+      );
+    });
+  });
+
+  group('P2-03 prekey lifecycle', () {
+    test('creates signed prekey and replenishment metadata', () async {
+      final manager = RemotePrekeyManager();
+      final identity = await crypto.Ed25519().newKeyPair();
+      final identityPublic = await identity.extractPublicKey();
+
+      final publication = await manager.createPublication(
+        accountIdentitySigningKey: identity,
+        signedPrekeyId: 7,
+        firstOneTimePrekeyId: 100,
+        oneTimePrekeyCount: 3,
+        now: DateTime.fromMillisecondsSinceEpoch(1000, isUtc: true),
+      );
+
+      expect(publication.signedPrekeyId, 7);
+      expect(publication.oneTimePrekeys.map((key) => key.keyId), [
+        100,
+        101,
+        102,
+      ]);
+      expect(manager.shouldReplenish(availableOneTimePrekeyCount: 4), isTrue);
+      expect(
+        manager.isExpired(
+          publication,
+          DateTime.fromMillisecondsSinceEpoch(
+            1000,
+            isUtc: true,
+          ).add(const Duration(days: 31)),
+        ),
+        isTrue,
+      );
+
+      final valid = await crypto.Ed25519().verify(
+        base64Url.decode(publication.signedPrekeyPublic),
+        signature: crypto.Signature(
+          base64Url.decode(publication.signedPrekeySignature),
+          publicKey: identityPublic,
+        ),
+      );
+      expect(valid, isTrue);
     });
   });
 }

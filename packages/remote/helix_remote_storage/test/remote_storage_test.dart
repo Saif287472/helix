@@ -233,7 +233,7 @@ void main() {
     migrated.initialize();
     addTearDown(migrated.close);
 
-    expect(migrated.schemaVersion, equals(6));
+    expect(migrated.schemaVersion, equals(7));
     final devices = migrated.getDevices('acc_v5');
     expect(devices.single.deviceId, equals('1'));
     expect(devices.single.deviceSigningPublicKey, equals('legacy_key'));
@@ -292,7 +292,7 @@ void main() {
     addTearDown(migrated.close);
 
     expect(migrated.getAccount('acc_plain')!.username, equals(marker));
-    expect(migrated.schemaVersion, equals(6));
+    expect(migrated.schemaVersion, equals(7));
     expect(_opensWithoutKey(file), isFalse);
     expect(_databaseFilesContain(file, marker), isFalse);
   });
@@ -330,6 +330,72 @@ void main() {
       expect(_opensWithoutKey(file), isFalse);
       expect(_databaseFilesContain(file, marker), isFalse);
     }
+  });
+
+  test('P2-04/P2-08 crypto session and trust state persist across restart', () {
+    final dir = Directory.systemTemp.createTempSync('helix_remote_p2_state_');
+    final file = File(p.join(dir.path, 'remote.db'));
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    final first = HelixRemoteDatabase(file);
+    first.initialize();
+    final seed = first.getOrCreateLocalHistorySessionSeed('conv_persist');
+    first.upsertCryptoSession(
+      sessionId: 'peer:conv_persist:bob_device',
+      conversationId: 'conv_persist',
+      role: 'x3dh_v1',
+      protocolVersion: 1,
+      rootKey: 'root_key',
+      sendingChainKey: 'send_key',
+      receivingChainKey: 'recv_key',
+      peerAccountId: 'bob',
+      peerDeviceId: 'bob_device',
+      sendCount: 3,
+      receiveCount: 2,
+      createdAt: 1000,
+      updatedAt: 2000,
+    );
+    first.upsertTrustDecision(
+      accountId: 'bob',
+      deviceId: 'bob_device',
+      identityFingerprint: 'fingerprint',
+      safetyNumber: 'safety',
+      status: 'trusted',
+      timestamp: 3000,
+    );
+    first.saveLocalPrekey(
+      keyId: 1,
+      role: 'one_time_prekey',
+      deviceId: 'alice_device',
+      publicKey: 'public',
+      privateKeyRef: 'secure_ref',
+      createdAt: 4000,
+      rotationState: 'active',
+    );
+    first.close();
+
+    final reopened = HelixRemoteDatabase(file);
+    reopened.initialize();
+    addTearDown(reopened.close);
+
+    expect(reopened.schemaVersion, equals(7));
+    expect(
+      reopened.getOrCreateLocalHistorySessionSeed('conv_persist'),
+      equals(seed),
+    );
+    final session = reopened.getCryptoSession('peer:conv_persist:bob_device')!;
+    expect(session['send_count'], equals(3));
+    expect(session['receive_count'], equals(2));
+    expect(
+      reopened.getTrustDecision(
+        accountId: 'bob',
+        deviceId: 'bob_device',
+      )!['safety_number'],
+      equals('safety'),
+    );
+    expect(reopened.countActiveOneTimePrekeys('alice_device'), equals(1));
   });
 
   test('Outbound Queue Operations and Tombstones', () {
