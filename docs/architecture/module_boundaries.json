@@ -34,6 +34,23 @@
       "reason": "Shared packages must be product-neutral and may not import from either product package tree or app code."
     },
     {
+      "source": "packages/remote/helix_remote_domain/**",
+      "imports": [
+        "packages/remote/helix_remote_api/**",
+        "packages/local/**",
+        "apps/**"
+      ],
+      "reason": "Remote domain models must not import API clients, local packages, or app code."
+    },
+    {
+      "source": "packages/remote/helix_remote_api/**",
+      "imports": [
+        "packages/local/**",
+        "apps/**"
+      ],
+      "reason": "Remote API client must not import local packages or app code."
+    },
+    {
       "source": "packages/local/helix_local_domain/**",
       "imports": [
         "packages/local/helix_local_protocol/**",

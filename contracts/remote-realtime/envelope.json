@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Helix Remote Realtime Envelope",
+  "description": "JSON schema for the realtime WebSocket and event sync envelope in Helix Remote (Phase 8).",
+  "type": "object",
+  "required": [
+    "event_id",
+    "schema_version",
+    "timestamp",
+    "type",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique UUID for the event."
+    },
+    "request_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Optional UUID correlation ID linking back to the client's request."
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Optional client-generated key preventing duplicate processing."
+    },
+    "correlation_id": {
+      "type": "string",
+      "description": "Optional end-to-end operation tracking ID."
+    },
+    "server_sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonically increasing sequence number assigned by the server for ordering."
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Schema version of the envelope (currently 1)."
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "UTC timestamp in milliseconds."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "chat_message",
+        "receipt",
+        "typing",
+        "group_membership",
+        "call_signal",
+        "device_revocation",
+        "sync_marker"
+      ],
+      "description": "The event type determining how the payload should be parsed."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-type specific schema payload."
+    }
+  }
+}

@@ -110,6 +110,7 @@ final class _PackageEntry {
         normalized == workspaceRoot ||
         normalized.contains('/apps/') ||
         normalized.contains('/packages/local/') ||
+        normalized.contains('/packages/remote/') ||
         normalized.endsWith('/tool');
   }
 

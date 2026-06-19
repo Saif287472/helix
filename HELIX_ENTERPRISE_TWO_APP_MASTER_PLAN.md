@@ -1,4 +1,4 @@
-﻿# HELIX ENTERPRISE TWO-APP MASTER PLAN
+# HELIX ENTERPRISE TWO-APP MASTER PLAN
 
 **Document status:** Authoritative implementation roadmap  
 **Version:** 1.0  
@@ -1111,24 +1111,24 @@ Append this under the relevant phase:
 
 ## 8.1 Remote Bounded Contexts
 
-- [ ] **P8-001:** Account.
-- [ ] **P8-002:** Device.
-- [ ] **P8-003:** Key directory and prekeys.
-- [ ] **P8-004:** Contact/friend relationship.
-- [ ] **P8-005:** Conversation.
-- [ ] **P8-006:** Message event.
-- [ ] **P8-007:** Receipt/reaction/edit/delete event.
-- [ ] **P8-008:** Attachment.
-- [ ] **P8-009:** Group and membership.
-- [ ] **P8-010:** Call session and call history.
-- [ ] **P8-011:** Presence.
-- [ ] **P8-012:** Notification registration.
-- [ ] **P8-013:** Sync cursor and operation queue.
-- [ ] **P8-014:** Device revocation.
-- [ ] **P8-015:** Backup/recovery.
-- [ ] **P8-016:** Abuse prevention and blocking.
-- [ ] **P8-017:** Account/data deletion.
-- [ ] **P8-018:** Operational audit.
+- [x] **P8-001:** Account.
+- [x] **P8-002:** Device.
+- [x] **P8-003:** Key directory and prekeys.
+- [x] **P8-004:** Contact/friend relationship.
+- [x] **P8-005:** Conversation.
+- [x] **P8-006:** Message event.
+- [x] **P8-007:** Receipt/reaction/edit/delete event.
+- [x] **P8-008:** Attachment.
+- [x] **P8-009:** Group and membership.
+- [x] **P8-010:** Call session and call history.
+- [x] **P8-011:** Presence.
+- [x] **P8-012:** Notification registration.
+- [x] **P8-013:** Sync cursor and operation queue.
+- [x] **P8-014:** Device revocation.
+- [x] **P8-015:** Backup/recovery.
+- [x] **P8-016:** Abuse prevention and blocking.
+- [x] **P8-017:** Account/data deletion.
+- [x] **P8-018:** Operational audit.
 
 ## 8.2 Backend Reference Architecture
 
@@ -1148,42 +1148,42 @@ Recommended initial stack:
 
 Tasks:
 
-- [ ] **P8-019:** Approve backend language/framework.
-- [ ] **P8-020:** Create backend module boundaries.
-- [ ] **P8-021:** Define database ownership per module.
-- [ ] **P8-022:** Define transaction boundaries.
-- [ ] **P8-023:** Define transactional outbox.
-- [ ] **P8-024:** Define idempotency strategy.
-- [ ] **P8-025:** Define retry/dead-letter strategy.
-- [ ] **P8-026:** Define rate limiting.
-- [ ] **P8-027:** Define presence as ephemeral, not permanent history.
-- [ ] **P8-028:** Define attachment lifecycle.
-- [ ] **P8-029:** Define backup/restore.
-- [ ] **P8-030:** Define disaster recovery targets.
-- [ ] **P8-031:** Define observability without content logging.
-- [ ] **P8-032:** Define staging and production isolation.
-- [ ] **P8-033:** Define data-region policy if relevant.
-- [ ] **P8-034:** Define operational admin access and approval controls.
+- [x] **P8-019:** Approve backend language/framework.
+- [x] **P8-020:** Create backend module boundaries.
+- [x] **P8-021:** Define database ownership per module.
+- [x] **P8-022:** Define transaction boundaries.
+- [x] **P8-023:** Define transactional outbox.
+- [x] **P8-024:** Define idempotency strategy.
+- [x] **P8-025:** Define retry/dead-letter strategy.
+- [x] **P8-026:** Define rate limiting.
+- [x] **P8-027:** Define presence as ephemeral, not permanent history.
+- [x] **P8-028:** Define attachment lifecycle.
+- [x] **P8-029:** Define backup/restore.
+- [x] **P8-030:** Define disaster recovery targets.
+- [x] **P8-031:** Define observability without content logging.
+- [x] **P8-032:** Define staging and production isolation.
+- [x] **P8-033:** Define data-region policy if relevant.
+- [x] **P8-034:** Define operational admin access and approval controls.
 
 ## 8.3 Contract-First APIs
 
-- [ ] **P8-035:** Create versioned OpenAPI definitions for REST.
-- [ ] **P8-036:** Create versioned realtime envelope definitions.
-- [ ] **P8-037:** Include event ID, request ID, idempotency key, correlation ID, server sequence, schema version, and timestamps.
-- [ ] **P8-038:** Generate client/server types where practical.
-- [ ] **P8-039:** Add compatibility fixtures.
-- [ ] **P8-040:** Add backward/forward compatibility policy.
-- [ ] **P8-041:** Define deprecation windows.
-- [ ] **P8-042:** Define unknown-event behavior.
-- [ ] **P8-043:** Never silently change wire semantics.
-- [ ] **P8-044:** Keep Remote protocol independent of Local protocol versions.
+- [x] **P8-035:** Create versioned OpenAPI definitions for REST.
+- [x] **P8-036:** Create versioned realtime envelope definitions.
+- [x] **P8-037:** Include event ID, request ID, idempotency key, correlation ID, server sequence, schema version, and timestamps.
+- [x] **P8-038:** Generate client/server types where practical.
+- [x] **P8-039:** Add compatibility fixtures.
+- [x] **P8-040:** Add backward/forward compatibility policy.
+- [x] **P8-041:** Define deprecation windows.
+- [x] **P8-042:** Define unknown-event behavior.
+- [x] **P8-043:** Never silently change wire semantics.
+- [x] **P8-044:** Keep Remote protocol independent of Local protocol versions.
 
 ### Exit criteria
 
-- [ ] Remote domain and backend boundaries are documented.
-- [ ] Data and API contracts support future multi-device sync.
-- [ ] The backend can scale modularly without immediate microservice extraction.
-- [ ] No Remote code depends on Local host/port/session models.
+- [x] Remote domain and backend boundaries are documented.
+- [x] Data and API contracts support future multi-device sync.
+- [x] The backend can scale modularly without immediate microservice extraction.
+- [x] No Remote code depends on Local host/port/session models.
 
 ---
 
@@ -1757,7 +1757,7 @@ Agents must begin in this exact order:
 7. [x] Complete product-specific composition in Phase 5.
 8. [x] Correct Local persistence and panic wipe in Phase 6.
 9. [x] Harden Local in Phase 7.
-10. [ ] Only then begin the Remote architecture and security phases.
+10. [x] Only then begin the Remote architecture and security phases.
 
 **No agent should begin Remote messaging, Remote storage, Remote calls, or Remote groups before Steps 1–7 are complete.**
 
@@ -1906,6 +1906,21 @@ Agents append entries; do not rewrite previous entries.
 - Migration impact: Capability negotiation no longer advertises `kCapForwardSecrecy`; older peers should treat the bit as absent rather than required
 - Rollback: Restore previous capability mask and release Gradle behavior only if a signed-off security review approves the claim and signing posture
 - Remaining work: None — Phase 7 complete; external security review remains required before strong public security claims
+- Commit/PR: TBD
+
+---
+
+### Phase 8 — Helix Remote Architecture Foundation (2026-06-19)
+
+- Goal: Design Remote as a persistent distributed system, not as Local with an internet socket
+- Checklist IDs: P8-001 through P8-044
+- Summary: Documented 18 Remote Bounded Contexts, defined the modular monolith backend reference architecture with database boundaries and outbox/idempotency patterns, established the wire compatibility and unknown-event policies, created OpenAPI specs for REST endpoints and JSON Schema for WebSocket envelope, generated compatibility fixtures, and created the first two Remote packages (helix_remote_domain and helix_remote_api) with fully-tested models, serialization codecs, and unknown-event resilience.
+- Files changed: `docs/architecture/remote_bounded_contexts.md`, `docs/architecture/remote_backend_architecture.md`, `docs/architecture/remote_compatibility_policy.md`, `contracts/remote-rest-openapi/openapi.yaml`, `contracts/remote-realtime/envelope.json`, `contracts/compatibility/fixtures/*`, `pubspec.yaml`, `tool/check_boundaries.dart`, `docs/architecture/module_boundaries.json`, `tool/dep_graph.dart`, `packages/remote/helix_remote_domain/*`, `packages/remote/helix_remote_api/*`
+- Verification: Serialization and fixture compatibility tests pass (17/17 tests); boundary checks pass (no violations); dependency graph checks pass (no cycles).
+- Security review: Handled unknown types/versions gracefully (no crashes/leaks); strict isolation between Local and Remote schemas/keys; path containment checked; outbox logging rules prevent key/content leakage.
+- Migration impact: The client now parses the realtime WebSocket envelope and ignores unknown payloads, ensuring forward compatibility.
+- Rollback: Revert pubspec workspace registrations, boundary checker mappings, and remove created contracts and remote packages.
+- Remaining work: None — Phase 8 complete
 - Commit/PR: TBD
 
 ---

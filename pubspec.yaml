@@ -19,6 +19,9 @@ workspace:
   - packages/local/helix_local_transfer
   - packages/local/helix_local_groups
   - packages/local/helix_local_discovery
+  - packages/remote/helix_remote_domain
+  - packages/remote/helix_remote_api
+
 
 dependencies:
   helix_local_domain:

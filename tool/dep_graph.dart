@@ -25,6 +25,8 @@ const _nodes = <String, String>{
   'helix_local_transfer': 'packages/local/helix_local_transfer/lib/',
   'helix_local_groups': 'packages/local/helix_local_groups/lib/',
   'helix_local_discovery': 'packages/local/helix_local_discovery/lib/',
+  'helix_remote_domain': 'packages/remote/helix_remote_domain/lib/',
+  'helix_remote_api': 'packages/remote/helix_remote_api/lib/',
 };
 
 Future<void> main(List<String> args) async {

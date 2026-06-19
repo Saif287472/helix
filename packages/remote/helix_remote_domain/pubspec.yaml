@@ -1,0 +1,12 @@
+name: helix_remote_domain
+description: Domain entities, repository contracts, and models for Helix Remote.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  meta: any
