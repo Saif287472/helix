@@ -12,11 +12,15 @@ dependencies:
   flutter:
     sdk: flutter
   sqlite3: ^3.3.3
-  sqlite3_flutter_libs: ^0.6.0
   meta: ^1.18.0
   path: ^1.9.1
   helix_remote_domain:
     path: ../helix_remote_domain
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlcipher
 
 dev_dependencies:
   flutter_test:

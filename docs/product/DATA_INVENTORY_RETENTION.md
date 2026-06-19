@@ -5,7 +5,7 @@
 | **User Name / Nickname** | Until profile reset | Secure storage | Until profile edit/account delete | SQL DB + Server registry |
 | **Identity Keys** | Until profile reset/wipe | Secure storage | Until account deletion | Secure storage + Server prekeys |
 | **Chat Threads** | Active runtime session only | RAM only | Until user manual deletion | Encrypted SQL DB |
-| **Text Messages** | Active runtime session only | RAM only | Until user manual deletion | Local SQLite database; SQLCipher encryption remains BLOCKED |
+| **Text Messages** | Active runtime session only | RAM only | Until user manual deletion | Local SQLCipher database |
 | **Private Media Cache** | Active runtime session only | RAM only | Cache evicts automatically; server copy until message delete | App cache directory |
 | **File Transfers** | Cleaned on transfer complete | `.part` file in app-temp | Persistent object storage until references are gone | Encrypted object payloads plus server metadata |
 | **Audit Logs** | Redacted; cleared on close | Memory buffer | Operational retention; account rows deleted on account deletion | Server audit table with redacted IP/user-agent |

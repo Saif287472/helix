@@ -38,3 +38,8 @@ dependencies:
     path: packages/local/helix_local_protocol
   helix_remote_calls:
     path: packages/remote/helix_remote_calls
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlcipher

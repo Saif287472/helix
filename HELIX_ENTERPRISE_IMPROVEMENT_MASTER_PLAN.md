@@ -31,7 +31,8 @@ However, the current Remote product is not yet a safe enterprise messaging syste
 5. conversation encryption seeds are held only in an in-memory map;
 6. X3DH failure silently falls back to an incompatible local-only encryption path;
 7. the supposed “double ratchet” is only a symmetric chain ratchet and is not integrated into persisted messaging sessions;
-8. the Remote SQLite database explicitly remains plaintext because standard `sqlite3` ignores `PRAGMA key`;
+8. Remote local database encryption is now repaired by P2-01, but persisted
+   cryptographic sessions and E2EE fail-closed behavior remain incomplete;
 9. the Remote release manifest omits permissions required for networking and calls;
 10. attachment URL composition duplicates `/api/v1`, and cache eviction can delete the user’s original selected file;
 11. backup upload sends the database snapshot without actually applying the declared encryption;
@@ -80,7 +81,7 @@ No phase permits a broad “clean architecture rewrite,” a backend language re
 | R-001 | Critical | Login key mismatch: X25519 device key is registered; Ed25519 identity key signs; backend verifies registered device key as Ed25519 | `apps/helix_remote/lib/app/composition_root.dart:291-340`; `services/helix_remote_backend/lib/src/modules/auth.dart:150-195` | 1 |
 | R-002 | Critical | Device ID is a backend string but client model/database uses integer; non-digits are stripped and often become `1` | `composition_root.dart:299-300,367-369,426-429`; `helix_remote_domain/domain/device.dart`; Remote DB schema | 1 |
 | R-003 | Critical | WebSocket client uses HTTP scheme and `/ws`; backend exposes `/api/v1/ws` | `remote_config.dart:28-38,51-70`; `server_impl.dart:140-141` | 1/3 |
-| R-004 | Critical | Remote database is plaintext despite an encryption key and `PRAGMA key` call | `helix_remote_storage/src/database.dart:13-23` | 2 |
+| R-004 | Critical | **DONE 2026-06-20:** Remote database now opens through SQLCipher, rejects wrong keys, migrates plaintext files with copy/integrity/swap/rollback, and scans clean for plaintext markers | `helix_remote_storage/src/database.dart`; `remote_storage_test.dart` P2-01 tests | 2 |
 | R-005 | Critical | Per-conversation protector seeds live only in a process-local map and are lost on restart | `composition_root.dart:229-241` | 2 |
 | R-006 | Critical | X3DH errors and missing bundles fall back to a non-interoperable generic protector instead of failing closed | `remote_messaging_service.dart` X3DH envelope construction paths | 2 |
 | R-007 | Critical | No complete persisted Double Ratchet protocol: no DH ratchet headers, counters, skipped keys, or session persistence | `helix_remote_crypto/src/double_ratchet.dart:4-102` | 2 |
@@ -315,7 +316,7 @@ Use an opaque `String` `DeviceId` end to end. Do not parse or coerce it to an in
 
 | ID | Agent instruction | Required behavior | Verification |
 |---|---|---|---|
-| P2-01 | Replace standard SQLite with a supported SQLCipher-capable implementation behind `HelixRemoteDatabase`. Add plaintext-to-encrypted migration using copy, integrity check, atomic swap, and rollback. | Opening DB without correct key fails; plaintext markers are absent on disk | binary scan, wrong-key test, migration crash-injection tests |
+| P2-01 | **DONE 2026-06-20:** Replaced Remote keyed database opens with SQLCipher-backed `sqlite3` hooks, fail-closed SQLCipher detection, wrong-key rejection, plaintext-header-gated copy migration, integrity checks, atomic swap, and rollback. | Opening DB without correct key fails; plaintext markers are absent on disk | `remote_storage_test.dart` wrong-key, binary scan, plaintext migration, and crash-injection rollback tests |
 | P2-02 | Separate secure-storage records by key role and version. Store key metadata, creation time, rotation state, and device binding. | No raw private key in logs/database/export | key inventory and secure-storage migration tests |
 | P2-03 | Implement signed prekey creation, signature verification, one-time prekey upload, atomic consumption, replenishment threshold, rotation, and expiry. Wire it into registration/login lifecycle. | New device publishes before messaging is enabled | two-client prekey tests, depleted-prekey test |
 | P2-04 | Replace the in-memory conversation-seed map with a versioned cryptographic session repository. Persist session state transactionally with the message/outbox write. | Restart does not lose decryption capability or reuse message keys | kill/restart/crash tests |

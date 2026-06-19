@@ -50,8 +50,8 @@ Retention and deletion behavior is documented in
 
 ## Security Limits
 
-- Remote client database-at-rest encryption remains BLOCKED until a reviewed
-  SQLCipher-capable or equivalent library supports required targets.
+- Remote client database-at-rest encryption is implemented with SQLCipher-backed
+  local storage; strong E2EE and forward-secrecy claims remain blocked below.
 - Independent external cryptographic/security review remains BLOCKED until an
   actual reviewer evaluates the exact implementation/version.
 - Full DH/skipped-key ratchet support remains BLOCKED pending a reviewed

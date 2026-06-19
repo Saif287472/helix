@@ -42,7 +42,7 @@ it.
 | Account registration/login | Defective | `apps/helix_remote/lib/app/composition_root.dart`; `services/helix_remote_backend/lib/src/modules/auth.dart`; `HELIX_ENTERPRISE_IMPROVEMENT_MASTER_PLAN.md` R-001/R-002 | Key roles and device identifiers are inconsistent; Phase 1 owns this fix. |
 | Remote REST DTOs and compatibility fixtures | Component-only | `packages/remote/helix_remote_api`; `contracts/compatibility`; API tests | DTO tests exist, but contract generation and route-level parity are incomplete. |
 | WebSocket transport | Defective | `apps/helix_remote/lib/app/remote_config.dart`; backend WebSocket route | Client path/scheme and query-token behavior are inconsistent with backend safety goals. |
-| Remote persistent storage | Defective | `packages/remote/helix_remote_storage/lib/src/database.dart`; storage tests | Standard SQLite ignores `PRAGMA key`; Remote database is not SQLCipher-encrypted. |
+| Remote persistent storage | Component-only | `packages/remote/helix_remote_storage/lib/src/database.dart`; `packages/remote/helix_remote_storage/test/remote_storage_test.dart` | P2-01 verifies SQLCipher-backed local DB encryption, wrong-key failure, binary marker absence, plaintext migration, and rollback. UI/service use remains broader Remote wiring work. |
 | Remote sync/outbox | Component-only | `packages/remote/helix_remote_sync`; sync tests | Sync engine exists, but lifecycle/reconnect driving and atomic batch guarantees are incomplete. |
 | Remote crypto sessions and E2EE messaging | Defective | `packages/remote/helix_remote_crypto`; `apps/helix_remote/lib/app/remote_messaging_service.dart`; crypto tests | X3DH/ratchet pieces exist, but key roles, fail-closed policy, persisted sessions, and full Double Ratchet behavior are not proven. |
 | Remote attachments | Defective | `apps/helix_remote/lib/app/remote_attachment_service.dart`; backend attachment tests | Upload/download components exist; raw key fallback and cache semantics need Phase 5 repair. |
@@ -85,4 +85,3 @@ it.
 - PostgreSQL, Redis, S3, SQLCipher, production observability, staging, signing,
   and external security review remain future or external gates unless executable
   evidence is added in later phases.
-

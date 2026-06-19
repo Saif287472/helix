@@ -22,8 +22,10 @@ may be discussed only as future target-state options until an ADR and
 executable migration evidence prove otherwise.
 
 Documentation must not claim that Remote E2EE, Double Ratchet persistence,
-SQLCipher database encryption, PostgreSQL, Redis, or object storage are already
-implemented unless the claim links to production wiring and tests.
+PostgreSQL, Redis, or object storage are already implemented unless the claim
+links to production wiring and tests. SQLCipher database-at-rest encryption is
+implemented by P2-01 and must continue to link to the storage tests that prove
+wrong-key failure, binary marker absence, and plaintext migration rollback.
 
 ## Consequences
 
@@ -31,4 +33,3 @@ implemented unless the claim links to production wiring and tests.
 - Backend language rewrites are out of scope for Phases 0-4.
 - Future storage or infrastructure changes must follow contract tests and
   migration evidence before docs present them as implemented.
-

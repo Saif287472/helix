@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -244,6 +245,93 @@ void main() {
     );
   });
 
+  test('P2-01 encrypted database rejects wrong key and hides markers', () {
+    final dir = Directory.systemTemp.createTempSync('helix_remote_p2_enc_');
+    final file = File(p.join(dir.path, 'remote.db'));
+    const key = 'correct horse battery staple';
+    const marker = 'p2_plaintext_marker_alice_secret';
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    final encrypted = HelixRemoteDatabase(file, password: key);
+    encrypted.initialize();
+    encrypted.upsertAccount(
+      RemoteAccount(
+        accountId: 'acc_p2',
+        username: marker,
+        identityPublicKey: 'identity_p2',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(2000),
+        status: 'Active',
+      ),
+    );
+    encrypted.close();
+
+    final wrongKey = HelixRemoteDatabase(file, password: 'wrong key');
+    expect(
+      wrongKey.initialize,
+      throwsA(isA<RemoteDatabaseEncryptionException>()),
+    );
+    expect(_opensWithoutKey(file), isFalse);
+    expect(_databaseFilesContain(file, marker), isFalse);
+  });
+
+  test('P2-01 migrates plaintext database to encrypted SQLCipher file', () {
+    final dir = Directory.systemTemp.createTempSync('helix_remote_p2_migrate_');
+    final file = File(p.join(dir.path, 'remote.db'));
+    const key = 'migration key';
+    const marker = 'p2_migration_marker_bob_secret';
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    _createPlaintextV6Database(file, marker);
+    expect(_hasPlaintextSqliteHeader(file), isTrue);
+
+    final migrated = HelixRemoteDatabase(file, password: key);
+    migrated.initialize();
+    addTearDown(migrated.close);
+
+    expect(migrated.getAccount('acc_plain')!.username, equals(marker));
+    expect(migrated.schemaVersion, equals(6));
+    expect(_opensWithoutKey(file), isFalse);
+    expect(_databaseFilesContain(file, marker), isFalse);
+  });
+
+  test('P2-01 migration crash injection rolls back plaintext source', () {
+    for (final fault in RemoteDatabaseMigrationFault.values) {
+      final dir = Directory.systemTemp.createTempSync('helix_remote_p2_fault_');
+      final file = File(p.join(dir.path, 'remote.db'));
+      const key = 'fault migration key';
+      final marker = 'p2_fault_marker_${fault.name}';
+      addTearDown(() {
+        if (dir.existsSync()) dir.deleteSync(recursive: true);
+      });
+      _createPlaintextV6Database(file, marker);
+
+      final failing = HelixRemoteDatabase(
+        file,
+        password: key,
+        migrationFault: fault,
+      );
+      expect(
+        failing.initialize,
+        throwsA(isA<RemoteDatabaseMigrationException>()),
+      );
+
+      expect(file.existsSync(), isTrue);
+      expect(_hasPlaintextSqliteHeader(file), isTrue);
+      expect(File('${file.path}.p2-encrypted-temp').existsSync(), isFalse);
+      expect(File('${file.path}.p2-plaintext-backup').existsSync(), isFalse);
+      expect(_readPlaintextUsername(file), equals(marker));
+
+      final retry = HelixRemoteDatabase(file, password: key);
+      retry.initialize();
+      retry.close();
+      expect(_opensWithoutKey(file), isFalse);
+      expect(_databaseFilesContain(file, marker), isFalse);
+    }
+  });
+
   test('Outbound Queue Operations and Tombstones', () {
     db.enqueueOperation('op_1', 'SEND_MESSAGE', '{"message_id": "msg_1"}');
 
@@ -349,4 +437,99 @@ void main() {
     );
     expect(db.getConversations(), equals(before));
   });
+}
+
+void _createPlaintextV6Database(File file, String marker) {
+  final oldDb = sqlite.sqlite3.open(file.path);
+  oldDb
+    ..execute('''
+      CREATE TABLE accounts (
+        account_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        identity_public_key TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        status TEXT NOT NULL
+      );
+    ''')
+    ..execute('''
+      INSERT INTO accounts VALUES (
+        'acc_plain',
+        '$marker',
+        'identity_plain',
+        3000,
+        'Active'
+      );
+    ''')
+    ..execute('PRAGMA user_version = 6;')
+    ..close();
+}
+
+String _readPlaintextUsername(File file) {
+  final raw = sqlite.sqlite3.open(file.path);
+  try {
+    return raw
+            .select(
+              "SELECT username FROM accounts WHERE account_id = 'acc_plain';",
+            )
+            .first['username']
+        as String;
+  } finally {
+    raw.close();
+  }
+}
+
+bool _opensWithoutKey(File file) {
+  sqlite.Database? raw;
+  try {
+    raw = sqlite.sqlite3.open(file.path);
+    raw.select('SELECT count(*) FROM sqlite_master;');
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    raw?.close();
+  }
+}
+
+bool _hasPlaintextSqliteHeader(File file) {
+  if (!file.existsSync() || file.lengthSync() < 16) {
+    return false;
+  }
+  final handle = file.openSync()..setPositionSync(0);
+  try {
+    return ascii.decode(handle.readSync(16), allowInvalid: true) ==
+        'SQLite format 3\u0000';
+  } finally {
+    handle.closeSync();
+  }
+}
+
+bool _databaseFilesContain(File databaseFile, String marker) {
+  final needle = utf8.encode(marker);
+  for (final suffix in const ['', '-wal', '-shm']) {
+    final file = File('${databaseFile.path}$suffix');
+    if (file.existsSync() && _bytesContain(file.readAsBytesSync(), needle)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _bytesContain(List<int> haystack, List<int> needle) {
+  if (needle.isEmpty || haystack.length < needle.length) {
+    return false;
+  }
+  for (var i = 0; i <= haystack.length - needle.length; i++) {
+    var matches = true;
+    for (var j = 0; j < needle.length; j++) {
+      if (haystack[i + j] != needle[j]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return true;
+    }
+  }
+  return false;
 }

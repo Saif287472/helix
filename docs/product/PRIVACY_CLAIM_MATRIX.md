@@ -5,7 +5,7 @@ Comparison of public security claims against validated monorepo mechanisms.
 | Claim | Helix Local Status | Helix Local Mechanism | Helix Remote Status | Helix Remote Mechanism |
 | :--- | :--- | :--- | :--- | :--- |
 | **No Server Dependency** | Implemented | Serverless mDNS discovery; direct P2P TLS channels | N/A (Server Dependent) | N/A |
-| **Zero remnants on close** | Implemented | RAM-only threads, messages, and caches | Prohibited | Remote is intentionally persistent; current SQLite storage is not SQLCipher-encrypted and is blocked from release until Phase 2 fixes it |
+| **Zero remnants on close** | Implemented | RAM-only threads, messages, and caches | Prohibited | Remote is intentionally persistent; local SQLCipher database-at-rest encryption is implemented by P2-01 |
 | **Forward Secrecy** | Planned | Handshake-based ephemeral key agreements | Blocked for strong claim | Full DH/skipped-key ratchet remains blocked pending reviewed implementation |
 | **No Metadata tracking** | Implemented | No external signaling server | Partial | Metadata is minimized, inventoried, and audit logs are redacted; server still needs routing/sync metadata |
 | **Secure Reset** | Implemented | Clear secure storage, memory tables, WAL buffers | Component-only for server account deletion | Account delete endpoint purges server-side account/device/mailbox data; app-side local cleanup is not wired yet |

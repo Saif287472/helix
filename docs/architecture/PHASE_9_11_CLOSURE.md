@@ -112,7 +112,7 @@ Classification key:
 
 | ID | Item | Status | Evidence | Risk | Required Repair |
 |---|---|---|---|---|---|
-| P11-001 | Remote-only encrypted local database | **PARTIALLY IMPLEMENTED** | `HelixRemoteDatabase` (`packages/remote/helix_remote_storage/lib/src/database.dart`) exists; **`PRAGMA key = '$password'` against the standard `sqlite3` Dart package is a no-op — standard SQLite3 ignores the key PRAGMA; the database is not encrypted** | **CRITICAL** | Mark BLOCKED; add clear code comment; require SQLCipher or alternative before shipping; add Scenario C physical byte test to confirm (will fail until fixed) |
+| P11-001 | Remote-only encrypted local database | **REPAIRED IN P2-01** | `HelixRemoteDatabase` now requires SQLCipher for keyed opens, rejects wrong keys, migrates plaintext files with copy/integrity/swap/rollback, and has binary marker tests in `remote_storage_test.dart` | Low | Continue platform build verification; broader Remote session/E2EE work remains Phase 2 |
 | P11-002 | Schema separated from Local | **VERIFIED COMPLETE** | Separate package `helix_remote_storage`; no Local tables | Low | None |
 | P11-003–P11-012 | Account, device, contact, conversation, member, message, revision, reaction, receipt, attachment, group, call history tables | **PARTIALLY IMPLEMENTED** | Tables exist in `_onCreate()`; **no reaction, receipt, or processed_event_ids tables**; `messages.text` stores ciphertext (misleading column name); **no encryption enforced** | High | Add missing tables; rename `text` → `ciphertext_blob` |
 | P11-013 | Sync cursors | **PARTIALLY IMPLEMENTED** | `sync_cursors` table exists; scoped per `conversation_id`; design review implies global account/device stream | Medium | Clarify scope; add global cursor support if required |
@@ -122,6 +122,11 @@ Classification key:
 | P11-017 | Migration rollback/recovery policy | **NOT STARTED** | `_applyMigrations()` only sets `user_version = 1` with no schema migration steps; no transaction; no rollback | High | Implement proper migration framework |
 | P11-018 | Corruption detection and safe recovery | **NOT STARTED** | No `PRAGMA integrity_check`; no typed corruption error; silent fallback possible | High | Add integrity check; add typed error |
 | P11-019 | Backup/restore tests | **NOT STARTED** | No backup mechanism for Remote client DB | Medium | Implement and test |
+
+> P2-01 update, 2026-06-20: P11-001 is repaired after this closure snapshot.
+> `HelixRemoteDatabase` now requires SQLCipher for keyed opens, rejects wrong
+> keys, migrates plaintext files with copy/integrity/swap/rollback, and has
+> binary marker plus crash-injection tests in `remote_storage_test.dart`.
 
 ### 11.2 Synchronization Engine
 
@@ -146,7 +151,7 @@ Classification key:
 - **Partially implemented:** P11-003–P11-016, P11-020–P11-028, P11-035
 - **Unverified:** P11-029
 - **Not started:** P11-017, P11-018, P11-019, P11-030–P11-034
-- **Blocked:** P11-001 (DB encryption pending SQLCipher-capable library)
+- **Repaired after closure:** P11-001 (P2-01 SQLCipher-backed Remote DB)
 
 ---
 
@@ -172,8 +177,13 @@ Same pattern: `chainKey` is advanced before `aesGcm.decrypt()`. An authenticatio
 ### DEFECT-4: Remote Database is Not Encrypted
 **File:** `packages/remote/helix_remote_storage/lib/src/database.dart:16`  
 **Severity:** CRITICAL  
-`PRAGMA key = '$password'` is executed against the standard `sqlite3` Dart package which links standard SQLite3 (not SQLCipher). The PRAGMA is silently ignored. All database content is stored in plaintext. This requires a SQLCipher-capable library for both Android and Windows.  
-**Status: BLOCKED** — no verified SQLCipher-capable Flutter package supporting both Android and Windows is available at this time.
+The original defect was that `PRAGMA key = '$password'` executed against standard SQLite and was silently ignored, leaving database content plaintext.
+**Status: RESOLVED IN P2-01** — Remote database-at-rest encryption now has SQLCipher-backed implementation and tests.
+
+**P2-01 update, 2026-06-20:** DEFECT-4 is resolved for Remote local
+database-at-rest encryption with SQLCipher-backed `sqlite3` hooks, runtime
+SQLCipher detection, wrong-key failure, plaintext migration, integrity checks,
+and rollback tests.
 
 ### DEFECT-5: Sync Batch Not Atomic
 **File:** `packages/remote/helix_remote_sync/lib/src/sync_engine.dart:27-87`  
@@ -256,7 +266,7 @@ The following master-plan checkboxes are inaccurate and must be corrected:
 - P10-024, P10-025, P10-026 (not started or not wired)
 - P10-027 (BLOCKED — staging)
 - P10-030–P10-034 (not started)
-- P11-001 (BLOCKED — no real encryption)
+- P11-001 (REPAIRED IN P2-01)
 - P11-017, P11-018, P11-019 (not started)
 - P11-020, P11-022, P11-024 (critical defects)
 - P11-030–P11-034 (not started)

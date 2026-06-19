@@ -30,11 +30,11 @@ void main() {
     },
   );
 
-  test('privacy claims do not assert implemented SQLCipher or full E2EE', () {
+  test('privacy claims keep E2EE blocked after SQLCipher repair', () {
     final claims = _read(root, 'docs/product/PRIVACY_CLAIM_MATRIX.md');
 
     expect(claims, isNot(contains('Persistent SQLCipher databases')));
-    expect(claims, contains('not SQLCipher-encrypted'));
+    expect(claims, contains('local SQLCipher database-at-rest encryption'));
     expect(claims, contains('Blocked for strong claim'));
   });
 }

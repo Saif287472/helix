@@ -39,3 +39,8 @@ dev_dependencies:
   sqlite3: ^3.3.3
   helix_remote_backend:
     path: ../../services/helix_remote_backend
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlcipher
