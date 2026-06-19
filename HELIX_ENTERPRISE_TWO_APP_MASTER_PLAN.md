@@ -1242,53 +1242,53 @@ Tasks:
 
 ### Account and Device
 
-- [ ] **P10-001:** Account registration without mandatory contact upload.
-- [ ] **P10-002:** Authentication/session tokens.
+- [x] **P10-001:** Account registration without mandatory contact upload.
+- [x] **P10-002:** Authentication/session tokens.
 - [ ] **P10-003:** Refresh-token rotation.
-- [ ] **P10-004:** Device registration.
-- [ ] **P10-005:** Device listing and naming.
-- [ ] **P10-006:** Device revocation.
-- [ ] **P10-007:** Public key/prekey publication.
-- [ ] **P10-008:** Account recovery policy.
-- [ ] **P10-009:** Brute-force and credential-stuffing controls.
-- [ ] **P10-010:** Audit events with no sensitive content.
+- [x] **P10-004:** Device registration.
+- [x] **P10-005:** Device listing and naming.
+- [x] **P10-006:** Device revocation.
+- [x] **P10-007:** Public key/prekey publication.
+- [x] **P10-008:** Account recovery policy.
+- [x] **P10-009:** Brute-force and credential-stuffing controls.
+- [x] **P10-010:** Audit events with no sensitive content.
 
 ### Messaging Infrastructure
 
-- [ ] **P10-011:** Conversation creation and membership.
-- [ ] **P10-012:** Ciphertext message envelope storage.
-- [ ] **P10-013:** Per-conversation server sequence.
-- [ ] **P10-014:** Idempotent send.
-- [ ] **P10-015:** Offline mailbox/delivery.
-- [ ] **P10-016:** Delivery acknowledgement.
-- [ ] **P10-017:** Sync cursor API.
+- [x] **P10-011:** Conversation creation and membership.
+- [x] **P10-012:** Ciphertext message envelope storage.
+- [x] **P10-013:** Per-conversation server sequence.
+- [x] **P10-014:** Idempotent send.
+- [x] **P10-015:** Offline mailbox/delivery.
+- [x] **P10-016:** Delivery acknowledgement.
+- [x] **P10-017:** Sync cursor API.
 - [ ] **P10-018:** Tombstone events.
-- [ ] **P10-019:** Transactional outbox.
-- [ ] **P10-020:** Push notification worker with no plaintext content.
+- [x] **P10-019:** Transactional outbox.
+- [x] **P10-020:** Push notification worker with no plaintext content.
 - [ ] **P10-021:** Backpressure and mailbox quotas.
-- [ ] **P10-022:** Abuse/rate limits.
-- [ ] **P10-023:** Blocking enforcement.
+- [x] **P10-022:** Abuse/rate limits.
+- [x] **P10-023:** Blocking enforcement.
 
 ### Infrastructure
 
-- [ ] **P10-024:** Database migrations.
-- [ ] **P10-025:** Local development stack.
-- [ ] **P10-026:** Automated integration tests.
+- [x] **P10-024:** Database migrations.
+- [x] **P10-025:** Local development stack.
+- [x] **P10-026:** Automated integration tests.
 - [ ] **P10-027:** Staging deployment.
 - [ ] **P10-028:** Secret management.
 - [ ] **P10-029:** TLS configuration.
 - [ ] **P10-030:** Metrics, logs, and traces.
-- [ ] **P10-031:** Backup and restore test.
+- [x] **P10-031:** Backup and restore test.
 - [ ] **P10-032:** Dependency and container scanning.
 - [ ] **P10-033:** API load test baseline.
 - [ ] **P10-034:** Incident response runbook.
 
 ### Exit criteria
 
-- [ ] Backend can register an account/device and reliably store/deliver ciphertext.
-- [ ] No message plaintext is available to backend components.
-- [ ] Retries are idempotent.
-- [ ] Backup restore is tested.
+- [x] Backend can register an account/device and reliably store/deliver ciphertext.
+- [x] No message plaintext is available to backend components.
+- [x] Retries are idempotent.
+- [x] Backup restore is tested.
 - [ ] Staging is isolated from production.
 
 ---

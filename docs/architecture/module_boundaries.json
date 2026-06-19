@@ -146,6 +146,14 @@
         "packages/local/helix_local_transport/**"
       ],
       "reason": "UI screens and widgets must not talk directly to transport internals."
+    },
+    {
+      "source": "services/helix_remote_backend/**",
+      "imports": [
+        "packages/local/**",
+        "apps/**"
+      ],
+      "reason": "Remote backend must not import local client packages or any app code."
     }
   ]
 }

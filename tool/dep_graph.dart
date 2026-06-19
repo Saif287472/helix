@@ -28,6 +28,7 @@ const _nodes = <String, String>{
   'helix_remote_domain': 'packages/remote/helix_remote_domain/lib/',
   'helix_remote_api': 'packages/remote/helix_remote_api/lib/',
   'helix_remote_crypto': 'packages/remote/helix_remote_crypto/lib/',
+  'helix_remote_backend': 'services/helix_remote_backend/lib/',
 };
 
 Future<void> main(List<String> args) async {

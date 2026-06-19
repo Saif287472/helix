@@ -111,6 +111,7 @@ final class _PackageEntry {
         normalized.contains('/apps/') ||
         normalized.contains('/packages/local/') ||
         normalized.contains('/packages/remote/') ||
+        normalized.contains('/services/') ||
         normalized.endsWith('/tool');
   }
 

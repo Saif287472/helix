@@ -1,0 +1,22 @@
+name: helix_remote_backend
+description: Secure, operational backend monolith for Helix Remote.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  shelf: any
+  shelf_router: any
+  shelf_web_socket: any
+  sqlite3: any
+  crypto: any
+  cryptography: any
+  web_socket_channel: any
+  meta: any
+
+dev_dependencies:
+  test: any
