@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/screens/conversation_screen.dart';
+import 'package:helix_remote/screens/settings_screen.dart';
 import 'package:helix_remote_domain/models.dart';
-import '../app/remote_messaging_service.dart';
-import '../app/composition_root.dart';
-import 'conversation_screen.dart';
-import 'settings_screen.dart';
 
 class ConversationListScreen extends StatefulWidget {
   const ConversationListScreen({

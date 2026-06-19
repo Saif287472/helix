@@ -9,10 +9,10 @@ environment:
 resolution: workspace
 
 dependencies:
-  crypto: any
-  uuid: any
-  image: any
-  path: any
+  crypto: ^3.0.7
+  uuid: ^4.5.3
+  image: ^4.9.1
+  path: ^1.9.1
   helix_local_domain:
     path: ../helix_local_domain
   helix_local_protocol:

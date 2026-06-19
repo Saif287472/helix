@@ -230,16 +230,16 @@ Rollback:
 
 ### Agent-executable tasks
 
-| ID | Agent instruction | Primary files | Verification |
-|---|---|---|---|
-| P0-01 | Create a current-state evidence ledger. Classify every major Local and Remote capability as verified, component-only, defective, missing, or external gate. Link each classification to code and tests. Do not copy phase checkboxes. | `docs/architecture/`, `docs/product/` | Reviewer samples at least 20 claims against source |
-| P0-02 | Add an ADR retaining the Dart/Shelf backend. Mark Go/Chi, PostgreSQL/S3/Redis statements as target-state only or superseded. Remove claims that E2EE/SQLCipher are already implemented. | ADRs, backend architecture, privacy claim matrix | Documentation consistency test |
-| P0-03 | Extend secret-scan roots to `.github`, `apps`, `packages`, `services`, `contracts`, `tool`, `scripts`, and root configuration. Add exclusions by path/type, not by skipping entire source trees. | `tool/check_secrets.dart`, tests | Seeded canary secrets in each source root are detected |
-| P0-04 | Generate boundary/dependency package maps from workspace `pubspec.yaml` files or add all current packages, including Remote calls/groups. Fail when a workspace package is unclassified. | boundary checker, dep graph, tests | Remove-one-package negative test fails |
-| P0-05 | Apply root strict analyzer settings to both apps, all packages, backend, and tooling. Ban implicit dynamic at contract boundaries and unawaited lifecycle calls except explicitly annotated cases. | analysis options | `flutter analyze` and `dart analyze` pass |
-| P0-06 | Replace `any` dependency declarations with reviewed compatible ranges and commit the workspace lockfile policy. Flag EOL, prerelease, or duplicate packages. | all pubspecs, dependency policy | clean resolution on Windows and Linux |
-| P0-07 | Consolidate `ci.yml` and `verify.yml` into one reusable pipeline with caching, concurrency cancellation, path-aware jobs, mandatory Windows/Android debug builds, and backend tests. | `.github/workflows`, scripts | PR check matrix passes from a clean checkout |
-| P0-08 | Add risk-based coverage reporting without imposing an arbitrary global percentage: critical auth/crypto/storage/sync/wipe modules require branch coverage and explicit scenario lists. | CI/test tooling | coverage artifact and threshold failures are demonstrated |
+| ID | Agent instruction | Primary files | Verification | Status |
+|---|---|---|---|---|
+| P0-01 | Create a current-state evidence ledger. Classify every major Local and Remote capability as verified, component-only, defective, missing, or external gate. Link each classification to code and tests. Do not copy phase checkboxes. | `docs/architecture/`, `docs/product/` | Reviewer samples at least 20 claims against source | **Done 2026-06-20:** `docs/architecture/CURRENT_STATE_2026-06-20.md` |
+| P0-02 | Add an ADR retaining the Dart/Shelf backend. Mark Go/Chi, PostgreSQL/S3/Redis statements as target-state only or superseded. Remove claims that E2EE/SQLCipher are already implemented. | ADRs, backend architecture, privacy claim matrix | Documentation consistency test | **Done 2026-06-20:** ADR 019 and `tool/documentation_consistency_test.dart` |
+| P0-03 | Extend secret-scan roots to `.github`, `apps`, `packages`, `services`, `contracts`, `tool`, `scripts`, and root configuration. Add exclusions by path/type, not by skipping entire source trees. | `tool/check_secrets.dart`, tests | Seeded canary secrets in each source root are detected | **Done 2026-06-20:** `tool/secret_scan_test.dart` |
+| P0-04 | Generate boundary/dependency package maps from workspace `pubspec.yaml` files or add all current packages, including Remote calls/groups. Fail when a workspace package is unclassified. | boundary checker, dep graph, tests | Remove-one-package negative test fails | **Done 2026-06-20:** dynamic workspace discovery and boundary negative test |
+| P0-05 | Apply root strict analyzer settings to both apps, all packages, backend, and tooling. Ban implicit dynamic at contract boundaries and unawaited lifecycle calls except explicitly annotated cases. | analysis options | `flutter analyze` and `dart analyze` pass | **Done 2026-06-20:** root strict baseline plus Remote include |
+| P0-06 | Replace `any` dependency declarations with reviewed compatible ranges and commit the workspace lockfile policy. Flag EOL, prerelease, or duplicate packages. | all pubspecs, dependency policy | clean resolution on Windows and Linux | **Done 2026-06-20:** pinned pubspecs, lockfile policy, dependency risk register |
+| P0-07 | Consolidate `ci.yml` and `verify.yml` into one reusable pipeline with caching, concurrency cancellation, path-aware jobs, mandatory Windows/Android debug builds, and backend tests. | `.github/workflows`, scripts | PR check matrix passes from a clean checkout | **Done 2026-06-20:** single `ci.yml`; `verify.yml` removed |
+| P0-08 | Add risk-based coverage reporting without imposing an arbitrary global percentage: critical auth/crypto/storage/sync/wipe modules require branch coverage and explicit scenario lists. | CI/test tooling | coverage artifact and threshold failures are demonstrated | **Done 2026-06-20:** `docs/quality/RISK_BASED_COVERAGE.md` and `tool/risk_coverage_test.dart` |
 
 ### Exit criteria
 

@@ -1,15 +1,40 @@
 import 'dart:io';
 
-const _defaultRoots = [
-  'lib',
-  'test',
+const defaultSecretScanRoots = [
+  '.github',
+  'apps',
+  'packages',
+  'services',
+  'contracts',
   'tool',
   'scripts',
   'docs',
   'pubspec.yaml',
+  'pubspec.lock',
   'analysis_options.yaml',
   '.env.example',
 ];
+
+const ignoredSecretPathPrefixes = {
+  '.dart_tool',
+  '.git',
+  '.idea',
+  '.gradle',
+  'build',
+  'coverage',
+  'android/app/debug',
+  'android/app/profile',
+  'android/app/release',
+};
+
+const ignoredSecretExtensions = {
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.ico',
+  '.db',
+  '.sqlite',
+};
 
 final _patterns = <_SecretPattern>[
   _SecretPattern(
@@ -30,7 +55,7 @@ final _patterns = <_SecretPattern>[
 
 Future<void> main(List<String> args) async {
   final root = Directory.current;
-  final scanRoots = args.isEmpty ? _defaultRoots : args;
+  final scanRoots = args.isEmpty ? defaultSecretScanRoots : args;
   final findings = await scanForSecrets(root, scanRoots);
 
   if (findings.isEmpty) {
@@ -90,27 +115,19 @@ class _SecretPattern {
 }
 
 Stream<File> _files(Directory root, Directory start) async* {
-  const ignoredDirectories = {
-    '.dart_tool',
-    '.git',
-    '.idea',
-    'build',
-    'coverage',
-    'android/app/debug',
-    'android/app/profile',
-    'android/app/release',
-  };
-  const ignoredExtensions = {'.png', '.jpg', '.jpeg', '.ico', '.db', '.sqlite'};
-
   await for (final entity in start.list(recursive: true, followLinks: false)) {
     final relative = _relativePath(root, entity);
-    if (ignoredDirectories.any(
-      (ignored) => relative == ignored || relative.startsWith('$ignored/'),
+    final segments = relative.split('/');
+    if (ignoredSecretPathPrefixes.any(
+      (ignored) =>
+          relative == ignored ||
+          relative.startsWith('$ignored/') ||
+          segments.contains(ignored),
     )) {
       continue;
     }
     if (entity is File &&
-        !ignoredExtensions.any(
+        !ignoredSecretExtensions.any(
           (ext) => entity.path.toLowerCase().endsWith(ext),
         )) {
       yield entity;
@@ -119,7 +136,14 @@ Stream<File> _files(Directory root, Directory start) async* {
 }
 
 Future<List<SecretFinding>> _scanFile(Directory root, File file) async {
-  final content = await file.readAsString();
+  final String content;
+  try {
+    content = await file.readAsString();
+  } on FormatException {
+    return const [];
+  } on FileSystemException {
+    return const [];
+  }
   final lines = content.split('\n');
   final findings = <SecretFinding>[];
   for (var i = 0; i < lines.length; i++) {

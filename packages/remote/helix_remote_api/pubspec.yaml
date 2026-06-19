@@ -9,9 +9,9 @@ environment:
 resolution: workspace
 
 dependencies:
-  meta: any
+  meta: ^1.18.0
   helix_remote_domain:
     path: ../helix_remote_domain
 
 dev_dependencies:
-  test: any
+  test: ^1.31.0

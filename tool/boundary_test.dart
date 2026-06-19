@@ -93,6 +93,46 @@ void main() {
       reason: 'Circular dependencies detected:\n${cycles.join('\n')}',
     );
   });
+
+  test('all workspace packages are resolved and classified', () async {
+    final packages = await loadWorkspacePackages(root);
+    final packageNames = packages.map((package) => package.name).toSet();
+
+    expect(packageNames, contains('helix_remote_calls'));
+    expect(packageNames, contains('helix_remote_groups'));
+    expect(packageNames, contains('helix_remote_backend'));
+    expect(await checkWorkspacePackageClassifications(root), isEmpty);
+  });
+
+  test('unclassified workspace packages fail the boundary gate', () async {
+    final temp = await Directory.systemTemp.createTemp('helix_boundary_test_');
+    try {
+      File('${temp.path}/pubspec.yaml').writeAsStringSync('''
+name: temp_workspace
+workspace:
+  - packages/remote/unclassified
+''');
+      Directory(
+        '${temp.path}/packages/remote/unclassified',
+      ).createSync(recursive: true);
+      File(
+        '${temp.path}/packages/remote/unclassified/pubspec.yaml',
+      ).writeAsStringSync('''
+name: unclassified_remote_package
+environment:
+  sdk: ^3.12.0
+''');
+      File('${temp.path}/ownership-blast-radius.yaml').writeAsStringSync('''
+packages: {}
+''');
+
+      final failures = await checkWorkspacePackageClassifications(temp);
+      expect(failures, hasLength(1));
+      expect(failures.single, contains('unclassified_remote_package'));
+    } finally {
+      temp.deleteSync(recursive: true);
+    }
+  });
 }
 
 Directory _findRepoRoot() {

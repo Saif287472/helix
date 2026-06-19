@@ -60,19 +60,18 @@ void main() {
 
     test('CI separates product and Remote backend checks', () {
       final ci = _read('.github/workflows/ci.yml');
-      final verify = _read('.github/workflows/verify.yml');
 
       for (final required in [
-        'local-flutter',
-        'remote-flutter',
-        'remote-backend',
-        'Remote API compatibility',
-        'Release hardening',
+        'verify-windows',
+        'verify-linux',
+        'dorny/paths-filter',
+        'HELIX_VERIFY_BUILD: "1"',
+        './scripts/verify.ps1',
+        './scripts/verify.sh',
+        'concurrency:',
       ]) {
         expect(ci, contains(required));
       }
-      expect(verify, contains('./scripts/verify.ps1'));
-      expect(verify, contains('./scripts/verify.sh'));
     });
 
     test('release and governance documents cover final gates', () {
@@ -213,10 +212,7 @@ void main() {
       expect(security, contains('Independent cryptographic review: BLOCKED'));
       expect(phase12To20, contains('| P18-015 | Penetration test |'));
       expect(phase12To20, contains('| P18-016 | Independent crypto review |'));
-      expect(
-        phase12To20,
-        contains('| P18-017 | Mobile application security review |'),
-      );
+      expect(phase12To20, contains('| P18-017 | Mobile app security review |'));
       expect(phase12To20, contains('| P18-018 | Backend security review |'));
       expect(phase12To20, contains('| P18-019 | Secrets and access review |'));
       expect(

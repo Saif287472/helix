@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:yaml/yaml.dart';
+
 const _defaultConfigPath = 'docs/architecture/module_boundaries.json';
 
 Future<void> main(List<String> args) async {
@@ -10,15 +12,28 @@ Future<void> main(List<String> args) async {
     root,
     File(_join(root.path, configPath)),
   );
+  final classificationFailures = await checkWorkspacePackageClassifications(
+    root,
+  );
 
-  if (violations.isEmpty) {
+  if (violations.isEmpty && classificationFailures.isEmpty) {
     stdout.writeln('Boundary check passed.');
     return;
   }
 
-  stderr.writeln(
-    'Boundary check failed with ${violations.length} violation(s):',
-  );
+  stderr.writeln('Boundary check failed:');
+  if (classificationFailures.isNotEmpty) {
+    stderr.writeln(
+      'Workspace classification failure(s): '
+      '${classificationFailures.length}',
+    );
+    for (final failure in classificationFailures) {
+      stderr.writeln('- $failure');
+    }
+  }
+  if (violations.isNotEmpty) {
+    stderr.writeln('Import violation(s): ${violations.length}');
+  }
   for (final violation in violations) {
     stderr.writeln(
       '${violation.source}:${violation.line}: ${violation.importUri} -> '
@@ -70,6 +85,74 @@ Future<List<BoundaryViolation>> checkBoundaries(
   }
 
   return violations;
+}
+
+Future<List<String>> checkWorkspacePackageClassifications(
+  Directory root,
+) async {
+  final workspace = await loadWorkspacePackages(root);
+  final ownership = await loadOwnershipPackagePaths(root);
+  final failures = <String>[];
+
+  for (final package in workspace) {
+    if (!ownership.contains(package.rootPath)) {
+      failures.add(
+        '${package.name} at ${package.rootPath} is missing from '
+        'ownership-blast-radius.yaml',
+      );
+    }
+  }
+
+  return failures;
+}
+
+Future<List<WorkspacePackage>> loadWorkspacePackages(Directory root) async {
+  final rootPubspec = File(_join(root.path, 'pubspec.yaml'));
+  final yaml = loadYaml(await rootPubspec.readAsString()) as YamlMap;
+  final workspace =
+      (yaml['workspace'] as YamlList?)?.cast<String>() ?? const [];
+  final packages = <WorkspacePackage>[];
+
+  for (final path in workspace) {
+    final pubspec = File(_join(root.path, '$path/pubspec.yaml'));
+    if (!pubspec.existsSync()) {
+      throw StateError('Workspace entry has no pubspec.yaml: $path');
+    }
+    final packageYaml = loadYaml(await pubspec.readAsString()) as YamlMap;
+    final name = packageYaml['name'] as String?;
+    if (name == null || name.isEmpty) {
+      throw StateError('Workspace package has no name: $path');
+    }
+    packages.add(WorkspacePackage(name: name, rootPath: _normalizePath(path)));
+  }
+
+  packages.sort((a, b) => a.name.compareTo(b.name));
+  return packages;
+}
+
+Future<Set<String>> loadOwnershipPackagePaths(Directory root) async {
+  final ownership = File(_join(root.path, 'ownership-blast-radius.yaml'));
+  final paths = <String>{};
+  var inPackages = false;
+  for (final line in await ownership.readAsLines()) {
+    if (line.trimRight() == 'packages:') {
+      inPackages = true;
+      continue;
+    }
+    if (!inPackages) continue;
+    final match = RegExp(r'^  ([^#\s][^:]+):\s*$').firstMatch(line);
+    if (match != null) {
+      paths.add(_normalizePath(match.group(1)!));
+    }
+  }
+  return paths;
+}
+
+class WorkspacePackage {
+  const WorkspacePackage({required this.name, required this.rootPath});
+
+  final String name;
+  final String rootPath;
 }
 
 class BoundaryConfig {
@@ -167,30 +250,6 @@ List<_ImportRef> _extractImports(String content) {
   return refs;
 }
 
-// Maps workspace package names to their source roots (relative to repo root).
-// Update this map whenever a new package is added to the workspace.
-const _workspacePackageRoots = <String, String>{
-  'helix': 'apps/helix_local/lib/',
-  'helix_remote': 'apps/helix_remote/lib/',
-  'helix_local_domain': 'packages/local/helix_local_domain/lib/',
-  'helix_local_protocol': 'packages/local/helix_local_protocol/lib/',
-  'helix_local_crypto': 'packages/local/helix_local_crypto/lib/',
-  'helix_local_transport': 'packages/local/helix_local_transport/lib/',
-  'helix_local_storage': 'packages/local/helix_local_storage/lib/',
-  'helix_local_platform': 'packages/local/helix_local_platform/lib/',
-  'helix_local_calls': 'packages/local/helix_local_calls/lib/',
-  'helix_local_messaging': 'packages/local/helix_local_messaging/lib/',
-  'helix_local_transfer': 'packages/local/helix_local_transfer/lib/',
-  'helix_local_groups': 'packages/local/helix_local_groups/lib/',
-  'helix_local_discovery': 'packages/local/helix_local_discovery/lib/',
-  'helix_remote_domain': 'packages/remote/helix_remote_domain/lib/',
-  'helix_remote_api': 'packages/remote/helix_remote_api/lib/',
-  'helix_remote_crypto': 'packages/remote/helix_remote_crypto/lib/',
-  'helix_remote_backend': 'services/helix_remote_backend/lib/',
-  'helix_remote_storage': 'packages/remote/helix_remote_storage/lib/',
-  'helix_remote_sync': 'packages/remote/helix_remote_sync/lib/',
-};
-
 String? _resolveImport(String source, String uri) {
   if (uri.startsWith('dart:') || uri.startsWith('package:flutter/')) {
     return null;
@@ -201,7 +260,7 @@ String? _resolveImport(String source, String uri) {
     if (slashIdx == -1) return null;
     final packageName = rest.substring(0, slashIdx);
     final relativePath = rest.substring(slashIdx + 1);
-    final root = _workspacePackageRoots[packageName];
+    final root = workspacePackageRoots[packageName];
     if (root == null) return null; // External package — not in workspace
     return '$root$relativePath';
   }
@@ -213,6 +272,29 @@ String? _resolveImport(String source, String uri) {
       ? source.substring(0, source.lastIndexOf('/'))
       : '.';
   return _normalizePath('$sourceDir/$uri');
+}
+
+final Map<String, String> workspacePackageRoots = _loadPackageRootsSync();
+
+Map<String, String> _loadPackageRootsSync() {
+  final root = Directory.current;
+  final pubspec = File(_join(root.path, 'pubspec.yaml'));
+  if (!pubspec.existsSync()) return const {};
+  final yaml = loadYaml(pubspec.readAsStringSync()) as YamlMap;
+  final workspace =
+      (yaml['workspace'] as YamlList?)?.cast<String>() ?? const [];
+  final roots = <String, String>{};
+
+  for (final path in workspace) {
+    final packagePubspec = File(_join(root.path, '$path/pubspec.yaml'));
+    if (!packagePubspec.existsSync()) continue;
+    final packageYaml = loadYaml(packagePubspec.readAsStringSync()) as YamlMap;
+    final name = packageYaml['name'] as String?;
+    if (name == null || name.isEmpty) continue;
+    roots[name] = '${_normalizePath(path)}/lib/';
+  }
+
+  return roots;
 }
 
 String _relativePath(Directory root, File file) {

@@ -9,7 +9,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  cryptography: any
-  crypto: any
+  cryptography: ^2.9.0
+  crypto: ^3.0.7
   helix_local_domain:
     path: ../helix_local_domain

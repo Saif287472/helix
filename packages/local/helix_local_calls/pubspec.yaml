@@ -11,8 +11,8 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  flutter_webrtc: any
-  uuid: any
+  flutter_webrtc: ^1.5.1
+  uuid: ^4.5.3
   helix_local_domain:
     path: ../helix_local_domain
   helix_local_protocol:

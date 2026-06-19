@@ -9,7 +9,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  cbor: any
-  meta: any
+  cbor: ^6.5.1
+  meta: ^1.18.0
   helix_local_domain:
     path: ../helix_local_domain

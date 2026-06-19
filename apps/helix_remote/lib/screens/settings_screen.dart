@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../app/remote_messaging_service.dart';
-import '../app/composition_root.dart';
-import 'backup_screen.dart';
-import 'device_management_screen.dart';
-import 'privacy_screen.dart';
-import 'groups_screen.dart';
+import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/screens/backup_screen.dart';
+import 'package:helix_remote/screens/device_management_screen.dart';
+import 'package:helix_remote/screens/groups_screen.dart';
+import 'package:helix_remote/screens/privacy_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
-import '../app/remote_messaging_service.dart';
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({

@@ -9,11 +9,11 @@ environment:
 resolution: workspace
 
 dependencies:
-  basic_utils: any
-  cryptography: any
-  pointycastle: any
-  crypto: any
-  meta: any
+  basic_utils: ^5.8.2
+  cryptography: ^2.9.0
+  pointycastle: ^4.0.0
+  crypto: ^3.0.7
+  meta: ^1.18.0
   helix_local_domain:
     path: ../helix_local_domain
   helix_local_protocol:

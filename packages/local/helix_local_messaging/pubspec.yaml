@@ -9,7 +9,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  uuid: any
+  uuid: ^4.5.3
   helix_local_domain:
     path: ../helix_local_domain
   helix_local_protocol:

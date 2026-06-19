@@ -11,7 +11,7 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  meta: any
+  meta: ^1.18.0
   helix_remote_domain:
     path: ../helix_remote_domain
   helix_remote_storage:
@@ -22,4 +22,4 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  path: any
+  path: ^1.9.1

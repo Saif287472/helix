@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
-import '../app/remote_messaging_service.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({

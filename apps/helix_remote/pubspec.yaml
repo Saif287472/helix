@@ -26,16 +26,16 @@ dependencies:
     path: ../../packages/remote/helix_remote_calls
   helix_remote_groups:
     path: ../../packages/remote/helix_remote_groups
-  path: any
-  path_provider: any
-  cryptography: any
-  crypto: any
-  flutter_secure_storage: any
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  cryptography: ^2.9.0
+  crypto: ^3.0.7
+  flutter_secure_storage: ^10.3.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  test: any
-  sqlite3: any
+  test: ^1.31.0
+  sqlite3: ^3.3.3
   helix_remote_backend:
     path: ../../services/helix_remote_backend

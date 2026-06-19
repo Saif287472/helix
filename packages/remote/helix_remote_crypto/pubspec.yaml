@@ -11,10 +11,10 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  meta: any
-  cryptography: any
-  crypto: any
-  flutter_secure_storage: any
+  meta: ^1.18.0
+  cryptography: ^2.9.0
+  crypto: ^3.0.7
+  flutter_secure_storage: ^10.3.1
   helix_remote_domain:
     path: ../helix_remote_domain
 

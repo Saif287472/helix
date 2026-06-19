@@ -9,14 +9,14 @@ environment:
 resolution: workspace
 
 dependencies:
-  shelf: any
-  shelf_router: any
-  shelf_web_socket: any
-  sqlite3: any
-  crypto: any
-  cryptography: any
-  web_socket_channel: any
-  meta: any
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+  shelf_web_socket: ^3.0.0
+  sqlite3: ^3.3.3
+  crypto: ^3.0.7
+  cryptography: ^2.9.0
+  web_socket_channel: ^3.0.3
+  meta: ^1.18.0
 
 dev_dependencies:
-  test: any
+  test: ^1.31.0

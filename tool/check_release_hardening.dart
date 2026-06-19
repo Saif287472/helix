@@ -110,8 +110,11 @@ Future<void> main() async {
     'ProductName", "Helix Local"',
   );
 
-  requireContains('.github/workflows/verify.yml', './scripts/verify.ps1');
-  requireContains('.github/workflows/verify.yml', './scripts/verify.sh');
+  requireContains('.github/workflows/ci.yml', './scripts/verify.ps1');
+  requireContains('.github/workflows/ci.yml', './scripts/verify.sh');
+  requireContains('.github/workflows/ci.yml', 'concurrency:');
+  requireContains('.github/workflows/ci.yml', 'dorny/paths-filter');
+  requireContains('.github/workflows/ci.yml', 'HELIX_VERIFY_BUILD: "1"');
   requireContains('scripts/verify.ps1', 'check_release_hardening.dart');
   requireContains('scripts/verify.sh', 'check_release_hardening.dart');
   requireContains(

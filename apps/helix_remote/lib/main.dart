@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_config.dart';
+import 'package:helix_remote/screens/conversation_list_screen.dart';
 import 'package:path/path.dart' as p;
-
-import 'app/composition_root.dart';
-import 'app/remote_config.dart';
-import 'screens/conversation_list_screen.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

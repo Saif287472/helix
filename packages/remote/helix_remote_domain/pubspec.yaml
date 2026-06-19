@@ -9,4 +9,4 @@ environment:
 resolution: workspace
 
 dependencies:
-  meta: any
+  meta: ^1.18.0

@@ -170,6 +170,22 @@
         "apps/**"
       ],
       "reason": "Remote sync must not import local client packages or app code."
+    },
+    {
+      "source": "packages/remote/helix_remote_calls/**",
+      "imports": [
+        "packages/local/**",
+        "apps/**"
+      ],
+      "reason": "Remote calls must not import local client packages or app code."
+    },
+    {
+      "source": "packages/remote/helix_remote_groups/**",
+      "imports": [
+        "packages/local/**",
+        "apps/**"
+      ],
+      "reason": "Remote groups must not import local client packages or app code."
     }
   ]
 }

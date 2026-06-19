@@ -11,7 +11,7 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  uuid: any
+  uuid: ^4.5.3
   helix_local_domain:
     path: ../helix_local_domain
   helix_local_protocol:

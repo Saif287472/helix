@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:cryptography/cryptography.dart';
-import 'remote_messaging_service.dart';
+import 'package:helix_remote/app/remote_messaging_service.dart';
 
 class RemoteMessageProtectorImpl implements RemoteMessageProtector {
   RemoteMessageProtectorImpl({required this._keySeedProvider});
