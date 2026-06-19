@@ -276,6 +276,32 @@ class BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 5;');
     }
+
+    if (version < 6) {
+      _db.execute('DROP TABLE IF EXISTS attachment_references;');
+      _db.execute('DROP TABLE IF EXISTS attachments;');
+      _db.execute('''
+        CREATE TABLE attachments (
+          file_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          file_size INTEGER NOT NULL,
+          file_hash TEXT NOT NULL,
+          uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS attachment_references (
+          file_id TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          PRIMARY KEY(file_id, message_id),
+          FOREIGN KEY(file_id) REFERENCES attachments(file_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 6;');
+    }
   }
 
   void close() {
@@ -291,13 +317,35 @@ class BackendDatabase {
     required String accountId,
     required int fileSize,
     required String fileHash,
+    int? createdAt,
   }) {
+    final time = createdAt ?? DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO attachments (file_id, account_id, file_size, file_hash, uploaded_bytes, status)
-      VALUES (?, ?, ?, ?, 0, 'PENDING');
+      INSERT OR REPLACE INTO attachments (file_id, account_id, file_size, file_hash, uploaded_bytes, status, created_at)
+      VALUES (?, ?, ?, ?, 0, 'PENDING', ?);
     ''');
-    stmt.execute([fileId, accountId, fileSize, fileHash]);
+    stmt.execute([fileId, accountId, fileSize, fileHash, time]);
     stmt.close();
+  }
+
+  List<String> getOrphanAttachmentIds(int olderThanTimestamp) {
+    final stmt = _db.prepare('''
+      SELECT file_id FROM attachments 
+      WHERE status != 'COMPLETED' AND created_at < ?;
+    ''');
+    final res = stmt.select([olderThanTimestamp]);
+    stmt.close();
+    return res.map((row) => row['file_id'] as String).toList();
+  }
+
+  List<String> getAttachmentsOlderThan(int olderThanTimestamp) {
+    final stmt = _db.prepare('''
+      SELECT file_id FROM attachments 
+      WHERE status = 'COMPLETED' AND created_at < ?;
+    ''');
+    final res = stmt.select([olderThanTimestamp]);
+    stmt.close();
+    return res.map((row) => row['file_id'] as String).toList();
   }
 
   Map<String, dynamic>? getAttachment(String fileId) {

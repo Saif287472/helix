@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/attachment_safety.dart';
+import 'package:helix_remote/app/attachment_export.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_backend/helix_remote_backend.dart';
@@ -302,4 +303,126 @@ void main() {
       );
     },
   );
+
+  // P14-013: Cache eviction without deleting server history
+  test('evictLocalCache removes local plaintext file and updates status',
+      () async {
+    final service = RemoteAttachmentService(
+      baseUrl: 'http://127.0.0.1:$port',
+      authToken: token,
+      db: db,
+      tempDir: clientTempDir,
+    );
+
+    // 1. Prepare and upload a file
+    final plaintextBytes = List.generate(200, (i) => i % 256);
+    final plaintextFile = File(p.join(clientTempDir.path, 'evict_test.txt'));
+    await plaintextFile.writeAsBytes(plaintextBytes);
+
+    final prepResult = await service.prepareAttachment(plaintextFile);
+    final attachmentId = prepResult['attachment_id'] as String;
+    final cipherPath = prepResult['ciphertext_path'] as String;
+
+    // Register on backend and upload
+    server.db.createAttachment(
+      fileId: attachmentId,
+      accountId: 'user1',
+      fileSize: File(cipherPath).lengthSync(),
+      fileHash: attachmentId,
+    );
+    await service.uploadAttachment(
+      attachmentId: attachmentId,
+      ciphertextPath: cipherPath,
+    );
+
+    // 2. Download to get a local plaintext cache file
+    final downloadPath = p.join(clientTempDir.path, 'evict_download.enc');
+    final decryptedFile = await service.downloadAttachment(
+      attachmentId: attachmentId,
+      savePath: downloadPath,
+    );
+    expect(decryptedFile.existsSync(), isTrue);
+    expect(db.getAttachment(attachmentId)!['status'], equals('DOWNLOADED'));
+
+    // 3. Evict the local cache
+    service.evictLocalCache(attachmentId);
+
+    expect(decryptedFile.existsSync(), isFalse);
+    final afterEvict = db.getAttachment(attachmentId);
+    expect(afterEvict!['status'], equals('CACHE_EVICTED'));
+    expect(afterEvict['local_path'], isNull);
+
+    // Server copy is unaffected
+    expect(server.db.getAttachment(attachmentId), isNotNull);
+    expect(server.db.getAttachment(attachmentId)!['status'], equals('COMPLETED'));
+  });
+
+  // P14-014: External export warning
+  test('export warning message is accurate and verifiable', () {
+    final warning = RemoteAttachmentExport.exportWarningMessage;
+
+    expect(warning, contains('end-to-end encryption'));
+    expect(warning, contains('decrypted'));
+    expect(warning, isNot(contains('Helix cannot see')));
+    expect(RemoteAttachmentExport.verifyExportWarning(warning), isTrue);
+    expect(
+      RemoteAttachmentExport.verifyExportWarning('Other message'),
+      isFalse,
+    );
+  });
+
+  // P14-015: Multi-device attachment key delivery
+  test('buildKeyDeliveryPackage produces per-device key slots', () {
+    final service = RemoteAttachmentService(
+      baseUrl: 'http://127.0.0.1:$port',
+      authToken: token,
+      db: db,
+      tempDir: clientTempDir,
+    );
+
+    const attachmentId = 'test_attachment_id';
+    const rawKey = 'base64encodedattachmentkey==';
+    final deviceIds = ['device_A', 'device_B', 'device_C'];
+
+    // Without custom encryptor — raw key placeholder in each slot
+    final package = service.buildKeyDeliveryPackage(
+      attachmentId: attachmentId,
+      attachmentKey: rawKey,
+      deviceIds: deviceIds,
+    );
+
+    expect(package.attachmentId, equals(attachmentId));
+    expect(package.deviceKeys.keys, containsAll(deviceIds));
+    for (final did in deviceIds) {
+      expect(package.deviceKeys[did], equals(rawKey));
+    }
+
+    // With a custom per-device encryptor
+    final packageEncrypted = service.buildKeyDeliveryPackage(
+      attachmentId: attachmentId,
+      attachmentKey: rawKey,
+      deviceIds: deviceIds,
+      encryptForDevice: (did, key) => '$did:$key',
+    );
+    expect(packageEncrypted.deviceKeys['device_A'], equals('device_A:$rawKey'));
+    expect(packageEncrypted.deviceKeys['device_B'], equals('device_B:$rawKey'));
+
+    // Round-trip serialization
+    final json = package.toJson();
+    final parsed = AttachmentKeyPackage.fromJson(json);
+    expect(parsed.attachmentId, equals(attachmentId));
+    expect(parsed.deviceKeys, equals(package.deviceKeys));
+  });
+
+  // P14-016: evictLocalCache is a no-op for unknown attachment
+  test('evictLocalCache is safe when attachment is not in local DB', () {
+    final service = RemoteAttachmentService(
+      baseUrl: 'http://127.0.0.1:$port',
+      authToken: token,
+      db: db,
+      tempDir: clientTempDir,
+    );
+    // Should not throw
+    expect(() => service.evictLocalCache('nonexistent_id'), returnsNormally);
+  });
 }

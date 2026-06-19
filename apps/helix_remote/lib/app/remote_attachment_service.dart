@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
+import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:cryptography/cryptography.dart' as crypto_pkg;
 
@@ -338,6 +339,52 @@ class RemoteAttachmentService {
     );
 
     return plaintextFile;
+  }
+
+  /// Removes the locally cached plaintext file for [attachmentId] without
+  /// touching the server copy. Status is set to CACHE_EVICTED so a future
+  /// download can recover the file.
+  void evictLocalCache(String attachmentId) {
+    final localAttachment = db.getAttachment(attachmentId);
+    if (localAttachment == null) return;
+
+    final localPath = localAttachment['local_path'] as String?;
+    if (localPath != null) {
+      final localFile = File(localPath);
+      if (localFile.existsSync()) {
+        localFile.deleteSync();
+      }
+    }
+
+    db.saveAttachment(
+      attachmentId: attachmentId,
+      filename: localAttachment['filename'] as String,
+      sizeBytes: localAttachment['size_bytes'] as int,
+      encryptedKey: localAttachment['encrypted_key'] as String,
+      localPath: null,
+      status: 'CACHE_EVICTED',
+    );
+  }
+
+  /// Packages the plaintext [attachmentKey] into per-device slots for
+  /// multi-device key delivery. [encryptForDevice] should encrypt the key to
+  /// each device's public key; when omitted the raw key is used (test-only).
+  AttachmentKeyPackage buildKeyDeliveryPackage({
+    required String attachmentId,
+    required String attachmentKey,
+    required List<String> deviceIds,
+    String Function(String deviceId, String key)? encryptForDevice,
+  }) {
+    final deviceKeys = <String, String>{};
+    for (final deviceId in deviceIds) {
+      deviceKeys[deviceId] = encryptForDevice != null
+          ? encryptForDevice(deviceId, attachmentKey)
+          : attachmentKey;
+    }
+    return AttachmentKeyPackage(
+      attachmentId: attachmentId,
+      deviceKeys: deviceKeys,
+    );
   }
 
   Future<String> _computeSha256(Uint8List data) async {

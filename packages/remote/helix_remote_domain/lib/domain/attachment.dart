@@ -1,3 +1,27 @@
+/// Per-device encrypted key slots for multi-device attachment key delivery.
+/// Each entry maps a device_id to the attachment key encrypted for that device.
+class AttachmentKeyPackage {
+  const AttachmentKeyPackage({
+    required this.attachmentId,
+    required this.deviceKeys,
+  });
+
+  final String attachmentId;
+  final Map<String, String> deviceKeys;
+
+  Map<String, dynamic> toJson() => {
+    'attachment_id': attachmentId,
+    'device_keys': deviceKeys,
+  };
+
+  factory AttachmentKeyPackage.fromJson(Map<String, dynamic> json) {
+    return AttachmentKeyPackage(
+      attachmentId: json['attachment_id'] as String,
+      deviceKeys: Map<String, String>.from(json['device_keys'] as Map),
+    );
+  }
+}
+
 class RemoteAttachmentManifest {
   const RemoteAttachmentManifest({
     required this.fileId,

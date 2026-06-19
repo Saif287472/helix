@@ -363,4 +363,236 @@ void main() {
       client.close();
     },
   );
+
+  // P14-011: Orphan cleanup
+  test('cleanupOrphans removes stale incomplete uploads', () {
+    final module = AttachmentsModule(server.db, storageDir: tempStorageDir);
+
+    final pastTime = DateTime.now()
+        .subtract(const Duration(hours: 2))
+        .millisecondsSinceEpoch;
+
+    // Create two orphan attachments (never completed)
+    server.db.createAttachment(
+      fileId: 'orphan_a',
+      accountId: 'user1',
+      fileSize: 100,
+      fileHash: 'orphan_a',
+      createdAt: pastTime,
+    );
+    server.db.createAttachment(
+      fileId: 'orphan_b',
+      accountId: 'user1',
+      fileSize: 200,
+      fileHash: 'orphan_b',
+      createdAt: pastTime,
+    );
+    // Write a physical partial file for orphan_a
+    final partialFile = File('${tempStorageDir.path}/orphan_a');
+    partialFile.writeAsBytesSync([1, 2, 3]);
+
+    // Also create a completed attachment — should NOT be removed
+    server.db.createAttachment(
+      fileId: 'completed_c',
+      accountId: 'user1',
+      fileSize: 50,
+      fileHash: 'completed_c',
+      createdAt: pastTime,
+    );
+    server.db.updateAttachmentProgress('completed_c', 50, 'COMPLETED');
+
+    final removed = module.cleanupOrphans(staleAfter: const Duration(hours: 1));
+
+    expect(removed, equals(2));
+    expect(server.db.getAttachment('orphan_a'), isNull);
+    expect(server.db.getAttachment('orphan_b'), isNull);
+    expect(partialFile.existsSync(), isFalse);
+    // Completed attachment must survive
+    expect(server.db.getAttachment('completed_c'), isNotNull);
+  });
+
+  // P14-012: Object storage lifecycle rules
+  test(
+    'runLifecycleRules expires unreferenced completed attachments older than retention period',
+    () {
+      final module = AttachmentsModule(server.db, storageDir: tempStorageDir);
+
+      final oldTime = DateTime.now()
+          .subtract(const Duration(days: 31))
+          .millisecondsSinceEpoch;
+
+      // Old completed attachment with no references -> should be expired
+      server.db.createAttachment(
+        fileId: 'old_unreferenced',
+        accountId: 'user1',
+        fileSize: 100,
+        fileHash: 'old_unreferenced',
+        createdAt: oldTime,
+      );
+      server.db.updateAttachmentProgress('old_unreferenced', 100, 'COMPLETED');
+      final oldFile = File('${tempStorageDir.path}/old_unreferenced');
+      oldFile.writeAsBytesSync([9, 8, 7]);
+
+      // Old completed attachment that IS referenced -> must survive
+      server.db.createAttachment(
+        fileId: 'old_referenced',
+        accountId: 'user1',
+        fileSize: 50,
+        fileHash: 'old_referenced',
+        createdAt: oldTime,
+      );
+      server.db.updateAttachmentProgress('old_referenced', 50, 'COMPLETED');
+      server.db.createConversation('lc_conv', 'DIRECT', 'Test', ['user1']);
+      server.db.saveMessage(
+        messageId: 'lc_msg1',
+        conversationId: 'lc_conv',
+        senderAccountId: 'user1',
+        senderDeviceId: 'device1',
+        recipientDeviceId: 'device1',
+        ciphertext: 'x',
+      );
+      server.db.registerAttachmentReference('old_referenced', 'lc_msg1');
+
+      // Recent completed attachment -> must survive even without references
+      final recentTime = DateTime.now()
+          .subtract(const Duration(days: 1))
+          .millisecondsSinceEpoch;
+      server.db.createAttachment(
+        fileId: 'new_unreferenced',
+        accountId: 'user1',
+        fileSize: 75,
+        fileHash: 'new_unreferenced',
+        createdAt: recentTime,
+      );
+      server.db.updateAttachmentProgress(
+        'new_unreferenced',
+        75,
+        'COMPLETED',
+      );
+
+      final expired =
+          module.runLifecycleRules(retainFor: const Duration(days: 30));
+
+      expect(expired, equals(1));
+      expect(server.db.getAttachment('old_unreferenced'), isNull);
+      expect(oldFile.existsSync(), isFalse);
+      expect(server.db.getAttachment('old_referenced'), isNotNull);
+      expect(server.db.getAttachment('new_unreferenced'), isNotNull);
+    },
+  );
+
+  // P14-016: Corruption test — hash mismatch triggers FAILED status
+  test('upload with hash mismatch is rejected and marked FAILED', () async {
+    final client = HttpClient();
+
+    final originalBytes = List.generate(200, (i) => i % 256);
+    final realHash = sha256.convert(originalBytes).toString();
+
+    // Register with the correct hash
+    final uploadReq = await client.post(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload',
+    );
+    uploadReq.headers.set('Authorization', 'Bearer $token');
+    uploadReq.headers.set('Content-Type', 'application/json');
+    uploadReq.add(
+      utf8.encode(
+        jsonEncode({'file_size': originalBytes.length, 'file_hash': realHash}),
+      ),
+    );
+    var resp = await uploadReq.close();
+    expect(resp.statusCode, equals(200));
+    await resp.drain();
+
+    // Upload corrupted bytes (all zeros instead of real content)
+    final corruptBytes = List.filled(200, 0);
+    final putReq = await client.put(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload/file/$realHash?offset=0',
+    );
+    putReq.headers.set('Authorization', 'Bearer $token');
+    putReq.add(corruptBytes);
+    resp = await putReq.close();
+    expect(resp.statusCode, equals(400));
+    final body =
+        jsonDecode(await resp.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    expect(body['error'], contains('hash mismatch'));
+
+    final attachment = server.db.getAttachment(realHash);
+    expect(attachment!['status'], equals('FAILED'));
+
+    client.close();
+  });
+
+  // P14-016: Interrupted upload resume — second session picks up from offset
+  test('interrupted upload resumes correctly from server offset', () async {
+    final client = HttpClient();
+
+    final bytes = List.generate(600, (i) => (i * 3) % 256);
+    final fileHash = sha256.convert(bytes).toString();
+
+    final uploadReq = await client.post(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload',
+    );
+    uploadReq.headers.set('Authorization', 'Bearer $token');
+    uploadReq.headers.set('Content-Type', 'application/json');
+    uploadReq.add(
+      utf8.encode(jsonEncode({'file_size': bytes.length, 'file_hash': fileHash})),
+    );
+    var resp = await uploadReq.close();
+    expect(resp.statusCode, equals(200));
+    await resp.drain();
+
+    // Upload first 300 bytes
+    final put1 = await client.put(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload/file/$fileHash?offset=0',
+    );
+    put1.headers.set('Authorization', 'Bearer $token');
+    put1.add(bytes.sublist(0, 300));
+    resp = await put1.close();
+    expect(resp.statusCode, equals(200));
+    final b1 =
+        jsonDecode(await resp.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    expect(b1['status'], equals('UPLOADING'));
+
+    // "Network drops" — resume from offset 300 in a new session
+    final statusReq = await client.get(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload/status/$fileHash',
+    );
+    statusReq.headers.set('Authorization', 'Bearer $token');
+    resp = await statusReq.close();
+    final statusBody =
+        jsonDecode(await resp.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    final resumeOffset = statusBody['uploaded_bytes'] as int;
+    expect(resumeOffset, equals(300));
+
+    // Upload remaining bytes from the resume offset
+    final put2 = await client.put(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload/file/$fileHash?offset=$resumeOffset',
+    );
+    put2.headers.set('Authorization', 'Bearer $token');
+    put2.add(bytes.sublist(resumeOffset));
+    resp = await put2.close();
+    expect(resp.statusCode, equals(200));
+    final b2 =
+        jsonDecode(await resp.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    expect(b2['status'], equals('COMPLETED'));
+    expect(b2['uploaded_bytes'], equals(600));
+
+    client.close();
+  });
 }

@@ -142,6 +142,44 @@ class AttachmentsModule {
     }
   }
 
+  /// Deletes uploads that never completed and are older than [staleAfter].
+  /// Returns the count of orphans removed.
+  int cleanupOrphans({required Duration staleAfter}) {
+    final threshold =
+        DateTime.now().subtract(staleAfter).millisecondsSinceEpoch;
+    final orphanIds = db.getOrphanAttachmentIds(threshold);
+    var count = 0;
+    for (final fileId in orphanIds) {
+      final file = File('${storageDir.path}/$fileId');
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+      db.deleteAttachmentRow(fileId);
+      count++;
+    }
+    return count;
+  }
+
+  /// Expires completed attachments that have no message references and are
+  /// older than [retainFor]. Returns the count of objects removed.
+  int runLifecycleRules({required Duration retainFor}) {
+    final threshold =
+        DateTime.now().subtract(retainFor).millisecondsSinceEpoch;
+    final candidateIds = db.getAttachmentsOlderThan(threshold);
+    var count = 0;
+    for (final fileId in candidateIds) {
+      if (db.getAttachmentReferenceCount(fileId) == 0) {
+        final file = File('${storageDir.path}/$fileId');
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
+        db.deleteAttachmentRow(fileId);
+        count++;
+      }
+    }
+    return count;
+  }
+
   Future<Response> _uploadStatusHandler(Request request, String fileId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {

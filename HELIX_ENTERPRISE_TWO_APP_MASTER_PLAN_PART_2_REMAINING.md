@@ -143,12 +143,23 @@ Still not complete:
 - [x] **P14-008:** File size and quota limits.
 - [x] **P14-009:** Malware-risk UX without server plaintext scanning claims.
 - [x] **P14-010:** Attachment expiry only through explicit deletion/retention contract.
-- [ ] **P14-011:** Orphan cleanup after transactions fail.
-- [ ] **P14-012:** Object storage lifecycle rules.
-- [ ] **P14-013:** Cache eviction without deleting server history.
-- [ ] **P14-014:** External export warning.
-- [ ] **P14-015:** Multi-device attachment key delivery.
-- [ ] **P14-016:** Load, interruption, and corruption tests.
+- [x] **P14-011:** Orphan cleanup after transactions fail.
+- [x] **P14-012:** Object storage lifecycle rules.
+- [x] **P14-013:** Cache eviction without deleting server history.
+- [x] **P14-014:** External export warning.
+- [x] **P14-015:** Multi-device attachment key delivery.
+- [x] **P14-016:** Load, interruption, and corruption tests.
+
+### 2026-06-19 Implementation Evidence (P14-011 to P14-016)
+
+- `AttachmentsModule.cleanupOrphans(staleAfter)` removes PENDING/UPLOADING attachment records and their partial disk files older than the given duration. Uses `BackendDatabase.getOrphanAttachmentIds` (schema v6 column `created_at`).
+- `AttachmentsModule.runLifecycleRules(retainFor)` expires COMPLETED attachments with zero message references older than the retention period. Only removes unreferenced objects; referenced objects are preserved.
+- `RemoteAttachmentService.evictLocalCache(attachmentId)` deletes the locally cached plaintext file and sets client DB status to `CACHE_EVICTED`. The server-side encrypted copy is unaffected; a future download can recover the file.
+- `attachment_export.dart` provides `RemoteAttachmentExport.exportWarningMessage` - an accurate warning that exporting removes E2EE protection - and a `verifyExportWarning` helper.
+- `AttachmentKeyPackage` domain model (in `helix_remote_domain`) holds per-device encrypted key slots (`Map<device_id, encrypted_key>`), with `toJson`/`fromJson` for wire serialization.
+- `RemoteAttachmentService.buildKeyDeliveryPackage` creates a key package for a list of device IDs. An optional `encryptForDevice` callback provides real per-device encryption; without it the raw key placeholder is used (test-only path).
+- Backend test: 7/7 pass - includes orphan cleanup, lifecycle rules, hash-mismatch FAILED status, and interrupted-upload resume.
+- Client test: 8/8 pass - includes cache eviction, export warning, key-package serialization, and no-op eviction safety.
 
 ---
 
