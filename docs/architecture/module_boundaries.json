@@ -154,6 +154,22 @@
         "apps/**"
       ],
       "reason": "Remote backend must not import local client packages or any app code."
+    },
+    {
+      "source": "packages/remote/helix_remote_storage/**",
+      "imports": [
+        "packages/local/**",
+        "apps/**"
+      ],
+      "reason": "Remote storage must not import local client packages or app code."
+    },
+    {
+      "source": "packages/remote/helix_remote_sync/**",
+      "imports": [
+        "packages/local/**",
+        "apps/**"
+      ],
+      "reason": "Remote sync must not import local client packages or app code."
     }
   ]
 }

@@ -1299,52 +1299,52 @@ Tasks:
 
 ## 11.1 Remote Local Database
 
-- [ ] **P11-001:** Create a Remote-only encrypted local database.
-- [ ] **P11-002:** Separate schema and migrations from Local.
-- [ ] **P11-003:** Model accounts.
-- [ ] **P11-004:** Model devices.
-- [ ] **P11-005:** Model contacts.
-- [ ] **P11-006:** Model conversations.
-- [ ] **P11-007:** Model conversation members.
-- [ ] **P11-008:** Model message events.
-- [ ] **P11-009:** Model revisions/reactions/receipts.
-- [ ] **P11-010:** Model attachments.
-- [ ] **P11-011:** Model groups.
-- [ ] **P11-012:** Model call history.
-- [ ] **P11-013:** Model sync cursors.
-- [ ] **P11-014:** Model pending operations.
-- [ ] **P11-015:** Model tombstones.
-- [ ] **P11-016:** Add indexes and pagination queries.
-- [ ] **P11-017:** Add migration rollback/recovery policy.
-- [ ] **P11-018:** Add corruption detection and safe recovery.
-- [ ] **P11-019:** Add database backup/restore tests where applicable.
+- [x] **P11-001:** Create a Remote-only encrypted local database.
+- [x] **P11-002:** Separate schema and migrations from Local.
+- [x] **P11-003:** Model accounts.
+- [x] **P11-004:** Model devices.
+- [x] **P11-005:** Model contacts.
+- [x] **P11-006:** Model conversations.
+- [x] **P11-007:** Model conversation members.
+- [x] **P11-008:** Model message events.
+- [x] **P11-009:** Model revisions/reactions/receipts.
+- [x] **P11-010:** Model attachments.
+- [x] **P11-011:** Model groups.
+- [x] **P11-012:** Model call history.
+- [x] **P11-013:** Model sync cursors.
+- [x] **P11-014:** Model pending operations.
+- [x] **P11-015:** Model tombstones.
+- [x] **P11-016:** Add indexes and pagination queries.
+- [x] **P11-017:** Add migration rollback/recovery policy.
+- [x] **P11-018:** Add corruption detection and safe recovery.
+- [x] **P11-019:** Add database backup/restore tests where applicable.
 
 ## 11.2 Sync Engine
 
-- [ ] **P11-020:** Outbound operation queue.
-- [ ] **P11-021:** Stable client-generated operation IDs.
-- [ ] **P11-022:** Retry with exponential backoff and jitter.
-- [ ] **P11-023:** Inbound cursor-based synchronization.
-- [ ] **P11-024:** Transactional application of event batches.
-- [ ] **P11-025:** Duplicate suppression.
-- [ ] **P11-026:** Ordering rules.
-- [ ] **P11-027:** Conflict rules.
-- [ ] **P11-028:** Tombstone handling.
-- [ ] **P11-029:** Offline-first read behavior.
-- [ ] **P11-030:** Reconnect/resume.
-- [ ] **P11-031:** Background sync limits.
-- [ ] **P11-032:** Network-change handling.
-- [ ] **P11-033:** Clock-skew tolerance.
-- [ ] **P11-034:** Sync health diagnostics.
-- [ ] **P11-035:** No plaintext content in sync logs.
+- [x] **P11-020:** Outbound operation queue.
+- [x] **P11-021:** Stable client-generated operation IDs.
+- [x] **P11-022:** Retry with exponential backoff and jitter.
+- [x] **P11-023:** Inbound cursor-based synchronization.
+- [x] **P11-024:** Transactional application of event batches.
+- [x] **P11-025:** Duplicate suppression.
+- [x] **P11-026:** Ordering rules.
+- [x] **P11-027:** Conflict rules.
+- [x] **P11-028:** Tombstone handling.
+- [x] **P11-029:** Offline-first read behavior.
+- [x] **P11-030:** Reconnect/resume.
+- [x] **P11-031:** Background sync limits.
+- [x] **P11-032:** Network-change handling.
+- [x] **P11-033:** Clock-skew tolerance.
+- [x] **P11-034:** Sync health diagnostics.
+- [x] **P11-035:** No plaintext content in sync logs.
 
 ### Exit criteria
 
-- [ ] Remote history survives restart.
-- [ ] Offline operations synchronize exactly once in effect.
-- [ ] Duplicate/reordered events do not corrupt state.
-- [ ] Local and server state recover after interrupted sync.
-- [ ] Local panic wipe tests still prove Remote independence.
+- [x] Remote history survives restart.
+- [x] Offline operations synchronize exactly once in effect.
+- [x] Duplicate/reordered events do not corrupt state.
+- [x] Local and server state recover after interrupted sync.
+- [x] Local panic wipe tests still prove Remote independence.
 
 ---
 
