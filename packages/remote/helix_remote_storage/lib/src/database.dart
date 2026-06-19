@@ -248,6 +248,19 @@ class HelixRemoteDatabase {
       ''');
       _db.execute('PRAGMA user_version = 3;');
     }
+    if (version < 4) {
+      // Single-row table tracking the in-progress call so crash recovery
+      // can detect stale calls and mark them as missed on next launch.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS active_call (
+          call_id TEXT NOT NULL,
+          peer_id TEXT NOT NULL,
+          is_video INTEGER NOT NULL,
+          started_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 4;');
+    }
   }
 
   void close() => _db.close();
@@ -892,5 +905,78 @@ class HelixRemoteDatabase {
     final res = stmt.select([itemId, type]);
     stmt.close();
     return res.isNotEmpty;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Call history (P15-013)
+  // ---------------------------------------------------------------------------
+
+  void saveCallHistory({
+    required String callId,
+    required String peerId,
+    required bool isVideo,
+    required String direction,
+    required int durationSeconds,
+    required int timestamp,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO call_history (call_id, peer_id, is_video, direction, duration, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([callId, peerId, isVideo ? 1 : 0, direction, durationSeconds, timestamp]);
+    stmt.close();
+  }
+
+  List<Map<String, dynamic>> getCallHistory({int limit = 50}) {
+    final stmt = _db.prepare('''
+      SELECT * FROM call_history ORDER BY timestamp DESC LIMIT ?;
+    ''');
+    final res = stmt.select([limit]);
+    stmt.close();
+    return res
+        .map((row) => {
+              'call_id': row['call_id'],
+              'peer_id': row['peer_id'],
+              'is_video': row['is_video'],
+              'direction': row['direction'],
+              'duration': row['duration'],
+              'timestamp': row['timestamp'],
+            })
+        .toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Active call marker for crash recovery (P15-008)
+  // ---------------------------------------------------------------------------
+
+  void setActiveCallMarker({
+    required String callId,
+    required String peerId,
+    required bool isVideo,
+    required int startedAt,
+  }) {
+    _db.execute('DELETE FROM active_call;');
+    final stmt = _db.prepare('''
+      INSERT INTO active_call (call_id, peer_id, is_video, started_at)
+      VALUES (?, ?, ?, ?);
+    ''');
+    stmt.execute([callId, peerId, isVideo ? 1 : 0, startedAt]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getActiveCallMarker() {
+    final res = _db.select('SELECT * FROM active_call LIMIT 1;');
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'call_id': row['call_id'],
+      'peer_id': row['peer_id'],
+      'is_video': row['is_video'],
+      'started_at': row['started_at'],
+    };
+  }
+
+  void clearActiveCallMarker() {
+    _db.execute('DELETE FROM active_call;');
   }
 }

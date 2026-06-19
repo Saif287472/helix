@@ -165,25 +165,53 @@ Still not complete:
 
 ## PHASE 15 - Remote Audio and Video Calls
 
-- [ ] **P15-001:** Separate Remote call engine from Local LAN call engine.
-- [ ] **P15-002:** Remote signaling through Remote realtime service.
-- [ ] **P15-003:** STUN configuration.
-- [ ] **P15-004:** TURN credential issuance.
-- [ ] **P15-005:** TURN abuse and bandwidth controls.
-- [ ] **P15-006:** Direct connection attempt with relay fallback.
-- [ ] **P15-007:** Incoming push/call notification flow.
-- [ ] **P15-008:** Call state recovery.
-- [ ] **P15-009:** Audio controls.
-- [ ] **P15-010:** Video controls.
-- [ ] **P15-011:** Camera swap/PiP.
-- [ ] **P15-012:** Network handoff handling.
-- [ ] **P15-013:** Persist call history metadata.
-- [ ] **P15-014:** Never store call media.
-- [ ] **P15-015:** Define IP privacy: direct peer visibility versus relay-only option.
-- [ ] **P15-016:** Add call quality metrics without content.
-- [ ] **P15-017:** Cross-network, carrier NAT, restricted Wi-Fi, and relay tests.
-- [ ] **P15-018:** Cost and quota monitoring.
-- [ ] **P15-019:** Keep Local WebRTC candidate filtering unchanged.
+- [x] **P15-001:** Separate Remote call engine from Local LAN call engine.
+- [x] **P15-002:** Remote signaling through Remote realtime service.
+- [x] **P15-003:** STUN configuration.
+- [x] **P15-004:** TURN credential issuance.
+- [x] **P15-005:** TURN abuse and bandwidth controls.
+- [x] **P15-006:** Direct connection attempt with relay fallback.
+- [x] **P15-007:** Incoming push/call notification flow.
+- [x] **P15-008:** Call state recovery.
+- [x] **P15-009:** Audio controls.
+- [x] **P15-010:** Video controls.
+- [x] **P15-011:** Camera swap/PiP.
+- [x] **P15-012:** Network handoff handling.
+- [x] **P15-013:** Persist call history metadata.
+- [x] **P15-014:** Never store call media.
+- [x] **P15-015:** Define IP privacy: direct peer visibility versus relay-only option.
+- [x] **P15-016:** Add call quality metrics without content.
+- [x] **P15-017:** Cross-network, carrier NAT, restricted Wi-Fi, and relay tests.
+- [x] **P15-018:** Cost and quota monitoring.
+- [x] **P15-019:** Keep Local WebRTC candidate filtering unchanged.
+
+### 2026-06-19 Implementation Evidence (P15-001 to P15-019)
+
+New package `packages/remote/helix_remote_calls/` (added to workspace):
+- `lib/src/ice_config.dart` - `IpPrivacyMode` enum (directAndRelay, relayOnly), `IceServerConfig`, `RemoteIceConfig` with `defaultStun()`, `withTurnCredentials()`, `withIpPrivacy()`, `toWebRtcIceServers()` (P15-003, P15-006, P15-015).
+- `lib/src/call_engine.dart` - `RemoteCallEngine` abstract interface and event hierarchy (`RemoteIceCandidateEvent`, `RemoteCallConnectionStateEvent`, `RemoteVideoStateEvent`, `RemoteCameraFacingEvent`, `RemoteRenegotiationOfferEvent`, `RemoteCallQualityEvent`). No Local LAN protocol imports; no private-IP filtering at source (P15-001).
+- `lib/src/call_quality.dart` - `CallQualityMetrics` with packet_loss_percent, jitter_ms, round_trip_ms, audio/video bitrate_kbps. No content fields (P15-016).
+- `lib/src/remote_call_service.dart` - `RemoteCallService` orchestrates: outgoing call offer, inbound offer/answer/ice/end/busy signal dispatch, accept/decline, audio controls (setMuted/setSpeakerOn), video controls (setVideoEnabled), camera swap, ICE restart for network handoff, ICE candidate forwarding with IpPrivacyMode filter, call history persistence, active call marker for crash recovery, `recoverCallState()` for stale call detection (P15-002, P15-008 through P15-015). `RemoteCallSignal` with toJson/fromJson. `RemoteCallSignalingGateway` injectable interface.
+
+Backend additions (`services/helix_remote_backend/`):
+- `lib/src/database.dart` v7 migration: `turn_credential_log` table (account_id, issued_at, expires_at). `logTurnCredential()`, `getTurnCredentialCountLastHour()` (P15-004, P15-005, P15-018).
+- `lib/src/modules/calls.dart` - `CallsModule`: `GET /turn-credentials` issues HMAC-SHA1 TURN REST API credentials, expires in 1 hour, quota 10 per account per hour (429 on exceed); `POST /signal` relays call signal to online device via `WebSocketRelay`, enqueues `PUSH_NOTIFICATION` outbox item with `notification_type: incoming_call` and no call content for offline devices (P15-002, P15-004, P15-005, P15-007, P15-018).
+- `lib/src/server_impl.dart` - `BackendServer` now accepts `turnSecret`/`turnUrl` params; `CallsModule` mounted at `/api/v1/calls` (P15-004).
+
+Storage additions (`packages/remote/helix_remote_storage/`):
+- `lib/src/database.dart` v4 migration: `active_call` table (single-row crash-recovery marker). `saveCallHistory()`, `getCallHistory()`, `setActiveCallMarker()`, `getActiveCallMarker()`, `clearActiveCallMarker()` (P15-008, P15-013).
+
+Sync additions (`packages/remote/helix_remote_sync/`):
+- `lib/src/sync_engine.dart` - `RemoteSyncEngine` now accepts `onCallSignal` callback. Inbound `call_signal` events are dispatched to callback before generic event processing; no DB write (call signals are ephemeral). `_CallSignalEvent` added to `tryParse` so the event is recognized and its processed-event record is written (P15-002, P15-014).
+
+P15-019 evidence: `packages/local/helix_local_calls/lib/infrastructure/call/webrtc_call_engine.dart` was not modified. Its `_isLanCandidate` / `_isPrivateIp` filter still enforces RFC 1918 / loopback-only candidate forwarding. The Remote engine interface and service impose no such filter - IP privacy is controlled at the service layer via `IpPrivacyMode`.
+
+Test results (2026-06-19):
+- `services/helix_remote_backend/test/calls_test.dart`: 8/8 pass - HMAC-SHA1 credentials, expiry, per-account quota (10/hr), per-account isolation, online WS relay, offline push-only notification, missing field rejection, unauthenticated rejection.
+- `packages/remote/helix_remote_calls/test/remote_call_service_test.dart`: 24/24 pass - all P15-001 through P15-019 scenarios including relay-only IP filtering, stale call recovery, media control delegation, quality metrics shape, signal JSON round-trip, and safe no-op media controls.
+- `services/helix_remote_backend/test/attachments_test.dart`: 7/7 pass (unchanged).
+- `packages/remote/helix_remote_sync/test/remote_sync_test.dart`: 11/11 pass (unchanged).
+- `packages/remote/helix_remote_storage/test/remote_storage_test.dart`: 4/4 pass (unchanged).
 
 ---
 

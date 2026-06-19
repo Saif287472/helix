@@ -15,6 +15,7 @@ import 'package:helix_remote_backend/src/modules/contacts.dart';
 import 'package:helix_remote_backend/src/modules/messaging.dart';
 import 'package:helix_remote_backend/src/modules/backups.dart';
 import 'package:helix_remote_backend/src/modules/attachments.dart';
+import 'package:helix_remote_backend/src/modules/calls.dart';
 
 class OutboxWorker {
   final BackendDatabase db;
@@ -61,6 +62,8 @@ class BackendServer {
   final WebSocketRelay wsRelay;
   final OutboxWorker outboxWorker;
   final Directory? attachmentsStorageDir;
+  final String turnSecret;
+  final String turnUrl;
   HttpServer? _httpServer;
   HttpServer? get httpServer => _httpServer;
 
@@ -71,6 +74,8 @@ class BackendServer {
     required this.wsRelay,
     required this.outboxWorker,
     this.attachmentsStorageDir,
+    this.turnSecret = '',
+    this.turnUrl = '',
   });
 
   factory BackendServer.create({
@@ -79,6 +84,8 @@ class BackendServer {
     double rateLimitMaxTokens = 100.0,
     double rateLimitRefillRate = 10.0,
     Directory? attachmentsStorageDir,
+    String turnSecret = '',
+    String turnUrl = '',
   }) {
     final db = BackendDatabase(sqliteDb);
     final jwt = JwtHelper(jwtSecret);
@@ -96,6 +103,8 @@ class BackendServer {
       wsRelay: wsRelay,
       outboxWorker: outboxWorker,
       attachmentsStorageDir: attachmentsStorageDir,
+      turnSecret: turnSecret,
+      turnUrl: turnUrl,
     );
   }
 
@@ -115,6 +124,12 @@ class BackendServer {
       wsRelay,
       onMessageDeleted: attachmentsModule.cleanAttachmentReferences,
     );
+    final callsModule = CallsModule(
+      db,
+      wsRelay,
+      turnSecret: turnSecret,
+      turnUrl: turnUrl,
+    );
 
     // Map modules
     router.mount('/api/v1/accounts', authModule.router.call);
@@ -124,6 +139,7 @@ class BackendServer {
     router.mount('/api/v1/messages', messagingModule.router.call);
     router.mount('/api/v1/backups', backupsModule.router.call);
     router.mount('/api/v1/attachments', attachmentsModule.router.call);
+    router.mount('/api/v1/calls', callsModule.router.call);
 
     // WebSocket route
     router.get('/api/v1/ws', wsRelay.handleUpgrade);

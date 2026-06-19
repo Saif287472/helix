@@ -25,6 +25,7 @@ workspace:
   - services/helix_remote_backend
   - packages/remote/helix_remote_storage
   - packages/remote/helix_remote_sync
+  - packages/remote/helix_remote_calls
 
 
 
@@ -34,3 +35,5 @@ dependencies:
     path: packages/local/helix_local_domain
   helix_local_protocol:
     path: packages/local/helix_local_protocol
+  helix_remote_calls:
+    path: packages/remote/helix_remote_calls

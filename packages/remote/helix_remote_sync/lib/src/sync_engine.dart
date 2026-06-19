@@ -18,10 +18,15 @@ abstract class SyncGateway {
 }
 
 class RemoteSyncEngine {
-  RemoteSyncEngine(this.db, {this.diagnostics});
+  RemoteSyncEngine(this.db, {this.diagnostics, this.onCallSignal});
 
   final HelixRemoteDatabase db;
   final void Function(String message)? diagnostics;
+
+  /// Called when a `call_signal` event arrives on the inbound stream.
+  /// The payload map is forwarded as-is; no DB write is performed because
+  /// call signals are ephemeral and must not persist media or content.
+  final void Function(Map<String, dynamic> payload)? onCallSignal;
 
   static const String _globalSyncCursorId = '__remote_global_stream__';
 
@@ -52,6 +57,11 @@ class RemoteSyncEngine {
           throw StateError(
             'Remote sync sequence regression for unseen event type=${env.type}',
           );
+        }
+
+        // Call signals are ephemeral: deliver via callback, never write to DB.
+        if (env.type == 'call_signal' && onCallSignal != null) {
+          onCallSignal!(env.payload);
         }
 
         final event = _InboundSyncEvent.tryParse(env);
@@ -203,6 +213,8 @@ abstract class _InboundSyncEvent {
         return const _TypingEvent();
       case 'sync_marker':
         return const _SyncMarkerEvent();
+      case 'call_signal':
+        return const _CallSignalEvent();
       default:
         return null;
     }
@@ -452,4 +464,13 @@ class _SyncMarkerEvent extends _InboundSyncEvent {
 
   @override
   bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) => true;
+}
+
+// Ephemeral — payload delivered via RemoteSyncEngine.onCallSignal callback.
+// No DB write; call media and content must never be persisted server-side.
+class _CallSignalEvent extends _InboundSyncEvent {
+  const _CallSignalEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) => false;
 }

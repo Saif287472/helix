@@ -302,6 +302,20 @@ class BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 6;');
     }
+
+    if (version < 7) {
+      // Tracks TURN credential issuance per account for quota enforcement (P15-005/P15-018).
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS turn_credential_log (
+          log_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          issued_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 7;');
+    }
   }
 
   void close() {
@@ -1529,6 +1543,37 @@ class BackendDatabase {
       'SELECT COUNT(*) FROM messages WHERE recipient_device_id = ?;',
     );
     final res = stmt.select([deviceId]);
+    stmt.close();
+    if (res.isEmpty) return 0;
+    return res.first.columnAt(0) as int;
+  }
+
+  // ---------------------------------------------------------------------------
+  // TURN credential log (P15-004, P15-005, P15-018)
+  // ---------------------------------------------------------------------------
+
+  void logTurnCredential({
+    required String logId,
+    required String accountId,
+    required int issuedAt,
+    required int expiresAt,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO turn_credential_log (log_id, account_id, issued_at, expires_at)
+      VALUES (?, ?, ?, ?);
+    ''');
+    stmt.execute([logId, accountId, issuedAt, expiresAt]);
+    stmt.close();
+  }
+
+  /// Returns the number of TURN credentials issued to [accountId] in the last hour.
+  int getTurnCredentialCountLastHour(String accountId) {
+    final since = DateTime.now().millisecondsSinceEpoch - 3600000;
+    final stmt = _db.prepare('''
+      SELECT COUNT(*) FROM turn_credential_log
+      WHERE account_id = ? AND issued_at >= ?;
+    ''');
+    final res = stmt.select([accountId, since]);
     stmt.close();
     if (res.isEmpty) return 0;
     return res.first.columnAt(0) as int;
