@@ -206,3 +206,187 @@ packages:
     allowed_consumers:
       - apps/helix_remote
     notes: Remote package creation begins in Phase 8.
+
+  packages/local/helix_local_domain:
+    classification: local
+    owner: local-team
+    risk_level: critical
+    description: Local domain contracts, ProductDescriptor values, identity and trust models
+    allowed_consumers:
+      - apps/helix_local
+      - packages/local/helix_local_storage
+      - packages/local/helix_local_platform
+      - packages/local/helix_local_groups
+      - packages/local/helix_local_discovery
+      - packages/local/helix_local_calls
+      - packages/local/helix_local_messaging
+      - packages/local/helix_local_transfer
+      - packages/local/helix_local_transport
+      - packages/local/helix_local_protocol
+
+  packages/local/helix_local_protocol:
+    classification: local
+    owner: local-team
+    risk_level: critical
+    description: LAN wire protocol, frames, codecs, capability flags, and fixtures
+    allowed_consumers:
+      - apps/helix_local
+      - packages/local/helix_local_transport
+      - packages/local/helix_local_calls
+      - packages/local/helix_local_messaging
+      - packages/local/helix_local_transfer
+      - packages/local/helix_local_groups
+
+  packages/local/helix_local_crypto:
+    classification: local
+    owner: local-team
+    risk_level: critical
+    description: Local LAN cryptographic primitives
+    allowed_consumers:
+      - packages/local/helix_local_transport
+      - apps/helix_local
+
+  packages/local/helix_local_transport:
+    classification: local
+    owner: local-team
+    risk_level: high
+    description: Secure LAN channel and frame transport
+    allowed_consumers:
+      - apps/helix_local
+      - packages/local/helix_local_calls
+      - packages/local/helix_local_messaging
+      - packages/local/helix_local_transfer
+      - packages/local/helix_local_groups
+
+  packages/local/helix_local_discovery:
+    classification: local
+    owner: local-team
+    risk_level: high
+    description: mDNS and UDP LAN peer discovery
+    allowed_consumers:
+      - apps/helix_local
+      - packages/local/helix_local_groups
+
+  packages/local/helix_local_storage:
+    classification: local
+    owner: local-team
+    risk_level: critical
+    description: Local secure storage, RAM repositories, and storage isolation guards
+    allowed_consumers:
+      - apps/helix_local
+
+  packages/local/helix_local_platform:
+    classification: local
+    owner: local-team
+    risk_level: high
+    description: Local platform notifications, foreground service, diagnostics, and tray integration
+    allowed_consumers:
+      - apps/helix_local
+
+  packages/local/helix_local_groups:
+    classification: local
+    owner: local-team
+    risk_level: high
+    description: Session-only LAN group lobby and membership behavior
+    allowed_consumers:
+      - apps/helix_local
+
+  packages/local/helix_local_messaging:
+    classification: local
+    owner: local-team
+    risk_level: high
+    description: Ephemeral LAN messaging behavior and in-memory message lifecycle
+    allowed_consumers:
+      - apps/helix_local
+
+  packages/local/helix_local_calls:
+    classification: local
+    owner: local-team
+    risk_level: high
+    description: LAN WebRTC call service with Local signaling and private-candidate handling
+    allowed_consumers:
+      - apps/helix_local
+
+  packages/local/helix_local_transfer:
+    classification: local
+    owner: local-team
+    risk_level: medium
+    description: LAN file transfer send/receive coordination
+    allowed_consumers:
+      - apps/helix_local
+
+  packages/remote/helix_remote_domain:
+    classification: remote
+    owner: remote-team
+    risk_level: critical
+    description: Remote account, device, conversation, message, attachment, and call domain models
+    allowed_consumers:
+      - apps/helix_remote
+      - packages/remote/helix_remote_api
+      - packages/remote/helix_remote_storage
+      - packages/remote/helix_remote_sync
+
+  packages/remote/helix_remote_crypto:
+    classification: remote
+    owner: remote-team
+    risk_level: critical
+    description: Remote E2EE, attachment encryption, backup envelope crypto, and key storage wrappers
+    allowed_consumers:
+      - apps/helix_remote
+
+  packages/remote/helix_remote_api:
+    classification: remote
+    owner: remote-team
+    risk_level: high
+    description: Remote REST models, realtime envelopes, and compatibility fixtures
+    allowed_consumers:
+      - apps/helix_remote
+      - packages/remote/helix_remote_sync
+
+  packages/remote/helix_remote_storage:
+    classification: remote
+    owner: remote-team
+    risk_level: critical
+    description: Remote persistent SQLite database, migrations, tombstones, and backup snapshots
+    allowed_consumers:
+      - apps/helix_remote
+      - packages/remote/helix_remote_sync
+      - packages/remote/helix_remote_groups
+
+  packages/remote/helix_remote_sync:
+    classification: remote
+    owner: remote-team
+    risk_level: high
+    description: Remote inbound/outbound sync engine, cursors, idempotency, and realtime dispatch
+    allowed_consumers:
+      - apps/helix_remote
+
+  packages/remote/helix_remote_calls:
+    classification: remote
+    owner: remote-team
+    risk_level: high
+    description: Remote WebRTC call service using internet signaling, STUN, and TURN
+    allowed_consumers:
+      - apps/helix_remote
+
+  packages/remote/helix_remote_groups:
+    classification: remote
+    owner: remote-team
+    risk_level: high
+    description: Remote persistent group lifecycle, roles, invites, and group sync operations
+    allowed_consumers:
+      - apps/helix_remote
+
+  services/helix_remote_backend:
+    classification: remote
+    owner: remote-team
+    risk_level: critical
+    description: Remote modular monolith backend, REST/WebSocket gateways, server queues, privacy, and operability
+    allowed_consumers: []
+
+  tool:
+    classification: tooling
+    owner: architecture-team
+    risk_level: high
+    description: Boundary, release, secret, SBOM, dependency, and governance verification tools
+    allowed_consumers: []

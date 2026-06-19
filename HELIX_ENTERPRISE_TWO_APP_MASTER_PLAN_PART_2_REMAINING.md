@@ -411,55 +411,72 @@ Still externally blocked:
 
 ## 20.1 Local Pipeline
 
-- [ ] **P20-001:** Local-only analyze/test.
-- [ ] **P20-002:** Local Android build/sign.
-- [ ] **P20-003:** Local Windows build/sign.
-- [ ] **P20-004:** Local offline acceptance tests.
-- [ ] **P20-005:** Local wipe isolation tests.
-- [ ] **P20-006:** Local protocol compatibility tests.
-- [ ] **P20-007:** Local release notes and rollback.
+- [x] **P20-001:** Local-only analyze/test.
+- [ ] **P20-002:** Local Android build/sign. BLOCKED until real Local signing material exists and a signed artifact is built.
+- [ ] **P20-003:** Local Windows build/sign. BLOCKED until real Windows signing material exists and a signed artifact is built.
+- [x] **P20-004:** Local offline acceptance tests.
+- [x] **P20-005:** Local wipe isolation tests.
+- [x] **P20-006:** Local protocol compatibility tests.
+- [x] **P20-007:** Local release notes and rollback.
 
 ## 20.2 Remote Pipeline
 
-- [ ] **P20-008:** Remote client analyze/test.
-- [ ] **P20-009:** Remote backend unit/integration tests.
-- [ ] **P20-010:** Contract compatibility tests.
-- [ ] **P20-011:** Database migration tests.
-- [ ] **P20-012:** Remote Android build/sign.
-- [ ] **P20-013:** Remote Windows build/sign.
-- [ ] **P20-014:** Staging end-to-end tests.
-- [ ] **P20-015:** Security gates.
-- [ ] **P20-016:** Production deployment and rollback.
-- [ ] **P20-017:** Remote release notes.
+- [x] **P20-008:** Remote client analyze/test.
+- [x] **P20-009:** Remote backend unit/integration tests.
+- [x] **P20-010:** Contract compatibility tests.
+- [x] **P20-011:** Database migration tests.
+- [ ] **P20-012:** Remote Android build/sign. BLOCKED until real Remote signing material exists and a signed artifact is built.
+- [ ] **P20-013:** Remote Windows build/sign. BLOCKED until real Windows signing material exists and a signed artifact is built.
+- [ ] **P20-014:** Staging end-to-end tests. BLOCKED until real staging infrastructure and credentials exist.
+- [x] **P20-015:** Security gates.
+- [ ] **P20-016:** Production deployment and rollback. BLOCKED until real production infrastructure, credentials, monitoring, and rollback evidence exist.
+- [x] **P20-017:** Remote release notes.
 
 ## 20.3 Cross-Product Gates
 
-- [ ] **P20-018:** Install both apps together.
-- [ ] **P20-019:** Run both simultaneously.
-- [ ] **P20-020:** Verify independent notifications.
-- [ ] **P20-021:** Verify independent camera/microphone sessions and contention UX.
-- [ ] **P20-022:** Verify independent secure storage.
-- [ ] **P20-023:** Verify independent databases.
-- [ ] **P20-024:** Verify Local panic wipe leaves Remote intact.
-- [ ] **P20-025:** Verify Remote logout/delete leaves Local intact.
-- [ ] **P20-026:** Verify uninstalling Local leaves Remote intact.
-- [ ] **P20-027:** Verify uninstalling Remote leaves Local intact.
-- [ ] **P20-028:** Verify Local has no Remote backend traffic.
-- [ ] **P20-029:** Verify Remote has no LAN broadcast unless explicitly designed.
-- [ ] **P20-030:** Verify package dependency firewall.
+- [ ] **P20-018:** Install both apps together. BLOCKED until signed/installable Local and Remote artifacts exist.
+- [ ] **P20-019:** Run both simultaneously. BLOCKED until signed/installable Local and Remote artifacts exist.
+- [ ] **P20-020:** Verify independent notifications. BLOCKED until manual Android/Windows co-install checks are run.
+- [ ] **P20-021:** Verify independent camera/microphone sessions and contention UX. BLOCKED until manual device checks are run.
+- [x] **P20-022:** Verify independent secure storage.
+- [x] **P20-023:** Verify independent databases.
+- [x] **P20-024:** Verify Local panic wipe leaves Remote intact.
+- [x] **P20-025:** Verify Remote logout/delete leaves Local intact.
+- [ ] **P20-026:** Verify uninstalling Local leaves Remote intact. BLOCKED until manual platform uninstall checks are run.
+- [ ] **P20-027:** Verify uninstalling Remote leaves Local intact. BLOCKED until manual platform uninstall checks are run.
+- [x] **P20-028:** Verify Local has no Remote backend traffic.
+- [x] **P20-029:** Verify Remote has no LAN broadcast unless explicitly designed.
+- [x] **P20-030:** Verify package dependency firewall.
 
 ## 20.4 Governance
 
-- [ ] **P20-031:** Quarterly architecture review.
-- [ ] **P20-032:** Quarterly dependency review.
-- [ ] **P20-033:** Annual threat-model review.
-- [ ] **P20-034:** Security-claim review before every major release.
-- [ ] **P20-035:** ADR required for cross-product sharing.
-- [ ] **P20-036:** Deprecation policy for packages and protocols.
-- [ ] **P20-037:** Ownership map for every package/module.
-- [ ] **P20-038:** Keep this plan updated as the execution ledger.
-- [ ] **P20-039:** Archive completed phase evidence.
-- [ ] **P20-040:** Never delete historical migration or security decisions without replacement records.
+- [x] **P20-031:** Quarterly architecture review.
+- [x] **P20-032:** Quarterly dependency review.
+- [x] **P20-033:** Annual threat-model review.
+- [x] **P20-034:** Security-claim review before every major release.
+- [x] **P20-035:** ADR required for cross-product sharing.
+- [x] **P20-036:** Deprecation policy for packages and protocols.
+- [x] **P20-037:** Ownership map for every package/module.
+- [x] **P20-038:** Keep this plan updated as the execution ledger.
+- [x] **P20-039:** Archive completed phase evidence.
+- [x] **P20-040:** Never delete historical migration or security decisions without replacement records.
+
+### 2026-06-19 Implementation Evidence (P20 Repository Release and Governance Baseline)
+
+- `apps/helix_remote/android/app/build.gradle.kts` now fails closed for Remote release signing and forbids debug signing, matching Local's product-scoped signing model.
+- `scripts/remote_release_gate.ps1` adds an independent Remote gate for full verification, Remote client tests, Remote backend tests, Remote API compatibility, security gates, signing preflight, optional staging preflight, and optional artifact builds.
+- `scripts/verify.ps1` and `scripts/verify.sh` run `tool/phase20_release_governance_test.dart` as part of full verification.
+- `tool/check_release_hardening.dart` now requires Remote signing fail-closed behavior, Remote release docs, cross-product release docs, governance docs, and the Remote release gate.
+- `tool/phase20_release_governance_test.dart`: 9/9 pass - Local/Remote signing isolation, independent verification/release scripts, CI separation, release/governance docs, product identifiers, storage isolation, Remote no-LAN checks, Local no-Remote-backend checks, ownership map coverage, and external blocker preservation.
+- `docs/release/REMOTE_RELEASE_CHECKLIST.md`, `docs/release/REMOTE_RELEASE_ROLLBACK_PLAN.md`, `docs/release/REMOTE_RELEASE_NOTES_TEMPLATE.md`, `docs/release/CROSS_PRODUCT_ACCEPTANCE_CHECKLIST.md`, and `docs/governance/LONG_TERM_GOVERNANCE.md` define final release, rollback, cross-product, and governance processes.
+- `ownership-blast-radius.yaml` now includes current Local package paths, Remote package paths, `services/helix_remote_backend`, and `tool`.
+
+Still externally/manually blocked:
+- P20-002/P20-003 Local signed release artifacts require real signing material and platform signing evidence.
+- P20-012/P20-013 Remote signed release artifacts require real signing material and platform signing evidence.
+- P20-014 staging E2E remains blocked by the master-plan staging infrastructure blocker.
+- P20-016 production deployment/rollback evidence requires real production infrastructure, credentials, monitoring, and rollback execution.
+- P20-018 through P20-021 and P20-026/P20-027 require real co-install/manual device checks with installable artifacts.
 
 ---
 

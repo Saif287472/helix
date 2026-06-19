@@ -46,9 +46,17 @@ Future<void> main() async {
     'apps/helix_local/android/app/build.gradle.kts',
     'signingConfigs.getByName("debug")',
   );
+  requireNotContains(
+    'apps/helix_remote/android/app/build.gradle.kts',
+    'signingConfigs.getByName("debug")',
+  );
   requireContains(
     'apps/helix_local/android/app/build.gradle.kts',
     'Debug signing is forbidden for Helix Local release.',
+  );
+  requireContains(
+    'apps/helix_remote/android/app/build.gradle.kts',
+    'Debug signing is forbidden for Helix Remote release.',
   );
   requireContains(
     'apps/helix_local/android/app/build.gradle.kts',
@@ -65,6 +73,22 @@ Future<void> main() async {
   requireContains(
     'apps/helix_local/android/app/build.gradle.kts',
     'helix_local.keystore',
+  );
+  requireContains(
+    'apps/helix_remote/android/app/build.gradle.kts',
+    'HELIX_REMOTE_STORE_PASSWORD',
+  );
+  requireContains(
+    'apps/helix_remote/android/app/build.gradle.kts',
+    'HELIX_REMOTE_KEY_ALIAS',
+  );
+  requireContains(
+    'apps/helix_remote/android/app/build.gradle.kts',
+    'HELIX_REMOTE_KEY_PASSWORD',
+  );
+  requireContains(
+    'apps/helix_remote/android/app/build.gradle.kts',
+    'helix_remote.keystore',
   );
 
   requireContains(
@@ -95,6 +119,8 @@ Future<void> main() async {
     'generate_local_sbom.dart --check-only',
   );
   requireContains('scripts/verify.sh', 'generate_local_sbom.dart --check-only');
+  requireContains('scripts/verify.ps1', 'phase20_release_governance_test.dart');
+  requireContains('scripts/verify.sh', 'phase20_release_governance_test.dart');
 
   requireFile('docs/security/AUTHENTICATED_KEY_AGREEMENT_REVIEW.md');
   requireFile('docs/security/EXTERNAL_SECURITY_REVIEW_GATE.md');
@@ -102,7 +128,14 @@ Future<void> main() async {
   requireFile('docs/release/LOCAL_PRIVACY_VERIFICATION_CHECKLIST.md');
   requireFile('docs/release/LOCAL_RELEASE_ROLLBACK_PLAN.md');
   requireFile('docs/release/LOCAL_SBOM_DEPENDENCY_AUDIT.md');
+  requireFile('docs/release/REMOTE_RELEASE_CHECKLIST.md');
+  requireFile('docs/release/REMOTE_RELEASE_ROLLBACK_PLAN.md');
+  requireFile('docs/release/REMOTE_RELEASE_NOTES_TEMPLATE.md');
+  requireFile('docs/release/CROSS_PRODUCT_ACCEPTANCE_CHECKLIST.md');
+  requireFile('docs/governance/LONG_TERM_GOVERNANCE.md');
+  requireFile('docs/governance/PHASE_20_COMPLETION_EVIDENCE.md');
   requireFile('scripts/local_release_gate.ps1');
+  requireFile('scripts/remote_release_gate.ps1');
 
   if (failures.isNotEmpty) {
     stderr.writeln('Release hardening check failed:');

@@ -44,6 +44,10 @@ Invoke-Step "Forbidden import tests + cycle detection (P4-010/P4-015)" {
     dart test tool/boundary_test.dart
 }
 
+Invoke-Step "Phase 20 release/governance audit" {
+    dart test tool/phase20_release_governance_test.dart
+}
+
 Invoke-Step "Dependency graph (P4-014)" {
     dart run tool/dep_graph.dart
 }

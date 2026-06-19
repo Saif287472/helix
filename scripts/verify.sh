@@ -39,6 +39,9 @@ dart run tool/check_boundaries.dart
 step "Forbidden import tests + cycle detection (P4-010/P4-015)"
 dart test tool/boundary_test.dart
 
+step "Phase 20 release/governance audit"
+dart test tool/phase20_release_governance_test.dart
+
 step "Dependency graph (P4-014)"
 dart run tool/dep_graph.dart
 
