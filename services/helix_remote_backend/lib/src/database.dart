@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:sqlite3/sqlite3.dart';
 
 class BackendDatabase {
@@ -411,6 +413,12 @@ class BackendDatabase {
 
       _db.execute('PRAGMA user_version = 9;');
     }
+
+    if (version < 10) {
+      // Phase 18 is policy/control focused. No new tables are required; the
+      // version marks databases that have account export/delete helper support.
+      _db.execute('PRAGMA user_version = 10;');
+    }
   }
 
   void close() {
@@ -590,6 +598,100 @@ class BackendDatabase {
     );
     stmt.execute([username, accountId]);
     stmt.close();
+  }
+
+  Map<String, dynamic> exportAccountData(String accountId) {
+    final deviceIds = getDevices(
+      accountId,
+    ).map((device) => device['device_id'] as String).toList();
+
+    return {
+      'export_version': 1,
+      'exported_at': DateTime.now().millisecondsSinceEpoch,
+      'account': getAccount(accountId),
+      'devices': getDevices(accountId),
+      'device_revocations': _selectWhere(
+        'device_revocations',
+        'account_id = ?',
+        [accountId],
+      ),
+      'pending_device_links': _selectWhere(
+        'pending_device_links',
+        'account_id = ?',
+        [accountId],
+      ),
+      'public_prekeys': {
+        'signed_prekeys': _selectWhere('signed_prekeys', 'account_id = ?', [
+          accountId,
+        ]),
+        'one_time_prekeys': _selectWhere('one_time_prekeys', 'account_id = ?', [
+          accountId,
+        ]),
+      },
+      'contacts': getContacts(accountId),
+      'contact_requests': getContactRequests(accountId),
+      'privacy': getPrivacy(accountId),
+      'conversations': _selectWhere(
+        'conversations',
+        'conversation_id IN (SELECT conversation_id FROM conversation_members WHERE account_id = ?)',
+        [accountId],
+      ),
+      'memberships': _selectWhere('conversation_members', 'account_id = ?', [
+        accountId,
+      ]),
+      'message_mailbox': deviceIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : _selectWhere(
+              'messages',
+              'recipient_device_id IN (${List.filled(deviceIds.length, '?').join(', ')}) OR sender_account_id = ?',
+              [...deviceIds, accountId],
+            ),
+      'attachments': _selectWhere('attachments', 'account_id = ?', [accountId]),
+      'backup': getBackup(accountId),
+      'reports': [
+        ..._selectWhere('reports', 'reporter_account_id = ?', [accountId]),
+        ..._selectWhere('reports', 'subject_account_id = ?', [accountId]),
+      ],
+      'audit': _selectWhere('audit_logs', 'account_id = ?', [accountId]),
+    };
+  }
+
+  void deleteAccountData(String accountId) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final devices = getDevices(
+        accountId,
+      ).map((device) => device['device_id'] as String).toList();
+      for (final deviceId in devices) {
+        deleteMessagesForDevice(deviceId);
+      }
+
+      for (final table in [
+        'audit_logs',
+        'group_creation_log',
+        'turn_credential_log',
+        'pending_device_links',
+        'device_revocations',
+      ]) {
+        _deleteWhere(table, 'account_id = ?', [accountId]);
+      }
+      for (final table in ['reports']) {
+        _deleteWhere(
+          table,
+          'reporter_account_id = ? OR subject_account_id = ?',
+          [accountId, accountId],
+        );
+      }
+      _deleteWhere('outbox', 'payload LIKE ?', ['%$accountId%']);
+
+      final stmt = _db.prepare('DELETE FROM accounts WHERE account_id = ?;');
+      stmt.execute([accountId]);
+      stmt.close();
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
   }
 
   // Device operations
@@ -1716,6 +1818,11 @@ class BackendDatabase {
 
   // Outbox operations
   void enqueueOutbox(String eventId, String type, String payload) {
+    if (type == 'PUSH_NOTIFICATION' && _containsForbiddenPayloadKey(payload)) {
+      throw ArgumentError(
+        'Push notification payload must not contain plaintext',
+      );
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
       INSERT INTO outbox (event_id, type, payload, status, retries, created_at)
@@ -1768,8 +1875,95 @@ class BackendDatabase {
       INSERT INTO audit_logs (event_id, account_id, device_id, action, client_ip, user_agent, timestamp)
       VALUES (?, ?, ?, ?, ?, ?, ?);
     ''');
-    stmt.execute([uuid, accountId, deviceId, action, clientIp, userAgent, now]);
+    stmt.execute([
+      uuid,
+      accountId,
+      deviceId,
+      action,
+      _redactClientIp(clientIp),
+      userAgent == null ? null : 'redacted',
+      now,
+    ]);
     stmt.close();
+  }
+
+  List<Map<String, dynamic>> getAuditLogs({String? accountId}) {
+    final rows = accountId == null
+        ? _db.select('SELECT * FROM audit_logs ORDER BY timestamp DESC;')
+        : _db.select(
+            'SELECT * FROM audit_logs WHERE account_id = ? ORDER BY timestamp DESC;',
+            [accountId],
+          );
+    return rows
+        .map(
+          (row) => {
+            'event_id': row['event_id'],
+            'account_id': row['account_id'],
+            'device_id': row['device_id'],
+            'action': row['action'],
+            'client_ip': row['client_ip'],
+            'user_agent': row['user_agent'],
+            'timestamp': row['timestamp'],
+          },
+        )
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _selectWhere(
+    String table,
+    String where,
+    List<Object?> args,
+  ) {
+    final stmt = _db.prepare('SELECT * FROM $table WHERE $where;');
+    final rows = stmt.select(args);
+    stmt.close();
+    return rows.map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  void _deleteWhere(String table, String where, List<Object?> args) {
+    final stmt = _db.prepare('DELETE FROM $table WHERE $where;');
+    stmt.execute(args);
+    stmt.close();
+  }
+
+  bool _containsForbiddenPayloadKey(String payload) {
+    final decoded = jsonDecode(payload);
+    const forbiddenKeys = {
+      'plaintext',
+      'message_text',
+      'body',
+      'content',
+      'filename',
+      'backup_key',
+      'passphrase',
+      'recovery_phrase',
+      'token',
+    };
+
+    bool scan(Object? value) {
+      if (value is Map) {
+        for (final entry in value.entries) {
+          final key = entry.key.toString().toLowerCase();
+          if (forbiddenKeys.contains(key)) return true;
+          if (scan(entry.value)) return true;
+        }
+      } else if (value is List) {
+        return value.any(scan);
+      }
+      return false;
+    }
+
+    return scan(decoded);
+  }
+
+  String? _redactClientIp(String? clientIp) {
+    if (clientIp == null || clientIp.isEmpty) return null;
+    if (clientIp.contains(':')) return 'ipv6:redacted';
+    final parts = clientIp.split('.');
+    if (parts.length == 4) {
+      return '${parts[0]}.${parts[1]}.${parts[2]}.0';
+    }
+    return 'redacted';
   }
 
   // Refresh Tokens (P10-003)

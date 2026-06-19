@@ -491,6 +491,62 @@ paths:
         '401':
           description: Unauthorized
 
+  /privacy/export:
+    get:
+      summary: Export server-visible account data for the authenticated account
+      operationId: exportAccountData
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Exported account, device, contact, mailbox, backup, report, and audit metadata
+        '401':
+          description: Unauthorized
+
+  /privacy/admin/audit:
+    get:
+      summary: Read redacted audit records as an allow-listed admin
+      operationId: readAdminAudit
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: account_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Redacted audit records
+        '403':
+          description: Admin privileges required
+
+  /account/delete:
+    delete:
+      summary: Delete the authenticated Remote account after explicit confirmation
+      operationId: deleteAccount
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - confirmation
+              properties:
+                confirmation:
+                  type: string
+                  description: Must equal DELETE followed by the authenticated account id
+      responses:
+        '200':
+          description: Account deleted
+        '400':
+          description: Invalid confirmation
+        '403':
+          description: Device inactive or token invalid
+
   /account:
     delete:
       summary: Request account deletion (marks data for erasure)

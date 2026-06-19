@@ -6,3 +6,4 @@ export 'src/rate_limiter.dart';
 export 'src/modules/attachments.dart';
 export 'src/modules/calls.dart';
 export 'src/modules/groups.dart';
+export 'src/modules/privacy_compliance.dart';

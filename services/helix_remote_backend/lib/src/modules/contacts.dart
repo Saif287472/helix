@@ -5,9 +5,11 @@ import 'package:helix_remote_backend/src/database.dart';
 
 class ContactsModule {
   final BackendDatabase db;
+  final Set<String> adminAccountIds;
   static const int contactRequestDailyLimit = 20;
 
-  ContactsModule(this.db);
+  ContactsModule(this.db, {Set<String>? adminAccountIds})
+    : adminAccountIds = adminAccountIds ?? const {'admin'};
 
   Router get router {
     final router = Router();
@@ -473,14 +475,35 @@ class ContactsModule {
         );
       }
 
+      final actorAccountId = auth['account_id'] as String;
+      if (!adminAccountIds.contains(actorAccountId)) {
+        db.logAudit(
+          actorAccountId,
+          auth['device_id'] as String?,
+          'ADMIN_ACCESS_DENIED',
+          request.context['client_ip'] as String?,
+          null,
+        );
+        return Response.forbidden(
+          jsonEncode({'error': 'Admin privileges required'}),
+        );
+      }
+
       final actionId =
           body['action_id'] as String? ??
           'sa_${DateTime.now().microsecondsSinceEpoch}';
       db.addSafetyAction(
         actionId: actionId,
         reportId: reportId,
-        actorAccountId: auth['account_id'] as String,
+        actorAccountId: actorAccountId,
         action: action,
+      );
+      db.logAudit(
+        actorAccountId,
+        auth['device_id'] as String?,
+        'ADMIN_SAFETY_ACTION',
+        request.context['client_ip'] as String?,
+        null,
       );
 
       return Response.ok(jsonEncode({'action_id': actionId}));

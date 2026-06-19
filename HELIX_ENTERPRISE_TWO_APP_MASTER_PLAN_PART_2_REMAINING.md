@@ -312,31 +312,60 @@ Remaining constraints:
 
 ## PHASE 18 - Privacy, Security, Abuse, and Compliance
 
-- [ ] **P18-001:** Publish accurate privacy policy.
-- [ ] **P18-002:** Publish metadata inventory.
-- [ ] **P18-003:** Publish retention schedule.
-- [ ] **P18-004:** Publish data deletion behavior.
-- [ ] **P18-005:** No sale or behavioral monetization of personal data.
-- [ ] **P18-006:** No plaintext message content in logs.
-- [ ] **P18-007:** No plaintext push payload.
-- [ ] **P18-008:** No mandatory address-book upload.
-- [ ] **P18-009:** Consent and permission review.
-- [ ] **P18-010:** Data export.
-- [ ] **P18-011:** Account deletion workflow.
-- [ ] **P18-012:** Security incident response.
-- [ ] **P18-013:** Vulnerability disclosure policy.
-- [ ] **P18-014:** Dependency/CVE response policy.
-- [ ] **P18-015:** Penetration test.
-- [ ] **P18-016:** Independent cryptographic review.
-- [ ] **P18-017:** Mobile application security review.
-- [ ] **P18-018:** Backend security review.
-- [ ] **P18-019:** Secrets and access review.
-- [ ] **P18-020:** Abuse-report handling with minimum necessary data.
-- [ ] **P18-021:** Admin access logging.
-- [ ] **P18-022:** Production access approval and least privilege.
-- [ ] **P18-023:** Backup encryption and restore authorization.
-- [ ] **P18-024:** App-store privacy declarations.
-- [ ] **P18-025:** Verify all marketing statements against tests and design documents.
+- [x] **P18-001:** Publish accurate privacy policy.
+- [x] **P18-002:** Publish metadata inventory.
+- [x] **P18-003:** Publish retention schedule.
+- [x] **P18-004:** Publish data deletion behavior.
+- [x] **P18-005:** No sale or behavioral monetization of personal data.
+- [x] **P18-006:** No plaintext message content in logs.
+- [x] **P18-007:** No plaintext push payload.
+- [x] **P18-008:** No mandatory address-book upload.
+- [x] **P18-009:** Consent and permission review.
+- [x] **P18-010:** Data export.
+- [x] **P18-011:** Account deletion workflow.
+- [x] **P18-012:** Security incident response.
+- [x] **P18-013:** Vulnerability disclosure policy.
+- [x] **P18-014:** Dependency/CVE response policy.
+- [ ] **P18-015:** Penetration test. BLOCKED until an actual scoped penetration test is performed.
+- [ ] **P18-016:** Independent cryptographic review. BLOCKED until an external reviewer evaluates the exact implementation/version.
+- [ ] **P18-017:** Mobile application security review. BLOCKED until release builds are reviewed.
+- [ ] **P18-018:** Backend security review. BLOCKED until deployed backend/configuration review exists.
+- [ ] **P18-019:** Secrets and access review. BLOCKED until production credentials and access roles exist.
+- [x] **P18-020:** Abuse-report handling with minimum necessary data.
+- [x] **P18-021:** Admin access logging.
+- [x] **P18-022:** Production access approval and least privilege.
+- [x] **P18-023:** Backup encryption and restore authorization.
+- [x] **P18-024:** App-store privacy declarations.
+- [x] **P18-025:** Verify all marketing statements against tests and design documents.
+
+### 2026-06-19 Implementation Evidence (P18 Local/Repo-Side Work)
+
+Backend additions (`services/helix_remote_backend/`):
+- `PrivacyComplianceModule` adds `GET /api/v1/privacy/export`, `DELETE /api/v1/account/delete`, and `GET /api/v1/privacy/admin/audit`.
+- Account export returns server-visible account, device, prekey, contact, privacy, conversation, message-mailbox, attachment, backup, report, and redacted audit metadata for the authenticated account.
+- Account deletion requires confirmation `DELETE <account_id>` and purges server-side account, device, refresh-token, prekey, mailbox, contact, privacy, report, backup, attachment, revocation, pending-link, and account-specific audit data.
+- `BackendDatabase.enqueueOutbox` rejects plaintext-bearing push notification payload keys such as `plaintext`, `message_text`, `body`, `filename`, `backup_key`, `passphrase`, `recovery_phrase`, and `token`.
+- `BackendDatabase.logAudit` stores redacted IP and redacted user-agent markers instead of raw values.
+- Safety/admin actions now require an allow-listed admin account and log admin access/denial events.
+
+Documentation additions/updates:
+- `docs/product/remote/PRIVACY_POLICY.md` - accurate current Remote privacy policy draft, including no sale/behavioral ads, no mandatory address-book upload, no plaintext push payloads, and blocker disclaimers.
+- `docs/product/remote/METADATA_INVENTORY.md` - Remote metadata inventory and minimization rules.
+- `docs/product/remote/RETENTION_AND_DELETION.md` - retention schedule, account deletion behavior, and external-copy limits.
+- `docs/product/remote/APP_STORE_PRIVACY.md` - store privacy declaration checklist and manual review items.
+- `docs/security/REMOTE_SECURITY_AND_COMPLIANCE.md` - incident response, vulnerability disclosure, dependency/CVE response, review gates, production access/least privilege, and claim review policy.
+- `docs/product/PRIVACY_CLAIM_MATRIX.md`, `docs/product/DATA_INVENTORY_RETENTION.md`, and `docs/product/remote/PRODUCT_CONTRACT.md` updated to avoid overclaiming blocked Remote database encryption, forward secrecy, metadata, and external review properties.
+- `contracts/remote-rest-openapi/openapi.yaml` records Phase 18 privacy export, admin audit, and account deletion API surface.
+
+Test results (2026-06-19):
+- `services/helix_remote_backend/test/privacy_compliance_test.dart`: 5/5 pass - authenticated data export, ciphertext-only export content, redacted audit IP, account deletion auth invalidation, admin allow-list/denial logging, admin safety action logging, plaintext report rejection, plaintext push outbox rejection, and policy/claim document coverage.
+
+Still externally blocked:
+- P18-015 penetration test: no actual penetration test evidence exists.
+- P18-016 independent cryptographic review: blocked by the external reviewer requirement documented at the top of this plan.
+- P18-017 mobile application security review: no release-build mobile review evidence exists.
+- P18-018 backend security review: no deployed-backend review evidence exists.
+- P18-019 secrets/access review: no production credentials or access roles exist to review.
 
 ---
 

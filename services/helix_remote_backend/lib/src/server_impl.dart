@@ -17,6 +17,7 @@ import 'package:helix_remote_backend/src/modules/backups.dart';
 import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/modules/groups.dart';
+import 'package:helix_remote_backend/src/modules/privacy_compliance.dart';
 
 class OutboxWorker {
   final BackendDatabase db;
@@ -65,6 +66,7 @@ class BackendServer {
   final Directory? attachmentsStorageDir;
   final String turnSecret;
   final String turnUrl;
+  final Set<String> adminAccountIds;
   HttpServer? _httpServer;
   HttpServer? get httpServer => _httpServer;
 
@@ -77,6 +79,7 @@ class BackendServer {
     this.attachmentsStorageDir,
     this.turnSecret = '',
     this.turnUrl = '',
+    this.adminAccountIds = const {'admin'},
   });
 
   factory BackendServer.create({
@@ -87,6 +90,7 @@ class BackendServer {
     Directory? attachmentsStorageDir,
     String turnSecret = '',
     String turnUrl = '',
+    Set<String> adminAccountIds = const {'admin'},
   }) {
     final db = BackendDatabase(sqliteDb);
     final jwt = JwtHelper(jwtSecret);
@@ -106,6 +110,7 @@ class BackendServer {
       attachmentsStorageDir: attachmentsStorageDir,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
+      adminAccountIds: adminAccountIds,
     );
   }
 
@@ -114,7 +119,7 @@ class BackendServer {
 
     final authModule = AuthModule(db, jwt, notifyDevice: wsRelay.sendToDevice);
     final prekeysModule = PrekeysModule(db);
-    final contactsModule = ContactsModule(db);
+    final contactsModule = ContactsModule(db, adminAccountIds: adminAccountIds);
     final backupsModule = BackupsModule(db);
     final attachmentsModule = AttachmentsModule(
       db,
@@ -132,6 +137,10 @@ class BackendServer {
       turnUrl: turnUrl,
     );
     final groupsModule = GroupsModule(db, wsRelay);
+    final privacyComplianceModule = PrivacyComplianceModule(
+      db,
+      adminAccountIds: adminAccountIds,
+    );
 
     // Map modules
     router.mount('/api/v1/accounts', authModule.router.call);
@@ -143,6 +152,8 @@ class BackendServer {
     router.mount('/api/v1/attachments', attachmentsModule.router.call);
     router.mount('/api/v1/calls', callsModule.router.call);
     router.mount('/api/v1/groups', groupsModule.router.call);
+    router.mount('/api/v1/privacy', privacyComplianceModule.privacyRouter.call);
+    router.mount('/api/v1/account', privacyComplianceModule.accountRouter.call);
 
     // WebSocket route
     router.get('/api/v1/ws', wsRelay.handleUpgrade);

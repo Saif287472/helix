@@ -8,10 +8,10 @@ Helix Remote is a persistent, end-to-end encrypted messaging application that al
 - **Infrastructure**: Supported by a modular monolith server running REST and WebSocket gateways.
 
 ## 2. Retention & Persistence Policy
-- **Chat History**: Stored in a local encrypted database (SQLCipher) on the device. Persists until the user explicitly deletes it.
+- **Chat History**: Stored in a local Remote database on the device. Persists until the user explicitly deletes it. SQLCipher-capable database-at-rest encryption remains BLOCKED until a reviewed library supports required targets.
 - **Server Mailboxes**: Encrypted message envelopes are held temporarily in server queues for delivery to offline devices, then permanently deleted upon acknowledgment.
 - **Attachments**: Ciphertext files stored securely in object storage (S3) and deleted once all referencing messages are deleted.
-- **Account Deletion**: Fully purges all account details, public prekeys, and registered device details from the server directory.
+- **Account Deletion**: Purges account details, public prekeys, registered device details, active device mailboxes, backups, attachments, reports, and account-specific audit rows from the server directory. External recipient copies and user-exported files are outside deletion guarantees.
 
 ## 3. Cryptographic Identity
 - **Centralized Prekeys**: Public keys and identity descriptors are uploaded to the server directory so remote peers can establish sessions offline.
