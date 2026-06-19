@@ -210,7 +210,7 @@ class HelixRemoteDatabase {
   void _applyMigrations() {
     final version = schemaVersion;
     if (version < 1) {
-      // Rename messages.text → ciphertext_blob for schema clarity.
+      // Rename messages.text to ciphertext_blob for schema clarity.
       // On fresh databases the new column name is created by _onCreate above;
       // this branch only runs on pre-existing v0 DBs that have 'text'.
       try {
@@ -533,10 +533,75 @@ class HelixRemoteDatabase {
         .toList();
   }
 
+  Map<String, dynamic>? getMessageById(String messageId) {
+    final stmt = _db.prepare('SELECT * FROM messages WHERE message_id = ?;');
+    final res = stmt.select([messageId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'message_id': row['message_id'],
+      'conversation_id': row['conversation_id'],
+      'sender_account_id': row['sender_account_id'],
+      'sender_device_id': row['sender_device_id'],
+      'ciphertext_blob': row['ciphertext_blob'],
+      'server_sequence': row['server_sequence'],
+      'timestamp': row['timestamp'],
+      'status': row['status'],
+    };
+  }
+
   void deleteMessage(String messageId) {
     final stmt = _db.prepare('DELETE FROM messages WHERE message_id = ?;');
     stmt.execute([messageId]);
     stmt.close();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message revisions
+  // ---------------------------------------------------------------------------
+
+  void saveMessageRevision({
+    required String revisionId,
+    required String messageId,
+    required String type,
+    required String authorId,
+    required String payload,
+    required int timestamp,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO revisions (
+        revision_id,
+        message_id,
+        type,
+        author_id,
+        payload,
+        timestamp
+      )
+      VALUES (?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([revisionId, messageId, type, authorId, payload, timestamp]);
+    stmt.close();
+  }
+
+  List<Map<String, dynamic>> getMessageRevisions(String messageId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM revisions WHERE message_id = ? ORDER BY timestamp ASC;',
+    );
+    final res = stmt.select([messageId]);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'revision_id': row['revision_id'],
+            'message_id': row['message_id'],
+            'type': row['type'],
+            'author_id': row['author_id'],
+            'payload': row['payload'],
+            'timestamp': row['timestamp'],
+          },
+        )
+        .toList();
   }
 
   void saveMessageReceipt({
@@ -701,7 +766,7 @@ class HelixRemoteDatabase {
   }
 
   /// Returns the raw state of a single pending operation, or null if not found.
-  /// Useful for diagnostics and tests — does NOT filter by [next_attempt_at].
+  /// Useful for diagnostics and tests. Does NOT filter by [next_attempt_at].
   Map<String, dynamic>? getOperationById(String opId) {
     final stmt = _db.prepare(
       'SELECT * FROM pending_operations WHERE op_id = ?;',

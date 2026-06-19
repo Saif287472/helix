@@ -41,45 +41,63 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 ## Remaining Implementation Phases
 
-## PHASE 12 — Remote One-to-One Messaging MVP
+## PHASE 12 - Remote One-to-One Messaging MVP
 
 **Goal:** Release the smallest complete persistent private messaging loop.
 
 ### Tasks
 
-- [ ] **P12-001:** Account sign-in/setup UI.
-- [ ] **P12-002:** Device verification UI.
+- [x] **P12-001:** Account sign-in/setup UI.
+- [x] **P12-002:** Device verification UI.
 - [ ] **P12-003:** Add contact by username, QR, or invitation.
-- [ ] **P12-004:** One-to-one conversation creation.
+- [x] **P12-004:** One-to-one conversation creation.
 - [ ] **P12-005:** E2EE text send.
-- [ ] **P12-006:** Offline receive.
-- [ ] **P12-007:** Persistent conversation list.
-- [ ] **P12-008:** Persistent message history.
-- [ ] **P12-009:** Delivery receipts.
-- [ ] **P12-010:** Read receipts with privacy setting.
-- [ ] **P12-011:** Typing indicators as ephemeral state.
-- [ ] **P12-012:** Message edits as persistent events.
-- [ ] **P12-013:** Message reactions as persistent events.
-- [ ] **P12-014:** Delete-for-self.
-- [ ] **P12-015:** Delete-for-everyone only if approved by product contract.
-- [ ] **P12-016:** Blocking.
+- [x] **P12-006:** Offline receive.
+- [x] **P12-007:** Persistent conversation list.
+- [x] **P12-008:** Persistent message history.
+- [x] **P12-009:** Delivery receipts.
+- [x] **P12-010:** Read receipts with privacy setting.
+- [x] **P12-011:** Typing indicators as ephemeral state.
+- [x] **P12-012:** Message edits as persistent events.
+- [x] **P12-013:** Message reactions as persistent events.
+- [x] **P12-014:** Delete-for-self.
+- [x] **P12-015:** Delete-for-everyone only if approved by product contract.
+- [x] **P12-016:** Blocking.
 - [ ] **P12-017:** Push notification without plaintext.
-- [ ] **P12-018:** Search over local decrypted history.
-- [ ] **P12-019:** Pagination.
+- [x] **P12-018:** Search over local decrypted history.
+- [x] **P12-019:** Pagination.
 - [ ] **P12-020:** Migration and compatibility tests.
 - [ ] **P12-021:** End-to-end tests across two devices and two networks.
-- [ ] **P12-022:** No Local package imports.
+- [x] **P12-022:** No Local package imports.
+
+### 2026-06-19 Implementation Evidence
+
+Implemented and tested an executable Remote 1:1 messaging MVP slice:
+
+- Remote app shell now has account/device setup controls, device verification toggle, contact entry, direct conversation list, message history, composer, edit/reaction/delete controls, read-receipt toggle, typing state, and generic encrypted-message notification text.
+- `RemoteMessagingService` persists account/device/contact/conversation/message state, queues ciphertext-only outbound operations, handles delivery/read receipts, keeps typing ephemeral, supports local decrypted search and pagination, and avoids Local imports.
+- Remote storage now exposes message lookup and revision persistence for edits/reactions.
+- Remote sync recognizes inbound `message_edited`, `reaction_added`, and `reaction_removed` events and stores encrypted revision payloads.
+- Tests added/updated for Remote app service, widget shell, storage, sync typed dispatch, analyzer, boundaries, secret scan, backend, and package sweeps.
+
+Still not production-complete:
+
+- P12-003 remains partial: username/contact entry exists; QR and invitation flows are not implemented.
+- P12-005 remains constrained by the full DH/skipped-key ratchet blocker. The current slice proves ciphertext-only payload boundaries through an injectable protector, not production-reviewed E2EE.
+- P12-017 proves no plaintext notification body in the app/backend path covered by tests, but real push infrastructure remains outside local evidence.
+- P12-020 remains partial: compatibility/event tests exist, but no dedicated migration test was added for Phase 12 revisions because the revisions table already existed.
+- P12-021 remains incomplete: backend tests cover local loopback devices/WebSocket relay, not two real networks.
 
 ### Exit criteria
 
 - [ ] Persistent 1:1 messaging works across networks and restarts.
 - [ ] The server cannot read message content.
-- [ ] Manual deletion follows documented semantics.
-- [ ] Local remains unaffected.
+- [x] Manual deletion follows documented semantics.
+- [x] Local remains unaffected.
 
 ---
 
-## PHASE 13 — Remote Contacts, Friends, Presence, and Safety
+## PHASE 13 - Remote Contacts, Friends, Presence, and Safety
 
 - [ ] **P13-001:** Contact request lifecycle.
 - [ ] **P13-002:** Accept/reject/cancel.
@@ -99,7 +117,7 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 ---
 
-## PHASE 14 — Remote Attachments, Media, and Files
+## PHASE 14 - Remote Attachments, Media, and Files
 
 - [ ] **P14-001:** Client-side random attachment key.
 - [ ] **P14-002:** Client-side encryption before upload.
@@ -120,7 +138,7 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 ---
 
-## PHASE 15 — Remote Audio and Video Calls
+## PHASE 15 - Remote Audio and Video Calls
 
 - [ ] **P15-001:** Separate Remote call engine from Local LAN call engine.
 - [ ] **P15-002:** Remote signaling through Remote realtime service.
@@ -144,7 +162,7 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 ---
 
-## PHASE 16 — Remote Groups
+## PHASE 16 - Remote Groups
 
 - [ ] **P16-001:** Persistent group identity.
 - [ ] **P16-002:** Persistent membership and roles.
@@ -165,7 +183,7 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 ---
 
-## PHASE 17 — Multi-Device, Backup, and Recovery
+## PHASE 17 - Multi-Device, Backup, and Recovery
 
 - [ ] **P17-001:** Link new device.
 - [ ] **P17-002:** Verify new device out of band.
@@ -186,7 +204,7 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 ---
 
-## PHASE 18 — Privacy, Security, Abuse, and Compliance
+## PHASE 18 - Privacy, Security, Abuse, and Compliance
 
 - [ ] **P18-001:** Publish accurate privacy policy.
 - [ ] **P18-002:** Publish metadata inventory.
@@ -216,7 +234,7 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 ---
 
-## PHASE 19 — Operability, Reliability, Scaling, and Disaster Recovery
+## PHASE 19 - Operability, Reliability, Scaling, and Disaster Recovery
 
 - [ ] **P19-001:** Service-level indicators.
 - [ ] **P19-002:** Service-level objectives.
@@ -243,7 +261,7 @@ Use plain ASCII punctuation when adding generated instructions to this file: `-`
 
 ---
 
-## PHASE 20 — Independent Release Pipelines and Long-Term Governance
+## PHASE 20 - Independent Release Pipelines and Long-Term Governance
 
 ## 20.1 Local Pipeline
 
@@ -354,62 +372,62 @@ The following tests are mandatory before Remote feature development.
 
 # 9. Risk Register
 
-## R-001 — Remote accidentally reuses Local persistence model
+## R-001 - Remote accidentally reuses Local persistence model
 
 **Impact:** Severe future rewrite.  
 **Control:** Separate Remote domain/storage packages and schema before messaging implementation.
 
-## R-002 — Local wipe deletes Remote data
+## R-002 - Local wipe deletes Remote data
 
 **Impact:** Catastrophic user-data loss.  
 **Control:** Unique app IDs, scoped descriptors, path guard, separate secure storage, isolation E2E tests.
 
-## R-003 — Shared packages become a hidden monolith
+## R-003 - Shared packages become a hidden monolith
 
 **Impact:** Both products become coupled and difficult to evolve.  
 **Control:** Shared eligibility rules, no product imports, no infrastructure in shared.
 
-## R-004 — Current Local database contradicts ephemeral promise
+## R-004 - Current Local database contradicts ephemeral promise
 
 **Impact:** Privacy failure.  
 **Control:** Phase 6 migration to RAM-only content and forensic-oriented wipe tests.
 
-## R-005 — Custom cryptography used for Remote
+## R-005 - Custom cryptography used for Remote
 
 **Impact:** Critical confidentiality failure.  
 **Control:** Phase 9 security gate and independent review.
 
-## R-006 — Multi-device added too late
+## R-006 - Multi-device added too late
 
 **Impact:** Schema/protocol rewrite.  
 **Control:** Account/device IDs, per-device keys, sync cursors, tombstones, and event model from foundation.
 
-## R-007 — Remote backend over-engineered into microservices
+## R-007 - Remote backend over-engineered into microservices
 
 **Impact:** Solo-maintainer operational failure.  
 **Control:** Modular monolith + transactional outbox; split only with evidence.
 
-## R-008 — Remote backend under-engineered as simple CRUD
+## R-008 - Remote backend under-engineered as simple CRUD
 
 **Impact:** Duplicate messages, loss, ordering bugs, deletion inconsistency.  
 **Control:** Idempotency, server sequences, operation queue, cursors, transactional event application.
 
-## R-009 — Marketing exceeds implementation
+## R-009 - Marketing exceeds implementation
 
 **Impact:** Trust, legal, and security damage.  
 **Control:** Claim matrix and release gate.
 
-## R-010 — External files assumed erasable
+## R-010 - External files assumed erasable
 
 **Impact:** False panic-wipe promise.  
 **Control:** App-private temporary storage and explicit export warning.
 
-## R-011 — Debug release signing ships
+## R-011 - Debug release signing ships
 
 **Impact:** Supply-chain and update risk.  
 **Control:** CI signing gate.
 
-## R-012 — AI agents make broad unreviewed changes
+## R-012 - AI agents make broad unreviewed changes
 
 **Impact:** Architecture drift.  
 **Control:** Phase checkboxes, small slices, evidence, boundary tests, ADR requirements.

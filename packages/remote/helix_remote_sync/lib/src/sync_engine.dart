@@ -176,6 +176,11 @@ abstract class _InboundSyncEvent {
       case 'message_deleted':
       case 'message_tombstoned':
         return const _MessageDeletedEvent();
+      case 'message_edited':
+        return const _MessageEditedEvent();
+      case 'reaction_added':
+      case 'reaction_removed':
+        return const _ReactionEvent();
       case 'read_receipt':
         return const _ReceiptEvent('READ');
       case 'delivery_receipt':
@@ -184,6 +189,8 @@ abstract class _InboundSyncEvent {
         return const _MembershipChangedEvent();
       case 'conversation_created':
         return const _ConversationCreatedEvent();
+      case 'typing':
+        return const _TypingEvent();
       case 'sync_marker':
         return const _SyncMarkerEvent();
       default:
@@ -253,6 +260,52 @@ class _MessageDeletedEvent extends _InboundSyncEvent {
     final messageId = _InboundSyncEvent.requireString(env, 'message_id');
     db.saveTombstone(messageId, 'MESSAGE');
     db.deleteMessage(messageId);
+    return true;
+  }
+}
+
+class _MessageEditedEvent extends _InboundSyncEvent {
+  const _MessageEditedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final messageId = _InboundSyncEvent.requireString(env, 'message_id');
+    db.saveMessageRevision(
+      revisionId: env.eventId,
+      messageId: messageId,
+      type: 'EDIT',
+      authorId:
+          env.payload['author_id'] as String? ??
+          env.payload['sender_account_id'] as String? ??
+          'unknown',
+      payload: jsonEncode({
+        'ciphertext': _InboundSyncEvent.requireString(env, 'ciphertext'),
+      }),
+      timestamp: env.payload['timestamp'] as int? ?? env.timestamp,
+    );
+    return true;
+  }
+}
+
+class _ReactionEvent extends _InboundSyncEvent {
+  const _ReactionEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final messageId = _InboundSyncEvent.requireString(env, 'message_id');
+    db.saveMessageRevision(
+      revisionId: env.eventId,
+      messageId: messageId,
+      type: env.type == 'reaction_removed' ? 'REACTION_REMOVED' : 'REACTION',
+      authorId:
+          env.payload['author_id'] as String? ??
+          env.payload['account_id'] as String? ??
+          'unknown',
+      payload: jsonEncode({
+        'reaction': _InboundSyncEvent.requireString(env, 'reaction'),
+      }),
+      timestamp: env.payload['timestamp'] as int? ?? env.timestamp,
+    );
     return true;
   }
 }
@@ -328,6 +381,13 @@ class _ConversationCreatedEvent extends _InboundSyncEvent {
     );
     return true;
   }
+}
+
+class _TypingEvent extends _InboundSyncEvent {
+  const _TypingEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) => false;
 }
 
 class _SyncMarkerEvent extends _InboundSyncEvent {

@@ -34,7 +34,7 @@ class MockSyncGateway implements SyncGateway {
   }
 }
 
-/// A gateway whose fetch always throws — used to prove batch rollback.
+/// A gateway whose fetch always throws. Used to prove batch rollback.
 class _FailingFetchGateway implements SyncGateway {
   @override
   Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
@@ -327,8 +327,48 @@ void main() {
           },
         ),
         RemoteRealtimeEnvelope(
-          eventId: 'event_membership_removed',
+          eventId: 'event_message_created_for_revision',
           serverSequence: 6,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'chat_message',
+          payload: {
+            'message_id': 'msg_typed_2',
+            'conversation_id': 'conv_typed',
+            'sender_account_id': 'alice',
+            'sender_device_id': 1,
+            'ciphertext': 'opaque-ciphertext-for-revision',
+          },
+        ),
+        RemoteRealtimeEnvelope(
+          eventId: 'event_message_edited',
+          serverSequence: 7,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'message_edited',
+          payload: {
+            'message_id': 'msg_typed_2',
+            'conversation_id': 'conv_typed',
+            'author_id': 'alice',
+            'ciphertext': 'opaque-edited-ciphertext',
+          },
+        ),
+        RemoteRealtimeEnvelope(
+          eventId: 'event_reaction_added',
+          serverSequence: 8,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'reaction_added',
+          payload: {
+            'message_id': 'msg_typed_2',
+            'conversation_id': 'conv_typed',
+            'author_id': 'bob',
+            'reaction': '+1',
+          },
+        ),
+        RemoteRealtimeEnvelope(
+          eventId: 'event_membership_removed',
+          serverSequence: 9,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'membership_changed',
@@ -340,7 +380,7 @@ void main() {
         ),
         RemoteRealtimeEnvelope(
           eventId: 'event_message_deleted',
-          serverSequence: 7,
+          serverSequence: 10,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'message_deleted',
@@ -351,7 +391,7 @@ void main() {
         ),
         RemoteRealtimeEnvelope(
           eventId: 'event_unknown_full_id_must_not_log',
-          serverSequence: 8,
+          serverSequence: 11,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'future_required_event',
@@ -362,14 +402,25 @@ void main() {
 
       final applied = await engine.syncInbound(gateway);
 
-      expect(applied, equals(7));
+      expect(applied, equals(10));
       expect(
         db.getConversations().map((c) => c.conversationId),
         contains('conv_typed'),
       );
       expect(db.getConversationMembers('conv_typed'), ['alice']);
-      expect(db.getMessages('conv_typed'), isEmpty);
+      final remainingMessages = db.getMessages('conv_typed');
+      expect(remainingMessages.single['message_id'], equals('msg_typed_2'));
       expect(db.isTombstoned('msg_typed_1', 'MESSAGE'), isTrue);
+
+      final revisions = db.getMessageRevisions('msg_typed_2');
+      expect(
+        revisions.map((r) => r['type']),
+        containsAll(['EDIT', 'REACTION']),
+      );
+      expect(
+        revisions.map((r) => r['payload']).join(' '),
+        contains('opaque-edited-ciphertext'),
+      );
 
       final receipts = db.getMessageReceipts('msg_typed_1');
       expect(
@@ -377,7 +428,7 @@ void main() {
         containsAll(['DELIVERY', 'READ']),
       );
 
-      expect(db.getSyncCursor('__remote_global_stream__'), equals(8));
+      expect(db.getSyncCursor('__remote_global_stream__'), equals(11));
       expect(diagnostics.length, equals(1));
       expect(diagnostics.single, contains('future_required_event'));
       expect(
@@ -451,7 +502,7 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // Scenario D (Stage 4a/4c): batch atomicity — a failing batch must not
+  // Scenario D (Stage 4a/4c): batch atomicity. A failing batch must not
   // advance the cursor or persist partial message data.
   // ---------------------------------------------------------------------------
 
@@ -569,7 +620,7 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // Scenario E/F (Stage 4b/4c): outbound queue — idempotency_key and
+  // Scenario E/F (Stage 4b/4c): outbound queue. idempotency_key and
   // next_attempt_at are persisted; backoff is computed from failure time.
   // ---------------------------------------------------------------------------
 
