@@ -120,6 +120,15 @@ $Stats = [ordered]@{
 
 $Warnings = New-Object -TypeName 'System.Collections.Generic.List[string]'
 $VisitedDirectories = New-Object -TypeName 'System.Collections.Generic.HashSet[string]' -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
+$IncludedRelativePaths = New-Object -TypeName 'System.Collections.Generic.HashSet[string]' -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
+
+$ExpectedTopLevelDirectories = @(
+    "services",
+    "contracts",
+    "infra",
+    "deploy",
+    "migrations"
+)
 
 function Test-IsReparsePoint {
     param(
@@ -128,6 +137,39 @@ function Test-IsReparsePoint {
     )
 
     return (($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
+}
+
+function Test-IsInsideOutputDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FullName
+    )
+
+    $Candidate = [System.IO.Path]::GetFullPath($FullName).TrimEnd([char[]]"\/")
+    $OutputBase = $OutputDirectory.TrimEnd([char[]]"\/")
+
+    if ($Candidate.Equals($OutputBase, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+    }
+
+    $OutputPrefix = $OutputBase + [System.IO.Path]::DirectorySeparatorChar
+    return $Candidate.StartsWith($OutputPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Test-IsUnderExcludedDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FullName
+    )
+
+    $RelativePath = [System.IO.Path]::GetFullPath($FullName).Substring($Root.Length).TrimStart([char[]]"\/")
+    $Parts = $RelativePath -split '[\\/]'
+    foreach ($Part in $Parts) {
+        if ($ExcludedDirectoryNames -contains $Part) {
+            return $true
+        }
+    }
+    return $false
 }
 
 function Test-IsSensitiveFileName {
@@ -291,12 +333,46 @@ function Write-ProjectTree {
 
         if ($Item.PSIsContainer) {
             $Stats.IncludedDirectories++
+            [void]$IncludedRelativePaths.Add($Item.FullName.Substring($Root.Length).TrimStart([char[]]"\/").Replace("\", "/"))
             $NextPrefix = if ($IsLast) { "$Prefix    " } else { "$Prefix|   " }
             Write-ProjectTree -Path $Item.FullName -Writer $Writer -Prefix $NextPrefix
         }
         else {
             $Stats.IncludedFiles++
+            [void]$IncludedRelativePaths.Add($Item.FullName.Substring($Root.Length).TrimStart([char[]]"\/").Replace("\", "/"))
         }
+    }
+}
+
+function Assert-ExpectedExportCoverage {
+    $Missing = New-Object -TypeName 'System.Collections.Generic.List[string]'
+
+    foreach ($DirectoryName in $ExpectedTopLevelDirectories) {
+        $DirectoryPath = Join-Path $Root $DirectoryName
+        if ((Test-Path -LiteralPath $DirectoryPath -PathType Container) -and
+            (-not $IncludedRelativePaths.Contains($DirectoryName))) {
+            $Missing.Add("$DirectoryName/")
+        }
+    }
+
+    $Dockerfiles = @(
+        Get-ChildItem -LiteralPath $Root -Recurse -Force -File -Filter "Dockerfile*" |
+        Where-Object {
+            -not (Test-IsInsideOutputDirectory -FullName $_.FullName) -and
+            -not (Test-IsUnderExcludedDirectory -FullName $_.FullName) -and
+            -not (Test-IsSensitiveFileName -Name $_.Name)
+        }
+    )
+
+    foreach ($Dockerfile in $Dockerfiles) {
+        $RelativePath = $Dockerfile.FullName.Substring($Root.Length).TrimStart([char[]]"\/").Replace("\", "/")
+        if (-not $IncludedRelativePaths.Contains($RelativePath)) {
+            $Missing.Add($RelativePath)
+        }
+    }
+
+    if ($Missing.Count -gt 0) {
+        throw "Export self-check failed. Expected project areas were absent from $OutputPath`: $($Missing -join ', ')"
     }
 }
 
@@ -313,6 +389,7 @@ try {
     $Writer.WriteLine("")
 
     Write-ProjectTree -Path $Root -Writer $Writer
+    Assert-ExpectedExportCoverage
 
     $Writer.WriteLine("")
     $Writer.WriteLine("SUMMARY")

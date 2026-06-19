@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:math' as math;
+
+import 'package:helix_remote_api/api/realtime_envelope.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
-import 'package:helix_remote_api/api/realtime_envelope.dart';
 
 abstract class SyncGateway {
   Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
@@ -17,73 +18,71 @@ abstract class SyncGateway {
 }
 
 class RemoteSyncEngine {
-  final HelixRemoteDatabase db;
+  RemoteSyncEngine(this.db, {this.diagnostics});
 
-  RemoteSyncEngine(this.db);
+  final HelixRemoteDatabase db;
+  final void Function(String message)? diagnostics;
+
+  static const String _globalSyncCursorId = '__remote_global_stream__';
 
   /// Synchronises incoming events from the server since the last stored cursor.
   ///
-  /// ATOMICITY (DEFECT-5 fix): the entire batch is wrapped in a single SQLite
-  /// transaction. The cursor is updated only after ALL events are applied.
-  /// A crash or error mid-batch rolls back everything; on the next sync the
-  /// engine re-fetches from the unchanged cursor and replays the same batch.
-  Future<int> syncInbound(SyncGateway gateway, String conversationId) async {
-    final lastSeq = db.getSyncCursor(conversationId);
-
+  /// The inbound stream is account/device scoped. Individual events carry their
+  /// own authoritative entity IDs, such as conversation_id.
+  Future<int> syncInbound(SyncGateway gateway) async {
+    final lastSeq = db.getSyncCursor(_globalSyncCursorId);
     final envelopes = await gateway.fetchInboundEvents(sinceSequence: lastSeq);
 
-    final sortedEnvelopes = List<RemoteRealtimeEnvelope>.from(envelopes)
-      ..sort((a, b) => (a.serverSequence ?? 0).compareTo(b.serverSequence ?? 0));
+    final sortedEnvelopes = List<RemoteRealtimeEnvelope>.from(
+      envelopes,
+    )..sort((a, b) => (a.serverSequence ?? 0).compareTo(b.serverSequence ?? 0));
 
     int appliedCount = 0;
     int highestSeq = lastSeq;
 
-    // Single transaction for the full batch — cursor advances only on COMMIT.
     db.rawExecute('BEGIN TRANSACTION;');
     try {
       for (final env in sortedEnvelopes) {
         final seq = env.serverSequence ?? 0;
-        if (seq <= lastSeq) {
-          continue; // Duplicate sequence — already applied before this batch
+        if (db.hasProcessedEventId(env.eventId)) {
+          continue;
         }
 
-        if (env.type == 'chat_message') {
-          final payload = env.payload;
-          final messageId = env.eventId;
-          final senderAccountId = payload['sender_account_id'] as String? ?? 'unknown';
-          final senderDeviceId = payload['sender_device_id'] as int? ?? 0;
-          final ciphertext = payload['ciphertext'] as String? ?? '';
-
-          if (db.isTombstoned(messageId, 'MESSAGE')) {
-            // Tombstoned events still advance the cursor so they are not re-fetched.
-            highestSeq = seq;
-            continue;
-          }
-
-          final message = RemoteMessage(
-            messageId: messageId,
-            conversationId: conversationId,
-            senderAccountId: senderAccountId,
-            senderDeviceId: senderDeviceId,
-            ciphertext: ciphertext,
+        if (seq <= lastSeq) {
+          throw StateError(
+            'Remote sync sequence regression for unseen event type=${env.type}',
           );
+        }
 
-          db.saveMessage(message, seq, env.timestamp, 'DELIVERED');
+        final event = _InboundSyncEvent.tryParse(env);
+        if (event == null) {
+          _recordUnknownEvent(env);
+          _recordProcessedEvent(env, seq);
+          highestSeq = seq;
+          continue;
+        }
+
+        if (event is _SyncMarkerEvent) {
+          _recordProcessedEvent(env, seq);
           highestSeq = seq;
           appliedCount++;
-        } else if (env.type == 'sync_marker') {
-          highestSeq = seq;
+          continue;
+        }
+
+        final applied = event.apply(db, env);
+        _recordProcessedEvent(env, seq);
+        highestSeq = seq;
+        if (applied) {
           appliedCount++;
         }
       }
 
-      // Update cursor once for the entire batch.
       if (highestSeq > lastSeq) {
-        db.updateSyncCursor(conversationId, highestSeq);
+        db.updateSyncCursor(_globalSyncCursorId, highestSeq);
       }
 
       db.rawExecute('COMMIT;');
-    } catch (e) {
+    } catch (_) {
       db.rawExecute('ROLLBACK;');
       rethrow;
     }
@@ -91,11 +90,40 @@ class RemoteSyncEngine {
     return appliedCount;
   }
 
+  void _recordUnknownEvent(RemoteRealtimeEnvelope env) {
+    diagnostics?.call(
+      'Unknown Remote sync event skipped '
+      'type=${_redactDiagnosticField(env.type)} '
+      'schema=${env.schemaVersion} '
+      'sequence=${env.serverSequence ?? 0}',
+    );
+  }
+
+  String _redactDiagnosticField(String value) {
+    if (value.length <= 32) return value;
+    return '${value.substring(0, 32)}...';
+  }
+
+  void _recordProcessedEvent(RemoteRealtimeEnvelope env, int sequence) {
+    db.saveProcessedEvent(
+      eventId: env.eventId,
+      serverSequence: sequence,
+      eventType: env.type,
+      contentFingerprint: _eventFingerprint(env),
+    );
+  }
+
+  String _eventFingerprint(RemoteRealtimeEnvelope env) {
+    final payloadKeys = env.payload.keys.toList()..sort();
+    return jsonEncode({
+      'type': env.type,
+      'schema_version': env.schemaVersion,
+      'server_sequence': env.serverSequence,
+      'payload_keys': payloadKeys,
+    });
+  }
+
   /// Processes the outbound pending-operations queue with exponential backoff.
-  ///
-  /// DEFECT-6 fix: backoff is computed from [next_attempt_at], which is
-  /// persisted to the database after each failure. A process restart will not
-  /// retry an operation before its scheduled deadline.
   Future<int> processOutboundQueue(SyncGateway gateway) async {
     final pendingOps = db.getPendingOperations();
     int processedCount = 0;
@@ -105,9 +133,6 @@ class RemoteSyncEngine {
       final type = op['type'] as String;
       final payloadStr = op['payload'] as String;
       final retries = op['retries'] as int;
-
-      // getPendingOperations() already filters by next_attempt_at <= now,
-      // so no additional time check is needed here.
 
       try {
         final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
@@ -120,13 +145,12 @@ class RemoteSyncEngine {
 
         db.updateOperationStatus(opId, 'COMPLETED', retries);
         processedCount++;
-      } catch (e) {
+      } catch (_) {
         final nextRetries = retries + 1;
         final nextStatus = nextRetries >= 5 ? 'FAILED' : 'PENDING';
         db.updateOperationStatus(opId, nextStatus, nextRetries);
 
         if (nextRetries < 5) {
-          // Exponential backoff: 2^retries seconds, plus 0–500 ms random jitter.
           final backoffMs = 1000 * (1 << nextRetries);
           final jitterMs = math.Random().nextInt(500);
           final nextAttempt =
@@ -138,4 +162,177 @@ class RemoteSyncEngine {
 
     return processedCount;
   }
+}
+
+abstract class _InboundSyncEvent {
+  const _InboundSyncEvent();
+
+  static _InboundSyncEvent? tryParse(RemoteRealtimeEnvelope env) {
+    if (env.isUnrecognized) return null;
+
+    switch (env.type) {
+      case 'chat_message':
+        return const _MessageCreatedEvent();
+      case 'message_deleted':
+      case 'message_tombstoned':
+        return const _MessageDeletedEvent();
+      case 'read_receipt':
+        return const _ReceiptEvent('READ');
+      case 'delivery_receipt':
+        return const _ReceiptEvent('DELIVERY');
+      case 'membership_changed':
+        return const _MembershipChangedEvent();
+      case 'conversation_created':
+        return const _ConversationCreatedEvent();
+      case 'sync_marker':
+        return const _SyncMarkerEvent();
+      default:
+        return null;
+    }
+  }
+
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env);
+
+  static String requireString(
+    RemoteRealtimeEnvelope env,
+    String key, {
+    String? eventType,
+  }) {
+    final value = env.payload[key];
+    if (value is String && value.isNotEmpty) return value;
+    throw FormatException(
+      '${eventType ?? env.type} event is missing authoritative $key',
+    );
+  }
+
+  static int? optionalInt(RemoteRealtimeEnvelope env, String key) {
+    final value = env.payload[key];
+    return value is int ? value : null;
+  }
+}
+
+class _MessageCreatedEvent extends _InboundSyncEvent {
+  const _MessageCreatedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final messageId = env.payload['message_id'] as String? ?? env.eventId;
+    final conversationId = _InboundSyncEvent.requireString(
+      env,
+      'conversation_id',
+      eventType: 'chat_message',
+    );
+
+    if (db.isTombstoned(messageId, 'MESSAGE')) {
+      return false;
+    }
+
+    final message = RemoteMessage(
+      messageId: messageId,
+      conversationId: conversationId,
+      senderAccountId: env.payload['sender_account_id'] as String? ?? 'unknown',
+      senderDeviceId: env.payload['sender_device_id'] as int? ?? 0,
+      ciphertext: env.payload['ciphertext'] as String? ?? '',
+    );
+
+    db.saveMessage(
+      message,
+      env.serverSequence ?? 0,
+      env.timestamp,
+      'DELIVERED',
+    );
+    return true;
+  }
+}
+
+class _MessageDeletedEvent extends _InboundSyncEvent {
+  const _MessageDeletedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final messageId = _InboundSyncEvent.requireString(env, 'message_id');
+    db.saveTombstone(messageId, 'MESSAGE');
+    db.deleteMessage(messageId);
+    return true;
+  }
+}
+
+class _ReceiptEvent extends _InboundSyncEvent {
+  const _ReceiptEvent(this.receiptType);
+
+  final String receiptType;
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    db.saveMessageReceipt(
+      receiptId: env.eventId,
+      messageId: _InboundSyncEvent.requireString(env, 'message_id'),
+      conversationId: _InboundSyncEvent.requireString(env, 'conversation_id'),
+      accountId: _InboundSyncEvent.requireString(env, 'account_id'),
+      deviceId: _InboundSyncEvent.optionalInt(env, 'device_id'),
+      receiptType: receiptType,
+      timestamp: env.payload['timestamp'] as int? ?? env.timestamp,
+    );
+    return true;
+  }
+}
+
+class _MembershipChangedEvent extends _InboundSyncEvent {
+  const _MembershipChangedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final conversationId = _InboundSyncEvent.requireString(
+      env,
+      'conversation_id',
+    );
+    final accountId = _InboundSyncEvent.requireString(env, 'account_id');
+    final action = env.payload['action'] as String? ?? 'added';
+
+    if (action == 'removed') {
+      db.removeConversationMember(conversationId, accountId);
+      return true;
+    }
+
+    db.upsertConversationMember(
+      conversationId,
+      accountId,
+      role: env.payload['role'] as String? ?? 'MEMBER',
+    );
+    return true;
+  }
+}
+
+class _ConversationCreatedEvent extends _InboundSyncEvent {
+  const _ConversationCreatedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final conversationId = _InboundSyncEvent.requireString(
+      env,
+      'conversation_id',
+    );
+    final members = env.payload['member_ids'];
+
+    db.upsertConversation(
+      RemoteConversation(
+        conversationId: conversationId,
+        title: env.payload['title'] as String? ?? '',
+        type: env.payload['conversation_type'] as String? ?? 'DIRECT',
+        lastActivitySequence: env.serverSequence ?? 0,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          env.payload['created_at'] as int? ?? env.timestamp,
+        ),
+      ),
+      members is List ? members.whereType<String>().toList() : const [],
+    );
+    return true;
+  }
+}
+
+class _SyncMarkerEvent extends _InboundSyncEvent {
+  const _SyncMarkerEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) => true;
 }

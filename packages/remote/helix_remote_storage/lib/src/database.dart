@@ -105,6 +105,18 @@ class HelixRemoteDatabase {
     ''');
 
     _db.execute('''
+      CREATE TABLE IF NOT EXISTS message_receipts (
+        receipt_id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        device_id INTEGER,
+        receipt_type TEXT NOT NULL,
+        timestamp INTEGER NOT NULL
+      );
+    ''');
+
+    _db.execute('''
       CREATE INDEX IF NOT EXISTS idx_messages_conv_seq
       ON messages(conversation_id, server_sequence ASC);
     ''');
@@ -155,8 +167,17 @@ class HelixRemoteDatabase {
     _db.execute('''
       CREATE TABLE IF NOT EXISTS sync_cursors (
         conversation_id TEXT PRIMARY KEY,
-        last_sequence INTEGER NOT NULL,
-        FOREIGN KEY (conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
+        last_sequence INTEGER NOT NULL
+      );
+    ''');
+
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS processed_event_ids (
+        event_id TEXT PRIMARY KEY,
+        server_sequence INTEGER NOT NULL UNIQUE,
+        event_type TEXT NOT NULL,
+        content_fingerprint TEXT NOT NULL,
+        processed_at INTEGER NOT NULL
       );
     ''');
 
@@ -193,7 +214,9 @@ class HelixRemoteDatabase {
       // On fresh databases the new column name is created by _onCreate above;
       // this branch only runs on pre-existing v0 DBs that have 'text'.
       try {
-        _db.execute('ALTER TABLE messages RENAME COLUMN text TO ciphertext_blob;');
+        _db.execute(
+          'ALTER TABLE messages RENAME COLUMN text TO ciphertext_blob;',
+        );
       } catch (_) {
         // Column may already be renamed or may not exist yet; safe to ignore.
       }
@@ -212,6 +235,18 @@ class HelixRemoteDatabase {
         );
       } catch (_) {}
       _db.execute('PRAGMA user_version = 2;');
+    }
+    if (version < 3) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS processed_event_ids (
+          event_id TEXT PRIMARY KEY,
+          server_sequence INTEGER NOT NULL UNIQUE,
+          event_type TEXT NOT NULL,
+          content_fingerprint TEXT NOT NULL,
+          processed_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 3;');
     }
   }
 
@@ -298,13 +333,19 @@ class HelixRemoteDatabase {
     final stmt = _db.prepare('SELECT * FROM devices WHERE account_id = ?;');
     final res = stmt.select([accountId]);
     stmt.close();
-    return res.map((row) => RemoteDevice(
-      deviceId: row['device_id'] as int,
-      deviceName: row['device_name'] as String,
-      devicePublicKey: row['device_public_key'] as String,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
-      status: row['status'] as String,
-    )).toList();
+    return res
+        .map(
+          (row) => RemoteDevice(
+            deviceId: row['device_id'] as int,
+            deviceName: row['device_name'] as String,
+            devicePublicKey: row['device_public_key'] as String,
+            createdAt: DateTime.fromMillisecondsSinceEpoch(
+              row['created_at'] as int,
+            ),
+            status: row['status'] as String,
+          ),
+        )
+        .toList();
   }
 
   // ---------------------------------------------------------------------------
@@ -316,11 +357,7 @@ class HelixRemoteDatabase {
       INSERT OR REPLACE INTO contacts (peer_account_id, nickname, status)
       VALUES (?, ?, ?);
     ''');
-    stmt.execute([
-      contact.peerAccountId,
-      contact.nickname,
-      contact.status,
-    ]);
+    stmt.execute([contact.peerAccountId, contact.nickname, contact.status]);
     stmt.close();
   }
 
@@ -328,19 +365,26 @@ class HelixRemoteDatabase {
     final stmt = _db.prepare('SELECT * FROM contacts;');
     final res = stmt.select();
     stmt.close();
-    return res.map((row) => RemoteContact(
-      peerAccountId: row['peer_account_id'] as String,
-      nickname: row['nickname'] as String,
-      status: row['status'] as String,
-    )).toList();
+    return res
+        .map(
+          (row) => RemoteContact(
+            peerAccountId: row['peer_account_id'] as String,
+            nickname: row['nickname'] as String,
+            status: row['status'] as String,
+          ),
+        )
+        .toList();
   }
 
   // ---------------------------------------------------------------------------
   // Conversation operations
   // ---------------------------------------------------------------------------
 
-  void upsertConversation(RemoteConversation conversation, List<String> memberIds) {
-    _db.execute('BEGIN TRANSACTION;');
+  void upsertConversation(
+    RemoteConversation conversation,
+    List<String> memberIds,
+  ) {
+    _db.execute('SAVEPOINT upsert_conversation;');
     try {
       final stmt = _db.prepare('''
         INSERT INTO conversations (conversation_id, title, type, last_sequence, created_at)
@@ -359,7 +403,9 @@ class HelixRemoteDatabase {
       ]);
       stmt.close();
 
-      final clearStmt = _db.prepare('DELETE FROM members WHERE conversation_id = ?;');
+      final clearStmt = _db.prepare(
+        'DELETE FROM members WHERE conversation_id = ?;',
+      );
       clearStmt.execute([conversation.conversationId]);
       clearStmt.close();
 
@@ -372,9 +418,10 @@ class HelixRemoteDatabase {
       }
       memStmt.close();
 
-      _db.execute('COMMIT;');
+      _db.execute('RELEASE SAVEPOINT upsert_conversation;');
     } catch (_) {
-      _db.execute('ROLLBACK;');
+      _db.execute('ROLLBACK TO SAVEPOINT upsert_conversation;');
+      _db.execute('RELEASE SAVEPOINT upsert_conversation;');
       rethrow;
     }
   }
@@ -383,27 +430,63 @@ class HelixRemoteDatabase {
     final stmt = _db.prepare('SELECT * FROM conversations;');
     final res = stmt.select();
     stmt.close();
-    return res.map((row) => RemoteConversation(
-      conversationId: row['conversation_id'] as String,
-      title: row['title'] as String? ?? '',
-      type: row['type'] as String,
-      lastActivitySequence: row['last_sequence'] as int,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
-    )).toList();
+    return res
+        .map(
+          (row) => RemoteConversation(
+            conversationId: row['conversation_id'] as String,
+            title: row['title'] as String? ?? '',
+            type: row['type'] as String,
+            lastActivitySequence: row['last_sequence'] as int,
+            createdAt: DateTime.fromMillisecondsSinceEpoch(
+              row['created_at'] as int,
+            ),
+          ),
+        )
+        .toList();
   }
 
   List<String> getConversationMembers(String conversationId) {
-    final stmt = _db.prepare('SELECT account_id FROM members WHERE conversation_id = ?;');
+    final stmt = _db.prepare(
+      'SELECT account_id FROM members WHERE conversation_id = ?;',
+    );
     final res = stmt.select([conversationId]);
     stmt.close();
     return res.map((row) => row['account_id'] as String).toList();
+  }
+
+  void upsertConversationMember(
+    String conversationId,
+    String accountId, {
+    String role = 'MEMBER',
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO members (conversation_id, account_id, role)
+      VALUES (?, ?, ?)
+      ON CONFLICT(conversation_id, account_id) DO UPDATE SET
+        role = excluded.role;
+    ''');
+    stmt.execute([conversationId, accountId, role]);
+    stmt.close();
+  }
+
+  void removeConversationMember(String conversationId, String accountId) {
+    final stmt = _db.prepare(
+      'DELETE FROM members WHERE conversation_id = ? AND account_id = ?;',
+    );
+    stmt.execute([conversationId, accountId]);
+    stmt.close();
   }
 
   // ---------------------------------------------------------------------------
   // Message operations
   // ---------------------------------------------------------------------------
 
-  void saveMessage(RemoteMessage message, int sequence, int timestamp, String status) {
+  void saveMessage(
+    RemoteMessage message,
+    int sequence,
+    int timestamp,
+    String status,
+  ) {
     final stmt = _db.prepare('''
       INSERT OR REPLACE INTO messages (message_id, conversation_id, sender_account_id, sender_device_id, ciphertext_blob, server_sequence, timestamp, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?);
@@ -421,7 +504,11 @@ class HelixRemoteDatabase {
     stmt.close();
   }
 
-  List<Map<String, dynamic>> getMessages(String conversationId, {int limit = 50, int offset = 0}) {
+  List<Map<String, dynamic>> getMessages(
+    String conversationId, {
+    int limit = 50,
+    int offset = 0,
+  }) {
     final stmt = _db.prepare('''
       SELECT * FROM messages
       WHERE conversation_id = ?
@@ -430,16 +517,80 @@ class HelixRemoteDatabase {
     ''');
     final res = stmt.select([conversationId, limit, offset]);
     stmt.close();
-    return res.map((row) => {
-      'message_id': row['message_id'],
-      'conversation_id': row['conversation_id'],
-      'sender_account_id': row['sender_account_id'],
-      'sender_device_id': row['sender_device_id'],
-      'ciphertext_blob': row['ciphertext_blob'],
-      'server_sequence': row['server_sequence'],
-      'timestamp': row['timestamp'],
-      'status': row['status'],
-    }).toList();
+    return res
+        .map(
+          (row) => {
+            'message_id': row['message_id'],
+            'conversation_id': row['conversation_id'],
+            'sender_account_id': row['sender_account_id'],
+            'sender_device_id': row['sender_device_id'],
+            'ciphertext_blob': row['ciphertext_blob'],
+            'server_sequence': row['server_sequence'],
+            'timestamp': row['timestamp'],
+            'status': row['status'],
+          },
+        )
+        .toList();
+  }
+
+  void deleteMessage(String messageId) {
+    final stmt = _db.prepare('DELETE FROM messages WHERE message_id = ?;');
+    stmt.execute([messageId]);
+    stmt.close();
+  }
+
+  void saveMessageReceipt({
+    required String receiptId,
+    required String messageId,
+    required String conversationId,
+    required String accountId,
+    required String receiptType,
+    required int timestamp,
+    int? deviceId,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO message_receipts (
+        receipt_id,
+        message_id,
+        conversation_id,
+        account_id,
+        device_id,
+        receipt_type,
+        timestamp
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      receiptId,
+      messageId,
+      conversationId,
+      accountId,
+      deviceId,
+      receiptType,
+      timestamp,
+    ]);
+    stmt.close();
+  }
+
+  List<Map<String, dynamic>> getMessageReceipts(String messageId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM message_receipts WHERE message_id = ? ORDER BY timestamp ASC;',
+    );
+    final res = stmt.select([messageId]);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'receipt_id': row['receipt_id'],
+            'message_id': row['message_id'],
+            'conversation_id': row['conversation_id'],
+            'account_id': row['account_id'],
+            'device_id': row['device_id'],
+            'receipt_type': row['receipt_type'],
+            'timestamp': row['timestamp'],
+          },
+        )
+        .toList();
   }
 
   // ---------------------------------------------------------------------------
@@ -456,11 +607,48 @@ class HelixRemoteDatabase {
   }
 
   int getSyncCursor(String conversationId) {
-    final stmt = _db.prepare('SELECT last_sequence FROM sync_cursors WHERE conversation_id = ?;');
+    final stmt = _db.prepare(
+      'SELECT last_sequence FROM sync_cursors WHERE conversation_id = ?;',
+    );
     final res = stmt.select([conversationId]);
     stmt.close();
     if (res.isEmpty) return 0;
     return res.first['last_sequence'] as int;
+  }
+
+  bool hasProcessedEventId(String eventId) {
+    final stmt = _db.prepare(
+      'SELECT 1 FROM processed_event_ids WHERE event_id = ?;',
+    );
+    final res = stmt.select([eventId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
+  void saveProcessedEvent({
+    required String eventId,
+    required int serverSequence,
+    required String eventType,
+    required String contentFingerprint,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO processed_event_ids (
+        event_id,
+        server_sequence,
+        event_type,
+        content_fingerprint,
+        processed_at
+      )
+      VALUES (?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      eventId,
+      serverSequence,
+      eventType,
+      contentFingerprint,
+      DateTime.now().millisecondsSinceEpoch,
+    ]);
+    stmt.close();
   }
 
   // ---------------------------------------------------------------------------
@@ -469,7 +657,12 @@ class HelixRemoteDatabase {
 
   /// Enqueue an outbound operation. [idempotencyKey] is a stable server-visible
   /// ID that prevents duplicate delivery if the same operation is retried.
-  void enqueueOperation(String opId, String type, String payload, {String idempotencyKey = ''}) {
+  void enqueueOperation(
+    String opId,
+    String type,
+    String payload, {
+    String idempotencyKey = '',
+  }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
       INSERT INTO pending_operations (op_id, idempotency_key, type, payload, status, retries, created_at, next_attempt_at)
@@ -491,16 +684,20 @@ class HelixRemoteDatabase {
     ''');
     final res = stmt.select([now]);
     stmt.close();
-    return res.map((row) => {
-      'op_id': row['op_id'],
-      'idempotency_key': row['idempotency_key'],
-      'type': row['type'],
-      'payload': row['payload'],
-      'status': row['status'],
-      'retries': row['retries'],
-      'created_at': row['created_at'],
-      'next_attempt_at': row['next_attempt_at'],
-    }).toList();
+    return res
+        .map(
+          (row) => {
+            'op_id': row['op_id'],
+            'idempotency_key': row['idempotency_key'],
+            'type': row['type'],
+            'payload': row['payload'],
+            'status': row['status'],
+            'retries': row['retries'],
+            'created_at': row['created_at'],
+            'next_attempt_at': row['next_attempt_at'],
+          },
+        )
+        .toList();
   }
 
   /// Returns the raw state of a single pending operation, or null if not found.
@@ -558,7 +755,9 @@ class HelixRemoteDatabase {
   }
 
   bool isTombstoned(String itemId, String type) {
-    final stmt = _db.prepare('SELECT 1 FROM tombstones WHERE item_id = ? AND type = ?;');
+    final stmt = _db.prepare(
+      'SELECT 1 FROM tombstones WHERE item_id = ? AND type = ?;',
+    );
     final res = stmt.select([itemId, type]);
     stmt.close();
     return res.isNotEmpty;

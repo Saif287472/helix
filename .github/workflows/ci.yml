@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  architecture-and-secrets:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Format check
+        shell: pwsh
+        run: dart format --output=none --set-exit-if-changed apps packages tool
+      - name: Analyzer
+        shell: pwsh
+        run: flutter analyze --no-pub
+      - name: Architecture boundaries
+        shell: pwsh
+        run: dart run tool/check_boundaries.dart
+      - name: Boundary tests and dependency cycles
+        shell: pwsh
+        run: dart test tool/boundary_test.dart
+      - name: Dependency graph
+        shell: pwsh
+        run: dart run tool/dep_graph.dart
+      - name: Secret scan
+        shell: pwsh
+        run: dart run tool/check_secrets.dart
+      - name: Release hardening
+        shell: pwsh
+        run: dart run tool/check_release_hardening.dart
+      - name: SBOM/license inventory
+        shell: pwsh
+        run: dart run tool/generate_local_sbom.dart --check-only
+      - name: Remote API compatibility
+        shell: pwsh
+        working-directory: packages/remote/helix_remote_api
+        run: dart test
+
+  local-flutter:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Helix Local app tests
+        shell: pwsh
+        working-directory: apps/helix_local
+        run: flutter test --no-pub
+
+  remote-flutter:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Helix Remote app tests
+        shell: pwsh
+        working-directory: apps/helix_remote
+        run: flutter test --no-pub
+
+  remote-crypto:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Remote crypto tests
+        shell: pwsh
+        working-directory: packages/remote/helix_remote_crypto
+        run: flutter test --no-pub
+
+  remote-storage:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Remote storage tests
+        shell: pwsh
+        working-directory: packages/remote/helix_remote_storage
+        run: flutter test --no-pub
+
+  remote-sync:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Remote sync tests
+        shell: pwsh
+        working-directory: packages/remote/helix_remote_sync
+        run: flutter test --no-pub
+
+  remote-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - name: Backend tests
+        working-directory: services/helix_remote_backend
+        run: dart test

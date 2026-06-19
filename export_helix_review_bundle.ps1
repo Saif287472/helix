@@ -73,6 +73,8 @@ $IncludedTopDirectories = @(
     "services",
     "contracts",
     "infra",
+    "deploy",
+    "migrations",
     "assets"
 )
 
@@ -267,7 +269,11 @@ function Get-ExportKey([string]$RelativePath) {
         return "localPackages"
     }
 
-    if (($Path -like "services/*") -or ($Path -like "contracts/*") -or ($Path -like "infra/*")) {
+    if (($Path -like "services/*") -or
+        ($Path -like "contracts/*") -or
+        ($Path -like "infra/*") -or
+        ($Path -like "deploy/*") -or
+        ($Path -like "migrations/*")) {
         return "remoteBackend"
     }
 

@@ -269,4 +269,5 @@ Items repaired in this pass are recorded here as they are completed.
 
 | Item | Status | Commit |
 |---|---|---|
+| Scenario B current symmetric-chain coverage | PARTIALLY IMPLEMENTED / BLOCKED | Current tests prove early out-of-order ciphertext and replay are rejected without corrupting state. Successful 3->1->2 skipped-key decryption remains BLOCKED until a reviewed DH/skipped-key ratchet is selected. |
 | (closure pass in progress) | — | — |

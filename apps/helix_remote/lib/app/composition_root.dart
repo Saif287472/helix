@@ -55,11 +55,13 @@ enum RemoteStartupState {
 /// ISOLATION: This root creates and owns all Remote-specific infrastructure.
 /// It never touches Local databases, key stores, or lifecycle objects.
 class RemoteCompositionRoot {
-  RemoteCompositionRoot._({required this.config});
+  RemoteCompositionRoot._({required this.config, this._dbKeyLoader});
 
   /// Creates the production Remote root and validates required configuration.
   /// Throws [StateError] if any required config field is empty.
-  factory RemoteCompositionRoot.production({required String databaseDirectory}) {
+  factory RemoteCompositionRoot.production({
+    required String databaseDirectory,
+  }) {
     final config = RemoteProductConfig(
       displayName: 'Helix Remote',
       packageId: 'com.helix.remote',
@@ -74,13 +76,20 @@ class RemoteCompositionRoot {
   }
 
   /// Test/override constructor — accepts an explicit config.
-  factory RemoteCompositionRoot.withConfig(RemoteProductConfig config) {
-    final root = RemoteCompositionRoot._(config: config);
+  factory RemoteCompositionRoot.withConfig(
+    RemoteProductConfig config, {
+    Future<String?> Function()? dbKeyLoader,
+  }) {
+    final root = RemoteCompositionRoot._(
+      config: config,
+      dbKeyLoader: dbKeyLoader,
+    );
     root._validate();
     return root;
   }
 
   final RemoteProductConfig config;
+  final Future<String?> Function()? _dbKeyLoader;
 
   RemoteStartupState _state = RemoteStartupState.idle;
   RemoteStartupState get startupState => _state;
@@ -94,7 +103,8 @@ class RemoteCompositionRoot {
   // Service accessors — fail closed if called before ready.
   // ---------------------------------------------------------------------------
 
-  RemoteSecureKeyStorage get keyStorage => _requireReady(_keyStorage, 'keyStorage');
+  RemoteSecureKeyStorage get keyStorage =>
+      _requireReady(_keyStorage, 'keyStorage');
   HelixRemoteDatabase get database => _requireReady(_database, 'database');
   RemoteSyncEngine get syncEngine => _requireReady(_syncEngine, 'syncEngine');
 
@@ -116,7 +126,7 @@ class RemoteCompositionRoot {
   ///
   /// Steps:
   ///   1. Validate config (synchronous, done at construction)
-  ///   2. Load or create the database encryption key from secure storage
+  ///   2. Load the existing database encryption key from secure storage
   ///   3. Open the Remote-only database file
   ///   4. Run schema migrations
   ///
@@ -141,7 +151,7 @@ class RemoteCompositionRoot {
       _state = RemoteStartupState.loadingDbKey;
       const keyStorageAdapter = RemoteSecureKeyStorage();
       _keyStorage = keyStorageAdapter;
-      final dbKey = await _loadOrCreateDbKey(keyStorageAdapter);
+      final dbKey = await _loadRequiredDbKey(keyStorageAdapter);
 
       // Step 3+4 — open and migrate the database.
       // NOTE (DEFECT-4 / BLOCKED): the password passed here activates a
@@ -163,23 +173,19 @@ class RemoteCompositionRoot {
     }
   }
 
-  /// Derives or retrieves the database encryption key from secure storage.
-  Future<String> _loadOrCreateDbKey(RemoteSecureKeyStorage storage) async {
+  /// Retrieves the database encryption key from secure storage.
+  ///
+  /// Startup fails closed when the key is absent. Do not silently create a
+  /// plaintext fallback database or invent a replacement key here.
+  Future<String> _loadRequiredDbKey(RemoteSecureKeyStorage storage) async {
     const keyName = 'db_key';
-    final existing = await storage.readKey(keyName);
+    final existing = _dbKeyLoader == null
+        ? await storage.readKey(keyName)
+        : await _dbKeyLoader();
     if (existing != null && existing.isNotEmpty) {
       return existing;
     }
-    // Generate a 32-byte random key, hex-encoded.
-    final bytes = List.generate(32, (_) {
-      // Use DateTime.now().microsecond as a cheap seed component.
-      // NOTE: this is NOT cryptographically secure. Replace with
-      // dart:math Random.secure() bytes once the secure random API is verified.
-      return DateTime.now().microsecond ^ DateTime.now().millisecond;
-    });
-    final key = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    await storage.writeKey(keyName, key);
-    return key;
+    throw StateError('Remote database key is unavailable');
   }
 
   // ---------------------------------------------------------------------------
@@ -210,9 +216,7 @@ class RemoteCompositionRoot {
       );
     }
     if (config.logNamespace.isEmpty) {
-      throw StateError(
-        'RemoteProductConfig.logNamespace must not be empty',
-      );
+      throw StateError('RemoteProductConfig.logNamespace must not be empty');
     }
     if (config.databaseDirectory.isEmpty) {
       throw StateError(

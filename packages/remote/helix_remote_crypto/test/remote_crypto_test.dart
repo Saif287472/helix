@@ -5,12 +5,15 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 
 // Shared helper: build a valid Ed25519-signed prekey bundle.
-Future<({
-  crypto.SimpleKeyPair bobIdentityKey,
-  crypto.SimpleKeyPair bobSignedPrekeyKp,
-  crypto.SimplePublicKey bobSigningPublic,
-  Uint8List signature,
-})> _buildBobBundle() async {
+Future<
+  ({
+    crypto.SimpleKeyPair bobIdentityKey,
+    crypto.SimpleKeyPair bobSignedPrekeyKp,
+    crypto.SimplePublicKey bobSigningPublic,
+    Uint8List signature,
+  })
+>
+_buildBobBundle() async {
   final x25519 = crypto.X25519();
   final ed25519 = crypto.Ed25519();
 
@@ -42,93 +45,111 @@ void main() {
   // ---------------------------------------------------------------------------
 
   group('X3DH Key Agreement — signed prekey verification (P9-003)', () {
-    test('Alice and Bob derive the same master secret when signature is valid', () async {
-      final aliceIdentityKey = await x25519.newKeyPair();
-      final aliceEphemeralKey = await x25519.newKeyPair();
-      final bobOneTimePrekeyKp = await x25519.newKeyPair();
+    test(
+      'Alice and Bob derive the same master secret when signature is valid',
+      () async {
+        final aliceIdentityKey = await x25519.newKeyPair();
+        final aliceEphemeralKey = await x25519.newKeyPair();
+        final bobOneTimePrekeyKp = await x25519.newKeyPair();
 
-      final bundle = await _buildBobBundle();
+        final bundle = await _buildBobBundle();
 
-      final bobIdentityPublicKey = await bundle.bobIdentityKey.extractPublicKey();
-      final bobSignedPrekeyPublic = await bundle.bobSignedPrekeyKp.extractPublicKey();
-      final bobOneTimePrekeyPublic = await bobOneTimePrekeyKp.extractPublicKey();
-      final aliceIdentityPublicKey = await aliceIdentityKey.extractPublicKey();
-      final aliceEphemeralPublicKey = await aliceEphemeralKey.extractPublicKey();
+        final bobIdentityPublicKey = await bundle.bobIdentityKey
+            .extractPublicKey();
+        final bobSignedPrekeyPublic = await bundle.bobSignedPrekeyKp
+            .extractPublicKey();
+        final bobOneTimePrekeyPublic = await bobOneTimePrekeyKp
+            .extractPublicKey();
+        final aliceIdentityPublicKey = await aliceIdentityKey
+            .extractPublicKey();
+        final aliceEphemeralPublicKey = await aliceEphemeralKey
+            .extractPublicKey();
 
-      final aliceSecret = await initiator.initiateSession(
-        aliceIdentityKey: aliceIdentityKey,
-        aliceEphemeralKey: aliceEphemeralKey,
-        bobIdentityPublicKey: bobIdentityPublicKey,
-        bobIdentitySigningPublicKey: bundle.bobSigningPublic,
-        bobSignedPrekey: bobSignedPrekeyPublic,
-        bobSignedPrekeySignature: bundle.signature,
-        bobOneTimePrekey: bobOneTimePrekeyPublic,
-      );
-
-      final bobSecret = await initiator.receiveSession(
-        bobIdentityKey: bundle.bobIdentityKey,
-        bobSignedPrekey: bundle.bobSignedPrekeyKp,
-        bobOneTimePrekey: bobOneTimePrekeyKp,
-        aliceIdentityPublicKey: aliceIdentityPublicKey,
-        aliceEphemeralPublicKey: aliceEphemeralPublicKey,
-      );
-
-      final aliceBytes = await aliceSecret.extractBytes();
-      final bobBytes = await bobSecret.extractBytes();
-
-      expect(aliceBytes, bobBytes);
-      expect(aliceBytes.length, 32);
-    });
-
-    test('DEFECT-3 fix: invalid signed prekey signature throws X3dhSignatureVerificationException', () async {
-      final aliceIdentityKey = await x25519.newKeyPair();
-      final aliceEphemeralKey = await x25519.newKeyPair();
-      final bundle = await _buildBobBundle();
-
-      final bobIdentityPublicKey = await bundle.bobIdentityKey.extractPublicKey();
-      final bobSignedPrekeyPublic = await bundle.bobSignedPrekeyKp.extractPublicKey();
-
-      // Tamper with the signature
-      final tampered = Uint8List.fromList(bundle.signature);
-      tampered[tampered.length ~/ 2] ^= 0xFF;
-
-      expect(
-        () => initiator.initiateSession(
+        final aliceSecret = await initiator.initiateSession(
           aliceIdentityKey: aliceIdentityKey,
           aliceEphemeralKey: aliceEphemeralKey,
           bobIdentityPublicKey: bobIdentityPublicKey,
           bobIdentitySigningPublicKey: bundle.bobSigningPublic,
           bobSignedPrekey: bobSignedPrekeyPublic,
-          bobSignedPrekeySignature: tampered,
-        ),
-        throwsA(isA<X3dhSignatureVerificationException>()),
-      );
-    });
-
-    test('DEFECT-3 fix: signature from wrong identity key is rejected', () async {
-      final aliceIdentityKey = await x25519.newKeyPair();
-      final aliceEphemeralKey = await x25519.newKeyPair();
-      final bundle = await _buildBobBundle();
-
-      final bobIdentityPublicKey = await bundle.bobIdentityKey.extractPublicKey();
-      final bobSignedPrekeyPublic = await bundle.bobSignedPrekeyKp.extractPublicKey();
-
-      // Use a completely different signing key for verification
-      final wrongSigningKp = await ed25519.newKeyPair();
-      final wrongSigningPublic = await wrongSigningKp.extractPublicKey();
-
-      expect(
-        () => initiator.initiateSession(
-          aliceIdentityKey: aliceIdentityKey,
-          aliceEphemeralKey: aliceEphemeralKey,
-          bobIdentityPublicKey: bobIdentityPublicKey,
-          bobIdentitySigningPublicKey: wrongSigningPublic,
-          bobSignedPrekey: bobSignedPrekeyPublic,
           bobSignedPrekeySignature: bundle.signature,
-        ),
-        throwsA(isA<X3dhSignatureVerificationException>()),
-      );
-    });
+          bobOneTimePrekey: bobOneTimePrekeyPublic,
+        );
+
+        final bobSecret = await initiator.receiveSession(
+          bobIdentityKey: bundle.bobIdentityKey,
+          bobSignedPrekey: bundle.bobSignedPrekeyKp,
+          bobOneTimePrekey: bobOneTimePrekeyKp,
+          aliceIdentityPublicKey: aliceIdentityPublicKey,
+          aliceEphemeralPublicKey: aliceEphemeralPublicKey,
+        );
+
+        final aliceBytes = await aliceSecret.extractBytes();
+        final bobBytes = await bobSecret.extractBytes();
+
+        expect(aliceBytes, bobBytes);
+        expect(aliceBytes.length, 32);
+      },
+    );
+
+    test(
+      'DEFECT-3 fix: invalid signed prekey signature throws X3dhSignatureVerificationException',
+      () async {
+        final aliceIdentityKey = await x25519.newKeyPair();
+        final aliceEphemeralKey = await x25519.newKeyPair();
+        final bundle = await _buildBobBundle();
+
+        final bobIdentityPublicKey = await bundle.bobIdentityKey
+            .extractPublicKey();
+        final bobSignedPrekeyPublic = await bundle.bobSignedPrekeyKp
+            .extractPublicKey();
+
+        // Tamper with the signature
+        final tampered = Uint8List.fromList(bundle.signature);
+        tampered[tampered.length ~/ 2] ^= 0xFF;
+
+        expect(
+          () => initiator.initiateSession(
+            aliceIdentityKey: aliceIdentityKey,
+            aliceEphemeralKey: aliceEphemeralKey,
+            bobIdentityPublicKey: bobIdentityPublicKey,
+            bobIdentitySigningPublicKey: bundle.bobSigningPublic,
+            bobSignedPrekey: bobSignedPrekeyPublic,
+            bobSignedPrekeySignature: tampered,
+          ),
+          throwsA(isA<X3dhSignatureVerificationException>()),
+        );
+      },
+    );
+
+    test(
+      'DEFECT-3 fix: signature from wrong identity key is rejected',
+      () async {
+        final aliceIdentityKey = await x25519.newKeyPair();
+        final aliceEphemeralKey = await x25519.newKeyPair();
+        final bundle = await _buildBobBundle();
+
+        final bobIdentityPublicKey = await bundle.bobIdentityKey
+            .extractPublicKey();
+        final bobSignedPrekeyPublic = await bundle.bobSignedPrekeyKp
+            .extractPublicKey();
+
+        // Use a completely different signing key for verification
+        final wrongSigningKp = await ed25519.newKeyPair();
+        final wrongSigningPublic = await wrongSigningKp.extractPublicKey();
+
+        expect(
+          () => initiator.initiateSession(
+            aliceIdentityKey: aliceIdentityKey,
+            aliceEphemeralKey: aliceEphemeralKey,
+            bobIdentityPublicKey: bobIdentityPublicKey,
+            bobIdentitySigningPublicKey: wrongSigningPublic,
+            bobSignedPrekey: bobSignedPrekeyPublic,
+            bobSignedPrekeySignature: bundle.signature,
+          ),
+          throwsA(isA<X3dhSignatureVerificationException>()),
+        );
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -159,69 +180,79 @@ void main() {
       expect(await alice.decrypt(await bob.encrypt(p2)), p2);
     });
 
-    test('DEFECT-1 fix: authentication failure does NOT advance receiving chain', () async {
-      final rootKey = crypto.SecretKey(List.generate(32, (i) => i));
-      final sendKey = crypto.SecretKey(List.generate(32, (i) => i + 10));
-      final receiveKey = crypto.SecretKey(List.generate(32, (i) => i + 20));
+    test(
+      'DEFECT-1 fix: authentication failure does NOT advance receiving chain',
+      () async {
+        final rootKey = crypto.SecretKey(List.generate(32, (i) => i));
+        final sendKey = crypto.SecretKey(List.generate(32, (i) => i + 10));
+        final receiveKey = crypto.SecretKey(List.generate(32, (i) => i + 20));
 
-      final alice = DoubleRatchetSession(
-        rootKey: rootKey,
-        sendingChainKey: sendKey,
-        receivingChainKey: receiveKey,
-      );
-      final bob = DoubleRatchetSession(
-        rootKey: rootKey,
-        sendingChainKey: receiveKey,
-        receivingChainKey: sendKey,
-      );
+        final alice = DoubleRatchetSession(
+          rootKey: rootKey,
+          sendingChainKey: sendKey,
+          receivingChainKey: receiveKey,
+        );
+        final bob = DoubleRatchetSession(
+          rootKey: rootKey,
+          sendingChainKey: receiveKey,
+          receivingChainKey: sendKey,
+        );
 
-      final msg = Uint8List.fromList('Valid message'.codeUnits);
-      final valid = await alice.encrypt(msg);
+        final msg = Uint8List.fromList('Valid message'.codeUnits);
+        final valid = await alice.encrypt(msg);
 
-      // Corrupt ciphertext
-      final corrupt = Uint8List.fromList(valid);
-      corrupt[corrupt.length - 1] ^= 0xFF;
+        // Corrupt ciphertext
+        final corrupt = Uint8List.fromList(valid);
+        corrupt[corrupt.length - 1] ^= 0xFF;
 
-      // Auth failure must throw
-      expect(() => bob.decrypt(corrupt), throwsA(anything));
+        // Auth failure must throw
+        expect(() => bob.decrypt(corrupt), throwsA(anything));
 
-      // After failure, original message must still decrypt — state is unchanged
-      final result = await bob.decrypt(valid);
-      expect(result, msg);
-    });
+        // After failure, original message must still decrypt — state is unchanged
+        final result = await bob.decrypt(valid);
+        expect(result, msg);
+      },
+    );
 
-    test('Scenario A (closure): corrupt → fail → original decrypts successfully', () async {
-      final rootKey = crypto.SecretKey(List.generate(32, (i) => i + 5));
-      final sendKey = crypto.SecretKey(List.generate(32, (i) => i + 15));
-      final receiveKey = crypto.SecretKey(List.generate(32, (i) => i + 25));
+    test(
+      'Scenario A (closure): corrupt → fail → original decrypts successfully',
+      () async {
+        final rootKey = crypto.SecretKey(List.generate(32, (i) => i + 5));
+        final sendKey = crypto.SecretKey(List.generate(32, (i) => i + 15));
+        final receiveKey = crypto.SecretKey(List.generate(32, (i) => i + 25));
 
-      final alice = DoubleRatchetSession(
-        rootKey: rootKey,
-        sendingChainKey: sendKey,
-        receivingChainKey: receiveKey,
-      );
-      final bob = DoubleRatchetSession(
-        rootKey: rootKey,
-        sendingChainKey: receiveKey,
-        receivingChainKey: sendKey,
-      );
+        final alice = DoubleRatchetSession(
+          rootKey: rootKey,
+          sendingChainKey: sendKey,
+          receivingChainKey: receiveKey,
+        );
+        final bob = DoubleRatchetSession(
+          rootKey: rootKey,
+          sendingChainKey: receiveKey,
+          receivingChainKey: sendKey,
+        );
 
-      final msg = Uint8List.fromList('Scenario A message'.codeUnits);
-      final valid = await alice.encrypt(msg);
+        final msg = Uint8List.fromList('Scenario A message'.codeUnits);
+        final valid = await alice.encrypt(msg);
 
-      final corrupt = Uint8List.fromList(valid);
-      corrupt[corrupt.length - 3] ^= 0xAA;
+        final corrupt = Uint8List.fromList(valid);
+        corrupt[corrupt.length - 3] ^= 0xAA;
 
-      Object? err;
-      try {
-        await bob.decrypt(corrupt);
-      } catch (e) {
-        err = e;
-      }
-      expect(err, isNotNull, reason: 'Corrupt ciphertext must fail');
+        Object? err;
+        try {
+          await bob.decrypt(corrupt);
+        } catch (e) {
+          err = e;
+        }
+        expect(err, isNotNull, reason: 'Corrupt ciphertext must fail');
 
-      expect(await bob.decrypt(valid), msg, reason: 'Session must recover after auth failure');
-    });
+        expect(
+          await bob.decrypt(valid),
+          msg,
+          reason: 'Session must recover after auth failure',
+        );
+      },
+    );
 
     test('Malformed (too short) ciphertext throws (P9-021)', () async {
       final rootKey = crypto.SecretKey(List.generate(32, (i) => i));
@@ -234,8 +265,52 @@ void main() {
         receivingChainKey: sendKey,
       );
 
-      expect(() => bob.decrypt(Uint8List.fromList([0, 1, 2])), throwsA(anything));
+      expect(
+        () => bob.decrypt(Uint8List.fromList([0, 1, 2])),
+        throwsA(anything),
+      );
     });
+
+    test(
+      'Scenario B current symmetric chain coverage: early out-of-order delivery is rejected and replay fails',
+      () async {
+        final rootKey = crypto.SecretKey(List.generate(32, (i) => i + 30));
+        final sendKey = crypto.SecretKey(List.generate(32, (i) => i + 40));
+        final receiveKey = crypto.SecretKey(List.generate(32, (i) => i + 50));
+
+        final alice = DoubleRatchetSession(
+          rootKey: rootKey,
+          sendingChainKey: sendKey,
+          receivingChainKey: receiveKey,
+        );
+        final bob = DoubleRatchetSession(
+          rootKey: rootKey,
+          sendingChainKey: receiveKey,
+          receivingChainKey: sendKey,
+        );
+
+        final p1 = Uint8List.fromList('message-1'.codeUnits);
+        final p2 = Uint8List.fromList('message-2'.codeUnits);
+        final p3 = Uint8List.fromList('message-3'.codeUnits);
+
+        final c1 = await alice.encrypt(p1);
+        final c2 = await alice.encrypt(p2);
+        final c3 = await alice.encrypt(p3);
+
+        // Current implementation is a simple symmetric chain with no skipped-key
+        // cache. True 3 -> 1 -> 2 successful out-of-order delivery remains
+        // BLOCKED pending a reviewed ratchet implementation.
+        expect(() => bob.decrypt(c3), throwsA(anything));
+
+        expect(await bob.decrypt(c1), p1);
+        expect(await bob.decrypt(c2), p2);
+
+        // Replaying message 2 after the receive chain advances must fail without
+        // preventing the next valid message from decrypting.
+        expect(() => bob.decrypt(c2), throwsA(anything));
+        expect(await bob.decrypt(c3), p3);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -253,24 +328,33 @@ void main() {
       expect(await receiver.decrypt(await sender.encrypt(pt)), pt);
     });
 
-    test('DEFECT-2 fix: auth failure does NOT advance group chain state', () async {
-      final startingKey = crypto.SecretKey(List.generate(32, (i) => i));
+    test(
+      'DEFECT-2 fix: auth failure does NOT advance group chain state',
+      () async {
+        final startingKey = crypto.SecretKey(List.generate(32, (i) => i));
 
-      final sender = GroupSenderChain(chainKey: startingKey);
-      final receiver = GroupSenderChain(chainKey: startingKey);
+        final sender = GroupSenderChain(chainKey: startingKey);
+        final receiver = GroupSenderChain(chainKey: startingKey);
 
-      final msg = Uint8List.fromList('Group message'.codeUnits);
-      final valid = await sender.encrypt(msg);
+        final msg = Uint8List.fromList('Group message'.codeUnits);
+        final valid = await sender.encrypt(msg);
 
-      final tampered = Uint8List.fromList(valid);
-      tampered[tampered.length - 1] ^= 0xFF;
+        final tampered = Uint8List.fromList(valid);
+        tampered[tampered.length - 1] ^= 0xFF;
 
-      expect(() => receiver.decrypt(tampered), throwsA(anything),
-          reason: 'Tampered ciphertext must fail authentication');
+        expect(
+          () => receiver.decrypt(tampered),
+          throwsA(anything),
+          reason: 'Tampered ciphertext must fail authentication',
+        );
 
-      expect(await receiver.decrypt(valid), msg,
-          reason: 'Chain state must be unchanged after auth failure');
-    });
+        expect(
+          await receiver.decrypt(valid),
+          msg,
+          reason: 'Chain state must be unchanged after auth failure',
+        );
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -323,8 +407,14 @@ void main() {
       final helper = RemoteBackupCrypto();
       final salt = Uint8List.fromList(List.generate(16, (i) => i));
 
-      final correctKey = await helper.deriveBackupKey(passphrase: 'correct', salt: salt);
-      final wrongKey = await helper.deriveBackupKey(passphrase: 'wrong', salt: salt);
+      final correctKey = await helper.deriveBackupKey(
+        passphrase: 'correct',
+        salt: salt,
+      );
+      final wrongKey = await helper.deriveBackupKey(
+        passphrase: 'wrong',
+        salt: salt,
+      );
 
       final ct = await helper.encryptBackup(
         Uint8List.fromList('backup data'.codeUnits),

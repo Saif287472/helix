@@ -43,30 +43,29 @@ void main() {
 
     test('P5-014: throws StateError when displayName is empty', () {
       expect(
-        () => RemoteCompositionRoot.withConfig(
-          _validConfig(displayName: ''),
-        ),
+        () => RemoteCompositionRoot.withConfig(_validConfig(displayName: '')),
         throwsStateError,
       );
     });
 
     test('P5-014: throws StateError when packageId is empty', () {
       expect(
-        () => RemoteCompositionRoot.withConfig(
-          _validConfig(packageId: ''),
-        ),
+        () => RemoteCompositionRoot.withConfig(_validConfig(packageId: '')),
         throwsStateError,
       );
     });
 
-    test('P5-014: throws StateError when secureStoragePrefix lacks trailing _', () {
-      expect(
-        () => RemoteCompositionRoot.withConfig(
-          _validConfig(secureStoragePrefix: 'helix_remote_v1'),
-        ),
-        throwsStateError,
-      );
-    });
+    test(
+      'P5-014: throws StateError when secureStoragePrefix lacks trailing _',
+      () {
+        expect(
+          () => RemoteCompositionRoot.withConfig(
+            _validConfig(secureStoragePrefix: 'helix_remote_v1'),
+          ),
+          throwsStateError,
+        );
+      },
+    );
 
     test('P5-014: throws StateError when secureStoragePrefix is empty', () {
       expect(
@@ -116,6 +115,44 @@ void main() {
 
       root1.dispose();
       root2.dispose();
+    });
+
+    test('Scenario H: startup fails closed when DB key is absent', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'helix_remote_startup_',
+      );
+      addTearDown(() async {
+        if (tempDir.existsSync()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      const secretSentinel = 'SUPER_SECRET_DB_KEY_SHOULD_NOT_APPEAR';
+      final root = RemoteCompositionRoot.withConfig(
+        _validConfig(databaseDirectory: tempDir.path),
+        dbKeyLoader: () async => '',
+      );
+
+      Object? error;
+      try {
+        await root.initialize();
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error, isA<StateError>());
+      expect(root.startupState, RemoteStartupState.failed);
+      expect(
+        File(
+          '${tempDir.path}${Platform.pathSeparator}helix_remote.db',
+        ).existsSync(),
+        isFalse,
+      );
+      expect(error.toString(), isNot(contains(secretSentinel)));
+      expect(() => root.database, throwsStateError);
+      expect(() => root.syncEngine, throwsStateError);
+
+      root.dispose();
     });
   });
 }
