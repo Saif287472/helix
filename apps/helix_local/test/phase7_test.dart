@@ -511,9 +511,7 @@ GroupService _groupService(InMemoryGroupRepository repo, String fingerprint) {
 Directory _findRepoRoot() {
   var dir = Directory.current;
   while (true) {
-    if (File(
-      '${dir.path}${Platform.pathSeparator}HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN.md',
-    ).existsSync()) {
+    if (_isRepoRoot(dir)) {
       return dir;
     }
     final parent = dir.parent;
@@ -525,6 +523,12 @@ Directory _findRepoRoot() {
     dir = parent;
   }
 }
+
+bool _isRepoRoot(Directory dir) =>
+    File('${dir.path}${Platform.pathSeparator}pubspec.yaml').existsSync() &&
+    File(
+      '${dir.path}${Platform.pathSeparator}ownership-blast-radius.yaml',
+    ).existsSync();
 
 class _MemoryTrustRepository implements TrustRepository {
   List<KnownPeer> peers = [];

@@ -37,7 +37,10 @@ class HelixRemoteApp extends StatefulWidget {
 class _HelixRemoteAppState extends State<HelixRemoteApp> {
   RemoteStartupState _startupState = RemoteStartupState.idle;
   String? _errorMessage;
+  String? _registrationError;
   bool _initializing = false;
+  bool _registering = false;
+  final TextEditingController _usernameController = TextEditingController();
 
   @override
   void initState() {
@@ -73,6 +76,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
 
   @override
   void dispose() {
+    _usernameController.dispose();
     widget.root.dispose();
     super.dispose();
   }
@@ -134,7 +138,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   }
 
   Widget _buildSetupScreen() {
-    final usernameController = TextEditingController();
     return Scaffold(
       appBar: AppBar(title: Text(widget.root.config.displayName)),
       body: Center(
@@ -156,40 +159,95 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
               ),
               const SizedBox(height: 24),
               TextField(
-                controller: usernameController,
+                controller: _usernameController,
+                enabled: !_registering,
                 decoration: const InputDecoration(
                   labelText: 'Username',
                   border: OutlineInputBorder(),
                 ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _register(),
               ),
               const SizedBox(height: 16),
+              if (_registrationError != null) ...[
+                Text(
+                  _registrationError!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: 16),
+              ],
               FilledButton.icon(
-                onPressed: () async {
-                  final username = usernameController.text.trim();
-                  if (username.isEmpty) return;
-                  try {
-                    await widget.root.registerAndLogin(username);
-                    if (mounted) {
-                      setState(() {
-                        _startupState = widget.root.startupState;
-                      });
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      setState(() {
-                        _errorMessage = e.toString();
-                      });
-                    }
-                  }
-                },
-                icon: const Icon(Icons.login),
-                label: const Text('Register & Sign In'),
+                onPressed: _registering ? null : _register,
+                icon: _registering
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.login),
+                label: Text(
+                  _registering ? 'Registering...' : 'Register & Sign In',
+                ),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _register() async {
+    final username = _usernameController.text.trim();
+    if (username.isEmpty || _registering) return;
+
+    setState(() {
+      _registering = true;
+      _registrationError = null;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.root.registerAndLogin(username);
+      if (mounted) {
+        setState(() {
+          _startupState = widget.root.startupState;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _registrationError = _formatRegistrationError(e);
+          _errorMessage = _registrationError;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _registering = false;
+        });
+      }
+    }
+  }
+
+  String _formatRegistrationError(Object error) {
+    final backend = widget.root.devConfig.restBaseUri;
+    final raw = error.toString();
+    final backendHint =
+        backend.host == 'localhost' || backend.host == '127.0.0.1'
+        ? 'On a physical Android device, localhost points to the phone. '
+              'Restart with --dart-define=HELIX_REMOTE_HOST=<your PC LAN IP> '
+              'and make sure the backend is running.'
+        : 'Make sure the backend is running at $backend and reachable from '
+              'this device.';
+
+    if (raw.contains('SocketException') ||
+        raw.contains('Connection refused') ||
+        raw.contains('Failed host lookup') ||
+        raw.contains('Connection timed out')) {
+      return 'Could not reach Helix Remote backend at $backend. $backendHint';
+    }
+
+    return 'Registration failed: $raw';
   }
 
   Widget _buildReadyScreen() {

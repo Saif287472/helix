@@ -413,9 +413,9 @@ only. No service from the Remote packages is used by the UI.
 
 ---
 
-## Master Plan Checkbox Corrections
+## Historical Checklist Corrections
 
-The following checkboxes in `HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN_PART_2_REMAINING.md` overstate completion:
+The following historical checklist claims overstate completion:
 
 | Phase | Checkbox | Claimed | Actual | Correction |
 |---|---|---|---|---|
@@ -429,8 +429,7 @@ The following checkboxes in `HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN_PART_2_REMAINI
 | P19 | P19-010 [x] | WebSocket storm | **VERIFIED COMPONENT ONLY** | Backend-side only, not tested client-side |
 | P20 | P20-011 [x] | Migration tests | **NOT STARTED** | No dedicated migration test file |
 
-This baseline does not delete or modify the master plan checkboxes. The correction
-above is the authoritative closure-in-progress annotation.
+The correction above is the authoritative closure-in-progress annotation.
 
 ---
 

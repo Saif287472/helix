@@ -1,0 +1,809 @@
+# Helix Enterprise Improvement Master Plan
+
+**Authoritative snapshot:** Git commit `ff0e84682d49663df635c592847efacd2b160d2b`  
+**Source reviewed:** all seven uploaded exports: architecture/plans, Local packages, Local app, Remote client/packages, Remote backend/contracts, tests/tooling, and repository tree.  
+**Plan status:** implementation-ready  
+**Primary rule:** preserve the current two-app monorepo and its useful package boundaries; correct proven defects before adding features or performing cosmetic refactors.
+
+---
+
+## 1. Executive conclusion
+
+Helix already has several unusually strong foundations:
+
+- two separately signed Flutter application shells;
+- explicit Local/Remote product boundaries;
+- ADRs, threat models, privacy contracts, release checklists, and ownership metadata;
+- a substantial Local implementation with RAM-only conversation data and panic-wipe orchestration;
+- Remote packages for API, storage, sync, cryptography, calls, and groups;
+- a Dart/Shelf modular backend;
+- hundreds of unit, component, protocol, migration, and backend tests;
+- CI checks for formatting, analysis, boundaries, secrets, release hardening, and SBOM generation.
+
+The repository is therefore **not a rewrite candidate**.
+
+However, the current Remote product is not yet a safe enterprise messaging system. Several vertical paths are internally inconsistent or disconnected even though their individual components and tests exist. The most serious examples are:
+
+1. the client registers an X25519 device key but signs login challenges with a separate Ed25519 identity key, while the backend interprets the registered device key as Ed25519;
+2. Remote device identifiers are strings at the backend but integers in the client domain/database, with lossy coercion to `1`;
+3. the client constructs an HTTP `/ws` URI while the backend exposes `/api/v1/ws`;
+4. outbound and inbound sync functions exist but are not run by an application lifecycle coordinator;
+5. conversation encryption seeds are held only in an in-memory map;
+6. X3DH failure silently falls back to an incompatible local-only encryption path;
+7. the supposed “double ratchet” is only a symmetric chain ratchet and is not integrated into persisted messaging sessions;
+8. the Remote SQLite database explicitly remains plaintext because standard `sqlite3` ignores `PRAGMA key`;
+9. the Remote release manifest omits permissions required for networking and calls;
+10. attachment URL composition duplicates `/api/v1`, and cache eviction can delete the user’s original selected file;
+11. backup upload sends the database snapshot without actually applying the declared encryption;
+12. tooling has blind spots: the default secret scan omits `apps/`, `packages/`, and `services/`, while dependency maps omit Remote calls and groups.
+
+These are stop-ship defects, not polish items. The roadmap therefore freezes new Remote feature development until a secure direct-message vertical slice works across two real clients, restart, offline delivery, and multi-device sync.
+
+---
+
+## 2. Evidence standard and decision rules
+
+### 2.1 What counts as evidence
+
+A feature is considered implemented only when all applicable layers exist and are connected:
+
+`UI → application service → domain contract → local persistence → network contract → backend handler → backend persistence → event/sync return path → observable UI state`
+
+A package-level class or passing isolated unit test does **not** prove the feature works in the application.
+
+### 2.2 Classification used in this plan
+
+- **Verified:** production wiring and behavior test exist.
+- **Component-only:** implementation exists but is not connected end to end.
+- **Defective:** current wiring contains a correctness, security, privacy, or data-loss defect.
+- **Missing:** no meaningful implementation exists.
+- **External gate:** requires independent review, production infrastructure, signing, or store validation.
+
+### 2.3 Non-rewrite rule
+
+Refactors must use a strangler approach:
+
+1. add or strengthen a stable interface;
+2. add characterization tests around current behavior;
+3. move one responsibility behind the interface;
+4. verify;
+5. remove the old path only after parity is proven.
+
+No phase permits a broad “clean architecture rewrite,” a backend language rewrite, or wholesale UI replacement.
+
+---
+
+## 3. Current-state risk register
+
+| ID | Severity | Proven condition | Primary evidence | Resolution phase |
+|---|---|---|---|---|
+| R-001 | Critical | Login key mismatch: X25519 device key is registered; Ed25519 identity key signs; backend verifies registered device key as Ed25519 | `apps/helix_remote/lib/app/composition_root.dart:291-340`; `services/helix_remote_backend/lib/src/modules/auth.dart:150-195` | 1 |
+| R-002 | Critical | Device ID is a backend string but client model/database uses integer; non-digits are stripped and often become `1` | `composition_root.dart:299-300,367-369,426-429`; `helix_remote_domain/domain/device.dart`; Remote DB schema | 1 |
+| R-003 | Critical | WebSocket client uses HTTP scheme and `/ws`; backend exposes `/api/v1/ws` | `remote_config.dart:28-38,51-70`; `server_impl.dart:140-141` | 1/3 |
+| R-004 | Critical | Remote database is plaintext despite an encryption key and `PRAGMA key` call | `helix_remote_storage/src/database.dart:13-23` | 2 |
+| R-005 | Critical | Per-conversation protector seeds live only in a process-local map and are lost on restart | `composition_root.dart:229-241` | 2 |
+| R-006 | Critical | X3DH errors and missing bundles fall back to a non-interoperable generic protector instead of failing closed | `remote_messaging_service.dart` X3DH envelope construction paths | 2 |
+| R-007 | Critical | No complete persisted Double Ratchet protocol: no DH ratchet headers, counters, skipped keys, or session persistence | `helix_remote_crypto/src/double_ratchet.dart:4-102` | 2 |
+| R-008 | Critical | Outbound queue and inbound sync are exposed as methods but are not driven by app lifecycle/network events | `remote_messaging_service.dart:629-632`; no production caller | 3 |
+| R-009 | Critical | Unknown outbound operation type defaults to message-send endpoint, permitting semantic misrouting | `remote_sync_gateway.dart:89-132` | 3 |
+| R-010 | High | Reconnect policy exists but WebSocket client does not implement retry/backoff/gap recovery | `remote_config.dart:83-90`; `remote_websocket_client.dart` | 3 |
+| R-011 | High | WebSocket bearer token is placed in query string | `remote_websocket_client.dart:42-44`; backend tests use query token | 1/3 |
+| R-012 | High | Remote production Android manifest lacks Internet, camera, microphone, notification, and call-service permissions | `apps/helix_remote/android/app/src/main/AndroidManifest.xml` | 1/6 |
+| R-013 | High | Attachment service duplicates `/api/v1`; cache metadata points at original source file and eviction deletes it | `composition_root.dart:250-255`; `remote_attachment_service.dart:67-74,150,347-366` | 5 |
+| R-014 | High | Backup declares KDF/salt but uploads an unencrypted database snapshot | `screens/backup_screen.dart:27-45` | 5 |
+| R-015 | High | Account deletion dialog asks for typed confirmation but supplies the confirmation automatically; local data is not purged | `screens/privacy_screen.dart:62-98` | 5 |
+| R-016 | High | Group operation names do not map to sync endpoints and unknown types default to message send | group service pending operations; `remote_sync_gateway.dart` | 6 |
+| R-017 | High | Remote call service is constructed but not started; release permissions/UI/lifecycle are incomplete | `composition_root.dart:258-263`; Remote call package and app screens | 6 |
+| R-018 | High | Backend accepts an insecure default JWT secret and uses a minimal custom JWT implementation without enterprise claims/key rotation | `bin/server.dart`; `lib/src/jwt.dart` | 1/10 |
+| R-019 | High | Secret scan default roots omit most monorepo source; boundary/dependency maps omit Remote calls/groups | `tool/check_secrets.dart:3-12`; `tool/check_boundaries.dart:172-191`; `tool/dep_graph.dart:14-34` | 0 |
+| R-020 | High | Architecture documents claim Go/Chi, PostgreSQL, S3, Redis, and completed E2EE that the authoritative implementation does not provide | `docs/architecture/remote_backend_architecture.md`; privacy claim/closure documents | 0 |
+| R-021 | Medium | Local wiring remains split between `LocalCompositionRoot` and a 1,559-line provider file; controllers use static global use-case fallbacks | `apps/helix_local/lib/providers/app_providers.dart`; QR/secret/TCP controllers | 7 |
+| R-022 | Medium | Several Local services and protocol paths are oversized and contain silent catches, reducing diagnosability | Local messaging, group, request, lobby, transfer, and secure-channel files | 7 |
+| R-023 | Medium | Android mDNS discoverability re-enable only logs and does not re-register | `HelixMdnsService.kt` `updateDiscoverability` | 7 |
+| R-024 | Medium | Local bundled audio/logo assets are roughly 58 MB, increasing install size and startup/package cost | Local asset inventory | 10 |
+| R-025 | Medium | Remote UI is an early scaffold: imperative reloads, controller creation in `build`, sparse states, weak destructive-flow UX, no established accessibility/localization layer | `apps/helix_remote/lib/main.dart`; seven Remote screens | 8/9 |
+| R-026 | Medium | CI duplicates work, does not always build apps, has no risk-based coverage thresholds, real-device E2E, accessibility gates, fuzzing, or load budgets | workflows and verification scripts | 0/11 |
+
+---
+
+## 4. Target architecture
+
+### 4.1 Repository-level target
+
+```text
+apps/
+  helix_local/     Product shell, navigation, presentation composition
+  helix_remote/    Product shell, navigation, presentation composition
+
+packages/
+  local/           Local-only domain/application/infrastructure packages
+  remote/          Remote-only domain/application/infrastructure packages
+  shared/          Only proven product-neutral primitives and design tokens
+
+services/
+  helix_remote_backend/
+    bin/           Process entrypoint
+    lib/src/
+      platform/    config, logging, metrics, auth middleware, DB adapters
+      modules/     bounded contexts with explicit ports
+      migrations/  ordered, immutable schema migrations
+
+contracts/
+  remote-rest-openapi/
+  remote-realtime/
+  compatibility/
+```
+
+### 4.2 Local target
+
+- Preserve Local’s LAN-only, install-scoped identity, RAM-only conversation content, and ordered wipe semantics.
+- `LocalCompositionRoot` becomes the sole construction and disposal owner.
+- Riverpod providers expose already-constructed application services; they do not secretly construct infrastructure.
+- Presentation code depends on application-facing controllers/state, never directly on sockets, databases, crypto, or platform channels.
+- Existing package façades remain stable while oversized internals are decomposed incrementally.
+
+### 4.3 Remote target
+
+- Explicitly typed account identity signing key, device authentication signing key, and device X25519 agreement key.
+- Canonical opaque `String` identifiers across client, contracts, database, backend, WebSocket, and tests.
+- A persistent cryptographic session repository owns prekeys, ratchet state, counters, skipped keys, trust changes, and key epochs.
+- An application lifecycle coordinator owns authentication, token rotation, WebSocket, catch-up sync, outbound queue processing, reconnect, and disposal.
+- REST and realtime DTOs come from one contract source and cannot silently diverge.
+- The backend remains a Dart/Shelf modular monolith for this program. It gains explicit repositories, migrations, production configuration, observability, and later a PostgreSQL adapter. A Go rewrite is out of scope unless a future ADR demonstrates a measured need.
+
+### 4.4 Shared-code policy
+
+Code enters `packages/shared/` only when:
+
+1. both apps already need the same semantic behavior;
+2. it has no Local/Remote identity, storage, transport, retention, or privacy assumption;
+3. product branding/configuration is injected;
+4. boundary tests prove it imports neither Local nor Remote packages;
+5. a small ADR records why duplication is more dangerous than sharing.
+
+Likely candidates after stabilization: spacing/typography primitives, generic async-state widgets, non-sensitive validation utilities, and test helpers. Crypto, storage, transport, identity, and protocol code remain product-specific.
+
+---
+
+## 5. Delivery controls for all agents
+
+### 5.1 Required task packet
+
+Every agent task must contain:
+
+- task ID and phase;
+- allowed files/directories;
+- forbidden adjacent changes;
+- applicable ADRs/contracts;
+- observable precondition;
+- implementation steps;
+- targeted tests;
+- full verification commands;
+- rollback method;
+- measurable completion criteria.
+
+### 5.2 Change discipline
+
+- One concern per PR.
+- Security-critical schema/protocol changes require a migration and compatibility test in the same PR.
+- No agent may weaken a test, analyzer rule, boundary rule, validation, encryption, or wipe behavior to make a check pass.
+- No silent `catch` may be added. Errors must be transformed, surfaced, retried with policy, or explicitly documented as best-effort cleanup.
+- New public methods require tests for success, failure, cancellation/disposal, and idempotency where relevant.
+- High-risk files may be owned by only one active agent at a time.
+- Each phase ends with a tagged evidence commit and a rollback point.
+
+### 5.3 Standard completion report
+
+```text
+Task:
+Intent:
+Files changed:
+Contract/schema change:
+Security/privacy impact:
+Tests added:
+Commands run and exact results:
+Manual/device checks:
+Known residual risk:
+Rollback:
+```
+
+---
+
+# 6. Phased implementation roadmap
+
+## Phase 0 — Re-baseline truth and make guardrails trustworthy
+
+**Goal:** make repository checks and documentation reflect the actual authoritative implementation before changing behavior.
+
+**Dependencies:** none.  
+**Feature freeze:** no new Remote feature work during this phase.
+
+### Deliverables
+
+- A new `docs/architecture/CURRENT_STATE_<date>.md` evidence ledger generated from executable paths, not closure claims.
+- A superseding ADR confirming Dart/Shelf as the current backend and marking the Go/Chi reference document obsolete.
+- Accurate package inventory and ownership coverage.
+- Monorepo-wide secret scanning.
+- Unified strict analyzer configuration.
+- Reproducible dependency versions.
+- One non-duplicative CI pipeline with mandatory build jobs.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Primary files | Verification |
+|---|---|---|---|
+| P0-01 | Create a current-state evidence ledger. Classify every major Local and Remote capability as verified, component-only, defective, missing, or external gate. Link each classification to code and tests. Do not copy phase checkboxes. | `docs/architecture/`, `docs/product/` | Reviewer samples at least 20 claims against source |
+| P0-02 | Add an ADR retaining the Dart/Shelf backend. Mark Go/Chi, PostgreSQL/S3/Redis statements as target-state only or superseded. Remove claims that E2EE/SQLCipher are already implemented. | ADRs, backend architecture, privacy claim matrix | Documentation consistency test |
+| P0-03 | Extend secret-scan roots to `.github`, `apps`, `packages`, `services`, `contracts`, `tool`, `scripts`, and root configuration. Add exclusions by path/type, not by skipping entire source trees. | `tool/check_secrets.dart`, tests | Seeded canary secrets in each source root are detected |
+| P0-04 | Generate boundary/dependency package maps from workspace `pubspec.yaml` files or add all current packages, including Remote calls/groups. Fail when a workspace package is unclassified. | boundary checker, dep graph, tests | Remove-one-package negative test fails |
+| P0-05 | Apply root strict analyzer settings to both apps, all packages, backend, and tooling. Ban implicit dynamic at contract boundaries and unawaited lifecycle calls except explicitly annotated cases. | analysis options | `flutter analyze` and `dart analyze` pass |
+| P0-06 | Replace `any` dependency declarations with reviewed compatible ranges and commit the workspace lockfile policy. Flag EOL, prerelease, or duplicate packages. | all pubspecs, dependency policy | clean resolution on Windows and Linux |
+| P0-07 | Consolidate `ci.yml` and `verify.yml` into one reusable pipeline with caching, concurrency cancellation, path-aware jobs, mandatory Windows/Android debug builds, and backend tests. | `.github/workflows`, scripts | PR check matrix passes from a clean checkout |
+| P0-08 | Add risk-based coverage reporting without imposing an arbitrary global percentage: critical auth/crypto/storage/sync/wipe modules require branch coverage and explicit scenario lists. | CI/test tooling | coverage artifact and threshold failures are demonstrated |
+
+### Exit criteria
+
+- Secret canaries under every first-class source root are detected.
+- Every workspace package appears in boundary and dependency checks.
+- All current source uses one strict analyzer baseline.
+- Both apps build in CI on supported targets.
+- The evidence ledger contains no unqualified “implemented” claim lacking a production wiring path and test.
+- The Dart/Shelf decision is explicit; no agent is instructed to rewrite the backend language.
+
+---
+
+## Phase 1 — Correct Remote identity, authentication, identifiers, and transport contract
+
+**Goal:** make registration, login, session restoration, REST, and WebSocket connection cryptographically and structurally coherent.
+
+**Dependencies:** Phase 0.
+
+### Architectural decision
+
+Use three distinct key roles:
+
+- **Account identity signing key:** Ed25519; long-lived account identity/trust.
+- **Device authentication signing key:** Ed25519; signs login challenges and device-link approvals.
+- **Device agreement key:** X25519; used only for X3DH/key agreement.
+
+Use an opaque `String` `DeviceId` end to end. Do not parse or coerce it to an integer.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Required behavior | Verification |
+|---|---|---|---|
+| P1-01 | Introduce typed value objects/DTOs for `AccountId`, `DeviceId`, signing public key, and agreement public key. Migrate Remote models and client DB columns from integer device IDs to text using an ordered migration. | No `replaceAll(RegExp(r'\D'))`, no fallback ID `1` | Migration test with existing integer rows; serialization parity |
+| P1-02 | Version the registration contract to carry account identity key, device signing key, and device agreement key explicitly. Add database columns and backend validation. | Key type/length validated; fields cannot be swapped | Contract fixtures and negative key-type tests |
+| P1-03 | Sign login challenges with the device Ed25519 authentication key and verify that exact registered key. Bind challenge to account, device, nonce, purpose, issued-at, expiry, and server audience. Make it single-use. | Replay, expiry, wrong-device, and wrong-purpose requests fail | Client-to-real-backend auth integration test |
+| P1-04 | Remove insecure production JWT defaults. Add environment validation and explicit development mode. Use a maintained JWT implementation or harden behind a replaceable token service with `iss`, `aud`, `sub`, `device_id`, `jti`, `iat`, `nbf`, `exp`, token type, `kid`, and rotation. | Production startup fails without valid key material | startup tests and token claim tests |
+| P1-05 | Implement refresh-token rotation, reuse detection, device/session revocation, and local token purge. | One-time rotating refresh tokens; revoked device cannot refresh or reconnect | replay and revocation integration tests |
+| P1-06 | Make URI construction typed: REST `http/https`; realtime `ws/wss`; backend path `/api/v1/ws`. Reject plaintext schemes outside explicit development mode. | No HTTP URI passed to `WebSocket.connect` | config matrix tests |
+| P1-07 | Replace query-string bearer tokens with an approved WebSocket authentication mechanism: short-lived one-use WS ticket or authorization-capable handshake. | Tokens absent from URI/logs/proxy access logs | backend/client integration and redaction tests |
+| P1-08 | Add required Remote Android permissions and platform declarations, separated by feature and API level. | Release build can perform network auth; call permissions remain runtime-gated | release-manifest test and Android smoke test |
+| P1-09 | Create one black-box test that boots the real backend, registers a real client identity/device, logs in, refreshes, opens WebSocket, restores the session after restart, then revokes the device. | No fakes in contract/auth path | mandatory CI test |
+
+### Exit criteria
+
+- The real app client can register and log in against the real backend.
+- Wrong key type, wrong device, expired/replayed challenge, revoked device, and reused refresh token all fail.
+- Device IDs remain byte-for-byte identical across client, database, REST, backend, and realtime payloads.
+- WebSocket connects on the contract path using `ws/wss`, with no bearer token in the URL.
+- Session restore survives app restart and validates token/device state.
+- Remote production build has the permissions required for enabled features.
+
+---
+
+## Phase 2 — Make Remote cryptography and local persistence real and fail-closed
+
+**Goal:** replace placeholder security with an interoperable, restart-safe, reviewable E2EE and encrypted-storage implementation while preserving package interfaces where practical.
+
+**Dependencies:** Phase 1.  
+**Parallel work:** SQLCipher migration and protocol-session implementation can proceed in separate branches after shared schemas are agreed.
+
+### Deliverables
+
+- Functional encrypted local database.
+- Explicit prekey lifecycle.
+- Persisted one-to-one session state.
+- Correct X3DH/session establishment and receive path.
+- Full Double Ratchet semantics or a vetted protocol library behind the existing package boundary.
+- No encryption fallback.
+- Key-change and verification UX contract.
+- External cryptographic review package.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Required behavior | Verification |
+|---|---|---|---|
+| P2-01 | Replace standard SQLite with a supported SQLCipher-capable implementation behind `HelixRemoteDatabase`. Add plaintext-to-encrypted migration using copy, integrity check, atomic swap, and rollback. | Opening DB without correct key fails; plaintext markers are absent on disk | binary scan, wrong-key test, migration crash-injection tests |
+| P2-02 | Separate secure-storage records by key role and version. Store key metadata, creation time, rotation state, and device binding. | No raw private key in logs/database/export | key inventory and secure-storage migration tests |
+| P2-03 | Implement signed prekey creation, signature verification, one-time prekey upload, atomic consumption, replenishment threshold, rotation, and expiry. Wire it into registration/login lifecycle. | New device publishes before messaging is enabled | two-client prekey tests, depleted-prekey test |
+| P2-04 | Replace the in-memory conversation-seed map with a versioned cryptographic session repository. Persist session state transactionally with the message/outbox write. | Restart does not lose decryption capability or reuse message keys | kill/restart/crash tests |
+| P2-05 | Implement the receiving side of X3DH. Validate signed prekeys and bind the transcript to both account/device identities, protocol version, and conversation context. | Unknown/unverified key changes are blocked or explicitly accepted | known-answer and tamper tests |
+| P2-06 | Implement full Double Ratchet semantics: DH ratchet, send/receive counters, previous-chain length, skipped-message keys with limits, authenticated headers/AAD, replay detection, out-of-order delivery, and atomic state updates. Prefer a mature audited implementation if it can satisfy platform and licensing constraints. | No state advance on failed authentication; bounded skipped-key storage | official vectors where available, property tests, reordered/duplicate tests |
+| P2-07 | Delete all generic-protector fallback branches from Remote E2EE establishment. Return a typed “secure session unavailable” state and keep the plaintext only in the encrypted local outbox until retry/cancel. | Encryption never silently downgrades | negative tests assert zero network send |
+| P2-08 | Define identity/device key change handling and safety-number verification. Persist trust decisions and expose “new device/key changed” events to UI. | Messages to changed keys follow explicit policy | trust-state transition tests |
+| P2-09 | Add cryptographic domain separation and AAD for message ID, conversation ID, sender/recipient device IDs, protocol version, content type, and relevant counters. | Envelope metadata substitution fails authentication | mutation tests |
+| P2-10 | Produce an external-review bundle: protocol specification, state diagrams, key lifecycle, storage schema, test vectors, threat model, known limitations, and reproducible tests. | Independent reviewer can assess without reading UI code | security-review gate sign-off |
+
+### Exit criteria
+
+- Remote DB content is demonstrably encrypted at rest on Android and Windows.
+- Two clean installations establish a session and exchange messages without shared test secrets.
+- Both clients can restart and continue the session without message-key reuse or loss.
+- Duplicate, reordered, delayed, tampered, wrong-device, and key-change scenarios have deterministic results.
+- No code path sends a message after X3DH/ratchet failure using weaker or unrelated encryption.
+- External cryptographic review is complete before production claims of E2EE or forward secrecy.
+
+---
+
+## Phase 3 — Build the Remote runtime reliability plane
+
+**Goal:** make REST, WebSocket, outbound queue, inbound catch-up, token refresh, retries, and lifecycle work automatically and observably.
+
+**Dependencies:** Phases 1–2.
+
+### Target component
+
+Create a single `RemoteRuntimeCoordinator` owned by `RemoteCompositionRoot`. It is the only component allowed to start/stop:
+
+- token/session validation;
+- WebSocket connection;
+- inbound catch-up;
+- outbound queue worker;
+- prekey replenishment;
+- call signaling runtime;
+- network-state handling;
+- app foreground/background behavior;
+- logout/local purge;
+- deterministic disposal.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Required behavior | Verification |
+|---|---|---|---|
+| P3-01 | Add typed REST errors, connect/read/write timeouts, cancellation, bounded retries for safe/idempotent operations, `Retry-After`, correlation IDs, and idempotency headers. | Non-idempotent mutations are never blindly replayed | fault-injection HTTP tests |
+| P3-02 | Replace endpoint string switch/default routing with a sealed operation registry. Unknown operations must fail closed before opening a request. | Group/contact typo cannot become a message send | exhaustive operation mapping test |
+| P3-03 | Implement lifecycle coordinator startup sequence: validate session → catch up inbound → drain outbox → connect realtime → mark ready. | UI is not “ready” before first consistent sync | state-machine tests |
+| P3-04 | Implement single-flight outbound worker with durable attempt count, exponential backoff with jitter, retry classification, next-attempt time, cancellation, and dead-letter state visible to users. | Restart resumes safely; idempotency prevents duplicates | crash/restart and duplicate-submit tests |
+| P3-05 | Implement WebSocket reconnect using configured policy, network-awareness, token refresh, and connection generation IDs. Prevent an old socket’s `onDone` from clearing a newer socket. | One logical connection per device | reconnect-race tests |
+| P3-06 | Implement sequence-gap detection. Realtime events may advance only after contiguous application; gaps trigger REST catch-up. Persist cursor and event atomically. | Out-of-order WebSocket events do not skip data | gap/reorder/property tests |
+| P3-07 | Define ACK semantics and backend mailbox retention. ACK the highest contiguous device sequence after durable application. Reconnect starts from persisted ACK/cursor. | Backend does not replay from zero indefinitely | offline/reconnect integration test |
+| P3-08 | Add a connectivity/sync state model: offline, connecting, syncing, ready, degraded, auth-required, retry scheduled, failed operation count. | UI can explain every non-ready state | widget/state tests |
+| P3-09 | Make `dispose()` asynchronous and awaited throughout both app roots. Close timers, streams, sockets, DB, call media, HTTP clients, and workers in a deterministic order. | No callbacks after disposal | leak/disposal tests |
+
+### Exit criteria
+
+- A queued message created offline sends automatically when connectivity returns.
+- Forced process termination during send neither loses nor duplicates the mutation.
+- Missing realtime sequence triggers catch-up before later events are exposed.
+- Token expiry rotates transparently or transitions to a clear auth-required state.
+- Reconnect storms are bounded client-side and server-side.
+- Every unknown operation type fails locally with no network request.
+- Runtime teardown leaves no active timer, socket, media track, worker, or database handle.
+
+---
+
+## Phase 4 — Prove the Remote direct-messaging vertical slice
+
+**Goal:** certify the core product before attachments, groups, calls, or broad UI work.
+
+**Dependencies:** Phases 1–3.
+
+### Supported scope
+
+- account/device registration and restore;
+- contact request/accept/reject/cancel;
+- direct conversation creation;
+- text message send/receive;
+- delivery/read receipts;
+- edit/delete/tombstone;
+- offline and restart behavior;
+- multi-device fan-out;
+- device revocation;
+- key-change warning.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Verification |
+|---|---|---|
+| P4-01 | Build a real end-to-end harness with two clients and one backend; add a third client for sibling-device fan-out. Use temporary encrypted databases and real cryptography. | CI runs the full path without fake protector/gateway |
+| P4-02 | Normalize server/client status vocabulary and state transitions for contacts, conversations, messages, receipts, retry, and tombstones. | transition-table tests reject illegal states |
+| P4-03 | Ensure every mutation carries stable message/request ID, idempotency key, correlation ID, sender device ID, and protocol version. | retry produces one logical result |
+| P4-04 | Implement inbound decryption/apply transaction and failure quarantine. A malformed event cannot advance cursor or poison the queue. | corrupted-envelope recovery test |
+| P4-05 | Implement deterministic conflict rules for edit/delete/receipt ordering and device clock skew. Prefer server sequence over wall-clock ordering. | permutation/property tests |
+| P4-06 | Add minimal production UI states for pending, sent, delivered, read, retrying, failed, edited, deleted, offline, key changed, and revoked device. | widget tests and manual two-device script |
+| P4-07 | Add telemetry counters without content: queue age, sync lag, decrypt failure class, reconnect count, and API latency. | redaction tests |
+
+### Mandatory scenario matrix
+
+The phase cannot close until all pass:
+
+1. online Alice → Bob;
+2. Bob offline, later reconnects;
+3. Alice sends, process is killed before response, then restarts;
+4. Bob receives events out of order;
+5. duplicate server event;
+6. tampered ciphertext;
+7. depleted one-time prekeys;
+8. Bob adds a second device;
+9. Bob revokes the first device;
+10. identity/device key changes;
+11. message edit followed by delete while another device is offline;
+12. network flaps during token refresh and WebSocket reconnect.
+
+### Exit criteria
+
+- All scenario-matrix tests pass with real implementations.
+- No plaintext appears in backend DB, logs, WebSocket traces, or network envelopes.
+- No user-visible message is lost or duplicated under the tested crash/retry cases.
+- Remote direct messaging is the first feature allowed to carry an “implemented end to end” designation.
+
+---
+
+## Phase 5 — Secure attachments, backup/restore, privacy, and device management
+
+**Goal:** complete data-bearing and destructive workflows without data loss or misleading security.
+
+**Dependencies:** Phase 4.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Required behavior | Verification |
+|---|---|---|---|
+| P5-01 | Replace string URL concatenation with typed endpoint construction. Remove duplicated `/api/v1`. | One canonical base URI | contract tests |
+| P5-02 | Separate imported source path, app-owned encrypted cache path, downloaded ciphertext path, and exported plaintext path in schema/types. Eviction may delete only app-owned cache files. | Original user file is never deleted | filesystem ownership tests |
+| P5-03 | Stream attachment encryption/decryption and hash verification; use authenticated chunk framing or a vetted streaming construction. | Bounded memory; resumable transfer cannot splice/reorder chunks | large-file, tamper, resume tests |
+| P5-04 | Deliver attachment keys only through the established E2EE session, bound to attachment/message/conversation/device. | Server never receives usable file key | two-client attachment E2E |
+| P5-05 | Implement encrypted backup with the existing backup-crypto boundary or a reviewed replacement. Derive key client-side with a memory-hard KDF, authenticate metadata, version format, and verify before restore. | Server stores opaque ciphertext only | wrong-passphrase, tamper, old-version tests |
+| P5-06 | Restore into a staging database, validate schema/integrity/account binding, then atomically swap. | Failed restore leaves current DB untouched | crash/tamper migration tests |
+| P5-07 | Replace privacy export dialog with a secure, explicit file export using platform share/save APIs, expiry/cleanup, and warning about external-file wipe limits. | Sensitive JSON is not left in a dialog/log/temp indefinitely | export lifecycle test |
+| P5-08 | Implement real typed account-deletion confirmation, recent authentication, server deletion job status, local logout, secure-storage purge, encrypted DB/cache deletion, and final state. | Button cannot self-confirm | destructive-flow widget/integration tests |
+| P5-09 | Complete device listing, rename, link approval, revoke/lost-device, last-active security history, and “cannot revoke final device without recovery path” policy. | Revocation propagates to REST/WS/refresh/prekeys | multi-device E2E |
+
+### Exit criteria
+
+- Original selected files survive cache eviction.
+- Attachment transfer survives interruption and detects any corruption.
+- Backup object is unreadable to the server and restores only after full authentication/integrity validation.
+- Account deletion requires actual user-entered confirmation and clears local app-owned data deterministically.
+- Device revocation immediately blocks token refresh, realtime reconnect, and future message fan-out.
+
+---
+
+## Phase 6 — Productionize Remote groups and calls
+
+**Goal:** add complex multi-party and realtime-media features only after direct messaging is trustworthy.
+
+**Dependencies:** Phase 5.
+
+### Group tasks
+
+| ID | Agent instruction | Verification |
+|---|---|---|
+| P6-G01 | Define group REST/realtime operation types in the canonical contract and map every pending operation explicitly. | exhaustive route/DTO tests |
+| P6-G02 | Enforce backend membership/admin authorization for every group mutation and message fan-out. | privilege-escalation tests |
+| P6-G03 | Replace random group-key labels with persisted cryptographic key material and a reviewed sender-key/epoch protocol. | join/remove/rejoin/offline-member tests |
+| P6-G04 | Rotate epoch on membership change; prevent removed members from decrypting new messages and new members from reading unauthorized history. | cryptographic membership matrix |
+| P6-G05 | Define deterministic admin succession, deletion, invite expiry, and conflict handling using server sequence. | concurrent-admin tests |
+
+### Call tasks
+
+| ID | Agent instruction | Verification |
+|---|---|---|
+| P6-C01 | Start/stop call service through the runtime coordinator and route signals by canonical target device ID. | real two-client signaling test |
+| P6-C02 | Add configurable ICE policy, short-lived TURN credentials, TLS transport, regional fallback, and privacy-aware candidate handling. Remove hardcoded public defaults from production. | relay-only and outage tests |
+| P6-C03 | Complete Android/Windows permissions, audio focus, foreground service/notification, lock-screen behavior, and app lifecycle. | device matrix |
+| P6-C04 | Build call UI for incoming, dialing, connecting, active, reconnecting, ended, failed, permission denied, mute, speaker, camera, and network quality. | widget + manual device tests |
+| P6-C05 | Add media resource ownership and deterministic cleanup. | repeated call/leak stress test |
+| P6-C06 | Add call-quality metrics without SDP, IP, media, or identity leakage. | redaction tests |
+
+### Exit criteria
+
+- Group authorization and cryptographic epoch behavior pass the full membership matrix.
+- Removed devices/members cannot decrypt future group traffic.
+- Calls work on Android↔Android, Windows↔Windows, and Android↔Windows using direct and TURN-relayed paths.
+- Failed or cancelled calls release camera, microphone, renderers, sockets, timers, and foreground resources.
+
+---
+
+## Phase 7 — Consolidate Helix Local architecture without changing product behavior
+
+**Goal:** reduce hidden coupling, oversized files, silent failures, and lifecycle ambiguity while preserving Local’s proven privacy semantics.
+
+**Dependencies:** Phase 0; may run in parallel with Remote Phases 2–6 if file ownership is isolated.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Required behavior | Verification |
+|---|---|---|---|
+| P7-01 | Move all Local production service construction into `LocalCompositionRoot` or feature composition modules owned by it. Providers expose instances and state only. | One wiring graph | composition graph snapshot test |
+| P7-02 | Remove static `globalUseCase` fallbacks from QR, secret-code, TCP server, and any similar controllers. Require injection. | Two roots share no mutable state | isolation tests |
+| P7-03 | Make root/service disposal fully asynchronous and ordered. | wipe/exit waits for media/network/storage cleanup | disposal sequence tests |
+| P7-04 | Decompose `app_providers.dart` by feature (`identity`, `discovery`, `connection`, `messaging`, `groups`, `calls`, `transfer`, `wipe`) while preserving provider names through temporary re-exports. | No consumer migration blast radius | provider parity tests |
+| P7-05 | Add characterization tests, then split Local messaging/group/request orchestration into state machines and small collaborators. Do not change wire frames in the same PR. | Existing workflow behavior remains stable | old/new transition parity |
+| P7-06 | Keep `SecureChannel` as a façade; extract handshake, frame IO, replay/order validation, heartbeat, and shutdown components one at a time. | Protocol bytes unchanged | fixture, fuzz, fragmentation, replay tests |
+| P7-07 | Replace silent catches with typed failure handling and redacted structured logging. Best-effort cleanup must record category/counter without sensitive data. | No swallowed operational failure | static check plus fault tests |
+| P7-08 | Fix Android mDNS discoverability re-enable, registration lifecycle, resolve queue cancellation, and stale-peer behavior. | toggle off/on republishes | Android integration test |
+| P7-09 | Review LAN candidate handling for IPv6 ULA/link-local and mDNS host candidates without permitting WAN relay. | modern IPv4/IPv6 LANs work | candidate-policy tests |
+| P7-10 | Split large screens by behavior/state, not arbitrary line count. Extract sections, commands, selectors, and dialogs while preserving visual output. | no UX regression | golden/widget tests |
+| P7-11 | Re-run Local storage inventory and panic-wipe forensic checks after every structural change. | no message/history persistence | restart and filesystem scans |
+
+### Exit criteria
+
+- Production object construction has one owner.
+- No static mutable service/use-case fallback remains.
+- Local root disposal is awaited and deterministic.
+- Boundary, protocol fixture, wipe, discovery, messaging, group, call, and transfer tests remain green.
+- No Local conversation content survives restart or panic wipe.
+- Large files are reduced through cohesive extraction, with stable public façades and no broad rewrite.
+
+---
+
+## Phase 8 — Establish an enterprise UI/UX system for both products
+
+**Goal:** create consistent, responsive, understandable interfaces while keeping product-specific workflows distinct.
+
+**Dependencies:** Remote Phase 4 and Local Phase 7 for broad adoption. Foundation work may start earlier.
+
+### Deliverables
+
+- product-neutral design tokens and component contracts;
+- separate Local and Remote themes/branding;
+- responsive navigation;
+- standard async/error/empty/offline states;
+- coherent information architecture;
+- validated destructive and security-sensitive flows.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Verification |
+|---|---|---|
+| P8-01 | Inventory every screen, route, dialog, sheet, state, and primary task for both apps. Map duplication, dead ends, and hidden actions. | reviewed UX inventory |
+| P8-02 | Define tokens for spacing, type scale, shape, elevation, motion, breakpoints, icon sizing, focus, and semantic colors. Share only neutral tokens that pass ADR 014 eligibility. | token lint/snapshot |
+| P8-03 | Build app-scoped component primitives: page scaffold, responsive pane, settings section, list row, conversation row, message bubble, status chip, empty/error/offline panel, confirmation dialog, and progress surface. | component gallery/goldens |
+| P8-04 | Adopt responsive navigation: bottom navigation on compact layouts; navigation rail or master-detail on wide Windows/tablet layouts. Preserve current Local vibe. | breakpoint golden tests |
+| P8-05 | Define one async-state pattern (`initial/loading/data/empty/refreshing/offline/stale/error`) and use it across both apps. | state coverage tests |
+| P8-06 | Rework Remote onboarding into explicit create/restore/link-device paths with backend/environment detail hidden from normal users. | usability script |
+| P8-07 | Rework Local home into clear sections for nearby peers, requests, active chats, groups, and discoverability/session status. | task-completion review |
+| P8-08 | Add durable, actionable feedback: retry, cancel, open diagnostics, copy safe error reference, pending queue count, attachment progress, and call state. | failure-path widgets |
+| P8-09 | Standardize destructive actions using impact text, typed confirmation only where warranted, recent-auth requirement, progress, cancellation limits, and completion receipts. | destructive-flow matrix |
+| P8-10 | Add privacy/security explanations in context: Local ephemerality, Remote persistence, key verification, external export limits, backup responsibility, and metadata. | content review against product contracts |
+
+### Exit criteria
+
+- Core tasks are reachable without exposing internal IDs or developer endpoints.
+- Phone and desktop layouts pass defined breakpoint tests.
+- Every async screen has loading, empty, offline/stale, and error behavior.
+- Security-sensitive actions communicate consequence before execution and result afterward.
+- No shared UI package contains product-specific retention, network, identity, or wipe assumptions.
+
+---
+
+## Phase 9 — Accessibility, localization, and ease-of-use certification
+
+**Goal:** make both apps operable with screen readers, keyboard, large text, low vision, motor constraints, and localized content.
+
+**Dependencies:** Phase 8.
+
+### Standard
+
+Target WCAG 2.2 AA principles as applicable to native Flutter apps, plus Android and Windows platform accessibility expectations.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Verification |
+|---|---|---|
+| P9-01 | Add Flutter localization infrastructure; remove user-visible hardcoded strings from screens/widgets. Support locale-aware dates, times, pluralization, and text direction. | untranslated-string check |
+| P9-02 | Add semantic labels, roles, values, hints, live regions, and grouping for messages, receipts, calls, QR, media, security warnings, and icon-only controls. | semantics tests + TalkBack/Narrator |
+| P9-03 | Define keyboard order, shortcuts, focus restoration, visible focus, escape/back behavior, and modal trapping on Windows. | keyboard-only scenario matrix |
+| P9-04 | Support at least 200% text scaling without clipping or loss of function; avoid fixed-height text containers. | text-scale goldens |
+| P9-05 | Enforce contrast for text, icons, focus, statuses, disabled states, and charts; never encode message/call/security state by color alone. | automated contrast audit + review |
+| P9-06 | Enforce minimum interactive target size and spacing; provide alternatives to gesture-only actions. | widget geometry tests |
+| P9-07 | Respect reduced-motion/high-contrast/platform theme settings and avoid unnecessary continuous animation. | platform-setting tests |
+| P9-08 | Make validation and errors specific, announced, field-associated, recoverable, and free of sensitive internals. | form/error accessibility tests |
+| P9-09 | Run structured usability sessions for setup, connect/add contact, message, call, attachment, verification, backup, and deletion. Track completion, error, and abandonment. | signed findings/remediation log |
+
+### Exit criteria
+
+- Core scenario matrix completes with keyboard only.
+- Core scenario matrix completes with TalkBack and Windows Narrator.
+- No critical screen clips or loses controls at 200% text.
+- All user-visible strings are localizable.
+- Automated checks have zero critical accessibility violations; remaining manual findings are documented and accepted by severity.
+
+---
+
+## Phase 10 — Performance, scalability, observability, and backend evolution
+
+**Goal:** meet measurable performance/operability targets and evolve the backend without a big-bang rewrite.
+
+**Dependencies:** functional phases for the relevant feature.
+
+### 10.1 Measure first
+
+Create budgets for:
+
+- cold/warm startup;
+- time to usable home;
+- time to first synced state;
+- message send-to-local-ack and send-to-delivery;
+- list scroll frame time;
+- memory at idle/chat/call/large transfer;
+- DB size and query latency at defined data volumes;
+- battery/network use;
+- APK/Windows package size;
+- backend p50/p95/p99 latency, throughput, queue age, WebSocket count, DB contention, and error rates.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Verification |
+|---|---|---|
+| P10-01 | Add reproducible benchmark datasets and profile builds. Record baselines before optimization. | benchmark artifact in CI/nightly |
+| P10-02 | Reduce Local’s roughly 58 MB bundled assets: remove duplicates, shorten/compress tones, lazy-download optional packs only if product policy permits, and generate appropriately sized images. | package-size budget |
+| P10-03 | Paginate/virtualize conversation, message, contact, device, group, audit, and attachment lists. Avoid decrypting/searching hundreds of rows on the UI isolate. | 10k/100k-row benchmarks |
+| P10-04 | Move expensive KDF, hashing, media preparation, database export, and large parsing off the UI isolate with cancellation/progress. | frame-time and cancellation tests |
+| P10-05 | Audit client DB queries/indexes using representative plans. Add bounded retention for operational tables such as completed outbox/dead letters/audit records. | query-plan regression tests |
+| P10-06 | Split backend `database.dart` behind module-owned repository ports and an explicit transaction abstraction. Preserve current SQLite adapter for tests/development. | repository contract suite |
+| P10-07 | Add an immutable migration framework with checksum, expand/migrate/contract sequencing, backup prerequisite, and rollback policy. | upgrade/downgrade rehearsal |
+| P10-08 | Add PostgreSQL adapter and production configuration only after repository parity tests exist. Run SQLite and PostgreSQL adapters against the same contract suite. | adapter parity |
+| P10-09 | Replace in-process-only rate limiting, reconnect tracking, and delivery coordination with interfaces and production-capable shared implementations where horizontal scaling requires them. | multi-instance tests |
+| P10-10 | Add object-storage adapter for attachments/backups; backend stores only encrypted blobs and metadata. | local emulator + production-compatible tests |
+| P10-11 | Add structured redacted logs, metrics, traces, correlation IDs, health/readiness, queue depth, sync lag, migration status, and alerts. | redaction and observability tests |
+| P10-12 | Run load, soak, reconnect-storm, large-mailbox, prekey depletion, TURN outage, object-store outage, DB failover, and restore drills. | documented SLO evidence |
+
+### Exit criteria
+
+- Budgets and SLOs are defined, measured, and enforced for critical paths.
+- No performance change is accepted without before/after evidence.
+- Backend modules no longer access one 2,578-line database implementation directly.
+- SQLite remains a valid development/test adapter; PostgreSQL production adoption is incremental and parity-tested.
+- Horizontal-scaling state is explicit rather than accidentally process-local.
+- Backup/restore and disaster-recovery drills meet documented RPO/RTO targets.
+
+---
+
+## Phase 11 — Release assurance, compliance, and staged production readiness
+
+**Goal:** make releases repeatable, independently reviewable, reversible, and safe.
+
+**Dependencies:** all relevant prior phases.
+
+### Agent-executable tasks
+
+| ID | Agent instruction | Verification |
+|---|---|---|
+| P11-01 | Build a risk-based test pyramid: unit, state-machine/property, contract, component, real backend/client E2E, platform integration, accessibility, performance, load, and security. | coverage map against risk register |
+| P11-02 | Add fuzzing for Local frames/secure channel and Remote REST/realtime/encrypted envelopes; add malformed migration/backup/attachment inputs. | scheduled fuzz jobs with corpus retention |
+| P11-03 | Add SAST, dependency vulnerability review, license policy, reproducible SBOMs for both apps and backend, and signed provenance/artifacts. | release-gate evidence |
+| P11-04 | Add Android/Windows release builds, signing isolation, co-installation, upgrade, uninstall/reinstall, permission, deep-link, notification, and clean-machine tests. | release candidate matrix |
+| P11-05 | Commission independent cryptographic review and penetration test. Block security marketing claims until critical/high findings close or receive documented risk acceptance. | signed external reports |
+| P11-06 | Validate privacy inventory, retention, deletion, export, backup, telemetry, app-store disclosures, and data-processing documentation against executable behavior. | privacy evidence matrix |
+| P11-07 | Implement staged rollout with internal, alpha, beta, percentage rollout, feature flags, schema/protocol compatibility window, crash/ANR/error thresholds, and automatic halt criteria. | rollout rehearsal |
+| P11-08 | Rehearse rollback for app, API, realtime schema, DB migration, object storage, and key/config rotation. | timed rollback exercise |
+| P11-09 | Create on-call runbooks and ownership for auth outage, sync backlog, corrupt migration, key/prekey incident, privacy request failure, TURN outage, data-loss suspicion, and security incident. | tabletop exercise |
+
+### Final enterprise release gate
+
+A release is enterprise-ready only when:
+
+- no Critical/High open defect exists in auth, crypto, storage, sync, wipe, deletion, or authorization;
+- direct messaging, attachments, backup, group, and call scenario matrices pass on supported platforms;
+- all contract/migration compatibility tests pass for the supported rolling-upgrade window;
+- external cryptographic and penetration reviews are complete;
+- privacy claims match tested behavior;
+- SLO/load/DR evidence exists;
+- signed artifacts, SBOM, provenance, release notes, rollback plan, and incident ownership are complete.
+
+---
+
+# 7. Recommended execution order and parallel lanes
+
+## 7.1 Critical path
+
+```text
+Phase 0
+  ↓
+Phase 1 (identity/auth/ID/transport contract)
+  ↓
+Phase 2 (E2EE + encrypted persistence)
+  ↓
+Phase 3 (runtime/sync/outbox/reconnect)
+  ↓
+Phase 4 (direct-message proof)
+  ↓
+Phase 5 (attachments/backup/privacy/devices)
+  ↓
+Phase 6 (groups/calls)
+  ↓
+Phases 8–11 adoption and certification
+```
+
+## 7.2 Safe parallel work
+
+- **Lane A — Remote security:** Phases 1–2.
+- **Lane B — Remote runtime/backend:** Phase 3 after Phase 1 schemas stabilize.
+- **Lane C — Local architecture:** Phase 7 can start after Phase 0 and remain isolated from Remote files.
+- **Lane D — UI foundation:** Phase 8 tokens/component gallery can start after Phase 0; feature adoption waits for stable workflows.
+- **Lane E — QA/DevEx:** Phase 0, then continuously builds the scenario harnesses for each phase.
+- **Lane F — Operations:** production adapters/observability design can begin early, but implementation must not overtake functional correctness.
+
+Do not parallelize two agents in the same auth, crypto-session, sync-cursor, database-migration, or wipe code path.
+
+---
+
+# 8. Verification command model
+
+Each task runs a targeted command first, then the full platform-appropriate pipeline.
+
+### Mandatory on every PR
+
+```powershell
+dart format --output=none --set-exit-if-changed apps packages services tool
+flutter analyze
+dart analyze services/helix_remote_backend tool
+dart run tool/check_boundaries.dart
+dart test tool/boundary_test.dart
+dart run tool/check_secrets.dart
+```
+
+Then run all affected app/package/backend tests.
+
+### Mandatory on phase closure
+
+```powershell
+$env:HELIX_VERIFY_BUILD="1"
+.\scripts\verify.ps1
+```
+
+Plus:
+
+- clean checkout on Windows and Linux;
+- Android release-manifest/build verification;
+- phase-specific real-client/backend scenario suite;
+- migration upgrade/recovery test where schema changed;
+- filesystem/log/network plaintext scan where sensitive data changed;
+- accessibility/performance/security gates where applicable.
+
+A passing analyzer and unit suite is necessary but never sufficient for a phase closure.
+
+---
+
+# 9. First implementation cycle: exact recommended backlog
+
+The first cycle should contain only these tasks, in this order:
+
+1. **P0-03:** fix monorepo secret-scan coverage.
+2. **P0-04:** make package boundary/dependency maps complete and self-validating.
+3. **P0-02:** supersede stale backend/implementation claims.
+4. **P0-05/P0-06:** strict analysis and dependency pinning.
+5. **P1-01:** canonical string device IDs with migrations.
+6. **P1-02/P1-03:** explicit signing/agreement keys and correct challenge login.
+7. **P1-06/P1-07:** correct WebSocket URI/path and remove query tokens.
+8. **P1-09:** real app-client-to-backend auth/WebSocket test.
+9. **P2-01:** functional SQLCipher migration.
+10. **P2-03 through P2-08:** prekeys, persisted sessions, real receive path, full ratchet/fail-closed policy.
+11. **P3-01 through P3-09:** runtime coordinator and reliable sync.
+12. **P4 scenario matrix:** certify direct messaging.
+
+Do not assign agents to Remote attachments, groups, calls, visual redesign, PostgreSQL, or new product features until item 12 passes.
+
+---
+
+# 10. Definition of “done” for the next improvement cycle
+
+The next improvement cycle is successful when all of the following are true:
+
+- repository checks scan and classify the full monorepo;
+- documentation no longer overstates implementation;
+- Remote registration/login/WebSocket works against the real backend;
+- identifiers and key roles are type-safe and consistent;
+- the Remote local database is actually encrypted;
+- cryptographic sessions and messages survive restart;
+- E2EE fails closed and passes tamper/reorder/replay tests;
+- outbound/inbound sync runs automatically with gap recovery and idempotency;
+- two real clients complete the direct-message scenario matrix;
+- Local behavior remains unchanged while its wiring and lifecycle become simpler;
+- subsequent UI, accessibility, performance, and operations work has stable interfaces to build upon.
+
+That is the point at which Helix moves from a well-documented, component-rich prototype to a defensible enterprise engineering baseline.

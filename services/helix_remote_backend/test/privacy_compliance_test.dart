@@ -396,9 +396,7 @@ Future<_Response> _getJson(
 
 Directory _repoRoot() {
   var dir = Directory.current;
-  while (!File(
-    '${dir.path}/HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN.md',
-  ).existsSync()) {
+  while (!_isRepoRoot(dir)) {
     final parent = dir.parent;
     if (parent.path == dir.path) {
       throw StateError('Could not locate repository root');
@@ -407,3 +405,7 @@ Directory _repoRoot() {
   }
   return dir;
 }
+
+bool _isRepoRoot(Directory dir) =>
+    File('${dir.path}/pubspec.yaml').existsSync() &&
+    File('${dir.path}/ownership-blast-radius.yaml').existsSync();

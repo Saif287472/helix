@@ -40,7 +40,7 @@ level before release.
 
 ## Execution Ledger
 
-`HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN_PART_2_REMAINING.md` remains the execution
-ledger for remaining and blocked Phase 12+ work. Completion evidence must
-distinguish repository controls from external review, signing, staging, and
-production deployment evidence.
+`docs/architecture/PHASE_12_20_CLOSURE.md` remains the execution ledger for
+remaining and blocked Phase 12+ work. Completion evidence must distinguish
+repository controls from external review, signing, staging, and production
+deployment evidence.

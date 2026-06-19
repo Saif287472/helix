@@ -45,7 +45,8 @@ These rules are mechanically enforced by `tool/check_boundaries.dart` and
 ### Current package classification
 
 All packages under `packages/` are **Local-classified** until explicitly
-extracted via the shared-code eligibility checklist (master plan section 3.3).
+extracted via the shared-code eligibility checklist in
+`docs/adr/014-shared-package-eligibility.md`.
 
 `packages/shared/` and `packages/remote/` are empty boundary placeholders.
 Do not add code to them without following the extraction checklist.
@@ -75,7 +76,8 @@ the descriptor and inject it through the composition root.
 ## Required Flow
 
 1. Understand the task and identify affected features.
-2. Read `HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN.md` for the current phase.
+2. Read the current phase/closure docs in `docs/architecture/`, especially
+   `docs/architecture/PHASE_12_20_CLOSURE.md` for Phase 20 work.
 3. Read relevant ADRs in `docs/adr/` and workflow docs in `docs/workflows/`.
 4. Make a short implementation plan for non-trivial work.
 5. Keep changes small and scoped to the requested stage.
@@ -120,7 +122,8 @@ the descriptor and inject it through the composition root.
 - Never move code into `packages/shared/` without passing the shared-code
   eligibility checklist.
 - Never start Remote messaging, storage, calls, or group features before
-  Phases 4–7 are complete (see master plan section 11).
+  Phases 4–7 are complete and the Remote closure docs show executable
+  evidence.
 
 ## Completion Report
 

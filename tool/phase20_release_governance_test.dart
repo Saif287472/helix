@@ -204,38 +204,28 @@ void main() {
     );
 
     test('execution ledger keeps external blockers unclaimed', () {
-      final master = _read('HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN.md');
-      final part2 = _read(
-        'HELIX_ENTERPRISE_TWO_APP_MASTER_PLAN_PART_2_REMAINING.md',
-      );
+      final phase9To11 = _read('docs/architecture/PHASE_9_11_CLOSURE.md');
+      final phase12To20 = _read('docs/architecture/PHASE_12_20_CLOSURE.md');
+      final security = _read('docs/security/REMOTE_SECURITY_AND_COMPLIANCE.md');
 
-      expect(master, contains('Staging deployment remains BLOCKED'));
+      expect(phase9To11, contains('P10-027 | Staging deployment'));
+      expect(phase9To11, contains('**BLOCKED**'));
+      expect(security, contains('Independent cryptographic review: BLOCKED'));
+      expect(phase12To20, contains('| P18-015 | Penetration test |'));
+      expect(phase12To20, contains('| P18-016 | Independent crypto review |'));
       expect(
-        master,
-        contains(
-          'Independent external cryptographic/security review remains BLOCKED',
-        ),
+        phase12To20,
+        contains('| P18-017 | Mobile application security review |'),
       );
-      expect(part2, contains('- [ ] **P18-015:** Penetration test. BLOCKED'));
+      expect(phase12To20, contains('| P18-018 | Backend security review |'));
+      expect(phase12To20, contains('| P18-019 | Secrets and access review |'));
       expect(
-        part2,
-        contains(
-          '- [ ] **P18-016:** Independent cryptographic review. BLOCKED',
-        ),
-      );
-      expect(
-        part2,
-        contains(
-          '- [ ] **P18-017:** Mobile application security review. BLOCKED',
-        ),
+        phase12To20,
+        contains('| P20-014 | Staging E2E tests | **OUT OF STUDENT SCOPE**'),
       );
       expect(
-        part2,
-        contains('- [ ] **P18-018:** Backend security review. BLOCKED'),
-      );
-      expect(
-        part2,
-        contains('- [ ] **P18-019:** Secrets and access review. BLOCKED'),
+        phase12To20,
+        contains('| P20-016 | Production deployment/rollback |'),
       );
     });
   });

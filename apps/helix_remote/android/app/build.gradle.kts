@@ -4,6 +4,19 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseKeystoreFile = project.rootProject.file("helix_remote.keystore")
+val releaseStorePassword = System.getenv("HELIX_REMOTE_STORE_PASSWORD") ?: ""
+val releaseKeyAlias = System.getenv("HELIX_REMOTE_KEY_ALIAS") ?: ""
+val releaseKeyPassword = System.getenv("HELIX_REMOTE_KEY_PASSWORD") ?: ""
+val releaseSigningConfigured =
+    releaseKeystoreFile.exists() &&
+        releaseStorePassword.isNotBlank() &&
+        releaseKeyAlias.isNotBlank() &&
+        releaseKeyPassword.isNotBlank()
+val missingReleaseSigningMessage =
+    "Release build requires helix_remote.keystore and HELIX_REMOTE_STORE_PASSWORD, " +
+        "HELIX_REMOTE_KEY_ALIAS, HELIX_REMOTE_KEY_PASSWORD. Debug signing is forbidden for Helix Remote release."
+
 android {
     namespace = "com.helix.remote"
     compileSdk = flutter.compileSdkVersion
@@ -22,30 +35,34 @@ android {
         versionName = flutter.versionName
     }
 
+    if (releaseSigningConfigured) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             // Use product-scoped env vars (HELIX_REMOTE_*) so that Local and Remote
             // release builds can never accidentally share the same signing credentials.
-            val keystoreFile = project.rootProject.file("helix_remote.keystore")
-            val storePassword = System.getenv("HELIX_REMOTE_STORE_PASSWORD") ?: ""
-            val keyAlias = System.getenv("HELIX_REMOTE_KEY_ALIAS") ?: ""
-            val keyPassword = System.getenv("HELIX_REMOTE_KEY_PASSWORD") ?: ""
-            if (!keystoreFile.exists() ||
-                storePassword.isBlank() ||
-                keyAlias.isBlank() ||
-                keyPassword.isBlank()) {
-                throw org.gradle.api.GradleException(
-                    "Release build requires helix_remote.keystore and HELIX_REMOTE_STORE_PASSWORD, " +
-                    "HELIX_REMOTE_KEY_ALIAS, HELIX_REMOTE_KEY_PASSWORD. Debug signing is forbidden for Helix Remote release."
-                )
-            }
-            signingConfig = signingConfigs.create("release") {
-                storeFile = keystoreFile
-                this.storePassword = storePassword
-                this.keyAlias = keyAlias
-                this.keyPassword = keyPassword
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val releaseTaskRequested = allTasks.any { task ->
+        task.project == project && task.name.contains("Release")
+    }
+    if (releaseTaskRequested && !releaseSigningConfigured) {
+        throw org.gradle.api.GradleException(missingReleaseSigningMessage)
     }
 }
 

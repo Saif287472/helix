@@ -373,7 +373,11 @@ class RemoteCompositionRoot {
     );
 
     setAuthenticated(accessToken);
-    await connectWebSocket();
+    try {
+      await connectWebSocket();
+    } catch (e) {
+      _lastError = 'Registered, but WebSocket connect failed: $e';
+    }
   }
 
   void setAuthenticated(String accessToken) {
