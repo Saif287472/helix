@@ -138,11 +138,11 @@ Still not complete:
 - [x] **P14-003:** Content-addressed or opaque object ID without plaintext filename.
 - [x] **P14-004:** Resumable upload.
 - [x] **P14-005:** Resumable download.
-- [ ] **P14-006:** Integrity verification.
-- [ ] **P14-007:** Encrypted thumbnail strategy.
-- [ ] **P14-008:** File size and quota limits.
-- [ ] **P14-009:** Malware-risk UX without server plaintext scanning claims.
-- [ ] **P14-010:** Attachment expiry only through explicit deletion/retention contract.
+- [x] **P14-006:** Integrity verification.
+- [x] **P14-007:** Encrypted thumbnail strategy.
+- [x] **P14-008:** File size and quota limits.
+- [x] **P14-009:** Malware-risk UX without server plaintext scanning claims.
+- [x] **P14-010:** Attachment expiry only through explicit deletion/retention contract.
 - [ ] **P14-011:** Orphan cleanup after transactions fail.
 - [ ] **P14-012:** Object storage lifecycle rules.
 - [ ] **P14-013:** Cache eviction without deleting server history.

@@ -1,9 +1,12 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
+import 'package:helix_remote/app/attachment_safety.dart';
+import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 
@@ -57,6 +60,7 @@ void main() {
       jwtSecret: 'test_jwt_secret_for_remote_attachments_service_testing',
       rateLimitMaxTokens: 100.0,
       rateLimitRefillRate: 10.0,
+      attachmentsStorageDir: tempStorageDir,
     );
 
     final backendDb = server.db;
@@ -126,7 +130,7 @@ void main() {
 
       // 3. Resumable upload (simulate partial upload first)
       // We'll manually insert 300 bytes into the server's directory to simulate an interrupted upload
-      final serverFile = File('attachments_storage/$attachmentId');
+      final serverFile = File('${tempStorageDir.path}/$attachmentId');
       if (!serverFile.parent.existsSync()) {
         serverFile.parent.createSync(recursive: true);
       }
@@ -139,6 +143,7 @@ void main() {
       // Register attachment metadata on backend database as PENDING with 300 bytes
       server.db.createAttachment(
         fileId: attachmentId,
+        accountId: 'user1',
         fileSize: fullCiphertext.length,
         fileHash: attachmentId,
       );
@@ -190,6 +195,110 @@ void main() {
       expect(
         localAttachmentAfterDownload['local_path'],
         equals(decryptedFile.path),
+      );
+    },
+  );
+
+  test('Client-side size limit validation throws ArgumentError', () async {
+    final service = RemoteAttachmentService(
+      baseUrl: 'http://127.0.0.1:$port',
+      authToken: token,
+      db: db,
+      tempDir: clientTempDir,
+    );
+
+    // Create a mock File that claims to be 11MB
+    final largeFile = File(p.join(clientTempDir.path, 'large.txt'));
+    await largeFile.writeAsBytes(Uint8List(10)); // just small actual write
+    // To mock the lengthSync without writing 11MB, we will write a file and mock length check if needed.
+    // Wait! lengthSync reads length from filesystem, so we must write a large file or use custom mocking.
+    // Since writing 11MB on local disk takes less than 10 milliseconds, we can write it!
+    final largeBytes = Uint8List(11 * 1024 * 1024);
+    await largeFile.writeAsBytes(largeBytes);
+
+    expect(() => service.prepareAttachment(largeFile), throwsArgumentError);
+  });
+
+  test(
+    'Encrypted thumbnail preparation, database storage, and manifest serialization',
+    () async {
+      final service = RemoteAttachmentService(
+        baseUrl: 'http://127.0.0.1:$port',
+        authToken: token,
+        db: db,
+        tempDir: clientTempDir,
+      );
+
+      // 1. Setup plaintext primary and thumbnail files
+      final mainFile = File(p.join(clientTempDir.path, 'photo.jpg'));
+      await mainFile.writeAsBytes(List.generate(500, (i) => i % 256));
+
+      final thumbFile = File(p.join(clientTempDir.path, 'photo_thumb.jpg'));
+      await thumbFile.writeAsBytes(List.generate(50, (i) => (i * 2) % 256));
+
+      // 2. Prepare attachment with thumbnail
+      final prepResult = await service.prepareAttachment(
+        mainFile,
+        thumbnailFile: thumbFile,
+      );
+      final mainId = prepResult['attachment_id'] as String;
+      final thumbData = prepResult['thumbnail'] as Map<String, dynamic>;
+      final thumbId = thumbData['attachment_id'] as String;
+
+      expect(mainId, isNotEmpty);
+      expect(thumbId, isNotEmpty);
+      expect(mainId, isNot(equals(thumbId)));
+
+      // Verify both are stored in client DB
+      final mainLocal = db.getAttachment(mainId);
+      final thumbLocal = db.getAttachment(thumbId);
+      expect(mainLocal, isNotNull);
+      expect(thumbLocal, isNotNull);
+      expect(mainLocal!['status'], equals('PENDING'));
+      expect(thumbLocal!['status'], equals('PENDING'));
+      expect(mainLocal['filename'], equals('photo.jpg'));
+      expect(thumbLocal['filename'], equals('photo.jpg.thumb'));
+
+      // 3. Serialize and deserialize RemoteAttachmentManifest with thumbnail metadata
+      final manifest = RemoteAttachmentManifest(
+        fileId: mainId,
+        fileSize: prepResult['size_bytes'] as int,
+        fileHash: prepResult['file_hash'] as String,
+        mimeType: 'image/jpeg',
+        thumbnailFileId: thumbId,
+        thumbnailFileSize: thumbData['size_bytes'] as int,
+        thumbnailFileHash: thumbData['file_hash'] as String,
+      );
+
+      final json = manifest.toJson();
+      expect(json['thumbnail_file_id'], equals(thumbId));
+      expect(json['thumbnail_file_size'], equals(thumbData['size_bytes']));
+
+      final parsed = RemoteAttachmentManifest.fromJson(json);
+      expect(parsed.thumbnailFileId, equals(thumbId));
+      expect(parsed.thumbnailFileSize, equals(thumbData['size_bytes']));
+      expect(parsed.thumbnailFileHash, equals(thumbData['file_hash']));
+    },
+  );
+
+  test(
+    'Malware warning UX string verification without server scanning claims',
+    () {
+      // 1. Get the warning message
+      final warning = RemoteAttachmentSafety.malwareWarningMessage;
+
+      // 2. Verify warning properties
+      expect(warning, contains('end-to-end encrypted'));
+      expect(warning, contains('cannot scan'));
+      expect(warning, contains('malware'));
+      expect(warning, isNot(contains('server does scan')));
+      expect(warning, isNot(contains('server performs scan')));
+
+      // 3. Check helper method
+      expect(RemoteAttachmentSafety.verifyWarningMessage(warning), isTrue);
+      expect(
+        RemoteAttachmentSafety.verifyWarningMessage('Some other warning'),
+        isFalse,
       );
     },
   );

@@ -60,6 +60,7 @@ class BackendServer {
   final RateLimiter rateLimiter;
   final WebSocketRelay wsRelay;
   final OutboxWorker outboxWorker;
+  final Directory? attachmentsStorageDir;
   HttpServer? _httpServer;
   HttpServer? get httpServer => _httpServer;
 
@@ -69,6 +70,7 @@ class BackendServer {
     required this.rateLimiter,
     required this.wsRelay,
     required this.outboxWorker,
+    this.attachmentsStorageDir,
   });
 
   factory BackendServer.create({
@@ -76,6 +78,7 @@ class BackendServer {
     required String jwtSecret,
     double rateLimitMaxTokens = 100.0,
     double rateLimitRefillRate = 10.0,
+    Directory? attachmentsStorageDir,
   }) {
     final db = BackendDatabase(sqliteDb);
     final jwt = JwtHelper(jwtSecret);
@@ -92,6 +95,7 @@ class BackendServer {
       rateLimiter: rateLimiter,
       wsRelay: wsRelay,
       outboxWorker: outboxWorker,
+      attachmentsStorageDir: attachmentsStorageDir,
     );
   }
 
@@ -101,9 +105,16 @@ class BackendServer {
     final authModule = AuthModule(db, jwt);
     final prekeysModule = PrekeysModule(db);
     final contactsModule = ContactsModule(db);
-    final messagingModule = MessagingModule(db, wsRelay);
     final backupsModule = BackupsModule(db);
-    final attachmentsModule = AttachmentsModule(db);
+    final attachmentsModule = AttachmentsModule(
+      db,
+      storageDir: attachmentsStorageDir,
+    );
+    final messagingModule = MessagingModule(
+      db,
+      wsRelay,
+      onMessageDeleted: attachmentsModule.cleanAttachmentReferences,
+    );
 
     // Map modules
     router.mount('/api/v1/accounts', authModule.router.call);

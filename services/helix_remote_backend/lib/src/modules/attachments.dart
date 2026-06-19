@@ -6,6 +6,9 @@ import 'package:crypto/crypto.dart';
 import 'package:helix_remote_backend/src/database.dart';
 
 class AttachmentsModule {
+  static const int maxFileSize = 10 * 1024 * 1024; // 10MB
+  static const int maxQuota = 50 * 1024 * 1024; // 50MB
+
   final BackendDatabase db;
   final Directory storageDir;
 
@@ -23,6 +26,7 @@ class AttachmentsModule {
     router.put('/upload/file/<fileId>', _uploadFileHandler);
     router.get('/download/<fileId>', _requestDownloadHandler);
     router.get('/download/file/<fileId>', _downloadFileHandler);
+    router.post('/register-reference', _registerReferenceHandler);
     return router;
   }
 
@@ -44,11 +48,30 @@ class AttachmentsModule {
         );
       }
 
+      if (fileSize > maxFileSize) {
+        return Response.badRequest(
+          body: jsonEncode({
+            'error': 'File size exceeds maximum limit of 10MB',
+          }),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final currentUsage = db.getAccountStorageUsage(accountId);
+      if (currentUsage + fileSize > maxQuota) {
+        return Response.badRequest(
+          body: jsonEncode({
+            'error': 'Upload exceeds account storage quota of 50MB',
+          }),
+        );
+      }
+
       // Content-addressed: file_id is derived from file_hash
       final fileId = fileHash;
 
       db.createAttachment(
         fileId: fileId,
+        accountId: accountId,
         fileSize: fileSize,
         fileHash: fileHash,
       );
@@ -66,6 +89,56 @@ class AttachmentsModule {
       return Response.internalServerError(
         body: jsonEncode({'error': e.toString()}),
       );
+    }
+  }
+
+  Future<Response> _registerReferenceHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final fileId = body['file_id'] as String?;
+      final messageId = body['message_id'] as String?;
+
+      if (fileId == null ||
+          messageId == null ||
+          fileId.isEmpty ||
+          messageId.isEmpty) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing file_id or message_id'}),
+        );
+      }
+
+      db.registerAttachmentReference(fileId, messageId);
+      return Response.ok(jsonEncode({'message': 'Reference registered'}));
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+      );
+    }
+  }
+
+  void cleanAttachmentReferences(String messageId) {
+    try {
+      final fileIds = db.getReferencedFileIds(messageId);
+      db.deleteAttachmentReferences(messageId);
+
+      for (final fileId in fileIds) {
+        final count = db.getAttachmentReferenceCount(fileId);
+        if (count == 0) {
+          final file = File('${storageDir.path}/$fileId');
+          if (file.existsSync()) {
+            file.deleteSync();
+          }
+          db.deleteAttachmentRow(fileId);
+        }
+      }
+    } catch (e) {
+      // Ignore or log error gracefully
     }
   }
 

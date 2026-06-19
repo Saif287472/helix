@@ -10,8 +10,9 @@ abstract class MessageRelay {
 class MessagingModule {
   final BackendDatabase db;
   final MessageRelay relay;
+  final void Function(String messageId)? onMessageDeleted;
 
-  MessagingModule(this.db, this.relay);
+  MessagingModule(this.db, this.relay, {this.onMessageDeleted});
 
   Router get router {
     final router = Router();
@@ -303,6 +304,9 @@ class MessagingModule {
       }
 
       final conversationId = msg['conversation_id'] as String;
+
+      // Clean up any referenced attachments if count drops to 0
+      onMessageDeleted?.call(messageId);
 
       // Delete message from messages table
       db.deleteMessage(messageId);

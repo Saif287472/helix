@@ -22,6 +22,7 @@ void main() {
       jwtSecret: 'test_jwt_secret_for_attachments_testing',
       rateLimitMaxTokens: 100.0,
       rateLimitRefillRate: 10.0,
+      attachmentsStorageDir: tempStorageDir,
     );
 
     // Register a mock user and device in the backend DB to perform auth
@@ -197,6 +198,167 @@ void main() {
       // Verify full concat
       final fullRec = [...chunkReceived1, ...chunkReceived2];
       expect(fullRec, equals(originalBytes));
+
+      client.close();
+    },
+  );
+
+  test('File size limits (10MB) and quota limits (50MB) on backend', () async {
+    final client = HttpClient();
+
+    // 1. File size limit check (11MB)
+    final uploadReq1 = await client.post(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload',
+    );
+    uploadReq1.headers.set('Authorization', 'Bearer $token');
+    uploadReq1.headers.set('Content-Type', 'application/json');
+    uploadReq1.add(
+      utf8.encode(
+        jsonEncode({
+          'file_size': 11 * 1024 * 1024, // 11MB
+          'file_hash': 'too_large_hash',
+        }),
+      ),
+    );
+    var resp = await uploadReq1.close();
+    expect(resp.statusCode, equals(400));
+    var respBody =
+        jsonDecode(await resp.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    expect(respBody['error'], contains('exceeds maximum limit of 10MB'));
+
+    // 2. User storage quota limit check
+    // Simulate current storage use of 48MB by inserting directly into database
+    server.db.createAttachment(
+      fileId: 'mock_48mb_file',
+      accountId: 'user1',
+      fileSize: 48 * 1024 * 1024,
+      fileHash: 'mock_48mb_hash',
+    );
+    server.db.updateAttachmentProgress(
+      'mock_48mb_file',
+      48 * 1024 * 1024,
+      'COMPLETED',
+    );
+
+    // Attempt to upload a 3MB file (total would be 51MB > 50MB quota)
+    final uploadReq2 = await client.post(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload',
+    );
+    uploadReq2.headers.set('Authorization', 'Bearer $token');
+    uploadReq2.headers.set('Content-Type', 'application/json');
+    uploadReq2.add(
+      utf8.encode(
+        jsonEncode({
+          'file_size': 3 * 1024 * 1024, // 3MB
+          'file_hash': 'exceeds_quota_hash',
+        }),
+      ),
+    );
+    resp = await uploadReq2.close();
+    expect(resp.statusCode, equals(400));
+    respBody =
+        jsonDecode(await resp.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    expect(
+      respBody['error'],
+      contains('exceeds account storage quota of 50MB'),
+    );
+
+    client.close();
+  });
+
+  test(
+    'Reference registration and reference-count automatic file deletion',
+    () async {
+      final client = HttpClient();
+
+      // 1. Upload a small 100-byte file
+      final originalBytes = List.generate(100, (i) => i % 256);
+      final fileHash = sha256.convert(originalBytes).toString();
+      final fileSize = originalBytes.length;
+
+      final uploadReq = await client.post(
+        '127.0.0.1',
+        port,
+        '/api/v1/attachments/upload',
+      );
+      uploadReq.headers.set('Authorization', 'Bearer $token');
+      uploadReq.headers.set('Content-Type', 'application/json');
+      uploadReq.add(
+        utf8.encode(jsonEncode({'file_size': fileSize, 'file_hash': fileHash})),
+      );
+      var resp = await uploadReq.close();
+      expect(resp.statusCode, equals(200));
+
+      final putReq = await client.put(
+        '127.0.0.1',
+        port,
+        '/api/v1/attachments/upload/file/$fileHash?offset=0',
+      );
+      putReq.headers.set('Authorization', 'Bearer $token');
+      putReq.add(originalBytes);
+      resp = await putReq.close();
+      expect(resp.statusCode, equals(200));
+
+      // Verify physical file exists on disk
+      final physicalFile = File('${tempStorageDir.path}/$fileHash');
+      expect(physicalFile.existsSync(), isTrue);
+
+      // 2. Setup mock message in backend DB
+      server.db.createConversation('conv_cleanup', 'DIRECT', 'Cleanup Conv', [
+        'user1',
+      ]);
+      server.db.saveMessage(
+        messageId: 'msg_to_delete_99',
+        conversationId: 'conv_cleanup',
+        senderAccountId: 'user1',
+        senderDeviceId: 'device1',
+        recipientDeviceId: 'device1',
+        ciphertext: 'encrypted_payload',
+      );
+
+      // 3. Register attachment reference via HTTP API
+      final refReq = await client.post(
+        '127.0.0.1',
+        port,
+        '/api/v1/attachments/register-reference',
+      );
+      refReq.headers.set('Authorization', 'Bearer $token');
+      refReq.headers.set('Content-Type', 'application/json');
+      refReq.add(
+        utf8.encode(
+          jsonEncode({'file_id': fileHash, 'message_id': 'msg_to_delete_99'}),
+        ),
+      );
+      resp = await refReq.close();
+      expect(resp.statusCode, equals(200));
+
+      // Verify reference exists in DB
+      expect(server.db.getAttachmentReferenceCount(fileHash), equals(1));
+
+      // 4. Delete the message using the /delete endpoint
+      final deleteReq = await client.post(
+        '127.0.0.1',
+        port,
+        '/api/v1/messages/delete',
+      );
+      deleteReq.headers.set('Authorization', 'Bearer $token');
+      deleteReq.headers.set('Content-Type', 'application/json');
+      deleteReq.add(
+        utf8.encode(jsonEncode({'message_id': 'msg_to_delete_99'})),
+      );
+      resp = await deleteReq.close();
+      expect(resp.statusCode, equals(200));
+
+      // 5. Verify reference count is now 0 and physical file + DB row are gone
+      expect(server.db.getAttachmentReferenceCount(fileHash), equals(0));
+      expect(physicalFile.existsSync(), isFalse);
+      expect(server.db.getAttachment(fileHash), isNull);
 
       client.close();
     },

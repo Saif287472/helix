@@ -27,7 +27,15 @@ class RemoteAttachmentService {
   /// Prepares a file for upload: generates random key/IV, encrypts the file
   /// to a temporary ciphertext file, saves metadata locally.
   /// Returns the attachment metadata mapping.
-  Future<Map<String, dynamic>> prepareAttachment(File plaintextFile) async {
+  Future<Map<String, dynamic>> prepareAttachment(
+    File plaintextFile, {
+    File? thumbnailFile,
+  }) async {
+    final originalLength = plaintextFile.lengthSync();
+    if (originalLength > 10 * 1024 * 1024) {
+      throw ArgumentError('File size exceeds the 10MB limit');
+    }
+
     final keys = _crypto.generateAttachmentKeys();
     final keyBytes = keys['key']!;
     final ivBytes = keys['iv']!;
@@ -60,7 +68,7 @@ class RemoteAttachmentService {
       status: 'PENDING',
     );
 
-    return {
+    final result = <String, dynamic>{
       'attachment_id': sha256Hash,
       'filename': filename,
       'size_bytes': ciphertext.length,
@@ -68,6 +76,55 @@ class RemoteAttachmentService {
       'encrypted_key': keyWithIv,
       'ciphertext_path': tempCipherFile.path,
     };
+
+    if (thumbnailFile != null) {
+      if (thumbnailFile.lengthSync() > 1024 * 1024) {
+        throw ArgumentError('Thumbnail file size exceeds the 1MB limit');
+      }
+
+      final thumbKeys = _crypto.generateAttachmentKeys();
+      final thumbKeyBytes = thumbKeys['key']!;
+      final thumbIvBytes = thumbKeys['iv']!;
+
+      final thumbPlaintext = await thumbnailFile.readAsBytes();
+      final thumbCiphertext = await _crypto.encryptFile(
+        thumbPlaintext,
+        thumbKeyBytes,
+        thumbIvBytes,
+      );
+
+      final thumbFilename = '$filename.thumb';
+      final tempThumbCipherFile = File(
+        p.join(tempDir.path, '$thumbFilename.enc'),
+      );
+      await tempThumbCipherFile.writeAsBytes(thumbCiphertext);
+
+      final thumbSha256Hash = await _computeSha256(thumbCiphertext);
+
+      final thumbEncKeyStr = base64UrlEncode(thumbKeyBytes);
+      final thumbEncIvStr = base64UrlEncode(thumbIvBytes);
+      final thumbKeyWithIv = '$thumbEncKeyStr:$thumbEncIvStr';
+
+      db.saveAttachment(
+        attachmentId: thumbSha256Hash,
+        filename: thumbFilename,
+        sizeBytes: thumbCiphertext.length,
+        encryptedKey: thumbKeyWithIv,
+        localPath: thumbnailFile.path,
+        status: 'PENDING',
+      );
+
+      result['thumbnail'] = {
+        'attachment_id': thumbSha256Hash,
+        'filename': thumbFilename,
+        'size_bytes': thumbCiphertext.length,
+        'file_hash': thumbSha256Hash,
+        'encrypted_key': thumbKeyWithIv,
+        'ciphertext_path': tempThumbCipherFile.path,
+      };
+    }
+
+    return result;
   }
 
   /// Performs a resumable upload to the server.
@@ -286,5 +343,26 @@ class RemoteAttachmentService {
   Future<String> _computeSha256(Uint8List data) async {
     final hash = await crypto_pkg.Sha256().hash(data);
     return hash.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  Future<void> registerReference({
+    required String fileId,
+    required String messageId,
+  }) async {
+    final requestUrl = Uri.parse(
+      '$baseUrl/api/v1/attachments/register-reference',
+    );
+    final req = await _httpClient.postUrl(requestUrl);
+    req.headers.set('Authorization', 'Bearer $authToken');
+    req.headers.set('Content-Type', 'application/json');
+    req.add(
+      utf8.encode(jsonEncode({'file_id': fileId, 'message_id': messageId})),
+    );
+    final resp = await req.close();
+    if (resp.statusCode != 200) {
+      throw StateError(
+        'Failed to register reference with status ${resp.statusCode}',
+      );
+    }
   }
 }

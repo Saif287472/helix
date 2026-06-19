@@ -252,6 +252,30 @@ class BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 4;');
     }
+
+    if (version < 5) {
+      _db.execute('DROP TABLE IF EXISTS attachments;');
+      _db.execute('''
+        CREATE TABLE attachments (
+          file_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          file_size INTEGER NOT NULL,
+          file_hash TEXT NOT NULL,
+          uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS attachment_references (
+          file_id TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          PRIMARY KEY(file_id, message_id),
+          FOREIGN KEY(file_id) REFERENCES attachments(file_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 5;');
+    }
   }
 
   void close() {
@@ -264,14 +288,15 @@ class BackendDatabase {
 
   void createAttachment({
     required String fileId,
+    required String accountId,
     required int fileSize,
     required String fileHash,
   }) {
     final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO attachments (file_id, file_size, file_hash, uploaded_bytes, status)
-      VALUES (?, ?, ?, 0, 'PENDING');
+      INSERT OR REPLACE INTO attachments (file_id, account_id, file_size, file_hash, uploaded_bytes, status)
+      VALUES (?, ?, ?, ?, 0, 'PENDING');
     ''');
-    stmt.execute([fileId, fileSize, fileHash]);
+    stmt.execute([fileId, accountId, fileSize, fileHash]);
     stmt.close();
   }
 
@@ -283,6 +308,7 @@ class BackendDatabase {
     final row = result.first;
     return {
       'file_id': row['file_id'],
+      'account_id': row['account_id'],
       'file_size': row['file_size'],
       'file_hash': row['file_hash'],
       'uploaded_bytes': row['uploaded_bytes'],
@@ -300,6 +326,60 @@ class BackendDatabase {
     ''');
     stmt.execute([uploadedBytes, status, fileId]);
     stmt.close();
+  }
+
+  void registerAttachmentReference(String fileId, String messageId) {
+    final stmt = _db.prepare('''
+      INSERT OR IGNORE INTO attachment_references (file_id, message_id)
+      VALUES (?, ?);
+    ''');
+    stmt.execute([fileId, messageId]);
+    stmt.close();
+  }
+
+  int getAttachmentReferenceCount(String fileId) {
+    final stmt = _db.prepare('''
+      SELECT COUNT(*) FROM attachment_references WHERE file_id = ?;
+    ''');
+    final res = stmt.select([fileId]);
+    stmt.close();
+    if (res.isEmpty) return 0;
+    return res.first.columnAt(0) as int;
+  }
+
+  void deleteAttachmentReferences(String messageId) {
+    final stmt = _db.prepare(
+      'DELETE FROM attachment_references WHERE message_id = ?;',
+    );
+    stmt.execute([messageId]);
+    stmt.close();
+  }
+
+  List<String> getReferencedFileIds(String messageId) {
+    final stmt = _db.prepare(
+      'SELECT file_id FROM attachment_references WHERE message_id = ?;',
+    );
+    final res = stmt.select([messageId]);
+    stmt.close();
+    return res.map((row) => row['file_id'] as String).toList();
+  }
+
+  void deleteAttachmentRow(String fileId) {
+    final stmt = _db.prepare('DELETE FROM attachments WHERE file_id = ?;');
+    stmt.execute([fileId]);
+    stmt.close();
+  }
+
+  int getAccountStorageUsage(String accountId) {
+    final stmt = _db.prepare('''
+      SELECT SUM(file_size) FROM attachments 
+      WHERE account_id = ? AND status = 'COMPLETED';
+    ''');
+    final res = stmt.select([accountId]);
+    stmt.close();
+    if (res.isEmpty) return 0;
+    final val = res.first.columnAt(0);
+    return val is int ? val : 0;
   }
 
   // Account operations
