@@ -261,6 +261,33 @@ class HelixRemoteDatabase {
       ''');
       _db.execute('PRAGMA user_version = 4;');
     }
+    if (version < 5) {
+      // P16-001: Group metadata columns on existing groups table.
+      try {
+        _db.execute('ALTER TABLE groups ADD COLUMN avatar_uri TEXT;');
+      } catch (_) {}
+      try {
+        _db.execute(
+          "ALTER TABLE groups ADD COLUMN creator_id TEXT NOT NULL DEFAULT '';",
+        );
+      } catch (_) {}
+      try {
+        _db.execute(
+          'ALTER TABLE groups ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0;',
+        );
+      } catch (_) {}
+      // P16-003: Pending and responded invite records for the current device.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_invites (
+          invite_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          inviter_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 5;');
+    }
   }
 
   void close() => _db.close();
@@ -978,5 +1005,129 @@ class HelixRemoteDatabase {
 
   void clearActiveCallMarker() {
     _db.execute('DELETE FROM active_call;');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Group metadata (P16-001, P16-008)
+  // ---------------------------------------------------------------------------
+
+  void upsertGroupMetadata({
+    required String groupId,
+    required String name,
+    required String creatorId,
+    String? avatarUri,
+    int epoch = 0,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO groups (group_id, name, owner_id, status, avatar_uri, creator_id, epoch)
+      VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?)
+      ON CONFLICT(group_id) DO UPDATE SET
+        name = excluded.name,
+        avatar_uri = excluded.avatar_uri,
+        epoch = excluded.epoch;
+    ''');
+    stmt.execute([groupId, name, creatorId, avatarUri, creatorId, epoch]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getGroupMetadata(String groupId) {
+    final stmt = _db.prepare('SELECT * FROM groups WHERE group_id = ?;');
+    final res = stmt.select([groupId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'group_id': row['group_id'],
+      'name': row['name'],
+      'creator_id': row['creator_id'] ?? row['owner_id'],
+      'avatar_uri': row['avatar_uri'],
+      'epoch': row['epoch'] ?? 0,
+      'status': row['status'],
+    };
+  }
+
+  /// P16-005: Increment the key epoch after a membership change.
+  void updateGroupEpoch(String groupId, int epoch) {
+    final stmt = _db.prepare(
+      'UPDATE groups SET epoch = ? WHERE group_id = ?;',
+    );
+    stmt.execute([epoch, groupId]);
+    stmt.close();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Group invites (P16-003)
+  // ---------------------------------------------------------------------------
+
+  void upsertGroupInvite({
+    required String inviteId,
+    required String groupId,
+    required String inviterId,
+    required String status,
+    required int createdAt,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO group_invites (invite_id, group_id, inviter_id, status, created_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(invite_id) DO UPDATE SET status = excluded.status;
+    ''');
+    stmt.execute([inviteId, groupId, inviterId, status, createdAt]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getGroupInvite(String inviteId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM group_invites WHERE invite_id = ?;',
+    );
+    final res = stmt.select([inviteId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'invite_id': row['invite_id'],
+      'group_id': row['group_id'],
+      'inviter_id': row['inviter_id'],
+      'status': row['status'],
+      'created_at': row['created_at'],
+    };
+  }
+
+  List<Map<String, dynamic>> getGroupInvites() {
+    final stmt = _db.prepare(
+      "SELECT * FROM group_invites WHERE status = 'PENDING' ORDER BY created_at DESC;",
+    );
+    final res = stmt.select();
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'invite_id': row['invite_id'],
+            'group_id': row['group_id'],
+            'inviter_id': row['inviter_id'],
+            'status': row['status'],
+            'created_at': row['created_at'],
+          },
+        )
+        .toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Members with roles (P16-002)
+  // ---------------------------------------------------------------------------
+
+  List<Map<String, dynamic>> getGroupMembersWithRoles(String conversationId) {
+    final stmt = _db.prepare(
+      'SELECT account_id, role FROM members WHERE conversation_id = ?;',
+    );
+    final res = stmt.select([conversationId]);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'account_id': row['account_id'],
+            'role': row['role'],
+          },
+        )
+        .toList();
   }
 }

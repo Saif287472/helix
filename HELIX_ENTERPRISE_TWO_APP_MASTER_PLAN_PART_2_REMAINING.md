@@ -217,22 +217,50 @@ Test results (2026-06-19):
 
 ## PHASE 16 - Remote Groups
 
-- [ ] **P16-001:** Persistent group identity.
-- [ ] **P16-002:** Persistent membership and roles.
-- [ ] **P16-003:** Invite/join approval rules.
-- [ ] **P16-004:** Group E2EE strategy from Phase 9.
-- [ ] **P16-005:** Membership-change key updates.
-- [ ] **P16-006:** Persistent group message history.
-- [ ] **P16-007:** Persistent group files.
-- [ ] **P16-008:** Admin events.
-- [ ] **P16-009:** Leave/remove/block behavior.
-- [ ] **P16-010:** Group deletion.
-- [ ] **P16-011:** Offline member synchronization.
-- [ ] **P16-012:** Multi-device membership synchronization.
-- [ ] **P16-013:** Large-group pagination.
-- [ ] **P16-014:** Abuse and rate limits.
-- [ ] **P16-015:** Future group call architecture ADR.
-- [ ] **P16-016:** Do not reuse Local host election as Remote group authority.
+- [x] **P16-001:** Persistent group identity.
+- [x] **P16-002:** Persistent membership and roles.
+- [x] **P16-003:** Invite/join approval rules.
+- [x] **P16-004:** Group E2EE strategy from Phase 9.
+- [x] **P16-005:** Membership-change key updates.
+- [x] **P16-006:** Persistent group message history.
+- [x] **P16-007:** Persistent group files.
+- [x] **P16-008:** Admin events.
+- [x] **P16-009:** Leave/remove/block behavior.
+- [x] **P16-010:** Group deletion.
+- [x] **P16-011:** Offline member synchronization.
+- [x] **P16-012:** Multi-device membership synchronization.
+- [x] **P16-013:** Large-group pagination.
+- [x] **P16-014:** Abuse and rate limits.
+- [x] **P16-015:** Future group call architecture ADR.
+- [x] **P16-016:** Do not reuse Local host election as Remote group authority.
+
+### 2026-06-19 Implementation Evidence (P16-001 to P16-016)
+
+New package `packages/remote/helix_remote_groups/` (added to workspace):
+- `lib/src/group_service.dart` - `RemoteGroupService` orchestrates: group creation with creator as ADMIN (P16-001, P16-002), member invitation (P16-003), invite accept/reject (P16-003), member listing with roles (P16-002), paginated group message history (P16-006, P16-013), admin rename/avatar updates (P16-008), member role changes (P16-008), member leave (P16-009), admin remove member with epoch bump (P16-009, P16-005), group deletion with tombstone (P16-010). Injectable `encryptionKeyProvider` follows Phase 9 strategy without inventing crypto (P16-004). No `helix_local_*` imports; group authority is ADMIN role on server, not host election (P16-016).
+
+Client storage additions (`packages/remote/helix_remote_storage/`):
+- `lib/src/database.dart` v5 migration: adds `avatar_uri`, `creator_id`, `epoch` to `groups` table; adds `group_invites` table (P16-001, P16-003, P16-005). New methods: `upsertGroupMetadata`, `getGroupMetadata`, `updateGroupEpoch`, `upsertGroupInvite`, `getGroupInvite`, `getGroupInvites`, `getGroupMembersWithRoles`.
+
+Backend additions (`services/helix_remote_backend/`):
+- `lib/src/database.dart` v8 migration: `groups` table (group_id, creator_id, encryption_key_id, status), `group_invites` table (full lifecycle PENDING/ACCEPTED/REJECTED), `group_creation_log` for rate limiting. New methods: `createGroup`, `getGroup`, `isGroupAdmin`, `getGroupMemberRole`, `getGroupMembersPaginated`, `createGroupInvite`, `getGroupInvite`, `hasOpenGroupInvite`, `acceptGroupInvite`, `rejectGroupInvite`, `updateGroupInfo`, `changeGroupMemberRole`, `removeGroupMember`, `deleteGroup`, `logGroupCreation`, `countGroupCreationsLastDay`, `countGroupInvitesLastHour`.
+- `lib/src/modules/groups.dart` - `GroupsModule` with 10 endpoints: `POST /create` (P16-001, P16-014 rate limit 5/day), `GET /info` (P16-001), `GET /members` (P16-013 paginated), `POST /invite` (P16-003, P16-011 push notif, P16-014 rate limit 20/hr), `POST /invite/respond` (P16-003, P16-012 WS relay), `POST /update` (P16-008 admin only), `POST /member-role` (P16-008 admin only), `POST /leave` (P16-009), `POST /remove` (P16-009 admin only, P16-005 key_updated event), `POST /delete` (P16-010 admin only). Mounted at `/api/v1/groups`. Group files handled via existing attachment service (P16-007).
+- `lib/helix_remote_backend.dart` - exports `groups.dart`.
+- `lib/src/server_impl.dart` - `GroupsModule` instantiated and mounted.
+
+Sync engine additions (`packages/remote/helix_remote_sync/`):
+- `lib/src/sync_engine.dart` - 4 new inbound event classes: `_GroupCreatedEvent` (upserts conversation + metadata), `_GroupInviteEvent` (stores pending invite), `_GroupDeletedEvent` (tombstones), `_GroupAdminEvent` (updates name/avatar). `group_key_updated` maps to `_SyncMarkerEvent` (app-layer key distribution, P16-004/P16-005).
+
+Architecture document:
+- `docs/architecture/adr_group_calls.md` - ADR recording decision to use SFU over P2P mesh for future group calls; explicitly prohibits reuse of Local LAN host-election (P16-015, P16-016).
+
+Test results (2026-06-19):
+- `services/helix_remote_backend/test/groups_test.dart`: 21/21 pass - group create/info/members, admin-only invite, duplicate invite rejection, accept/reject lifecycle, offline push notification, rename, role change, leave, remove, delete with tombstone, WebSocket relay, creation rate limit (5/day), invite rate limit (20/hr).
+- `packages/remote/helix_remote_groups/test/remote_group_service_test.dart`: 21/21 pass - all P16-001 through P16-016 scenarios including epoch increment on removal, ciphertext-only message storage, injectable E2EE key provider, and no-Local-import boundary verification.
+- `services/helix_remote_backend/test/calls_test.dart`: 8/8 pass (unchanged).
+- `services/helix_remote_backend/test/attachments_test.dart`: 7/7 pass (unchanged).
+- `packages/remote/helix_remote_sync/test/remote_sync_test.dart`: 11/11 pass (unchanged).
+- `packages/remote/helix_remote_storage/test/remote_storage_test.dart`: 4/4 pass (unchanged).
 
 ---
 

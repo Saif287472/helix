@@ -16,6 +16,7 @@ import 'package:helix_remote_backend/src/modules/messaging.dart';
 import 'package:helix_remote_backend/src/modules/backups.dart';
 import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
+import 'package:helix_remote_backend/src/modules/groups.dart';
 
 class OutboxWorker {
   final BackendDatabase db;
@@ -130,6 +131,7 @@ class BackendServer {
       turnSecret: turnSecret,
       turnUrl: turnUrl,
     );
+    final groupsModule = GroupsModule(db, wsRelay);
 
     // Map modules
     router.mount('/api/v1/accounts', authModule.router.call);
@@ -140,6 +142,7 @@ class BackendServer {
     router.mount('/api/v1/backups', backupsModule.router.call);
     router.mount('/api/v1/attachments', attachmentsModule.router.call);
     router.mount('/api/v1/calls', callsModule.router.call);
+    router.mount('/api/v1/groups', groupsModule.router.call);
 
     // WebSocket route
     router.get('/api/v1/ws', wsRelay.handleUpgrade);

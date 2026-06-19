@@ -316,6 +316,47 @@ class BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 7;');
     }
+
+    if (version < 8) {
+      // P16-001: Group metadata linked to conversations.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS groups (
+          group_id TEXT PRIMARY KEY,
+          creator_id TEXT NOT NULL,
+          encryption_key_id TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          FOREIGN KEY(creator_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      // P16-003: Invite lifecycle (PENDING/ACCEPTED/REJECTED).
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_invites (
+          invite_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          inviter_id TEXT NOT NULL,
+          invitee_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          FOREIGN KEY(inviter_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(invitee_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      // P16-014: Rate-limit group creation per account (5 per day).
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_creation_log (
+          log_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 8;');
+    }
   }
 
   void close() {
@@ -1574,6 +1615,290 @@ class BackendDatabase {
       WHERE account_id = ? AND issued_at >= ?;
     ''');
     final res = stmt.select([accountId, since]);
+    stmt.close();
+    if (res.isEmpty) return 0;
+    return res.first.columnAt(0) as int;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Group operations (P16-001 to P16-014)
+  // ---------------------------------------------------------------------------
+
+  /// Creates a GROUP conversation, group metadata row, and sets creator to ADMIN.
+  void createGroup({
+    required String groupId,
+    required String name,
+    required String creatorId,
+    required String encryptionKeyId,
+    required List<String> initialMemberIds,
+  }) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      final convStmt = _db.prepare('''
+        INSERT OR REPLACE INTO conversations (conversation_id, type, title, created_at, last_sequence)
+        VALUES (?, 'GROUP', ?, ?, 0);
+      ''');
+      convStmt.execute([groupId, name, now]);
+      convStmt.close();
+
+      final clearStmt = _db.prepare(
+        'DELETE FROM conversation_members WHERE conversation_id = ?;',
+      );
+      clearStmt.execute([groupId]);
+      clearStmt.close();
+
+      final memStmt = _db.prepare('''
+        INSERT INTO conversation_members (conversation_id, account_id, role)
+        VALUES (?, ?, ?);
+      ''');
+      final allMembers = [
+        ...initialMemberIds,
+        if (!initialMemberIds.contains(creatorId)) creatorId,
+      ];
+      for (final memberId in allMembers) {
+        final role = memberId == creatorId ? 'ADMIN' : 'MEMBER';
+        memStmt.execute([groupId, memberId, role]);
+      }
+      memStmt.close();
+
+      final grpStmt = _db.prepare('''
+        INSERT OR REPLACE INTO groups (group_id, creator_id, encryption_key_id, status, created_at)
+        VALUES (?, ?, ?, 'ACTIVE', ?);
+      ''');
+      grpStmt.execute([groupId, creatorId, encryptionKeyId, now]);
+      grpStmt.close();
+
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  Map<String, dynamic>? getGroup(String groupId) {
+    final stmt = _db.prepare('''
+      SELECT g.*, c.title AS name FROM groups g
+      JOIN conversations c ON c.conversation_id = g.group_id
+      WHERE g.group_id = ?;
+    ''');
+    final res = stmt.select([groupId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'group_id': row['group_id'],
+      'name': row['name'],
+      'creator_id': row['creator_id'],
+      'encryption_key_id': row['encryption_key_id'],
+      'status': row['status'],
+      'created_at': row['created_at'],
+    };
+  }
+
+  bool isGroupAdmin(String groupId, String accountId) {
+    final stmt = _db.prepare('''
+      SELECT 1 FROM conversation_members
+      WHERE conversation_id = ? AND account_id = ? AND role = 'ADMIN';
+    ''');
+    final res = stmt.select([groupId, accountId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
+  String? getGroupMemberRole(String groupId, String accountId) {
+    final stmt = _db.prepare('''
+      SELECT role FROM conversation_members
+      WHERE conversation_id = ? AND account_id = ?;
+    ''');
+    final res = stmt.select([groupId, accountId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    return res.first['role'] as String;
+  }
+
+  /// P16-013: Paginated member list.
+  List<Map<String, dynamic>> getGroupMembersPaginated(
+    String groupId, {
+    int limit = 50,
+    int offset = 0,
+  }) {
+    final stmt = _db.prepare('''
+      SELECT account_id, role FROM conversation_members
+      WHERE conversation_id = ?
+      ORDER BY role DESC, account_id ASC
+      LIMIT ? OFFSET ?;
+    ''');
+    final res = stmt.select([groupId, limit, offset]);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'account_id': row['account_id'],
+            'role': row['role'],
+          },
+        )
+        .toList();
+  }
+
+  // P16-003: Invite lifecycle
+
+  void createGroupInvite({
+    required String inviteId,
+    required String groupId,
+    required String inviterId,
+    required String inviteeId,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT INTO group_invites (invite_id, group_id, inviter_id, invitee_id, status, created_at)
+      VALUES (?, ?, ?, ?, 'PENDING', ?);
+    ''');
+    stmt.execute([inviteId, groupId, inviterId, inviteeId, now]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getGroupInvite(String inviteId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM group_invites WHERE invite_id = ?;',
+    );
+    final res = stmt.select([inviteId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'invite_id': row['invite_id'],
+      'group_id': row['group_id'],
+      'inviter_id': row['inviter_id'],
+      'invitee_id': row['invitee_id'],
+      'status': row['status'],
+      'created_at': row['created_at'],
+    };
+  }
+
+  bool hasOpenGroupInvite(String groupId, String inviteeId) {
+    final stmt = _db.prepare('''
+      SELECT 1 FROM group_invites
+      WHERE group_id = ? AND invitee_id = ? AND status = 'PENDING';
+    ''');
+    final res = stmt.select([groupId, inviteeId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
+  /// Accepts invite: sets status=ACCEPTED, adds invitee as MEMBER.
+  void acceptGroupInvite(String inviteId) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final invite = getGroupInvite(inviteId);
+      if (invite == null) throw StateError('Invite not found: $inviteId');
+
+      final updStmt = _db.prepare(
+        "UPDATE group_invites SET status = 'ACCEPTED' WHERE invite_id = ?;",
+      );
+      updStmt.execute([inviteId]);
+      updStmt.close();
+
+      final memStmt = _db.prepare('''
+        INSERT OR IGNORE INTO conversation_members (conversation_id, account_id, role)
+        VALUES (?, ?, 'MEMBER');
+      ''');
+      memStmt.execute([invite['group_id'], invite['invitee_id']]);
+      memStmt.close();
+
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  void rejectGroupInvite(String inviteId) {
+    final stmt = _db.prepare(
+      "UPDATE group_invites SET status = 'REJECTED' WHERE invite_id = ?;",
+    );
+    stmt.execute([inviteId]);
+    stmt.close();
+  }
+
+  void updateGroupInfo(String groupId, {String? name}) {
+    if (name != null) {
+      final stmt = _db.prepare(
+        'UPDATE conversations SET title = ? WHERE conversation_id = ?;',
+      );
+      stmt.execute([name, groupId]);
+      stmt.close();
+    }
+  }
+
+  void changeGroupMemberRole(String groupId, String accountId, String role) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO conversation_members (conversation_id, account_id, role)
+      VALUES (?, ?, ?);
+    ''');
+    stmt.execute([groupId, accountId, role]);
+    stmt.close();
+  }
+
+  void removeGroupMember(String groupId, String accountId) {
+    final stmt = _db.prepare(
+      'DELETE FROM conversation_members WHERE conversation_id = ? AND account_id = ?;',
+    );
+    stmt.execute([groupId, accountId]);
+    stmt.close();
+  }
+
+  /// P16-010: Mark group DELETED and tombstone it.
+  void deleteGroup(String groupId) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final updStmt = _db.prepare(
+        "UPDATE groups SET status = 'DELETED' WHERE group_id = ?;",
+      );
+      updStmt.execute([groupId]);
+      updStmt.close();
+
+      saveTombstone(groupId, 'GROUP');
+
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  // P16-014: Rate limits
+
+  void logGroupCreation(String logId, String accountId) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT INTO group_creation_log (log_id, account_id, created_at)
+      VALUES (?, ?, ?);
+    ''');
+    stmt.execute([logId, accountId, now]);
+    stmt.close();
+  }
+
+  int countGroupCreationsLastDay(String accountId) {
+    final since = DateTime.now().millisecondsSinceEpoch - 86400000;
+    final stmt = _db.prepare('''
+      SELECT COUNT(*) FROM group_creation_log
+      WHERE account_id = ? AND created_at >= ?;
+    ''');
+    final res = stmt.select([accountId, since]);
+    stmt.close();
+    if (res.isEmpty) return 0;
+    return res.first.columnAt(0) as int;
+  }
+
+  int countGroupInvitesLastHour(String inviterId) {
+    final since = DateTime.now().millisecondsSinceEpoch - 3600000;
+    final stmt = _db.prepare('''
+      SELECT COUNT(*) FROM group_invites
+      WHERE inviter_id = ? AND created_at >= ?;
+    ''');
+    final res = stmt.select([inviterId, since]);
     stmt.close();
     if (res.isEmpty) return 0;
     return res.first.columnAt(0) as int;

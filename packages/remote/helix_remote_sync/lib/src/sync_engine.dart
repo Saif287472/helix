@@ -215,6 +215,17 @@ abstract class _InboundSyncEvent {
         return const _SyncMarkerEvent();
       case 'call_signal':
         return const _CallSignalEvent();
+      case 'group_created':
+        return const _GroupCreatedEvent();
+      case 'group_invite':
+        return const _GroupInviteEvent();
+      case 'group_deleted':
+        return const _GroupDeletedEvent();
+      case 'group_admin_event':
+        return const _GroupAdminEvent();
+      case 'group_key_updated':
+        // Marker only: actual key material is distributed at the app layer.
+        return const _SyncMarkerEvent();
       default:
         return null;
     }
@@ -473,4 +484,97 @@ class _CallSignalEvent extends _InboundSyncEvent {
 
   @override
   bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) => false;
+}
+
+// P16-001: Server confirms a new group was created; store conversation + metadata.
+class _GroupCreatedEvent extends _InboundSyncEvent {
+  const _GroupCreatedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final groupId = _InboundSyncEvent.requireString(env, 'group_id');
+    final name = env.payload['name'] as String? ?? '';
+    final creatorId = env.payload['creator_id'] as String? ?? '';
+    final members = env.payload['member_ids'];
+
+    db.upsertConversation(
+      RemoteConversation(
+        conversationId: groupId,
+        title: name,
+        type: 'GROUP',
+        lastActivitySequence: env.serverSequence ?? 0,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          env.payload['created_at'] as int? ?? env.timestamp,
+        ),
+      ),
+      members is List ? members.whereType<String>().toList() : const [],
+    );
+
+    db.upsertGroupMetadata(
+      groupId: groupId,
+      name: name,
+      creatorId: creatorId,
+      epoch: 0,
+    );
+
+    return true;
+  }
+}
+
+// P16-003: Server relays a group invite to the invitee's device(s).
+class _GroupInviteEvent extends _InboundSyncEvent {
+  const _GroupInviteEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final inviteId = _InboundSyncEvent.requireString(env, 'invite_id');
+    final groupId = _InboundSyncEvent.requireString(env, 'group_id');
+    final inviterId = env.payload['inviter_id'] as String? ?? '';
+
+    db.upsertGroupInvite(
+      inviteId: inviteId,
+      groupId: groupId,
+      inviterId: inviterId,
+      status: 'PENDING',
+      createdAt: env.payload['created_at'] as int? ?? env.timestamp,
+    );
+
+    return true;
+  }
+}
+
+// P16-010: Group has been deleted by an admin; tombstone and remove local state.
+class _GroupDeletedEvent extends _InboundSyncEvent {
+  const _GroupDeletedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final groupId = _InboundSyncEvent.requireString(env, 'group_id');
+    db.saveTombstone(groupId, 'GROUP');
+    return true;
+  }
+}
+
+// P16-008: Admin renamed the group or updated avatar — update local metadata.
+class _GroupAdminEvent extends _InboundSyncEvent {
+  const _GroupAdminEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final groupId = _InboundSyncEvent.requireString(env, 'group_id');
+    final newName = env.payload['name'] as String?;
+    if (newName != null) {
+      final existing = db.getGroupMetadata(groupId);
+      if (existing != null) {
+        db.upsertGroupMetadata(
+          groupId: groupId,
+          name: newName,
+          creatorId: existing['creator_id'] as String,
+          avatarUri: existing['avatar_uri'] as String?,
+          epoch: existing['epoch'] as int,
+        );
+      }
+    }
+    return true;
+  }
 }
