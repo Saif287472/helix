@@ -181,6 +181,16 @@ abstract class _InboundSyncEvent {
       case 'reaction_added':
       case 'reaction_removed':
         return const _ReactionEvent();
+      case 'contact_updated':
+        return const _ContactUpdatedEvent();
+      case 'contact_removed':
+        return const _ContactRemovedEvent();
+      case 'profile_updated':
+        return const _ProfileUpdatedEvent();
+      case 'privacy_updated':
+      case 'presence_updated':
+      case 'safety_notice':
+        return const _SyncMarkerEvent();
       case 'read_receipt':
         return const _ReceiptEvent('READ');
       case 'delivery_receipt':
@@ -325,6 +335,53 @@ class _ReceiptEvent extends _InboundSyncEvent {
       deviceId: _InboundSyncEvent.optionalInt(env, 'device_id'),
       receiptType: receiptType,
       timestamp: env.payload['timestamp'] as int? ?? env.timestamp,
+    );
+    return true;
+  }
+}
+
+class _ContactUpdatedEvent extends _InboundSyncEvent {
+  const _ContactUpdatedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    db.upsertContact(
+      RemoteContact(
+        peerAccountId: _InboundSyncEvent.requireString(env, 'peer_account_id'),
+        nickname: env.payload['nickname'] as String? ?? '',
+        status: env.payload['status'] as String? ?? 'Accepted',
+      ),
+    );
+    return true;
+  }
+}
+
+class _ContactRemovedEvent extends _InboundSyncEvent {
+  const _ContactRemovedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    db.deleteContact(_InboundSyncEvent.requireString(env, 'peer_account_id'));
+    return true;
+  }
+}
+
+class _ProfileUpdatedEvent extends _InboundSyncEvent {
+  const _ProfileUpdatedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final accountId = _InboundSyncEvent.requireString(env, 'account_id');
+    final existing = db.getAccount(accountId);
+    if (existing == null) return false;
+    db.upsertAccount(
+      RemoteAccount(
+        accountId: existing.accountId,
+        username: env.payload['username'] as String? ?? existing.username,
+        identityPublicKey: existing.identityPublicKey,
+        createdAt: existing.createdAt,
+        status: existing.status,
+      ),
     );
     return true;
   }

@@ -11,7 +11,12 @@ void main() {
       var dir = Directory.current;
       String? foundPath;
       for (int i = 0; i < 5; i++) {
-        final possiblePath = p.join(dir.path, '.dart_tool', 'lib', 'sqlite3.dll');
+        final possiblePath = p.join(
+          dir.path,
+          '.dart_tool',
+          'lib',
+          'sqlite3.dll',
+        );
         if (File(possiblePath).existsSync()) {
           foundPath = possiblePath;
           break;
@@ -82,6 +87,10 @@ void main() {
     expect(contacts.length, equals(1));
     expect(contacts.first.nickname, equals('Bob Friend'));
     expect(contacts.first.status, equals('Accepted'));
+
+    expect(db.getContact('bob_id')!.nickname, equals('Bob Friend'));
+    db.deleteContact('bob_id');
+    expect(db.getContact('bob_id'), isNull);
   });
 
   test('Conversations, Messages, and Cursors transactional operations', () {
@@ -110,11 +119,19 @@ void main() {
       ciphertext: 'hello bob decrypted text',
     );
 
-    db.saveMessage(message, 1, DateTime.now().millisecondsSinceEpoch, 'DELIVERED');
+    db.saveMessage(
+      message,
+      1,
+      DateTime.now().millisecondsSinceEpoch,
+      'DELIVERED',
+    );
 
     final messages = db.getMessages('conv_123');
     expect(messages.length, equals(1));
-    expect(messages.first['ciphertext_blob'], equals('hello bob decrypted text'));
+    expect(
+      messages.first['ciphertext_blob'],
+      equals('hello bob decrypted text'),
+    );
     expect(messages.first['server_sequence'], equals(1));
 
     // Update cursor

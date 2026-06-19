@@ -55,6 +55,36 @@ class RemotePushNotificationPreview {
   final String body;
 }
 
+class RemotePrivacySettings {
+  const RemotePrivacySettings({
+    required this.searchDiscoverable,
+    required this.presenceVisibility,
+    required this.lastSeenVisibility,
+  });
+
+  final bool searchDiscoverable;
+  final String presenceVisibility;
+  final String lastSeenVisibility;
+
+  Map<String, dynamic> toJson() => {
+    'search_discoverable': searchDiscoverable,
+    'presence_visibility': presenceVisibility,
+    'last_seen_visibility': lastSeenVisibility,
+  };
+}
+
+class RemotePresenceSnapshot {
+  const RemotePresenceSnapshot({
+    required this.accountId,
+    required this.visibility,
+    this.lastSeenAt,
+  });
+
+  final String accountId;
+  final String visibility;
+  final int? lastSeenAt;
+}
+
 class RemoteMessagingService {
   RemoteMessagingService({
     required this.db,
@@ -73,8 +103,15 @@ class RemoteMessagingService {
   String? _accountId;
   int? _deviceId;
   bool _readReceiptsEnabled = true;
+  RemotePrivacySettings _privacySettings = const RemotePrivacySettings(
+    searchDiscoverable: true,
+    presenceVisibility: 'CONTACTS',
+    lastSeenVisibility: 'CONTACTS',
+  );
+  final List<int> _contactRequestTimestamps = [];
 
   bool get readReceiptsEnabled => _readReceiptsEnabled;
+  RemotePrivacySettings get privacySettings => _privacySettings;
 
   Future<void> setupAccount({
     required RemoteAccount account,
@@ -121,6 +158,89 @@ class RemoteMessagingService {
     );
   }
 
+  void sendContactRequest({
+    required String peerAccountId,
+    String nickname = '',
+    String? requestId,
+  }) {
+    _enforceContactRequestQuota();
+    final id = requestId ?? 'cr_${_clock().microsecondsSinceEpoch}';
+    db.upsertContact(
+      RemoteContact(
+        peerAccountId: peerAccountId,
+        nickname: nickname,
+        status: 'PendingSent',
+      ),
+    );
+    db.enqueueOperation(
+      id,
+      'CONTACT_REQUEST',
+      jsonEncode({
+        'request_id': id,
+        'peer_account_id': peerAccountId,
+        'nickname': nickname,
+      }),
+      idempotencyKey: 'contact_request:$id',
+    );
+    _contactRequestTimestamps.add(_clock().millisecondsSinceEpoch);
+  }
+
+  void acceptContactRequest({
+    required String requestId,
+    required String peerAccountId,
+    String nickname = '',
+  }) {
+    db.upsertContact(
+      RemoteContact(
+        peerAccountId: peerAccountId,
+        nickname: nickname,
+        status: 'Accepted',
+      ),
+    );
+    db.enqueueOperation(
+      'accept_$requestId',
+      'CONTACT_REQUEST_ACCEPT',
+      jsonEncode({'request_id': requestId}),
+      idempotencyKey: 'contact_accept:$requestId',
+    );
+  }
+
+  void rejectContactRequest({
+    required String requestId,
+    required String peerAccountId,
+  }) {
+    db.deleteContact(peerAccountId);
+    db.enqueueOperation(
+      'reject_$requestId',
+      'CONTACT_REQUEST_REJECT',
+      jsonEncode({'request_id': requestId}),
+      idempotencyKey: 'contact_reject:$requestId',
+    );
+  }
+
+  void cancelContactRequest({
+    required String requestId,
+    required String peerAccountId,
+  }) {
+    db.deleteContact(peerAccountId);
+    db.enqueueOperation(
+      'cancel_$requestId',
+      'CONTACT_REQUEST_CANCEL',
+      jsonEncode({'request_id': requestId}),
+      idempotencyKey: 'contact_cancel:$requestId',
+    );
+  }
+
+  void removeContact(String peerAccountId) {
+    db.deleteContact(peerAccountId);
+    db.enqueueOperation(
+      'remove_contact_${peerAccountId}_${_clock().microsecondsSinceEpoch}',
+      'CONTACT_REMOVE',
+      jsonEncode({'peer_account_id': peerAccountId}),
+      idempotencyKey: 'contact_remove:$peerAccountId',
+    );
+  }
+
   void blockContact(String peerAccountId) {
     db.upsertContact(
       RemoteContact(
@@ -128,6 +248,110 @@ class RemoteMessagingService {
         nickname: '',
         status: 'Blocked',
       ),
+    );
+    db.enqueueOperation(
+      'block_contact_${peerAccountId}_${_clock().microsecondsSinceEpoch}',
+      'CONTACT_BLOCK',
+      jsonEncode({'peer_account_id': peerAccountId}),
+      idempotencyKey: 'contact_block:$peerAccountId',
+    );
+  }
+
+  void unblockContact(String peerAccountId) {
+    db.deleteContact(peerAccountId);
+    db.enqueueOperation(
+      'unblock_contact_${peerAccountId}_${_clock().microsecondsSinceEpoch}',
+      'CONTACT_UNBLOCK',
+      jsonEncode({'peer_account_id': peerAccountId}),
+      idempotencyKey: 'contact_unblock:$peerAccountId',
+    );
+  }
+
+  void changeUsername(String username) {
+    if (!_isValidUsername(username)) {
+      throw StateError('Invalid Remote username');
+    }
+    db.enqueueOperation(
+      'username_${_clock().microsecondsSinceEpoch}',
+      'USERNAME_CHANGE',
+      jsonEncode({'username': username}),
+      idempotencyKey: 'username:${_requireAccountId()}:$username',
+    );
+  }
+
+  List<RemoteContact> searchLocalContacts(String query) {
+    final normalized = query.toLowerCase();
+    return db
+        .getContacts()
+        .where(
+          (contact) =>
+              contact.peerAccountId.toLowerCase().contains(normalized) ||
+              contact.nickname.toLowerCase().contains(normalized),
+        )
+        .toList();
+  }
+
+  void updatePrivacy(RemotePrivacySettings settings) {
+    _validateVisibility(settings.presenceVisibility);
+    _validateVisibility(settings.lastSeenVisibility);
+    _privacySettings = settings;
+    db.enqueueOperation(
+      'privacy_${_clock().microsecondsSinceEpoch}',
+      'PRIVACY_UPDATE',
+      jsonEncode(settings.toJson()),
+      idempotencyKey: 'privacy:${_requireAccountId()}',
+    );
+  }
+
+  RemotePresenceSnapshot updatePresence() {
+    final snapshot = RemotePresenceSnapshot(
+      accountId: _requireAccountId(),
+      visibility: _privacySettings.presenceVisibility,
+      lastSeenAt: _privacySettings.lastSeenVisibility == 'NOBODY'
+          ? null
+          : _clock().millisecondsSinceEpoch,
+    );
+    db.enqueueOperation(
+      'presence_${_clock().microsecondsSinceEpoch}',
+      'PRESENCE_UPDATE',
+      jsonEncode({
+        'account_id': snapshot.accountId,
+        'visibility': snapshot.visibility,
+        'last_seen_at': snapshot.lastSeenAt,
+      }),
+      idempotencyKey: 'presence:${snapshot.accountId}',
+    );
+    return snapshot;
+  }
+
+  void updateProfile({required String displayName}) {
+    db.enqueueOperation(
+      'profile_${_clock().microsecondsSinceEpoch}',
+      'PROFILE_UPDATE',
+      jsonEncode({'display_name': displayName}),
+      idempotencyKey: 'profile:${_requireAccountId()}',
+    );
+  }
+
+  void reportAccount({
+    required String subjectAccountId,
+    required String category,
+    required String reasonCode,
+    required String contextHash,
+    String? reportId,
+  }) {
+    final id = reportId ?? 'r_${_clock().microsecondsSinceEpoch}';
+    db.enqueueOperation(
+      id,
+      'SAFETY_REPORT',
+      jsonEncode({
+        'report_id': id,
+        'subject_account_id': subjectAccountId,
+        'category': category,
+        'reason_code': reasonCode,
+        'context_hash': contextHash,
+      }),
+      idempotencyKey: 'report:$id',
     );
   }
 
@@ -499,5 +723,28 @@ class RemoteMessagingService {
   String _stableDirectConversationId(String a, String b) {
     final members = [a, b]..sort();
     return 'dm_${base64UrlEncode(utf8.encode(members.join('|'))).replaceAll('=', '')}';
+  }
+
+  void _enforceContactRequestQuota() {
+    final cutoff = _clock()
+        .subtract(const Duration(days: 1))
+        .millisecondsSinceEpoch;
+    _contactRequestTimestamps.removeWhere((timestamp) => timestamp < cutoff);
+    if (_contactRequestTimestamps.length >= 20) {
+      throw StateError('Remote contact request quota exceeded');
+    }
+  }
+
+  bool _isValidUsername(String username) {
+    if (username.length < 3 || username.length > 30) return false;
+    if (username.startsWith('helix_')) return false;
+    return RegExp(r'^[a-z0-9_]+$').hasMatch(username);
+  }
+
+  void _validateVisibility(String visibility) {
+    const allowed = {'EVERYONE', 'CONTACTS', 'NOBODY'};
+    if (!allowed.contains(visibility)) {
+      throw StateError('Invalid Remote privacy visibility');
+    }
   }
 }

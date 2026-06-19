@@ -258,6 +258,14 @@ void main() {
     () async {
       final diagnostics = <String>[];
       engine = RemoteSyncEngine(db, diagnostics: diagnostics.add);
+      db.upsertAccount(
+        RemoteAccount(
+          accountId: 'alice',
+          username: 'alice_old',
+          identityPublicKey: 'alice_identity',
+          createdAt: DateTime.now(),
+        ),
+      );
 
       gateway.inboundEvents.addAll([
         RemoteRealtimeEnvelope(
@@ -367,8 +375,44 @@ void main() {
           },
         ),
         RemoteRealtimeEnvelope(
-          eventId: 'event_membership_removed',
+          eventId: 'event_contact_updated',
           serverSequence: 9,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'contact_updated',
+          payload: {
+            'peer_account_id': 'carol',
+            'nickname': 'Carol',
+            'status': 'Accepted',
+          },
+        ),
+        RemoteRealtimeEnvelope(
+          eventId: 'event_contact_removed',
+          serverSequence: 10,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'contact_removed',
+          payload: {'peer_account_id': 'carol'},
+        ),
+        RemoteRealtimeEnvelope(
+          eventId: 'event_profile_updated',
+          serverSequence: 11,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'profile_updated',
+          payload: {'account_id': 'alice', 'username': 'alice_new'},
+        ),
+        RemoteRealtimeEnvelope(
+          eventId: 'event_privacy_updated',
+          serverSequence: 12,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'privacy_updated',
+          payload: {'presence_visibility': 'NOBODY'},
+        ),
+        RemoteRealtimeEnvelope(
+          eventId: 'event_membership_removed',
+          serverSequence: 13,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'membership_changed',
@@ -380,7 +424,7 @@ void main() {
         ),
         RemoteRealtimeEnvelope(
           eventId: 'event_message_deleted',
-          serverSequence: 10,
+          serverSequence: 14,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'message_deleted',
@@ -391,7 +435,7 @@ void main() {
         ),
         RemoteRealtimeEnvelope(
           eventId: 'event_unknown_full_id_must_not_log',
-          serverSequence: 11,
+          serverSequence: 15,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'future_required_event',
@@ -402,7 +446,7 @@ void main() {
 
       final applied = await engine.syncInbound(gateway);
 
-      expect(applied, equals(10));
+      expect(applied, equals(14));
       expect(
         db.getConversations().map((c) => c.conversationId),
         contains('conv_typed'),
@@ -421,6 +465,8 @@ void main() {
         revisions.map((r) => r['payload']).join(' '),
         contains('opaque-edited-ciphertext'),
       );
+      expect(db.getContact('carol'), isNull);
+      expect(db.getAccount('alice')!.username, equals('alice_new'));
 
       final receipts = db.getMessageReceipts('msg_typed_1');
       expect(
@@ -428,7 +474,7 @@ void main() {
         containsAll(['DELIVERY', 'READ']),
       );
 
-      expect(db.getSyncCursor('__remote_global_stream__'), equals(11));
+      expect(db.getSyncCursor('__remote_global_stream__'), equals(15));
       expect(diagnostics.length, equals(1));
       expect(diagnostics.single, contains('future_required_event'));
       expect(

@@ -325,4 +325,96 @@ void main() {
       );
     },
   );
+
+  test('Phase 13 contact lifecycle, privacy, presence, and reports', () {
+    service.sendContactRequest(
+      requestId: 'cr_1',
+      peerAccountId: 'bob',
+      nickname: 'Bob',
+    );
+    expect(db.getContact('bob')!.status, 'PendingSent');
+
+    service.acceptContactRequest(
+      requestId: 'cr_from_carol',
+      peerAccountId: 'carol',
+      nickname: 'Carol',
+    );
+    expect(db.getContact('carol')!.status, 'Accepted');
+
+    service.rejectContactRequest(
+      requestId: 'cr_from_dan',
+      peerAccountId: 'dan',
+    );
+    service.cancelContactRequest(
+      requestId: 'cr_to_erin',
+      peerAccountId: 'erin',
+    );
+    expect(db.getContact('dan'), isNull);
+    expect(db.getContact('erin'), isNull);
+
+    service.removeContact('carol');
+    expect(db.getContact('carol'), isNull);
+
+    service.blockContact('mallory');
+    expect(db.getContact('mallory')!.status, 'Blocked');
+    service.unblockContact('mallory');
+    expect(db.getContact('mallory'), isNull);
+
+    service.changeUsername('alice_new');
+    expect(() => service.changeUsername('Helix Bad'), throwsStateError);
+    expect(() => service.changeUsername('helix_admin'), throwsStateError);
+
+    service.updatePrivacy(
+      const RemotePrivacySettings(
+        searchDiscoverable: false,
+        presenceVisibility: 'NOBODY',
+        lastSeenVisibility: 'NOBODY',
+      ),
+    );
+    final presence = service.updatePresence();
+    expect(presence.visibility, 'NOBODY');
+    expect(presence.lastSeenAt, isNull);
+
+    service.updateProfile(displayName: 'Alice Remote');
+    service.reportAccount(
+      reportId: 'r_1',
+      subjectAccountId: 'mallory',
+      category: 'spam',
+      reasonCode: 'unsolicited_request',
+      contextHash: 'sha256:abc123',
+    );
+
+    final payloads = jsonEncode(db.getPendingOperations());
+    expect(payloads, contains('CONTACT_REQUEST'));
+    expect(payloads, contains('CONTACT_REQUEST_ACCEPT'));
+    expect(payloads, contains('CONTACT_REQUEST_REJECT'));
+    expect(payloads, contains('CONTACT_REQUEST_CANCEL'));
+    expect(payloads, contains('CONTACT_REMOVE'));
+    expect(payloads, contains('CONTACT_BLOCK'));
+    expect(payloads, contains('CONTACT_UNBLOCK'));
+    expect(payloads, contains('USERNAME_CHANGE'));
+    expect(payloads, contains('PRIVACY_UPDATE'));
+    expect(payloads, contains('PRESENCE_UPDATE'));
+    expect(payloads, contains('PROFILE_UPDATE'));
+    expect(payloads, contains('SAFETY_REPORT'));
+    expect(payloads, isNot(contains('message_text')));
+    expect(payloads, isNot(contains('plaintext')));
+  });
+
+  test('Phase 13 contact request quota is enforced locally', () {
+    for (var i = 0; i < 20; i++) {
+      service.sendContactRequest(
+        requestId: 'quota_$i',
+        peerAccountId: 'peer_$i',
+      );
+    }
+
+    expect(
+      () => service.sendContactRequest(
+        requestId: 'quota_overflow',
+        peerAccountId: 'overflow',
+      ),
+      throwsStateError,
+    );
+  });
 }

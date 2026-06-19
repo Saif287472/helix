@@ -99,21 +99,35 @@ Still not production-complete:
 
 ## PHASE 13 - Remote Contacts, Friends, Presence, and Safety
 
-- [ ] **P13-001:** Contact request lifecycle.
-- [ ] **P13-002:** Accept/reject/cancel.
-- [ ] **P13-003:** Friend/contact removal.
-- [ ] **P13-004:** Block/unblock.
-- [ ] **P13-005:** Username change rules.
-- [ ] **P13-006:** Search privacy controls.
-- [ ] **P13-007:** Presence privacy controls.
-- [ ] **P13-008:** Last-seen policy.
-- [ ] **P13-009:** Profile update propagation.
-- [ ] **P13-010:** Spam controls.
-- [ ] **P13-011:** Request quotas.
-- [ ] **P13-012:** Report flow with privacy-minimized evidence.
-- [ ] **P13-013:** Safety/admin workflow.
-- [ ] **P13-014:** Contact and block synchronization across devices.
+- [x] **P13-001:** Contact request lifecycle.
+- [x] **P13-002:** Accept/reject/cancel.
+- [x] **P13-003:** Friend/contact removal.
+- [x] **P13-004:** Block/unblock.
+- [x] **P13-005:** Username change rules.
+- [x] **P13-006:** Search privacy controls.
+- [x] **P13-007:** Presence privacy controls.
+- [x] **P13-008:** Last-seen policy.
+- [x] **P13-009:** Profile update propagation.
+- [x] **P13-010:** Spam controls.
+- [x] **P13-011:** Request quotas.
+- [x] **P13-012:** Report flow with privacy-minimized evidence.
+- [x] **P13-013:** Safety/admin workflow.
+- [x] **P13-014:** Contact and block synchronization across devices.
 - [ ] **P13-015:** Tests for blocked-user delivery and group behavior.
+
+### 2026-06-19 Implementation Evidence
+
+Implemented and tested the Phase 13 Remote contacts, privacy, presence, and safety slice:
+
+- Backend contact requests now support create/list/accept/reject/cancel, removal, block/unblock, request quotas, search privacy, presence heartbeat/query, username rules, privacy-minimized reports, and safety action recording.
+- Backend schema now includes contact requests, account privacy, reports, and safety actions.
+- Remote client service queues contact lifecycle, username, privacy, presence, profile, and safety report operations and enforces local request quota/username/privacy validation.
+- Remote sync recognizes contact/profile/privacy/presence/safety event types; contact/profile updates are applied locally and marker-only events are processed without crashing.
+- Tests cover contact lifecycle, username rules, quota enforcement, search privacy, presence/last-seen policy, plaintext-free reports, safety action workflow, contact/block sync events, and direct blocked-user delivery suppression.
+
+Still not complete:
+
+- P13-015 remains partial: direct blocked-user delivery is tested, but group-specific blocked-user behavior belongs to Phase 16 Remote Groups and is not implemented yet.
 
 ---
 

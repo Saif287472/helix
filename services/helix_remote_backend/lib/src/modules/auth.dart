@@ -27,6 +27,7 @@ class AuthModule {
     // Auth routes (enforced by middleware in main, but we can verify here too)
     router.get('/devices', _listDevicesHandler);
     router.post('/devices/revoke', _revokeDeviceHandler);
+    router.post('/username', _changeUsernameHandler);
 
     return router;
   }
@@ -203,8 +204,12 @@ class AuthModule {
       }, const Duration(days: 7));
 
       // Hash refresh token and save in database
-      final tokenHash = crypto_pkg.sha256.convert(utf8.encode(refreshToken)).toString();
-      final expiresAt = DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch;
+      final tokenHash = crypto_pkg.sha256
+          .convert(utf8.encode(refreshToken))
+          .toString();
+      final expiresAt = DateTime.now()
+          .add(const Duration(days: 7))
+          .millisecondsSinceEpoch;
       db.saveRefreshToken(
         tokenHash: tokenHash,
         accountId: accountId,
@@ -284,37 +289,99 @@ class AuthModule {
     }
   }
 
+  Future<Response> _changeUsernameHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final username = body['username'] as String?;
+      if (username == null || !_isValidUsername(username)) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Invalid username'}),
+        );
+      }
+
+      final existing = db.getAccountByUsername(username);
+      final accountId = auth['account_id'] as String;
+      if (existing != null && existing['account_id'] != accountId) {
+        return Response.forbidden(
+          jsonEncode({'error': 'Username is not available'}),
+        );
+      }
+
+      db.updateUsername(accountId, username);
+      db.logAudit(
+        accountId,
+        auth['device_id'] as String?,
+        'USERNAME_CHANGED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      return Response.ok(
+        jsonEncode({'message': 'Username changed', 'username': username}),
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+      );
+    }
+  }
+
+  bool _isValidUsername(String username) {
+    if (username.length < 3 || username.length > 30) return false;
+    if (username.startsWith('helix_')) return false;
+    return RegExp(r'^[a-z0-9_]+$').hasMatch(username);
+  }
+
   static String base64UrlEncode(List<int> bytes) {
     return base64Url.encode(bytes).replaceAll('=', '');
   }
 
   Future<Response> _refreshHandler(Request request) async {
     try {
-      final body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final refreshToken = body['refresh_token'] as String?;
       if (refreshToken == null) {
-        return Response.badRequest(body: jsonEncode({'error': 'Missing refresh_token'}));
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing refresh_token'}),
+        );
       }
 
       final claims = jwt.verifyToken(refreshToken);
       if (claims == null || claims['refresh'] != true) {
-        return Response.forbidden(jsonEncode({'error': 'Invalid or expired refresh token'}));
+        return Response.forbidden(
+          jsonEncode({'error': 'Invalid or expired refresh token'}),
+        );
       }
 
       final accountId = claims['account_id'] as String;
       final deviceId = claims['device_id'] as String;
 
-      final tokenHash = crypto_pkg.sha256.convert(utf8.encode(refreshToken)).toString();
+      final tokenHash = crypto_pkg.sha256
+          .convert(utf8.encode(refreshToken))
+          .toString();
       final storedToken = db.getRefreshToken(tokenHash);
 
       if (storedToken == null) {
-        return Response.forbidden(jsonEncode({'error': 'Refresh token not recognized'}));
+        return Response.forbidden(
+          jsonEncode({'error': 'Refresh token not recognized'}),
+        );
       }
 
       if (storedToken['revoked'] == 1) {
         // REPLAY ATTACK! Revoke ALL refresh tokens for this device for safety
         db.revokeAllRefreshTokensForDevice(accountId, deviceId);
-        return Response.forbidden(jsonEncode({'error': 'Compromised refresh token. All sessions revoked.'}));
+        return Response.forbidden(
+          jsonEncode({
+            'error': 'Compromised refresh token. All sessions revoked.',
+          }),
+        );
       }
 
       // Revoke the used token (rotation)
@@ -333,8 +400,12 @@ class AuthModule {
         'jti': Random.secure().nextInt(1000000000).toString(),
       }, const Duration(days: 7));
 
-      final newTokenHash = crypto_pkg.sha256.convert(utf8.encode(newRefreshToken)).toString();
-      final expiresAt = DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch;
+      final newTokenHash = crypto_pkg.sha256
+          .convert(utf8.encode(newRefreshToken))
+          .toString();
+      final expiresAt = DateTime.now()
+          .add(const Duration(days: 7))
+          .millisecondsSinceEpoch;
 
       db.saveRefreshToken(
         tokenHash: newTokenHash,
@@ -343,12 +414,13 @@ class AuthModule {
         expiresAt: expiresAt,
       );
 
-      return Response.ok(jsonEncode({
-        'token': newAccessToken,
-        'refresh_token': newRefreshToken,
-      }));
+      return Response.ok(
+        jsonEncode({'token': newAccessToken, 'refresh_token': newRefreshToken}),
+      );
     } catch (e) {
-      return Response.internalServerError(body: jsonEncode({'error': e.toString()}));
+      return Response.internalServerError(
+        body: jsonEncode({'error': e.toString()}),
+      );
     }
   }
 }

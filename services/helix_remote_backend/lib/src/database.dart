@@ -185,6 +185,60 @@ class BackendDatabase {
 
       _db.execute('PRAGMA user_version = 2;');
     }
+
+    if (version < 3) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS contact_requests (
+          request_id TEXT PRIMARY KEY,
+          requester_account_id TEXT NOT NULL,
+          target_account_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY(requester_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(target_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS account_privacy (
+          account_id TEXT PRIMARY KEY,
+          search_discoverable INTEGER NOT NULL DEFAULT 1,
+          presence_visibility TEXT NOT NULL DEFAULT 'CONTACTS',
+          last_seen_visibility TEXT NOT NULL DEFAULT 'CONTACTS',
+          profile_version INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS reports (
+          report_id TEXT PRIMARY KEY,
+          reporter_account_id TEXT NOT NULL,
+          subject_account_id TEXT NOT NULL,
+          category TEXT NOT NULL,
+          reason_code TEXT NOT NULL,
+          context_hash TEXT,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(reporter_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(subject_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS safety_actions (
+          action_id TEXT PRIMARY KEY,
+          report_id TEXT NOT NULL,
+          actor_account_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(report_id) REFERENCES reports(report_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 3;');
+    }
   }
 
   void close() {
@@ -236,6 +290,14 @@ class BackendDatabase {
     };
   }
 
+  void updateUsername(String accountId, String username) {
+    final stmt = _db.prepare(
+      'UPDATE accounts SET username = ? WHERE account_id = ?;',
+    );
+    stmt.execute([username, accountId]);
+    stmt.close();
+  }
+
   // Device operations
   void registerDevice(
     String deviceId,
@@ -279,6 +341,15 @@ class BackendDatabase {
       "UPDATE devices SET status = 'REVOKED' WHERE account_id = ? AND device_id = ?;",
     );
     stmt.execute([accountId, deviceId]);
+    stmt.close();
+  }
+
+  void updateDeviceLastSeen(String accountId, String deviceId, int timestamp) {
+    final stmt = _db.prepare('''
+      UPDATE devices SET last_seen_at = ?
+      WHERE account_id = ? AND device_id = ?;
+    ''');
+    stmt.execute([timestamp, accountId, deviceId]);
     stmt.close();
   }
 
@@ -429,29 +500,198 @@ class BackendDatabase {
   }
 
   // Contacts
-  void addContact(String accountId, String peerAccountId, String? nickname) {
-    final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO contacts (account_id, peer_account_id, nickname, status)
-      VALUES (?, ?, ?, 'ACCEPTED');
-    ''');
-    stmt.execute([accountId, peerAccountId, nickname]);
+  void createContactRequest({
+    required String requestId,
+    required String requesterAccountId,
+    required String targetAccountId,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final requestStmt = _db.prepare('''
+        INSERT INTO contact_requests (
+          request_id,
+          requester_account_id,
+          target_account_id,
+          status,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, 'PENDING', ?, ?);
+      ''');
+      requestStmt.execute([
+        requestId,
+        requesterAccountId,
+        targetAccountId,
+        now,
+        now,
+      ]);
+      requestStmt.close();
+
+      _upsertContactInTransaction(
+        requesterAccountId,
+        targetAccountId,
+        null,
+        'PENDING_SENT',
+      );
+      _upsertContactInTransaction(
+        targetAccountId,
+        requesterAccountId,
+        null,
+        'PENDING_RECEIVED',
+      );
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  Map<String, dynamic>? getContactRequest(String requestId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM contact_requests WHERE request_id = ?;',
+    );
+    final res = stmt.select([requestId]);
     stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'request_id': row['request_id'],
+      'requester_account_id': row['requester_account_id'],
+      'target_account_id': row['target_account_id'],
+      'status': row['status'],
+      'created_at': row['created_at'],
+      'updated_at': row['updated_at'],
+    };
+  }
+
+  List<Map<String, dynamic>> getContactRequests(String accountId) {
+    final stmt = _db.prepare('''
+      SELECT * FROM contact_requests
+      WHERE requester_account_id = ? OR target_account_id = ?
+      ORDER BY created_at DESC;
+    ''');
+    final res = stmt.select([accountId, accountId]);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'request_id': row['request_id'],
+            'requester_account_id': row['requester_account_id'],
+            'target_account_id': row['target_account_id'],
+            'status': row['status'],
+            'created_at': row['created_at'],
+            'updated_at': row['updated_at'],
+          },
+        )
+        .toList();
+  }
+
+  int countContactRequestsSince(String accountId, int sinceTimestamp) {
+    final stmt = _db.prepare('''
+      SELECT COUNT(*) AS count FROM contact_requests
+      WHERE requester_account_id = ? AND created_at >= ?;
+    ''');
+    final res = stmt.select([accountId, sinceTimestamp]);
+    stmt.close();
+    return res.first['count'] as int;
+  }
+
+  bool hasOpenContactRequest(
+    String requesterAccountId,
+    String targetAccountId,
+  ) {
+    final stmt = _db.prepare('''
+      SELECT 1 FROM contact_requests
+      WHERE requester_account_id = ?
+        AND target_account_id = ?
+        AND status = 'PENDING';
+    ''');
+    final res = stmt.select([requesterAccountId, targetAccountId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
+  void acceptContactRequest(String requestId) {
+    final request = getContactRequest(requestId);
+    if (request == null) {
+      throw StateError('Contact request not found');
+    }
+    final requester = request['requester_account_id'] as String;
+    final target = request['target_account_id'] as String;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final stmt = _db.prepare('''
+        UPDATE contact_requests
+        SET status = 'ACCEPTED', updated_at = ?
+        WHERE request_id = ?;
+      ''');
+      stmt.execute([now, requestId]);
+      stmt.close();
+      _upsertContactInTransaction(requester, target, null, 'ACCEPTED');
+      _upsertContactInTransaction(target, requester, null, 'ACCEPTED');
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  void closeContactRequest(String requestId, String status) {
+    final request = getContactRequest(requestId);
+    if (request == null) {
+      throw StateError('Contact request not found');
+    }
+    final requester = request['requester_account_id'] as String;
+    final target = request['target_account_id'] as String;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final stmt = _db.prepare('''
+        UPDATE contact_requests
+        SET status = ?, updated_at = ?
+        WHERE request_id = ?;
+      ''');
+      stmt.execute([status, now, requestId]);
+      stmt.close();
+      _deleteContactInTransaction(requester, target, onlyPending: true);
+      _deleteContactInTransaction(target, requester, onlyPending: true);
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  void addContact(String accountId, String peerAccountId, String? nickname) {
+    _upsertContact(accountId, peerAccountId, nickname, 'ACCEPTED');
   }
 
   void blockContact(String accountId, String peerAccountId) {
-    final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO contacts (account_id, peer_account_id, nickname, status)
-      VALUES (?, ?, NULL, 'BLOCKED');
-    ''');
-    stmt.execute([accountId, peerAccountId]);
-    stmt.close();
+    _upsertContact(accountId, peerAccountId, null, 'BLOCKED');
   }
 
   void unblockContact(String accountId, String peerAccountId) {
-    final stmt = _db.prepare('''
-      DELETE FROM contacts WHERE account_id = ? AND peer_account_id = ? AND status = 'BLOCKED';
-    ''');
-    stmt.execute([accountId, peerAccountId]);
+    removeContact(accountId, peerAccountId, onlyStatus: 'BLOCKED');
+  }
+
+  void removeContact(
+    String accountId,
+    String peerAccountId, {
+    String? onlyStatus,
+  }) {
+    final sql = onlyStatus == null
+        ? 'DELETE FROM contacts WHERE account_id = ? AND peer_account_id = ?;'
+        : 'DELETE FROM contacts WHERE account_id = ? AND peer_account_id = ? AND status = ?;';
+    final stmt = _db.prepare(sql);
+    stmt.execute(
+      onlyStatus == null
+          ? [accountId, peerAccountId]
+          : [accountId, peerAccountId, onlyStatus],
+    );
     stmt.close();
   }
 
@@ -477,6 +717,256 @@ class BackendDatabase {
     final res = stmt.select([accountId, peerAccountId]);
     stmt.close();
     return res.isNotEmpty;
+  }
+
+  bool areContacts(String accountId, String peerAccountId) {
+    final stmt = _db.prepare(
+      "SELECT 1 FROM contacts WHERE account_id = ? AND peer_account_id = ? AND status = 'ACCEPTED';",
+    );
+    final res = stmt.select([accountId, peerAccountId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
+  void _upsertContact(
+    String accountId,
+    String peerAccountId,
+    String? nickname,
+    String status,
+  ) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO contacts (account_id, peer_account_id, nickname, status)
+      VALUES (?, ?, ?, ?);
+    ''');
+    stmt.execute([accountId, peerAccountId, nickname, status]);
+    stmt.close();
+  }
+
+  void _upsertContactInTransaction(
+    String accountId,
+    String peerAccountId,
+    String? nickname,
+    String status,
+  ) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO contacts (account_id, peer_account_id, nickname, status)
+      VALUES (?, ?, ?, ?);
+    ''');
+    stmt.execute([accountId, peerAccountId, nickname, status]);
+    stmt.close();
+  }
+
+  void _deleteContactInTransaction(
+    String accountId,
+    String peerAccountId, {
+    bool onlyPending = false,
+  }) {
+    final stmt = _db.prepare(
+      onlyPending
+          ? "DELETE FROM contacts WHERE account_id = ? AND peer_account_id = ? AND status IN ('PENDING_SENT', 'PENDING_RECEIVED');"
+          : 'DELETE FROM contacts WHERE account_id = ? AND peer_account_id = ?;',
+    );
+    stmt.execute([accountId, peerAccountId]);
+    stmt.close();
+  }
+
+  Map<String, dynamic> getPrivacy(String accountId) {
+    _ensurePrivacyRow(accountId);
+    final stmt = _db.prepare(
+      'SELECT * FROM account_privacy WHERE account_id = ?;',
+    );
+    final res = stmt.select([accountId]);
+    stmt.close();
+    final row = res.first;
+    return {
+      'account_id': row['account_id'],
+      'search_discoverable': row['search_discoverable'] == 1,
+      'presence_visibility': row['presence_visibility'],
+      'last_seen_visibility': row['last_seen_visibility'],
+      'profile_version': row['profile_version'],
+    };
+  }
+
+  void setPrivacy({
+    required String accountId,
+    required bool searchDiscoverable,
+    required String presenceVisibility,
+    required String lastSeenVisibility,
+  }) {
+    final current = getPrivacy(accountId);
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO account_privacy (
+        account_id,
+        search_discoverable,
+        presence_visibility,
+        last_seen_visibility,
+        profile_version
+      )
+      VALUES (?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      accountId,
+      searchDiscoverable ? 1 : 0,
+      presenceVisibility,
+      lastSeenVisibility,
+      (current['profile_version'] as int) + 1,
+    ]);
+    stmt.close();
+  }
+
+  List<Map<String, dynamic>> searchAccounts(
+    String requesterAccountId,
+    String query, {
+    int limit = 20,
+  }) {
+    final stmt = _db.prepare('''
+      SELECT a.account_id, a.username
+      FROM accounts a
+      LEFT JOIN account_privacy p ON p.account_id = a.account_id
+      WHERE a.account_id != ?
+        AND (p.search_discoverable IS NULL OR p.search_discoverable = 1)
+        AND a.username LIKE ?
+      ORDER BY a.username ASC
+      LIMIT ?;
+    ''');
+    final res = stmt.select([requesterAccountId, '$query%', limit]);
+    stmt.close();
+    return res
+        .where(
+          (row) =>
+              !isBlocked(row['account_id'] as String, requesterAccountId) &&
+              !isBlocked(requesterAccountId, row['account_id'] as String),
+        )
+        .map(
+          (row) => {
+            'account_id': row['account_id'],
+            'username': row['username'],
+          },
+        )
+        .toList();
+  }
+
+  Map<String, dynamic>? getPresenceForViewer(
+    String viewerAccountId,
+    String targetAccountId,
+  ) {
+    final privacy = getPrivacy(targetAccountId);
+    final visibility = privacy['presence_visibility'] as String;
+    if (visibility == 'NOBODY') return null;
+    if (visibility == 'CONTACTS' &&
+        !areContacts(targetAccountId, viewerAccountId)) {
+      return null;
+    }
+
+    final stmt = _db.prepare('''
+      SELECT MAX(last_seen_at) AS last_seen_at
+      FROM devices
+      WHERE account_id = ? AND status = 'ACTIVE';
+    ''');
+    final res = stmt.select([targetAccountId]);
+    stmt.close();
+    final lastSeen = res.first['last_seen_at'];
+    if (lastSeen == null) return null;
+
+    return {
+      'account_id': targetAccountId,
+      'presence': 'RECENTLY_ACTIVE',
+      'last_seen_at': privacy['last_seen_visibility'] == 'NOBODY'
+          ? null
+          : lastSeen,
+    };
+  }
+
+  String createReport({
+    required String reportId,
+    required String reporterAccountId,
+    required String subjectAccountId,
+    required String category,
+    required String reasonCode,
+    String? contextHash,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT INTO reports (
+        report_id,
+        reporter_account_id,
+        subject_account_id,
+        category,
+        reason_code,
+        context_hash,
+        status,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'OPEN', ?);
+    ''');
+    stmt.execute([
+      reportId,
+      reporterAccountId,
+      subjectAccountId,
+      category,
+      reasonCode,
+      contextHash,
+      now,
+    ]);
+    stmt.close();
+    return reportId;
+  }
+
+  List<Map<String, dynamic>> getReports() {
+    final stmt = _db.prepare('SELECT * FROM reports ORDER BY created_at DESC;');
+    final res = stmt.select();
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'report_id': row['report_id'],
+            'reporter_account_id': row['reporter_account_id'],
+            'subject_account_id': row['subject_account_id'],
+            'category': row['category'],
+            'reason_code': row['reason_code'],
+            'context_hash': row['context_hash'],
+            'status': row['status'],
+            'created_at': row['created_at'],
+          },
+        )
+        .toList();
+  }
+
+  void addSafetyAction({
+    required String actionId,
+    required String reportId,
+    required String actorAccountId,
+    required String action,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final actionStmt = _db.prepare('''
+        INSERT INTO safety_actions (action_id, report_id, actor_account_id, action, created_at)
+        VALUES (?, ?, ?, ?, ?);
+      ''');
+      actionStmt.execute([actionId, reportId, actorAccountId, action, now]);
+      actionStmt.close();
+
+      final statusStmt = _db.prepare(
+        "UPDATE reports SET status = 'ACTIONED' WHERE report_id = ?;",
+      );
+      statusStmt.execute([reportId]);
+      statusStmt.close();
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  void _ensurePrivacyRow(String accountId) {
+    final stmt = _db.prepare('''
+      INSERT OR IGNORE INTO account_privacy (account_id)
+      VALUES (?);
+    ''');
+    stmt.execute([accountId]);
+    stmt.close();
   }
 
   // Conversations
@@ -593,7 +1083,9 @@ class BackendDatabase {
   }
 
   Map<String, dynamic>? getMessage(String messageId) {
-    final stmt = _db.prepare('SELECT * FROM messages WHERE message_id = ? LIMIT 1;');
+    final stmt = _db.prepare(
+      'SELECT * FROM messages WHERE message_id = ? LIMIT 1;',
+    );
     final res = stmt.select([messageId]);
     stmt.close();
     if (res.isEmpty) return null;
@@ -794,7 +1286,9 @@ class BackendDatabase {
   }
 
   Map<String, dynamic>? getRefreshToken(String tokenHash) {
-    final stmt = _db.prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?;');
+    final stmt = _db.prepare(
+      'SELECT * FROM refresh_tokens WHERE token_hash = ?;',
+    );
     final res = stmt.select([tokenHash]);
     stmt.close();
     if (res.isEmpty) return null;
@@ -809,13 +1303,17 @@ class BackendDatabase {
   }
 
   void revokeRefreshToken(String tokenHash) {
-    final stmt = _db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE token_hash = ?;');
+    final stmt = _db.prepare(
+      'UPDATE refresh_tokens SET revoked = 1 WHERE token_hash = ?;',
+    );
     stmt.execute([tokenHash]);
     stmt.close();
   }
 
   void revokeAllRefreshTokensForDevice(String accountId, String deviceId) {
-    final stmt = _db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE account_id = ? AND device_id = ?;');
+    final stmt = _db.prepare(
+      'UPDATE refresh_tokens SET revoked = 1 WHERE account_id = ? AND device_id = ?;',
+    );
     stmt.execute([accountId, deviceId]);
     stmt.close();
   }
@@ -832,7 +1330,9 @@ class BackendDatabase {
   }
 
   bool isTombstoned(String itemId, String type) {
-    final stmt = _db.prepare('SELECT 1 FROM tombstones WHERE item_id = ? AND type = ?;');
+    final stmt = _db.prepare(
+      'SELECT 1 FROM tombstones WHERE item_id = ? AND type = ?;',
+    );
     final res = stmt.select([itemId, type]);
     stmt.close();
     return res.isNotEmpty;
@@ -840,7 +1340,9 @@ class BackendDatabase {
 
   // Quotas / Backpressure (P10-021)
   int getMessageCountForDevice(String deviceId) {
-    final stmt = _db.prepare('SELECT COUNT(*) FROM messages WHERE recipient_device_id = ?;');
+    final stmt = _db.prepare(
+      'SELECT COUNT(*) FROM messages WHERE recipient_device_id = ?;',
+    );
     final res = stmt.select([deviceId]);
     stmt.close();
     if (res.isEmpty) return 0;

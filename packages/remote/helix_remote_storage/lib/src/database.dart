@@ -376,6 +376,27 @@ class HelixRemoteDatabase {
         .toList();
   }
 
+  RemoteContact? getContact(String peerAccountId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM contacts WHERE peer_account_id = ?;',
+    );
+    final res = stmt.select([peerAccountId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return RemoteContact(
+      peerAccountId: row['peer_account_id'] as String,
+      nickname: row['nickname'] as String,
+      status: row['status'] as String,
+    );
+  }
+
+  void deleteContact(String peerAccountId) {
+    final stmt = _db.prepare('DELETE FROM contacts WHERE peer_account_id = ?;');
+    stmt.execute([peerAccountId]);
+    stmt.close();
+  }
+
   // ---------------------------------------------------------------------------
   // Conversation operations
   // ---------------------------------------------------------------------------
