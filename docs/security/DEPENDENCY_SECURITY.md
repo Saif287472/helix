@@ -1,7 +1,10 @@
 # Dependency Security Checks
 
 Stage 1 verification includes `flutter pub outdated` as a dependency-health
-advisory. It flags upgrade pressure but does not replace human review.
+advisory in CI, or when `HELIX_DEPENDENCY_ADVISORY=1` is set locally. Local
+verification also passes `--no-pub` to Flutter commands unless that variable is
+set, so dependency availability checks do not run during routine local tests.
+The advisory flags upgrade pressure but does not replace human review.
 
 ## Required Review Before Adding Dependencies
 

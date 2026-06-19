@@ -1,5 +1,18 @@
 $ErrorActionPreference = "Stop"
 
+function Test-DependencyAdvisoryEnabled {
+    $flag = $env:HELIX_DEPENDENCY_ADVISORY
+    if ($flag -in @("1", "true", "TRUE", "yes", "YES")) { return $true }
+
+    $ci = $env:CI
+    return $ci -in @("1", "true", "TRUE", "yes", "YES")
+}
+
+$FlutterPubArgs = @()
+if (-not (Test-DependencyAdvisoryEnabled)) {
+    $FlutterPubArgs = @("--no-pub")
+}
+
 function Invoke-Step {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
@@ -8,8 +21,11 @@ function Invoke-Step {
 
     Write-Host ""
     Write-Host "==> $Name"
+    $global:LASTEXITCODE = 0
     & $Command
-    if (-not $?) { throw "Step '$Name' failed." }
+    if ((-not $?) -or ($global:LASTEXITCODE -ne 0)) {
+        throw "Step '$Name' failed."
+    }
 }
 
 Invoke-Step "Dart format check" {
@@ -17,7 +33,7 @@ Invoke-Step "Dart format check" {
 }
 
 Invoke-Step "Flutter analyze" {
-    flutter analyze
+    flutter analyze @FlutterPubArgs
 }
 
 Invoke-Step "Architecture boundary check" {
@@ -47,7 +63,7 @@ Invoke-Step "SBOM/license inventory check (P7)" {
 Invoke-Step "Flutter tests (helix_local)" {
     Push-Location apps/helix_local
     try {
-        flutter test
+        flutter test @FlutterPubArgs
     } finally {
         Pop-Location
     }
@@ -56,7 +72,7 @@ Invoke-Step "Flutter tests (helix_local)" {
 Invoke-Step "Flutter tests (helix_remote)" {
     Push-Location apps/helix_remote
     try {
-        flutter test
+        flutter test @FlutterPubArgs
     } finally {
         Pop-Location
     }
@@ -74,7 +90,7 @@ foreach ($scope in @("local", "shared", "remote")) {
                 try {
                     $pubspec = Get-Content (Join-Path $pkg.FullName "pubspec.yaml") -Raw
                     if ($pubspec -match 'sdk: flutter') {
-                        flutter test
+                        flutter test @FlutterPubArgs
                     } else {
                         dart test
                     }
@@ -96,14 +112,18 @@ Invoke-Step "Tests: services/helix_remote_backend" {
 }
 
 Invoke-Step "Dependency health advisory" {
-    flutter pub outdated
+    if (Test-DependencyAdvisoryEnabled) {
+        flutter pub outdated
+    } else {
+        Write-Host "Skipped for local verification. Set HELIX_DEPENDENCY_ADVISORY=1 to run flutter pub outdated."
+    }
 }
 
 if ($env:HELIX_VERIFY_BUILD -eq "1") {
     Invoke-Step "Debug build: helix_local (Windows)" {
         Push-Location apps/helix_local
         try {
-            flutter build windows --debug
+            flutter build windows --debug @FlutterPubArgs
         } finally {
             Pop-Location
         }
@@ -112,7 +132,7 @@ if ($env:HELIX_VERIFY_BUILD -eq "1") {
     Invoke-Step "Debug build: helix_local (Android APK)" {
         Push-Location apps/helix_local
         try {
-            flutter build apk --debug
+            flutter build apk --debug @FlutterPubArgs
         } finally {
             Pop-Location
         }
@@ -121,7 +141,7 @@ if ($env:HELIX_VERIFY_BUILD -eq "1") {
     Invoke-Step "Debug build: helix_remote (Windows)" {
         Push-Location apps/helix_remote
         try {
-            flutter build windows --debug
+            flutter build windows --debug @FlutterPubArgs
         } finally {
             Pop-Location
         }
@@ -130,7 +150,7 @@ if ($env:HELIX_VERIFY_BUILD -eq "1") {
     Invoke-Step "Debug build: helix_remote (Android APK)" {
         Push-Location apps/helix_remote
         try {
-            flutter build apk --debug
+            flutter build apk --debug @FlutterPubArgs
         } finally {
             Pop-Location
         }

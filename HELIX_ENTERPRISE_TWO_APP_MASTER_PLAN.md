@@ -1091,7 +1091,7 @@ Append this under the relevant phase:
 - [x] **P7-014:** Replace debug release signing. (Android release signing now fails closed without Local signing material.)
 - [x] **P7-015:** Add reproducible release instructions. (`docs/release/LOCAL_RELEASE_CHECKLIST.md`)
 - [x] **P7-016:** Add SBOM and dependency license checks. (`tool/generate_local_sbom.dart`, wired into verify.)
-- [x] **P7-017:** Add dependency vulnerability scanning. (Dependency audit process documented; `flutter pub outdated` remains automated advisory until hosted scanner is selected.)
+- [x] **P7-017:** Add dependency vulnerability scanning. (Dependency audit process documented; `flutter pub outdated` remains CI/release advisory until hosted scanner is selected; local verify runs pass `--no-pub` to Flutter commands and can opt back in with `HELIX_DEPENDENCY_ADVISORY=1`.)
 - [x] **P7-018:** Add a manual privacy verification checklist. (`docs/release/LOCAL_PRIVACY_VERIFICATION_CHECKLIST.md`)
 - [x] **P7-019:** Perform an external security review before strong marketing claims. (`docs/security/EXTERNAL_SECURITY_REVIEW_GATE.md`; unsupported strong claims are blocked until review.)
 - [x] **P7-020:** Produce an independent Local release artifact and rollback plan. (`scripts/local_release_gate.ps1`, `docs/release/LOCAL_RELEASE_ROLLBACK_PLAN.md`)

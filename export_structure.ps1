@@ -1,6 +1,37 @@
-$OutputFile = "codebase_structure.txt"
+﻿[CmdletBinding()]
+param(
+    [Parameter()]
+    [string]$OutputFile = "codebase_structure.txt"
+)
 
-$excludeDirs = @(
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# Always treat the folder containing this script as the repository root.
+# This makes the result independent of the caller's current directory.
+$Root = [System.IO.Path]::GetFullPath($PSScriptRoot)
+
+if ([string]::IsNullOrWhiteSpace($Root)) {
+    throw "Unable to determine the project root from PSScriptRoot."
+}
+
+if ([System.IO.Path]::IsPathRooted($OutputFile)) {
+    $OutputPath = [System.IO.Path]::GetFullPath($OutputFile)
+}
+else {
+    $OutputPath = [System.IO.Path]::GetFullPath((Join-Path $Root $OutputFile))
+}
+
+$OutputDirectory = Split-Path -Parent $OutputPath
+if (-not (Test-Path -LiteralPath $OutputDirectory -PathType Container)) {
+    [void](New-Item -ItemType Directory -Path $OutputDirectory -Force)
+}
+
+$CurrentScriptPath = [System.IO.Path]::GetFullPath($PSCommandPath)
+
+# Exclude only generated, dependency, cache, IDE, export, and sensitive folders.
+# New project folders are included automatically unless their exact name appears here.
+$ExcludedDirectoryNames = @(
     ".git",
     ".dart_tool",
     ".idea",
@@ -9,29 +40,40 @@ $excludeDirs = @(
     ".gradle",
     ".kotlin",
     ".cxx",
+    ".pub-cache",
+    ".plugin_symlinks",
+    ".swiftpm",
     "build",
     "coverage",
     "node_modules",
     "Pods",
     "DerivedData",
     "ephemeral",
-    ".plugin_symlinks"
+    "migrate_working_dir",
+    "codebase_review",
+    "review_exports",
+    "secrets",
+    "private"
 )
 
-$excludeFiles = @(
-    $OutputFile,
-    "export_structure.ps1",
+$ExcludedFileNames = @(
     ".flutter-plugins-dependencies",
     "local.properties",
+    "key.properties",
     "GeneratedPluginRegistrant.java",
     "dart_plugin_registrant.dart",
     "generated_plugin_registrant.cc",
     "generated_plugin_registrant.h",
-    "generated_plugins.cmake"
+    "generated_plugins.cmake",
+    "google-services.json",
+    "GoogleService-Info.plist",
+    "firebase_options.dart"
 )
 
-$excludePatterns = @(
+$ExcludedFilePatterns = @(
     "*.iml",
+    "*.ipr",
+    "*.iws",
     "*.log",
     "*.tmp",
     "*.bak",
@@ -46,18 +88,74 @@ $excludePatterns = @(
     "*.so",
     "*.exe",
     "*.pdb",
-    "*.jar"
+    "*.jar",
+    "*.keystore",
+    "*.jks",
+    "*.p12",
+    "*.pfx",
+    "*.pem",
+    "*.key",
+    "*.crt",
+    "*.cer",
+    "*.csr",
+    "service-account*.json",
+    "*.db",
+    "*.sqlite",
+    "*.sqlite3",
+    "diagnostics-*.json",
+    "audit-export-*.json",
+    "app.*.symbols",
+    "app.*.map.json"
 )
 
-function Test-ExcludedFile {
-    param([System.IO.FileInfo]$File)
+$Stats = [ordered]@{
+    IncludedDirectories       = 0
+    IncludedFiles             = 0
+    ExcludedDirectories       = 0
+    ExcludedFiles             = 0
+    SkippedSensitiveFiles     = 0
+    SkippedReparsePoints      = 0
+    UnreadableDirectories     = 0
+}
 
-    if ($excludeFiles -contains $File.Name) {
+$Warnings = New-Object -TypeName 'System.Collections.Generic.List[string]'
+$VisitedDirectories = New-Object -TypeName 'System.Collections.Generic.HashSet[string]' -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
+
+function Test-IsReparsePoint {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.FileSystemInfo]$Item
+    )
+
+    return (($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
+}
+
+function Test-IsSensitiveFileName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    if ($Name -ieq ".env.example") {
+        return $false
+    }
+
+    if ($Name -ieq ".env" -or $Name -like ".env.*") {
         return $true
     }
 
-    foreach ($pattern in $excludePatterns) {
-        if ($File.Name -like $pattern) {
+    if ($Name -ieq "google-services.json" -or
+        $Name -ieq "GoogleService-Info.plist" -or
+        $Name -ieq "firebase_options.dart" -or
+        $Name -like "service-account*.json") {
+        return $true
+    }
+
+    foreach ($Pattern in @(
+        "*.keystore", "*.jks", "*.p12", "*.pfx", "*.pem", "*.key",
+        "*.crt", "*.cer", "*.csr", "*.db", "*.sqlite", "*.sqlite3"
+    )) {
+        if ($Name -like $Pattern) {
             return $true
         }
     }
@@ -65,49 +163,185 @@ function Test-ExcludedFile {
     return $false
 }
 
+function Test-ExcludedFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.FileInfo]$File
+    )
+
+    $FullPath = [System.IO.Path]::GetFullPath($File.FullName)
+
+    if ($FullPath -ieq $OutputPath -or $FullPath -ieq $CurrentScriptPath) {
+        $Stats.ExcludedFiles++
+        return $true
+    }
+
+    if (Test-IsSensitiveFileName -Name $File.Name) {
+        $Stats.SkippedSensitiveFiles++
+        return $true
+    }
+
+    if ($ExcludedFileNames -contains $File.Name) {
+        $Stats.ExcludedFiles++
+        return $true
+    }
+
+    foreach ($Pattern in $ExcludedFilePatterns) {
+        if ($File.Name -like $Pattern) {
+            $Stats.ExcludedFiles++
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-ExcludedDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.DirectoryInfo]$Directory
+    )
+
+    if (Test-IsReparsePoint -Item $Directory) {
+        $Stats.SkippedReparsePoints++
+        return $true
+    }
+
+    if ($ExcludedDirectoryNames -contains $Directory.Name) {
+        $Stats.ExcludedDirectories++
+        return $true
+    }
+
+    return $false
+}
+
+function Get-GitCommit {
+    try {
+        $Commit = (& git -C $Root rev-parse HEAD 2>$null | Select-Object -First 1)
+        if (-not [string]::IsNullOrWhiteSpace($Commit)) {
+            return $Commit.Trim()
+        }
+    }
+    catch {
+        # Git metadata is optional for this inventory.
+    }
+
+    return "Unavailable"
+}
+
+function Get-VisibleChildren {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    try {
+        $Children = @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction Stop)
+    }
+    catch {
+        $Stats.UnreadableDirectories++
+        $Warnings.Add("Unreadable directory: $Path | $($_.Exception.Message)")
+        return @()
+    }
+
+    $Visible = foreach ($Child in $Children) {
+        if ($Child.PSIsContainer) {
+            if (-not (Test-ExcludedDirectory -Directory $Child)) {
+                $Child
+            }
+        }
+        else {
+            if (-not (Test-ExcludedFile -File $Child)) {
+                $Child
+            }
+        }
+    }
+
+    return @(
+        $Visible |
+        Sort-Object @{ Expression = { -not $_.PSIsContainer } }, @{ Expression = { $_.Name }; Ascending = $true }
+    )
+}
+
 function Write-ProjectTree {
     param(
+        [Parameter(Mandatory = $true)]
         [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [System.IO.StreamWriter]$Writer,
+
         [string]$Prefix = ""
     )
 
-    $items = @(
-        Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue |
-        Where-Object {
-            if ($_.PSIsContainer) {
-                $excludeDirs -notcontains $_.Name
-            }
-            else {
-                -not (Test-ExcludedFile $_)
-            }
-        } |
-        Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name
-    )
+    $CanonicalPath = [System.IO.Path]::GetFullPath($Path)
+    if (-not $VisitedDirectories.Add($CanonicalPath)) {
+        $Warnings.Add("Duplicate directory traversal prevented: $CanonicalPath")
+        return
+    }
 
-    for ($i = 0; $i -lt $items.Count; $i++) {
-        $item = $items[$i]
-        $isLast = $i -eq ($items.Count - 1)
+    $Items = @(Get-VisibleChildren -Path $CanonicalPath)
 
-        $branch = if ($isLast) { "\---" } else { "+---" }
-        Add-Content -Path $OutputFile -Value "$Prefix$branch$($item.Name)"
+    for ($Index = 0; $Index -lt $Items.Count; $Index++) {
+        $Item = $Items[$Index]
+        $IsLast = ($Index -eq ($Items.Count - 1))
+        $Branch = if ($IsLast) { "\---" } else { "+---" }
 
-        if ($item.PSIsContainer) {
-            $nextPrefix = if ($isLast) {
-                "$Prefix    "
-            }
-            else {
-                "$Prefix|   "
-            }
+        $Writer.WriteLine("$Prefix$Branch$($Item.Name)")
 
-            Write-ProjectTree -Path $item.FullName -Prefix $nextPrefix
+        if ($Item.PSIsContainer) {
+            $Stats.IncludedDirectories++
+            $NextPrefix = if ($IsLast) { "$Prefix    " } else { "$Prefix|   " }
+            Write-ProjectTree -Path $Item.FullName -Writer $Writer -Prefix $NextPrefix
+        }
+        else {
+            $Stats.IncludedFiles++
         }
     }
 }
 
-"PROJECT STRUCTURE" | Set-Content -Path $OutputFile -Encoding UTF8
-"Root: $(Get-Location)" | Add-Content -Path $OutputFile
-"" | Add-Content -Path $OutputFile
+$GeneratedUtc = [DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm:ss'Z'")
+$GitCommit = Get-GitCommit
+$Utf8WithBom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $true
+$Writer = New-Object -TypeName System.IO.StreamWriter -ArgumentList $OutputPath, $false, $Utf8WithBom
 
-Write-ProjectTree -Path (Get-Location).Path
+try {
+    $Writer.WriteLine("PROJECT STRUCTURE")
+    $Writer.WriteLine("Generated UTC: $GeneratedUtc")
+    $Writer.WriteLine("Root: $Root")
+    $Writer.WriteLine("Git commit: $GitCommit")
+    $Writer.WriteLine("")
 
-Write-Host "Created: $OutputFile"
+    Write-ProjectTree -Path $Root -Writer $Writer
+
+    $Writer.WriteLine("")
+    $Writer.WriteLine("SUMMARY")
+    $Writer.WriteLine("Included directories: $($Stats.IncludedDirectories)")
+    $Writer.WriteLine("Included files: $($Stats.IncludedFiles)")
+    $Writer.WriteLine("Excluded directories: $($Stats.ExcludedDirectories)")
+    $Writer.WriteLine("Excluded files: $($Stats.ExcludedFiles)")
+    $Writer.WriteLine("Skipped sensitive files: $($Stats.SkippedSensitiveFiles)")
+    $Writer.WriteLine("Skipped reparse points: $($Stats.SkippedReparsePoints)")
+    $Writer.WriteLine("Unreadable directories: $($Stats.UnreadableDirectories)")
+
+    if ($Warnings.Count -gt 0) {
+        $Writer.WriteLine("")
+        $Writer.WriteLine("WARNINGS")
+        foreach ($Warning in $Warnings) {
+            $Writer.WriteLine("- $Warning")
+        }
+    }
+}
+finally {
+    $Writer.Dispose()
+}
+
+Write-Host ""
+Write-Host "Project tree created successfully:" -ForegroundColor Green
+Write-Host $OutputPath -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Included directories: $($Stats.IncludedDirectories)"
+Write-Host "Included files: $($Stats.IncludedFiles)"
+Write-Host "Skipped sensitive files: $($Stats.SkippedSensitiveFiles)"
+Write-Host "Skipped reparse points: $($Stats.SkippedReparsePoints)"
+Write-Host ""
