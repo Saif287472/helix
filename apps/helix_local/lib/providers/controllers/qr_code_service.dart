@@ -4,16 +4,16 @@ import 'package:helix_local_domain/domain/models.dart';
 export 'package:helix_local_domain/domain/qr/qr_payload.dart';
 
 class QrCodeService {
-  final QrCodeUseCase _useCase;
+  final QrCodeUseCase useCase;
 
-  const QrCodeService({required this._useCase});
+  const QrCodeService({required this.useCase});
 
-  String encode(QrPayload payload) => _useCase.encode(payload);
+  String encode(QrPayload payload) => useCase.encode(payload);
 
-  QrPayload? decode(String raw) => _useCase.decode(raw);
+  QrPayload? decode(String raw) => useCase.decode(raw);
 
-  Peer payloadToPeer(QrPayload payload) => _useCase.payloadToPeer(payload);
+  Peer payloadToPeer(QrPayload payload) => useCase.payloadToPeer(payload);
 
   List<Peer> payloadToPeers(QrPayload payload) =>
-      _useCase.payloadToPeers(payload);
+      useCase.payloadToPeers(payload);
 }

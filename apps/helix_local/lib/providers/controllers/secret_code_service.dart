@@ -7,20 +7,16 @@ import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
 
 class SecretCodeService {
-  final SecretCodeUseCase _useCase;
+  final SecretCodeUseCase useCase;
 
-  const SecretCodeService({required this._useCase});
+  const SecretCodeService({required this.useCase});
 
   Future<void> broadcastSearch(
     String enteredCode,
     RawDatagramSocket socket,
     List<String> broadcastAddresses,
   ) {
-    return _useCase.broadcastSearch(
-      enteredCode,
-      socket,
-      broadcastAddresses,
-    );
+    return useCase.broadcastSearch(enteredCode, socket, broadcastAddresses);
   }
 
   Future<bool> handleChallenge(
@@ -34,7 +30,7 @@ class SecretCodeService {
     String deviceSuffix,
     int tcpPort,
   ) {
-    return _useCase.handleChallenge(
+    return useCase.handleChallenge(
       packet,
       storedVerifier,
       replySocket,
@@ -48,14 +44,14 @@ class SecretCodeService {
   }
 
   Future<Peer?> waitForResponse(RawDatagramSocket socket, Duration timeout) {
-    return _useCase.waitForResponse(socket, timeout);
+    return useCase.waitForResponse(socket, timeout);
   }
 
   Future<List<Peer>> waitForResponses(
     RawDatagramSocket socket,
     Duration timeout,
   ) {
-    return _useCase.waitForResponses(socket, timeout);
+    return useCase.waitForResponses(socket, timeout);
   }
 
   Future<List<Peer>> search(
@@ -63,7 +59,7 @@ class SecretCodeService {
     Duration timeout = kCodeSearchTimeout,
     List<String> broadcastAddresses = const ['255.255.255.255'],
   }) {
-    return _useCase.search(
+    return useCase.search(
       enteredCode,
       timeout: timeout,
       broadcastAddresses: broadcastAddresses,

@@ -8,7 +8,11 @@ import 'package:helix/ui/app_theme.dart';
 /// verification expectations in the UI where the action lives — not in a
 /// separate help page.
 class HelixPrivacyNote extends StatelessWidget {
-  const HelixPrivacyNote(this.text, {super.key, this.icon = Icons.lock_outline});
+  const HelixPrivacyNote(
+    this.text, {
+    super.key,
+    this.icon = Icons.lock_outline,
+  });
 
   final String text;
   final IconData icon;

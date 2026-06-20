@@ -1,9 +1,11 @@
 // Identity providers: QR code, secret code, diagnostics, trust, notifications.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_local_domain/domain/models.dart';
-import 'package:helix_local_domain/application/contracts/repositories.dart' show TrustRepository;
+import 'package:helix_local_domain/application/contracts/repositories.dart'
+    show TrustRepository;
 import 'package:helix_local_protocol/application/contracts/use_cases.dart';
-import 'package:helix/providers/session_provider.dart' show profileServiceProvider;
+import 'package:helix/providers/session_provider.dart'
+    show profileServiceProvider;
 import 'package:helix/providers/infrastructure_providers.dart';
 import 'package:helix/providers/controllers/diagnostics_service.dart';
 import 'package:helix/providers/controllers/notification_service.dart';
@@ -15,7 +17,8 @@ import 'package:helix/application/qr/qr_code_use_case_impl.dart';
 import 'package:helix/application/secret_code/secret_code_use_case_impl.dart';
 import 'package:helix/application/trust/trust_use_case_impl.dart';
 
-export 'package:helix/providers/controllers/qr_code_service.dart' show QrCodeService;
+export 'package:helix/providers/controllers/qr_code_service.dart'
+    show QrCodeService;
 export 'package:helix_local_domain/domain/qr/qr_payload.dart';
 
 final qrCodeUseCaseProvider = Provider<QrCodeUseCase>((ref) {

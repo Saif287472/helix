@@ -164,8 +164,9 @@ class _StatePanel extends StatelessWidget {
             const SizedBox(height: HelixTokens.space16),
             Text(
               title,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
               textAlign: TextAlign.center,
             ),
             if (body != null) ...[

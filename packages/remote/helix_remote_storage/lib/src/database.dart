@@ -347,6 +347,10 @@ class HelixRemoteDatabase {
       CREATE INDEX IF NOT EXISTS idx_messages_conv_seq
       ON messages(conversation_id, server_sequence ASC);
     ''');
+    _db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_messages_timestamp
+      ON messages(timestamp DESC);
+    ''');
 
     _db.execute('''
       CREATE TABLE IF NOT EXISTS revisions (
@@ -438,6 +442,10 @@ class HelixRemoteDatabase {
         next_attempt_at INTEGER NOT NULL DEFAULT 0
       );
     ''');
+    _db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_pending_operations_due
+      ON pending_operations(status, next_attempt_at, created_at);
+    ''');
 
     _db.execute('''
       CREATE TABLE IF NOT EXISTS tombstones (
@@ -446,6 +454,10 @@ class HelixRemoteDatabase {
         deleted_at INTEGER NOT NULL,
         PRIMARY KEY (item_id, type)
       );
+    ''');
+    _db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_tombstones_type_deleted
+      ON tombstones(type, deleted_at);
     ''');
 
     // P4-04: Inbound events that fail parsing or application are quarantined
@@ -601,6 +613,21 @@ class HelixRemoteDatabase {
         );
       ''');
       _db.execute('PRAGMA user_version = 10;');
+    }
+    if (version < 11) {
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_messages_timestamp
+        ON messages(timestamp DESC);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_pending_operations_due
+        ON pending_operations(status, next_attempt_at, created_at);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_tombstones_type_deleted
+        ON tombstones(type, deleted_at);
+      ''');
+      _db.execute('PRAGMA user_version = 11;');
     }
   }
 
@@ -1788,6 +1815,41 @@ class HelixRemoteDatabase {
     stmt.close();
   }
 
+  Map<String, int> purgeOperationalRecords({
+    required int completedOperationsOlderThan,
+    required int tombstonesOlderThan,
+    required int quarantineOlderThan,
+  }) {
+    _db.execute('SAVEPOINT purge_operational_records;');
+    try {
+      final purgedOperations = _deleteWhereCount(
+        'pending_operations',
+        "status = 'COMPLETED' AND created_at < ?",
+        [completedOperationsOlderThan],
+      );
+      final purgedTombstones = _deleteWhereCount(
+        'tombstones',
+        'deleted_at < ?',
+        [tombstonesOlderThan],
+      );
+      final purgedQuarantine = _deleteWhereCount(
+        'quarantine_events',
+        'quarantined_at < ?',
+        [quarantineOlderThan],
+      );
+      _db.execute('RELEASE SAVEPOINT purge_operational_records;');
+      return {
+        'pending_operations': purgedOperations,
+        'tombstones': purgedTombstones,
+        'quarantine_events': purgedQuarantine,
+      };
+    } catch (_) {
+      _db.execute('ROLLBACK TO SAVEPOINT purge_operational_records;');
+      _db.execute('RELEASE SAVEPOINT purge_operational_records;');
+      rethrow;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Tombstones
   // ---------------------------------------------------------------------------
@@ -1891,6 +1953,19 @@ class HelixRemoteDatabase {
 
   void clearActiveCallMarker() {
     _db.execute('DELETE FROM active_call;');
+  }
+
+  int _deleteWhereCount(String table, String where, List<Object?> args) {
+    final before = _countRows(table);
+    final stmt = _db.prepare('DELETE FROM $table WHERE $where;');
+    stmt.execute(args);
+    stmt.close();
+    return before - _countRows(table);
+  }
+
+  int _countRows(String table) {
+    final rows = _db.select('SELECT COUNT(*) AS count FROM $table;');
+    return rows.first['count'] as int;
   }
 
   // ---------------------------------------------------------------------------

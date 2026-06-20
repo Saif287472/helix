@@ -323,7 +323,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ],
     );
 
-    final screen = _buildShell(context, isWide, destinations, body, unread, incomingCount);
+    final screen = _buildShell(
+      context,
+      isWide,
+      destinations,
+      body,
+      unread,
+      incomingCount,
+    );
 
     if (!isDesktop) return screen;
 

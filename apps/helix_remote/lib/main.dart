@@ -213,9 +213,8 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
                   icon: Icons.person_add_outlined,
                   title: 'Create new account',
                   subtitle: 'Register a new username on this server.',
-                  onTap: () => setState(
-                    () => _setupPath = _SetupPath.createAccount,
-                  ),
+                  onTap: () =>
+                      setState(() => _setupPath = _SetupPath.createAccount),
                 ),
                 const SizedBox(height: 12),
                 _SetupOptionTile(
@@ -223,9 +222,8 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
                   title: 'Restore existing account',
                   subtitle:
                       'You have a backup from another device. Enter your restore code.',
-                  onTap: () => setState(
-                    () => _setupPath = _SetupPath.restoreAccount,
-                  ),
+                  onTap: () =>
+                      setState(() => _setupPath = _SetupPath.restoreAccount),
                 ),
               ],
             ),

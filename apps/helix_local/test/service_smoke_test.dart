@@ -4,10 +4,11 @@ import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/controllers/diagnostics_service.dart';
 import 'package:helix/providers/controllers/qr_code_service.dart';
 import 'package:helix/providers/controllers/session_service.dart';
+import 'package:helix/application/qr/qr_code_use_case_impl.dart';
 
 void main() {
   group('QrCodeService smoke tests', () {
-    const service = QrCodeService();
+    const service = QrCodeService(useCase: QrCodeUseCaseImpl());
 
     test('encode/decode round-trips the current QR payload', () {
       const payload = QrPayload(

@@ -61,7 +61,10 @@ class TrustedDevicesCard extends ConsumerWidget {
             ),
           ),
           title: Text(peer.nickname ?? peer.lastPublicName),
-          subtitle: Text('Trusted since $since', style: theme.textTheme.bodySmall),
+          subtitle: Text(
+            'Trusted since $since',
+            style: theme.textTheme.bodySmall,
+          ),
           trailing: PopupMenuButton<String>(
             onSelected: (action) async {
               switch (action) {
@@ -76,7 +79,9 @@ class TrustedDevicesCard extends ConsumerWidget {
                       content: TextField(
                         controller: ctrl,
                         autofocus: true,
-                        decoration: const InputDecoration(labelText: 'Nickname'),
+                        decoration: const InputDecoration(
+                          labelText: 'Nickname',
+                        ),
                         onSubmitted: (_) => Navigator.of(ctx).pop(ctrl.text),
                       ),
                       actions: [
@@ -106,7 +111,10 @@ class TrustedDevicesCard extends ConsumerWidget {
               PopupMenuItem(value: 'untrust', child: Text('Remove trust')),
               PopupMenuItem(
                 value: 'forget',
-                child: Text('Forget device', style: TextStyle(color: Colors.red)),
+                child: Text(
+                  'Forget device',
+                  style: TextStyle(color: Colors.red),
+                ),
               ),
             ],
           ),

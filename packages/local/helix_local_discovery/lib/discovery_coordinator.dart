@@ -232,7 +232,6 @@ class DiscoveryCoordinator {
     });
   }
 
-
   Future<void> _startDiscoverySources(_DiscoveryStartConfig config) async {
     if (Platform.isWindows) {
       await Future.wait([

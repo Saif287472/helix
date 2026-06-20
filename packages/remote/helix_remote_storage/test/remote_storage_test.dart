@@ -233,7 +233,7 @@ void main() {
     migrated.initialize();
     addTearDown(migrated.close);
 
-    expect(migrated.schemaVersion, equals(10));
+    expect(migrated.schemaVersion, equals(11));
     final devices = migrated.getDevices('acc_v5');
     expect(devices.single.deviceId, equals('1'));
     expect(devices.single.deviceSigningPublicKey, equals('legacy_key'));
@@ -292,7 +292,7 @@ void main() {
     addTearDown(migrated.close);
 
     expect(migrated.getAccount('acc_plain')!.username, equals(marker));
-    expect(migrated.schemaVersion, equals(10));
+    expect(migrated.schemaVersion, equals(11));
     expect(_opensWithoutKey(file), isFalse);
     expect(_databaseFilesContain(file, marker), isFalse);
   });
@@ -380,7 +380,7 @@ void main() {
     reopened.initialize();
     addTearDown(reopened.close);
 
-    expect(reopened.schemaVersion, equals(10));
+    expect(reopened.schemaVersion, equals(11));
     expect(
       reopened.getOrCreateLocalHistorySessionSeed('conv_persist'),
       equals(seed),
@@ -535,6 +535,34 @@ void main() {
       throwsUnsupportedError,
     );
     expect(db.getConversations(), equals(before));
+  });
+
+  test('P10 operational retention purges bounded completed rows only', () {
+    final futureCutoff = DateTime.now().millisecondsSinceEpoch + 60000;
+
+    db.enqueueOperation('op_done', 'send', '{}');
+    db.updateOperationStatus('op_done', 'COMPLETED', 0);
+    db.enqueueOperation('op_pending', 'send', '{}');
+    db.saveTombstone('msg_old', 'MESSAGE');
+    db.saveQuarantinedEvent(
+      eventId: 'bad_event',
+      serverSequence: 1,
+      eventType: 'chat_message',
+      rawPayload: '{}',
+      failureReason: 'test',
+    );
+
+    final purged = db.purgeOperationalRecords(
+      completedOperationsOlderThan: futureCutoff,
+      tombstonesOlderThan: futureCutoff,
+      quarantineOlderThan: futureCutoff,
+    );
+
+    expect(purged['pending_operations'], equals(1));
+    expect(purged['tombstones'], equals(1));
+    expect(purged['quarantine_events'], equals(1));
+    expect(db.getOperationById('op_done'), isNull);
+    expect(db.getOperationById('op_pending'), isNotNull);
   });
 }
 

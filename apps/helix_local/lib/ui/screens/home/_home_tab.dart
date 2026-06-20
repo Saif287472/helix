@@ -1097,7 +1097,8 @@ class _HomeSummaryBar extends ConsumerWidget {
           Expanded(
             child: _SummaryChip(
               icon: Icons.notifications_outlined,
-              label: '$requestCount pending ${requestCount == 1 ? 'request' : 'requests'}',
+              label:
+                  '$requestCount pending ${requestCount == 1 ? 'request' : 'requests'}',
               color: theme.colorScheme.errorContainer,
               onColor: theme.colorScheme.onErrorContainer,
               onTap: () => onSelectTab?.call(1),
@@ -1164,7 +1165,11 @@ class _SummaryChip extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(Icons.chevron_right, size: HelixTokens.iconSm, color: onColor),
+              Icon(
+                Icons.chevron_right,
+                size: HelixTokens.iconSm,
+                color: onColor,
+              ),
             ],
           ),
         ),

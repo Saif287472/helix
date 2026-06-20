@@ -80,8 +80,7 @@ class HelixLocalizations {
   String get setupConfirmCodeLabel => 'Confirm code';
   String get setupConfirmRequired => 'Please confirm your code.';
   String get setupConfirmMismatch => 'Codes do not match.';
-  String get setupDiscoverableLabel =>
-      'Make me discoverable to nearby devices';
+  String get setupDiscoverableLabel => 'Make me discoverable to nearby devices';
   String get setupCreateButton => 'Create identity';
   String get setupCreating => 'Creating identity…';
   String get setupCodeNote =>

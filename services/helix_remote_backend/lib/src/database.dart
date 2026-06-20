@@ -4,6 +4,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 class BackendDatabase {
   final Database _db;
+  int _transactionDepth = 0;
 
   BackendDatabase(this._db) {
     _initializeSchema();
@@ -490,6 +491,42 @@ class BackendDatabase {
       }
       _db.execute('PRAGMA user_version = 13;');
     }
+
+    if (version < 14) {
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_outbox_status_created
+        ON outbox(status, created_at);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_account_timestamp
+        ON audit_logs(account_id, timestamp DESC);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_tombstones_type_deleted
+        ON tombstones(type, deleted_at);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_device_events_recipient_sequence
+        ON device_events(recipient_device_id, device_sequence);
+      ''');
+      _db.execute('PRAGMA user_version = 14;');
+    }
+  }
+
+  T runInTransaction<T>(T Function() operation) {
+    final name = 'helix_tx_${_transactionDepth++}';
+    _db.execute('SAVEPOINT $name;');
+    try {
+      final result = operation();
+      _db.execute('RELEASE SAVEPOINT $name;');
+      return result;
+    } catch (_) {
+      _db.execute('ROLLBACK TO SAVEPOINT $name;');
+      _db.execute('RELEASE SAVEPOINT $name;');
+      rethrow;
+    } finally {
+      _transactionDepth--;
+    }
   }
 
   void close() {
@@ -582,6 +619,33 @@ class BackendDatabase {
       counts[row['status'] as String] = row['count'] as int;
     }
     return counts;
+  }
+
+  Map<String, int> purgeOperationalRecords({
+    required int completedOutboxOlderThan,
+    required int auditOlderThan,
+    required int tombstonesOlderThan,
+  }) {
+    return runInTransaction(() {
+      final purgedOutbox = _deleteWhereCount(
+        'outbox',
+        "status = 'COMPLETED' AND created_at < ?",
+        [completedOutboxOlderThan],
+      );
+      final purgedAudit = _deleteWhereCount('audit_logs', 'timestamp < ?', [
+        auditOlderThan,
+      ]);
+      final purgedTombstones = _deleteWhereCount(
+        'tombstones',
+        'deleted_at < ?',
+        [tombstonesOlderThan],
+      );
+      return {
+        'outbox': purgedOutbox,
+        'audit_logs': purgedAudit,
+        'tombstones': purgedTombstones,
+      };
+    });
   }
 
   Map<String, dynamic>? getOutboxEvent(String eventId) {
@@ -755,6 +819,8 @@ class BackendDatabase {
       'status': row['status'],
     };
   }
+
+  bool accountExists(String accountId) => getAccount(accountId) != null;
 
   Map<String, dynamic>? getAccountByUsername(String username) {
     final stmt = _db.prepare('SELECT * FROM accounts WHERE username = ?;');
@@ -2244,6 +2310,12 @@ class BackendDatabase {
     stmt.close();
   }
 
+  int _deleteWhereCount(String table, String where, List<Object?> args) {
+    final before = _countRows(table);
+    _deleteWhere(table, where, args);
+    return before - _countRows(table);
+  }
+
   bool _containsForbiddenPayloadKey(String payload) {
     final decoded = jsonDecode(payload);
     const forbiddenKeys = {
@@ -2725,7 +2797,7 @@ class BackendDatabase {
       'timestamp': timestamp,
       'type': type,
       'payload': payload,
-      'server_sequence': ?serverSequence,
+      'server_sequence': serverSequence,
     };
   }
 }

@@ -7,7 +7,8 @@ import 'package:helix_local_storage/data/database.dart';
 import 'package:helix_local_storage/data/database_provider.dart';
 import 'package:helix_local_domain/application/contracts/repositories.dart';
 import 'package:helix_local_protocol/application/contracts/gateways.dart';
-import 'package:helix_local_protocol/application/contracts/use_cases.dart' show DisconnectWipeScheduler;
+import 'package:helix_local_protocol/application/contracts/use_cases.dart'
+    show DisconnectWipeScheduler;
 import 'package:helix/providers/session_provider.dart';
 import 'package:helix/app/composition_root.dart' show LocalCompositionRoot;
 

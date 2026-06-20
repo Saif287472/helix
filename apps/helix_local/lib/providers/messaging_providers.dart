@@ -4,7 +4,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:helix_local_domain/domain/models.dart';
-import 'package:helix/providers/session_provider.dart' show activeChatCountProvider;
+import 'package:helix/providers/session_provider.dart'
+    show activeChatCountProvider;
 import 'package:helix/providers/infrastructure_providers.dart';
 import 'package:helix/providers/controllers/messaging_service.dart';
 import 'package:helix_local_messaging/helix_messaging.dart';
@@ -154,4 +155,3 @@ final threadByIdProvider = Provider.family<ChatThread?, String>((
 ) {
   return ref.watch(threadsProvider)[threadId];
 });
-

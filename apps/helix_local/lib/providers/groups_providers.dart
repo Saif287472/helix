@@ -6,7 +6,8 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:helix_local_domain/core/constants.dart';
-import 'package:helix/providers/session_provider.dart' show productDescriptorProvider;
+import 'package:helix/providers/session_provider.dart'
+    show productDescriptorProvider;
 import 'package:helix/providers/infrastructure_providers.dart';
 import 'package:helix/providers/controllers/group_service.dart';
 import 'package:helix/services/app_logger.dart';
@@ -133,8 +134,11 @@ class GroupMessagesNotifier extends StateNotifier<List<GroupMessage>> {
 }
 
 final groupMessagesProvider =
-    StateNotifierProvider.family<GroupMessagesNotifier, List<GroupMessage>,
-        String>((ref, groupId) {
+    StateNotifierProvider.family<
+      GroupMessagesNotifier,
+      List<GroupMessage>,
+      String
+    >((ref, groupId) {
       final groupService = ref.watch(groupServiceProvider);
       return GroupMessagesNotifier(groupService, groupId);
     });

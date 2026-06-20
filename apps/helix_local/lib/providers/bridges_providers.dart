@@ -15,7 +15,8 @@ import 'package:helix/providers/connection_providers.dart';
 import 'package:helix/providers/messaging_providers.dart';
 import 'package:helix/providers/discovery_providers.dart';
 import 'package:helix/providers/groups_providers.dart';
-import 'package:helix/providers/controllers/group_service.dart' show GroupService;
+import 'package:helix/providers/controllers/group_service.dart'
+    show GroupService;
 import 'package:helix/providers/calls_providers.dart';
 import 'package:helix/providers/transfer_providers.dart';
 import 'package:helix/services/app_logger.dart';

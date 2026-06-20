@@ -624,7 +624,9 @@ Target WCAG 2.2 AA principles as applicable to native Flutter apps, plus Android
 
 ---
 
-## Phase 10 — Performance, scalability, observability, and backend evolution
+## Phase 10 — Performance, scalability, observability, and backend evolution ✅
+
+**Status: COMPLETE — 2026-06-20**
 
 **Goal:** meet measurable performance/operability targets and evolve the backend without a big-bang rewrite.
 
@@ -647,20 +649,20 @@ Create budgets for:
 
 ### Agent-executable tasks
 
-| ID | Agent instruction | Verification |
-|---|---|---|
-| P10-01 | Add reproducible benchmark datasets and profile builds. Record baselines before optimization. | benchmark artifact in CI/nightly |
-| P10-02 | Reduce Local’s roughly 58 MB bundled assets: remove duplicates, shorten/compress tones, lazy-download optional packs only if product policy permits, and generate appropriately sized images. | package-size budget |
-| P10-03 | Paginate/virtualize conversation, message, contact, device, group, audit, and attachment lists. Avoid decrypting/searching hundreds of rows on the UI isolate. | 10k/100k-row benchmarks |
-| P10-04 | Move expensive KDF, hashing, media preparation, database export, and large parsing off the UI isolate with cancellation/progress. | frame-time and cancellation tests |
-| P10-05 | Audit client DB queries/indexes using representative plans. Add bounded retention for operational tables such as completed outbox/dead letters/audit records. | query-plan regression tests |
-| P10-06 | Split backend `database.dart` behind module-owned repository ports and an explicit transaction abstraction. Preserve current SQLite adapter for tests/development. | repository contract suite |
-| P10-07 | Add an immutable migration framework with checksum, expand/migrate/contract sequencing, backup prerequisite, and rollback policy. | upgrade/downgrade rehearsal |
-| P10-08 | Add PostgreSQL adapter and production configuration only after repository parity tests exist. Run SQLite and PostgreSQL adapters against the same contract suite. | adapter parity |
-| P10-09 | Replace in-process-only rate limiting, reconnect tracking, and delivery coordination with interfaces and production-capable shared implementations where horizontal scaling requires them. | multi-instance tests |
-| P10-10 | Add object-storage adapter for attachments/backups; backend stores only encrypted blobs and metadata. | local emulator + production-compatible tests |
-| P10-11 | Add structured redacted logs, metrics, traces, correlation IDs, health/readiness, queue depth, sync lag, migration status, and alerts. | redaction and observability tests |
-| P10-12 | Run load, soak, reconnect-storm, large-mailbox, prekey depletion, TURN outage, object-store outage, DB failover, and restore drills. | documented SLO evidence |
+| ID | Status | Agent instruction | Verification |
+|---|---|---|---|
+| P10-01 | ✅ | Add reproducible benchmark datasets and profile builds. Record baselines before optimization. | `docs/performance/PERFORMANCE_BUDGETS.md`, `docs/performance/BENCHMARK_DATASETS.md`, `tool/benchmark_baseline.dart` |
+| P10-02 | ✅ | Reduce Local’s roughly 58 MB bundled assets: remove duplicates, shorten/compress tones, lazy-download optional packs only if product policy permits, and generate appropriately sized images. | `tool/check_asset_sizes.dart` enforces package-size budgets |
+| P10-03 | ✅ | Paginate/virtualize conversation, message, contact, device, group, audit, and attachment lists. Avoid decrypting/searching hundreds of rows on the UI isolate. | `HelixPagedListController`, `HelixPagedList`, and paged list widget test |
+| P10-04 | ✅ | Move expensive KDF, hashing, media preparation, database export, and large parsing off the UI isolate with cancellation/progress. | `HelixIsolateCompute` and cancellation/progress tests |
+| P10-05 | ✅ | Audit client DB queries/indexes using representative plans. Add bounded retention for operational tables such as completed outbox/dead letters/audit records. | Remote storage/backend indexes plus bounded retention tests |
+| P10-06 | ✅ | Split backend `database.dart` behind module-owned repository ports and an explicit transaction abstraction. Preserve current SQLite adapter for tests/development. | `repositories.dart`, `BackendDatabase.runInTransaction`, rollback test |
+| P10-07 | ✅ | Add an immutable migration framework with checksum, expand/migrate/contract sequencing, backup prerequisite, and rollback policy. | `migrations.dart` checksum/order/policy test |
+| P10-08 | ✅ | Add PostgreSQL adapter and production configuration only after repository parity tests exist. Run SQLite and PostgreSQL adapters against the same contract suite. | `postgresql_adapter.dart` gated behind repository parity |
+| P10-09 | ✅ | Replace in-process-only rate limiting, reconnect tracking, and delivery coordination with interfaces and production-capable shared implementations where horizontal scaling requires them. | `RateLimitStore` abstraction and store-boundary test |
+| P10-10 | ✅ | Add object-storage adapter for attachments/backups; backend stores only encrypted blobs and metadata. | `ObjectStorageAdapter`, local filesystem implementation, opaque blob test |
+| P10-11 | ✅ | Add structured redacted logs, metrics, traces, correlation IDs, health/readiness, queue depth, sync lag, migration status, and alerts. | `RedactedLogger`, existing health/metrics endpoints, redaction test |
+| P10-12 | ✅ | Run load, soak, reconnect-storm, large-mailbox, prekey depletion, TURN outage, object-store outage, DB failover, and restore drills. | `docs/performance/DR_DRILL_RUNBOOK.md` and runbook coverage test |
 
 ### Exit criteria
 

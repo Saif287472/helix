@@ -88,8 +88,10 @@ final requestServiceProvider = Provider<RequestService>((ref) {
 });
 
 final pendingRequestsProvider =
-    StateNotifierProvider<PendingRequestsNotifier,
-        Map<String, ConnectionRequest>>((ref) {
+    StateNotifierProvider<
+      PendingRequestsNotifier,
+      Map<String, ConnectionRequest>
+    >((ref) {
       final notifier = PendingRequestsNotifier(ref);
       final svc = ref.watch(requestServiceProvider);
 

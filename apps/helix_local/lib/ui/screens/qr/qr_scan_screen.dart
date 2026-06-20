@@ -20,7 +20,6 @@ class QrScanScreen extends ConsumerStatefulWidget {
 }
 
 class _QrScanScreenState extends ConsumerState<QrScanScreen> {
-
   final _controller = MobileScannerController();
   bool _processing = false;
 

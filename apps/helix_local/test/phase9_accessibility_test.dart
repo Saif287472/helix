@@ -22,7 +22,11 @@ import 'package:helix/ui/components/helix_semantics.dart';
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-Widget _wrap(Widget child, {bool disableAnimations = false, double textScale = 1.0}) {
+Widget _wrap(
+  Widget child, {
+  bool disableAnimations = false,
+  double textScale = 1.0,
+}) {
   return MaterialApp(
     localizationsDelegates: const [HelixLocalizations.delegate],
     supportedLocales: HelixLocalizations.supportedLocales,
@@ -42,19 +46,24 @@ Widget _wrap(Widget child, {bool disableAnimations = false, double textScale = 1
 
 void main() {
   group('P9-07 HelixAnimation', () {
-    testWidgets('returns configured duration when animations enabled',
-        (tester) async {
+    testWidgets('returns configured duration when animations enabled', (
+      tester,
+    ) async {
       Duration? fastDur;
       Duration? normalDur;
       Duration? slowDur;
 
       await tester.pumpWidget(
-        _wrap(Builder(builder: (ctx) {
-          fastDur = HelixAnimation.fast(ctx);
-          normalDur = HelixAnimation.normal(ctx);
-          slowDur = HelixAnimation.slow(ctx);
-          return const SizedBox.shrink();
-        })),
+        _wrap(
+          Builder(
+            builder: (ctx) {
+              fastDur = HelixAnimation.fast(ctx);
+              normalDur = HelixAnimation.normal(ctx);
+              slowDur = HelixAnimation.slow(ctx);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
       );
 
       expect(fastDur, HelixTokens.fast);
@@ -62,20 +71,23 @@ void main() {
       expect(slowDur, HelixTokens.slow);
     });
 
-    testWidgets('returns Duration.zero when disableAnimations = true',
-        (tester) async {
+    testWidgets('returns Duration.zero when disableAnimations = true', (
+      tester,
+    ) async {
       Duration? fastDur;
       Duration? normalDur;
       Duration? slowDur;
 
       await tester.pumpWidget(
         _wrap(
-          Builder(builder: (ctx) {
-            fastDur = HelixAnimation.fast(ctx);
-            normalDur = HelixAnimation.normal(ctx);
-            slowDur = HelixAnimation.slow(ctx);
-            return const SizedBox.shrink();
-          }),
+          Builder(
+            builder: (ctx) {
+              fastDur = HelixAnimation.fast(ctx);
+              normalDur = HelixAnimation.normal(ctx);
+              slowDur = HelixAnimation.slow(ctx);
+              return const SizedBox.shrink();
+            },
+          ),
           disableAnimations: true,
         ),
       );
@@ -109,14 +121,12 @@ void main() {
       await tester.tap(find.byType(HelixSemanticButton));
     });
 
-    testWidgets('disabled button has null onPressed and correct label',
-        (tester) async {
+    testWidgets('disabled button has null onPressed and correct label', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _wrap(
-          const HelixSemanticButton(
-            icon: Icons.send,
-            label: 'Send message',
-          ),
+          const HelixSemanticButton(icon: Icons.send, label: 'Send message'),
         ),
       );
 
@@ -186,13 +196,12 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(48));
     });
 
-    testWidgets('HelixMinTouchTarget enforces 48 dp on small child',
-        (tester) async {
+    testWidgets('HelixMinTouchTarget enforces 48 dp on small child', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _wrap(
-          const HelixMinTouchTarget(
-            child: SizedBox(width: 12, height: 12),
-          ),
+          const HelixMinTouchTarget(child: SizedBox(width: 12, height: 12)),
         ),
       );
 
@@ -207,8 +216,9 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
 
   group('P9-04 200% text scale', () {
-    testWidgets('HelixStatusLabel does not overflow at 2× text scale',
-        (tester) async {
+    testWidgets('HelixStatusLabel does not overflow at 2× text scale', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _wrap(
           HelixStatusLabel(
@@ -223,8 +233,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('HelixSemanticButton does not overflow at 2× text scale',
-        (tester) async {
+    testWidgets('HelixSemanticButton does not overflow at 2× text scale', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _wrap(
           HelixSemanticButton(
@@ -245,28 +256,30 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
 
   group('P9-08 form error accessibility', () {
-    testWidgets('errorText is rendered inside the field, not as a separate widget',
-        (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          const TextField(
-            decoration: InputDecoration(
-              labelText: 'Display name',
-              errorText: 'Name is required.',
+    testWidgets(
+      'errorText is rendered inside the field, not as a separate widget',
+      (tester) async {
+        await tester.pumpWidget(
+          _wrap(
+            const TextField(
+              decoration: InputDecoration(
+                labelText: 'Display name',
+                errorText: 'Name is required.',
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      // Error text is rendered by InputDecorator inside the field widget tree.
-      expect(
-        find.descendant(
-          of: find.byType(TextField),
-          matching: find.text('Name is required.'),
-        ),
-        findsOneWidget,
-      );
-    });
+        // Error text is rendered by InputDecorator inside the field widget tree.
+        expect(
+          find.descendant(
+            of: find.byType(TextField),
+            matching: find.text('Name is required.'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('no errorText renders no error text widget', (tester) async {
       await tester.pumpWidget(
@@ -293,8 +306,11 @@ void main() {
         MaterialApp(
           home: CallbackShortcuts(
             bindings: {
-              const SingleActivator(LogicalKeyboardKey.digit1, control: true):
-                  () => called = true,
+              const SingleActivator(
+                LogicalKeyboardKey.digit1,
+                control: true,
+              ): () =>
+                  called = true,
             },
             child: const Focus(autofocus: true, child: SizedBox.expand()),
           ),
@@ -317,8 +333,11 @@ void main() {
         MaterialApp(
           home: CallbackShortcuts(
             bindings: {
-              const SingleActivator(LogicalKeyboardKey.digit4, control: true):
-                  () => called = true,
+              const SingleActivator(
+                LogicalKeyboardKey.digit4,
+                control: true,
+              ): () =>
+                  called = true,
             },
             child: const Focus(autofocus: true, child: SizedBox.expand()),
           ),
@@ -344,10 +363,14 @@ void main() {
       HelixLocalizations? l10n;
 
       await tester.pumpWidget(
-        _wrap(Builder(builder: (ctx) {
-          l10n = HelixLocalizations.of(ctx);
-          return const SizedBox.shrink();
-        })),
+        _wrap(
+          Builder(
+            builder: (ctx) {
+              l10n = HelixLocalizations.of(ctx);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
       );
 
       expect(l10n, isNotNull);
@@ -358,18 +381,21 @@ void main() {
     });
 
     test('supportedLocales contains en', () {
-      expect(
-        HelixLocalizations.supportedLocales,
-        contains(const Locale('en')),
-      );
+      expect(HelixLocalizations.supportedLocales, contains(const Locale('en')));
     });
 
     test('delegate supports en locale', () {
-      expect(HelixLocalizations.delegate.isSupported(const Locale('en')), isTrue);
+      expect(
+        HelixLocalizations.delegate.isSupported(const Locale('en')),
+        isTrue,
+      );
     });
 
     test('delegate does not support unsupported locale', () {
-      expect(HelixLocalizations.delegate.isSupported(const Locale('xx')), isFalse);
+      expect(
+        HelixLocalizations.delegate.isSupported(const Locale('xx')),
+        isFalse,
+      );
     });
   });
 }

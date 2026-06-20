@@ -199,7 +199,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(trustServiceProvider).clearAllPeers();
       await ref.read(profileServiceProvider).reset();
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.setup, (r) => false);
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil(AppRoutes.setup, (r) => false);
       }
     } catch (e) {
       if (mounted) {
@@ -1086,10 +1088,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             ListTile(
               enabled: profile.biometricLock,
-              leading: SettingsIcon(
-                Icons.timer_outlined,
-                color: Colors.orange,
-              ),
+              leading: SettingsIcon(Icons.timer_outlined, color: Colors.orange),
               title: const Text('Auto-lock after idle'),
               subtitle: Text(_lockLabel(profile.lockAfterMinutes)),
               trailing: const Icon(Icons.chevron_right),
@@ -1329,4 +1328,3 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 }
-

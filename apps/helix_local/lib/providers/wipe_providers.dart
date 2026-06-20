@@ -19,7 +19,8 @@ import 'package:helix/providers/messaging_providers.dart'
     show messagingServiceProvider;
 import 'package:helix/providers/discovery_providers.dart'
     show discoveryCoordinatorProvider;
-import 'package:helix/providers/groups_providers.dart' show groupServiceProvider;
+import 'package:helix/providers/groups_providers.dart'
+    show groupServiceProvider;
 import 'package:helix/providers/calls_providers.dart' show callServiceProvider;
 import 'package:helix/providers/transfer_providers.dart'
     show fileTransferServiceProvider, ephemeralMediaServiceProvider;

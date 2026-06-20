@@ -69,11 +69,7 @@ class HelixLiveRegion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      liveRegion: true,
-      label: value,
-      child: child,
-    );
+    return Semantics(liveRegion: true, label: value, child: child);
   }
 }
 
@@ -102,7 +98,8 @@ class HelixStatusLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style =
-        textStyle ?? Theme.of(context).textTheme.labelSmall?.copyWith(color: color);
+        textStyle ??
+        Theme.of(context).textTheme.labelSmall?.copyWith(color: color);
 
     return Semantics(
       label: semanticsLabel ?? label,
@@ -135,10 +132,7 @@ class HelixMinTouchTarget extends StatelessWidget {
   Widget build(BuildContext context) {
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-      child: Align(
-        alignment: alignment ?? Alignment.center,
-        child: child,
-      ),
+      child: Align(alignment: alignment ?? Alignment.center, child: child),
     );
   }
 }

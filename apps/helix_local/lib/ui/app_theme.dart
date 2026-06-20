@@ -38,6 +38,7 @@ class HelixTokens {
   // ── Responsive breakpoints ──────────────────────────────────────────────────
   /// Compact → wide: switch from BottomNavigationBar to NavigationRail.
   static const double breakpointWide = 600;
+
   /// Wide → extra-wide: master-detail pane layout.
   static const double breakpointExtraWide = 1024;
 

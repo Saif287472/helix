@@ -87,20 +87,27 @@ void main() {
       expect(recordB, ['qr-b']);
     });
 
-    test('SecretCodeService.search dispatches to the injected use case', () async {
-      final queriesA = <String>[];
-      final queriesB = <String>[];
+    test(
+      'SecretCodeService.search dispatches to the injected use case',
+      () async {
+        final queriesA = <String>[];
+        final queriesB = <String>[];
 
-      final svcA = SecretCodeService(useCase: _StubSecretCodeUseCase(queriesA));
-      final svcB = SecretCodeService(useCase: _StubSecretCodeUseCase(queriesB));
+        final svcA = SecretCodeService(
+          useCase: _StubSecretCodeUseCase(queriesA),
+        );
+        final svcB = SecretCodeService(
+          useCase: _StubSecretCodeUseCase(queriesB),
+        );
 
-      await svcA.search('code-alpha');
-      await svcB.search('code-beta');
-      await svcA.search('code-alpha-2');
+        await svcA.search('code-alpha');
+        await svcB.search('code-beta');
+        await svcA.search('code-alpha-2');
 
-      expect(queriesA, ['code-alpha', 'code-alpha-2']);
-      expect(queriesB, ['code-beta']);
-    });
+        expect(queriesA, ['code-alpha', 'code-alpha-2']);
+        expect(queriesB, ['code-beta']);
+      },
+    );
   });
 }
 
@@ -157,10 +164,16 @@ class _StubSecretCodeUseCase implements SecretCodeUseCase {
   ) async => false;
 
   @override
-  Future<Peer?> waitForResponse(RawDatagramSocket socket, Duration timeout) async => null;
+  Future<Peer?> waitForResponse(
+    RawDatagramSocket socket,
+    Duration timeout,
+  ) async => null;
 
   @override
-  Future<List<Peer>> waitForResponses(RawDatagramSocket socket, Duration timeout) async => [];
+  Future<List<Peer>> waitForResponses(
+    RawDatagramSocket socket,
+    Duration timeout,
+  ) async => [];
 
   @override
   Future<List<Peer>> search(

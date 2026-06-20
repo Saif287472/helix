@@ -5,7 +5,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:helix_local_domain/domain/models.dart';
-import 'package:helix/providers/session_provider.dart' show productDescriptorProvider;
+import 'package:helix/providers/session_provider.dart'
+    show productDescriptorProvider;
 import 'package:helix/providers/infrastructure_providers.dart';
 import 'package:helix/providers/identity_providers.dart'
     show secretCodeUseCaseProvider, knownPeersProvider;
@@ -88,4 +89,3 @@ final favoritePeerListProvider = FutureProvider<List<Peer>>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return db.getFavoritePeers();
 });
-
