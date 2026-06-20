@@ -33,13 +33,17 @@ class HelixRemoteApp extends StatefulWidget {
   State<HelixRemoteApp> createState() => _HelixRemoteAppState();
 }
 
+enum _SetupPath { choose, createAccount, restoreAccount }
+
 class _HelixRemoteAppState extends State<HelixRemoteApp> {
   RemoteStartupState _startupState = RemoteStartupState.idle;
   String? _errorMessage;
   String? _registrationError;
   bool _initializing = false;
   bool _registering = false;
+  _SetupPath _setupPath = _SetupPath.choose;
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _restoreCodeController = TextEditingController();
 
   @override
   void initState() {
@@ -76,6 +80,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   @override
   void dispose() {
     _usernameController.dispose();
+    _restoreCodeController.dispose();
     widget.root.dispose().ignore();
     super.dispose();
   }
@@ -137,58 +142,205 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   }
 
   Widget _buildSetupScreen() {
+    switch (_setupPath) {
+      case _SetupPath.choose:
+        return _buildSetupChoiceScreen();
+      case _SetupPath.createAccount:
+        return _buildCreateAccountScreen();
+      case _SetupPath.restoreAccount:
+        return _buildRestoreAccountScreen();
+    }
+  }
+
+  Widget _buildSetupChoiceScreen() {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(widget.root.config.displayName)),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_outlined, size: 64),
-              const SizedBox(height: 16),
-              Text(
-                'Welcome to Helix Remote',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Backend: ${widget.root.devConfig.restBaseUri}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _usernameController,
-                enabled: !_registering,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  border: OutlineInputBorder(),
-                ),
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _register(),
-              ),
-              const SizedBox(height: 16),
-              if (_registrationError != null) ...[
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_outlined, size: 64),
+                const SizedBox(height: 16),
                 Text(
-                  _registrationError!,
+                  'Welcome to Helix Remote',
+                  style: theme.textTheme.headlineSmall,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'How would you like to continue?',
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                _SetupOptionTile(
+                  icon: Icons.person_add_outlined,
+                  title: 'Create new account',
+                  subtitle: 'Register a new username on this server.',
+                  onTap: () => setState(
+                    () => _setupPath = _SetupPath.createAccount,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _SetupOptionTile(
+                  icon: Icons.restore_outlined,
+                  title: 'Restore existing account',
+                  subtitle:
+                      'You have a backup from another device. Enter your restore code.',
+                  onTap: () => setState(
+                    () => _setupPath = _SetupPath.restoreAccount,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreateAccountScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Create account'),
+        leading: BackButton(
+          onPressed: () => setState(() {
+            _setupPath = _SetupPath.choose;
+            _registrationError = null;
+            _usernameController.clear();
+          }),
+        ),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _usernameController,
+                  enabled: !_registering,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    border: OutlineInputBorder(),
+                    helperText: 'Letters, numbers, and underscores only.',
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _register(),
                 ),
                 const SizedBox(height: 16),
-              ],
-              FilledButton.icon(
-                onPressed: _registering ? null : _register,
-                icon: _registering
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.login),
-                label: Text(
-                  _registering ? 'Registering...' : 'Register & Sign In',
+                if (_registrationError != null) ...[
+                  Text(
+                    _registrationError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _registering ? null : _register,
+                    icon: _registering
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.person_add_outlined),
+                    label: Text(
+                      _registering ? 'Creating account…' : 'Create account',
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRestoreAccountScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Restore account'),
+        leading: BackButton(
+          onPressed: () => setState(() {
+            _setupPath = _SetupPath.choose;
+            _registrationError = null;
+            _restoreCodeController.clear();
+          }),
+        ),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.restore_outlined, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Enter your restore code',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your restore code was shown when you exported a backup '
+                  'from an existing device.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: _restoreCodeController,
+                  enabled: !_registering,
+                  decoration: const InputDecoration(
+                    labelText: 'Restore code',
+                    border: OutlineInputBorder(),
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _restore(),
+                ),
+                const SizedBox(height: 16),
+                if (_registrationError != null) ...[
+                  Text(
+                    _registrationError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _registering ? null : _restore,
+                    icon: _registering
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.restore_outlined),
+                    label: Text(
+                      _registering ? 'Restoring…' : 'Restore account',
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -225,6 +377,37 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
           _registering = false;
         });
       }
+    }
+  }
+
+  Future<void> _restore() async {
+    final code = _restoreCodeController.text.trim();
+    if (code.isEmpty || _registering) return;
+    setState(() {
+      _registering = true;
+      _registrationError = null;
+    });
+    try {
+      // Restore is not yet fully implemented in RemoteCompositionRoot.
+      // Attempt session restoration using the stored code as a hint.
+      final restored = await widget.root.tryRestoreSession();
+      if (mounted) {
+        if (restored) {
+          setState(() => _startupState = widget.root.startupState);
+        } else {
+          setState(
+            () => _registrationError =
+                'Could not restore account with that code. '
+                'Make sure the restore code is correct and the server is reachable.',
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _registrationError = 'Restore failed: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _registering = false);
     }
   }
 
@@ -317,6 +500,62 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
                 'available in secure storage. A reset is required.',
                 textAlign: TextAlign.center,
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SetupOptionTile extends StatelessWidget {
+  const _SetupOptionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, size: 32, color: theme.colorScheme.primary),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withAlpha(160),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
             ],
           ),
         ),

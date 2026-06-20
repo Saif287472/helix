@@ -272,7 +272,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final unread = ref.watch(totalUnreadProvider);
     final incomingCount = ref.watch(incomingRequestCountProvider);
     final width = MediaQuery.of(context).size.width;
-    final isWide = width > 600;
+    final isWide = width > HelixTokens.breakpointWide;
 
     final destinations = [
       NavigationDestination(
@@ -316,7 +316,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final body = IndexedStack(
       index: _selectedIndex,
       children: [
-        const _HomeTab(),
+        _HomeTab(onSelectTab: (int i) => setState(() => _selectedIndex = i)),
         const RequestsScreen(),
         const _ChatsTab(),
         const SettingsScreen(),

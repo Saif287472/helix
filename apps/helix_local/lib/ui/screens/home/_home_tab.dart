@@ -5,7 +5,9 @@ part of 'home_screen.dart';
 // ---------------------------------------------------------------------------
 
 class _HomeTab extends ConsumerStatefulWidget {
-  const _HomeTab();
+  const _HomeTab({this.onSelectTab});
+
+  final void Function(int index)? onSelectTab;
 
   @override
   ConsumerState<_HomeTab> createState() => _HomeTabState();
@@ -461,6 +463,10 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                     loading: () => const SizedBox.shrink(),
                     error: (e, _) => _DiscoveryWarningBanner(error: '$e'),
                   ),
+                  const SizedBox(height: 16),
+
+                  // ── Section summary (requests + unread) ───────────────────
+                  _HomeSummaryBar(onSelectTab: widget.onSelectTab),
                   const SizedBox(height: 16),
 
                   // ── Find people + Direct connect ───────────────────────────
@@ -1065,6 +1071,102 @@ class _GroupRow extends StatelessWidget {
               color: theme.colorScheme.onSurface.withAlpha(120),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Section summary bar (requests + unread chats quick-access)
+// ---------------------------------------------------------------------------
+
+class _HomeSummaryBar extends ConsumerWidget {
+  const _HomeSummaryBar({this.onSelectTab});
+  final void Function(int index)? onSelectTab;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requestCount = ref.watch(incomingRequestCountProvider);
+    final unread = ref.watch(totalUnreadProvider);
+    if (requestCount == 0 && unread == 0) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        if (requestCount > 0)
+          Expanded(
+            child: _SummaryChip(
+              icon: Icons.notifications_outlined,
+              label: '$requestCount pending ${requestCount == 1 ? 'request' : 'requests'}',
+              color: theme.colorScheme.errorContainer,
+              onColor: theme.colorScheme.onErrorContainer,
+              onTap: () => onSelectTab?.call(1),
+            ),
+          ),
+        if (requestCount > 0 && unread > 0) const SizedBox(width: 8),
+        if (unread > 0)
+          Expanded(
+            child: _SummaryChip(
+              icon: Icons.chat_bubble_outline,
+              label: '$unread unread',
+              color: theme.colorScheme.primaryContainer,
+              onColor: theme.colorScheme.onPrimaryContainer,
+              onTap: () => onSelectTab?.call(2),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color onColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(HelixTokens.radius8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(HelixTokens.radius8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: HelixTokens.space12,
+            vertical: HelixTokens.space8,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: HelixTokens.iconSm, color: onColor),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: onColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, size: HelixTokens.iconSm, color: onColor),
+            ],
+          ),
         ),
       ),
     );

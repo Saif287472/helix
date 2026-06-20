@@ -18,6 +18,9 @@ import 'package:helix/ui/app_router.dart';
 import 'package:helix/ui/app_theme.dart';
 import 'package:helix/ui/screens/settings/settings_widgets.dart';
 import 'package:helix/ui/screens/settings/trusted_devices_card.dart';
+import 'package:helix/ui/components/helix_destructive_dialog.dart';
+import 'package:helix/ui/components/helix_feedback.dart';
+import 'package:helix/ui/components/helix_privacy_note.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -162,34 +165,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _confirmResetPreferences() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reset to default settings?'),
-        content: const Text(
+    final confirmed = await HelixDestructiveDialog.show(
+      context,
+      title: 'Reset to default settings?',
+      impactText:
           'This restores notifications, appearance, privacy, and ringtone '
           'settings to their defaults. Your display name, secret sentence, '
           'device identity, and chats are not affected.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Reset'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Reset settings',
+      barrierDismissible: true,
     );
     if (confirmed != true) return;
     await ref.read(profileServiceProvider).resetPreferencesToDefaults();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings reset to defaults.')),
-      );
-    }
+    if (mounted) HelixFeedback.success(context, 'Settings reset to defaults.');
   }
 
   // ---------------------------------------------------------------------------
@@ -197,27 +185,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _resetHelix() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reset Helix?'),
-        content: const Text(
-          'This will erase your display name, secret sentence, device identity, '
+    final confirmed = await HelixDestructiveDialog.show(
+      context,
+      title: 'Reset Helix?',
+      impactText:
+          'This erases your display name, secret sentence, device identity, '
           'and all active sessions. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Reset everything'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Reset everything',
     );
     if (confirmed != true) return;
     setState(() => _resetting = true);
@@ -225,16 +199,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(trustServiceProvider).clearAllPeers();
       await ref.read(profileServiceProvider).reset();
       if (mounted) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil(AppRoutes.setup, (r) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.setup, (r) => false);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _resetting = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Reset failed: $e')));
+        HelixFeedback.error(context, 'Reset failed: $e');
       }
     }
   }
@@ -1152,6 +1122,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+        const HelixPrivacyNote(
+          'Helix Local is end-to-end encrypted over your LAN. No messages '
+          'are stored on any server. All content is ephemeral — it exists '
+          'only in app memory and is lost when a session ends or a wipe runs.',
+          icon: Icons.shield_outlined,
+        ),
         const SizedBox(height: 20),
 
         // ── Appearance ───────────────────────────────────────────────────────
@@ -1319,6 +1295,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 24),
 
         // ── Danger zone ──────────────────────────────────────────────────────
+        const HelixPrivacyNote(
+          'Resetting Helix erases your identity and all session state from '
+          'this device. Peers who trusted you will need to re-verify. '
+          'This cannot be undone.',
+          icon: Icons.warning_amber_outlined,
+        ),
+        const SizedBox(height: 8),
         FilledButton.icon(
           onPressed: _resetting ? null : _resetHelix,
           icon: _resetting

@@ -5,6 +5,7 @@ import 'package:helix_local_domain/domain/models.dart';
 class HelixTokens {
   HelixTokens._();
 
+  // ── Spacing (2px base scale) ────────────────────────────────────────────────
   static const double space2 = 2;
   static const double space4 = 4;
   static const double space6 = 6;
@@ -19,6 +20,7 @@ class HelixTokens {
   static const double space40 = 40;
   static const double space48 = 48;
 
+  // ── Border radius ───────────────────────────────────────────────────────────
   static const double radius4 = 4;
   static const double radius6 = 6;
   static const double radius8 = 8;
@@ -27,19 +29,46 @@ class HelixTokens {
   static const double radius20 = 20;
   static const double radius28 = 28;
 
+  // ── Component sizes ─────────────────────────────────────────────────────────
   static const double touchTarget = 48;
   static const double peerGridMin = 340;
   static const double contentMaxWidth = 1120;
   static const double setupMaxWidth = 560;
 
+  // ── Responsive breakpoints ──────────────────────────────────────────────────
+  /// Compact → wide: switch from BottomNavigationBar to NavigationRail.
+  static const double breakpointWide = 600;
+  /// Wide → extra-wide: master-detail pane layout.
+  static const double breakpointExtraWide = 1024;
+
+  // ── Icon sizes ──────────────────────────────────────────────────────────────
+  static const double iconSm = 18;
+  static const double iconMd = 24;
+  static const double iconLg = 32;
+  static const double iconXl = 40;
+
+  // ── Motion ──────────────────────────────────────────────────────────────────
   static const Duration fast = Duration(milliseconds: 150);
   static const Duration normal = Duration(milliseconds: 240);
   static const Duration slow = Duration(milliseconds: 420);
 
+  static const Curve easeStandard = Curves.easeInOutCubicEmphasized;
+  static const Curve easeEnter = Curves.easeOutCubic;
+  static const Curve easeExit = Curves.easeInCubic;
+
+  // ── Semantic colors (theme-independent; do not use for text on colored bg) ──
+  static const Color colorSuccess = Color(0xFF2E8B57);
+  static const Color colorWarning = Color(0xFF9A6A00);
+  static const Color colorError = Color(0xFFD32F2F);
+  static const Color colorInfo = Color(0xFF0369A1);
+  static const Color colorOffline = Color(0xFF7E8793);
+
+  // ── Shadows ─────────────────────────────────────────────────────────────────
   static const List<BoxShadow> softShadow = [
     BoxShadow(color: Color(0x16000000), blurRadius: 18, offset: Offset(0, 8)),
   ];
 
+  // ── Typography helpers ──────────────────────────────────────────────────────
   static const TextStyle sectionLabel = TextStyle(
     fontSize: 11,
     fontWeight: FontWeight.w800,
@@ -285,9 +314,9 @@ class HelixTheme {
     }
   }
 
-  static Color get connectedColor => const Color(0xFF2E8B57);
-  static Color get pendingColor => const Color(0xFF9A6A00);
-  static Color get disconnectedColor => const Color(0xFF7E8793);
+  static Color get connectedColor => HelixTokens.colorSuccess;
+  static Color get pendingColor => HelixTokens.colorWarning;
+  static Color get disconnectedColor => HelixTokens.colorOffline;
   static Color get accentColor => HelixAccent.teal.seed;
   static Color get primaryColor => HelixAccent.teal.seed;
 }

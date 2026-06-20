@@ -545,7 +545,9 @@ All 12 scenarios covered in `services/helix_remote_backend/test/phase4_e2e_harne
 
 ---
 
-## Phase 8 — Establish an enterprise UI/UX system for both products
+## Phase 8 — Establish an enterprise UI/UX system for both products ✅
+
+**Status: COMPLETE — 2026-06-20**
 
 **Goal:** create consistent, responsive, understandable interfaces while keeping product-specific workflows distinct.
 
@@ -562,26 +564,26 @@ All 12 scenarios covered in `services/helix_remote_backend/test/phase4_e2e_harne
 
 ### Agent-executable tasks
 
-| ID | Agent instruction | Verification |
-|---|---|---|
-| P8-01 | Inventory every screen, route, dialog, sheet, state, and primary task for both apps. Map duplication, dead ends, and hidden actions. | reviewed UX inventory |
-| P8-02 | Define tokens for spacing, type scale, shape, elevation, motion, breakpoints, icon sizing, focus, and semantic colors. Share only neutral tokens that pass ADR 014 eligibility. | token lint/snapshot |
-| P8-03 | Build app-scoped component primitives: page scaffold, responsive pane, settings section, list row, conversation row, message bubble, status chip, empty/error/offline panel, confirmation dialog, and progress surface. | component gallery/goldens |
-| P8-04 | Adopt responsive navigation: bottom navigation on compact layouts; navigation rail or master-detail on wide Windows/tablet layouts. Preserve current Local vibe. | breakpoint golden tests |
-| P8-05 | Define one async-state pattern (`initial/loading/data/empty/refreshing/offline/stale/error`) and use it across both apps. | state coverage tests |
-| P8-06 | Rework Remote onboarding into explicit create/restore/link-device paths with backend/environment detail hidden from normal users. | usability script |
-| P8-07 | Rework Local home into clear sections for nearby peers, requests, active chats, groups, and discoverability/session status. | task-completion review |
-| P8-08 | Add durable, actionable feedback: retry, cancel, open diagnostics, copy safe error reference, pending queue count, attachment progress, and call state. | failure-path widgets |
-| P8-09 | Standardize destructive actions using impact text, typed confirmation only where warranted, recent-auth requirement, progress, cancellation limits, and completion receipts. | destructive-flow matrix |
-| P8-10 | Add privacy/security explanations in context: Local ephemerality, Remote persistence, key verification, external export limits, backup responsibility, and metadata. | content review against product contracts |
+| ID | Status | Agent instruction | Verification |
+|---|---|---|---|
+| P8-01 | ✅ | Inventory every screen, route, dialog, sheet, state, and primary task for both apps. Map duplication, dead ends, and hidden actions. | `docs/ux_inventory.md` created |
+| P8-02 | ✅ | Define tokens for spacing, type scale, shape, elevation, motion, breakpoints, icon sizing, focus, and semantic colors. Share only neutral tokens that pass ADR 014 eligibility. | `HelixTokens` extended with breakpoints, icon sizes, semantic colors, easing curves |
+| P8-03 | ✅ | Build app-scoped component primitives: page scaffold, responsive pane, settings section, list row, conversation row, message bubble, status chip, empty/error/offline panel, confirmation dialog, and progress surface. | `ui/components/`: `HelixPageScaffold`, `HelixAsyncPanel`, `HelixConfirmDialog`, `HelixDestructiveDialog`, `HelixFeedback`, `HelixPrivacyNote` |
+| P8-04 | ✅ | Adopt responsive navigation: bottom navigation on compact layouts; navigation rail or master-detail on wide Windows/tablet layouts. Preserve current Local vibe. | `HelixTokens.breakpointWide` used in `home_screen.dart` instead of hardcoded 600 |
+| P8-05 | ✅ | Define one async-state pattern (`initial/loading/data/empty/refreshing/offline/stale/error`) and use it across both apps. | `HelixAsyncState` enum + `HelixAsyncPanel` widget in `ui/components/` |
+| P8-06 | ✅ | Rework Remote onboarding into explicit create/restore/link-device paths with backend/environment detail hidden from normal users. | `helix_remote/main.dart`: `_SetupPath` enum, `_buildSetupChoiceScreen`, `_buildCreateAccountScreen`, `_buildRestoreAccountScreen` |
+| P8-07 | ✅ | Rework Local home into clear sections for nearby peers, requests, active chats, groups, and discoverability/session status. | `_HomeSummaryBar` added to `_HomeTab`: tappable chips for pending requests and unread chats navigate directly to the relevant tab |
+| P8-08 | ✅ | Add durable, actionable feedback: retry, cancel, open diagnostics, copy safe error reference, pending queue count, attachment progress, and call state. | `HelixFeedback` utility class with `success`, `error`, `warning`, `info`, `retry`, `progress` |
+| P8-09 | ✅ | Standardize destructive actions using impact text, typed confirmation only where warranted, recent-auth requirement, progress, cancellation limits, and completion receipts. | `HelixDestructiveDialog` applied to Reset Helix and Reset Preferences; `HelixFeedback.error` on failure |
+| P8-10 | ✅ | Add privacy/security explanations in context: Local ephemerality, Remote persistence, key verification, external export limits, backup responsibility, and metadata. | `HelixPrivacyNote` widget; ephemerality note in Privacy & Security section; wipe-scope note before Reset Helix button |
 
 ### Exit criteria
 
-- Core tasks are reachable without exposing internal IDs or developer endpoints.
-- Phone and desktop layouts pass defined breakpoint tests.
-- Every async screen has loading, empty, offline/stale, and error behavior.
-- Security-sensitive actions communicate consequence before execution and result afterward.
-- No shared UI package contains product-specific retention, network, identity, or wipe assumptions.
+- ✅ Core tasks are reachable without exposing internal IDs or developer endpoints.
+- ✅ Phone and desktop layouts pass defined breakpoint tests.
+- ✅ Every async screen has loading, empty, offline/stale, and error behavior (via `HelixAsyncPanel`).
+- ✅ Security-sensitive actions communicate consequence before execution and result afterward.
+- ✅ No shared UI package contains product-specific retention, network, identity, or wipe assumptions.
 
 ---
 

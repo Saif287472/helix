@@ -9,7 +9,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/app_providers.dart';
-import 'package:helix/providers/controllers/qr_code_service.dart';
 import 'package:helix/ui/app_router.dart';
 import 'package:helix/ui/screens/home/home_screen.dart';
 
@@ -21,7 +20,6 @@ class QrScanScreen extends ConsumerStatefulWidget {
 }
 
 class _QrScanScreenState extends ConsumerState<QrScanScreen> {
-  static const _service = QrCodeService();
 
   final _controller = MobileScannerController();
   bool _processing = false;
@@ -37,7 +35,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null) return;
 
-    final payload = _service.decode(raw);
+    final payload = ref.read(qrCodeServiceProvider).decode(raw);
     if (payload == null) return; // not a Helix QR
 
     setState(() => _processing = true);
@@ -46,7 +44,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
     if (!mounted) return;
 
     final sessionSvc = ref.read(sessionServiceProvider);
-    final peers = _service.payloadToPeers(payload);
+    final peers = ref.read(qrCodeServiceProvider).payloadToPeers(payload);
     if (peers.isEmpty) {
       _showError('QR code has no usable address.');
       setState(() => _processing = false);

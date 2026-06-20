@@ -14,7 +14,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/app_providers.dart';
-import 'package:helix/providers/controllers/qr_code_service.dart';
 import 'package:helix/ui/app_router.dart';
 
 class QrShareScreen extends ConsumerStatefulWidget {
@@ -25,8 +24,6 @@ class QrShareScreen extends ConsumerStatefulWidget {
 }
 
 class _QrShareScreenState extends ConsumerState<QrShareScreen> {
-  static const _service = QrCodeService();
-
   String? _qrData;
   String? _error;
   Duration _remaining = kQrValidityDuration;
@@ -97,7 +94,7 @@ class _QrShareScreenState extends ConsumerState<QrShareScreen> {
       sessionId: sessionSvc.sessionId,
     );
 
-    final qrData = _service.encode(payload);
+    final qrData = ref.read(qrCodeServiceProvider).encode(payload);
 
     if (!mounted) return;
     setState(() {
