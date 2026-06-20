@@ -132,7 +132,7 @@ Do not silently expand a phase into unrelated work.
 | 01 | Remote runtime configuration and backend bootstrap | HXA-001, HXA-002 | 00 | COMPLETE |
 | 02 | Local startup, session recovery, and group-init visibility | HXA-016, HXA-017, HXA-018 | 00 | COMPLETE |
 | 03 | Remote application lifecycle and observable top-level state | HXA-003, HXA-006, HXA-015, HXA-023 | 01 | COMPLETE |
-| 04 | Remote authentication, token refresh, logout, and revocation | HXA-004, part of HXA-014 | 03 | NOT STARTED |
+| 04 | Remote authentication, token refresh, logout, and revocation | HXA-004, part of HXA-014 | 03 | COMPLETE |
 | 05 | Remote recovery strategy and fresh-device account restore | HXA-005 | 04 | NOT STARTED |
 | 06 | Remote contract, route, fixture, and serialization parity | HXA-009, HXA-021 | 04 | NOT STARTED |
 | 07 | Remote contact requests and accepted-contact conversation gating | HXA-007 | 06 | NOT STARTED |
@@ -212,7 +212,7 @@ Record exact commands and exit results. “Tests passed” without commands is i
 
 # Phase 00 — Baseline, ledger, and reproducible verification
 
-**Status:** COMPLETE  
+**Status:** COMPLETE
 **Purpose:** Establish a trustworthy starting point and make every later phase auditable.
 
 ## Scope
@@ -626,8 +626,8 @@ At minimum, the app must distinguish:
 
 # Phase 04 — Remote authentication, token refresh, logout, and revocation
 
-**Status:** NOT STARTED  
-**Audit coverage:** HXA-004 and logout portion of HXA-014  
+**Status:** COMPLETE
+**Audit coverage:** HXA-004 and logout portion of HXA-014
 **Purpose:** Make authentication durable across expiry, restart, logout, revocation, and backend failure.
 
 ## Required work
@@ -672,7 +672,35 @@ At minimum, the app must distinguish:
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-21
+- Agent/model identifier: Codex (GPT-5)
+- Starting commit: `6da89dc`
+- Ending commit or working-tree state: Phase 04 committed locally after this record; working tree clean.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `apps/helix_remote/lib/app/composition_root.dart`
+  - `apps/helix_remote/lib/app/remote_rest_client.dart`
+  - `apps/helix_remote/lib/app/remote_sync_gateway.dart`
+  - `apps/helix_remote/lib/screens/settings_screen.dart`
+  - `apps/helix_remote/test/remote_auth_refresh_lifecycle_test.dart` (new)
+  - `apps/helix_remote/test/remote_lifecycle_test.dart`
+  - `apps/helix_remote/test/remote_rest_client_auth_refresh_test.dart` (new)
+- Tests and commands run with results:
+  - `dart analyze apps/helix_remote/lib/app/remote_rest_client.dart apps/helix_remote/lib/app/remote_sync_gateway.dart apps/helix_remote/lib/app/composition_root.dart apps/helix_remote/lib/screens/settings_screen.dart apps/helix_remote/test/remote_rest_client_auth_refresh_test.dart apps/helix_remote/test/remote_auth_refresh_lifecycle_test.dart apps/helix_remote/test/remote_lifecycle_test.dart` — PASS, no issues found.
+  - `flutter test test/remote_rest_client_auth_refresh_test.dart test/remote_auth_refresh_lifecycle_test.dart test/remote_lifecycle_test.dart test/startup_state_widget_test.dart` from `apps/helix_remote` — PASS, 17/17 tests.
+  - `flutter test test/remote_rest_client_auth_refresh_test.dart test/remote_auth_refresh_lifecycle_test.dart test/remote_lifecycle_test.dart` from `apps/helix_remote` — PASS, 15/15 tests after realtime reconnect update.
+  - `.\scripts\verify.ps1` from repository root — PASS.
+- Acceptance criteria result:
+  - HXA-004 PASS: `HelixRemoteRestClientImpl` now supports a production `refreshAuth` hook, prevents concurrent refresh storms with `_refreshInFlight`, excludes `accounts/refresh` from recursive refresh, and retries a 401/403 REST operation exactly once after a successful refresh. P04-A01 and P04-A02 verify expired-token retry and simultaneous-401 single-flight behavior.
+  - HXA-004 PASS: `RemoteCompositionRoot.refreshAccessToken()` reads the stored refresh token from secure storage, calls `accounts/refresh`, persists rotated access and refresh tokens with pending markers before applying them to memory, updates REST, attachment, sync/runtime token providers, and reconnects an active WebSocket with the new token. P04-L01 verifies restart refresh and token rotation before authentication.
+  - HXA-004 PASS: refresh failures are classified. Missing, invalid, replayed, expired, or revoked refresh tokens stop realtime/call runtime, purge local session credentials, and return the app to `unauthenticated`. Transient refresh/network failures set `recoverableFailure` without deleting the stored session or causing a logout loop. P04-L02 and P04-L03 verify both paths.
+  - HXA-014 logout subset PASS: Settings now exposes a visible non-destructive "Logout" action, separate from Device Management revoke/lost-device actions and Privacy account deletion. `RemoteCompositionRoot.logout()` stops runtime, disconnects realtime, clears local tokens/session state, preserves the encrypted app database, and returns to setup. P04-L04 verifies local session clear without database deletion.
+  - Backend refresh/revocation evidence remains covered by existing backend tests: `services/helix_remote_backend/test/integration_test.dart` verifies refresh-token rotation/replay invalidation, and `services/helix_remote_backend/test/phase1_auth_test.dart` verifies refresh, restored access, WebSocket auth, and revoked-device refresh rejection.
+- Security-sensitive areas touched: Remote authentication/session lifecycle, refresh-token rotation, secure token persistence, runtime auth state, WebSocket auth, attachment auth token propagation, logout/session purge. No token/key values are logged; refresh/reconnect errors use generic messages.
+- Contract or migration changes: No API route, database schema, or migration changes. The implementation uses the existing `POST /api/v1/accounts/refresh` contract and existing backend rotation/replay policy.
+- Remaining manual-only checks: Physical Android/Windows manual check that Settings > Logout returns to setup on a real backend account; long-running manual check that an already-open WebSocket reconnects seamlessly after a real token refresh; physical-device secure-storage interruption during token rotation.
+- Deviations from this plan and why: "Atomic" token persistence is implemented as best-effort two-key rotation with pending markers because the current `KeyValueStore` abstraction has no multi-key transaction primitive. Tokens are applied to in-memory runtime only after both canonical secure-storage writes complete. A future storage abstraction can replace this with true transactional secure-storage semantics without changing callers.
+- Newly discovered defects and assigned future phase: Attachment upload/download raw HTTP calls now receive refreshed tokens after rotation, but they do not independently trigger refresh on a direct attachment 401. Assign independent attachment-operation 401 retry to Phase 06 contract/parity or Phase 09 runtime health if manual testing shows attachment URLs can outlive access-token expiry.
 
 ---
 
@@ -1581,7 +1609,7 @@ _Not completed._
 | HXA-001 Remote default HTTPS/WSS vs HTTP/WS backend | 01 | Complete |
 | HXA-002 Remote Android localhost/cleartext packaging | 01 | Complete |
 | HXA-003 Stored Remote session does not start runtime | 03 | Complete |
-| HXA-004 Refresh token not wired in production | 04 | Pending |
+| HXA-004 Refresh token not wired in production | 04 | Complete |
 | HXA-005 Restore code ignored | 05 | Pending |
 | HXA-006 Reset Required has no action | 03 | Complete |
 | HXA-007 Contact-request lifecycle unreachable | 07 | Pending |
@@ -1591,7 +1619,7 @@ _Not completed._
 | HXA-011 Attachments and calls unreachable | 11 | Pending; call-specific work coordinated in Phase 12 |
 | HXA-012 No viable ICE path in relay-only default | 12 | Pending |
 | HXA-013 Group management partially reachable | 13 | Pending |
-| HXA-014 Device linking and logout absent | 14 | Pending; token/logout subset coordinated in Phase 04 |
+| HXA-014 Device linking and logout absent | 14 | Pending; Phase 04 token/logout subset complete |
 | HXA-015 Account deletion leaves authenticated UI | 15 | Lifecycle navigation replacement complete in Phase 03; full account deletion and restore in Phase 15 |
 | HXA-016 Local app init has no retry | 02 | Complete |
 | HXA-017 Local Home session cannot retry | 02 | Complete |

@@ -10,6 +10,7 @@
 //   P03-A07  startupStateChanges supports multiple concurrent listeners.
 //   P03-A08  purgeAfterAccountDeletion() transitions to unauthenticated via stream.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -38,18 +39,39 @@ RemoteProductConfig _validConfig(String dir) => RemoteProductConfig(
   databaseDirectory: dir,
 );
 
-RemoteDevelopmentConfig _devConfig(String dir) => RemoteDevelopmentConfig(
-  profile: RemoteRuntimeProfile.localWindows,
-  restBaseUri: Uri.parse('http://127.0.0.1:8080'),
-  webSocketUri: Uri.parse('ws://127.0.0.1:8080/api/v1/ws'),
-  allowInsecureTransport: true,
-  backendHostMode: 'same-pc',
-  requestTimeoutMs: 15000,
-  reconnectPolicy: const ReconnectPolicy(),
-  databaseDirectory: dir,
-  attachmentCacheDir: '$dir/attachments_cache',
-  diagnosticLevel: DiagnosticLevel.info,
-);
+RemoteDevelopmentConfig _devConfig(String dir, {Uri? restBaseUri}) =>
+    RemoteDevelopmentConfig(
+      profile: RemoteRuntimeProfile.localWindows,
+      restBaseUri: restBaseUri ?? Uri.parse('http://127.0.0.1:8080'),
+      webSocketUri: Uri.parse('ws://127.0.0.1:8080/api/v1/ws'),
+      allowInsecureTransport: true,
+      backendHostMode: 'same-pc',
+      requestTimeoutMs: 15000,
+      reconnectPolicy: const ReconnectPolicy(),
+      databaseDirectory: dir,
+      attachmentCacheDir: '$dir/attachments_cache',
+      diagnosticLevel: DiagnosticLevel.info,
+    );
+
+Future<HttpServer> _refreshServer({
+  String accessFixture = 'tok-refreshed',
+  String refreshFixture = 'refresh-refreshed',
+}) async {
+  final server = await HttpServer.bind('127.0.0.1', 0);
+  server.listen((request) async {
+    if (request.uri.path.endsWith('/accounts/refresh')) {
+      await request.drain<void>();
+      request.response.statusCode = 200;
+      request.response.write(
+        jsonEncode({'token': accessFixture, 'refresh_token': refreshFixture}),
+      );
+    } else {
+      request.response.statusCode = 404;
+    }
+    await request.response.close();
+  });
+  return server;
+}
 
 void main() {
   group('RemoteCompositionRoot lifecycle (Phase 03)', () {
@@ -124,16 +146,22 @@ void main() {
 
         final store = _InMemoryKeyValueStore();
         await store.write('access_token', 'tok-abc');
+        await store.write('refresh_token', 'refresh-abc');
         await store.write('account_id', 'acc-123');
         await store.write('username', 'testuser');
         await store.write('identity_public_key', 'aabbcc');
         await store.write('device_id', 'dev_00112233');
         await store.write('device_signing_public_key', 'ddeegg');
         await store.write('device_agreement_public_key', 'hhiijj');
+        final server = await _refreshServer();
+        addTearDown(() => server.close(force: true));
 
         final root = RemoteCompositionRoot.withConfig(
           _validConfig(dir.path),
-          devConfig: _devConfig(dir.path),
+          devConfig: _devConfig(
+            dir.path,
+            restBaseUri: Uri.parse('http://127.0.0.1:${server.port}'),
+          ),
           keyValueStore: store,
         );
         addTearDown(root.dispose);
@@ -262,16 +290,22 @@ void main() {
 
         final store = _InMemoryKeyValueStore();
         await store.write('access_token', 'tok-xyz');
+        await store.write('refresh_token', 'refresh-xyz');
         await store.write('account_id', 'acc-xyz');
         await store.write('username', 'userxyz');
         await store.write('identity_public_key', 'pk');
         await store.write('device_id', 'dev_00aabbcc');
         await store.write('device_signing_public_key', 'spk');
         await store.write('device_agreement_public_key', 'apk');
+        final server = await _refreshServer();
+        addTearDown(() => server.close(force: true));
 
         final root = RemoteCompositionRoot.withConfig(
           _validConfig(dir.path),
-          devConfig: _devConfig(dir.path),
+          devConfig: _devConfig(
+            dir.path,
+            restBaseUri: Uri.parse('http://127.0.0.1:${server.port}'),
+          ),
           keyValueStore: store,
         );
         addTearDown(root.dispose);

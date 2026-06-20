@@ -11,9 +11,11 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required Uri baseUri,
     required int timeoutMs,
     this._tokenProvider,
+    Future<bool> Function()? refreshAuth,
     HttpClient? httpClient,
   }) : _endpoints = RemoteApiEndpoints(baseUri),
        _timeout = Duration(milliseconds: timeoutMs),
+       _refreshAuth = refreshAuth,
        _httpClient =
            httpClient ??
            (() {
@@ -25,9 +27,11 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   final RemoteApiEndpoints _endpoints;
   final Duration _timeout;
   final String? Function()? _tokenProvider;
+  final Future<bool> Function()? _refreshAuth;
   final HttpClient _httpClient;
 
   String? _accessToken;
+  Future<bool>? _refreshInFlight;
 
   @override
   set accessToken(String? token) => _accessToken = token;
@@ -52,10 +56,12 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     Map<String, String>? extraHeaders,
     String? idempotencyKey,
     Map<String, String>? queryParameters,
+    bool skipAuthRefresh = false,
   }) async {
     final canRetry = _isSafeMethod(method) || idempotencyKey != null;
     final maxAttempts = canRetry ? 3 : 1;
     var attempt = 0;
+    var retriedAfterRefresh = false;
     while (true) {
       attempt++;
       try {
@@ -68,6 +74,14 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
           queryParameters: queryParameters,
         );
       } on RemoteRestException catch (e) {
+        if (!skipAuthRefresh &&
+            !retriedAfterRefresh &&
+            _isAuthFailure(e.statusCode) &&
+            await _refreshAuthOnce()) {
+          retriedAfterRefresh = true;
+          attempt = 0;
+          continue;
+        }
         if (attempt >= maxAttempts || !_isRetryableStatus(e.statusCode)) {
           rethrow;
         }
@@ -154,6 +168,28 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       statusCode == 503 ||
       statusCode == 504;
 
+  bool _isAuthFailure(int? statusCode) =>
+      statusCode == 401 || statusCode == 403;
+
+  Future<bool> _refreshAuthOnce() {
+    final refreshAuth = _refreshAuth;
+    if (refreshAuth == null) return Future.value(false);
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+    late final Future<bool> refresh;
+    try {
+      refresh = refreshAuth().catchError((_) => false);
+    } catch (_) {
+      return Future.value(false);
+    }
+    _refreshInFlight = refresh;
+    return refresh.whenComplete(() {
+      if (identical(_refreshInFlight, refresh)) {
+        _refreshInFlight = null;
+      }
+    });
+  }
+
   Duration _retryDelay(int attempt) {
     final jitterMs = math.Random().nextInt(150);
     return Duration(milliseconds: (200 * (1 << (attempt - 1))) + jitterMs);
@@ -237,6 +273,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
         'POST',
         'accounts/refresh',
         body: {'refresh_token': refreshToken},
+        skipAuthRefresh: true,
       );
 
   @override

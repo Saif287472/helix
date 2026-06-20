@@ -87,8 +87,47 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Logout'),
+              subtitle: const Text(
+                'Return to setup without deleting account data',
+              ),
+              onTap: () => _confirmLogout(context),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text(
+          'This clears the saved session on this device. Your account and '
+          'server data are not deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    await root.logout();
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 }

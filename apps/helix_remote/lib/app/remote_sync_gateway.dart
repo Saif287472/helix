@@ -9,9 +9,11 @@ class RemoteSyncGatewayImpl implements SyncGateway {
     required Uri baseUri,
     required int timeoutMs,
     String? Function()? tokenProvider,
+    Future<bool> Function()? refreshAuth,
     HttpClient? httpClient,
   }) : _endpoints = RemoteApiEndpoints(baseUri),
        _tokenProvider = tokenProvider,
+       _refreshAuth = refreshAuth,
        _httpClient =
            httpClient ??
            (() {
@@ -22,6 +24,7 @@ class RemoteSyncGatewayImpl implements SyncGateway {
 
   final RemoteApiEndpoints _endpoints;
   final String? Function()? _tokenProvider;
+  final Future<bool> Function()? _refreshAuth;
   final HttpClient _httpClient;
   final RemoteOutboundOperationRegistry _registry =
       RemoteOutboundOperationRegistry();
@@ -35,6 +38,11 @@ class RemoteSyncGatewayImpl implements SyncGateway {
   @override
   Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
     required int sinceSequence,
+  }) => _fetchInboundEvents(sinceSequence: sinceSequence, allowRefresh: true);
+
+  Future<List<RemoteRealtimeEnvelope>> _fetchInboundEvents({
+    required int sinceSequence,
+    required bool allowRefresh,
   }) async {
     final uri = _endpoints.api(
       'messages/device-events',
@@ -47,6 +55,15 @@ class RemoteSyncGatewayImpl implements SyncGateway {
       req.headers.set('Authorization', auth);
     }
     final resp = await req.close();
+    if (allowRefresh &&
+        _isAuthFailure(resp.statusCode) &&
+        await _refreshAuthOnce()) {
+      await resp.drain<void>();
+      return _fetchInboundEvents(
+        sinceSequence: sinceSequence,
+        allowRefresh: false,
+      );
+    }
     if (resp.statusCode != 200) {
       throw HttpException(
         'Sync fetch failed with status ${resp.statusCode}',
@@ -68,6 +85,18 @@ class RemoteSyncGatewayImpl implements SyncGateway {
     required String opId,
     required String type,
     required Map<String, dynamic> payload,
+  }) => _sendOutboundOperation(
+    opId: opId,
+    type: type,
+    payload: payload,
+    allowRefresh: true,
+  );
+
+  Future<void> _sendOutboundOperation({
+    required String opId,
+    required String type,
+    required Map<String, dynamic> payload,
+    required bool allowRefresh,
   }) async {
     final operation = _registry.require(type);
     final uri = _endpoints.api(operation.path);
@@ -84,6 +113,17 @@ class RemoteSyncGatewayImpl implements SyncGateway {
     req.add(utf8.encode(jsonEncode(body)));
 
     final resp = await req.close();
+    if (allowRefresh &&
+        _isAuthFailure(resp.statusCode) &&
+        await _refreshAuthOnce()) {
+      await resp.drain<void>();
+      return _sendOutboundOperation(
+        opId: opId,
+        type: type,
+        payload: payload,
+        allowRefresh: false,
+      );
+    }
     if (resp.statusCode >= 400) {
       final errBody = await resp.transform(utf8.decoder).join();
       throw HttpException(
@@ -101,6 +141,11 @@ class RemoteSyncGatewayImpl implements SyncGateway {
         return payload;
     }
   }
+
+  bool _isAuthFailure(int statusCode) => statusCode == 401 || statusCode == 403;
+
+  Future<bool> _refreshAuthOnce() =>
+      _refreshAuth?.call() ?? Future.value(false);
 }
 
 class RemoteOutboundOperationRegistry {
