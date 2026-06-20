@@ -256,7 +256,7 @@ void main() {
       }
 
       expect(error, isA<StateError>());
-      expect(root.startupState, RemoteStartupState.recoverableFailure);
+      expect(root.startupState, RemoteStartupState.resetRequired);
       await root.dispose();
     });
 

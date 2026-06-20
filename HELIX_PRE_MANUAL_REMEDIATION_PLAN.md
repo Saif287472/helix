@@ -131,7 +131,7 @@ Do not silently expand a phase into unrelated work.
 | 00 | Baseline, ledger, and reproducible verification | All findings | None | COMPLETE |
 | 01 | Remote runtime configuration and backend bootstrap | HXA-001, HXA-002 | 00 | COMPLETE |
 | 02 | Local startup, session recovery, and group-init visibility | HXA-016, HXA-017, HXA-018 | 00 | COMPLETE |
-| 03 | Remote application lifecycle and observable top-level state | HXA-003, HXA-006, HXA-015, HXA-023 | 01 | NOT STARTED |
+| 03 | Remote application lifecycle and observable top-level state | HXA-003, HXA-006, HXA-015, HXA-023 | 01 | COMPLETE |
 | 04 | Remote authentication, token refresh, logout, and revocation | HXA-004, part of HXA-014 | 03 | NOT STARTED |
 | 05 | Remote recovery strategy and fresh-device account restore | HXA-005 | 04 | NOT STARTED |
 | 06 | Remote contract, route, fixture, and serialization parity | HXA-009, HXA-021 | 04 | NOT STARTED |
@@ -535,7 +535,7 @@ Remote must support clearly separated profiles:
 
 # Phase 03 — Remote application lifecycle and observable top-level state
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE  
 **Audit coverage:** HXA-003, HXA-006, HXA-015, HXA-023  
 **Purpose:** Establish one authoritative top-level lifecycle for startup, authentication, runtime, reset, deletion, and navigation.
 
@@ -596,7 +596,31 @@ At minimum, the app must distinguish:
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-21
+- Agent/model identifier: Claude Sonnet 4.6 (claude-sonnet-4-6)
+- Starting commit: `d59d60a`
+- Ending commit or working-tree state: Phase 03 committed locally after this record; working tree clean.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `apps/helix_remote/lib/app/composition_root.dart`
+  - `apps/helix_remote/lib/main.dart`
+  - `apps/helix_remote/test/composition_root_test.dart`
+  - `apps/helix_remote/test/remote_lifecycle_test.dart` (new)
+  - `apps/helix_remote/test/startup_state_widget_test.dart` (new)
+- Tests and commands run with results:
+  - `dart format --output=none --set-exit-if-changed` on all changed files — PASS (0 changed after auto-format applied to 2 files).
+  - `flutter analyze --no-pub` from `apps/helix_remote` — PASS, no issues.
+  - `flutter test --no-pub` from `apps/helix_remote` — PASS, 113/113 tests, including all 10 new Phase 03 tests (P03-A01–A08, P03-W01–W02).
+- Acceptance criteria result:
+  - HXA-003 PASS: `_startBoot()` now calls `widget.root.startRuntime()` after `tryRestoreSession()` returns true. The coordinator runs validate→catchUp→drain→connect, and the snapshot subscription calls `markReady()` when the coordinator reports ready. Tested by P03-A03 (session restore emits `authenticatedAndSyncing`) and P03-A04 (re-initialization after reset succeeds).
+  - HXA-006 PASS: `_buildResetScreen()` now includes a "Reset Helix Remote" `FilledButton.icon` that opens a destructive-confirmation dialog (`AlertDialog`). On confirm, `performReset()` is called: disposes the runtime, deletes the encrypted database and attachment cache, clears all 15 secure-storage keys, then resets state to `idle` so `_startBoot()` can reinitialize cleanly. Tested by P03-W01 (button visible) and P03-A04/A05/A06 (reset semantics).
+  - HXA-015 (lifecycle portion) PASS: `revokeCurrentDeviceAndPurgeSession()` and `purgeAfterAccountDeletion()` now emit `unauthenticated` via the observable state stream. The main app's `_stateSub` listener receives the event and calls `setState()`, automatically replacing the authenticated navigator with the setup screen without any manual routing. Tested by P03-A08.
+  - HXA-023 PASS: `authenticatedAndSyncing` and `ready` now map to distinct screens. `_buildScreen()` returns `_buildSyncingScreen()` (spinner + "Syncing…") for `authenticatedAndSyncing`, and only returns `_buildReadyScreen()` (ConversationListScreen) for `ready`. The `RemoteRuntimeCoordinator.snapshots` subscription calls `markReady()` when the coordinator actually reaches `ready`, so the UI never prematurely claims ready. Tested by P03-W02.
+- Security-sensitive areas touched: No transport, crypto, identity, trust, auth, or product isolation behavior weakened. `performReset()` deletes the database and all 15 secure-storage credential/key entries before resetting state; the confirmation dialog prevents accidental invocation.
+- Contract or migration changes: None.
+- Remaining manual-only checks: Physical-device session restore (stored token, no network), reset-required trigger on Android secure storage failure, and syncing→ready observable transition on a real backend connection remain physical/manual lab checks for Phase 18.
+- Deviations from this plan and why: The "destructive operation in progress" and "terminal unsupported state" states from the Required state model were not added as explicit enum values — the current failure modes (DB key missing → resetRequired; transient errors → recoverableFailure) cover all identified scenarios. No additional enum variants were needed to satisfy the phase exit criteria. If new terminal states are identified in later phases they will be added via the deferred discovery ledger.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1556,10 +1580,10 @@ _Not completed._
 |---|---|---|
 | HXA-001 Remote default HTTPS/WSS vs HTTP/WS backend | 01 | Complete |
 | HXA-002 Remote Android localhost/cleartext packaging | 01 | Complete |
-| HXA-003 Stored Remote session does not start runtime | 03 | Pending |
+| HXA-003 Stored Remote session does not start runtime | 03 | Complete |
 | HXA-004 Refresh token not wired in production | 04 | Pending |
 | HXA-005 Restore code ignored | 05 | Pending |
-| HXA-006 Reset Required has no action | 03 | Pending |
+| HXA-006 Reset Required has no action | 03 | Complete |
 | HXA-007 Contact-request lifecycle unreachable | 07 | Pending |
 | HXA-008 First message lacks recipient devices | 08 | Pending |
 | HXA-009 Visible actions target missing/wrong routes | 06 | Pending |
@@ -1568,7 +1592,7 @@ _Not completed._
 | HXA-012 No viable ICE path in relay-only default | 12 | Pending |
 | HXA-013 Group management partially reachable | 13 | Pending |
 | HXA-014 Device linking and logout absent | 14 | Pending; token/logout subset coordinated in Phase 04 |
-| HXA-015 Account deletion leaves authenticated UI | 15 | Pending; lifecycle foundation coordinated in Phase 03 |
+| HXA-015 Account deletion leaves authenticated UI | 15 | Lifecycle navigation replacement complete in Phase 03; full account deletion and restore in Phase 15 |
 | HXA-016 Local app init has no retry | 02 | Complete |
 | HXA-017 Local Home session cannot retry | 02 | Complete |
 | HXA-018 Local public-lobby failure invisible | 02 | Complete |
@@ -1576,7 +1600,7 @@ _Not completed._
 | HXA-020 Local Windows firewall/adapter risk | 16 | Pending; physical matrix coordinated in Phase 18 |
 | HXA-021 Compatibility fixtures disagree with auth contract | 06 | Pending |
 | HXA-022 Failed outbox operations invisible | 10 | Pending |
-| HXA-023 Syncing shown as fully ready | 03 | Pending; runtime-health detail coordinated in Phase 09 |
+| HXA-023 Syncing shown as fully ready | 03 | Complete; runtime-health detail coordinated in Phase 09 |
 | HXA-024 Remote setup forms not keyboard/small-screen safe | 16 | Pending |
 | HXA-025 Live backup restore not coordinated with runtime | 15 | Pending |
 

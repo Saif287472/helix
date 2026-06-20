@@ -141,6 +141,7 @@ class RemoteCompositionRoot {
 
   RemoteStartupState _state = RemoteStartupState.idle;
   RemoteStartupState get startupState => _state;
+  Stream<RemoteStartupState> get startupStateChanges => _stateController.stream;
 
   String? _lastError;
   String? get lastError => _lastError;
@@ -158,6 +159,10 @@ class RemoteCompositionRoot {
   RemoteCallService? _callService;
   RemoteGroupService? _groupService;
   RemoteRuntimeCoordinator? _runtimeCoordinator;
+  StreamSubscription<RemoteRuntimeSnapshot>? _runtimeSnapshotSub;
+  final _stateController = StreamController<RemoteStartupState>.broadcast(
+    sync: true,
+  );
 
   RemoteSecureKeyStorage get keyStorage =>
       _requireReady(_keyStorage, 'keyStorage');
@@ -188,24 +193,29 @@ class RemoteCompositionRoot {
     return value;
   }
 
+  void _setState(RemoteStartupState state) {
+    _state = state;
+    if (!_stateController.isClosed) _stateController.add(state);
+  }
+
   Future<void> initialize() async {
     if (_state == RemoteStartupState.ready) return;
     if (_state == RemoteStartupState.authenticatedAndSyncing) return;
 
     try {
-      _state = RemoteStartupState.loadingConfiguration;
+      _setState(RemoteStartupState.loadingConfiguration);
       _validate();
 
-      _state = RemoteStartupState.openingSecureStorage;
+      _setState(RemoteStartupState.openingSecureStorage);
       _keyValue =
           _keyValueStore ??
           SecureStorageStore(prefix: config.secureStoragePrefix);
       _keyStorage = RemoteSecureKeyStorage();
 
-      _state = RemoteStartupState.firstRunInitialization;
+      _setState(RemoteStartupState.firstRunInitialization);
       final dbKey = await _loadOrCreateDbKey();
 
-      _state = RemoteStartupState.openingDatabase;
+      _setState(RemoteStartupState.openingDatabase);
       final dbDir = Directory(config.databaseDirectory);
       if (!dbDir.existsSync()) {
         dbDir.createSync(recursive: true);
@@ -215,7 +225,7 @@ class RemoteCompositionRoot {
       db.initialize();
       _database = db;
 
-      _state = RemoteStartupState.restoringSession;
+      _setState(RemoteStartupState.restoringSession);
       _restClient = HelixRemoteRestClientImpl(
         baseUri: devConfig.restBaseUri,
         timeoutMs: devConfig.requestTimeoutMs,
@@ -287,10 +297,22 @@ class RemoteCompositionRoot {
         startCallSignaling: () async => _callService!.start(),
         purgeLocalSession: _purgeLocalSessionOnly,
       );
+      _runtimeSnapshotSub?.cancel();
+      _runtimeSnapshotSub = _runtimeCoordinator!.snapshots.listen((snap) {
+        if (snap.state == RemoteRuntimeState.ready) {
+          markReady();
+        } else if (snap.state == RemoteRuntimeState.authRequired &&
+            (_state == RemoteStartupState.authenticatedAndSyncing ||
+                _state == RemoteStartupState.ready)) {
+          _setState(RemoteStartupState.unauthenticated);
+        }
+      });
 
-      _state = RemoteStartupState.unauthenticated;
+      _setState(RemoteStartupState.unauthenticated);
     } catch (e) {
-      _state = RemoteStartupState.recoverableFailure;
+      if (_state != RemoteStartupState.resetRequired) {
+        _setState(RemoteStartupState.recoverableFailure);
+      }
       _lastError = e.toString();
       rethrow;
     }
@@ -531,7 +553,7 @@ class RemoteCompositionRoot {
     if (_attachmentService != null) {
       _attachmentService!.authToken = accessToken;
     }
-    _state = RemoteStartupState.authenticatedAndSyncing;
+    _setState(RemoteStartupState.authenticatedAndSyncing);
   }
 
   Future<bool> tryRestoreSession() async {
@@ -651,7 +673,7 @@ class RemoteCompositionRoot {
     await _callService?.endActiveCall();
     await disconnectWebSocket();
     await _purgeLocalSessionOnly();
-    _state = RemoteStartupState.unauthenticated;
+    _setState(RemoteStartupState.unauthenticated);
   }
 
   Future<void> purgeAfterAccountDeletion() async {
@@ -664,7 +686,7 @@ class RemoteCompositionRoot {
     if (cacheDir.existsSync()) {
       cacheDir.deleteSync(recursive: true);
     }
-    _state = RemoteStartupState.unauthenticated;
+    _setState(RemoteStartupState.unauthenticated);
   }
 
   Future<void> _purgeLocalSessionOnly() async {
@@ -697,7 +719,7 @@ class RemoteCompositionRoot {
 
   void markReady() {
     if (_state == RemoteStartupState.authenticatedAndSyncing) {
-      _state = RemoteStartupState.ready;
+      _setState(RemoteStartupState.ready);
     }
   }
 
@@ -715,7 +737,7 @@ class RemoteCompositionRoot {
     if (dbFile.existsSync()) {
       _lastError =
           'Database exists but its key is missing from secure storage.';
-      _state = RemoteStartupState.resetRequired;
+      _setState(RemoteStartupState.resetRequired);
       throw StateError(_lastError!);
     }
 
@@ -820,8 +842,67 @@ class RemoteCompositionRoot {
     }
   }
 
+  static const _resetKeys = [
+    'access_token',
+    'refresh_token',
+    'account_id',
+    'username',
+    'identity_public_key',
+    'identity_private_key',
+    'device_id',
+    'device_public_key',
+    'device_private_key',
+    'device_signing_public_key',
+    'device_signing_private_key',
+    'device_agreement_public_key',
+    'device_agreement_private_key',
+    'db_key',
+    'attachment_key_wrapping_key',
+  ];
+
+  Future<void> performReset() async {
+    _runtimeSnapshotSub?.cancel();
+    _runtimeSnapshotSub = null;
+    await _callService?.endActiveCall();
+    await _runtimeCoordinator?.dispose();
+    _runtimeCoordinator = null;
+    await disconnectWebSocket();
+    await _callService?.dispose();
+    _callService = null;
+    _messagingService = null;
+    _groupService = null;
+    _attachmentService = null;
+    _syncEngine = null;
+    _syncGateway = null;
+    await _restClient?.close();
+    _restClient = null;
+
+    _database?.close();
+    _database?.deleteFiles();
+    _database = null;
+
+    final cacheDir = Directory(devConfig.attachmentCacheDir);
+    if (cacheDir.existsSync()) cacheDir.deleteSync(recursive: true);
+
+    final store = _keyValue;
+    if (store != null) {
+      for (final key in _resetKeys) {
+        await store.delete(key);
+      }
+    }
+    _keyValue = null;
+    _keyStorage = null;
+    _accessToken = null;
+    _lastError = null;
+
+    _setState(RemoteStartupState.idle);
+  }
+
   Future<void> dispose() async {
-    _state = RemoteStartupState.idle;
+    _runtimeSnapshotSub?.cancel();
+    _runtimeSnapshotSub = null;
+    _setState(RemoteStartupState.idle);
+    await _stateController.close();
     await _runtimeCoordinator?.dispose();
     _runtimeCoordinator = null;
     await disconnectWebSocket();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:helix_remote/app/composition_root.dart';
@@ -97,10 +99,18 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   _SetupPath _setupPath = _SetupPath.choose;
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _restoreCodeController = TextEditingController();
+  StreamSubscription<RemoteStartupState>? _stateSub;
 
   @override
   void initState() {
     super.initState();
+    _stateSub = widget.root.startupStateChanges.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _startupState = state;
+        _errorMessage = widget.root.lastError;
+      });
+    });
     _startBoot();
   }
 
@@ -110,28 +120,21 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
     try {
       await widget.root.initialize();
       final restored = await widget.root.tryRestoreSession();
-      if (restored && mounted) {
-        setState(() {
-          _startupState = widget.root.startupState;
-        });
-      } else if (mounted) {
-        setState(() {
-          _startupState = widget.root.startupState;
-        });
+      if (restored) {
+        await widget.root.startRuntime();
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _startupState = widget.root.startupState;
-          _errorMessage = widget.root.lastError ?? e.toString();
-        });
+        setState(() => _errorMessage = widget.root.lastError ?? e.toString());
       }
+    } finally {
+      _initializing = false;
     }
-    _initializing = false;
   }
 
   @override
   void dispose() {
+    _stateSub?.cancel();
     _usernameController.dispose();
     _restoreCodeController.dispose();
     widget.root.dispose().ignore();
@@ -197,6 +200,8 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
         return _buildSetupScreen();
 
       case RemoteStartupState.authenticatedAndSyncing:
+        return _buildSyncingScreen();
+
       case RemoteStartupState.ready:
         return _buildReadyScreen();
 
@@ -218,6 +223,22 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
             CircularProgressIndicator(),
             SizedBox(height: 16),
             Text('Starting Helix Remote...'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSyncingScreen() {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.root.config.displayName)),
+      body: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Syncing…'),
           ],
         ),
       ),
@@ -422,11 +443,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
 
     try {
       await widget.root.registerAndLogin(username);
-      if (mounted) {
-        setState(() {
-          _startupState = widget.root.startupState;
-        });
-      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -451,12 +467,12 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
       _registrationError = null;
     });
     try {
-      // Restore is not yet fully implemented in RemoteCompositionRoot.
-      // Attempt session restoration using the stored code as a hint.
+      // Restore is not yet fully implemented — Phase 05 wires the real
+      // recovery flow. For now, attempt stored-session restoration as a hint.
       final restored = await widget.root.tryRestoreSession();
       if (mounted) {
         if (restored) {
-          setState(() => _startupState = widget.root.startupState);
+          await widget.root.startRuntime();
         } else {
           setState(
             () => _registrationError =
@@ -526,10 +542,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () {
-                  setState(() {
-                    _startupState = RemoteStartupState.idle;
-                    _errorMessage = null;
-                  });
+                  setState(() => _errorMessage = null);
                   _startBoot();
                 },
                 icon: const Icon(Icons.refresh),
@@ -546,28 +559,74 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
     return Scaffold(
       appBar: AppBar(title: const Text('Reset Required')),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.warning_amber, size: 64, color: Colors.orange),
-              const SizedBox(height: 16),
-              Text(
-                'Database key is missing',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'An existing database was found but its encryption key is not '
-                'available in secure storage. A reset is required.',
-                textAlign: TextAlign.center,
-              ),
-            ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.warning_amber, size: 64, color: Colors.orange),
+                const SizedBox(height: 16),
+                Text(
+                  'Database key is missing',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'An existing database was found but its encryption key is not '
+                  'available in secure storage. A destructive reset is required '
+                  'to continue.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    onPressed: _confirmedReset,
+                    icon: const Icon(Icons.delete_forever_outlined),
+                    label: const Text('Reset Helix Remote'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _confirmedReset() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm destructive reset'),
+        content: const Text(
+          'This will permanently delete all local account data, the encrypted '
+          'database, and all stored keys. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete and reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await widget.root.performReset();
+    if (mounted) _startBoot();
   }
 }
 
