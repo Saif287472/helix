@@ -553,7 +553,7 @@ class _MessageStatusChip extends StatelessWidget {
   (IconData, Color, String) _resolve(String status) {
     switch (status) {
       case 'PENDING':
-        return (Icons.schedule, Colors.grey, 'Pending');
+        return (Icons.schedule, Colors.grey, 'Queued');
       case 'SENT':
         return (Icons.done, Colors.blue, 'Sent');
       case 'DELIVERED':

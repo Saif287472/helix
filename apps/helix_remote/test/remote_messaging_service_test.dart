@@ -157,6 +157,7 @@ class _FakeRestClient implements HelixRemoteRestClient {
 class _FakeGateway implements SyncGateway {
   final inbound = <RemoteRealtimeEnvelope>[];
   final sent = <Map<String, dynamic>>[];
+  bool failSends = false;
 
   @override
   Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
@@ -173,6 +174,9 @@ class _FakeGateway implements SyncGateway {
     required String type,
     required Map<String, dynamic> payload,
   }) async {
+    if (failSends) {
+      throw Exception('offline');
+    }
     sent.add({'op_id': opId, 'type': type, 'payload': payload});
   }
 }
@@ -462,6 +466,59 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'P10 outbox summary exposes queued, retry, failed and manual retry',
+    () async {
+      db.updateOperationStatus(
+        'create_conversation_dm_alice_bob',
+        'COMPLETED',
+        0,
+      );
+      db.enqueueOperation(
+        'op_queued',
+        'PROFILE_UPDATE',
+        jsonEncode({'display_name': 'Alice'}),
+        idempotencyKey: 'profile:alice',
+      );
+      db.enqueueOperation(
+        'op_failed',
+        'USERNAME_CHANGE',
+        jsonEncode({'username': 'alice2'}),
+        idempotencyKey: 'username:alice:alice2',
+      );
+      db.updateOperationStatus('op_failed', 'FAILED', 5);
+
+      var summary = service.outboxSummary();
+      expect(summary.queuedCount, equals(1));
+      expect(summary.failedCount, equals(1));
+      expect(summary.hasVisibleWork, isTrue);
+
+      gateway.failSends = true;
+      await service.processOutboundQueue();
+      final retryState = db.getOperationById('op_queued')!;
+      expect(retryState['status'], 'PENDING');
+      expect(retryState['retries'], equals(1));
+      expect(db.getPendingOperations(), isEmpty);
+
+      summary = service.outboxSummary();
+      expect(summary.retryScheduledCount, equals(1));
+      expect(summary.failedCount, equals(1));
+      expect(summary.nextRetryAt, isNotNull);
+
+      gateway.failSends = false;
+      final retried = await service.retryFailedOutbox();
+      expect(retried, equals(1));
+      expect(
+        gateway.sent.where((op) => op['op_id'] == 'op_failed'),
+        hasLength(1),
+      );
+      expect(
+        db.getOperationById('op_failed')!['idempotency_key'],
+        'username:alice:alice2',
+      );
+    },
+  );
 
   test('P2-08 trust decisions persist key change state', () {
     service.recordTrustDecision(

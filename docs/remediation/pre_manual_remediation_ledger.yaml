@@ -354,10 +354,14 @@ findings:
       - packages/remote/helix_remote_sync/lib/src/sync_engine.dart
       - apps/helix_remote/lib/app/remote_messaging_service.dart
       - packages/remote/helix_remote_storage/lib/src/database.dart
-    status: pending
+      - apps/helix_remote/lib/screens/conversation_list_screen.dart
+      - apps/helix_remote/lib/screens/conversation_screen.dart
+      - apps/helix_remote/test/remote_messaging_service_test.dart
+      - apps/helix_remote/test/phase12_remote_messaging_screen_test.dart
+    status: complete
     tests_required:
       - Outbox failure, retry, DLQ, and visible failure UI tests.
-    final_disposition: Pending Phase 10.
+    final_disposition: Completed in Phase 10 by exposing queued/retry-scheduled/failed outbox summaries, adding manual retry for failed operations, preserving idempotency keys across retry, and covering payload-safe UI visibility.
   - id: HXA-023
     title: Syncing shown as fully ready
     primary_phase: 03

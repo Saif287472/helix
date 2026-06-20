@@ -138,7 +138,7 @@ Do not silently expand a phase into unrelated work.
 | 07 | Remote contact requests and accepted-contact conversation gating | HXA-007 | 06 | COMPLETE |
 | 08 | Remote first-message device discovery and E2EE session establishment | HXA-008 | 06, 07 | COMPLETE |
 | 09 | Remote realtime runtime, reactive screens, and runtime health UI | HXA-010, HXA-023 | 03, 06, 08 | COMPLETE |
-| 10 | Remote outbox truthfulness, retries, and failure recovery | HXA-022 | 06, 09 | NOT STARTED |
+| 10 | Remote outbox truthfulness, retries, and failure recovery | HXA-022 | 06, 09 | COMPLETE |
 | 11 | Remote attachments end to end | Attachment portion of HXA-011 | 08, 09, 10 | NOT STARTED |
 | 12 | Remote calls, incoming-call UX, and viable ICE/TURN policy | Call portion of HXA-011, HXA-012 | 04, 06, 09 | NOT STARTED |
 | 13 | Remote groups end to end | HXA-013 | 07, 08, 09, 10 | NOT STARTED |
@@ -1165,7 +1165,7 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 # Phase 10 — Remote outbox truthfulness, retries, and failure recovery
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE
 **Audit coverage:** HXA-022  
 **Purpose:** Stop optimistic UI from claiming success before server acknowledgement.
 
@@ -1217,7 +1217,32 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 ## Completion record
 
-_Not completed._
+Completed on 2026-06-21.
+
+- Starting commit: `98f69d2`
+- Ending commit: Phase 10 local commit `Complete phase 10 remote outbox truthfulness`
+- Files changed:
+  - `packages/remote/helix_remote_storage/lib/src/database.dart`
+  - `apps/helix_remote/lib/app/remote_messaging_service.dart`
+  - `apps/helix_remote/lib/screens/conversation_list_screen.dart`
+  - `apps/helix_remote/lib/screens/conversation_screen.dart`
+  - `apps/helix_remote/test/remote_messaging_service_test.dart`
+  - `apps/helix_remote/test/phase12_remote_messaging_screen_test.dart`
+  - `docs/remediation/pre_manual_remediation_ledger.yaml`
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+- Verification evidence:
+  - `dart format packages/remote/helix_remote_storage/lib/src/database.dart apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/lib/screens/conversation_list_screen.dart apps/helix_remote/lib/screens/conversation_screen.dart apps/helix_remote/test/remote_messaging_service_test.dart apps/helix_remote/test/phase12_remote_messaging_screen_test.dart` PASS.
+  - `dart analyze packages/remote/helix_remote_storage/lib/src/database.dart apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/lib/screens/conversation_list_screen.dart apps/helix_remote/lib/screens/conversation_screen.dart apps/helix_remote/test/remote_messaging_service_test.dart apps/helix_remote/test/phase12_remote_messaging_screen_test.dart` PASS.
+  - `flutter test test/remote_messaging_service_test.dart --no-pub` PASS.
+  - `flutter test test/phase12_remote_messaging_screen_test.dart --no-pub` PASS.
+  - `.\scripts\verify.ps1` PASS.
+- Audit result:
+  - HXA-022 PASS: Remote outbox state is visible as queued/retry scheduled/failed without exposing payloads; failed operations have a manual retry path; exhausted retry counts are reset only for explicit retry; retry tests preserve stable idempotency keys.
+- Security-sensitive areas touched: Remote pending-operation metadata, retry scheduling, outbox runtime summaries, and Remote message/contact list UI status wording. No authentication, crypto validation, storage encryption, wipe behavior, or plaintext payload display was weakened.
+- Contract or migration changes: None.
+- Remaining manual-only checks: Real backend validation/auth terminal-failure display and multi-device duplicate prevention should be exercised in integrated Phase 17/18 journeys.
+- Deviations from this plan and why: Phase 10 adds aggregate outbox visibility and retry action for all persisted operations rather than separate per-operation detail screens; dedicated operation-detail UX remains better aligned with later feature-specific phases.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1794,7 +1819,7 @@ _Not completed._
 | HXA-019 Local Android permission denial incomplete | 16 | Pending |
 | HXA-020 Local Windows firewall/adapter risk | 16 | Pending; physical matrix coordinated in Phase 18 |
 | HXA-021 Compatibility fixtures disagree with auth contract | 06 | Complete |
-| HXA-022 Failed outbox operations invisible | 10 | Pending |
+| HXA-022 Failed outbox operations invisible | 10 | Complete |
 | HXA-023 Syncing shown as fully ready | 03 | Complete |
 | HXA-024 Remote setup forms not keyboard/small-screen safe | 16 | Pending |
 | HXA-025 Live backup restore not coordinated with runtime | 15 | Pending |

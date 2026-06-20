@@ -1903,11 +1903,44 @@ class HelixRemoteDatabase {
     };
   }
 
+  List<Map<String, dynamic>> getOutboxOperations() {
+    final stmt = _db.prepare('''
+      SELECT * FROM pending_operations
+      WHERE status != 'COMPLETED'
+      ORDER BY created_at ASC;
+    ''');
+    final res = stmt.select();
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'op_id': row['op_id'],
+            'idempotency_key': row['idempotency_key'],
+            'type': row['type'],
+            'status': row['status'],
+            'retries': row['retries'],
+            'created_at': row['created_at'],
+            'next_attempt_at': row['next_attempt_at'],
+          },
+        )
+        .toList();
+  }
+
   void updateOperationStatus(String opId, String status, int retries) {
     final stmt = _db.prepare(
       'UPDATE pending_operations SET status = ?, retries = ? WHERE op_id = ?;',
     );
     stmt.execute([status, retries, opId]);
+    stmt.close();
+  }
+
+  void retryOperationNow(String opId) {
+    final stmt = _db.prepare('''
+      UPDATE pending_operations
+      SET status = 'PENDING', retries = 0, next_attempt_at = ?
+      WHERE op_id = ? AND status = 'FAILED';
+    ''');
+    stmt.execute([DateTime.now().millisecondsSinceEpoch, opId]);
     stmt.close();
   }
 

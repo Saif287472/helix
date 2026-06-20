@@ -30,6 +30,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   bool _loaded = false;
   bool _showContacts = false;
   String? _statusText;
+  RemoteOutboxSummary _outboxSummary = const RemoteOutboxSummary(
+    queuedCount: 0,
+    retryScheduledCount: 0,
+    failedCount: 0,
+  );
   RemoteRuntimeSnapshot? _runtimeSnapshot;
   StreamSubscription<RemoteSyncChange>? _changeSub;
   StreamSubscription<RemoteRuntimeSnapshot>? _runtimeSub;
@@ -63,10 +68,12 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       final convos = widget.messagingService.conversationList();
       final contacts = widget.messagingService.searchLocalContacts('');
       final requests = widget.messagingService.contactRequests();
+      final outbox = widget.messagingService.outboxSummary();
       setState(() {
         _conversations = convos;
         _contacts = contacts;
         _requests = requests;
+        _outboxSummary = outbox;
         _loaded = true;
       });
     } catch (e) {
@@ -193,6 +200,17 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     _reload();
   }
 
+  Future<void> _retryFailedOutbox() async {
+    final retried = await widget.messagingService.retryFailedOutbox();
+    if (!mounted) return;
+    setState(() {
+      _statusText = retried == 0
+          ? 'No failed operations to retry'
+          : 'Retrying failed operations';
+    });
+    _reload();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
@@ -224,6 +242,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         children: [
           if (_runtimeSnapshot != null)
             RemoteRuntimeStateBanner(stateLabel: _runtimeSnapshot!.state.name),
+          if (_outboxSummary.hasVisibleWork) _buildOutboxBanner(),
           if (_statusText != null)
             MaterialBanner(
               content: Text(_statusText!),
@@ -250,6 +269,27 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               onPressed: _reload,
               child: const Icon(Icons.refresh),
             ),
+    );
+  }
+
+  Widget _buildOutboxBanner() {
+    final parts = <String>[];
+    if (_outboxSummary.queuedCount > 0) {
+      parts.add('${_outboxSummary.queuedCount} queued');
+    }
+    if (_outboxSummary.retryScheduledCount > 0) {
+      parts.add('${_outboxSummary.retryScheduledCount} retry scheduled');
+    }
+    if (_outboxSummary.failedCount > 0) {
+      parts.add('${_outboxSummary.failedCount} failed');
+    }
+    return MaterialBanner(
+      content: Text('Outbox: ${parts.join(', ')}'),
+      actions: [
+        if (_outboxSummary.failedCount > 0)
+          TextButton(onPressed: _retryFailedOutbox, child: const Text('Retry')),
+        TextButton(onPressed: _reload, child: const Text('Refresh')),
+      ],
     );
   }
 

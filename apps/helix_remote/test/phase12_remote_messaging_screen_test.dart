@@ -500,4 +500,44 @@ void main() {
       expect(service.debugChangeListenerCount, equals(0));
     },
   );
+
+  testWidgets('P10 outbox banner shows queued and failed retry state', (
+    tester,
+  ) async {
+    db.enqueueOperation(
+      'op_profile',
+      'PROFILE_UPDATE',
+      jsonEncode({'display_name': 'private display'}),
+      idempotencyKey: 'profile:alice',
+    );
+    db.enqueueOperation(
+      'op_report',
+      'SAFETY_REPORT',
+      jsonEncode({'context_hash': 'secret-context-hash'}),
+      idempotencyKey: 'report:1',
+    );
+    db.updateOperationStatus('op_report', 'FAILED', 5);
+
+    final dir = Directory.systemTemp.createTempSync('p10_widget_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final root = RemoteCompositionRoot.production(
+      databaseDirectory: dir.path,
+      devConfig: _devConfig(dir.path),
+    );
+    addTearDown(root.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationListScreen(messagingService: service, root: root),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('Outbox:'), findsOneWidget);
+    expect(find.textContaining('queued'), findsOneWidget);
+    expect(find.textContaining('failed'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.textContaining('secret-context-hash'), findsNothing);
+    expect(find.textContaining('private display'), findsNothing);
+  });
 }
