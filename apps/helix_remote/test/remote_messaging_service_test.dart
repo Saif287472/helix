@@ -85,7 +85,18 @@ class _FakeRestClient implements HelixRemoteRestClient {
   @override
   Future<List<RemoteDevice>> listDevices() async => [];
   @override
+  Future<void> renameDevice({
+    required String deviceId,
+    required String deviceName,
+  }) async {}
+  @override
   Future<void> revokeDevice(String deviceId) async {}
+  @override
+  Future<void> reportLostDevice(String deviceId) async {}
+  @override
+  Future<List<Map<String, dynamic>>> getDeviceSecurityHistory(
+    String deviceId,
+  ) async => [];
   @override
   Future<void> uploadPreKeys({
     required int signedPrekeyId,

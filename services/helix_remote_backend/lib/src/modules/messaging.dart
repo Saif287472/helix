@@ -107,6 +107,18 @@ class MessagingModule {
         );
       }
 
+      final existingMessage = db.getMessage(messageId);
+      if (existingMessage != null) {
+        return Response.ok(
+          jsonEncode({
+            'message': 'Message already accepted',
+            'message_id': messageId,
+            'sequence': existingMessage['server_sequence'],
+            'idempotent': true,
+          }),
+        );
+      }
+
       final conversationMembers = db.getConversationMembers(conversationId);
       final requiredRecipientDeviceIds = <String>{};
       final allowedRecipientDeviceIds = <String>{};

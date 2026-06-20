@@ -6,6 +6,7 @@ import 'package:cryptography/cryptography.dart' as crypto;
 class TestRegistrationMaterial {
   const TestRegistrationMaterial({
     required this.deviceSigningKeyPair,
+    required this.deviceAgreementKeyPair,
     required this.accountIdentityPublicKey,
     required this.deviceSigningPublicKey,
     required this.deviceAgreementPublicKey,
@@ -14,6 +15,7 @@ class TestRegistrationMaterial {
   });
 
   final crypto.SimpleKeyPair deviceSigningKeyPair;
+  final crypto.SimpleKeyPair deviceAgreementKeyPair;
   final String accountIdentityPublicKey;
   final String deviceSigningPublicKey;
   final String deviceAgreementPublicKey;
@@ -59,6 +61,7 @@ Future<TestRegistrationMaterial> createTestRegistrationMaterial({
   );
   return TestRegistrationMaterial(
     deviceSigningKeyPair: deviceSigningKeyPair,
+    deviceAgreementKeyPair: agreementKeyPair,
     accountIdentityPublicKey: accountIdentityPublicKey,
     deviceSigningPublicKey: deviceSigningPublicKeyStr,
     deviceAgreementPublicKey: deviceAgreementPublicKey,

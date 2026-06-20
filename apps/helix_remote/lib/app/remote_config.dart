@@ -42,7 +42,7 @@ class RemoteDevelopmentConfig {
     final wsScheme = _webSocketSchemeFor(restScheme);
 
     return RemoteDevelopmentConfig(
-      restBaseUri: Uri.parse('$restScheme://$host:$port/api/v1'),
+      restBaseUri: Uri.parse('$restScheme://$host:$port'),
       webSocketUri: Uri.parse('$wsScheme://$host:$wsPort/api/v1/ws'),
       allowInsecureTransport: allowInsecure,
       backendHostMode: mode,
@@ -83,7 +83,7 @@ class RemoteDevelopmentConfig {
     final wsScheme = _webSocketSchemeFor(scheme);
 
     return RemoteDevelopmentConfig(
-      restBaseUri: Uri.parse('$scheme://$host:$port/api/v1'),
+      restBaseUri: Uri.parse('$scheme://$host:$port'),
       webSocketUri: Uri.parse('$wsScheme://$host:$wsPort/api/v1/ws'),
       allowInsecureTransport: allowInsecure,
       backendHostMode: host == 'localhost' || host == '127.0.0.1'

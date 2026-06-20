@@ -416,6 +416,7 @@ class RemoteMessagingService {
     String? title,
   }) {
     final accountId = _requireAccountId();
+    final deviceId = _requireDeviceId();
     final id =
         conversationId ?? _stableDirectConversationId(accountId, peerAccountId);
 

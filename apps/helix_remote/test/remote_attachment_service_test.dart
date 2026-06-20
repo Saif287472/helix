@@ -136,6 +136,12 @@ void main() {
       expect(localAttachment, isNotNull);
       expect(localAttachment!['status'], equals('PENDING'));
       expect(
+        localAttachment['imported_source_path'],
+        equals(plaintextFile.path),
+      );
+      expect(localAttachment['local_path'], isNull);
+      expect(localAttachment['encrypted_cache_path'], equals(cipherPath));
+      expect(
         localAttachment['size_bytes'],
         equals(File(cipherPath).lengthSync()),
       );
@@ -363,9 +369,14 @@ void main() {
       service.evictLocalCache(attachmentId);
 
       expect(decryptedFile.existsSync(), isFalse);
+      expect(plaintextFile.existsSync(), isTrue);
+      expect(File(cipherPath).existsSync(), isFalse);
       final afterEvict = db.getAttachment(attachmentId);
       expect(afterEvict!['status'], equals('CACHE_EVICTED'));
       expect(afterEvict['local_path'], isNull);
+      expect(afterEvict['imported_source_path'], equals(plaintextFile.path));
+      expect(afterEvict['encrypted_cache_path'], isNull);
+      expect(afterEvict['downloaded_ciphertext_path'], isNull);
 
       // Server copy is unaffected
       expect(server.db.getAttachment(attachmentId), isNotNull);
@@ -436,4 +447,54 @@ void main() {
     // Should not throw
     expect(() => service.evictLocalCache('nonexistent_id'), returnsNormally);
   });
+
+  test(
+    'download detects ciphertext tampering before plaintext cache write',
+    () async {
+      final service = RemoteAttachmentService(
+        baseUrl: 'http://127.0.0.1:$port',
+        authToken: token,
+        db: db,
+        tempDir: clientTempDir,
+        wrappingKey: wrappingKey,
+      );
+
+      final plaintextFile = File(p.join(clientTempDir.path, 'tamper.txt'));
+      await plaintextFile.writeAsBytes(List.generate(300, (i) => i % 251));
+
+      final prepResult = await service.prepareAttachment(plaintextFile);
+      final attachmentId = prepResult['attachment_id'] as String;
+      final cipherPath = prepResult['ciphertext_path'] as String;
+      final fullCiphertext = File(cipherPath).readAsBytesSync();
+
+      server.db.createAttachment(
+        fileId: attachmentId,
+        accountId: 'user1',
+        fileSize: fullCiphertext.length,
+        fileHash: attachmentId,
+      );
+      await service.uploadAttachment(
+        attachmentId: attachmentId,
+        ciphertextPath: cipherPath,
+      );
+
+      final serverFile = File('${tempStorageDir.path}/$attachmentId');
+      final tampered = serverFile.readAsBytesSync();
+      tampered[tampered.length - 1] ^= 0x01;
+      await serverFile.writeAsBytes(tampered);
+
+      final downloadPath = p.join(clientTempDir.path, 'tampered.enc');
+      expect(
+        () => service.downloadAttachment(
+          attachmentId: attachmentId,
+          savePath: downloadPath,
+        ),
+        throwsStateError,
+      );
+      expect(
+        File(downloadPath.replaceFirst(RegExp(r'\.enc$'), '')).existsSync(),
+        isFalse,
+      );
+    },
+  );
 }

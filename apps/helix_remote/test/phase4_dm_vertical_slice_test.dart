@@ -15,6 +15,21 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:path/path.dart' as p;
 
+void _seedRevisionParentMessage(HelixRemoteDatabase db, String messageId) {
+  db.saveMessage(
+    RemoteMessage(
+      messageId: messageId,
+      conversationId: 'conv_revisions',
+      senderAccountId: 'alice',
+      senderDeviceId: 'alice_device',
+      ciphertext: 'ciphertext',
+    ),
+    1,
+    1,
+    RemoteMessageStatus.sent,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // P4-02: Status vocabulary and transition validation
 // ---------------------------------------------------------------------------
@@ -135,24 +150,44 @@ void main() {
 
     test('unknown source status throws', () {
       expect(
-        () => RemoteMessageStatus.validateTransition('BOGUS', RemoteMessageStatus.sent),
+        () => RemoteMessageStatus.validateTransition(
+          'BOGUS',
+          RemoteMessageStatus.sent,
+        ),
         throwsA(isA<RemoteIllegalStatusTransitionException>()),
       );
     });
 
-    test('isTerminal: tombstoned, secureSessionUnavailable, revokedDevice are terminal', () {
-      expect(RemoteMessageStatus.isTerminal(RemoteMessageStatus.tombstoned), isTrue);
-      expect(
-        RemoteMessageStatus.isTerminal(RemoteMessageStatus.secureSessionUnavailable),
-        isTrue,
-      );
-      expect(RemoteMessageStatus.isTerminal(RemoteMessageStatus.revokedDevice), isTrue);
-    });
+    test(
+      'isTerminal: tombstoned, secureSessionUnavailable, revokedDevice are terminal',
+      () {
+        expect(
+          RemoteMessageStatus.isTerminal(RemoteMessageStatus.tombstoned),
+          isTrue,
+        );
+        expect(
+          RemoteMessageStatus.isTerminal(
+            RemoteMessageStatus.secureSessionUnavailable,
+          ),
+          isTrue,
+        );
+        expect(
+          RemoteMessageStatus.isTerminal(RemoteMessageStatus.revokedDevice),
+          isTrue,
+        );
+      },
+    );
 
     test('isTerminal: pending, sent, delivered, read are not terminal', () {
-      expect(RemoteMessageStatus.isTerminal(RemoteMessageStatus.pending), isFalse);
+      expect(
+        RemoteMessageStatus.isTerminal(RemoteMessageStatus.pending),
+        isFalse,
+      );
       expect(RemoteMessageStatus.isTerminal(RemoteMessageStatus.sent), isFalse);
-      expect(RemoteMessageStatus.isTerminal(RemoteMessageStatus.delivered), isFalse);
+      expect(
+        RemoteMessageStatus.isTerminal(RemoteMessageStatus.delivered),
+        isFalse,
+      );
       expect(RemoteMessageStatus.isTerminal(RemoteMessageStatus.read), isFalse);
     });
   });
@@ -219,26 +254,29 @@ void main() {
     // payload-builder helpers that are also exercised in the E2E harness.
     // Here we confirm the field-level invariants directly.
 
-    test('sendText payload must include protocol_version and sender_device_id', () {
-      const deviceId = 'alice_d1';
-      const convId = 'conv_test';
-      const msgId = 'msg_001';
-      const protocolVersion = 1;
+    test(
+      'sendText payload must include protocol_version and sender_device_id',
+      () {
+        const deviceId = 'alice_d1';
+        const convId = 'conv_test';
+        const msgId = 'msg_001';
+        const protocolVersion = 1;
 
-      // Minimal payload struct matching what RemoteMessagingService produces
-      final payload = <String, dynamic>{
-        'conversation_id': convId,
-        'message_id': msgId,
-        'protocol_version': protocolVersion,
-        'sender_account_id': 'alice',
-        'sender_device_id': deviceId,
-        'envelopes': <Map<String, dynamic>>[],
-      };
+        // Minimal payload struct matching what RemoteMessagingService produces
+        final payload = <String, dynamic>{
+          'conversation_id': convId,
+          'message_id': msgId,
+          'protocol_version': protocolVersion,
+          'sender_account_id': 'alice',
+          'sender_device_id': deviceId,
+          'envelopes': <Map<String, dynamic>>[],
+        };
 
-      expect(payload['protocol_version'], equals(1));
-      expect(payload['sender_device_id'], isNotNull);
-      expect(payload['sender_device_id'], isNot(isEmpty));
-    });
+        expect(payload['protocol_version'], equals(1));
+        expect(payload['sender_device_id'], isNotNull);
+        expect(payload['sender_device_id'], isNot(isEmpty));
+      },
+    );
 
     test('delivery receipt payload includes protocol_version', () {
       final payload = <String, dynamic>{
@@ -307,13 +345,12 @@ void main() {
         },
       };
       final outer = {'v': 1, 'ct': innerCt, 'h': header};
-      final blob =
-          base64UrlEncode(utf8.encode(jsonEncode(outer)));
+      final blob = base64UrlEncode(utf8.encode(jsonEncode(outer)));
 
       // Decode and verify
-      final decoded = jsonDecode(
-        utf8.decode(base64Url.decode(blob)),
-      ) as Map<String, dynamic>;
+      final decoded =
+          jsonDecode(utf8.decode(base64Url.decode(blob)))
+              as Map<String, dynamic>;
       expect(decoded['v'], equals(1));
       expect(decoded['ct'], equals(innerCt));
       final decodedHeader = decoded['h'] as Map<String, dynamic>;
@@ -336,6 +373,7 @@ void main() {
     setUp(() async {
       tmpDir = await Directory.systemTemp.createTemp('helix_p4_qtest_');
       db = HelixRemoteDatabase(File(p.join(tmpDir.path, 'test.db')));
+      db.initialize();
     });
 
     tearDown(() async {
@@ -343,18 +381,21 @@ void main() {
       await tmpDir.delete(recursive: true);
     });
 
-    test('saveQuarantinedEvent stores event and isQuarantinedEventId returns true', () {
-      db.saveQuarantinedEvent(
-        eventId: 'evt_bad_001',
-        serverSequence: 42,
-        eventType: 'chat_message',
-        rawPayload: jsonEncode({'broken': true}),
-        failureReason: 'malformed_header',
-      );
+    test(
+      'saveQuarantinedEvent stores event and isQuarantinedEventId returns true',
+      () {
+        db.saveQuarantinedEvent(
+          eventId: 'evt_bad_001',
+          serverSequence: 42,
+          eventType: 'chat_message',
+          rawPayload: jsonEncode({'broken': true}),
+          failureReason: 'malformed_header',
+        );
 
-      expect(db.isQuarantinedEventId('evt_bad_001'), isTrue);
-      expect(db.isQuarantinedEventId('evt_good_001'), isFalse);
-    });
+        expect(db.isQuarantinedEventId('evt_bad_001'), isTrue);
+        expect(db.isQuarantinedEventId('evt_good_001'), isFalse);
+      },
+    );
 
     test('getQuarantinedEvents returns events ordered by server_sequence', () {
       for (final seq in [30, 10, 20]) {
@@ -404,7 +445,11 @@ void main() {
       );
 
       final events = db.getQuarantinedEvents();
-      expect(events.length, equals(1), reason: 'REPLACE must overwrite, not duplicate');
+      expect(
+        events.length,
+        equals(1),
+        reason: 'REPLACE must overwrite, not duplicate',
+      );
       expect(events.first['failure_reason'], equals('second_failure'));
     });
 
@@ -439,6 +484,25 @@ void main() {
     setUp(() async {
       tmpDir = await Directory.systemTemp.createTemp('helix_p4_revtest_');
       db = HelixRemoteDatabase(File(p.join(tmpDir.path, 'test.db')));
+      db.initialize();
+      db.upsertAccount(
+        RemoteAccount(
+          accountId: 'alice',
+          username: 'alice',
+          identityPublicKey: 'alice_identity_key',
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1),
+        ),
+      );
+      db.upsertConversation(
+        RemoteConversation(
+          conversationId: 'conv_revisions',
+          title: 'Revisions',
+          type: 'DIRECT',
+          lastActivitySequence: 0,
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1),
+        ),
+        ['alice'],
+      );
     });
 
     tearDown(() async {
@@ -446,46 +510,59 @@ void main() {
       await tmpDir.delete(recursive: true);
     });
 
-    test('revisions are returned ordered by server_sequence ASC when sequences differ', () {
-      // Insert revisions out of natural order by timestamp but with clear sequences
-      db.saveMessageRevision(
-        revisionId: 'rev_3',
-        messageId: 'msg_order',
-        type: 'edit',
-        authorId: 'alice',
-        payload: 'third',
-        timestamp: 1000, // low timestamp (clock skew)
-        serverSequence: 30,
-      );
-      db.saveMessageRevision(
-        revisionId: 'rev_1',
-        messageId: 'msg_order',
-        type: 'original',
-        authorId: 'alice',
-        payload: 'first',
-        timestamp: 3000, // high timestamp (wrong wall-clock order)
-        serverSequence: 10,
-      );
-      db.saveMessageRevision(
-        revisionId: 'rev_2',
-        messageId: 'msg_order',
-        type: 'edit',
-        authorId: 'alice',
-        payload: 'second',
-        timestamp: 2000,
-        serverSequence: 20,
-      );
+    test(
+      'revisions are returned ordered by server_sequence ASC when sequences differ',
+      () {
+        _seedRevisionParentMessage(db, 'msg_order');
+        // Insert revisions out of natural order by timestamp but with clear sequences
+        db.saveMessageRevision(
+          revisionId: 'rev_3',
+          messageId: 'msg_order',
+          type: 'edit',
+          authorId: 'alice',
+          payload: 'third',
+          timestamp: 1000, // low timestamp (clock skew)
+          serverSequence: 30,
+        );
+        db.saveMessageRevision(
+          revisionId: 'rev_1',
+          messageId: 'msg_order',
+          type: 'original',
+          authorId: 'alice',
+          payload: 'first',
+          timestamp: 3000, // high timestamp (wrong wall-clock order)
+          serverSequence: 10,
+        );
+        db.saveMessageRevision(
+          revisionId: 'rev_2',
+          messageId: 'msg_order',
+          type: 'edit',
+          authorId: 'alice',
+          payload: 'second',
+          timestamp: 2000,
+          serverSequence: 20,
+        );
 
-      final revisions = db.getMessageRevisions('msg_order');
-      expect(revisions.length, equals(3));
-      expect(revisions[0]['payload'], equals('first'),
-          reason: 'server_sequence 10 must come first despite high wall-clock timestamp');
-      expect(revisions[1]['payload'], equals('second'));
-      expect(revisions[2]['payload'], equals('third'),
-          reason: 'server_sequence 30 must come last despite low wall-clock timestamp');
-    });
+        final revisions = db.getMessageRevisions('msg_order');
+        expect(revisions.length, equals(3));
+        expect(
+          revisions[0]['payload'],
+          equals('first'),
+          reason:
+              'server_sequence 10 must come first despite high wall-clock timestamp',
+        );
+        expect(revisions[1]['payload'], equals('second'));
+        expect(
+          revisions[2]['payload'],
+          equals('third'),
+          reason:
+              'server_sequence 30 must come last despite low wall-clock timestamp',
+        );
+      },
+    );
 
     test('when server_sequences equal, timestamp is tie-breaker', () {
+      _seedRevisionParentMessage(db, 'msg_tiebreak');
       db.saveMessageRevision(
         revisionId: 'rev_early_ts',
         messageId: 'msg_tiebreak',
@@ -511,30 +588,34 @@ void main() {
       expect(revisions[1]['payload'], equals('later'));
     });
 
-    test('server_sequence wins: late wall-clock but lower sequence comes first', () {
-      db.saveMessageRevision(
-        revisionId: 'rev_high_ts_low_seq',
-        messageId: 'msg_skew',
-        type: 'edit',
-        authorId: 'alice',
-        payload: 'should be first',
-        timestamp: 9999, // far-future clock
-        serverSequence: 1,
-      );
-      db.saveMessageRevision(
-        revisionId: 'rev_low_ts_high_seq',
-        messageId: 'msg_skew',
-        type: 'original',
-        authorId: 'alice',
-        payload: 'should be second',
-        timestamp: 1, // past clock
-        serverSequence: 2,
-      );
+    test(
+      'server_sequence wins: late wall-clock but lower sequence comes first',
+      () {
+        _seedRevisionParentMessage(db, 'msg_skew');
+        db.saveMessageRevision(
+          revisionId: 'rev_high_ts_low_seq',
+          messageId: 'msg_skew',
+          type: 'edit',
+          authorId: 'alice',
+          payload: 'should be first',
+          timestamp: 9999, // far-future clock
+          serverSequence: 1,
+        );
+        db.saveMessageRevision(
+          revisionId: 'rev_low_ts_high_seq',
+          messageId: 'msg_skew',
+          type: 'original',
+          authorId: 'alice',
+          payload: 'should be second',
+          timestamp: 1, // past clock
+          serverSequence: 2,
+        );
 
-      final revisions = db.getMessageRevisions('msg_skew');
-      expect(revisions[0]['payload'], equals('should be first'));
-      expect(revisions[1]['payload'], equals('should be second'));
-    });
+        final revisions = db.getMessageRevisions('msg_skew');
+        expect(revisions[0]['payload'], equals('should be first'));
+        expect(revisions[1]['payload'], equals('should be second'));
+      },
+    );
   });
 
   // =========================================================================
@@ -563,28 +644,33 @@ void main() {
       t.recordDecryptFailure('unknown_key');
       expect(t.decryptFailureCount, equals(3));
       final snap = t.snapshot();
-      final classes = snap['decrypt_failure_classes'] as Map<String, dynamic>;
+      final classes = Map<String, dynamic>.from(
+        snap['decrypt_failure_classes'] as Map,
+      );
       expect(classes['tampered_aad'], equals(2));
       expect(classes['unknown_key'], equals(1));
     });
 
-    test('snapshot contains no account IDs, device IDs, or message content', () {
-      final t = RemoteTelemetryCounters();
-      t.recordDecryptFailure('tampered_aad');
-      t.recordQueueAge(500);
-      t.recordSyncLag(300);
-      t.recordApiLatency(150);
+    test(
+      'snapshot contains no account IDs, device IDs, or message content',
+      () {
+        final t = RemoteTelemetryCounters();
+        t.recordDecryptFailure('tampered_aad');
+        t.recordQueueAge(500);
+        t.recordSyncLag(300);
+        t.recordApiLatency(150);
 
-      final snap = t.snapshot();
-      final encoded = jsonEncode(snap);
+        final snap = t.snapshot();
+        final encoded = jsonEncode(snap);
 
-      // Confirm no PII-like field names exist in the snapshot keys
-      expect(encoded, isNot(contains('account_id')));
-      expect(encoded, isNot(contains('device_id')));
-      expect(encoded, isNot(contains('message_id')));
-      expect(encoded, isNot(contains('conversation_id')));
-      expect(encoded, isNot(contains('plaintext')));
-    });
+        // Confirm no PII-like field names exist in the snapshot keys
+        expect(encoded, isNot(contains('account_id')));
+        expect(encoded, isNot(contains('device_id')));
+        expect(encoded, isNot(contains('message_id')));
+        expect(encoded, isNot(contains('conversation_id')));
+        expect(encoded, isNot(contains('plaintext')));
+      },
+    );
 
     test('snapshot aggregate fields are present and typed', () {
       final t = RemoteTelemetryCounters();
@@ -642,14 +728,17 @@ void main() {
       expect(snap['queue_age_p50_ms'], isNull);
     });
 
-    test('window cap: more than 1000 queue_age samples keep only the latest 1000', () {
-      final t = RemoteTelemetryCounters();
-      for (var i = 0; i < 1100; i++) {
-        t.recordQueueAge(i);
-      }
-      // The internal list is capped at 1000; snapshot must not throw
-      final snap = t.snapshot();
-      expect(snap['queue_age_p50_ms'], isA<int>());
-    });
+    test(
+      'window cap: more than 1000 queue_age samples keep only the latest 1000',
+      () {
+        final t = RemoteTelemetryCounters();
+        for (var i = 0; i < 1100; i++) {
+          t.recordQueueAge(i);
+        }
+        // The internal list is capped at 1000; snapshot must not throw
+        final snap = t.snapshot();
+        expect(snap['queue_age_p50_ms'], isA<int>());
+      },
+    );
   });
 }

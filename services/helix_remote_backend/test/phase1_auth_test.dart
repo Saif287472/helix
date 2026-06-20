@@ -306,6 +306,14 @@ void main() {
         );
         await ws.close();
 
+        server.db.registerDevice(
+          'dave_recovery_device',
+          'dave',
+          'recovery_signing_key',
+          'recovery_agreement_key',
+          'Recovery Device',
+        );
+
         final revoke = await postJson('/api/v1/accounts/devices/revoke', {
           'device_id': 'dave_device',
         }, token: accessToken);

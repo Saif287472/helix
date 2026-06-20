@@ -28,7 +28,16 @@ abstract class HelixRemoteRestClient {
 
   Future<List<RemoteDevice>> listDevices();
 
+  Future<void> renameDevice({
+    required String deviceId,
+    required String deviceName,
+  });
+
   Future<void> revokeDevice(String deviceId);
+
+  Future<void> reportLostDevice(String deviceId);
+
+  Future<List<Map<String, dynamic>>> getDeviceSecurityHistory(String deviceId);
 
   Future<void> uploadPreKeys({
     required int signedPrekeyId,

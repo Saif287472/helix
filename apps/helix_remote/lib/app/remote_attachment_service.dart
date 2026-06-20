@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:helix_remote/app/remote_endpoints.dart';
 import 'package:path/path.dart' as p;
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 import 'package:helix_remote_domain/models.dart';
@@ -17,6 +18,7 @@ class RemoteAttachmentService {
     RemoteAttachmentCrypto? crypto,
     HttpClient? httpClient,
   }) : _crypto = crypto ?? RemoteAttachmentCrypto(),
+       _endpoints = RemoteApiEndpoints(Uri.parse(baseUrl)),
        _httpClient = httpClient ?? HttpClient();
 
   final String baseUrl;
@@ -25,7 +27,17 @@ class RemoteAttachmentService {
   final Directory tempDir;
   final Uint8List wrappingKey;
   final RemoteAttachmentCrypto _crypto;
+  final RemoteApiEndpoints _endpoints;
   final HttpClient _httpClient;
+  static const int _chunkSize = 64 * 1024;
+  static final Uint8List _frameMagic = Uint8List.fromList([
+    0x48,
+    0x4c,
+    0x58,
+    0x41,
+    0x31,
+    0x0a,
+  ]);
 
   /// Prepares a file for upload: generates random key/IV, encrypts the file
   /// to a temporary ciphertext file, saves metadata locally.
@@ -43,18 +55,25 @@ class RemoteAttachmentService {
     final keyBytes = keys['key']!;
     final ivBytes = keys['iv']!;
 
-    final plaintext = await plaintextFile.readAsBytes();
-    final ciphertext = await _crypto.encryptFile(plaintext, keyBytes, ivBytes);
-
-    // Compute ciphertext hash
-    final sha256Hash = await _computeSha256(ciphertext);
-
-    // Write ciphertext to a temp file named with attachment id
-    final tempCipherFile = File(p.join(tempDir.path, '$sha256Hash.enc'));
-    if (!tempCipherFile.parent.existsSync()) {
-      tempCipherFile.parent.createSync(recursive: true);
+    final stagingCipherFile = File(
+      p.join(tempDir.path, '${_randomFileStem()}.upload.enc'),
+    );
+    if (!stagingCipherFile.parent.existsSync()) {
+      stagingCipherFile.parent.createSync(recursive: true);
     }
-    await tempCipherFile.writeAsBytes(ciphertext);
+    await _encryptFileToCache(
+      plaintextFile,
+      stagingCipherFile,
+      keyBytes,
+      ivBytes,
+    );
+
+    final sha256Hash = await _computeSha256File(stagingCipherFile);
+    final tempCipherFile = File(p.join(tempDir.path, '$sha256Hash.enc'));
+    if (tempCipherFile.existsSync()) {
+      await tempCipherFile.delete();
+    }
+    await stagingCipherFile.rename(tempCipherFile.path);
 
     // Wrap key material before storing in DB
     final wrappedKey = await _crypto.wrapAttachmentKey(
@@ -67,16 +86,18 @@ class RemoteAttachmentService {
     db.saveAttachment(
       attachmentId: sha256Hash,
       filename: p.basename(plaintextFile.path),
-      sizeBytes: ciphertext.length,
+      sizeBytes: tempCipherFile.lengthSync(),
       encryptedKey: wrappedKeyStr,
-      localPath: plaintextFile.path,
+      localPath: null,
+      importedSourcePath: plaintextFile.path,
+      encryptedCachePath: tempCipherFile.path,
       status: 'PENDING',
     );
 
     final result = <String, dynamic>{
       'attachment_id': sha256Hash,
       'filename': p.basename(plaintextFile.path),
-      'size_bytes': ciphertext.length,
+      'size_bytes': tempCipherFile.lengthSync(),
       'file_hash': sha256Hash,
       'encrypted_key': wrappedKeyStr,
       'ciphertext_path': tempCipherFile.path,
@@ -91,19 +112,23 @@ class RemoteAttachmentService {
       final thumbKeyBytes = thumbKeys['key']!;
       final thumbIvBytes = thumbKeys['iv']!;
 
-      final thumbPlaintext = await thumbnailFile.readAsBytes();
-      final thumbCiphertext = await _crypto.encryptFile(
-        thumbPlaintext,
+      final thumbStagingCipherFile = File(
+        p.join(tempDir.path, '${_randomFileStem()}.thumb.upload.enc'),
+      );
+      await _encryptFileToCache(
+        thumbnailFile,
+        thumbStagingCipherFile,
         thumbKeyBytes,
         thumbIvBytes,
       );
-
-      final thumbSha256Hash = await _computeSha256(thumbCiphertext);
-
+      final thumbSha256Hash = await _computeSha256File(thumbStagingCipherFile);
       final tempThumbCipherFile = File(
         p.join(tempDir.path, '$thumbSha256Hash.enc'),
       );
-      await tempThumbCipherFile.writeAsBytes(thumbCiphertext);
+      if (tempThumbCipherFile.existsSync()) {
+        await tempThumbCipherFile.delete();
+      }
+      await thumbStagingCipherFile.rename(tempThumbCipherFile.path);
 
       final thumbWrapped = await _crypto.wrapAttachmentKey(
         thumbKeyBytes,
@@ -115,16 +140,18 @@ class RemoteAttachmentService {
       db.saveAttachment(
         attachmentId: thumbSha256Hash,
         filename: '${p.basename(plaintextFile.path)}.thumb',
-        sizeBytes: thumbCiphertext.length,
+        sizeBytes: tempThumbCipherFile.lengthSync(),
         encryptedKey: thumbWrappedStr,
-        localPath: thumbnailFile.path,
+        localPath: null,
+        importedSourcePath: thumbnailFile.path,
+        encryptedCachePath: tempThumbCipherFile.path,
         status: 'PENDING',
       );
 
       result['thumbnail'] = {
         'attachment_id': thumbSha256Hash,
         'filename': '${p.basename(plaintextFile.path)}.thumb',
-        'size_bytes': thumbCiphertext.length,
+        'size_bytes': tempThumbCipherFile.lengthSync(),
         'file_hash': thumbSha256Hash,
         'encrypted_key': thumbWrappedStr,
         'ciphertext_path': tempThumbCipherFile.path,
@@ -147,7 +174,7 @@ class RemoteAttachmentService {
 
     final totalSize = cipherFile.lengthSync();
 
-    final requestUrl = Uri.parse('$baseUrl/api/v1/attachments/upload');
+    final requestUrl = _endpoints.attachmentsUpload;
     final req = await _httpClient.postUrl(requestUrl);
     req.headers.set('Authorization', 'Bearer $authToken');
     req.headers.set('Content-Type', 'application/json');
@@ -164,11 +191,9 @@ class RemoteAttachmentService {
         jsonDecode(await resp.transform(utf8.decoder).join())
             as Map<String, dynamic>;
     final uploadPath = respBody['upload_url'] as String;
-    final uploadUrl = Uri.parse('$baseUrl$uploadPath');
+    final uploadUrl = _endpoints.resolveServerPath(uploadPath);
 
-    final statusUrl = Uri.parse(
-      '$baseUrl/api/v1/attachments/upload/status/$attachmentId',
-    );
+    final statusUrl = _endpoints.attachmentUploadStatus(attachmentId);
     final statusReq = await _httpClient.getUrl(statusUrl);
     statusReq.headers.set('Authorization', 'Bearer $authToken');
     final statusResp = await statusReq.close();
@@ -221,6 +246,12 @@ class RemoteAttachmentService {
         sizeBytes: localAttachment['size_bytes'] as int,
         encryptedKey: localAttachment['encrypted_key'] as String,
         localPath: localAttachment['local_path'] as String?,
+        importedSourcePath: localAttachment['imported_source_path'] as String?,
+        encryptedCachePath: localAttachment['encrypted_cache_path'] as String?,
+        downloadedCiphertextPath:
+            localAttachment['downloaded_ciphertext_path'] as String?,
+        exportedPlaintextPath:
+            localAttachment['exported_plaintext_path'] as String?,
         status: 'COMPLETED',
       );
     }
@@ -232,9 +263,7 @@ class RemoteAttachmentService {
     required String savePath,
     void Function(double progress)? onProgress,
   }) async {
-    final requestUrl = Uri.parse(
-      '$baseUrl/api/v1/attachments/download/$attachmentId',
-    );
+    final requestUrl = _endpoints.attachmentDownload(attachmentId);
     final req = await _httpClient.getUrl(requestUrl);
     req.headers.set('Authorization', 'Bearer $authToken');
     final resp = await req.close();
@@ -247,7 +276,7 @@ class RemoteAttachmentService {
         jsonDecode(await resp.transform(utf8.decoder).join())
             as Map<String, dynamic>;
     final downloadPath = respBody['download_url'] as String;
-    final downloadUrl = Uri.parse('$baseUrl$downloadPath');
+    final downloadUrl = _endpoints.resolveServerPath(downloadPath);
 
     final destFile = File(savePath);
     int offset = 0;
@@ -321,16 +350,12 @@ class RemoteAttachmentService {
     final keyBytes = unwrapped['key']!;
     final ivBytes = unwrapped['iv']!;
 
-    // Open the ciphertext as secret box and decrypt
-    final ciphertext = await destFile.readAsBytes();
-    final plaintext = await _crypto.decryptFile(ciphertext, keyBytes, ivBytes);
-
     final plaintextFile = File(
       savePath.endsWith('.enc')
           ? savePath.substring(0, savePath.length - 4)
           : '$savePath.dec',
     );
-    await plaintextFile.writeAsBytes(plaintext);
+    await _decryptCacheToFile(destFile, plaintextFile, keyBytes, ivBytes);
 
     db.saveAttachment(
       attachmentId: attachmentId,
@@ -338,6 +363,11 @@ class RemoteAttachmentService {
       sizeBytes: localAttachment['size_bytes'] as int,
       encryptedKey: localAttachment['encrypted_key'] as String,
       localPath: plaintextFile.path,
+      importedSourcePath: localAttachment['imported_source_path'] as String?,
+      encryptedCachePath: localAttachment['encrypted_cache_path'] as String?,
+      downloadedCiphertextPath: destFile.path,
+      exportedPlaintextPath:
+          localAttachment['exported_plaintext_path'] as String?,
       status: 'DOWNLOADED',
     );
 
@@ -348,13 +378,9 @@ class RemoteAttachmentService {
     final localAttachment = db.getAttachment(attachmentId);
     if (localAttachment == null) return;
 
-    final localPath = localAttachment['local_path'] as String?;
-    if (localPath != null) {
-      final localFile = File(localPath);
-      if (localFile.existsSync()) {
-        localFile.deleteSync();
-      }
-    }
+    _deleteIfAppOwned(localAttachment['local_path'] as String?);
+    _deleteIfAppOwned(localAttachment['encrypted_cache_path'] as String?);
+    _deleteIfAppOwned(localAttachment['downloaded_ciphertext_path'] as String?);
 
     db.saveAttachment(
       attachmentId: attachmentId,
@@ -362,6 +388,11 @@ class RemoteAttachmentService {
       sizeBytes: localAttachment['size_bytes'] as int,
       encryptedKey: localAttachment['encrypted_key'] as String,
       localPath: null,
+      importedSourcePath: localAttachment['imported_source_path'] as String?,
+      encryptedCachePath: null,
+      downloadedCiphertextPath: null,
+      exportedPlaintextPath:
+          localAttachment['exported_plaintext_path'] as String?,
       status: 'CACHE_EVICTED',
     );
   }
@@ -382,11 +413,6 @@ class RemoteAttachmentService {
     );
   }
 
-  Future<String> _computeSha256(Uint8List data) async {
-    final hash = await crypto_pkg.Sha256().hash(data);
-    return hash.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-  }
-
   /// Computes SHA-256 hash of a file by reading it in chunks, avoiding
   /// loading the full file into memory.
   Future<String> _computeSha256File(File file) async {
@@ -404,9 +430,7 @@ class RemoteAttachmentService {
     required String fileId,
     required String messageId,
   }) async {
-    final requestUrl = Uri.parse(
-      '$baseUrl/api/v1/attachments/register-reference',
-    );
+    final requestUrl = _endpoints.attachmentsRegisterReference;
     final req = await _httpClient.postUrl(requestUrl);
     req.headers.set('Authorization', 'Bearer $authToken');
     req.headers.set('Content-Type', 'application/json');
@@ -418,6 +442,179 @@ class RemoteAttachmentService {
       throw StateError(
         'Failed to register reference with status ${resp.statusCode}',
       );
+    }
+  }
+
+  Future<void> _encryptFileToCache(
+    File plaintextFile,
+    File ciphertextFile,
+    Uint8List keyBytes,
+    Uint8List ivBytes,
+  ) async {
+    final algorithm = crypto_pkg.AesGcm.with256bits();
+    final secretKey = crypto_pkg.SecretKey(keyBytes);
+    final sink = ciphertextFile.openWrite(mode: FileMode.write);
+    final originalLength = plaintextFile.lengthSync();
+    sink.add(_frameMagic);
+    sink.add(_uint32Bytes(_chunkSize));
+    sink.add(_uint64Bytes(originalLength));
+    var index = 0;
+    await for (final chunk in plaintextFile.openRead()) {
+      final nonce = _chunkNonce(ivBytes, index);
+      final aad = _chunkAad(index, originalLength, chunk.length);
+      final box = await algorithm.encrypt(
+        chunk,
+        secretKey: secretKey,
+        nonce: nonce,
+        aad: aad,
+      );
+      final framed = Uint8List.fromList(box.concatenation());
+      sink.add(_uint32Bytes(index));
+      sink.add(_uint32Bytes(chunk.length));
+      sink.add(_uint32Bytes(framed.length));
+      sink.add(framed);
+      index++;
+    }
+    await sink.close();
+  }
+
+  Future<void> _decryptCacheToFile(
+    File ciphertextFile,
+    File plaintextFile,
+    Uint8List keyBytes,
+    Uint8List ivBytes,
+  ) async {
+    final raf = await ciphertextFile.open();
+    IOSink? sink;
+    try {
+      final magic = await raf.read(_frameMagic.length);
+      if (!_bytesEqual(magic, _frameMagic)) {
+        throw StateError('Unsupported attachment ciphertext framing');
+      }
+      final chunkSize = _readUint32(await raf.read(4));
+      final originalLength = _readUint64(await raf.read(8));
+      if (chunkSize <= 0 || chunkSize > _chunkSize) {
+        throw StateError('Invalid attachment chunk size');
+      }
+
+      final algorithm = crypto_pkg.AesGcm.with256bits();
+      final secretKey = crypto_pkg.SecretKey(keyBytes);
+      if (!plaintextFile.parent.existsSync()) {
+        plaintextFile.parent.createSync(recursive: true);
+      }
+      sink = plaintextFile.openWrite(mode: FileMode.write);
+      var expectedIndex = 0;
+      var written = 0;
+      while (await raf.position() < await raf.length()) {
+        final index = _readUint32(await raf.read(4));
+        final plainLength = _readUint32(await raf.read(4));
+        final boxLength = _readUint32(await raf.read(4));
+        if (index != expectedIndex ||
+            plainLength < 0 ||
+            plainLength > chunkSize ||
+            boxLength < 28) {
+          throw StateError('Invalid attachment ciphertext chunk order');
+        }
+        final framed = await raf.read(boxLength);
+        if (framed.length != boxLength) {
+          throw StateError('Truncated attachment ciphertext chunk');
+        }
+        final box = crypto_pkg.SecretBox.fromConcatenation(
+          framed,
+          nonceLength: 12,
+          macLength: 16,
+        );
+        final aad = _chunkAad(index, originalLength, plainLength);
+        final plaintext = await algorithm.decrypt(
+          box,
+          secretKey: secretKey,
+          aad: aad,
+        );
+        if (plaintext.length != plainLength) {
+          throw StateError('Attachment plaintext chunk length mismatch');
+        }
+        sink.add(plaintext);
+        written += plaintext.length;
+        expectedIndex++;
+      }
+      await sink.close();
+      sink = null;
+      if (written != originalLength) {
+        throw StateError('Attachment plaintext length mismatch');
+      }
+    } catch (_) {
+      if (plaintextFile.existsSync()) {
+        try {
+          plaintextFile.deleteSync();
+        } catch (_) {}
+      }
+      rethrow;
+    } finally {
+      await sink?.close();
+      await raf.close();
+    }
+  }
+
+  Uint8List _chunkNonce(Uint8List ivBytes, int index) {
+    final nonce = Uint8List.fromList(ivBytes);
+    final view = ByteData.sublistView(nonce);
+    final low = view.getUint32(8, Endian.big);
+    view.setUint32(8, low ^ index, Endian.big);
+    return nonce;
+  }
+
+  Uint8List _chunkAad(int index, int originalLength, int plainLength) {
+    return Uint8List.fromList(
+      utf8.encode(
+        'helix.remote.attachment.v1:$index:$originalLength:$plainLength',
+      ),
+    );
+  }
+
+  Uint8List _uint32Bytes(int value) {
+    final data = ByteData(4)..setUint32(0, value, Endian.big);
+    return data.buffer.asUint8List();
+  }
+
+  Uint8List _uint64Bytes(int value) {
+    final data = ByteData(8)..setUint64(0, value, Endian.big);
+    return data.buffer.asUint8List();
+  }
+
+  int _readUint32(Uint8List bytes) {
+    if (bytes.length != 4) throw StateError('Truncated uint32');
+    return ByteData.sublistView(bytes).getUint32(0, Endian.big);
+  }
+
+  int _readUint64(Uint8List bytes) {
+    if (bytes.length != 8) throw StateError('Truncated uint64');
+    return ByteData.sublistView(bytes).getUint64(0, Endian.big);
+  }
+
+  bool _bytesEqual(Uint8List left, Uint8List right) {
+    if (left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if (left[i] != right[i]) return false;
+    }
+    return true;
+  }
+
+  String _randomFileStem() {
+    final bytes = _crypto.aesGcm.newNonce();
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  void _deleteIfAppOwned(String? path) {
+    if (path == null || path.isEmpty) return;
+    final normalizedBase = p.normalize(p.absolute(tempDir.path));
+    final normalizedTarget = p.normalize(p.absolute(path));
+    if (!p.isWithin(normalizedBase, normalizedTarget) &&
+        normalizedBase != normalizedTarget) {
+      return;
+    }
+    final file = File(normalizedTarget);
+    if (file.existsSync()) {
+      file.deleteSync();
     }
   }
 }

@@ -65,6 +65,7 @@ class SettingsScreen extends StatelessWidget {
                   builder: (_) => PrivacyScreen(
                     restClient: root.restClient,
                     messagingService: messagingService,
+                    onAccountDeleted: root.purgeAfterAccountDeletion,
                   ),
                 ),
               ),

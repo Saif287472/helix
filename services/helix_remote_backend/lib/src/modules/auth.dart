@@ -31,6 +31,8 @@ class AuthModule {
 
     // Auth routes (enforced by middleware in main, but we can verify here too)
     router.get('/devices', _listDevicesHandler);
+    router.post('/devices/rename', _renameDeviceHandler);
+    router.get('/devices/security-history', _deviceSecurityHistoryHandler);
     router.post('/devices/link/request', _requestDeviceLinkHandler);
     router.post('/devices/link/verify', _verifyDeviceLinkHandler);
     router.post('/devices/link/complete', _completeDeviceLinkHandler);
@@ -326,6 +328,62 @@ class AuthModule {
     return Response.ok(jsonEncode({'devices': devices}));
   }
 
+  Future<Response> _renameDeviceHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final deviceId = body['device_id'] as String?;
+      final deviceName = body['device_name'] as String?;
+      if (deviceId == null ||
+          deviceName == null ||
+          deviceName.trim().isEmpty ||
+          deviceName.length > 80) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Invalid device rename request'}),
+        );
+      }
+      final accountId = auth['account_id'] as String;
+      if (!db.isDeviceActive(accountId, deviceId)) {
+        return Response.forbidden(jsonEncode({'error': 'Device is inactive'}));
+      }
+      db.renameDevice(accountId, deviceId, deviceName.trim());
+      db.logAudit(
+        accountId,
+        auth['device_id'] as String?,
+        'DEVICE_RENAMED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+      return Response.ok(jsonEncode({'message': 'Device renamed'}));
+    } catch (_) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+
+  Future<Response> _deviceSecurityHistoryHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+    final deviceId = request.url.queryParameters['device_id'];
+    if (deviceId == null || deviceId.isEmpty) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Missing device_id'}),
+      );
+    }
+    final accountId = auth['account_id'] as String;
+    return Response.ok(
+      jsonEncode({'history': db.getDeviceSecurityHistory(accountId, deviceId)}),
+    );
+  }
+
   Future<Response> _requestDeviceLinkHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
@@ -517,6 +575,13 @@ class AuthModule {
       }
 
       final accountId = auth['account_id'] as String;
+      if (!_canRevokeDevice(accountId, deviceToRevoke)) {
+        return Response.forbidden(
+          jsonEncode({
+            'error': 'Cannot revoke the final active device without recovery',
+          }),
+        );
+      }
 
       db.revokeDevice(accountId, deviceToRevoke);
       db.revokeAllRefreshTokensForDevice(accountId, deviceToRevoke);
@@ -572,6 +637,13 @@ class AuthModule {
       }
 
       final accountId = auth['account_id'] as String;
+      if (!_canRevokeDevice(accountId, lostDeviceId)) {
+        return Response.forbidden(
+          jsonEncode({
+            'error': 'Cannot revoke the final active device without recovery',
+          }),
+        );
+      }
       db.revokeDevice(accountId, lostDeviceId);
       db.revokeAllRefreshTokensForDevice(accountId, lostDeviceId);
       db.deleteMessagesForDevice(lostDeviceId);
@@ -660,6 +732,13 @@ class AuthModule {
     if (username.length < 3 || username.length > 30) return false;
     if (username.startsWith('helix_')) return false;
     return RegExp(r'^[a-z0-9_]+$').hasMatch(username);
+  }
+
+  bool _canRevokeDevice(String accountId, String deviceId) {
+    if (!db.isDeviceActive(accountId, deviceId)) {
+      return true;
+    }
+    return db.activeDeviceCount(accountId) > 1;
   }
 
   static String base64UrlEncode(List<int> bytes) {

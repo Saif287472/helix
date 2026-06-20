@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
+import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 
 class BackupScreen extends StatefulWidget {
@@ -23,8 +26,14 @@ class BackupScreen extends StatefulWidget {
 class _BackupScreenState extends State<BackupScreen> {
   bool _busy = false;
   String? _status;
+  final RemoteBackupCrypto _backupCrypto = RemoteBackupCrypto();
 
   Future<void> _createBackup() async {
+    final passphrase = await _promptRecoverySecret(
+      title: 'Create Backup',
+      action: 'Encrypt Backup',
+    );
+    if (passphrase == null) return;
     setState(() {
       _busy = true;
       _status = 'Creating backup...';
@@ -32,16 +41,20 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       final snapshot = widget.db.exportBackupSnapshot();
       final backupId = _randomId();
-      final kdf = 'pbkdf2-sha256';
-      final salt = base64Url.encode(
-        List<int>.generate(16, (_) => Random.secure().nextInt(256)),
+      final envelope = await _backupCrypto.encryptBackupEnvelope(
+        plaintext: Uint8List.fromList(utf8.encode(snapshot)),
+        passphrase: passphrase,
+        backupId: backupId,
+        backupKeyHint: 'User-held recovery secret required',
       );
       await widget.restClient.uploadBackup(
         backupId: backupId,
-        backupData: snapshot,
-        version: 1,
-        kdf: kdf,
-        salt: salt,
+        backupData: jsonEncode(envelope.toJson()),
+        version: envelope.version,
+        kdf: envelope.kdf,
+        salt: base64Url.encode(envelope.salt),
+        backupKeyHint: envelope.backupKeyHint,
+        deletionWatermark: envelope.deletionWatermark,
       );
       setState(() => _status = 'Backup created successfully (ID: $backupId)');
     } catch (e) {
@@ -52,6 +65,11 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _restoreBackup() async {
+    final passphrase = await _promptRecoverySecret(
+      title: 'Restore Backup',
+      action: 'Decrypt Backup',
+    );
+    if (passphrase == null) return;
     setState(() {
       _busy = true;
       _status = 'Downloading backup...';
@@ -59,7 +77,16 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       final backup = await widget.restClient.downloadBackup();
       final backupData = backup['backup_data'] as String;
-      widget.db.restoreBackupSnapshot(backupData);
+      final envelope = RemoteBackupEnvelope.fromJson(
+        jsonDecode(backupData) as Map<String, dynamic>,
+      );
+      final plaintext = await _backupCrypto.decryptBackupEnvelope(
+        envelope,
+        passphrase: passphrase,
+      );
+      final snapshot = utf8.decode(plaintext);
+      _validateSnapshotInStaging(snapshot);
+      widget.db.restoreBackupSnapshot(snapshot);
       setState(() => _status = 'Backup restored successfully');
     } catch (e) {
       setState(() => _status = 'Restore failed: $e');
@@ -71,6 +98,48 @@ class _BackupScreenState extends State<BackupScreen> {
   String _randomId() {
     final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  Future<String?> _promptRecoverySecret({
+    required String title,
+    required String action,
+  }) async {
+    final controller = TextEditingController();
+    final secret = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Recovery secret'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (secret == null || secret.trim().isEmpty) return null;
+    return secret.trim();
+  }
+
+  void _validateSnapshotInStaging(String snapshot) {
+    final staging = HelixRemoteDatabase(File(':memory:'));
+    staging.initialize();
+    try {
+      staging.restoreBackupSnapshot(snapshot);
+    } finally {
+      staging.close();
+    }
   }
 
   @override
@@ -86,7 +155,7 @@ class _BackupScreenState extends State<BackupScreen> {
               child: ListTile(
                 leading: const Icon(Icons.upload),
                 title: const Text('Create Backup'),
-                subtitle: const Text('Export all data to the server'),
+                subtitle: const Text('Encrypt and upload app data'),
                 enabled: !_busy,
                 onTap: _createBackup,
               ),
@@ -96,7 +165,7 @@ class _BackupScreenState extends State<BackupScreen> {
               child: ListTile(
                 leading: const Icon(Icons.download),
                 title: const Text('Restore Backup'),
-                subtitle: const Text('Download and restore from server'),
+                subtitle: const Text('Decrypt, validate, then restore'),
                 enabled: !_busy,
                 onTap: _restoreBackup,
               ),

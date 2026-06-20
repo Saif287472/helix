@@ -933,6 +933,24 @@ class BackendDatabase {
     stmt.close();
   }
 
+  void renameDevice(String accountId, String deviceId, String deviceName) {
+    final stmt = _db.prepare('''
+      UPDATE devices SET device_name = ?
+      WHERE account_id = ? AND device_id = ? AND status = 'ACTIVE';
+    ''');
+    stmt.execute([deviceName, accountId, deviceId]);
+    stmt.close();
+  }
+
+  int activeDeviceCount(String accountId) {
+    final stmt = _db.prepare(
+      "SELECT COUNT(*) AS count FROM devices WHERE account_id = ? AND status = 'ACTIVE';",
+    );
+    final res = stmt.select([accountId]);
+    stmt.close();
+    return res.first['count'] as int;
+  }
+
   bool isDeviceActive(String accountId, String deviceId) {
     final stmt = _db.prepare('''
       SELECT 1 FROM devices
@@ -1118,6 +1136,39 @@ class BackendDatabase {
       'reason': row['reason'],
       'created_at': row['created_at'],
     };
+  }
+
+  List<Map<String, dynamic>> getDeviceSecurityHistory(
+    String accountId,
+    String deviceId,
+  ) {
+    final audit = _selectWhere(
+      'audit_logs',
+      'account_id = ? AND device_id = ?',
+      [accountId, deviceId],
+    );
+    final revocations = _selectWhere(
+      'device_revocations',
+      'account_id = ? AND revoked_device_id = ?',
+      [accountId, deviceId],
+    );
+    return [
+      ...audit.map(
+        (row) => {
+          'type': row['action'],
+          'device_id': row['device_id'],
+          'timestamp': row['timestamp'],
+        },
+      ),
+      ...revocations.map(
+        (row) => {
+          'type': 'DEVICE_REVOKED',
+          'device_id': row['revoked_device_id'],
+          'reason': row['reason'],
+          'timestamp': row['created_at'],
+        },
+      ),
+    ]..sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
   }
 
   void deleteMessagesForDevice(String deviceId) {

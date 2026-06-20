@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/remote_config.dart';
+import 'package:helix_remote/app/remote_endpoints.dart';
 
 void main() {
   test('Remote config maps REST and WebSocket schemes explicitly', () {
@@ -66,5 +67,25 @@ void main() {
     );
 
     expect(dev.webSocketUri.scheme, equals('ws'));
+  });
+
+  test('Remote API endpoints use one canonical api prefix', () {
+    final fromOrigin = RemoteApiEndpoints(Uri.parse('https://remote.example'));
+    final fromLegacy = RemoteApiEndpoints(
+      Uri.parse('https://remote.example/api/v1'),
+    );
+
+    expect(
+      fromOrigin
+          .accountsChallenge(accountId: 'a b', deviceId: 'd/1')
+          .toString(),
+      equals(
+        'https://remote.example/api/v1/accounts/challenge?account_id=a+b&device_id=d%2F1',
+      ),
+    );
+    expect(
+      fromLegacy.attachmentsUpload.toString(),
+      equals('https://remote.example/api/v1/attachments/upload'),
+    );
   });
 }

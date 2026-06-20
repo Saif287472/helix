@@ -647,6 +647,18 @@ class RemoteCompositionRoot {
     _state = RemoteStartupState.unauthenticated;
   }
 
+  Future<void> purgeAfterAccountDeletion() async {
+    await disconnectWebSocket();
+    await _purgeLocalSessionOnly();
+    _database?.deleteFiles();
+    _database = null;
+    final cacheDir = Directory(devConfig.attachmentCacheDir);
+    if (cacheDir.existsSync()) {
+      cacheDir.deleteSync(recursive: true);
+    }
+    _state = RemoteStartupState.unauthenticated;
+  }
+
   Future<void> _purgeLocalSessionOnly() async {
     final store = _requireReady(_keyValue, 'keyValue');
     for (final key in [

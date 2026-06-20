@@ -68,6 +68,127 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     }
   }
 
+  Future<void> _rename(RemoteDevice device) async {
+    final controller = TextEditingController(text: device.deviceName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Device'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 80,
+          decoration: const InputDecoration(labelText: 'Device name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || name == device.deviceName) return;
+    try {
+      await widget.restClient.renameDevice(
+        deviceId: device.deviceId,
+        deviceName: name,
+      );
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Rename failed: $e')));
+      }
+    }
+  }
+
+  Future<void> _markLost(RemoteDevice device) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Report Lost Device'),
+        content: Text(
+          'Report "${device.deviceName}" as lost? Its sessions and queued messages will be revoked.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Report Lost'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await widget.restClient.reportLostDevice(device.deviceId);
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lost-device failed: $e')));
+      }
+    }
+  }
+
+  Future<void> _showHistory(RemoteDevice device) async {
+    try {
+      final history = await widget.restClient.getDeviceSecurityHistory(
+        device.deviceId,
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('${device.deviceName} History'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: history.isEmpty
+                ? const Text('No security history found.')
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final row in history)
+                        ListTile(
+                          dense: true,
+                          title: Text(row['type'].toString()),
+                          subtitle: Text(
+                            DateTime.fromMillisecondsSinceEpoch(
+                              row['timestamp'] as int,
+                            ).toLocal().toString(),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('History failed: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -92,9 +213,30 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                     leading: const Icon(Icons.phone_android),
                     title: Text(device.deviceName),
                     subtitle: Text('ID: ${device.deviceId} | ${device.status}'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () => _revoke(device),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'rename') {
+                          _rename(device);
+                        } else if (value == 'history') {
+                          _showHistory(device);
+                        } else if (value == 'lost') {
+                          _markLost(device);
+                        } else if (value == 'revoke') {
+                          _revoke(device);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'rename', child: Text('Rename')),
+                        PopupMenuItem(
+                          value: 'history',
+                          child: Text('Security History'),
+                        ),
+                        PopupMenuItem(
+                          value: 'lost',
+                          child: Text('Report Lost'),
+                        ),
+                        PopupMenuItem(value: 'revoke', child: Text('Revoke')),
+                      ],
                     ),
                   ),
                 );

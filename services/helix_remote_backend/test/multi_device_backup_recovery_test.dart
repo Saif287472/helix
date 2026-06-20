@@ -163,6 +163,57 @@ void main() {
   );
 
   test(
+    'P5 final active device cannot be revoked without recovery path',
+    () async {
+      final alice = await _registerAndLogin(
+        client,
+        port,
+        ed25519,
+        accountId: 'alice_final_device',
+        username: 'alice_final_device_user',
+        deviceId: 'alice_phone',
+        deviceName: 'Alice Phone',
+      );
+
+      final finalRevoke = await _postJson(
+        client,
+        port,
+        '/api/v1/accounts/devices/revoke',
+        {'device_id': 'alice_phone'},
+        token: alice.accessToken,
+      );
+      expect(finalRevoke.statusCode, equals(403));
+      expect(
+        server.db.isDeviceActive('alice_final_device', 'alice_phone'),
+        isTrue,
+      );
+
+      await _linkDevice(
+        client,
+        port,
+        ed25519,
+        existingToken: alice.accessToken,
+        accountId: 'alice_final_device',
+        deviceId: 'alice_tablet',
+        deviceName: 'Alice Tablet',
+      );
+
+      final allowed = await _postJson(
+        client,
+        port,
+        '/api/v1/accounts/devices/revoke',
+        {'device_id': 'alice_tablet'},
+        token: alice.accessToken,
+      );
+      expect(allowed.statusCode, equals(200));
+      expect(
+        server.db.isDeviceActive('alice_final_device', 'alice_tablet'),
+        isFalse,
+      );
+    },
+  );
+
+  test(
     'P17 per-device message fan-out requires each active target envelope',
     () async {
       final alice1 = await _registerAndLogin(

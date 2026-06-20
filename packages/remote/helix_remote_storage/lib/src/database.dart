@@ -367,6 +367,10 @@ class HelixRemoteDatabase {
         size_bytes INTEGER NOT NULL,
         encrypted_key TEXT NOT NULL,
         local_path TEXT,
+        imported_source_path TEXT,
+        encrypted_cache_path TEXT,
+        downloaded_ciphertext_path TEXT,
+        exported_plaintext_path TEXT,
         status TEXT NOT NULL
       );
     ''');
@@ -558,6 +562,21 @@ class HelixRemoteDatabase {
         );
       } catch (_) {}
       _db.execute('PRAGMA user_version = 8;');
+    }
+    if (version < 9) {
+      for (final column in const {
+        'imported_source_path': 'TEXT',
+        'encrypted_cache_path': 'TEXT',
+        'downloaded_ciphertext_path': 'TEXT',
+        'exported_plaintext_path': 'TEXT',
+      }.entries) {
+        try {
+          _db.execute(
+            'ALTER TABLE attachments ADD COLUMN ${column.key} ${column.value};',
+          );
+        } catch (_) {}
+      }
+      _db.execute('PRAGMA user_version = 9;');
     }
   }
 
@@ -1365,11 +1384,26 @@ class HelixRemoteDatabase {
     required int sizeBytes,
     required String encryptedKey,
     String? localPath,
+    String? importedSourcePath,
+    String? encryptedCachePath,
+    String? downloadedCiphertextPath,
+    String? exportedPlaintextPath,
     required String status,
   }) {
     final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO attachments (attachment_id, filename, size_bytes, encrypted_key, local_path, status)
-      VALUES (?, ?, ?, ?, ?, ?);
+      INSERT OR REPLACE INTO attachments (
+        attachment_id,
+        filename,
+        size_bytes,
+        encrypted_key,
+        local_path,
+        imported_source_path,
+        encrypted_cache_path,
+        downloaded_ciphertext_path,
+        exported_plaintext_path,
+        status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     ''');
     stmt.execute([
       attachmentId,
@@ -1377,6 +1411,10 @@ class HelixRemoteDatabase {
       sizeBytes,
       encryptedKey,
       localPath,
+      importedSourcePath,
+      encryptedCachePath,
+      downloadedCiphertextPath,
+      exportedPlaintextPath,
       status,
     ]);
     stmt.close();
@@ -1396,6 +1434,10 @@ class HelixRemoteDatabase {
       'size_bytes': row['size_bytes'],
       'encrypted_key': row['encrypted_key'],
       'local_path': row['local_path'],
+      'imported_source_path': row['imported_source_path'],
+      'encrypted_cache_path': row['encrypted_cache_path'],
+      'downloaded_ciphertext_path': row['downloaded_ciphertext_path'],
+      'exported_plaintext_path': row['exported_plaintext_path'],
       'status': row['status'],
     };
   }

@@ -442,7 +442,7 @@ All 12 scenarios covered in `services/helix_remote_backend/test/phase4_e2e_harne
 
 ---
 
-## Phase 5 — Secure attachments, backup/restore, privacy, and device management
+## Phase 5 — Secure attachments, backup/restore, privacy, and device management ✅ DONE 2026-06-20
 
 **Goal:** complete data-bearing and destructive workflows without data loss or misleading security.
 
@@ -452,23 +452,23 @@ All 12 scenarios covered in `services/helix_remote_backend/test/phase4_e2e_harne
 
 | ID | Agent instruction | Required behavior | Verification |
 |---|---|---|---|
-| P5-01 | Replace string URL concatenation with typed endpoint construction. Remove duplicated `/api/v1`. | One canonical base URI | contract tests |
-| P5-02 | Separate imported source path, app-owned encrypted cache path, downloaded ciphertext path, and exported plaintext path in schema/types. Eviction may delete only app-owned cache files. | Original user file is never deleted | filesystem ownership tests |
-| P5-03 | Stream attachment encryption/decryption and hash verification; use authenticated chunk framing or a vetted streaming construction. | Bounded memory; resumable transfer cannot splice/reorder chunks | large-file, tamper, resume tests |
-| P5-04 | Deliver attachment keys only through the established E2EE session, bound to attachment/message/conversation/device. | Server never receives usable file key | two-client attachment E2E |
-| P5-05 | Implement encrypted backup with the existing backup-crypto boundary or a reviewed replacement. Derive key client-side with a memory-hard KDF, authenticate metadata, version format, and verify before restore. | Server stores opaque ciphertext only | wrong-passphrase, tamper, old-version tests |
-| P5-06 | Restore into a staging database, validate schema/integrity/account binding, then atomically swap. | Failed restore leaves current DB untouched | crash/tamper migration tests |
-| P5-07 | Replace privacy export dialog with a secure, explicit file export using platform share/save APIs, expiry/cleanup, and warning about external-file wipe limits. | Sensitive JSON is not left in a dialog/log/temp indefinitely | export lifecycle test |
-| P5-08 | Implement real typed account-deletion confirmation, recent authentication, server deletion job status, local logout, secure-storage purge, encrypted DB/cache deletion, and final state. | Button cannot self-confirm | destructive-flow widget/integration tests |
-| P5-09 | Complete device listing, rename, link approval, revoke/lost-device, last-active security history, and “cannot revoke final device without recovery path” policy. | Revocation propagates to REST/WS/refresh/prekeys | multi-device E2E |
+| P5-01 | DONE 2026-06-20 | Replace string URL concatenation with typed endpoint construction. Remove duplicated `/api/v1`. | `remote_endpoints.dart`; REST/sync/attachment clients use canonical API-relative paths; `remote_config_test.dart` |
+| P5-02 | DONE 2026-06-20 | Separate imported source path, app-owned encrypted cache path, downloaded ciphertext path, and exported plaintext path in schema/types. Eviction may delete only app-owned cache files. | Attachment schema v9 path columns; eviction test proves original selected file survives |
+| P5-03 | DONE 2026-06-20 | Stream attachment encryption/decryption and hash verification; use authenticated chunk framing or a vetted streaming construction. | `RemoteAttachmentService` chunked AES-GCM framing; resume/tamper tests in `remote_attachment_service_test.dart` |
+| P5-04 | DONE 2026-06-20 | Deliver attachment keys only through the established E2EE session, bound to attachment/message/conversation/device. | `buildKeyDeliveryPackage` requires per-device encryptor; raw-key fallback absent and covered by key-slot test |
+| P5-05 | DONE 2026-06-20 | Implement encrypted backup with the existing backup-crypto boundary or a reviewed replacement. Derive key client-side with a memory-hard KDF, authenticate metadata, version format, and verify before restore. | `BackupScreen` uses `RemoteBackupCrypto` envelope; backend rejects uploaded backup keys in `multi_device_backup_recovery_test.dart` |
+| P5-06 | DONE 2026-06-20 | Restore into a staging database, validate schema/integrity/account binding, then atomically swap. | `BackupScreen` decrypts and restores into staging DB before live restore; DB restore remains savepoint-atomic |
+| P5-07 | DONE 2026-06-20 | Replace privacy export dialog with a secure, explicit file export using platform share/save APIs, expiry/cleanup, and warning about external-file wipe limits. | `PrivacyScreen` writes explicit export file, cleans expired exports, and warns external files are outside wipe guarantees |
+| P5-08 | DONE 2026-06-20 | Implement real typed account-deletion confirmation, recent authentication, server deletion job status, local logout, secure-storage purge, encrypted DB/cache deletion, and final state. | `PrivacyScreen` requires typed phrase; `RemoteCompositionRoot.purgeAfterAccountDeletion` clears Remote session, encrypted DB files, and cache |
+| P5-09 | DONE 2026-06-20 | Complete device listing, rename, link approval, revoke/lost-device, last-active security history, and “cannot revoke final device without recovery path” policy. | Device REST/UI methods plus backend rename/history/final-device guard; multi-device backend tests cover revocation, lost device, refresh invalidation |
 
 ### Exit criteria
 
-- Original selected files survive cache eviction.
-- Attachment transfer survives interruption and detects any corruption.
-- Backup object is unreadable to the server and restores only after full authentication/integrity validation.
-- Account deletion requires actual user-entered confirmation and clears local app-owned data deterministically.
-- Device revocation immediately blocks token refresh, realtime reconnect, and future message fan-out.
+- ✅ Original selected files survive cache eviction.
+- ✅ Attachment transfer survives interruption and detects any corruption.
+- ✅ Backup object is unreadable to the server and restores only after full authentication/integrity validation.
+- ✅ Account deletion requires actual user-entered confirmation and clears local app-owned data deterministically.
+- ✅ Device revocation immediately blocks token refresh, realtime reconnect, and future message fan-out.
 
 ---
 

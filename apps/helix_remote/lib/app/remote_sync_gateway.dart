@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:helix_remote/app/remote_endpoints.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 
@@ -9,7 +10,7 @@ class RemoteSyncGatewayImpl implements SyncGateway {
     required int timeoutMs,
     String? Function()? tokenProvider,
     HttpClient? httpClient,
-  }) : _baseUri = baseUri,
+  }) : _endpoints = RemoteApiEndpoints(baseUri),
        _tokenProvider = tokenProvider,
        _httpClient =
            httpClient ??
@@ -19,7 +20,7 @@ class RemoteSyncGatewayImpl implements SyncGateway {
              return client;
            })();
 
-  final Uri _baseUri;
+  final RemoteApiEndpoints _endpoints;
   final String? Function()? _tokenProvider;
   final HttpClient _httpClient;
   final RemoteOutboundOperationRegistry _registry =
@@ -35,8 +36,9 @@ class RemoteSyncGatewayImpl implements SyncGateway {
   Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
     required int sinceSequence,
   }) async {
-    final uri = _baseUri.resolve(
-      '/api/v1/messages/device-events?since_sequence=$sinceSequence',
+    final uri = _endpoints.api(
+      'messages/device-events',
+      queryParameters: {'since_sequence': sinceSequence.toString()},
     );
     final req = await _httpClient.getUrl(uri);
     req.headers.set('Content-Type', 'application/json');
@@ -68,7 +70,7 @@ class RemoteSyncGatewayImpl implements SyncGateway {
     required Map<String, dynamic> payload,
   }) async {
     final operation = _registry.require(type);
-    final uri = _baseUri.resolve(operation.path);
+    final uri = _endpoints.api(operation.path);
     final req = await _httpClient.openUrl(operation.method, uri);
     req.headers.set('Content-Type', 'application/json');
     req.headers.set('X-Correlation-Id', opId);
@@ -128,102 +130,102 @@ class RemoteOutboundOperation {
     RemoteOutboundOperation._(
       type: 'SEND_MESSAGE',
       method: 'POST',
-      path: '/api/v1/messages/send',
+      path: 'messages/send',
     ),
     RemoteOutboundOperation._(
       type: 'CREATE_CONVERSATION',
       method: 'POST',
-      path: '/api/v1/messages/conversations/create',
+      path: 'messages/conversations/create',
     ),
     RemoteOutboundOperation._(
       type: 'DELETE_MESSAGE',
       method: 'POST',
-      path: '/api/v1/messages/delete',
+      path: 'messages/delete',
     ),
     RemoteOutboundOperation._(
       type: 'EDIT_MESSAGE',
       method: 'POST',
-      path: '/api/v1/messages/edit',
+      path: 'messages/edit',
     ),
     RemoteOutboundOperation._(
       type: 'REACTION',
       method: 'POST',
-      path: '/api/v1/messages/reactions',
+      path: 'messages/reactions',
     ),
     RemoteOutboundOperation._(
       type: 'DELIVERY_RECEIPT',
       method: 'POST',
-      path: '/api/v1/messages/receipts',
+      path: 'messages/receipts',
     ),
     RemoteOutboundOperation._(
       type: 'READ_RECEIPT',
       method: 'POST',
-      path: '/api/v1/messages/receipts',
+      path: 'messages/receipts',
     ),
     RemoteOutboundOperation._(
       type: 'TYPING',
       method: 'POST',
-      path: '/api/v1/messages/typing',
+      path: 'messages/typing',
     ),
     RemoteOutboundOperation._(
       type: 'CONTACT_REQUEST',
       method: 'POST',
-      path: '/api/v1/contacts/requests',
+      path: 'contacts/requests',
     ),
     RemoteOutboundOperation._(
       type: 'CONTACT_REQUEST_ACCEPT',
       method: 'POST',
-      path: '/api/v1/contacts/requests/accept',
+      path: 'contacts/requests/accept',
     ),
     RemoteOutboundOperation._(
       type: 'CONTACT_REQUEST_REJECT',
       method: 'POST',
-      path: '/api/v1/contacts/requests/reject',
+      path: 'contacts/requests/reject',
     ),
     RemoteOutboundOperation._(
       type: 'CONTACT_REQUEST_CANCEL',
       method: 'POST',
-      path: '/api/v1/contacts/requests/cancel',
+      path: 'contacts/requests/cancel',
     ),
     RemoteOutboundOperation._(
       type: 'CONTACT_REMOVE',
       method: 'POST',
-      path: '/api/v1/contacts/remove',
+      path: 'contacts/remove',
     ),
     RemoteOutboundOperation._(
       type: 'CONTACT_BLOCK',
       method: 'POST',
-      path: '/api/v1/contacts/block',
+      path: 'contacts/block',
     ),
     RemoteOutboundOperation._(
       type: 'CONTACT_UNBLOCK',
       method: 'POST',
-      path: '/api/v1/contacts/unblock',
+      path: 'contacts/unblock',
     ),
     RemoteOutboundOperation._(
       type: 'USERNAME_CHANGE',
       method: 'POST',
-      path: '/api/v1/profile/username',
+      path: 'profile/username',
     ),
     RemoteOutboundOperation._(
       type: 'PRIVACY_UPDATE',
       method: 'POST',
-      path: '/api/v1/contacts/privacy',
+      path: 'contacts/privacy',
     ),
     RemoteOutboundOperation._(
       type: 'PRESENCE_UPDATE',
       method: 'POST',
-      path: '/api/v1/contacts/presence',
+      path: 'contacts/presence',
     ),
     RemoteOutboundOperation._(
       type: 'PROFILE_UPDATE',
       method: 'POST',
-      path: '/api/v1/profile',
+      path: 'profile',
     ),
     RemoteOutboundOperation._(
       type: 'SAFETY_REPORT',
       method: 'POST',
-      path: '/api/v1/accounts/report',
+      path: 'accounts/report',
     ),
   ];
 

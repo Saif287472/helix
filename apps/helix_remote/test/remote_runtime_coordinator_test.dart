@@ -119,7 +119,7 @@ void main() {
       () {
         final registry = RemoteOutboundOperationRegistry();
 
-        expect(registry.require('SEND_MESSAGE').path, '/api/v1/messages/send');
+        expect(registry.require('SEND_MESSAGE').path, 'messages/send');
         expect(
           () => registry.require('FUTURE_UNKNOWN_OPERATION'),
           throwsStateError,

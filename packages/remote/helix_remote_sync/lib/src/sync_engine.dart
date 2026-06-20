@@ -302,7 +302,9 @@ class RemoteSyncEngine {
 
         // P4-07: record queue age for telemetry (age = time from creation to send)
         final ageMs = DateTime.now().millisecondsSinceEpoch - createdAt;
-        diagnostics?.call('Remote outbound op completed type=$type age=${ageMs}ms');
+        diagnostics?.call(
+          'Remote outbound op completed type=$type age=${ageMs}ms',
+        );
       } catch (e) {
         final nextRetries = retries + 1;
         final permanent = _isPermanentOutboundFailure(e);

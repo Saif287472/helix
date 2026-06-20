@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:helix_remote_api/api/rest_client.dart';
+import 'package:helix_remote/app/remote_endpoints.dart';
 import 'package:helix_remote_domain/models.dart';
 
 class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
@@ -11,7 +12,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required int timeoutMs,
     this._tokenProvider,
     HttpClient? httpClient,
-  }) : _baseUri = baseUri,
+  }) : _endpoints = RemoteApiEndpoints(baseUri),
        _timeout = Duration(milliseconds: timeoutMs),
        _httpClient =
            httpClient ??
@@ -21,7 +22,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
              return client;
            })();
 
-  final Uri _baseUri;
+  final RemoteApiEndpoints _endpoints;
   final Duration _timeout;
   final String? Function()? _tokenProvider;
   final HttpClient _httpClient;
@@ -50,6 +51,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     Map<String, dynamic>? body,
     Map<String, String>? extraHeaders,
     String? idempotencyKey,
+    Map<String, String>? queryParameters,
   }) async {
     final canRetry = _isSafeMethod(method) || idempotencyKey != null;
     final maxAttempts = canRetry ? 3 : 1;
@@ -63,6 +65,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
           body: body,
           extraHeaders: extraHeaders,
           idempotencyKey: idempotencyKey,
+          queryParameters: queryParameters,
         );
       } on RemoteRestException catch (e) {
         if (attempt >= maxAttempts || !_isRetryableStatus(e.statusCode)) {
@@ -73,7 +76,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
         if (attempt >= maxAttempts) {
           throw RemoteRestException(
             message: 'REST request timed out: ${e.message ?? method}',
-            uri: _baseUri.resolve(path),
+            uri: _endpoints.api(path, queryParameters: queryParameters),
           );
         }
         await Future<void>.delayed(_retryDelay(attempt));
@@ -81,7 +84,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
         if (attempt >= maxAttempts) {
           throw RemoteRestException(
             message: 'REST socket failure: ${e.message}',
-            uri: _baseUri.resolve(path),
+            uri: _endpoints.api(path, queryParameters: queryParameters),
           );
         }
         await Future<void>.delayed(_retryDelay(attempt));
@@ -95,8 +98,9 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     Map<String, dynamic>? body,
     Map<String, String>? extraHeaders,
     String? idempotencyKey,
+    Map<String, String>? queryParameters,
   }) async {
-    final uri = _baseUri.resolve(path);
+    final uri = _endpoints.api(path, queryParameters: queryParameters);
     final correlationId = _newCorrelationId();
     final req = await _httpClient.openUrl(method, uri).timeout(_timeout);
     req.headers.set('Content-Type', 'application/json');
@@ -187,7 +191,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required String deviceName,
   }) => _request(
     'POST',
-    '/api/v1/accounts/register',
+    'accounts/register',
     body: {
       'registration_version': 2,
       'account_id': accountId,
@@ -208,7 +212,8 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required String deviceId,
   }) => _request(
     'GET',
-    '/api/v1/accounts/challenge?account_id=$accountId&device_id=$deviceId',
+    'accounts/challenge',
+    queryParameters: {'account_id': accountId, 'device_id': deviceId},
   );
 
   @override
@@ -218,7 +223,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required String signature,
   }) => _request(
     'POST',
-    '/api/v1/accounts/login',
+    'accounts/login',
     body: {
       'account_id': accountId,
       'device_id': deviceId,
@@ -230,13 +235,13 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   Future<Map<String, dynamic>> refreshToken({required String refreshToken}) =>
       _request(
         'POST',
-        '/api/v1/accounts/refresh',
+        'accounts/refresh',
         body: {'refresh_token': refreshToken},
       );
 
   @override
   Future<List<RemoteDevice>> listDevices() async {
-    final data = await _request('GET', '/api/v1/accounts/devices');
+    final data = await _request('GET', 'accounts/devices');
     final list = data['devices'] as List<dynamic>;
     return list
         .map((e) => RemoteDevice.fromJson(e as Map<String, dynamic>))
@@ -244,12 +249,46 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   }
 
   @override
+  Future<void> renameDevice({
+    required String deviceId,
+    required String deviceName,
+  }) async {
+    await _request(
+      'POST',
+      'accounts/devices/rename',
+      body: {'device_id': deviceId, 'device_name': deviceName},
+    );
+  }
+
+  @override
   Future<void> revokeDevice(String deviceId) async {
     await _request(
       'POST',
-      '/api/v1/accounts/devices/revoke',
+      'accounts/devices/revoke',
       body: {'device_id': deviceId},
     );
+  }
+
+  @override
+  Future<void> reportLostDevice(String deviceId) async {
+    await _request(
+      'POST',
+      'accounts/devices/lost-device',
+      body: {'device_id': deviceId},
+    );
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getDeviceSecurityHistory(
+    String deviceId,
+  ) async {
+    final data = await _request(
+      'GET',
+      'accounts/devices/security-history',
+      queryParameters: {'device_id': deviceId},
+    );
+    return (data['history'] as List<dynamic>? ?? const [])
+        .cast<Map<String, dynamic>>();
   }
 
   @override
@@ -261,7 +300,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   }) async {
     await _request(
       'POST',
-      '/api/v1/prekeys/publish',
+      'prekeys/publish',
       body: {
         'signed_prekey_id': signedPrekeyId,
         'signed_prekey': signedPrekey,
@@ -273,14 +312,18 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
 
   @override
   Future<Map<String, dynamic>> getPreKeyBundle({required String accountId}) =>
-      _request('GET', '/api/v1/prekeys/bundle?account_id=$accountId');
+      _request(
+        'GET',
+        'prekeys/bundle',
+        queryParameters: {'account_id': accountId},
+      );
 
   @override
   Future<Map<String, dynamic>> sendContactRequest({
     required String peerAccountId,
   }) => _request(
     'POST',
-    '/api/v1/contacts/requests',
+    'contacts/requests',
     body: {'peer_account_id': peerAccountId},
   );
 
@@ -288,7 +331,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   Future<void> acceptContactRequest(String requestId) async {
     await _request(
       'POST',
-      '/api/v1/contacts/requests/accept',
+      'contacts/requests/accept',
       body: {'request_id': requestId},
     );
   }
@@ -299,13 +342,13 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required String fileHash,
   }) => _request(
     'POST',
-    '/api/v1/attachments/upload',
+    'attachments/upload',
     body: {'file_size': fileSize, 'file_hash': fileHash},
   );
 
   @override
   Future<Map<String, dynamic>> requestAttachmentDownload(String fileId) async {
-    final data = await _request('GET', '/api/v1/attachments/download/$fileId');
+    final data = await _request('GET', 'attachments/download/$fileId');
     return data;
   }
 
@@ -315,7 +358,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required Map<String, dynamic> payload,
   }) => _request(
     'POST',
-    '/api/v1/calls/signal',
+    'calls/signal',
     body: {'target_device_id': targetDeviceId, 'payload': payload},
   );
 
@@ -323,14 +366,14 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   Future<void> requestAccountDeletion({required String confirmation}) async {
     await _request(
       'DELETE',
-      '/api/v1/account/delete',
+      'account/delete',
       body: {'confirmation': confirmation},
     );
   }
 
   @override
   Future<Map<String, dynamic>> exportData() =>
-      _request('GET', '/api/v1/privacy/export');
+      _request('GET', 'privacy/export');
 
   @override
   Future<Map<String, dynamic>> uploadBackup({
@@ -343,7 +386,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     int deletionWatermark = 0,
   }) => _request(
     'POST',
-    '/api/v1/backups/',
+    'backups/',
     body: {
       'backup_id': backupId,
       'backup_data': backupData,
@@ -356,8 +399,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   );
 
   @override
-  Future<Map<String, dynamic>> downloadBackup() =>
-      _request('GET', '/api/v1/backups/');
+  Future<Map<String, dynamic>> downloadBackup() => _request('GET', 'backups/');
 
   @override
   Future<void> close() async {

@@ -28,6 +28,7 @@ class RemoteDevice {
 
   factory RemoteDevice.fromJson(Map<String, dynamic> json) {
     final legacyDevicePublicKey = json['device_public_key'] as String?;
+    final createdAtValue = json['created_at'];
     return RemoteDevice(
       deviceId: json['device_id'] as String,
       deviceName: json['device_name'] as String,
@@ -39,7 +40,9 @@ class RemoteDevice {
           json['device_agreement_public_key'] as String? ??
           legacyDevicePublicKey ??
           '',
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: createdAtValue is int
+          ? DateTime.fromMillisecondsSinceEpoch(createdAtValue)
+          : DateTime.parse(createdAtValue as String),
       status: json['status'] as String? ?? 'Active',
     );
   }
