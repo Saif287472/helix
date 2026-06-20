@@ -10,13 +10,14 @@ import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
-import 'package:helix/providers/controllers/secret_code_service.dart';
 import 'package:helix_local_domain/application/contracts/repositories.dart';
 import 'package:helix_local_protocol/application/contracts/use_cases.dart';
+import 'package:helix/application/secret_code/secret_code_use_case_impl.dart';
 
 class IdentityManagerImpl implements IdentityManager {
   final ProfileRepository _profileRepository;
   final SecureIdentityStore _secureIdentityStore;
+  final SecretCodeUseCase _secretCodeUseCase;
   // Windows flutter_secure_storage uses a file under the product's appDataFolder.
   // Injected so callers can override without hardcoding the path here.
   final String _appDataFolder;
@@ -33,7 +34,8 @@ class IdentityManagerImpl implements IdentityManager {
     required this._profileRepository,
     required this._secureIdentityStore,
     this._appDataFolder = 'com.helix/helix',
-  });
+    SecretCodeUseCase? secretCodeUseCase,
+  }) : _secretCodeUseCase = secretCodeUseCase ?? SecretCodeUseCaseImpl();
 
   @override
   Profile? get profile => _profile;
@@ -330,7 +332,7 @@ class IdentityManagerImpl implements IdentityManager {
   }
 
   Future<String> _deriveSecretCodeVerifier(String code) async {
-    return SecretCodeService.deriveVerifier(code);
+    return _secretCodeUseCase.deriveVerifier(code);
   }
 
   static Uint8List _modulusBytes(RSAPublicKey key) {

@@ -3,34 +3,20 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:helix_local_protocol/application/contracts/use_cases.dart';
-import 'package:helix/application/secret_code/secret_code_use_case_impl.dart';
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
 
 class SecretCodeService {
-  static SecretCodeUseCase? globalUseCase;
+  final SecretCodeUseCase _useCase;
 
-  static final _defaultUseCase = SecretCodeUseCaseImpl();
-
-  final SecretCodeUseCase? _useCase;
-
-  const SecretCodeService({this._useCase});
-
-  SecretCodeUseCase get _effectiveUseCase =>
-      _useCase ?? globalUseCase ?? _defaultUseCase;
-
-  static bool isChallengePacket(Uint8List packet) =>
-      (globalUseCase ?? _defaultUseCase).isChallengePacket(packet);
-
-  static Future<String> deriveVerifier(String code) =>
-      (globalUseCase ?? _defaultUseCase).deriveVerifier(code);
+  const SecretCodeService({required this._useCase});
 
   Future<void> broadcastSearch(
     String enteredCode,
     RawDatagramSocket socket,
     List<String> broadcastAddresses,
   ) {
-    return _effectiveUseCase.broadcastSearch(
+    return _useCase.broadcastSearch(
       enteredCode,
       socket,
       broadcastAddresses,
@@ -48,7 +34,7 @@ class SecretCodeService {
     String deviceSuffix,
     int tcpPort,
   ) {
-    return _effectiveUseCase.handleChallenge(
+    return _useCase.handleChallenge(
       packet,
       storedVerifier,
       replySocket,
@@ -62,14 +48,14 @@ class SecretCodeService {
   }
 
   Future<Peer?> waitForResponse(RawDatagramSocket socket, Duration timeout) {
-    return _effectiveUseCase.waitForResponse(socket, timeout);
+    return _useCase.waitForResponse(socket, timeout);
   }
 
   Future<List<Peer>> waitForResponses(
     RawDatagramSocket socket,
     Duration timeout,
   ) {
-    return _effectiveUseCase.waitForResponses(socket, timeout);
+    return _useCase.waitForResponses(socket, timeout);
   }
 
   Future<List<Peer>> search(
@@ -77,7 +63,7 @@ class SecretCodeService {
     Duration timeout = kCodeSearchTimeout,
     List<String> broadcastAddresses = const ['255.255.255.255'],
   }) {
-    return _effectiveUseCase.search(
+    return _useCase.search(
       enteredCode,
       timeout: timeout,
       broadcastAddresses: broadcastAddresses,

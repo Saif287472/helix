@@ -7,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix_local_protocol/application/contracts/use_cases.dart';
 
+import 'package:helix_local_discovery/lan_candidate.dart';
 import 'package:helix_local_discovery/mdns_discovery.dart';
 import 'package:helix_local_discovery/peer_registry.dart';
 import 'package:helix_local_discovery/udp_discovery.dart';
@@ -168,6 +169,7 @@ class DiscoveryCoordinator {
     int port,
     String localSessionId,
   ) async {
+    if (!isLanCandidate(host)) return null;
     Socket? socket;
     try {
       socket = await Socket.connect(
@@ -222,9 +224,14 @@ class DiscoveryCoordinator {
 
   void _startRegistrySubscriptions() {
     _registry.start();
-    _mdnsSub = _mdns.discovered.listen(_registry.upsert);
-    _udpSub = _udp.discovered.listen(_registry.upsert);
+    _mdnsSub = _mdns.discovered.listen((peer) {
+      if (isLanCandidate(peer.host)) _registry.upsert(peer);
+    });
+    _udpSub = _udp.discovered.listen((peer) {
+      if (isLanCandidate(peer.host)) _registry.upsert(peer);
+    });
   }
+
 
   Future<void> _startDiscoverySources(_DiscoveryStartConfig config) async {
     if (Platform.isWindows) {

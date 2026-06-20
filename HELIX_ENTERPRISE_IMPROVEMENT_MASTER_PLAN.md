@@ -510,7 +510,9 @@ All 12 scenarios covered in `services/helix_remote_backend/test/phase4_e2e_harne
 
 ---
 
-## Phase 7 — Consolidate Helix Local architecture without changing product behavior
+## Phase 7 — Consolidate Helix Local architecture without changing product behavior ✅
+
+**Status: COMPLETE — 2026-06-20**
 
 **Goal:** reduce hidden coupling, oversized files, silent failures, and lifecycle ambiguity while preserving Local’s proven privacy semantics.
 
@@ -518,28 +520,28 @@ All 12 scenarios covered in `services/helix_remote_backend/test/phase4_e2e_harne
 
 ### Agent-executable tasks
 
-| ID | Agent instruction | Required behavior | Verification |
-|---|---|---|---|
-| P7-01 | Move all Local production service construction into `LocalCompositionRoot` or feature composition modules owned by it. Providers expose instances and state only. | One wiring graph | composition graph snapshot test |
-| P7-02 | Remove static `globalUseCase` fallbacks from QR, secret-code, TCP server, and any similar controllers. Require injection. | Two roots share no mutable state | isolation tests |
-| P7-03 | Make root/service disposal fully asynchronous and ordered. | wipe/exit waits for media/network/storage cleanup | disposal sequence tests |
-| P7-04 | Decompose `app_providers.dart` by feature (`identity`, `discovery`, `connection`, `messaging`, `groups`, `calls`, `transfer`, `wipe`) while preserving provider names through temporary re-exports. | No consumer migration blast radius | provider parity tests |
-| P7-05 | Add characterization tests, then split Local messaging/group/request orchestration into state machines and small collaborators. Do not change wire frames in the same PR. | Existing workflow behavior remains stable | old/new transition parity |
-| P7-06 | Keep `SecureChannel` as a façade; extract handshake, frame IO, replay/order validation, heartbeat, and shutdown components one at a time. | Protocol bytes unchanged | fixture, fuzz, fragmentation, replay tests |
-| P7-07 | Replace silent catches with typed failure handling and redacted structured logging. Best-effort cleanup must record category/counter without sensitive data. | No swallowed operational failure | static check plus fault tests |
-| P7-08 | Fix Android mDNS discoverability re-enable, registration lifecycle, resolve queue cancellation, and stale-peer behavior. | toggle off/on republishes | Android integration test |
-| P7-09 | Review LAN candidate handling for IPv6 ULA/link-local and mDNS host candidates without permitting WAN relay. | modern IPv4/IPv6 LANs work | candidate-policy tests |
-| P7-10 | Split large screens by behavior/state, not arbitrary line count. Extract sections, commands, selectors, and dialogs while preserving visual output. | no UX regression | golden/widget tests |
-| P7-11 | Re-run Local storage inventory and panic-wipe forensic checks after every structural change. | no message/history persistence | restart and filesystem scans |
+| ID | Status | Agent instruction | Required behavior | Verification |
+|---|---|---|---|---|
+| P7-01 | ✅ | Move all Local production service construction into `LocalCompositionRoot` or feature composition modules owned by it. Providers expose instances and state only. | One wiring graph | composition graph snapshot test |
+| P7-02 | ✅ | Remove static `globalUseCase` fallbacks from QR, secret-code, TCP server, and any similar controllers. Require injection. | Two roots share no mutable state | isolation tests |
+| P7-03 | ✅ | Make root/service disposal fully asynchronous and ordered. | wipe/exit waits for media/network/storage cleanup | disposal sequence tests |
+| P7-04 | ✅ | Decompose `app_providers.dart` by feature (`identity`, `discovery`, `connection`, `messaging`, `groups`, `calls`, `transfer`, `wipe`) while preserving provider names through temporary re-exports. | No consumer migration blast radius | provider parity tests |
+| P7-05 | ✅ | Add characterization tests, then split Local messaging/group/request orchestration into state machines and small collaborators. Do not change wire frames in the same PR. | Existing workflow behavior remains stable | old/new transition parity |
+| P7-06 | ✅ | Keep `SecureChannel` as a façade; extract handshake, frame IO, replay/order validation, heartbeat, and shutdown components one at a time. | Protocol bytes unchanged | fixture, fuzz, fragmentation, replay tests |
+| P7-07 | ✅ | Replace silent catches with typed failure handling and redacted structured logging. Best-effort cleanup must record category/counter without sensitive data. | No swallowed operational failure | static check plus fault tests |
+| P7-08 | ✅ | Fix Android mDNS discoverability re-enable, registration lifecycle, resolve queue cancellation, and stale-peer behavior. | toggle off/on republishes | Android integration test |
+| P7-09 | ✅ | Review LAN candidate handling for IPv6 ULA/link-local and mDNS host candidates without permitting WAN relay. | modern IPv4/IPv6 LANs work | candidate-policy tests |
+| P7-10 | ✅ | Split large screens by behavior/state, not arbitrary line count. Extract sections, commands, selectors, and dialogs while preserving visual output. | no UX regression | golden/widget tests |
+| P7-11 | ✅ | Re-run Local storage inventory and panic-wipe forensic checks after every structural change. | no message/history persistence | restart and filesystem scans |
 
 ### Exit criteria
 
-- Production object construction has one owner.
-- No static mutable service/use-case fallback remains.
-- Local root disposal is awaited and deterministic.
-- Boundary, protocol fixture, wipe, discovery, messaging, group, call, and transfer tests remain green.
-- No Local conversation content survives restart or panic wipe.
-- Large files are reduced through cohesive extraction, with stable public façades and no broad rewrite.
+- ✅ Production object construction has one owner.
+- ✅ No static mutable service/use-case fallback remains.
+- ✅ Local root disposal is awaited and deterministic.
+- ✅ Boundary, protocol fixture, wipe, discovery, messaging, group, call, and transfer tests remain green.
+- ✅ No Local conversation content survives restart or panic wipe.
+- ✅ Large files are reduced through cohesive extraction, with stable public façades and no broad rewrite.
 
 ---
 

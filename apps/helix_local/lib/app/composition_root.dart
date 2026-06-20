@@ -74,7 +74,7 @@ class LocalCompositionRoot {
   final DisconnectWipeScheduler wipeScheduler;
 
   Future<void> dispose() async {
-    notificationGateway.dispose();
     await callEngine.dispose();
+    notificationGateway.dispose();
   }
 }

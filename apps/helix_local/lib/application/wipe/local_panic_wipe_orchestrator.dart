@@ -69,6 +69,7 @@ class LocalPanicWipeOrchestrator {
     required this.ephemeralMedia,
     this.onClearLogs,
     this.onClearAppPrivateFiles,
+    this.onClearReceivedFiles,
     this.onMarkWipePending,
     this.onClearWipePending,
   }) : _overrideSteps = null;
@@ -94,6 +95,7 @@ class LocalPanicWipeOrchestrator {
       ephemeralMedia = null,
       onClearLogs = null,
       onClearAppPrivateFiles = null,
+      onClearReceivedFiles = null,
       onMarkWipePending = null,
       onClearWipePending = null,
       _overrideSteps = steps;
@@ -119,6 +121,7 @@ class LocalPanicWipeOrchestrator {
        ephemeralMedia = null,
        onClearLogs = null,
        onClearAppPrivateFiles = null,
+       onClearReceivedFiles = null,
        _overrideSteps = steps;
 
   final MessagingService? messaging;
@@ -140,6 +143,8 @@ class LocalPanicWipeOrchestrator {
   /// testable without path_provider or AppLogger singleton dependencies.
   final Future<void> Function()? onClearLogs;
   final Future<void> Function()? onClearAppPrivateFiles;
+  // Deletes files already received and saved to the shared Helix/Media directory.
+  final Future<void> Function()? onClearReceivedFiles;
   final Future<void> Function()? onMarkWipePending;
   final Future<void> Function()? onClearWipePending;
 
@@ -224,6 +229,8 @@ class LocalPanicWipeOrchestrator {
       () => fileTransfer!.cancelAllTransfers(),
     ),
     ('ephemeralMedia.clearAll', () async => ephemeralMedia!.clearAll()),
+    // Delete files already received and saved to the shared Helix/Media dir.
+    ('clearReceivedFiles', () async => onClearReceivedFiles?.call()),
 
     // 10. Clear peers_cache rows then delete DB files (+ WAL + SHM)
     ('database.clearAll', () async => database!.clearAll()),

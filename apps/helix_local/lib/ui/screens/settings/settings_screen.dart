@@ -16,6 +16,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:helix/services/app_logger.dart';
 import 'package:helix/ui/app_router.dart';
 import 'package:helix/ui/app_theme.dart';
+import 'package:helix/ui/screens/settings/settings_widgets.dart';
+import 'package:helix/ui/screens/settings/trusted_devices_card.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -746,25 +748,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _SecurityLimitationItem(
+              SecurityLimitationItem(
                 'An attacker with physical access to your device.',
               ),
-              _SecurityLimitationItem(
+              SecurityLimitationItem(
                 'Malicious software already running on this device.',
               ),
-              _SecurityLimitationItem(
+              SecurityLimitationItem(
                 'A peer who deliberately shares or screenshots messages.',
               ),
-              _SecurityLimitationItem(
+              SecurityLimitationItem(
                 'Traffic analysis revealing that two devices are communicating.',
               ),
-              _SecurityLimitationItem(
+              SecurityLimitationItem(
                 'Network-level attackers on the same LAN observing packet metadata.',
               ),
-              _SecurityLimitationItem(
+              SecurityLimitationItem(
                 'Client isolation bypass at the router/access point level.',
               ),
-              _SecurityLimitationItem(
+              SecurityLimitationItem(
                 'Screen capture tools that operate at the OS or GPU level.',
               ),
             ],
@@ -902,124 +904,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Trusted devices card
-  // ---------------------------------------------------------------------------
-
-  Widget _buildTrustedDevicesCard(ThemeData theme) {
-    final trusted =
-        ref.watch(knownPeersProvider).value?.where((p) => p.trusted).toList() ??
-        [];
-    final trust = ref.read(trustServiceProvider);
-
-    if (trusted.isEmpty) {
-      return _SettingsCard(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Row(
-              children: [
-                _SettingsIcon(Icons.verified_user_outlined, color: Colors.teal),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    'No trusted devices yet. Open a chat → ⋮ → Verify identity to trust a device.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(160),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
-    return _SettingsCard(
-      children: trusted.map((peer) {
-        final since =
-            '${peer.firstSeenAt.day.toString().padLeft(2, '0')}/'
-            '${peer.firstSeenAt.month.toString().padLeft(2, '0')}/'
-            '${peer.firstSeenAt.year}';
-        return ListTile(
-          leading: CircleAvatar(
-            radius: 20,
-            backgroundColor: Colors.teal.withAlpha(30),
-            child: Text(
-              (peer.nickname ?? peer.lastPublicName).isNotEmpty
-                  ? (peer.nickname ?? peer.lastPublicName)[0].toUpperCase()
-                  : '?',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Colors.teal,
-              ),
-            ),
-          ),
-          title: Text(peer.nickname ?? peer.lastPublicName),
-          subtitle: Text(
-            'Trusted since $since',
-            style: theme.textTheme.bodySmall,
-          ),
-          trailing: PopupMenuButton<String>(
-            onSelected: (action) async {
-              switch (action) {
-                case 'rename':
-                  final ctrl = TextEditingController(
-                    text: peer.nickname ?? peer.lastPublicName,
-                  );
-                  final nick = await showDialog<String>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Rename device'),
-                      content: TextField(
-                        controller: ctrl,
-                        autofocus: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Nickname',
-                        ),
-                        onSubmitted: (_) => Navigator.of(ctx).pop(ctrl.text),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(null),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.of(ctx).pop(ctrl.text),
-                          child: const Text('Save'),
-                        ),
-                      ],
-                    ),
-                  );
-                  ctrl.dispose();
-                  if (nick != null && nick.trim().isNotEmpty) {
-                    await trust.renamePeer(peer.fingerprint, nick.trim());
-                  }
-                case 'untrust':
-                  await trust.untrustPeer(peer.fingerprint);
-                case 'forget':
-                  await trust.forgetPeer(peer.fingerprint);
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'rename', child: Text('Rename')),
-              PopupMenuItem(value: 'untrust', child: Text('Remove trust')),
-              PopupMenuItem(
-                value: 'forget',
-                child: Text(
-                  'Forget device',
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
   // Main content
   // ---------------------------------------------------------------------------
 
@@ -1098,10 +982,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 16),
 
         // ── Discoverable ─────────────────────────────────────────────────────
-        _SettingsCard(
+        SettingsCard(
           children: [
             SwitchListTile(
-              secondary: _SettingsIcon(
+              secondary: SettingsIcon(
                 profile.discoverability == DiscoverabilityState.discoverable
                     ? Icons.wifi_tethering
                     : Icons.wifi_tethering_off,
@@ -1128,11 +1012,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 20),
 
         // ── Messaging ────────────────────────────────────────────────────────
-        const _SectionLabel('Messaging'),
-        _SettingsCard(
+        const SettingsSectionLabel('Messaging'),
+        SettingsCard(
           children: [
             SwitchListTile(
-              secondary: _SettingsIcon(
+              secondary: SettingsIcon(
                 Icons.done_all_outlined,
                 color: Colors.indigo,
               ),
@@ -1144,7 +1028,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   .updatePreferences(readReceiptsEnabled: v),
             ),
             SwitchListTile(
-              secondary: _SettingsIcon(Icons.more_horiz, color: Colors.indigo),
+              secondary: SettingsIcon(Icons.more_horiz, color: Colors.indigo),
               title: const Text('Typing indicators'),
               subtitle: const Text('Show peers when you\'re composing.'),
               value: profile.typingIndicatorsEnabled,
@@ -1153,7 +1037,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   .updatePreferences(typingIndicatorsEnabled: v),
             ),
             SwitchListTile(
-              secondary: _SettingsIcon(
+              secondary: SettingsIcon(
                 Icons.notifications_outlined,
                 color: Colors.orange,
               ),
@@ -1165,7 +1049,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   .updatePreferences(notifyShowSender: v),
             ),
             SwitchListTile(
-              secondary: _SettingsIcon(
+              secondary: SettingsIcon(
                 Icons.volume_up_outlined,
                 color: const Color(0xFF43A047),
               ),
@@ -1177,7 +1061,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   .updatePreferences(notifySound: v),
             ),
             SwitchListTile(
-              secondary: _SettingsIcon(
+              secondary: SettingsIcon(
                 Icons.content_copy_outlined,
                 color: Colors.blueGrey,
               ),
@@ -1220,11 +1104,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 20),
 
         // ── Privacy & Security ───────────────────────────────────────────────
-        const _SectionLabel('Privacy & Security'),
-        _SettingsCard(
+        const SettingsSectionLabel('Privacy & Security'),
+        SettingsCard(
           children: [
             SwitchListTile(
-              secondary: _SettingsIcon(Icons.fingerprint, color: Colors.red),
+              secondary: SettingsIcon(Icons.fingerprint, color: Colors.red),
               title: const Text('Biometric lock'),
               subtitle: const Text('Require biometrics to open the app.'),
               value: profile.biometricLock,
@@ -1232,7 +1116,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             ListTile(
               enabled: profile.biometricLock,
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.timer_outlined,
                 color: Colors.orange,
               ),
@@ -1244,7 +1128,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   : null,
             ),
             SwitchListTile(
-              secondary: _SettingsIcon(
+              secondary: SettingsIcon(
                 Icons.screenshot_monitor_outlined,
                 color: Colors.purple,
               ),
@@ -1258,7 +1142,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   .updatePreferences(screenshotProtect: v),
             ),
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.vpn_key_outlined,
                 color: Colors.red.shade700,
               ),
@@ -1271,11 +1155,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 20),
 
         // ── Appearance ───────────────────────────────────────────────────────
-        const _SectionLabel('Appearance'),
-        _SettingsCard(
+        const SettingsSectionLabel('Appearance'),
+        SettingsCard(
           children: [
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.brightness_auto_outlined,
                 color: Colors.pink,
               ),
@@ -1285,7 +1169,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: () => _showThemeDialog(context, profile),
             ),
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.palette_outlined,
                 color: Colors.pinkAccent,
               ),
@@ -1309,7 +1193,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: () => _showAccentDialog(context, profile),
             ),
             SwitchListTile(
-              secondary: _SettingsIcon(
+              secondary: SettingsIcon(
                 Icons.contrast,
                 color: Colors.grey.shade800,
               ),
@@ -1324,11 +1208,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 20),
 
         // ── Notifications ────────────────────────────────────────────────────
-        const _SectionLabel('Notifications'),
-        _SettingsCard(
+        const SettingsSectionLabel('Notifications'),
+        SettingsCard(
           children: [
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.music_note_outlined,
                 color: Colors.teal,
               ),
@@ -1342,11 +1226,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 20),
 
         // ── Advanced ─────────────────────────────────────────────────────────
-        const _SectionLabel('Advanced'),
-        _SettingsCard(
+        const SettingsSectionLabel('Advanced'),
+        SettingsCard(
           children: [
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.network_check_outlined,
                 color: Colors.blueGrey,
               ),
@@ -1356,7 +1240,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Navigator.of(context).pushNamed(AppRoutes.diagnostics),
             ),
             ListTile(
-              leading: _SettingsIcon(Icons.restart_alt, color: Colors.blueGrey),
+              leading: SettingsIcon(Icons.restart_alt, color: Colors.blueGrey),
               title: const Text('Restart discovery'),
               subtitle: const Text('Rebind local discovery services.'),
               onTap: () async {
@@ -1371,7 +1255,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               },
             ),
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.settings_backup_restore_outlined,
                 color: Colors.orange,
               ),
@@ -1386,16 +1270,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 20),
 
         // ── Trusted Devices ──────────────────────────────────────────────────
-        const _SectionLabel('Trusted Devices'),
-        _buildTrustedDevicesCard(theme),
+        const SettingsSectionLabel('Trusted Devices'),
+        const TrustedDevicesCard(),
         const SizedBox(height: 20),
 
         // ── About ────────────────────────────────────────────────────────────
-        const _SectionLabel('About'),
-        _SettingsCard(
+        const SettingsSectionLabel('About'),
+        SettingsCard(
           children: [
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.schema_outlined,
                 color: Colors.indigo,
               ),
@@ -1406,13 +1290,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
             ListTile(
-              leading: _SettingsIcon(Icons.apps_outlined, color: Colors.blue),
+              leading: SettingsIcon(Icons.apps_outlined, color: Colors.blue),
               title: const Text('App version'),
               trailing: Text('7.2.4', style: theme.textTheme.bodySmall),
               onTap: _handleVersionTap,
             ),
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.bug_report_outlined,
                 color: Colors.deepOrange,
               ),
@@ -1422,7 +1306,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: _exportLog,
             ),
             ListTile(
-              leading: _SettingsIcon(
+              leading: SettingsIcon(
                 Icons.security_outlined,
                 color: Colors.grey,
               ),
@@ -1463,107 +1347,3 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Shared helper widgets
-// ---------------------------------------------------------------------------
-
-class _SettingsIcon extends StatelessWidget {
-  const _SettingsIcon(this.icon, {required this.color});
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(icon, color: Colors.white, size: 22),
-    );
-  }
-}
-
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.children});
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final items = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      items.add(children[i]);
-      if (i < children.length - 1) {
-        items.add(
-          Divider(
-            height: 1,
-            indent: 68,
-            color: theme.colorScheme.outlineVariant.withAlpha(80),
-          ),
-        );
-      }
-    }
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: theme.colorScheme.outlineVariant.withAlpha(80)),
-      ),
-      color: theme.colorScheme.surface,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(children: items),
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
-      child: Text(
-        text,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-}
-
-class _SecurityLimitationItem extends StatelessWidget {
-  const _SecurityLimitationItem(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.remove_circle_outline,
-            size: 14,
-            color: theme.colorScheme.onSurface.withAlpha(120),
-          ),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: theme.textTheme.bodySmall)),
-        ],
-      ),
-    );
-  }
-}

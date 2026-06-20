@@ -35,6 +35,11 @@ class HelixMdnsService(private val context: Context) {
     // Local session info used to filter out our own advertisement.
     private var localSessionId = ""
 
+    // Retained so updateDiscoverability(true) can re-register without a full restart.
+    private var lastDisplayName = ""
+    private var lastDeviceSuffix = ""
+    private var lastPort = 0
+
     // ── EventSink ────────────────────────────────────────────────────────────
 
     fun setEventSink(sink: EventChannel.EventSink?) {
@@ -50,7 +55,10 @@ class HelixMdnsService(private val context: Context) {
         val port        = args["port"]        as? Int     ?: return
         val discoverable = args["discoverable"] as? Boolean ?: true
 
-        localSessionId = sessionId
+        localSessionId  = sessionId
+        lastDisplayName = displayName
+        lastDeviceSuffix = deviceSuffix
+        lastPort        = port
         nsdManager = context.getSystemService(Context.NSD_SERVICE) as? NsdManager ?: return
 
         if (discoverable) registerService(displayName, deviceSuffix, sessionId, port)
@@ -72,9 +80,12 @@ class HelixMdnsService(private val context: Context) {
     fun updateDiscoverability(args: Map<*, *>) {
         val discoverable = args["discoverable"] as? Boolean ?: return
         if (discoverable) {
-            // Re-register; we need the original params — best-effort via re-start
-            // is fine because discoverability changes are infrequent.
-            Log.d(tag, "Discoverability enabled — re-register service if params available")
+            // Re-register using the params retained from the last start() call.
+            if (localSessionId.isNotEmpty() && lastPort > 0) {
+                registerService(lastDisplayName, lastDeviceSuffix, localSessionId, lastPort)
+            } else {
+                Log.w(tag, "updateDiscoverability(true): no retained params — call start() first")
+            }
         } else {
             unregisterService()
         }

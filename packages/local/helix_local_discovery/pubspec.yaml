@@ -17,3 +17,6 @@ dependencies:
     path: ../helix_local_domain
   helix_local_protocol:
     path: ../helix_local_protocol
+
+dev_dependencies:
+  test: ^1.25.0
