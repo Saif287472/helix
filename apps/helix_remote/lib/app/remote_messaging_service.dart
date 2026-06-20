@@ -474,13 +474,26 @@ class RemoteMessagingService {
     );
     final sequence = _nextLocalSequence(conversationId);
     final timestamp = _clock().millisecondsSinceEpoch;
+    final uniqueRecipientDeviceIds = recipientDeviceIds.toSet().toList();
+    final hasRemoteMember = conversationMemberIds(
+      conversationId,
+    ).any((memberId) => memberId != accountId);
+    if (hasRemoteMember && uniqueRecipientDeviceIds.isEmpty) {
+      db.saveMessage(
+        localMessage,
+        sequence,
+        timestamp,
+        'SECURE_SESSION_UNAVAILABLE',
+      );
+      return id;
+    }
 
     try {
       final envelopes = await _buildX3dhEnvelopes(
         conversationId: conversationId,
         messageId: id,
         plaintext: plaintext,
-        recipientDeviceIds: recipientDeviceIds,
+        recipientDeviceIds: uniqueRecipientDeviceIds,
         senderAccountId: accountId,
         senderDeviceId: deviceId,
       );

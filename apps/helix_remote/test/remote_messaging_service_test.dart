@@ -314,6 +314,26 @@ void main() {
     expect(jsonEncode(pending), isNot(contains('do not downgrade this')));
   });
 
+  test('P12-005 empty recipient device list fails closed locally', () async {
+    final conversationId = service.createDirectConversation(
+      peerAccountId: 'bob',
+      conversationId: 'dm_no_recipient_devices',
+    );
+
+    await service.sendText(
+      conversationId: conversationId,
+      messageId: 'msg_no_devices',
+      plaintext: 'no known endpoint',
+      recipientDeviceIds: const [],
+    );
+
+    final stored = db.getMessageById('msg_no_devices')!;
+    expect(stored['status'], 'SECURE_SESSION_UNAVAILABLE');
+    final pending = db.getPendingOperations();
+    expect(pending.any((op) => op['type'] == 'SEND_MESSAGE'), isFalse);
+    expect(jsonEncode(pending), isNot(contains('endpoint')));
+  });
+
   test('P2-08 trust decisions persist key change state', () {
     service.recordTrustDecision(
       accountId: 'bob',

@@ -711,6 +711,35 @@ A release is enterprise-ready only when:
 
 ---
 
+## Phase 12 — Remote one-to-one messaging MVP ✅
+
+**Status: COMPLETE — 2026-06-20**
+
+**Goal:** turn the Remote direct-message shell into a service-backed MVP for account setup, contacts, direct conversations, local encrypted history, receipts, typing, search, pagination, and message mutations.
+
+**Dependencies:** Phases 1-4, 8-11.
+
+### Agent-executable tasks
+
+| ID | Status | Agent instruction | Verification |
+|---|---|---|---|
+| P12-01 | ✅ | Keep account creation/restored-session entry wired through `RemoteCompositionRoot`, not widget-local demo state. | `main.dart`, `composition_root_test.dart`, `widget_test.dart` |
+| P12-02 | ✅ | Route contact creation and direct-conversation creation through `RemoteMessagingService` and the persistent conversation/contact store. | `conversation_list_screen.dart`, `remote_messaging_service_test.dart` |
+| P12-03 | ✅ | Route send/search/history through `RemoteMessagingService`; store only ciphertext locally and never enqueue plaintext. | `remote_messaging_service_test.dart`, `phase12_remote_messaging_screen_test.dart` |
+| P12-04 | ✅ | Fail closed when a direct message has no known recipient devices or no secure session; do not enqueue an empty or downgraded network send. | `remote_messaging_service_test.dart` P12-005 |
+| P12-05 | ✅ | Wire the conversation UI to paged local history, search, delivered/read receipts, ephemeral typing, edit, reaction, delete-for-self, delete-for-everyone, and block actions. | `conversation_screen.dart`, `phase12_remote_messaging_screen_test.dart` |
+| P12-06 | ✅ | Keep Remote package isolation from Local packages and preserve release/verification gates. | `tool/boundary_test.dart`, `scripts/verify.ps1` |
+
+### Exit criteria
+
+- ✅ Remote direct-message screens no longer use in-memory demo contact/message lists.
+- ✅ Message send, history, search, receipts, typing, edits, reactions, deletes, and blocking go through `RemoteMessagingService`.
+- ✅ Missing recipient device/session state fails closed as `SECURE_SESSION_UNAVAILABLE` and stores no plaintext in outbox payloads.
+- ✅ Persistent Remote storage remains the source of truth for conversation and message history.
+- ✅ Remaining production gates, including real external push providers, real-device E2E, and external security review, stay tracked as release or Phase 20 scope rather than hidden inside this MVP.
+
+---
+
 # 7. Recommended execution order and parallel lanes
 
 ## 7.1 Critical path

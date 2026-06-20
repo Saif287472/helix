@@ -1,0 +1,357 @@
+import 'dart:convert';
+import 'dart:ffi';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/screens/conversation_screen.dart';
+import 'package:helix_remote_api/api/realtime_envelope.dart';
+import 'package:helix_remote_api/api/rest_client.dart';
+import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote_storage/helix_remote_storage.dart';
+import 'package:helix_remote_sync/helix_remote_sync.dart';
+import 'package:path/path.dart' as p;
+
+class _FakeProtector implements RemoteMessageProtector {
+  @override
+  Future<String> encryptText({
+    required String conversationId,
+    required String messageId,
+    required String plaintext,
+    required String recipientDeviceId,
+  }) async {
+    return 'cipher:${base64UrlEncode(utf8.encode(plaintext))}';
+  }
+
+  @override
+  Future<String> decryptText({
+    required String conversationId,
+    required String messageId,
+    required String ciphertext,
+  }) async {
+    return utf8.decode(
+      base64Url.decode(ciphertext.substring('cipher:'.length)),
+    );
+  }
+}
+
+class _FakeGateway implements SyncGateway {
+  final sent = <Map<String, dynamic>>[];
+
+  @override
+  Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
+    required int sinceSequence,
+  }) async => [];
+
+  @override
+  Future<void> sendOutboundOperation({
+    required String opId,
+    required String type,
+    required Map<String, dynamic> payload,
+  }) async {
+    sent.add({'op_id': opId, 'type': type, 'payload': payload});
+  }
+}
+
+class _FakeRestClient implements HelixRemoteRestClient {
+  @override
+  set accessToken(String? token) {}
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<Map<String, dynamic>> registerAccount({
+    required String accountId,
+    required String username,
+    required String accountIdentityPublicKey,
+    required String deviceId,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String accountRegistrationSignature,
+    required String deviceRegistrationSignature,
+    required String deviceName,
+  }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> getChallenge({
+    required String accountId,
+    required String deviceId,
+  }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> loginDevice({
+    required String accountId,
+    required String deviceId,
+    required String signature,
+  }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> refreshToken({
+    required String refreshToken,
+  }) async => {};
+
+  @override
+  Future<List<RemoteDevice>> listDevices() async => [];
+
+  @override
+  Future<void> renameDevice({
+    required String deviceId,
+    required String deviceName,
+  }) async {}
+
+  @override
+  Future<void> revokeDevice(String deviceId) async {}
+
+  @override
+  Future<void> reportLostDevice(String deviceId) async {}
+
+  @override
+  Future<List<Map<String, dynamic>>> getDeviceSecurityHistory(
+    String deviceId,
+  ) async => [];
+
+  @override
+  Future<void> uploadPreKeys({
+    required int signedPrekeyId,
+    required String signedPrekey,
+    required String signedPrekeySignature,
+    required List<Map<String, dynamic>> oneTimePrekeys,
+  }) async {}
+
+  @override
+  Future<Map<String, dynamic>> getPreKeyBundle({
+    required String accountId,
+  }) async => {'devices': <Map<String, dynamic>>[]};
+
+  @override
+  Future<Map<String, dynamic>> sendContactRequest({
+    required String peerAccountId,
+  }) async => {};
+
+  @override
+  Future<void> acceptContactRequest(String requestId) async {}
+
+  @override
+  Future<Map<String, dynamic>> requestAttachmentUpload({
+    required int fileSize,
+    required String fileHash,
+  }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> requestAttachmentDownload(String fileId) async =>
+      {};
+
+  @override
+  Future<void> requestAccountDeletion({required String confirmation}) async {}
+
+  @override
+  Future<Map<String, dynamic>> exportData() async => {};
+
+  @override
+  Future<Map<String, dynamic>> uploadBackup({
+    required String backupId,
+    required String backupData,
+    required int version,
+    required String kdf,
+    required String salt,
+    String backupKeyHint = '',
+    int deletionWatermark = 0,
+  }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> downloadBackup() async => {};
+
+  @override
+  Future<Map<String, dynamic>> sendCallSignal({
+    required String targetDeviceId,
+    required Map<String, dynamic> payload,
+  }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> getTurnCredentials() async => {};
+}
+
+void main() {
+  setUpAll(() {
+    if (Platform.isWindows) {
+      var dir = Directory.current;
+      for (var i = 0; i < 5; i++) {
+        final possiblePath = p.join(
+          dir.path,
+          '.dart_tool',
+          'lib',
+          'sqlite3.dll',
+        );
+        if (File(possiblePath).existsSync()) {
+          DynamicLibrary.open(possiblePath);
+          break;
+        }
+        final parent = dir.parent;
+        if (parent.path == dir.path) break;
+        dir = parent;
+      }
+    }
+  });
+
+  late HelixRemoteDatabase db;
+  late _FakeGateway gateway;
+  late RemoteMessagingService service;
+  late _FakeProtector protector;
+  var tick = 0;
+
+  DateTime clock() => DateTime.fromMillisecondsSinceEpoch(++tick * 1000);
+
+  Future<String> cipher(String plaintext) {
+    return protector.encryptText(
+      conversationId: 'dm_alice_bob',
+      messageId: 'seed',
+      plaintext: plaintext,
+      recipientDeviceId: 'local-history',
+    );
+  }
+
+  setUp(() async {
+    tick = 0;
+    db = HelixRemoteDatabase(File(':memory:'));
+    db.initialize();
+    gateway = _FakeGateway();
+    protector = _FakeProtector();
+    service = RemoteMessagingService(
+      db: db,
+      syncEngine: RemoteSyncEngine(db),
+      gateway: gateway,
+      protector: protector,
+      restClient: _FakeRestClient(),
+      clock: clock,
+    );
+    await service.setupAccount(
+      account: RemoteAccount(
+        accountId: 'alice',
+        username: 'alice',
+        identityPublicKey: 'alice_identity_key',
+        createdAt: clock(),
+      ),
+      device: RemoteDevice(
+        deviceId: 'alice_device',
+        deviceName: 'Alice phone',
+        deviceSigningPublicKey: 'alice_signing',
+        deviceAgreementPublicKey: 'alice_agreement',
+        createdAt: clock(),
+      ),
+    );
+    service.addContact(peerAccountId: 'bob', nickname: 'Bob');
+    service.createDirectConversation(
+      peerAccountId: 'bob',
+      conversationId: 'dm_alice_bob',
+      title: 'Bob',
+    );
+    db.saveMessage(
+      RemoteMessage(
+        messageId: 'msg_bob_1',
+        conversationId: 'dm_alice_bob',
+        senderAccountId: 'bob',
+        senderDeviceId: 'bob_device',
+        ciphertext: await cipher('budget marker from bob'),
+      ),
+      1,
+      clock().millisecondsSinceEpoch,
+      RemoteMessageStatus.delivered,
+    );
+    db.saveMessage(
+      RemoteMessage(
+        messageId: 'msg_bob_2',
+        conversationId: 'dm_alice_bob',
+        senderAccountId: 'bob',
+        senderDeviceId: 'bob_device',
+        ciphertext: await cipher('plain hello'),
+      ),
+      2,
+      clock().millisecondsSinceEpoch,
+      RemoteMessageStatus.delivered,
+    );
+  });
+
+  tearDown(() {
+    db.close();
+  });
+
+  testWidgets('P12 conversation screen uses service for search and receipts', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationScreen(
+          conversationId: 'dm_alice_bob',
+          messagingService: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('budget marker from bob'), findsOneWidget);
+    expect(
+      db.getPendingOperations().where((op) => op['type'] == 'READ_RECEIPT'),
+      isNotEmpty,
+    );
+
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'budget');
+    await tester.pumpAndSettle();
+
+    expect(find.text('budget marker from bob'), findsOneWidget);
+    expect(find.text('plain hello'), findsNothing);
+  });
+
+  testWidgets('P12 conversation screen sends and mutates through service', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationScreen(
+          conversationId: 'dm_alice_bob',
+          messagingService: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).last, 'draft text');
+    await tester.pump();
+    expect(gateway.sent.last['type'], 'TYPING');
+    final typingPayload = gateway.sent.last['payload'] as Map<String, dynamic>;
+    expect(typingPayload['is_typing'], isTrue);
+
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('draft text'), findsOneWidget);
+    expect(
+      db.getPendingOperations().any((op) => op['type'] == 'SEND_MESSAGE'),
+      isFalse,
+    );
+
+    await tester.tap(find.byTooltip('Message actions').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('React +1'));
+    await tester.pumpAndSettle();
+    expect(find.text('+1'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Message actions').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'updated text');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('updated text'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Message actions').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete for me'));
+    await tester.pumpAndSettle();
+    expect(find.text('updated text'), findsNothing);
+  });
+}

@@ -52,35 +52,25 @@ All checks run on 2026-06-19 from `J:\Projects\helix`:
 
 ## Core Architecture Finding
 
-The repository contains a substantial amount of **useful domain, storage,
-backend, crypto, sync, attachment, call, group, backup, and privacy code** at
-the library/package level. However, the **debug app wiring is the single
-critical blocker**.
+The original 2026-06-19 baseline correctly identified that the Remote Flutter
+app was a disconnected in-memory demonstration. Phases 1-12 have since repaired
+the direct-message critical path enough for a service-backed MVP:
 
-`RemoteCompositionRoot` currently wires only:
-- `RemoteSecureKeyStorage`
-- `HelixRemoteDatabase`
-- `RemoteSyncEngine`
+- `RemoteCompositionRoot` composes secure key storage, encrypted Remote DB,
+  concrete REST client, concrete sync gateway, WebSocket client, sync engine,
+  message protector, `RemoteMessagingService`, attachment, call, group, and
+  runtime coordinator services.
+- `main.dart` routes account creation and restored sessions through
+  `RemoteCompositionRoot` rather than widget-local auth state.
+- The direct-message screens route contact requests, direct-conversation
+  creation, send, history, search, receipts, typing, edits, reactions, deletes,
+  and blocking through `RemoteMessagingService` and persistent Remote storage.
+- The app no longer owns widget-local demo contact/message lists for the
+  direct-message path.
 
-It does **NOT** compose:
-- Concrete REST client (only abstract `HelixRemoteRestClient`)
-- Concrete WebSocket realtime client
-- Concrete `SyncGateway`
-- `RemoteMessagingService`
-- `RemoteAttachmentService`
-- `RemoteCallService` + concrete `RemoteCallEngine`
-- `RemoteGroupService`
-- Backup/recovery service
-- Privacy/account-deletion service
-- Connectivity/reconnect coordinator
-- Session/token store
-- Message protector/session store
-- Identity/prekey service
-
-The Remote Flutter app (`main.dart`) is a **self-contained in-memory
-demonstration**: contacts, messages, and settings live in widget-local
-`_contacts`, `_messages`, and `_UiMessage` lists. Actions call `setState()`
-only. No service from the Remote packages is used by the UI.
+Remaining Phase 13-20 work is still real: contacts/privacy, attachments,
+calls, groups, backup/recovery, production operations, external security review,
+and real-device/staging E2E need their own closure evidence.
 
 ---
 
@@ -88,30 +78,36 @@ only. No service from the Remote packages is used by the UI.
 
 | ID | Item | Status | Implementation Files | Production/Dev Wiring Path | Tests | Missing Integration | Security/Data Risk | Repair Task |
 |---|---|---|---|---|---|---|---|---|
-| P12-001 | Account sign-in/setup UI | **DISCONNECTED** | `apps/helix_remote/lib/main.dart` `_usernameController`, `_deviceController` | Widget state only; no service called | `widget_test.dart` - launches shell | No account registration, no account service | None (no real auth path) | Wire registration/login flow through composition root |
-| P12-002 | Device verification UI | **DISCONNECTED** | `apps/helix_remote/lib/main.dart:67` `_deviceVerified = true` | Local bool toggle, no backend | None for verification flow | No device verification service link | None (no real flow) | Connect to device verification service |
-| P12-003 | Add contact by username | **DISCONNECTED** | `apps/helix_remote/lib/main.dart:56` `_contactController` | Appends to in-memory `_contacts` List<String> | None for contact flow | No contact request service | None (no real flow) | Wire contact request lifecycle |
-| P12-004 | One-to-one conversation creation | **DISCONNECTED** | N/A in app | No creation path wired in app | `remote_messaging_service_test.dart` - service unit tests | Not connected to composition root | None | Wire conversation creation in services |
-| P12-005 | E2EE text send | **PARTIAL** | `apps/helix_remote/lib/app/remote_messaging_service.dart` - outbound queue with protector; `main.dart:173` - adds to `_messages` list | Service path: `RemoteMessagingService.send` -> outbound queue -> protector; UI path: `setState` only | `remote_messaging_service_test.dart` - 5 service tests; `composition_root_test.dart` | Not connected from composition root; UI does not use service | Ciphertext-only storage in test; no protector connected in real use | Wire messaging service into composition root; connect UI |
-| P12-006 | Offline receive | **PARTIAL** | `packages/remote/helix_remote_sync/lib/src/sync_engine.dart` - inbound sync with dedup | Sync engine parses events; no REST catch-up or realtime feed | `remote_sync_test.dart` - 11 tests | No concrete SyncGateway; no realtime client | Duplicate event rejection tested | Implement concrete SyncGateway + realtime client |
-| P12-007 | Persistent conversation list | **PARTIAL** | `packages/remote/helix_remote_storage/lib/src/database.dart` - `conversations` table, CRUD | Storage layer only; UI uses in-memory list | `remote_storage_test.dart` - 6 tests | No DB stream to UI | None | Wire conversation repository into UI |
-| P12-008 | Persistent message history | **PARTIAL** | `packages/remote/helix_remote_storage/lib/src/database.dart` - `messages` table, CRUD | Storage layer only; UI uses in-memory list | `remote_storage_test.dart` - 6 tests | No DB stream to UI | Ciphertext stored in `text` column (misleading name) | Wire message repository into UI; rename column |
-| P12-009 | Delivery receipts | **PARTIAL** | `apps/helix_remote/lib/app/remote_messaging_service.dart` - receipt handling | Service-level receipt tracking | `remote_messaging_service_test.dart` | Not connected to backend or UI | None | Wire receipt lifecycle |
-| P12-010 | Read receipts with privacy setting | **PARTIAL** | `apps/helix_remote/lib/app/remote_messaging_service.dart` - read receipt toggle; `main.dart:68` `_readReceipts` bool | Service level: `readReceipts` in compose; UI: local bool disconnect | `remote_messaging_service_test.dart` | Not connected to realtime or backend | None | Wire read receipt privacy setting |
-| P12-011 | Typing indicators as ephemeral state | **PARTIAL** | `apps/helix_remote/lib/app/remote_messaging_service.dart` - ephemeral typing; `main.dart:124` `isTyping` | Service level: sendTyping/clearTyping; UI: local text change detection | `remote_messaging_service_test.dart` | Not connected to realtime relay | None | Wire typing to realtime signaling |
-| P12-012 | Message edits as persistent events | **PARTIAL** | Backend `MessagingModule` edit route; service edit enqueue; UI `main.dart:182` local mutation | Backend + service: persistent; UI: local `_editMessage` | `remote_messaging_service_test.dart`; `messaging_test.dart` (backend) | Not connected in app | None | Wire edit through composed service path |
-| P12-013 | Message reactions as persistent events | **PARTIAL** | Backend reaction routes; service reaction enqueue; UI `main.dart:192` local mutation | Backend + service: persistent; UI: local `_reactToMessage` | `remote_messaging_service_test.dart`; `messaging_test.dart` (backend) | Not connected in app | None | Wire reaction through composed service path |
-| P12-014 | Delete-for-self | **PARTIAL** | Service delete-for-self; UI `main.dart:199` local remove | Service: enqueues delete operation; UI: `_deleteMessage` removes from list | `remote_messaging_service_test.dart` | Not connected in app | None | Wire delete through composed service path |
-| P12-015 | Delete-for-everyone | **PARTIAL** | Backend tombstone route; service delete-for-everyone | Backend: DELETE with tombstone creation | Backend `messaging_test.dart` | Not connected in app | Tombstone prevents reappearance | Wire delete-for-everyone through app |
-| P12-016 | Blocking | **PARTIAL** | Backend `block` route; service-level check; UI `main.dart:163` local block | Backend: blocks sends; UI: removes from contact list | `remote_messaging_service_test.dart`; backend `contacts_test.dart` | Not connected in app | Backend enforces block but UI has bypass | Wire block flow through composed service |
-| P12-017 | Push notification without plaintext | **OUT OF STUDENT SCOPE** | Backend push outbox | Requires real push provider infrastructure | Backend outbox tests exist | Real provider not available | No plaintext in existing outbox code | Create development notification channel |
-| P12-018 | Search over local decrypted history | **PARTIAL** | `storage/database.dart` - search methods; service-level search | Storage has `searchMessages()` | `remote_messaging_service_test.dart` - search test | Not wired to UI | None | Wire local search into UI |
-| P12-019 | Pagination | **PARTIAL** | `storage/database.dart` - limit/offset params; service-level pagination | Storage pagination in getMessages | `remote_storage_test.dart` - pagination | Not connected in app | None | Wire pagination into conversation UI |
-| P12-020 | Migration and compatibility tests | **PARTIAL** | `contracts/compatibility/fixtures/`; `helix_remote_api/test/serialization_test.dart` | Fixture decoding tests exist | 17 `serialization_test.dart` tests | No dedicated migration test for recent versions | None | Add migration test |
-| P12-021 | E2E tests across two devices | **NOT STARTED** | No in-process integration test with full app path | Backend integration_test.dart exists but tests only backend loopback | No app-level E2E test | Full E2E not implemented | None | Create Level 3 integration test |
-| P12-022 | No Local package imports | **VERIFIED COMPONENT ONLY** | All `apps/helix_remote/**` files | Boundary check passes | `tool/boundary_test.dart` | None | None | Monitor |
+| P12-001 | Account sign-in/setup UI | **PARTIAL** | `apps/helix_remote/lib/main.dart`; `apps/helix_remote/lib/app/composition_root.dart` | UI calls `RemoteCompositionRoot.registerAndLogin()` / `tryRestoreSession()` | `widget_test.dart`; `composition_root_test.dart` | Restore-code UX is still a placeholder; real backend availability is environmental | No widget-local credentials | Complete full restore workflow in backup/recovery phase |
+| P12-002 | Device verification UI | **VERIFIED COMPONENT ONLY** | `RemoteMessagingService.verifyDevice()`; `DeviceManagementScreen` | Device list/revoke/rename uses REST; local verify API exists | `remote_messaging_service_test.dart`; device/backend tests | Manual safety-number verification UI is still future work | Unknown devices fail verification | Add explicit safety-number verification screen |
+| P12-003 | Add contact by username/account ID | **PARTIAL** | `conversation_list_screen.dart`; `remote_messaging_service.dart` | UI -> `sendContactRequest()` -> contacts table + outbox | `remote_messaging_service_test.dart` | Accept/reject/cancel lifecycle is Phase 13 UI work | Contact request quota enforced locally | Phase 13 contact screens |
+| P12-004 | One-to-one conversation creation | **PARTIAL** | `conversation_list_screen.dart`; `remote_messaging_service.dart`; storage DB | UI -> `createDirectConversation()` -> persistent conversation + outbox | `remote_messaging_service_test.dart` | Contact-list widget path lacks dedicated test | None | Add list-screen widget test in Phase 13 |
+| P12-005 | E2EE text send | **PARTIAL** | `remote_messaging_service.dart`; `remote_message_protector.dart`; `conversation_screen.dart` | UI -> service -> ciphertext local history + outbox/gateway | `remote_messaging_service_test.dart`; `phase12_remote_messaging_screen_test.dart` | Full DH Double Ratchet and external review remain blocked | Missing recipient devices now fail closed with no send op | Continue crypto hardening under security review gate |
+| P12-006 | Offline receive | **PARTIAL** | `remote_sync_gateway.dart`; `remote_websocket_client.dart`; `sync_engine.dart`; runtime coordinator | REST catch-up + realtime envelope handling are composed | `remote_sync_test.dart`; runtime tests | Real backend/client E2E still release-gated | Duplicate event rejection tested | Add real-device/staging E2E |
+| P12-007 | Persistent conversation list | **PARTIAL** | `conversation_list_screen.dart`; storage DB | UI reads `messagingService.conversationList()` from DB | Remote storage/service tests | No stream-based live list refresh yet | None | Add reactive list refresh |
+| P12-008 | Persistent message history | **PARTIAL** | `conversation_screen.dart`; storage DB | UI reads `messageHistory()` and decodes local ciphertext | `phase12_remote_messaging_screen_test.dart`; storage tests | Search still decrypts bounded local page/service result | Ciphertext column is correctly named `ciphertext_blob` | Optimize large local search later |
+| P12-009 | Delivery receipts | **PARTIAL** | `conversation_screen.dart`; `remote_messaging_service.dart` | Visible inbound messages enqueue delivery receipts | `phase12_remote_messaging_screen_test.dart` | Backend/device E2E receipt propagation not covered here | No plaintext in receipt payload | Add E2E receipt scenario |
+| P12-010 | Read receipts with privacy setting | **PARTIAL** | `remote_messaging_service.dart`; `conversation_screen.dart` | UI marks read via service; service respects read-receipt toggle | `remote_messaging_service_test.dart`; `phase12_remote_messaging_screen_test.dart` | Dedicated settings UI for this toggle is not present | Toggle suppresses read operation | Wire setting in privacy UI |
+| P12-011 | Typing indicators as ephemeral state | **PARTIAL** | `conversation_screen.dart`; `remote_messaging_service.dart`; `remote_sync_gateway.dart` | Text input publishes `TYPING` through gateway, not DB | `phase12_remote_messaging_screen_test.dart` | Realtime peer display is future work | Typing is not persisted | Add inbound typing display |
+| P12-012 | Message edits as persistent events | **PARTIAL** | `conversation_screen.dart`; `remote_messaging_service.dart`; backend messaging routes | UI -> service revision + outbox | `phase12_remote_messaging_screen_test.dart`; backend messaging tests | Real peer E2E propagation not covered here | Edited text stored as local ciphertext | Add backend/client E2E |
+| P12-013 | Message reactions as persistent events | **PARTIAL** | Same as edits | UI -> service revision + outbox | `phase12_remote_messaging_screen_test.dart`; backend messaging tests | Full reaction picker is minimal (`+1`) | No message plaintext in outbox payload | Expand UX later |
+| P12-014 | Delete-for-self | **PARTIAL** | `conversation_screen.dart`; `remote_messaging_service.dart` | UI -> local tombstone + DB delete | `phase12_remote_messaging_screen_test.dart` | No undo UX | Local tombstone prevents reappearance | Add user-facing confirmation/undo if desired |
+| P12-015 | Delete-for-everyone | **PARTIAL** | `conversation_screen.dart`; `remote_messaging_service.dart`; backend messaging route | UI -> service tombstone + delete outbox | `remote_messaging_service_test.dart`; backend messaging tests | Real peer E2E propagation not covered here | Tombstone prevents local reappearance | Add backend/client E2E |
+| P12-016 | Blocking | **PARTIAL** | `conversation_screen.dart`; `remote_messaging_service.dart`; backend contacts route | UI -> service contact block + outbox/backend route | `remote_messaging_service_test.dart`; backend contacts tests | Phase 13 owns full block/unblock UX | Backend enforces block | Wire richer safety UI |
+| P12-017 | Push notification without plaintext | **OUT OF STUDENT SCOPE** | Backend push outbox | Requires provider infrastructure | Backend outbox tests | Real provider unavailable | Existing preview is generic | Release/infrastructure scope |
+| P12-018 | Search over local decrypted history | **PARTIAL** | `conversation_screen.dart`; `remote_messaging_service.dart` | UI -> service local decrypted search | `phase12_remote_messaging_screen_test.dart` | Large-history index optimization deferred | Search does not leave device | Add performance search index later |
+| P12-019 | Pagination | **PARTIAL** | `conversation_screen.dart`; storage DB | UI uses `limit/offset` with "Load earlier messages" | `phase12_remote_messaging_screen_test.dart`; storage tests | No infinite-scroll prefetch | None | Polish pagination UX |
+| P12-020 | Migration and compatibility tests | **PARTIAL** | `remote_storage_test.dart`; API serialization fixtures | Current schema migrations and DTO decoding tested | storage/API tests | No Phase-12-specific rolling upgrade E2E | None | Broaden rolling-upgrade matrix |
+| P12-021 | E2E tests across two devices | **OUT OF STUDENT SCOPE** | Backend integration and app widget/service tests | In-process coverage only | backend integration tests; Phase 12 widget/service tests | Requires real devices/staging infra | None | Release/staging gate |
+| P12-022 | No Local package imports | **VERIFIED COMPONENT ONLY** | `apps/helix_remote/**`; `packages/remote/**` | Boundary checker enforces product isolation | `tool/boundary_test.dart`; `check_boundaries.dart` | None | None | Monitor |
 
-**Phase 12 Summary:** The service and backend layers have substantial implementation, but **the app is entirely disconnected from them**. A user running the Remote app today sees a demo shell with hardcoded `bob` contact and sample message text. No authentication, no persistence, no encryption, no transport.
+**Phase 12 Summary:** The Remote direct-message path is now service-backed
+instead of widget-local demo state. Account setup, contact request creation,
+direct conversation creation, local encrypted history, search, paging, receipts,
+typing, edits, reactions, deletes, blocking, sync gateway, and runtime wiring all
+have executable evidence. Production-grade Double Ratchet claims, external push,
+manual safety-number verification, and real-device/staging E2E remain separate
+release/security gates.
 
 ---
 
@@ -358,33 +354,37 @@ only. No service from the Remote packages is used by the UI.
 
 ## Cross-Cutting Critical Issues
 
-### 1. RemoteCompositionRoot is underspecified
-- Wires only key storage, database, sync engine
-- Missing: REST client, WebSocket client, SyncGateway, messaging service, attachment service, call service + engine, group service, backup service, privacy service, session store, identity service, message protector
+### 1. RemoteCompositionRoot underspecified (REPAIRED through Phase 12)
+- `RemoteCompositionRoot` now wires secure storage, encrypted DB, concrete REST,
+  concrete sync gateway, WebSocket, sync engine, messaging, attachment, call,
+  group, and runtime coordinator services.
 - File: `apps/helix_remote/lib/app/composition_root.dart`
-- Repair: Stage 1
+- Evidence: `composition_root_test.dart`, `remote_runtime_coordinator_test.dart`,
+  `phase12_remote_messaging_screen_test.dart`
 
-### 2. Remote app UI is an in-memory demo
-- Contacts, messages, settings all in widget state (`_contacts`, `_messages`, `_UiMessage`)
-- No service calls, no persistence, no transport
-- File: `apps/helix_remote/lib/main.dart`
-- Repair: Stage 4 (data-driven UI) + Stage 1 (composition)
+### 2. Remote direct-message UI in-memory demo (REPAIRED through Phase 12)
+- Account setup and direct-message screens now call composition/root services and
+  `RemoteMessagingService`; contacts, conversations, and messages persist in
+  Remote storage.
+- Files: `apps/helix_remote/lib/main.dart`,
+  `apps/helix_remote/lib/screens/conversation_list_screen.dart`,
+  `apps/helix_remote/lib/screens/conversation_screen.dart`
+- Evidence: `phase12_remote_messaging_screen_test.dart`
 
-### 3. No concrete REST client
-- `HelixRemoteRestClient` is an abstract interface in `helix_remote_api`
-- File: `packages/remote/helix_remote_api/lib/api/rest_client.dart`
-- Repair: Stage 2
+### 3. Concrete REST client missing (REPAIRED)
+- `HelixRemoteRestClientImpl` is composed by `RemoteCompositionRoot`.
+- File: `apps/helix_remote/lib/app/remote_rest_client.dart`
 
-### 4. No concrete SyncGateway or realtime WebSocket client
-- Sync engine has no feed source
-- No concrete `SyncGateway` implementation
-- Repair: Stage 2 + Stage 3
+### 4. Concrete SyncGateway and realtime WebSocket missing (REPAIRED)
+- `RemoteSyncGatewayImpl` and `RemoteWebSocketClient` are composed by the
+  runtime path.
+- Files: `apps/helix_remote/lib/app/remote_sync_gateway.dart`,
+  `apps/helix_remote/lib/app/remote_websocket_client.dart`
 
-### 5. Fresh install cannot start (db_key unavailable)
-- `RemoteCompositionRoot._loadRequiredDbKey` throws when no key exists
-- No first-run key generation flow
-- File: `apps/helix_remote/lib/app/composition_root.dart:180`
-- Repair: Stage 1.2
+### 5. Fresh install cannot start (REPAIRED)
+- `_loadOrCreateDbKey()` creates a first-run DB key and fails closed only when
+  an existing database lacks its secure-storage key.
+- File: `apps/helix_remote/lib/app/composition_root.dart`
 
 ### 6. Attachment raw-key fallback (DEFECTIVE)
 - `buildKeyDeliveryPackage` silently uses raw key when no encryptor supplied
@@ -419,7 +419,7 @@ The following historical checklist claims overstate completion:
 
 | Phase | Checkbox | Claimed | Actual | Correction |
 |---|---|---|---|---|
-| P12 | Many [x] items | Complete | **DISCONNECTED** | UI is in-memory demo; service/backend not wired |
+| P12 | Many [x] items | Complete | **REPAIRED TO MVP** | Direct-message app path is service-backed; real-device/staging E2E remains release-gated |
 | P13 | All [x] | Complete | **DISCONNECTED** | Backend/services not wired into app |
 | P14 | All [x] | Complete | **PARTIAL / DEFECTIVE** | Raw key fallback; no app wiring |
 | P15 | All [x] | Complete | **VERIFIED COMPONENT ONLY / PARTIAL** | No concrete engine |
