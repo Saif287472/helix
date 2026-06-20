@@ -537,18 +537,6 @@ class RemoteMessagingService {
     final sequence = _nextLocalSequence(conversationId);
     final timestamp = _clock().millisecondsSinceEpoch;
     final uniqueRecipientDeviceIds = recipientDeviceIds.toSet().toList();
-    final hasRemoteMember = conversationMemberIds(
-      conversationId,
-    ).any((memberId) => memberId != accountId);
-    if (hasRemoteMember && uniqueRecipientDeviceIds.isEmpty) {
-      db.saveMessage(
-        localMessage,
-        sequence,
-        timestamp,
-        'SECURE_SESSION_UNAVAILABLE',
-      );
-      return id;
-    }
 
     try {
       final envelopes = await _buildX3dhEnvelopes(
@@ -621,14 +609,51 @@ class RemoteMessagingService {
     );
     final bundleResults = await Future.wait(bundleFutures, eagerError: false);
 
-    // Build device_id -> bundle map
+    // Build device_id -> bundle map and persist discovered peer devices so
+    // future sends do not require pre-seeded local device metadata.
     final deviceBundleMap = <String, Map<String, dynamic>>{};
-    for (final result in bundleResults) {
+    for (var i = 0; i < bundleResults.length; i++) {
+      final accountId = otherMembers[i];
+      final result = bundleResults[i];
       final devices = result['devices'] as List<dynamic>? ?? [];
+      final firstDevice = devices.isEmpty
+          ? null
+          : devices.first as Map<String, dynamic>;
+      db.upsertAccount(
+        RemoteAccount(
+          accountId: accountId,
+          username: accountId,
+          identityPublicKey:
+              result['account_identity_key'] as String? ??
+              firstDevice?['identity_key'] as String? ??
+              '',
+          createdAt: _clock(),
+        ),
+      );
       for (final device in devices) {
         final d = device as Map<String, dynamic>;
-        deviceBundleMap[d['device_id'] as String] = d;
+        final deviceId = d['device_id'] as String;
+        deviceBundleMap[deviceId] = d;
+        db.upsertDevice(
+          accountId,
+          RemoteDevice(
+            deviceId: deviceId,
+            deviceName: d['device_name'] as String? ?? deviceId,
+            deviceSigningPublicKey: d['identity_key'] as String? ?? '',
+            deviceAgreementPublicKey: d['device_key'] as String? ?? '',
+            createdAt: _clock(),
+          ),
+        );
       }
+    }
+
+    final targetDeviceIds = recipientDeviceIds.isEmpty
+        ? deviceBundleMap.keys.toList()
+        : recipientDeviceIds;
+    if (otherMembers.isNotEmpty && targetDeviceIds.isEmpty) {
+      throw const SecureSessionUnavailableException(
+        'no active recipient devices found',
+      );
     }
 
     // Reconstruct Alice's identity key pair from stored bytes
@@ -641,7 +666,7 @@ class RemoteMessagingService {
       type: crypto.KeyPairType.x25519,
     );
 
-    for (final recipientDeviceId in recipientDeviceIds) {
+    for (final recipientDeviceId in targetDeviceIds) {
       final bundle = deviceBundleMap[recipientDeviceId];
       if (bundle == null) {
         throw SecureSessionUnavailableException(

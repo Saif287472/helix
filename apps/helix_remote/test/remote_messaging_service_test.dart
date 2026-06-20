@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
@@ -51,6 +53,11 @@ class _FakeProtector implements RemoteMessageProtector {
 }
 
 class _FakeRestClient implements HelixRemoteRestClient {
+  _FakeRestClient({Map<String, Map<String, dynamic>>? bundles})
+    : bundles = bundles ?? {};
+
+  final Map<String, Map<String, dynamic>> bundles;
+
   @override
   set accessToken(String? token) {}
   @override
@@ -107,7 +114,7 @@ class _FakeRestClient implements HelixRemoteRestClient {
   @override
   Future<Map<String, dynamic>> getPreKeyBundle({
     required String accountId,
-  }) async => {};
+  }) async => bundles[accountId] ?? {'devices': <Map<String, dynamic>>[]};
   @override
   Future<Map<String, dynamic>> sendContactRequest({
     required String peerAccountId,
@@ -333,6 +340,127 @@ void main() {
     final pending = db.getPendingOperations();
     expect(pending.any((op) => op['type'] == 'SEND_MESSAGE'), isFalse);
     expect(jsonEncode(pending), isNot(contains('endpoint')));
+  });
+
+  test('P08 first message discovers peer devices from prekey bundle', () async {
+    final bundle = await _validPreKeyBundle(deviceId: 'bob_discovered_1');
+    service = RemoteMessagingService(
+      db: db,
+      syncEngine: RemoteSyncEngine(db),
+      gateway: gateway,
+      protector: _FakeProtector(),
+      restClient: _FakeRestClient(bundles: {'bob': bundle}),
+      clock: clock,
+    );
+    await service.setupAccount(
+      account: RemoteAccount(
+        accountId: 'alice',
+        username: 'alice',
+        identityPublicKey: 'alice_identity_key',
+        createdAt: clock(),
+      ),
+      device: RemoteDevice(
+        deviceId: 'alice_device_1',
+        deviceName: 'Alice phone',
+        deviceSigningPublicKey: 'alice_device_signing_key',
+        deviceAgreementPublicKey: 'alice_device_agreement_key',
+        createdAt: clock(),
+      ),
+    );
+    final aliceAgreement = await crypto.X25519().newKeyPair();
+    final aliceAgreementPub = await aliceAgreement.extractPublicKey();
+    service.setCryptoKeys(
+      devicePrivateKey: Uint8List.fromList(
+        await aliceAgreement.extractPrivateKeyBytes(),
+      ),
+      devicePublicKey: Uint8List.fromList(aliceAgreementPub.bytes),
+    );
+    service.addContact(peerAccountId: 'bob', nickname: 'Bob');
+    final conversationId = service.createDirectConversation(
+      peerAccountId: 'bob',
+      conversationId: 'dm_discovery',
+    );
+
+    await service.sendText(
+      conversationId: conversationId,
+      messageId: 'msg_discovery',
+      plaintext: 'first hello',
+      recipientDeviceIds: const [],
+    );
+
+    expect(
+      service.recipientDeviceIdsForConversation(conversationId),
+      contains('bob_discovered_1'),
+    );
+    final pendingSend = db.getPendingOperations().singleWhere(
+      (op) => op['type'] == 'SEND_MESSAGE',
+    );
+    final payload =
+        jsonDecode(pendingSend['payload'] as String) as Map<String, dynamic>;
+    expect(jsonEncode(payload), isNot(contains('first hello')));
+    expect(payload['envelopes'], hasLength(1));
+    expect(db.getMessageById('msg_discovery')!['status'], 'PENDING');
+  });
+
+  test('P08 invalid discovered signed prekey fails closed', () async {
+    final bundle = await _validPreKeyBundle(deviceId: 'bob_bad_spk');
+    final devices = bundle['devices'] as List<dynamic>;
+    final device = devices.single as Map<String, dynamic>;
+    final signedPrekey = device['signed_prekey'] as Map<String, dynamic>;
+    signedPrekey['signature'] = base64Encode(List<int>.filled(64, 0));
+
+    service = RemoteMessagingService(
+      db: db,
+      syncEngine: RemoteSyncEngine(db),
+      gateway: gateway,
+      protector: _FakeProtector(),
+      restClient: _FakeRestClient(bundles: {'bob': bundle}),
+      clock: clock,
+    );
+    await service.setupAccount(
+      account: RemoteAccount(
+        accountId: 'alice',
+        username: 'alice',
+        identityPublicKey: 'alice_identity_key',
+        createdAt: clock(),
+      ),
+      device: RemoteDevice(
+        deviceId: 'alice_device_1',
+        deviceName: 'Alice phone',
+        deviceSigningPublicKey: 'alice_device_signing_key',
+        deviceAgreementPublicKey: 'alice_device_agreement_key',
+        createdAt: clock(),
+      ),
+    );
+    final aliceAgreement = await crypto.X25519().newKeyPair();
+    final aliceAgreementPub = await aliceAgreement.extractPublicKey();
+    service.setCryptoKeys(
+      devicePrivateKey: Uint8List.fromList(
+        await aliceAgreement.extractPrivateKeyBytes(),
+      ),
+      devicePublicKey: Uint8List.fromList(aliceAgreementPub.bytes),
+    );
+    service.addContact(peerAccountId: 'bob', nickname: 'Bob');
+    final conversationId = service.createDirectConversation(
+      peerAccountId: 'bob',
+      conversationId: 'dm_bad_spk',
+    );
+
+    await service.sendText(
+      conversationId: conversationId,
+      messageId: 'msg_bad_spk',
+      plaintext: 'first hello',
+      recipientDeviceIds: const [],
+    );
+
+    expect(
+      db.getMessageById('msg_bad_spk')!['status'],
+      'SECURE_SESSION_UNAVAILABLE',
+    );
+    expect(
+      db.getPendingOperations().any((op) => op['type'] == 'SEND_MESSAGE'),
+      isFalse,
+    );
   });
 
   test('P2-08 trust decisions persist key change state', () {
@@ -673,4 +801,34 @@ void main() {
     expect(second.getContact('kai')!.status, 'PendingReceived');
     expect(second.getContactRequest('cr_restart')!.peerAccountId, 'kai');
   });
+}
+
+Future<Map<String, dynamic>> _validPreKeyBundle({
+  required String deviceId,
+}) async {
+  final ed25519 = crypto.Ed25519();
+  final x25519 = crypto.X25519();
+  final signing = await ed25519.newKeyPair();
+  final signingPub = await signing.extractPublicKey();
+  final agreement = await x25519.newKeyPair();
+  final agreementPub = await agreement.extractPublicKey();
+  final signedPrekey = await x25519.newKeyPair();
+  final signedPrekeyPub = await signedPrekey.extractPublicKey();
+  final signature = await ed25519.sign(signedPrekeyPub.bytes, keyPair: signing);
+
+  return {
+    'devices': [
+      {
+        'device_id': deviceId,
+        'device_key': base64Encode(agreementPub.bytes),
+        'identity_key': base64Encode(signingPub.bytes),
+        'signed_prekey': {
+          'key_id': 1,
+          'public_key': base64Encode(signedPrekeyPub.bytes),
+          'signature': base64Encode(signature.bytes),
+        },
+        'one_time_prekey': null,
+      },
+    ],
+  };
 }

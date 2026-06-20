@@ -143,10 +143,11 @@ findings:
       - apps/helix_remote/lib/app/remote_messaging_service.dart
       - packages/remote/helix_remote_crypto/lib/src/prekey_manager.dart
       - services/helix_remote_backend/lib/src/modules/prekeys.dart
-    status: pending
+      - apps/helix_remote/test/remote_messaging_service_test.dart
+    status: complete
     tests_required:
       - First-message device discovery and fail-closed missing-device tests.
-    final_disposition: Pending Phase 08.
+    final_disposition: Completed in Phase 08 with accepted-contact first-send device discovery, signed-prekey verification, discovered peer-device persistence, encrypted envelope enqueueing, and fail-closed invalid/no-device coverage.
   - id: HXA-009
     title: Visible actions target missing or wrong routes
     primary_phase: 06

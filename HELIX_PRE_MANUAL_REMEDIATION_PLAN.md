@@ -136,7 +136,7 @@ Do not silently expand a phase into unrelated work.
 | 05 | Remote recovery strategy and fresh-device account restore | HXA-005 | 04 | COMPLETE |
 | 06 | Remote contract, route, fixture, and serialization parity | HXA-009, HXA-021 | 04 | COMPLETE |
 | 07 | Remote contact requests and accepted-contact conversation gating | HXA-007 | 06 | COMPLETE |
-| 08 | Remote first-message device discovery and E2EE session establishment | HXA-008 | 06, 07 | NOT STARTED |
+| 08 | Remote first-message device discovery and E2EE session establishment | HXA-008 | 06, 07 | COMPLETE |
 | 09 | Remote realtime runtime, reactive screens, and runtime health UI | HXA-010, HXA-023 | 03, 06, 08 | NOT STARTED |
 | 10 | Remote outbox truthfulness, retries, and failure recovery | HXA-022 | 06, 09 | NOT STARTED |
 | 11 | Remote attachments end to end | Attachment portion of HXA-011 | 08, 09, 10 | NOT STARTED |
@@ -985,7 +985,7 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 # Phase 08 — Remote first-message device discovery and E2EE session establishment
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE
 **Audit coverage:** HXA-008  
 **Purpose:** Make the first direct message succeed without pre-seeded peer-device data.
 
@@ -1032,7 +1032,31 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-21
+- Agent/model identifier: Codex (GPT-5)
+- Starting commit: `b972723`
+- Ending commit or working-tree state: Phase 08 committed locally after this
+  record; expected working tree clean after commit.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `docs/remediation/pre_manual_remediation_ledger.yaml`
+  - `apps/helix_remote/lib/app/remote_messaging_service.dart`
+  - `apps/helix_remote/test/remote_messaging_service_test.dart`
+- Tests and commands run with results:
+  - `dart format apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/test/remote_messaging_service_test.dart` - PASS.
+  - `dart analyze apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/test/remote_messaging_service_test.dart` - PASS.
+  - `flutter test test/remote_messaging_service_test.dart` from `apps/helix_remote` - PASS, 12/12 tests.
+  - `.\scripts\verify.ps1` from repo root - PASS. Debug builds were skipped by the script default because `HELIX_VERIFY_BUILD` was not set.
+- Acceptance criteria result:
+  - HXA-008 PASS: `RemoteMessagingService.sendText` no longer fails only because the local recipient device cache is empty for an accepted remote conversation.
+  - First send now fetches recipient prekey bundles, verifies discovered signed prekeys before envelope construction, persists discovered account/device metadata, and fans out encrypted envelopes to discovered device IDs.
+  - Empty recipient bundles still fail closed with `SECURE_SESSION_UNAVAILABLE`, and invalid signed-prekey signatures do not enqueue outbound network sends.
+  - Ratchet/session persistence remains covered through the existing remote messaging secure-session tests and the newly added first-message discovery path.
+- Security-sensitive areas touched: Remote E2EE session establishment, peer device discovery/persistence, signed-prekey verification, and outbound encrypted message enqueueing. No plaintext payload is added to pending network operations.
+- Contract or migration changes: None.
+- Remaining manual-only checks: Real two-client first-message exchange against a live backend, device revocation during a live send race, and sender secondary-device fan-out policy remain covered by later integrated/manual phases.
+- Deviations from this plan and why: Local prekey replenishment behavior remains in the existing prekey manager/backend flow; Phase 08 closes the user-journey blocker by making accepted-contact first send discover and verify recipient devices on demand.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1715,7 +1739,7 @@ _Not completed._
 | HXA-005 Restore code ignored | 05 | Complete |
 | HXA-006 Reset Required has no action | 03 | Complete |
 | HXA-007 Contact-request lifecycle unreachable | 07 | Complete |
-| HXA-008 First message lacks recipient devices | 08 | Pending |
+| HXA-008 First message lacks recipient devices | 08 | Complete |
 | HXA-009 Visible actions target missing/wrong routes | 06 | Complete |
 | HXA-010 Screens do not react to synchronized changes | 09 | Pending |
 | HXA-011 Attachments and calls unreachable | 11 | Pending; call-specific work coordinated in Phase 12 |
