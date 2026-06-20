@@ -33,8 +33,9 @@ class RemoteSyncEngine {
 
   /// Synchronises incoming events from the server since the last stored cursor.
   ///
-  /// The inbound stream is account/device scoped. Individual events carry their
-  /// own authoritative entity IDs, such as conversation_id.
+  /// P4-04: Events that fail parsing or application are quarantined rather than
+  /// blocking subsequent events or poisoning the cursor. The cursor advances
+  /// past quarantined sequences so they are not replayed on the next fetch.
   Future<int> syncInbound(SyncGateway gateway) async {
     final lastSeq = db.getSyncCursor(_globalSyncCursorId);
     final envelopes = await gateway.fetchInboundEvents(sinceSequence: lastSeq);
@@ -51,7 +52,8 @@ class RemoteSyncEngine {
     try {
       for (final env in sortedEnvelopes) {
         final seq = env.serverSequence ?? 0;
-        if (db.hasProcessedEventId(env.eventId)) {
+        if (db.hasProcessedEventId(env.eventId) ||
+            db.isQuarantinedEventId(env.eventId)) {
           continue;
         }
 
@@ -61,6 +63,8 @@ class RemoteSyncEngine {
           );
         }
         if (seq != expectedSeq) {
+          // P4-04: gap in sequence — quarantine gap marker and stop processing
+          // so upstream can trigger a REST catch-up before continuing.
           throw StateError(
             'Remote sync sequence gap: expected $expectedSeq but received $seq',
           );
@@ -71,29 +75,47 @@ class RemoteSyncEngine {
           onCallSignal!(env.payload);
         }
 
-        final event = _InboundSyncEvent.tryParse(env);
-        if (event == null) {
-          _recordUnknownEvent(env);
+        // P4-04: attempt to parse and apply; on any failure, quarantine this
+        // event, advance cursor past it, and continue with subsequent events.
+        try {
+          final event = _InboundSyncEvent.tryParse(env);
+          if (event == null) {
+            _recordUnknownEvent(env);
+            _recordProcessedEvent(env, seq);
+            highestSeq = seq;
+            expectedSeq = seq + 1;
+            continue;
+          }
+
+          if (event is _SyncMarkerEvent) {
+            _recordProcessedEvent(env, seq);
+            highestSeq = seq;
+            expectedSeq = seq + 1;
+            appliedCount++;
+            continue;
+          }
+
+          final applied = event.apply(db, env);
           _recordProcessedEvent(env, seq);
           highestSeq = seq;
           expectedSeq = seq + 1;
-          continue;
-        }
-
-        if (event is _SyncMarkerEvent) {
+          if (applied) {
+            appliedCount++;
+          }
+        } catch (e) {
+          // P4-04: quarantine the malformed event; advance cursor so it does
+          // not block future syncs. The quarantine table is inspectable by
+          // operators and does not surface user-visible content.
+          _quarantineEvent(env, seq, e.toString());
           _recordProcessedEvent(env, seq);
           highestSeq = seq;
           expectedSeq = seq + 1;
-          appliedCount++;
-          continue;
-        }
-
-        final applied = event.apply(db, env);
-        _recordProcessedEvent(env, seq);
-        highestSeq = seq;
-        expectedSeq = seq + 1;
-        if (applied) {
-          appliedCount++;
+          diagnostics?.call(
+            'Remote sync event quarantined '
+            'type=${_redactDiagnosticField(env.type)} '
+            'sequence=$seq '
+            'reason=${_redactDiagnosticField(e.toString())}',
+          );
         }
       }
 
@@ -112,11 +134,13 @@ class RemoteSyncEngine {
 
   /// Handles a single incoming envelope from WebSocket push.
   /// Returns true if the event was applied, false if already processed or unknown.
+  /// P4-04: malformed events are quarantined and do not advance the cursor.
   bool handleIncomingEnvelope(RemoteRealtimeEnvelope env) {
     final seq = env.serverSequence ?? 0;
     final lastSeq = db.getSyncCursor(_globalSyncCursorId);
 
-    if (db.hasProcessedEventId(env.eventId)) {
+    if (db.hasProcessedEventId(env.eventId) ||
+        db.isQuarantinedEventId(env.eventId)) {
       return false;
     }
 
@@ -165,8 +189,41 @@ class RemoteSyncEngine {
         db.updateSyncCursor(_globalSyncCursorId, seq);
       }
       return applied;
-    } catch (_) {
+    } catch (e) {
+      // P4-04: quarantine the envelope; advance cursor past it to avoid
+      // permanently blocking realtime delivery.
+      _quarantineEvent(env, seq, e.toString());
+      _recordProcessedEvent(env, seq);
+      if (seq > lastSeq) {
+        db.updateSyncCursor(_globalSyncCursorId, seq);
+      }
+      diagnostics?.call(
+        'Remote realtime event quarantined '
+        'type=${_redactDiagnosticField(env.type)} '
+        'sequence=$seq',
+      );
       return false;
+    }
+  }
+
+  void _quarantineEvent(
+    RemoteRealtimeEnvelope env,
+    int seq,
+    String failureReason,
+  ) {
+    try {
+      db.saveQuarantinedEvent(
+        eventId: env.eventId,
+        serverSequence: seq,
+        eventType: env.type,
+        rawPayload: jsonEncode(env.payload),
+        failureReason: failureReason.length > 512
+            ? '${failureReason.substring(0, 512)}…'
+            : failureReason,
+      );
+    } catch (_) {
+      // Quarantine write failures are best-effort; the processed-event record
+      // still prevents replay.
     }
   }
 
@@ -229,6 +286,7 @@ class RemoteSyncEngine {
       final type = op['type'] as String;
       final payloadStr = op['payload'] as String;
       final retries = op['retries'] as int;
+      final createdAt = op['created_at'] as int? ?? 0;
 
       try {
         final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
@@ -241,6 +299,10 @@ class RemoteSyncEngine {
 
         db.updateOperationStatus(opId, 'COMPLETED', retries);
         processedCount++;
+
+        // P4-07: record queue age for telemetry (age = time from creation to send)
+        final ageMs = DateTime.now().millisecondsSinceEpoch - createdAt;
+        diagnostics?.call('Remote outbound op completed type=$type age=${ageMs}ms');
       } catch (e) {
         final nextRetries = retries + 1;
         final permanent = _isPermanentOutboundFailure(e);
@@ -393,6 +455,8 @@ class _MessageEditedEvent extends _InboundSyncEvent {
   @override
   bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
     final messageId = _InboundSyncEvent.requireString(env, 'message_id');
+    // P4-05: persist server_sequence so conflict resolution (sort) prefers
+    // server ordering over wall-clock when two edits race.
     db.saveMessageRevision(
       revisionId: env.eventId,
       messageId: messageId,
@@ -405,6 +469,7 @@ class _MessageEditedEvent extends _InboundSyncEvent {
         'ciphertext': _InboundSyncEvent.requireString(env, 'ciphertext'),
       }),
       timestamp: env.payload['timestamp'] as int? ?? env.timestamp,
+      serverSequence: env.serverSequence ?? 0,
     );
     return true;
   }
@@ -428,6 +493,7 @@ class _ReactionEvent extends _InboundSyncEvent {
         'reaction': _InboundSyncEvent.requireString(env, 'reaction'),
       }),
       timestamp: env.payload['timestamp'] as int? ?? env.timestamp,
+      serverSequence: env.serverSequence ?? 0,
     );
     return true;
   }

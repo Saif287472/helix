@@ -8,3 +8,4 @@ export 'domain/attachment.dart';
 export 'domain/group.dart';
 export 'domain/call.dart';
 export 'domain/sync.dart';
+export 'domain/remote_status.dart';

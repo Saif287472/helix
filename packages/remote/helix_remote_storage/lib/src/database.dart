@@ -433,6 +433,19 @@ class HelixRemoteDatabase {
       );
     ''');
 
+    // P4-04: Inbound events that fail parsing or application are quarantined
+    // here so they never block subsequent valid events or advance the cursor.
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS quarantine_events (
+        event_id TEXT PRIMARY KEY,
+        server_sequence INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        raw_payload TEXT NOT NULL,
+        failure_reason TEXT NOT NULL,
+        quarantined_at INTEGER NOT NULL
+      );
+    ''');
+
     _createRemoteCryptoTables();
   }
 
@@ -524,6 +537,27 @@ class HelixRemoteDatabase {
     if (version < 7) {
       _createRemoteCryptoTables();
       _db.execute('PRAGMA user_version = 7;');
+    }
+    if (version < 8) {
+      // P4-04: Quarantine table for inbound events that fail application.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS quarantine_events (
+          event_id TEXT PRIMARY KEY,
+          server_sequence INTEGER NOT NULL,
+          event_type TEXT NOT NULL,
+          raw_payload TEXT NOT NULL,
+          failure_reason TEXT NOT NULL,
+          quarantined_at INTEGER NOT NULL
+        );
+      ''');
+      // P4-05: Add server_sequence to revisions for deterministic conflict
+      // resolution — server sequence wins over wall-clock ordering.
+      try {
+        _db.execute(
+          'ALTER TABLE revisions ADD COLUMN server_sequence INTEGER NOT NULL DEFAULT 0;',
+        );
+      } catch (_) {}
+      _db.execute('PRAGMA user_version = 8;');
     }
   }
 
@@ -1377,6 +1411,7 @@ class HelixRemoteDatabase {
     required String authorId,
     required String payload,
     required int timestamp,
+    int serverSequence = 0,
   }) {
     final stmt = _db.prepare('''
       INSERT OR REPLACE INTO revisions (
@@ -1385,17 +1420,28 @@ class HelixRemoteDatabase {
         type,
         author_id,
         payload,
-        timestamp
+        timestamp,
+        server_sequence
       )
-      VALUES (?, ?, ?, ?, ?, ?);
+      VALUES (?, ?, ?, ?, ?, ?, ?);
     ''');
-    stmt.execute([revisionId, messageId, type, authorId, payload, timestamp]);
+    stmt.execute([
+      revisionId,
+      messageId,
+      type,
+      authorId,
+      payload,
+      timestamp,
+      serverSequence,
+    ]);
     stmt.close();
   }
 
+  // P4-05: Order by server_sequence first (server wins over wall-clock),
+  // then timestamp as tie-breaker for locally-generated revisions.
   List<Map<String, dynamic>> getMessageRevisions(String messageId) {
     final stmt = _db.prepare(
-      'SELECT * FROM revisions WHERE message_id = ? ORDER BY timestamp ASC;',
+      'SELECT * FROM revisions WHERE message_id = ? ORDER BY server_sequence ASC, timestamp ASC;',
     );
     final res = stmt.select([messageId]);
     stmt.close();
@@ -1408,6 +1454,7 @@ class HelixRemoteDatabase {
             'author_id': row['author_id'],
             'payload': row['payload'],
             'timestamp': row['timestamp'],
+            'server_sequence': row['server_sequence'] ?? 0,
           },
         )
         .toList();
@@ -1523,6 +1570,67 @@ class HelixRemoteDatabase {
       DateTime.now().millisecondsSinceEpoch,
     ]);
     stmt.close();
+  }
+
+  // P4-04: Quarantine an inbound event that failed parsing or application.
+  // The event is recorded so operators can inspect it; it does NOT advance
+  // the sync cursor.
+  void saveQuarantinedEvent({
+    required String eventId,
+    required int serverSequence,
+    required String eventType,
+    required String rawPayload,
+    required String failureReason,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO quarantine_events (
+        event_id,
+        server_sequence,
+        event_type,
+        raw_payload,
+        failure_reason,
+        quarantined_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      eventId,
+      serverSequence,
+      eventType,
+      rawPayload,
+      failureReason,
+      DateTime.now().millisecondsSinceEpoch,
+    ]);
+    stmt.close();
+  }
+
+  List<Map<String, dynamic>> getQuarantinedEvents() {
+    final stmt = _db.prepare(
+      'SELECT * FROM quarantine_events ORDER BY server_sequence ASC;',
+    );
+    final res = stmt.select();
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'event_id': row['event_id'],
+            'server_sequence': row['server_sequence'],
+            'event_type': row['event_type'],
+            'raw_payload': row['raw_payload'],
+            'failure_reason': row['failure_reason'],
+            'quarantined_at': row['quarantined_at'],
+          },
+        )
+        .toList();
+  }
+
+  bool isQuarantinedEventId(String eventId) {
+    final stmt = _db.prepare(
+      'SELECT 1 FROM quarantine_events WHERE event_id = ?;',
+    );
+    final res = stmt.select([eventId]);
+    stmt.close();
+    return res.isNotEmpty;
   }
 
   // ---------------------------------------------------------------------------

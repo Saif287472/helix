@@ -208,6 +208,8 @@ class RemoteMessagingService {
         'request_id': id,
         'peer_account_id': peerAccountId,
         'nickname': nickname,
+        'protocol_version': 1,
+        'sender_device_id': _deviceId,
       }),
       idempotencyKey: 'contact_request:$id',
     );
@@ -229,7 +231,11 @@ class RemoteMessagingService {
     db.enqueueOperation(
       'accept_$requestId',
       'CONTACT_REQUEST_ACCEPT',
-      jsonEncode({'request_id': requestId}),
+      jsonEncode({
+        'request_id': requestId,
+        'protocol_version': 1,
+        'sender_device_id': _deviceId,
+      }),
       idempotencyKey: 'contact_accept:$requestId',
     );
   }
@@ -242,7 +248,11 @@ class RemoteMessagingService {
     db.enqueueOperation(
       'reject_$requestId',
       'CONTACT_REQUEST_REJECT',
-      jsonEncode({'request_id': requestId}),
+      jsonEncode({
+        'request_id': requestId,
+        'protocol_version': 1,
+        'sender_device_id': _deviceId,
+      }),
       idempotencyKey: 'contact_reject:$requestId',
     );
   }
@@ -255,7 +265,11 @@ class RemoteMessagingService {
     db.enqueueOperation(
       'cancel_$requestId',
       'CONTACT_REQUEST_CANCEL',
-      jsonEncode({'request_id': requestId}),
+      jsonEncode({
+        'request_id': requestId,
+        'protocol_version': 1,
+        'sender_device_id': _deviceId,
+      }),
       idempotencyKey: 'contact_cancel:$requestId',
     );
   }
@@ -265,7 +279,11 @@ class RemoteMessagingService {
     db.enqueueOperation(
       'remove_contact_${peerAccountId}_${_clock().microsecondsSinceEpoch}',
       'CONTACT_REMOVE',
-      jsonEncode({'peer_account_id': peerAccountId}),
+      jsonEncode({
+        'peer_account_id': peerAccountId,
+        'protocol_version': 1,
+        'sender_device_id': _deviceId,
+      }),
       idempotencyKey: 'contact_remove:$peerAccountId',
     );
   }
@@ -281,7 +299,11 @@ class RemoteMessagingService {
     db.enqueueOperation(
       'block_contact_${peerAccountId}_${_clock().microsecondsSinceEpoch}',
       'CONTACT_BLOCK',
-      jsonEncode({'peer_account_id': peerAccountId}),
+      jsonEncode({
+        'peer_account_id': peerAccountId,
+        'protocol_version': 1,
+        'sender_device_id': _deviceId,
+      }),
       idempotencyKey: 'contact_block:$peerAccountId',
     );
   }
@@ -291,7 +313,11 @@ class RemoteMessagingService {
     db.enqueueOperation(
       'unblock_contact_${peerAccountId}_${_clock().microsecondsSinceEpoch}',
       'CONTACT_UNBLOCK',
-      jsonEncode({'peer_account_id': peerAccountId}),
+      jsonEncode({
+        'peer_account_id': peerAccountId,
+        'protocol_version': 1,
+        'sender_device_id': _deviceId,
+      }),
       idempotencyKey: 'contact_unblock:$peerAccountId',
     );
   }
@@ -412,6 +438,8 @@ class RemoteMessagingService {
         'type': 'DIRECT',
         'title': title,
         'members': [accountId, peerAccountId],
+        'protocol_version': 1,
+        'sender_device_id': deviceId,
       }),
       idempotencyKey: 'conversation:$id',
     );
@@ -466,6 +494,9 @@ class RemoteMessagingService {
         payload: jsonEncode({
           'message_id': id,
           'conversation_id': conversationId,
+          'sender_account_id': accountId,
+          'sender_device_id': deviceId,
+          'protocol_version': 1,
           'envelopes': envelopes,
         }),
         idempotencyKey: 'message:$id',
@@ -619,7 +650,7 @@ class RemoteMessagingService {
         ..add(nonce)
         ..add(encrypted.cipherText)
         ..add(encrypted.mac.bytes);
-      final ciphertext = base64Url.encode(ciphertextBytes.toBytes());
+      final innerCiphertext = base64Url.encode(ciphertextBytes.toBytes());
 
       final aliceIdentityPubKey = await aliceIdentityKey.extractPublicKey();
       final x3dhHeader = <String, dynamic>{
@@ -637,10 +668,18 @@ class RemoteMessagingService {
         },
       };
 
+      // P4-03: Pack ciphertext + X3DH header into a single opaque blob so the
+      // backend can relay both without schema changes. The recipient unpacks
+      // this blob to perform X3DH receive and AES-GCM decryption.
+      final packedEnvelope = base64Url.encode(
+        utf8.encode(
+          jsonEncode({'v': 1, 'ct': innerCiphertext, 'h': x3dhHeader}),
+        ),
+      );
+
       envelopes.add({
         'recipient_device_id': recipientDeviceId,
-        'ciphertext': ciphertext,
-        'x3dh_header': x3dhHeader,
+        'ciphertext': packedEnvelope,
       });
     }
 
@@ -740,6 +779,7 @@ class RemoteMessagingService {
         'conversation_id': conversationId,
         'account_id': _requireAccountId(),
         'device_id': _requireDeviceId(),
+        'protocol_version': 1,
       }),
       idempotencyKey: 'delivery:$receiptId',
     );
@@ -772,6 +812,7 @@ class RemoteMessagingService {
         'conversation_id': conversationId,
         'account_id': _requireAccountId(),
         'device_id': _requireDeviceId(),
+        'protocol_version': 1,
       }),
       idempotencyKey: 'read:$receiptId',
     );
@@ -823,6 +864,8 @@ class RemoteMessagingService {
         'conversation_id': conversationId,
         'revision_id': revisionId,
         'ciphertext': ciphertext,
+        'protocol_version': 1,
+        'sender_device_id': _requireDeviceId(),
       }),
       idempotencyKey: 'edit:$revisionId',
     );
@@ -872,7 +915,12 @@ class RemoteMessagingService {
     db.enqueueOperation(
       'delete_$messageId',
       'DELETE_MESSAGE',
-      jsonEncode({'message_id': messageId, 'conversation_id': conversationId}),
+      jsonEncode({
+        'message_id': messageId,
+        'conversation_id': conversationId,
+        'protocol_version': 1,
+        'sender_device_id': _requireDeviceId(),
+      }),
       idempotencyKey: 'delete:$messageId',
     );
   }
