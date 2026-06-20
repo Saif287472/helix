@@ -32,31 +32,41 @@ class RemoteWebSocketClient {
   StreamSubscription<dynamic>? _subscription;
   Timer? _pingTimer;
   bool _disposed = false;
+  int _generation = 0;
 
   bool get isConnected => _ws != null;
 
   Future<void> connect() async {
     if (_disposed) return;
     await disconnect();
+    final generation = ++_generation;
 
     try {
-      _ws = await WebSocket.connect(
+      final socket = await WebSocket.connect(
         _wsUri.toString(),
         headers: {'Authorization': 'Bearer $_token'},
       );
-      _subscription = _ws!.listen(
+      if (_disposed || generation != _generation) {
+        await socket.close();
+        return;
+      }
+      _ws = socket;
+      _subscription = socket.listen(
         _onData,
         onError: (error) {
+          if (generation != _generation) return;
           _ws = null;
           _onError?.call(error.toString());
         },
         onDone: () {
+          if (generation != _generation) return;
           _ws = null;
           _onDone?.call();
         },
       );
-      _startPing();
+      _startPing(generation);
     } catch (e) {
+      if (generation != _generation || _disposed) return;
       _onError?.call(e.toString());
       rethrow;
     }
@@ -83,9 +93,10 @@ class RemoteWebSocketClient {
     }
   }
 
-  void _startPing() {
+  void _startPing(int generation) {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(_pingInterval, (_) {
+      if (_disposed || generation != _generation) return;
       try {
         _ws?.add(jsonEncode({'type': 'ping'}));
       } catch (e) {
@@ -109,6 +120,7 @@ class RemoteWebSocketClient {
   }
 
   Future<void> disconnect() async {
+    _generation++;
     _pingTimer?.cancel();
     _pingTimer = null;
     await _subscription?.cancel();
@@ -117,8 +129,8 @@ class RemoteWebSocketClient {
     _ws = null;
   }
 
-  void dispose() {
+  Future<void> dispose() async {
     _disposed = true;
-    disconnect();
+    await disconnect();
   }
 }

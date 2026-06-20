@@ -76,7 +76,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   @override
   void dispose() {
     _usernameController.dispose();
-    widget.root.dispose();
+    widget.root.dispose().ignore();
     super.dispose();
   }
 

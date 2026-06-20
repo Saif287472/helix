@@ -79,7 +79,7 @@ export 'package:helix/providers/session_provider.dart'
 final compositionRootProvider = Provider<LocalCompositionRoot>((ref) {
   final descriptor = ref.watch(productDescriptorProvider);
   final root = LocalCompositionRoot.production(descriptor);
-  ref.onDispose(root.dispose);
+  ref.onDispose(() => root.dispose().ignore());
   return root;
 });
 

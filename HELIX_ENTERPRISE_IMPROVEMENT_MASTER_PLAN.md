@@ -361,17 +361,17 @@ Create a single `RemoteRuntimeCoordinator` owned by `RemoteCompositionRoot`. It 
 
 ### Agent-executable tasks
 
-| ID | Agent instruction | Required behavior | Verification |
-|---|---|---|---|
-| P3-01 | Add typed REST errors, connect/read/write timeouts, cancellation, bounded retries for safe/idempotent operations, `Retry-After`, correlation IDs, and idempotency headers. | Non-idempotent mutations are never blindly replayed | fault-injection HTTP tests |
-| P3-02 | Replace endpoint string switch/default routing with a sealed operation registry. Unknown operations must fail closed before opening a request. | Group/contact typo cannot become a message send | exhaustive operation mapping test |
-| P3-03 | Implement lifecycle coordinator startup sequence: validate session → catch up inbound → drain outbox → connect realtime → mark ready. | UI is not “ready” before first consistent sync | state-machine tests |
-| P3-04 | Implement single-flight outbound worker with durable attempt count, exponential backoff with jitter, retry classification, next-attempt time, cancellation, and dead-letter state visible to users. | Restart resumes safely; idempotency prevents duplicates | crash/restart and duplicate-submit tests |
-| P3-05 | Implement WebSocket reconnect using configured policy, network-awareness, token refresh, and connection generation IDs. Prevent an old socket’s `onDone` from clearing a newer socket. | One logical connection per device | reconnect-race tests |
-| P3-06 | Implement sequence-gap detection. Realtime events may advance only after contiguous application; gaps trigger REST catch-up. Persist cursor and event atomically. | Out-of-order WebSocket events do not skip data | gap/reorder/property tests |
-| P3-07 | Define ACK semantics and backend mailbox retention. ACK the highest contiguous device sequence after durable application. Reconnect starts from persisted ACK/cursor. | Backend does not replay from zero indefinitely | offline/reconnect integration test |
-| P3-08 | Add a connectivity/sync state model: offline, connecting, syncing, ready, degraded, auth-required, retry scheduled, failed operation count. | UI can explain every non-ready state | widget/state tests |
-| P3-09 | Make `dispose()` asynchronous and awaited throughout both app roots. Close timers, streams, sockets, DB, call media, HTTP clients, and workers in a deterministic order. | No callbacks after disposal | leak/disposal tests |
+| ID | Status | Agent instruction | Required behavior | Verification |
+|---|---|---|---|---|
+| P3-01 | DONE | Add typed REST errors, connect/read/write timeouts, cancellation, bounded retries for safe/idempotent operations, `Retry-After`, correlation IDs, and idempotency headers. | Non-idempotent mutations are never blindly replayed | `remote_rest_client_fault_test.dart` covers safe GET retry and non-idempotent POST non-replay |
+| P3-02 | DONE | Replace endpoint string switch/default routing with a sealed operation registry. Unknown operations must fail closed before opening a request. | Group/contact typo cannot become a message send | `remote_runtime_coordinator_test.dart` covers known mapping and unknown fail-closed behavior |
+| P3-03 | DONE | Implement lifecycle coordinator startup sequence: validate session -> token refresh -> catch up inbound -> drain outbox -> connect realtime -> mark ready. | UI is not ready before first consistent sync | `RemoteRuntimeCoordinator` startup state-machine test |
+| P3-04 | DONE | Implement single-flight outbound worker with durable attempt count, exponential backoff with jitter, retry classification, next-attempt time, cancellation, and dead-letter state visible to users. | Restart resumes safely; idempotency prevents duplicates | `remote_sync_test.dart` covers backoff persistence, DLQ, and concurrent drain single-flight |
+| P3-05 | DONE | Implement WebSocket reconnect using configured policy, network-awareness, token refresh, and connection generation IDs. Prevent an old socket's `onDone` from clearing a newer socket. | One logical connection per device | `RemoteRuntimeCoordinator` reconnect/network tests plus `RemoteWebSocketClient` generation guards |
+| P3-06 | DONE | Implement sequence-gap detection. Realtime events may advance only after contiguous application; gaps trigger REST catch-up. Persist cursor and event atomically. | Out-of-order WebSocket events do not skip data | `remote_sync_test.dart` covers REST batch gaps, realtime gaps, rollback, and atomic cursor advancement |
+| P3-07 | DONE | Define ACK semantics and backend mailbox retention. ACK the highest contiguous device sequence after durable application. Reconnect starts from persisted ACK/cursor. | Backend does not replay from zero indefinitely | Client sends ACK after contiguous durable realtime apply; backend cursor ACK path covered by existing integration tests |
+| P3-08 | DONE | Add a connectivity/sync state model: offline, connecting, syncing, ready, degraded, auth-required, retry scheduled, failed operation count. | UI can explain every non-ready state | `RemoteRuntimeCoordinator` snapshot and network/state tests |
+| P3-09 | DONE | Make `dispose()` asynchronous and awaited throughout both app roots. Close timers, streams, sockets, DB, call media, HTTP clients, and workers in a deterministic order. | No callbacks after disposal | Remote and Local composition-root disposal tests; WebSocket/runtime timers close deterministically |
 
 ### Exit criteria
 

@@ -22,6 +22,8 @@ class RemoteSyncGatewayImpl implements SyncGateway {
   final Uri _baseUri;
   final String? Function()? _tokenProvider;
   final HttpClient _httpClient;
+  final RemoteOutboundOperationRegistry _registry =
+      RemoteOutboundOperationRegistry();
 
   String? get _authHeader {
     final token = _tokenProvider?.call();
@@ -65,9 +67,12 @@ class RemoteSyncGatewayImpl implements SyncGateway {
     required String type,
     required Map<String, dynamic> payload,
   }) async {
-    final uri = _resolveEndpoint(type);
-    final req = await _httpClient.postUrl(uri);
+    final operation = _registry.require(type);
+    final uri = _baseUri.resolve(operation.path);
+    final req = await _httpClient.openUrl(operation.method, uri);
     req.headers.set('Content-Type', 'application/json');
+    req.headers.set('X-Correlation-Id', opId);
+    req.headers.set('Idempotency-Key', opId);
     final auth = _authHeader;
     if (auth != null) {
       req.headers.set('Authorization', auth);
@@ -86,52 +91,6 @@ class RemoteSyncGatewayImpl implements SyncGateway {
     }
   }
 
-  Uri _resolveEndpoint(String type) {
-    switch (type) {
-      case 'SEND_MESSAGE':
-        return _baseUri.resolve('/api/v1/messages/send');
-      case 'CREATE_CONVERSATION':
-        return _baseUri.resolve('/api/v1/messages/conversations/create');
-      case 'DELETE_MESSAGE':
-        return _baseUri.resolve('/api/v1/messages/delete');
-      case 'EDIT_MESSAGE':
-        return _baseUri.resolve('/api/v1/messages/edit');
-      case 'REACTION':
-        return _baseUri.resolve('/api/v1/messages/reactions');
-      case 'DELIVERY_RECEIPT':
-      case 'READ_RECEIPT':
-        return _baseUri.resolve('/api/v1/messages/receipts');
-      case 'TYPING':
-        return _baseUri.resolve('/api/v1/messages/typing');
-      case 'CONTACT_REQUEST':
-        return _baseUri.resolve('/api/v1/contacts/requests');
-      case 'CONTACT_REQUEST_ACCEPT':
-        return _baseUri.resolve('/api/v1/contacts/requests/accept');
-      case 'CONTACT_REQUEST_REJECT':
-        return _baseUri.resolve('/api/v1/contacts/requests/reject');
-      case 'CONTACT_REQUEST_CANCEL':
-        return _baseUri.resolve('/api/v1/contacts/requests/cancel');
-      case 'CONTACT_REMOVE':
-        return _baseUri.resolve('/api/v1/contacts/remove');
-      case 'CONTACT_BLOCK':
-        return _baseUri.resolve('/api/v1/contacts/block');
-      case 'CONTACT_UNBLOCK':
-        return _baseUri.resolve('/api/v1/contacts/unblock');
-      case 'USERNAME_CHANGE':
-        return _baseUri.resolve('/api/v1/profile/username');
-      case 'PRIVACY_UPDATE':
-        return _baseUri.resolve('/api/v1/contacts/privacy');
-      case 'PRESENCE_UPDATE':
-        return _baseUri.resolve('/api/v1/contacts/presence');
-      case 'PROFILE_UPDATE':
-        return _baseUri.resolve('/api/v1/profile');
-      case 'SAFETY_REPORT':
-        return _baseUri.resolve('/api/v1/accounts/report');
-      default:
-        return _baseUri.resolve('/api/v1/messages/send');
-    }
-  }
-
   Map<String, dynamic> _buildBody(String type, Map<String, dynamic> payload) {
     switch (type) {
       case 'SEND_MESSAGE':
@@ -140,4 +99,135 @@ class RemoteSyncGatewayImpl implements SyncGateway {
         return payload;
     }
   }
+}
+
+class RemoteOutboundOperationRegistry {
+  RemoteOutboundOperation require(String type) {
+    final operation = RemoteOutboundOperation.valuesByType[type];
+    if (operation == null) {
+      throw StateError('Unknown Remote outbound operation: $type');
+    }
+    return operation;
+  }
+
+  Iterable<String> get knownTypes => RemoteOutboundOperation.valuesByType.keys;
+}
+
+class RemoteOutboundOperation {
+  const RemoteOutboundOperation._({
+    required this.type,
+    required this.method,
+    required this.path,
+  });
+
+  final String type;
+  final String method;
+  final String path;
+
+  static const values = [
+    RemoteOutboundOperation._(
+      type: 'SEND_MESSAGE',
+      method: 'POST',
+      path: '/api/v1/messages/send',
+    ),
+    RemoteOutboundOperation._(
+      type: 'CREATE_CONVERSATION',
+      method: 'POST',
+      path: '/api/v1/messages/conversations/create',
+    ),
+    RemoteOutboundOperation._(
+      type: 'DELETE_MESSAGE',
+      method: 'POST',
+      path: '/api/v1/messages/delete',
+    ),
+    RemoteOutboundOperation._(
+      type: 'EDIT_MESSAGE',
+      method: 'POST',
+      path: '/api/v1/messages/edit',
+    ),
+    RemoteOutboundOperation._(
+      type: 'REACTION',
+      method: 'POST',
+      path: '/api/v1/messages/reactions',
+    ),
+    RemoteOutboundOperation._(
+      type: 'DELIVERY_RECEIPT',
+      method: 'POST',
+      path: '/api/v1/messages/receipts',
+    ),
+    RemoteOutboundOperation._(
+      type: 'READ_RECEIPT',
+      method: 'POST',
+      path: '/api/v1/messages/receipts',
+    ),
+    RemoteOutboundOperation._(
+      type: 'TYPING',
+      method: 'POST',
+      path: '/api/v1/messages/typing',
+    ),
+    RemoteOutboundOperation._(
+      type: 'CONTACT_REQUEST',
+      method: 'POST',
+      path: '/api/v1/contacts/requests',
+    ),
+    RemoteOutboundOperation._(
+      type: 'CONTACT_REQUEST_ACCEPT',
+      method: 'POST',
+      path: '/api/v1/contacts/requests/accept',
+    ),
+    RemoteOutboundOperation._(
+      type: 'CONTACT_REQUEST_REJECT',
+      method: 'POST',
+      path: '/api/v1/contacts/requests/reject',
+    ),
+    RemoteOutboundOperation._(
+      type: 'CONTACT_REQUEST_CANCEL',
+      method: 'POST',
+      path: '/api/v1/contacts/requests/cancel',
+    ),
+    RemoteOutboundOperation._(
+      type: 'CONTACT_REMOVE',
+      method: 'POST',
+      path: '/api/v1/contacts/remove',
+    ),
+    RemoteOutboundOperation._(
+      type: 'CONTACT_BLOCK',
+      method: 'POST',
+      path: '/api/v1/contacts/block',
+    ),
+    RemoteOutboundOperation._(
+      type: 'CONTACT_UNBLOCK',
+      method: 'POST',
+      path: '/api/v1/contacts/unblock',
+    ),
+    RemoteOutboundOperation._(
+      type: 'USERNAME_CHANGE',
+      method: 'POST',
+      path: '/api/v1/profile/username',
+    ),
+    RemoteOutboundOperation._(
+      type: 'PRIVACY_UPDATE',
+      method: 'POST',
+      path: '/api/v1/contacts/privacy',
+    ),
+    RemoteOutboundOperation._(
+      type: 'PRESENCE_UPDATE',
+      method: 'POST',
+      path: '/api/v1/contacts/presence',
+    ),
+    RemoteOutboundOperation._(
+      type: 'PROFILE_UPDATE',
+      method: 'POST',
+      path: '/api/v1/profile',
+    ),
+    RemoteOutboundOperation._(
+      type: 'SAFETY_REPORT',
+      method: 'POST',
+      path: '/api/v1/accounts/report',
+    ),
+  ];
+
+  static final valuesByType = {
+    for (final operation in values) operation.type: operation,
+  };
 }

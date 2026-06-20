@@ -73,8 +73,8 @@ class LocalCompositionRoot {
   final CallEngine callEngine;
   final DisconnectWipeScheduler wipeScheduler;
 
-  void dispose() {
+  Future<void> dispose() async {
     notificationGateway.dispose();
-    callEngine.dispose().ignore();
+    await callEngine.dispose();
   }
 }

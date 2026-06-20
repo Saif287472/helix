@@ -40,7 +40,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('RemoteCompositionRoot', () {
-    test('P5-013: production() instantiates with correct config', () {
+    test('P5-013: production() instantiates with correct config', () async {
       final root = RemoteCompositionRoot.production(
         databaseDirectory: Directory.systemTemp.path,
       );
@@ -51,7 +51,7 @@ void main() {
       expect(root.config.methodChannelNamespace, equals('com.helix.remote'));
       expect(root.config.logNamespace, equals('helix_remote'));
 
-      root.dispose();
+      await root.dispose();
     });
 
     test('P5-014: throws StateError when displayName is empty', () {
@@ -118,10 +118,11 @@ void main() {
       expect(() => root.attachmentService, throwsStateError);
       expect(() => root.callService, throwsStateError);
       expect(() => root.groupService, throwsStateError);
+      expect(() => root.runtimeCoordinator, throwsStateError);
       root.dispose();
     });
 
-    test('P5-019: two Remote roots are independent objects', () {
+    test('P5-019: two Remote roots are independent objects', () async {
       final root1 = RemoteCompositionRoot.production(
         databaseDirectory: Directory.systemTemp.path,
       );
@@ -131,8 +132,8 @@ void main() {
 
       expect(root1, isNot(same(root2)));
 
-      root1.dispose();
-      root2.dispose();
+      await root1.dispose();
+      await root2.dispose();
     });
 
     test('first run generates key and reaches unauthenticated state', () async {
@@ -161,8 +162,9 @@ void main() {
       expect(() => root.attachmentService, returnsNormally);
       expect(() => root.callService, returnsNormally);
       expect(() => root.groupService, returnsNormally);
+      expect(() => root.runtimeCoordinator, returnsNormally);
 
-      root.dispose();
+      await root.dispose();
     });
 
     test('second run reuses existing key and data', () async {
@@ -182,7 +184,7 @@ void main() {
       );
       await root1.initialize();
       expect(root1.startupState, RemoteStartupState.unauthenticated);
-      root1.dispose();
+      await root1.dispose();
 
       final root2 = RemoteCompositionRoot.withConfig(
         _validConfig(databaseDirectory: tempDir.path),
@@ -190,7 +192,7 @@ void main() {
       );
       await root2.initialize();
       expect(root2.startupState, RemoteStartupState.unauthenticated);
-      root2.dispose();
+      await root2.dispose();
     });
 
     test('existing database with missing key fails safely', () async {
@@ -222,7 +224,7 @@ void main() {
 
       expect(error, isA<StateError>());
       expect(root.startupState, RemoteStartupState.recoverableFailure);
-      root.dispose();
+      await root.dispose();
     });
 
     test('dispose is idempotent', () async {
@@ -240,9 +242,9 @@ void main() {
         keyValueStore: _InMemoryKeyValueStore(),
       );
       await root.initialize();
-      root.dispose();
+      await root.dispose();
       expect(root.startupState, RemoteStartupState.idle);
-      root.dispose();
+      await root.dispose();
       expect(root.startupState, RemoteStartupState.idle);
     });
 
@@ -275,8 +277,8 @@ void main() {
         isNot(root2.config.databaseDirectory),
       );
 
-      root1.dispose();
-      root2.dispose();
+      await root1.dispose();
+      await root2.dispose();
     });
   });
 }

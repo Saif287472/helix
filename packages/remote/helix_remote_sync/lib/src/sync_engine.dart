@@ -29,6 +29,7 @@ class RemoteSyncEngine {
   final void Function(Map<String, dynamic> payload)? onCallSignal;
 
   static const String _globalSyncCursorId = '__remote_global_stream__';
+  Future<int>? _outboundDrain;
 
   /// Synchronises incoming events from the server since the last stored cursor.
   ///
@@ -44,6 +45,7 @@ class RemoteSyncEngine {
 
     int appliedCount = 0;
     int highestSeq = lastSeq;
+    var expectedSeq = lastSeq + 1;
 
     db.rawExecute('BEGIN TRANSACTION;');
     try {
@@ -58,6 +60,11 @@ class RemoteSyncEngine {
             'Remote sync sequence regression for unseen event type=${env.type}',
           );
         }
+        if (seq != expectedSeq) {
+          throw StateError(
+            'Remote sync sequence gap: expected $expectedSeq but received $seq',
+          );
+        }
 
         // Call signals are ephemeral: deliver via callback, never write to DB.
         if (env.type == 'call_signal' && onCallSignal != null) {
@@ -69,12 +76,14 @@ class RemoteSyncEngine {
           _recordUnknownEvent(env);
           _recordProcessedEvent(env, seq);
           highestSeq = seq;
+          expectedSeq = seq + 1;
           continue;
         }
 
         if (event is _SyncMarkerEvent) {
           _recordProcessedEvent(env, seq);
           highestSeq = seq;
+          expectedSeq = seq + 1;
           appliedCount++;
           continue;
         }
@@ -82,6 +91,7 @@ class RemoteSyncEngine {
         final applied = event.apply(db, env);
         _recordProcessedEvent(env, seq);
         highestSeq = seq;
+        expectedSeq = seq + 1;
         if (applied) {
           appliedCount++;
         }
@@ -111,6 +121,13 @@ class RemoteSyncEngine {
     }
 
     if (seq <= lastSeq) {
+      return false;
+    }
+    if (seq != lastSeq + 1) {
+      diagnostics?.call(
+        'Remote realtime sequence gap: expected ${lastSeq + 1} '
+        'but received $seq',
+      );
       return false;
     }
 
@@ -188,6 +205,22 @@ class RemoteSyncEngine {
 
   /// Processes the outbound pending-operations queue with exponential backoff.
   Future<int> processOutboundQueue(SyncGateway gateway) async {
+    final existingDrain = _outboundDrain;
+    if (existingDrain != null) {
+      return existingDrain;
+    }
+    final drain = _processOutboundQueueOnce(gateway);
+    _outboundDrain = drain;
+    try {
+      return await drain;
+    } finally {
+      if (identical(_outboundDrain, drain)) {
+        _outboundDrain = null;
+      }
+    }
+  }
+
+  Future<int> _processOutboundQueueOnce(SyncGateway gateway) async {
     final pendingOps = db.getPendingOperations();
     int processedCount = 0;
 
@@ -208,12 +241,13 @@ class RemoteSyncEngine {
 
         db.updateOperationStatus(opId, 'COMPLETED', retries);
         processedCount++;
-      } catch (_) {
+      } catch (e) {
         final nextRetries = retries + 1;
-        final nextStatus = nextRetries >= 5 ? 'FAILED' : 'PENDING';
+        final permanent = _isPermanentOutboundFailure(e);
+        final nextStatus = permanent || nextRetries >= 5 ? 'FAILED' : 'PENDING';
         db.updateOperationStatus(opId, nextStatus, nextRetries);
 
-        if (nextRetries < 5) {
+        if (!permanent && nextRetries < 5) {
           final backoffMs = 1000 * (1 << nextRetries);
           final jitterMs = math.Random().nextInt(500);
           final nextAttempt =
@@ -225,6 +259,8 @@ class RemoteSyncEngine {
 
     return processedCount;
   }
+
+  bool _isPermanentOutboundFailure(Object error) => error is StateError;
 }
 
 abstract class _InboundSyncEvent {

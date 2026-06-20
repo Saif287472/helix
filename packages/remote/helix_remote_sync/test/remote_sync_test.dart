@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,6 +70,30 @@ class _StaticFetchGateway implements SyncGateway {
     required String type,
     required Map<String, dynamic> payload,
   }) async {}
+}
+
+class _DelayedSendGateway implements SyncGateway {
+  _DelayedSendGateway(this.release);
+
+  final Future<void> release;
+  int sendCalls = 0;
+
+  @override
+  Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
+    required int sinceSequence,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<void> sendOutboundOperation({
+    required String opId,
+    required String type,
+    required Map<String, dynamic> payload,
+  }) async {
+    sendCalls++;
+    await release;
+  }
 }
 
 void main() {
@@ -545,6 +570,57 @@ void main() {
       expect(db.getMessages('conv_123'), isEmpty);
       expect(db.hasProcessedEventId('event_sequence_regression'), isFalse);
     });
+
+    test('Inbound sequence gap fails closed and leaves cursor unchanged', () {
+      final gapGateway = _StaticFetchGateway([
+        RemoteRealtimeEnvelope(
+          eventId: 'event_sequence_gap',
+          serverSequence: 2,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'chat_message',
+          payload: {
+            'message_id': 'msg_gap',
+            'conversation_id': 'conv_123',
+            'sender_account_id': 'alice',
+            'sender_device_id': 'device1',
+            'ciphertext': 'must-not-apply',
+          },
+        ),
+      ]);
+
+      expect(() => engine.syncInbound(gapGateway), throwsA(isA<StateError>()));
+      expect(db.getSyncCursor('__remote_global_stream__'), equals(0));
+      expect(db.getMessages('conv_123'), isEmpty);
+      expect(db.hasProcessedEventId('event_sequence_gap'), isFalse);
+    });
+
+    test('Realtime sequence gap does not advance cursor', () {
+      final diagnostics = <String>[];
+      engine = RemoteSyncEngine(db, diagnostics: diagnostics.add);
+
+      final applied = engine.handleIncomingEnvelope(
+        RemoteRealtimeEnvelope(
+          eventId: 'event_realtime_gap',
+          serverSequence: 2,
+          schemaVersion: 1,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          type: 'chat_message',
+          payload: {
+            'message_id': 'msg_realtime_gap',
+            'conversation_id': 'conv_123',
+            'sender_account_id': 'alice',
+            'sender_device_id': 'device1',
+            'ciphertext': 'must-not-apply',
+          },
+        ),
+      );
+
+      expect(applied, isFalse);
+      expect(db.getSyncCursor('__remote_global_stream__'), equals(0));
+      expect(db.getMessages('conv_123'), isEmpty);
+      expect(diagnostics.single, contains('sequence gap'));
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -583,7 +659,7 @@ void main() {
       gateway.inboundEvents.addAll([
         RemoteRealtimeEnvelope(
           eventId: 'batch_msg_1',
-          serverSequence: 10,
+          serverSequence: 1,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'chat_message',
@@ -596,7 +672,7 @@ void main() {
         ),
         RemoteRealtimeEnvelope(
           eventId: 'batch_msg_2',
-          serverSequence: 11,
+          serverSequence: 2,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'chat_message',
@@ -609,7 +685,7 @@ void main() {
         ),
         RemoteRealtimeEnvelope(
           eventId: 'batch_msg_3',
-          serverSequence: 12,
+          serverSequence: 3,
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'chat_message',
@@ -626,7 +702,7 @@ void main() {
       expect(count, equals(3));
 
       // Cursor must reflect the last event in the batch.
-      expect(db.getSyncCursor('__remote_global_stream__'), equals(12));
+      expect(db.getSyncCursor('__remote_global_stream__'), equals(3));
 
       // All three messages must be persisted.
       expect(db.getMessages('conv_123').length, equals(3));
@@ -638,7 +714,7 @@ void main() {
         gateway.inboundEvents.add(
           RemoteRealtimeEnvelope(
             eventId: 'retry_msg_1',
-            serverSequence: 20,
+            serverSequence: 1,
             schemaVersion: 1,
             timestamp: DateTime.now().millisecondsSinceEpoch,
             type: 'chat_message',
@@ -660,7 +736,7 @@ void main() {
         // Second attempt: uses the real gateway, succeeds.
         final count = await engine.syncInbound(gateway);
         expect(count, equals(1));
-        expect(db.getSyncCursor('__remote_global_stream__'), equals(20));
+        expect(db.getSyncCursor('__remote_global_stream__'), equals(1));
       },
     );
   });
@@ -724,5 +800,25 @@ void main() {
       expect(op!['status'], equals('FAILED'));
       expect(op['retries'], equals(5));
     });
+
+    test(
+      'Concurrent outbound drains share a single in-flight worker',
+      () async {
+        db.enqueueOperation('single_flight_op', 'SEND_MESSAGE', '{}');
+        final release = Completer<void>();
+        final delayedGateway = _DelayedSendGateway(release.future);
+
+        final first = engine.processOutboundQueue(delayedGateway);
+        final second = engine.processOutboundQueue(delayedGateway);
+
+        await Future<void>.delayed(Duration.zero);
+        expect(delayedGateway.sendCalls, equals(1));
+
+        release.complete();
+        expect(await first, equals(1));
+        expect(await second, equals(1));
+        expect(delayedGateway.sendCalls, equals(1));
+      },
+    );
   });
 }

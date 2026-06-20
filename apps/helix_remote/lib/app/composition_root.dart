@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -10,6 +11,7 @@ import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_message_protector.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
+import 'package:helix_remote/app/remote_runtime_coordinator.dart';
 import 'package:helix_remote/app/remote_sync_gateway.dart';
 import 'package:helix_remote/app/remote_websocket_client.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
@@ -155,6 +157,7 @@ class RemoteCompositionRoot {
   RemoteAttachmentService? _attachmentService;
   RemoteCallService? _callService;
   RemoteGroupService? _groupService;
+  RemoteRuntimeCoordinator? _runtimeCoordinator;
 
   RemoteSecureKeyStorage get keyStorage =>
       _requireReady(_keyStorage, 'keyStorage');
@@ -172,6 +175,8 @@ class RemoteCompositionRoot {
       _requireReady(_callService, 'callService');
   RemoteGroupService get groupService =>
       _requireReady(_groupService, 'groupService');
+  RemoteRuntimeCoordinator get runtimeCoordinator =>
+      _requireReady(_runtimeCoordinator, 'runtimeCoordinator');
 
   T _requireReady<T>(T? value, String name) {
     if (value == null) {
@@ -266,6 +271,15 @@ class RemoteCompositionRoot {
         db: db,
         generateId: _generateId,
         encryptionKeyProvider: groupKeyProvider,
+      );
+
+      _runtimeCoordinator = RemoteRuntimeCoordinator(
+        validateSession: _validateRuntimeSession,
+        catchUpInbound: () => _messagingService!.syncInbound(),
+        drainOutbox: () => _messagingService!.processOutboundQueue(),
+        connectRealtime: connectWebSocket,
+        disconnectRealtime: disconnectWebSocket,
+        purgeLocalSession: _purgeLocalSessionOnly,
       );
 
       _state = RemoteStartupState.unauthenticated;
@@ -424,11 +438,7 @@ class RemoteCompositionRoot {
     );
 
     setAuthenticated(accessToken);
-    try {
-      await connectWebSocket();
-    } catch (e) {
-      _lastError = 'Registered, but WebSocket connect failed: $e';
-    }
+    await startRuntime();
   }
 
   Future<void> _publishInitialPrekeys({
@@ -574,23 +584,43 @@ class RemoteCompositionRoot {
       );
     }
     setAuthenticated(token);
-    try {
-      await connectWebSocket();
-    } catch (e) {
-      _lastError = 'Session restored but WebSocket reconnect failed: $e';
-    }
     return true;
+  }
+
+  Future<bool> _validateRuntimeSession() async {
+    if (_accessToken != null) return true;
+    if (_state == RemoteStartupState.unauthenticated) {
+      return tryRestoreSession();
+    }
+    return false;
+  }
+
+  Future<void> startRuntime() async {
+    await _requireReady(_runtimeCoordinator, 'runtimeCoordinator').start();
+    if (runtimeCoordinator.snapshot.state == RemoteRuntimeState.ready) {
+      markReady();
+    }
   }
 
   Future<void> connectWebSocket() async {
     final token = _accessToken;
     if (token == null) return;
+    await disconnectWebSocket();
 
     final wsClient = RemoteWebSocketClient(
       wsUri: devConfig.webSocketUri,
       token: token,
       onEvent: (envelope) {
-        _syncEngine?.handleIncomingEnvelope(envelope);
+        final applied = _syncEngine?.handleIncomingEnvelope(envelope) ?? false;
+        if (!applied) {
+          unawaited(_runtimeCoordinator?.handleRealtimeGap());
+          return;
+        }
+        final conversationId = envelope.payload['conversation_id'] as String?;
+        final sequence = envelope.serverSequence;
+        if (conversationId != null && sequence != null) {
+          _wsClient?.acknowledge(conversationId, sequence);
+        }
       },
       onRawSignal: (payload) {
         _callService?.processInboundSignal(RemoteCallSignal.fromJson(payload));
@@ -598,7 +628,9 @@ class RemoteCompositionRoot {
       onError: (error) {
         _lastError = error;
       },
-      onDone: () {},
+      onDone: () {
+        unawaited(_runtimeCoordinator?.handleRealtimeClosed());
+      },
     );
     await wsClient.connect();
     _wsClient = wsClient;
@@ -610,7 +642,13 @@ class RemoteCompositionRoot {
     if (deviceId != null && deviceId.isNotEmpty) {
       await _restClient?.revokeDevice(deviceId);
     }
-    disconnectWebSocket();
+    await disconnectWebSocket();
+    await _purgeLocalSessionOnly();
+    _state = RemoteStartupState.unauthenticated;
+  }
+
+  Future<void> _purgeLocalSessionOnly() async {
+    final store = _requireReady(_keyValue, 'keyValue');
     for (final key in [
       'access_token',
       'refresh_token',
@@ -630,11 +668,10 @@ class RemoteCompositionRoot {
     }
     _accessToken = null;
     _restClient?.accessToken = null;
-    _state = RemoteStartupState.unauthenticated;
   }
 
-  void disconnectWebSocket() {
-    _wsClient?.disconnect();
+  Future<void> disconnectWebSocket() async {
+    await _wsClient?.disconnect();
     _wsClient = null;
   }
 
@@ -763,9 +800,11 @@ class RemoteCompositionRoot {
     }
   }
 
-  void dispose() {
+  Future<void> dispose() async {
     _state = RemoteStartupState.idle;
-    disconnectWebSocket();
+    await _runtimeCoordinator?.dispose();
+    _runtimeCoordinator = null;
+    await disconnectWebSocket();
     _callService?.stop();
     _messagingService = null;
     _groupService = null;
@@ -773,7 +812,7 @@ class RemoteCompositionRoot {
     _attachmentService = null;
     _syncEngine = null;
     _syncGateway = null;
-    _restClient?.close();
+    await _restClient?.close();
     _restClient = null;
     _database?.close();
     _database = null;

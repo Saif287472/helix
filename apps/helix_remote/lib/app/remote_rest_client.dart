@@ -1,15 +1,19 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_domain/models.dart';
 
 class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   HelixRemoteRestClientImpl({
-    required this._baseUri,
+    required Uri baseUri,
     required int timeoutMs,
     this._tokenProvider,
     HttpClient? httpClient,
-  }) : _httpClient =
+  }) : _baseUri = baseUri,
+       _timeout = Duration(milliseconds: timeoutMs),
+       _httpClient =
            httpClient ??
            (() {
              final client = HttpClient();
@@ -18,6 +22,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
            })();
 
   final Uri _baseUri;
+  final Duration _timeout;
   final String? Function()? _tokenProvider;
   final HttpClient _httpClient;
 
@@ -44,10 +49,61 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     String path, {
     Map<String, dynamic>? body,
     Map<String, String>? extraHeaders,
+    String? idempotencyKey,
+  }) async {
+    final canRetry = _isSafeMethod(method) || idempotencyKey != null;
+    final maxAttempts = canRetry ? 3 : 1;
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        return await _sendOnce(
+          method,
+          path,
+          body: body,
+          extraHeaders: extraHeaders,
+          idempotencyKey: idempotencyKey,
+        );
+      } on RemoteRestException catch (e) {
+        if (attempt >= maxAttempts || !_isRetryableStatus(e.statusCode)) {
+          rethrow;
+        }
+        await Future<void>.delayed(e.retryAfter ?? _retryDelay(attempt));
+      } on TimeoutException catch (e) {
+        if (attempt >= maxAttempts) {
+          throw RemoteRestException(
+            message: 'REST request timed out: ${e.message ?? method}',
+            uri: _baseUri.resolve(path),
+          );
+        }
+        await Future<void>.delayed(_retryDelay(attempt));
+      } on SocketException catch (e) {
+        if (attempt >= maxAttempts) {
+          throw RemoteRestException(
+            message: 'REST socket failure: ${e.message}',
+            uri: _baseUri.resolve(path),
+          );
+        }
+        await Future<void>.delayed(_retryDelay(attempt));
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _sendOnce(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? extraHeaders,
+    String? idempotencyKey,
   }) async {
     final uri = _baseUri.resolve(path);
-    final req = await _httpClient.openUrl(method, uri);
+    final correlationId = _newCorrelationId();
+    final req = await _httpClient.openUrl(method, uri).timeout(_timeout);
     req.headers.set('Content-Type', 'application/json');
+    req.headers.set('X-Correlation-Id', correlationId);
+    if (idempotencyKey != null) {
+      req.headers.set('Idempotency-Key', idempotencyKey);
+    }
     final auth = _headers['Authorization'];
     if (auth != null) {
       req.headers.set('Authorization', auth);
@@ -60,15 +116,62 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       req.add(utf8.encode(jsonEncode(body)));
     }
 
-    final resp = await req.close();
-    final respBody = await resp.transform(utf8.decoder).join();
+    final resp = await req.close().timeout(_timeout);
+    final respBody = await resp
+        .transform(utf8.decoder)
+        .join()
+        .timeout(_timeout);
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
       if (respBody.isEmpty) return {};
       return jsonDecode(respBody) as Map<String, dynamic>;
     }
 
-    throw HttpException('REST ${resp.statusCode}: $respBody', uri: uri);
+    throw RemoteRestException(
+      statusCode: resp.statusCode,
+      message: respBody.isEmpty ? 'REST ${resp.statusCode}' : respBody,
+      uri: uri,
+      correlationId:
+          resp.headers.value('x-correlation-id') ??
+          resp.headers.value('X-Correlation-Id') ??
+          correlationId,
+      retryAfter: _parseRetryAfter(resp.headers.value('retry-after')),
+    );
+  }
+
+  bool _isSafeMethod(String method) =>
+      method == 'GET' || method == 'HEAD' || method == 'OPTIONS';
+
+  bool _isRetryableStatus(int? statusCode) =>
+      statusCode == 408 ||
+      statusCode == 429 ||
+      statusCode == 500 ||
+      statusCode == 502 ||
+      statusCode == 503 ||
+      statusCode == 504;
+
+  Duration _retryDelay(int attempt) {
+    final jitterMs = math.Random().nextInt(150);
+    return Duration(milliseconds: (200 * (1 << (attempt - 1))) + jitterMs);
+  }
+
+  Duration? _parseRetryAfter(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final seconds = int.tryParse(value);
+    if (seconds != null) return Duration(seconds: seconds);
+    try {
+      final date = HttpDate.parse(value);
+      final delta = date.difference(DateTime.now().toUtc());
+      return delta.isNegative ? Duration.zero : delta;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  String _newCorrelationId() {
+    final random = math.Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
   @override
@@ -260,4 +363,18 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   Future<void> close() async {
     _httpClient.close(force: true);
   }
+}
+
+class RemoteRestException extends HttpException {
+  const RemoteRestException({
+    required String message,
+    Uri? uri,
+    this.statusCode,
+    this.correlationId,
+    this.retryAfter,
+  }) : super(message, uri: uri);
+
+  final int? statusCode;
+  final String? correlationId;
+  final Duration? retryAfter;
 }
