@@ -193,12 +193,24 @@ class RemoteMessagingService {
     String? requestId,
   }) {
     _enforceContactRequestQuota();
+    _assertCanSendContactRequest(peerAccountId);
     final id = requestId ?? 'cr_${_clock().microsecondsSinceEpoch}';
+    final now = _clock().millisecondsSinceEpoch;
     db.upsertContact(
       RemoteContact(
         peerAccountId: peerAccountId,
         nickname: nickname,
         status: 'PendingSent',
+      ),
+    );
+    db.upsertContactRequest(
+      RemoteContactRequest(
+        requestId: id,
+        peerAccountId: peerAccountId,
+        direction: 'sent',
+        status: 'Pending',
+        updatedAt: now,
+        nickname: nickname,
       ),
     );
     db.enqueueOperation(
@@ -213,10 +225,10 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'contact_request:$id',
     );
-    _contactRequestTimestamps.add(_clock().millisecondsSinceEpoch);
+    _contactRequestTimestamps.add(now);
   }
 
-  void acceptContactRequest({
+  void recordIncomingContactRequest({
     required String requestId,
     required String peerAccountId,
     String nickname = '',
@@ -225,8 +237,38 @@ class RemoteMessagingService {
       RemoteContact(
         peerAccountId: peerAccountId,
         nickname: nickname,
+        status: 'PendingReceived',
+      ),
+    );
+    db.upsertContactRequest(
+      RemoteContactRequest(
+        requestId: requestId,
+        peerAccountId: peerAccountId,
+        direction: 'received',
+        status: 'Pending',
+        updatedAt: _clock().millisecondsSinceEpoch,
+        nickname: nickname,
+      ),
+    );
+  }
+
+  void acceptContactRequest({
+    required String requestId,
+    required String peerAccountId,
+    String nickname = '',
+  }) {
+    _assertOpenRequest(requestId, peerAccountId, 'received');
+    db.upsertContact(
+      RemoteContact(
+        peerAccountId: peerAccountId,
+        nickname: nickname,
         status: 'Accepted',
       ),
+    );
+    db.updateContactRequestStatus(
+      requestId,
+      'Accepted',
+      _clock().millisecondsSinceEpoch,
     );
     db.enqueueOperation(
       'accept_$requestId',
@@ -244,7 +286,13 @@ class RemoteMessagingService {
     required String requestId,
     required String peerAccountId,
   }) {
+    _assertOpenRequest(requestId, peerAccountId, 'received');
     db.deleteContact(peerAccountId);
+    db.updateContactRequestStatus(
+      requestId,
+      'Rejected',
+      _clock().millisecondsSinceEpoch,
+    );
     db.enqueueOperation(
       'reject_$requestId',
       'CONTACT_REQUEST_REJECT',
@@ -261,7 +309,13 @@ class RemoteMessagingService {
     required String requestId,
     required String peerAccountId,
   }) {
+    _assertOpenRequest(requestId, peerAccountId, 'sent');
     db.deleteContact(peerAccountId);
+    db.updateContactRequestStatus(
+      requestId,
+      'Cancelled',
+      _clock().millisecondsSinceEpoch,
+    );
     db.enqueueOperation(
       'cancel_$requestId',
       'CONTACT_REQUEST_CANCEL',
@@ -346,6 +400,8 @@ class RemoteMessagingService {
         .toList();
   }
 
+  List<RemoteContactRequest> contactRequests() => db.getContactRequests();
+
   void updatePrivacy(RemotePrivacySettings settings) {
     _validateVisibility(settings.presenceVisibility);
     _validateVisibility(settings.lastSeenVisibility);
@@ -417,6 +473,12 @@ class RemoteMessagingService {
   }) {
     final accountId = _requireAccountId();
     final deviceId = _requireDeviceId();
+    final contact = db.getContact(peerAccountId);
+    if (contact == null || contact.status != 'Accepted') {
+      throw StateError(
+        'Direct conversations require an accepted Remote contact',
+      );
+    }
     final id =
         conversationId ?? _stableDirectConversationId(accountId, peerAccountId);
 
@@ -1059,6 +1121,34 @@ class RemoteMessagingService {
     _contactRequestTimestamps.removeWhere((timestamp) => timestamp < cutoff);
     if (_contactRequestTimestamps.length >= 20) {
       throw StateError('Remote contact request quota exceeded');
+    }
+  }
+
+  void _assertCanSendContactRequest(String peerAccountId) {
+    final existing = db.getContact(peerAccountId);
+    if (existing == null) return;
+    switch (existing.status) {
+      case 'Accepted':
+        throw StateError('Contact already accepted');
+      case 'PendingSent':
+      case 'PendingReceived':
+        throw StateError('Contact request already pending');
+      case 'Blocked':
+        throw StateError('Blocked contacts cannot be requested');
+    }
+  }
+
+  void _assertOpenRequest(
+    String requestId,
+    String peerAccountId,
+    String direction,
+  ) {
+    final request = db.getContactRequest(requestId);
+    if (request == null ||
+        request.peerAccountId != peerAccountId ||
+        request.direction != direction ||
+        request.status != 'Pending') {
+      throw StateError('Contact request is no longer pending');
     }
   }
 

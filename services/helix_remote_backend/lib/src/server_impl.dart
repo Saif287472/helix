@@ -100,7 +100,11 @@ class BackendServer {
       now: now,
     );
     final prekeysModule = PrekeysModule(db);
-    final contactsModule = ContactsModule(db, adminAccountIds: adminAccountIds);
+    final contactsModule = ContactsModule(
+      db,
+      adminAccountIds: adminAccountIds,
+      notifyDevice: wsRelay.sendToDevice,
+    );
     final backupsModule = BackupsModule(db);
     final attachmentsModule = AttachmentsModule(
       db,

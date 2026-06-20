@@ -6,9 +6,11 @@ import 'package:helix_remote_backend/src/database.dart';
 class ContactsModule {
   final BackendDatabase db;
   final Set<String> adminAccountIds;
+  final void Function(String deviceId, Map<String, dynamic> payload)?
+  notifyDevice;
   static const int contactRequestDailyLimit = 20;
 
-  ContactsModule(this.db, {Set<String>? adminAccountIds})
+  ContactsModule(this.db, {Set<String>? adminAccountIds, this.notifyDevice})
     : adminAccountIds = adminAccountIds ?? const {'admin'};
 
   Router get router {
@@ -107,6 +109,23 @@ class ContactsModule {
         requestId: requestId,
         requesterAccountId: accountId,
         targetAccountId: peerAccountId,
+      );
+      final updatedAt = DateTime.now().millisecondsSinceEpoch;
+      _publishContactUpdate(
+        accountId: accountId,
+        peerAccountId: peerAccountId,
+        requestId: requestId,
+        direction: 'sent',
+        status: 'PendingSent',
+        updatedAt: updatedAt,
+      );
+      _publishContactUpdate(
+        accountId: peerAccountId,
+        peerAccountId: accountId,
+        requestId: requestId,
+        direction: 'received',
+        status: 'PendingReceived',
+        updatedAt: updatedAt,
       );
       db.logAudit(
         accountId,
@@ -549,6 +568,43 @@ class ContactsModule {
       }
 
       close(requestId);
+      final requester = contactRequest['requester_account_id'] as String;
+      final target = contactRequest['target_account_id'] as String;
+      final updatedAt = DateTime.now().millisecondsSinceEpoch;
+      if (action == 'ACCEPT') {
+        _publishContactUpdate(
+          accountId: requester,
+          peerAccountId: target,
+          requestId: requestId,
+          direction: 'sent',
+          status: 'Accepted',
+          updatedAt: updatedAt,
+        );
+        _publishContactUpdate(
+          accountId: target,
+          peerAccountId: requester,
+          requestId: requestId,
+          direction: 'received',
+          status: 'Accepted',
+          updatedAt: updatedAt,
+        );
+      } else {
+        final status = action == 'REJECT' ? 'Rejected' : 'Cancelled';
+        _publishContactRemoved(
+          accountId: requester,
+          peerAccountId: target,
+          requestId: requestId,
+          status: status,
+          updatedAt: updatedAt,
+        );
+        _publishContactRemoved(
+          accountId: target,
+          peerAccountId: requester,
+          requestId: requestId,
+          status: status,
+          updatedAt: updatedAt,
+        );
+      }
       db.logAudit(
         accountId,
         auth['device_id'] as String?,
@@ -574,6 +630,75 @@ class ContactsModule {
     if (peerUsername == null) return null;
     final account = db.getAccountByUsername(peerUsername);
     return account?['account_id'] as String?;
+  }
+
+  void _publishContactUpdate({
+    required String accountId,
+    required String peerAccountId,
+    required String requestId,
+    required String direction,
+    required String status,
+    required int updatedAt,
+  }) {
+    _publishContactEvent(
+      accountId: accountId,
+      eventType: 'contact_updated',
+      eventKey: '${requestId}_$direction',
+      payload: {
+        'peer_account_id': peerAccountId,
+        'request_id': requestId,
+        'direction': direction,
+        'status': status,
+        'updated_at': updatedAt,
+      },
+    );
+  }
+
+  void _publishContactRemoved({
+    required String accountId,
+    required String peerAccountId,
+    required String requestId,
+    required String status,
+    required int updatedAt,
+  }) {
+    _publishContactEvent(
+      accountId: accountId,
+      eventType: 'contact_removed',
+      eventKey: '${requestId}_$status',
+      payload: {
+        'peer_account_id': peerAccountId,
+        'request_id': requestId,
+        'status': status,
+        'updated_at': updatedAt,
+      },
+    );
+  }
+
+  void _publishContactEvent({
+    required String accountId,
+    required String eventType,
+    required String eventKey,
+    required Map<String, dynamic> payload,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final device in db.getDevices(accountId)) {
+      final deviceId = device['device_id'] as String;
+      final eventId = 'evt_${eventType}_${eventKey}_$deviceId';
+      final sequence = db.writeDeviceEvent(
+        eventId: eventId,
+        recipientDeviceId: deviceId,
+        eventType: eventType,
+        payload: jsonEncode(payload),
+      );
+      notifyDevice?.call(deviceId, {
+        'event_id': eventId,
+        'schema_version': 1,
+        'timestamp': now,
+        'type': eventType,
+        'payload': payload,
+        'server_sequence': sequence,
+      });
+    }
   }
 
   String _visibility(String? value) {

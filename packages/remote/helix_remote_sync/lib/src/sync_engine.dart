@@ -526,13 +526,31 @@ class _ContactUpdatedEvent extends _InboundSyncEvent {
 
   @override
   bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final peerAccountId = _InboundSyncEvent.requireString(
+      env,
+      'peer_account_id',
+    );
+    final status = env.payload['status'] as String? ?? 'Accepted';
     db.upsertContact(
       RemoteContact(
-        peerAccountId: _InboundSyncEvent.requireString(env, 'peer_account_id'),
+        peerAccountId: peerAccountId,
         nickname: env.payload['nickname'] as String? ?? '',
-        status: env.payload['status'] as String? ?? 'Accepted',
+        status: status,
       ),
     );
+    final requestId = env.payload['request_id'] as String?;
+    if (requestId != null) {
+      db.upsertContactRequest(
+        RemoteContactRequest(
+          requestId: requestId,
+          peerAccountId: peerAccountId,
+          direction: env.payload['direction'] as String? ?? 'received',
+          status: status == 'Accepted' ? 'Accepted' : 'Pending',
+          updatedAt: env.payload['updated_at'] as int? ?? env.timestamp,
+          nickname: env.payload['nickname'] as String? ?? '',
+        ),
+      );
+    }
     return true;
   }
 }
@@ -542,7 +560,19 @@ class _ContactRemovedEvent extends _InboundSyncEvent {
 
   @override
   bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
-    db.deleteContact(_InboundSyncEvent.requireString(env, 'peer_account_id'));
+    final peerAccountId = _InboundSyncEvent.requireString(
+      env,
+      'peer_account_id',
+    );
+    db.deleteContact(peerAccountId);
+    final requestId = env.payload['request_id'] as String?;
+    if (requestId != null) {
+      db.updateContactRequestStatus(
+        requestId,
+        env.payload['status'] as String? ?? 'Cancelled',
+        env.payload['updated_at'] as int? ?? env.timestamp,
+      );
+    }
     return true;
   }
 }

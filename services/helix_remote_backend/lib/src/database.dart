@@ -1524,11 +1524,18 @@ class BackendDatabase {
   ) {
     final stmt = _db.prepare('''
       SELECT 1 FROM contact_requests
-      WHERE requester_account_id = ?
-        AND target_account_id = ?
+      WHERE (
+          (requester_account_id = ? AND target_account_id = ?)
+          OR (requester_account_id = ? AND target_account_id = ?)
+        )
         AND status = 'PENDING';
     ''');
-    final res = stmt.select([requesterAccountId, targetAccountId]);
+    final res = stmt.select([
+      requesterAccountId,
+      targetAccountId,
+      targetAccountId,
+      requesterAccountId,
+    ]);
     stmt.close();
     return res.isNotEmpty;
   }

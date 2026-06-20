@@ -123,11 +123,15 @@ findings:
     current_evidence:
       - apps/helix_remote/lib/screens/conversation_list_screen.dart
       - apps/helix_remote/lib/app/remote_messaging_service.dart
+      - apps/helix_remote/test/phase12_remote_messaging_screen_test.dart
+      - apps/helix_remote/test/remote_messaging_service_test.dart
+      - packages/remote/helix_remote_storage/lib/src/database.dart
+      - packages/remote/helix_remote_sync/test/remote_sync_test.dart
       - services/helix_remote_backend/test/contacts_phase13_test.dart
-    status: pending
+    status: complete
     tests_required:
       - Send, accept, reject, cancel, and accepted-contact gating tests.
-    final_disposition: Pending Phase 07.
+    final_disposition: Completed in Phase 07 with reachable contact request UI actions, local request persistence, backend event convergence, and accepted-contact conversation gating.
   - id: HXA-008
     title: First message lacks recipient devices
     primary_phase: 08

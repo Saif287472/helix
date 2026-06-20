@@ -232,6 +232,7 @@ void main() {
         createdAt: clock(),
       ),
     );
+    service.addContact(peerAccountId: 'bob', nickname: 'Bob');
   });
 
   tearDown(() {
@@ -503,28 +504,42 @@ void main() {
   test('Phase 13 contact lifecycle, privacy, presence, and reports', () {
     service.sendContactRequest(
       requestId: 'cr_1',
-      peerAccountId: 'bob',
-      nickname: 'Bob',
+      peerAccountId: 'erin',
+      nickname: 'Erin',
     );
-    expect(db.getContact('bob')!.status, 'PendingSent');
+    expect(db.getContact('erin')!.status, 'PendingSent');
+    expect(db.getContactRequest('cr_1')!.status, 'Pending');
 
+    service.recordIncomingContactRequest(
+      requestId: 'cr_from_carol',
+      peerAccountId: 'carol',
+      nickname: 'Carol',
+    );
     service.acceptContactRequest(
       requestId: 'cr_from_carol',
       peerAccountId: 'carol',
       nickname: 'Carol',
     );
     expect(db.getContact('carol')!.status, 'Accepted');
+    expect(db.getContactRequest('cr_from_carol')!.status, 'Accepted');
 
+    service.recordIncomingContactRequest(
+      requestId: 'cr_from_dan',
+      peerAccountId: 'dan',
+    );
     service.rejectContactRequest(
       requestId: 'cr_from_dan',
       peerAccountId: 'dan',
     );
+    service.sendContactRequest(requestId: 'cr_to_erin', peerAccountId: 'frank');
     service.cancelContactRequest(
       requestId: 'cr_to_erin',
-      peerAccountId: 'erin',
+      peerAccountId: 'frank',
     );
     expect(db.getContact('dan'), isNull);
-    expect(db.getContact('erin'), isNull);
+    expect(db.getContact('frank'), isNull);
+    expect(db.getContactRequest('cr_from_dan')!.status, 'Rejected');
+    expect(db.getContactRequest('cr_to_erin')!.status, 'Cancelled');
 
     service.removeContact('carol');
     expect(db.getContact('carol'), isNull);
@@ -590,5 +605,72 @@ void main() {
       ),
       throwsStateError,
     );
+  });
+
+  test('P07 service preserves pending requests and gates conversations', () {
+    service.sendContactRequest(requestId: 'cr_pending', peerAccountId: 'zara');
+    expect(
+      () => service.createDirectConversation(peerAccountId: 'zara'),
+      throwsStateError,
+    );
+    expect(
+      () => service.sendContactRequest(
+        requestId: 'cr_duplicate',
+        peerAccountId: 'zara',
+      ),
+      throwsStateError,
+    );
+
+    service.recordIncomingContactRequest(
+      requestId: 'cr_received',
+      peerAccountId: 'yuki',
+      nickname: 'Yuki',
+    );
+    expect(db.getContact('yuki')!.status, 'PendingReceived');
+    expect(db.getContactRequest('cr_received')!.direction, 'received');
+
+    service.acceptContactRequest(
+      requestId: 'cr_received',
+      peerAccountId: 'yuki',
+      nickname: 'Yuki',
+    );
+    final conversationId = service.createDirectConversation(
+      peerAccountId: 'yuki',
+      conversationId: 'dm_yuki',
+    );
+    expect(conversationId, 'dm_yuki');
+  });
+
+  test('P07 pending contact requests survive database restart', () async {
+    final dir = Directory.systemTemp.createTempSync('p07_contacts_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}${Platform.pathSeparator}remote.db');
+
+    final first = HelixRemoteDatabase(file);
+    first.initialize();
+    first.upsertContact(
+      const RemoteContact(
+        peerAccountId: 'kai',
+        nickname: 'Kai',
+        status: 'PendingReceived',
+      ),
+    );
+    first.upsertContactRequest(
+      const RemoteContactRequest(
+        requestId: 'cr_restart',
+        peerAccountId: 'kai',
+        direction: 'received',
+        status: 'Pending',
+        updatedAt: 42,
+        nickname: 'Kai',
+      ),
+    );
+    first.close();
+
+    final second = HelixRemoteDatabase(file);
+    second.initialize();
+    addTearDown(second.close);
+    expect(second.getContact('kai')!.status, 'PendingReceived');
+    expect(second.getContactRequest('cr_restart')!.peerAccountId, 'kai');
   });
 }

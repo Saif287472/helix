@@ -135,7 +135,7 @@ Do not silently expand a phase into unrelated work.
 | 04 | Remote authentication, token refresh, logout, and revocation | HXA-004, part of HXA-014 | 03 | COMPLETE |
 | 05 | Remote recovery strategy and fresh-device account restore | HXA-005 | 04 | COMPLETE |
 | 06 | Remote contract, route, fixture, and serialization parity | HXA-009, HXA-021 | 04 | COMPLETE |
-| 07 | Remote contact requests and accepted-contact conversation gating | HXA-007 | 06 | NOT STARTED |
+| 07 | Remote contact requests and accepted-contact conversation gating | HXA-007 | 06 | COMPLETE |
 | 08 | Remote first-message device discovery and E2EE session establishment | HXA-008 | 06, 07 | NOT STARTED |
 | 09 | Remote realtime runtime, reactive screens, and runtime health UI | HXA-010, HXA-023 | 03, 06, 08 | NOT STARTED |
 | 10 | Remote outbox truthfulness, retries, and failure recovery | HXA-022 | 06, 09 | NOT STARTED |
@@ -893,7 +893,7 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 # Phase 07 — Remote contact requests and accepted-contact conversation gating
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE
 **Audit coverage:** HXA-007  
 **Purpose:** Make the complete contact trust-establishment lifecycle reachable and accurate in UI.
 
@@ -939,7 +939,47 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-21
+- Agent/model identifier: Codex (GPT-5)
+- Starting commit: `0c57a58`
+- Ending commit or working-tree state: Phase 07 committed locally after this
+  record; expected working tree clean after commit.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `docs/remediation/pre_manual_remediation_ledger.yaml`
+  - `docs/architecture/PHASE_12_20_CLOSURE.md`
+  - `apps/helix_remote/lib/app/remote_messaging_service.dart`
+  - `apps/helix_remote/lib/screens/conversation_list_screen.dart`
+  - `apps/helix_remote/test/phase12_remote_messaging_screen_test.dart`
+  - `apps/helix_remote/test/remote_messaging_service_test.dart`
+  - `packages/remote/helix_remote_domain/lib/domain/contact.dart`
+  - `packages/remote/helix_remote_storage/lib/src/database.dart`
+  - `packages/remote/helix_remote_storage/test/remote_storage_test.dart`
+  - `packages/remote/helix_remote_sync/lib/src/sync_engine.dart`
+  - `packages/remote/helix_remote_sync/test/remote_sync_test.dart`
+  - `services/helix_remote_backend/lib/src/database.dart`
+  - `services/helix_remote_backend/lib/src/modules/contacts.dart`
+  - `services/helix_remote_backend/lib/src/server_impl.dart`
+  - `services/helix_remote_backend/test/contacts_phase13_test.dart`
+- Tests and commands run with results:
+  - `dart analyze apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/lib/screens/conversation_list_screen.dart apps/helix_remote/test/remote_messaging_service_test.dart apps/helix_remote/test/phase12_remote_messaging_screen_test.dart` - PASS.
+  - `dart analyze packages/remote/helix_remote_domain/lib/domain/contact.dart packages/remote/helix_remote_storage/lib/src/database.dart packages/remote/helix_remote_sync/lib/src/sync_engine.dart packages/remote/helix_remote_sync/test/remote_sync_test.dart` - PASS.
+  - `dart analyze lib/src/database.dart lib/src/modules/contacts.dart lib/src/server_impl.dart test/contacts_phase13_test.dart` from `services/helix_remote_backend` - PASS.
+  - `flutter test test/remote_messaging_service_test.dart test/phase12_remote_messaging_screen_test.dart` from `apps/helix_remote` - PASS, 13/13 tests.
+  - `flutter test test/remote_storage_test.dart` from `packages/remote/helix_remote_storage` - PASS, 13/13 tests.
+  - `flutter test test/remote_sync_test.dart` from `packages/remote/helix_remote_sync` - PASS, 14/14 tests.
+  - `dart test test/contacts_phase13_test.dart` from `services/helix_remote_backend` - PASS, 4/4 tests.
+  - `.\scripts\verify.ps1` from repo root - PASS. Debug builds were skipped by the script default because `HELIX_VERIFY_BUILD` was not set.
+- Acceptance criteria result:
+  - HXA-007 PASS: the contact screen now exposes send, pending received, pending sent, accept, reject, cancel, refresh/reload, duplicate/already-pending errors, and accepted-contact-only chat opening.
+  - Pending request IDs are stored in the local encrypted database through `RemoteContactRequest` records and survive database restart/backup snapshots.
+  - Backend contact request create/accept/reject/cancel now emits `contact_updated`/`contact_removed` device events, and the sync engine applies them to contacts plus the local request ledger.
+  - Reverse-direction duplicate pending requests are rejected server-side.
+- Security-sensitive areas touched: Remote contact trust state, local encrypted storage schema, backend contact request events, and conversation creation gating. No crypto, transport, auth, wipe, or plaintext-message handling was weakened.
+- Contract or migration changes: Added Remote local storage schema version 12 with `contact_requests`; backend route contracts unchanged.
+- Remaining manual-only checks: Multi-client visual convergence while both apps are open, stale request races under real network delay, and platform-specific layout checks remain in later integrated/manual phases.
+- Deviations from this plan and why: REST list refresh remains represented by the visible Reload action against local synchronized state; direct REST pull for `/contacts/requests` is left to later runtime synchronization work because Phase 07 closes the reachable UI/actions and device-event convergence path without adding another polling loop.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1674,7 +1714,7 @@ _Not completed._
 | HXA-004 Refresh token not wired in production | 04 | Complete |
 | HXA-005 Restore code ignored | 05 | Complete |
 | HXA-006 Reset Required has no action | 03 | Complete |
-| HXA-007 Contact-request lifecycle unreachable | 07 | Pending |
+| HXA-007 Contact-request lifecycle unreachable | 07 | Complete |
 | HXA-008 First message lacks recipient devices | 08 | Pending |
 | HXA-009 Visible actions target missing/wrong routes | 06 | Complete |
 | HXA-010 Screens do not react to synchronized changes | 09 | Pending |

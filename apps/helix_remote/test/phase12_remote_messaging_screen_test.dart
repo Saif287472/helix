@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide DiagnosticLevel;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/screens/conversation_list_screen.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
@@ -172,6 +175,19 @@ class _FakeRestClient implements HelixRemoteRestClient {
   @override
   Future<Map<String, dynamic>> getTurnCredentials() async => {};
 }
+
+RemoteDevelopmentConfig _devConfig(String dir) => RemoteDevelopmentConfig(
+  profile: RemoteRuntimeProfile.localWindows,
+  restBaseUri: Uri.parse('http://127.0.0.1:8080'),
+  webSocketUri: Uri.parse('ws://127.0.0.1:8080/api/v1/ws'),
+  allowInsecureTransport: true,
+  backendHostMode: 'same-pc',
+  requestTimeoutMs: 5000,
+  reconnectPolicy: const ReconnectPolicy(),
+  databaseDirectory: dir,
+  attachmentCacheDir: '$dir/attachments_cache',
+  diagnosticLevel: DiagnosticLevel.info,
+);
 
 void main() {
   setUpAll(() {
@@ -353,5 +369,47 @@ void main() {
     await tester.tap(find.text('Delete for me'));
     await tester.pumpAndSettle();
     expect(find.text('updated text'), findsNothing);
+  });
+
+  testWidgets('P07 contact screen exposes pending request actions', (
+    tester,
+  ) async {
+    service.recordIncomingContactRequest(
+      requestId: 'cr_carol',
+      peerAccountId: 'carol',
+      nickname: 'Carol',
+    );
+    service.sendContactRequest(requestId: 'cr_dan', peerAccountId: 'dan');
+
+    final dir = Directory.systemTemp.createTempSync('p07_widget_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final root = RemoteCompositionRoot.production(
+      databaseDirectory: dir.path,
+      devConfig: _devConfig(dir.path),
+    );
+    addTearDown(root.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationListScreen(messagingService: service, root: root),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.people));
+    await tester.pump();
+
+    expect(find.text('PendingReceived'), findsOneWidget);
+    expect(find.byTooltip('Accept request'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Accept request'));
+    await tester.pump();
+    expect(db.getContact('carol')!.status, 'Accepted');
+    expect(find.text('Contact request accepted'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    expect(db.getContact('dan'), isNull);
+    expect(db.getContactRequest('cr_dan')!.status, 'Cancelled');
   });
 }

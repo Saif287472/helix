@@ -409,6 +409,8 @@ void main() {
             'peer_account_id': 'carol',
             'nickname': 'Carol',
             'status': 'Accepted',
+            'request_id': 'cr_carol',
+            'direction': 'received',
           },
         ),
         RemoteRealtimeEnvelope(
@@ -491,6 +493,7 @@ void main() {
         contains('opaque-edited-ciphertext'),
       );
       expect(db.getContact('carol'), isNull);
+      expect(db.getContactRequest('cr_carol')!.status, 'Accepted');
       expect(db.getAccount('alice')!.username, equals('alice_new'));
 
       final receipts = db.getMessageReceipts('msg_typed_1');

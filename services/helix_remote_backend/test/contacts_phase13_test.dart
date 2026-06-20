@@ -30,6 +30,13 @@ void main() {
   });
 
   test('Phase 13 contact request lifecycle and removal', () async {
+    final delivered = <Map<String, dynamic>>[];
+    contacts = ContactsModule(
+      db,
+      notifyDevice: (deviceId, payload) {
+        delivered.add({'device_id': deviceId, 'payload': payload});
+      },
+    );
     final create = await _json(
       contacts.router.call(
         _request(
@@ -44,6 +51,27 @@ void main() {
     expect(create.statusCode, 200);
     expect(db.getContacts('alice').single['status'], 'PENDING_SENT');
     expect(db.getContacts('bob').single['status'], 'PENDING_RECEIVED');
+    expect(
+      db.getDeviceEvents('bob_device', 0).map((e) => e['event_type']),
+      contains('contact_updated'),
+    );
+    expect(
+      jsonEncode(delivered),
+      allOf(contains('PendingReceived'), contains('cr_alice_bob')),
+    );
+
+    final duplicateReverse = await _json(
+      contacts.router.call(
+        _request(
+          'POST',
+          '/requests',
+          authAccount: 'bob',
+          authDevice: 'bob_device',
+          body: {'request_id': 'cr_bob_alice', 'peer_account_id': 'alice'},
+        ),
+      ),
+    );
+    expect(duplicateReverse.statusCode, 403);
 
     final accept = await _json(
       contacts.router.call(
@@ -59,6 +87,10 @@ void main() {
     expect(accept.statusCode, 200);
     expect(db.areContacts('alice', 'bob'), isTrue);
     expect(db.areContacts('bob', 'alice'), isTrue);
+    expect(
+      jsonEncode(db.getDeviceEvents('alice_device', 0)),
+      contains('Accepted'),
+    );
 
     final remove = await _json(
       contacts.router.call(

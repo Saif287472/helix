@@ -22,8 +22,10 @@ class ConversationListScreen extends StatefulWidget {
 class _ConversationListScreenState extends State<ConversationListScreen> {
   late List<RemoteConversation> _conversations;
   List<RemoteContact> _contacts = [];
+  List<RemoteContactRequest> _requests = [];
   bool _loaded = false;
   bool _showContacts = false;
+  String? _statusText;
 
   @override
   void initState() {
@@ -35,9 +37,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     try {
       final convos = widget.messagingService.conversationList();
       final contacts = widget.messagingService.searchLocalContacts('');
+      final requests = widget.messagingService.contactRequests();
       setState(() {
         _conversations = convos;
         _contacts = contacts;
+        _requests = requests;
         _loaded = true;
       });
     } catch (e) {
@@ -68,7 +72,14 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             onPressed: () {
               final peer = controller.text.trim();
               if (peer.isNotEmpty) {
-                widget.messagingService.sendContactRequest(peerAccountId: peer);
+                try {
+                  widget.messagingService.sendContactRequest(
+                    peerAccountId: peer,
+                  );
+                  setState(() => _statusText = 'Contact request sent');
+                } catch (e) {
+                  setState(() => _statusText = _safeError(e));
+                }
                 Navigator.pop(ctx);
                 _reload();
               }
@@ -81,6 +92,14 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   void _startConversation(RemoteContact contact) {
+    if (contact.status != 'Accepted') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Accept the contact request before opening a chat.'),
+        ),
+      );
+      return;
+    }
     final convId = widget.messagingService.createDirectConversation(
       peerAccountId: contact.peerAccountId,
       title: contact.nickname.isNotEmpty
@@ -95,6 +114,46 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         ),
       ),
     );
+  }
+
+  void _acceptRequest(RemoteContact contact, RemoteContactRequest request) {
+    try {
+      widget.messagingService.acceptContactRequest(
+        requestId: request.requestId,
+        peerAccountId: contact.peerAccountId,
+        nickname: contact.nickname,
+      );
+      setState(() => _statusText = 'Contact request accepted');
+    } catch (e) {
+      setState(() => _statusText = _safeError(e));
+    }
+    _reload();
+  }
+
+  void _rejectRequest(RemoteContact contact, RemoteContactRequest request) {
+    try {
+      widget.messagingService.rejectContactRequest(
+        requestId: request.requestId,
+        peerAccountId: contact.peerAccountId,
+      );
+      setState(() => _statusText = 'Contact request rejected');
+    } catch (e) {
+      setState(() => _statusText = _safeError(e));
+    }
+    _reload();
+  }
+
+  void _cancelRequest(RemoteContact contact, RemoteContactRequest request) {
+    try {
+      widget.messagingService.cancelContactRequest(
+        requestId: request.requestId,
+        peerAccountId: contact.peerAccountId,
+      );
+      setState(() => _statusText = 'Contact request cancelled');
+    } catch (e) {
+      setState(() => _statusText = _safeError(e));
+    }
+    _reload();
   }
 
   @override
@@ -124,7 +183,25 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           ),
         ],
       ),
-      body: _showContacts ? _buildContactList() : _buildConversationList(),
+      body: Column(
+        children: [
+          if (_statusText != null)
+            MaterialBanner(
+              content: Text(_statusText!),
+              actions: [
+                TextButton(
+                  onPressed: () => setState(() => _statusText = null),
+                  child: const Text('Dismiss'),
+                ),
+              ],
+            ),
+          Expanded(
+            child: _showContacts
+                ? _buildContactList()
+                : _buildConversationList(),
+          ),
+        ],
+      ),
       floatingActionButton: _showContacts
           ? FloatingActionButton(
               onPressed: _addContact,
@@ -170,6 +247,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       itemCount: _contacts.length,
       itemBuilder: (context, index) {
         final contact = _contacts[index];
+        final request = _openRequestFor(contact);
         return ListTile(
           title: Text(
             contact.nickname.isNotEmpty
@@ -177,10 +255,61 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 : contact.peerAccountId,
           ),
           subtitle: Text(contact.status),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: _contactTrailing(contact, request),
           onTap: () => _startConversation(contact),
         );
       },
     );
+  }
+
+  RemoteContactRequest? _openRequestFor(RemoteContact contact) {
+    for (final request in _requests) {
+      if (request.peerAccountId == contact.peerAccountId &&
+          request.status == 'Pending') {
+        return request;
+      }
+    }
+    return null;
+  }
+
+  Widget _contactTrailing(
+    RemoteContact contact,
+    RemoteContactRequest? request,
+  ) {
+    if (contact.status == 'PendingReceived' && request != null) {
+      return Wrap(
+        spacing: 4,
+        children: [
+          IconButton(
+            tooltip: 'Accept request',
+            icon: const Icon(Icons.check),
+            onPressed: () => _acceptRequest(contact, request),
+          ),
+          IconButton(
+            tooltip: 'Reject request',
+            icon: const Icon(Icons.close),
+            onPressed: () => _rejectRequest(contact, request),
+          ),
+        ],
+      );
+    }
+    if (contact.status == 'PendingSent' && request != null) {
+      return TextButton(
+        onPressed: () => _cancelRequest(contact, request),
+        child: const Text('Cancel'),
+      );
+    }
+    if (contact.status == 'Accepted') {
+      return const Icon(Icons.chevron_right);
+    }
+    return Text(contact.status);
+  }
+
+  String _safeError(Object error) {
+    final text = error.toString();
+    if (text.startsWith('Bad state: ')) {
+      return text.substring('Bad state: '.length);
+    }
+    return 'Contact operation failed';
   }
 }

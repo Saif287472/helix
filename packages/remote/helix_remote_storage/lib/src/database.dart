@@ -296,6 +296,7 @@ class HelixRemoteDatabase {
         status TEXT NOT NULL
       );
     ''');
+    _createContactRequestsTable();
 
     _db.execute('''
       CREATE TABLE IF NOT EXISTS conversations (
@@ -629,6 +630,27 @@ class HelixRemoteDatabase {
       ''');
       _db.execute('PRAGMA user_version = 11;');
     }
+    if (version < 12) {
+      _createContactRequestsTable();
+      _db.execute('PRAGMA user_version = 12;');
+    }
+  }
+
+  void _createContactRequestsTable() {
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS contact_requests (
+        request_id TEXT PRIMARY KEY,
+        peer_account_id TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        status TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        nickname TEXT NOT NULL DEFAULT ''
+      );
+    ''');
+    _db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_contact_requests_peer_status
+      ON contact_requests(peer_account_id, status);
+    ''');
   }
 
   void _createRemoteCryptoTables() {
@@ -968,6 +990,90 @@ class HelixRemoteDatabase {
     final stmt = _db.prepare('DELETE FROM contacts WHERE peer_account_id = ?;');
     stmt.execute([peerAccountId]);
     stmt.close();
+  }
+
+  void upsertContactRequest(RemoteContactRequest request) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO contact_requests (
+        request_id,
+        peer_account_id,
+        direction,
+        status,
+        updated_at,
+        nickname
+      )
+      VALUES (?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      request.requestId,
+      request.peerAccountId,
+      request.direction,
+      request.status,
+      request.updatedAt,
+      request.nickname,
+    ]);
+    stmt.close();
+  }
+
+  List<RemoteContactRequest> getContactRequests({String? status}) {
+    final stmt = status == null
+        ? _db.prepare(
+            'SELECT * FROM contact_requests ORDER BY updated_at DESC;',
+          )
+        : _db.prepare(
+            'SELECT * FROM contact_requests WHERE status = ? ORDER BY updated_at DESC;',
+          );
+    final res = status == null ? stmt.select() : stmt.select([status]);
+    stmt.close();
+    return res.map(_contactRequestFromRow).toList();
+  }
+
+  RemoteContactRequest? getContactRequest(String requestId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM contact_requests WHERE request_id = ?;',
+    );
+    final res = stmt.select([requestId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    return _contactRequestFromRow(res.first);
+  }
+
+  RemoteContactRequest? getOpenContactRequestForPeer(String peerAccountId) {
+    final stmt = _db.prepare('''
+      SELECT * FROM contact_requests
+      WHERE peer_account_id = ? AND status = 'Pending'
+      ORDER BY updated_at DESC
+      LIMIT 1;
+    ''');
+    final res = stmt.select([peerAccountId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    return _contactRequestFromRow(res.first);
+  }
+
+  void updateContactRequestStatus(
+    String requestId,
+    String status,
+    int updatedAt,
+  ) {
+    final stmt = _db.prepare('''
+      UPDATE contact_requests
+      SET status = ?, updated_at = ?
+      WHERE request_id = ?;
+    ''');
+    stmt.execute([status, updatedAt, requestId]);
+    stmt.close();
+  }
+
+  RemoteContactRequest _contactRequestFromRow(Row row) {
+    return RemoteContactRequest(
+      requestId: row['request_id'] as String,
+      peerAccountId: row['peer_account_id'] as String,
+      direction: row['direction'] as String,
+      status: row['status'] as String,
+      updatedAt: row['updated_at'] as int,
+      nickname: row['nickname'] as String? ?? '',
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -2151,6 +2257,7 @@ class HelixRemoteDatabase {
       'accounts': _selectAll('accounts'),
       'devices': _selectAll('devices'),
       'contacts': _selectAll('contacts'),
+      'contact_requests': _selectAll('contact_requests'),
       'conversations': _selectAll('conversations'),
       'members': _selectAll('members'),
       'messages': _selectAll('messages'),
@@ -2177,6 +2284,10 @@ class HelixRemoteDatabase {
       _restoreRows('accounts', decoded['accounts'] as List? ?? const []);
       _restoreRows('devices', decoded['devices'] as List? ?? const []);
       _restoreRows('contacts', decoded['contacts'] as List? ?? const []);
+      _restoreRows(
+        'contact_requests',
+        decoded['contact_requests'] as List? ?? const [],
+      );
       _restoreRows(
         'conversations',
         decoded['conversations'] as List? ?? const [],

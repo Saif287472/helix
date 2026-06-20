@@ -115,8 +115,8 @@ release/security gates.
 
 | ID | Item | Status | Implementation Files | Production/Dev Wiring Path | Tests | Missing Integration | Security/Data Risk | Repair Task |
 |---|---|---|---|---|---|---|---|---|
-| P13-001 | Contact request lifecycle | **DISCONNECTED** | Backend `contacts.dart` `ContactRequestsModule`; service `remote_messaging_service.dart` `contactRequest` | Backend routes exist; service enqueues operations | Backend `contacts_phase13_test.dart`; service tests | Not wired into composition root or UI | None | Wire contact request into app |
-| P13-002 | Accept/reject/cancel | **DISCONNECTED** | Backend accept/reject/cancel routes; service operations | Same as P13-001 | Backend tests | Not wired to app | None | Wire into app |
+| P13-001 | Contact request lifecycle | **WIRED** | Backend `contacts.dart`; service `remote_messaging_service.dart`; `conversation_list_screen.dart` | Contact tab sends requests and shows pending sent/received state from local synchronized storage | Backend `contacts_phase13_test.dart`; service/widget tests | Manual multi-client visual convergence remains Phase 18 | None | Continue integrated journey coverage |
+| P13-002 | Accept/reject/cancel | **WIRED** | Backend accept/reject/cancel routes; service operations; contact screen actions | Pending received requests expose Accept/Reject; pending sent requests expose Cancel | Backend tests; service/widget tests | Real-network race walkthrough remains manual/integrated | None | Continue integrated journey coverage |
 | P13-003 | Friend/contact removal | **DISCONNECTED** | Backend remove route; service removeContact | Same | Backend tests | Not wired | None | Wire into app |
 | P13-004 | Block/unblock | **DISCONNECTED** | Backend block/unblock routes; service block/unblock | Same | Backend tests; service tests | Not wired | Backend enforces block | Wire into app |
 | P13-005 | Username change rules | **VERIFIED COMPONENT ONLY** | Backend `auth.dart` username validation/enforcement | Backend-enforced rules | Backend tests | Not wired to app UI | Enforced server-side | Wire profile UI |
@@ -128,10 +128,10 @@ release/security gates.
 | P13-011 | Request quotas | **VERIFIED COMPONENT ONLY** | Backend rate limiting on requests | Backend-enforced | Backend tests | Not wired | None | N/A for student scope |
 | P13-012 | Report flow with privacy-minimized evidence | **VERIFIED COMPONENT ONLY** | Backend report creation | Backend route | Backend tests | Not wired to app UI | Privacy-minimized payload enforced | Wire report UI |
 | P13-013 | Safety/admin workflow | **VERIFIED COMPONENT ONLY** | Backend safety actions; admin allow-list | Backend: admin-only safety actions | Backend tests | Not wired | Admin access audited | N/A for student scope |
-| P13-014 | Contact/block sync across devices | **PARTIAL** | Sync engine processes `contact_updated`, `contact_removed`, `profile_updated`, `privacy_updated`, `presence_updated` events | Sync engine typed dispatch | `remote_sync_test.dart` | Events processed but no UI effect | None | Wire sync events to UI state |
+| P13-014 | Contact/block sync across devices | **PARTIAL** | Backend emits contact request device events; sync engine processes `contact_updated`, `contact_removed`, `profile_updated`, `privacy_updated`, `presence_updated` events | Contact request events update local contacts/request ledger; contact tab reloads synchronized state | `remote_sync_test.dart`; backend contact tests; widget tests | Live reactive refresh while screen is open remains Phase 09 runtime/UI work | None | Wire automatic runtime screen refresh |
 | P13-015 | Tests for blocked-user delivery and group behavior | **PARTIAL** | Backend tests for blocked-user delivery suppression | Direct blocked-user delivery tested | Backend `contacts_test.dart`; group block not implemented | Group block behavior not tested | None | Add group blocking test |
 
-**Phase 13 Summary:** All backend contact infrastructure exists and is tested. The sync engine processes contact/privacy/presence events. The Remote app has **no contact screens** beyond the hardcoded demo contact list. User-facing contact request, accept/reject, block/unblock, privacy settings, profile editing, and reporting are not wired.
+**Phase 13 Summary:** Contact request send, pending sent/received display, accept, reject, cancel, local request persistence, backend contact events, and accepted-contact conversation gating are wired. Block/unblock, privacy settings, profile editing, reporting, and automatic live screen refresh remain broader later-phase work.
 
 ---
 
