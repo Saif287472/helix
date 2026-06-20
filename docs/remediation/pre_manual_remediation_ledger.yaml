@@ -25,12 +25,15 @@ findings:
       - apps/helix_remote/lib/app/remote_config.dart::RemoteDevelopmentConfig
       - services/helix_remote_backend/bin/server.dart
       - apps/helix_remote/test/remote_config_test.dart
-    status: pending
+    status: complete
     tests_required:
       - Config parser tests for supported profiles and invalid transport.
       - Backend/client bootstrap smoke test.
       - Remote Windows and Android debug builds.
-    final_disposition: Pending Phase 01.
+    final_disposition: Complete in Phase 01. Remote now uses explicit runtime
+      profiles, production rejects insecure/local transport, development
+      profiles derive REST and WebSocket endpoints consistently, and backend
+      bootstrap is covered by an entrypoint smoke test.
   - id: HXA-002
     title: Remote Android localhost and cleartext packaging
     primary_phase: 01
@@ -42,12 +45,14 @@ findings:
       - apps/helix_remote/lib/app/remote_config.dart::fromDartDefine
       - apps/helix_remote/android/app/src/main/AndroidManifest.xml
       - apps/helix_remote/android/app/src/debug/AndroidManifest.xml
-    status: pending
+    status: complete
     tests_required:
       - Android emulator and physical-device host strategy tests.
       - Debug-only cleartext policy guard.
       - Release policy rejects HTTP and WS.
-    final_disposition: Pending Phase 01.
+    final_disposition: Complete in Phase 01. Android emulator development uses
+      explicit 10.0.2.2 host strategy, physical Android uses trusted HTTPS/WSS,
+      and cleartext is scoped to debug-only loopback/emulator hosts.
   - id: HXA-003
     title: Stored Remote session does not start runtime
     primary_phase: 03

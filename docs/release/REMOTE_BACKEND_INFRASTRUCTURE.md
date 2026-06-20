@@ -28,6 +28,9 @@ The backend monolith consumes environment variables injected at runtime:
 - `HELIX_REMOTE_DB_PATH`: Absolute path to the SQLite storage file (e.g. `/var/lib/helix/db.sqlite`).
 - `HELIX_REMOTE_HOST`: Host IP address to bind to (e.g. `127.0.0.1` behind reverse proxy).
 - `HELIX_REMOTE_PORT`: Port to listen on (e.g. `8080`).
+- `HELIX_REMOTE_DEV_MODE`: Set to `1` only for local development. This permits
+  the checked-in development backend command to use the non-secret development
+  JWT fallback and local SQLite path.
 
 ### Secrets Vault
 Production deployments must retrieve variables dynamically at startup using a vault (e.g., AWS Secrets Manager, HashiCorp Vault, or Google Cloud Secret Manager) rather than writing them to persistent disk.
@@ -37,6 +40,11 @@ Production deployments must retrieve variables dynamically at startup using a va
 ## 3. TLS Configuration & Reverse Proxy (P10-029)
 
 The Dart monolithic server must not be exposed directly to the public internet. All public traffic must terminate at a secure reverse proxy (Nginx or Envoy).
+
+The backend entrypoint defaults to `127.0.0.1` so development and reverse-proxy
+deployments do not accidentally bind to all interfaces. Binding to a LAN or
+public interface must be an explicit operator decision and production still
+requires a real `HELIX_REMOTE_JWT_SECRET`.
 
 ### Nginx SSL Configuration Checklist
 - **TLS Version**: Force TLS 1.3 or TLS 1.2 minimum. Disable TLS 1.0 and 1.1.

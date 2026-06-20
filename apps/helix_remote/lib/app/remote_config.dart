@@ -2,11 +2,44 @@ import 'dart:io';
 
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 
+enum RemoteRuntimeProfile {
+  production,
+  localWindows,
+  androidEmulator,
+  androidPhysical,
+}
+
+enum RemoteTransportPolicy {
+  strictTls,
+  trustedLocalTls,
+  debugPlaintextLocalhost,
+  debugPlaintextEmulator,
+}
+
+enum TlsExpectation {
+  required,
+  trustedDevelopmentCertificate,
+  notUsedDebugPlaintext,
+}
+
+class RemoteConfigurationException implements Exception {
+  const RemoteConfigurationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class RemoteDevelopmentConfig {
   RemoteDevelopmentConfig({
+    this.profile = RemoteRuntimeProfile.production,
+    String? environmentName,
     required this.restBaseUri,
     required this.webSocketUri,
     required this.allowInsecureTransport,
+    RemoteTransportPolicy? transportPolicy,
+    TlsExpectation? tlsExpectation,
     required this.backendHostMode,
     required this.requestTimeoutMs,
     required this.reconnectPolicy,
@@ -17,13 +50,27 @@ class RemoteDevelopmentConfig {
       iceServers: [],
       ipPrivacy: IpPrivacyMode.relayOnly,
     ),
-  }) {
-    _validateTransport();
+  }) : environmentName = environmentName ?? profile.name,
+       transportPolicy =
+           transportPolicy ??
+           _defaultTransportPolicy(
+             profile,
+             restBaseUri.scheme,
+             webSocketUri.scheme,
+           ),
+       tlsExpectation =
+           tlsExpectation ??
+           _defaultTlsExpectation(restBaseUri.scheme, webSocketUri.scheme) {
+    _validate();
   }
 
+  final RemoteRuntimeProfile profile;
+  final String environmentName;
   final Uri restBaseUri;
   final Uri webSocketUri;
   final bool allowInsecureTransport;
+  final RemoteTransportPolicy transportPolicy;
+  final TlsExpectation tlsExpectation;
   final String backendHostMode;
   final int requestTimeoutMs;
   final ReconnectPolicy reconnectPolicy;
@@ -32,41 +79,54 @@ class RemoteDevelopmentConfig {
   final DiagnosticLevel diagnosticLevel;
   final RemoteIceConfig callIceConfig;
 
+  String get restScheme => restBaseUri.scheme;
+  String get restHost => restBaseUri.host;
+  int get restPort => restBaseUri.port;
+  String get restBasePath => restBaseUri.path;
+  String get webSocketScheme => webSocketUri.scheme;
+  String get webSocketHost => webSocketUri.host;
+  int get webSocketPort => webSocketUri.port;
+  String get webSocketPath => webSocketUri.path;
+
   static RemoteDevelopmentConfig fromPlatform({
     required String databaseDirectory,
     required String attachmentCacheDir,
   }) {
-    final host = Platform.environment['HELIX_REMOTE_HOST'] ?? 'localhost';
-    final port = Platform.environment['HELIX_REMOTE_PORT'] ?? '8080';
-    final wsPort = Platform.environment['HELIX_REMOTE_WS_PORT'] ?? port;
-    final scheme = Platform.environment['HELIX_REMOTE_SCHEME'] ?? 'http';
-    final allowInsecure =
-        Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1' ||
-        Platform.environment['HELIX_REMOTE_ALLOW_INSECURE_TRANSPORT'] == '1';
-    final iceConfig = _iceConfigFromValues(
-      stunUrls: Platform.environment['HELIX_REMOTE_STUN_URLS'] ?? '',
-      turnUrl: Platform.environment['HELIX_REMOTE_TURN_URL'] ?? '',
-      turnUsername: Platform.environment['HELIX_REMOTE_TURN_USERNAME'] ?? '',
-      turnCredential:
-          Platform.environment['HELIX_REMOTE_TURN_CREDENTIAL'] ?? '',
-      ipPrivacy: Platform.environment['HELIX_REMOTE_IP_PRIVACY'] ?? '',
-    );
-
-    final mode = host == 'localhost' || host == '127.0.0.1' ? 'same-pc' : 'lan';
-    final restScheme = scheme;
-    final wsScheme = _webSocketSchemeFor(restScheme);
-
-    return RemoteDevelopmentConfig(
-      restBaseUri: Uri.parse('$restScheme://$host:$port'),
-      webSocketUri: Uri.parse('$wsScheme://$host:$wsPort/api/v1/ws'),
-      allowInsecureTransport: allowInsecure,
-      backendHostMode: mode,
-      requestTimeoutMs: 15000,
-      reconnectPolicy: const ReconnectPolicy(),
+    return fromEnvironmentValues(
       databaseDirectory: databaseDirectory,
       attachmentCacheDir: attachmentCacheDir,
-      diagnosticLevel: DiagnosticLevel.info,
-      callIceConfig: iceConfig,
+      values: Platform.environment,
+    );
+  }
+
+  static RemoteDevelopmentConfig fromEnvironmentValues({
+    required String databaseDirectory,
+    required String attachmentCacheDir,
+    required Map<String, String> values,
+  }) {
+    final env = values;
+    return _fromValues(
+      databaseDirectory: databaseDirectory,
+      attachmentCacheDir: attachmentCacheDir,
+      profileValue: env['HELIX_REMOTE_PROFILE'] ?? 'production',
+      hostValue: env['HELIX_REMOTE_HOST'] ?? '',
+      portValue: env['HELIX_REMOTE_PORT'] ?? '',
+      restSchemeValue:
+          env['HELIX_REMOTE_REST_SCHEME'] ?? env['HELIX_REMOTE_SCHEME'] ?? '',
+      restBasePathValue: env['HELIX_REMOTE_REST_BASE_PATH'] ?? '',
+      wsSchemeValue: env['HELIX_REMOTE_WS_SCHEME'] ?? '',
+      wsHostValue: env['HELIX_REMOTE_WS_HOST'] ?? '',
+      wsPortValue: env['HELIX_REMOTE_WS_PORT'] ?? '',
+      wsPathValue: env['HELIX_REMOTE_WS_PATH'] ?? '',
+      devModeValue: _envBool(env['HELIX_REMOTE_DEV_MODE']),
+      allowInsecureValue: _envBool(
+        env['HELIX_REMOTE_ALLOW_INSECURE_TRANSPORT'],
+      ),
+      stunUrls: env['HELIX_REMOTE_STUN_URLS'] ?? '',
+      turnUrl: env['HELIX_REMOTE_TURN_URL'] ?? '',
+      turnUsername: env['HELIX_REMOTE_TURN_USERNAME'] ?? '',
+      turnCredential: env['HELIX_REMOTE_TURN_CREDENTIAL'] ?? '',
+      ipPrivacy: env['HELIX_REMOTE_IP_PRIVACY'] ?? '',
     );
   }
 
@@ -74,28 +134,31 @@ class RemoteDevelopmentConfig {
     required String databaseDirectory,
     required String attachmentCacheDir,
   }) {
-    final host = const String.fromEnvironment(
-      'HELIX_REMOTE_HOST',
-      defaultValue: 'localhost',
+    const profileValue = String.fromEnvironment(
+      'HELIX_REMOTE_PROFILE',
+      defaultValue: 'production',
     );
-    final port = const String.fromEnvironment(
-      'HELIX_REMOTE_PORT',
-      defaultValue: '8080',
+    const hostValue = String.fromEnvironment('HELIX_REMOTE_HOST');
+    const portValue = String.fromEnvironment('HELIX_REMOTE_PORT');
+    const restSchemeValue = String.fromEnvironment(
+      'HELIX_REMOTE_REST_SCHEME',
+      defaultValue: String.fromEnvironment('HELIX_REMOTE_SCHEME'),
     );
-    final wsPort = const String.fromEnvironment(
-      'HELIX_REMOTE_WS_PORT',
-      defaultValue: '8080',
+    const restBasePathValue = String.fromEnvironment(
+      'HELIX_REMOTE_REST_BASE_PATH',
     );
-    final scheme = const String.fromEnvironment(
-      'HELIX_REMOTE_SCHEME',
-      defaultValue: 'https',
+    const wsSchemeValue = String.fromEnvironment('HELIX_REMOTE_WS_SCHEME');
+    const wsHostValue = String.fromEnvironment('HELIX_REMOTE_WS_HOST');
+    const wsPortValue = String.fromEnvironment('HELIX_REMOTE_WS_PORT');
+    const wsPathValue = String.fromEnvironment('HELIX_REMOTE_WS_PATH');
+    const devModeValue = bool.fromEnvironment(
+      'HELIX_REMOTE_DEV_MODE',
+      defaultValue: false,
     );
-    const allowInsecure =
-        bool.fromEnvironment('HELIX_REMOTE_DEV_MODE', defaultValue: false) ||
-        bool.fromEnvironment(
-          'HELIX_REMOTE_ALLOW_INSECURE_TRANSPORT',
-          defaultValue: false,
-        );
+    const allowInsecureValue = bool.fromEnvironment(
+      'HELIX_REMOTE_ALLOW_INSECURE_TRANSPORT',
+      defaultValue: false,
+    );
     const stunUrls = String.fromEnvironment('HELIX_REMOTE_STUN_URLS');
     const turnUrl = String.fromEnvironment('HELIX_REMOTE_TURN_URL');
     const turnUsername = String.fromEnvironment('HELIX_REMOTE_TURN_USERNAME');
@@ -103,15 +166,112 @@ class RemoteDevelopmentConfig {
       'HELIX_REMOTE_TURN_CREDENTIAL',
     );
     const ipPrivacy = String.fromEnvironment('HELIX_REMOTE_IP_PRIVACY');
-    final wsScheme = _webSocketSchemeFor(scheme);
+
+    return _fromValues(
+      databaseDirectory: databaseDirectory,
+      attachmentCacheDir: attachmentCacheDir,
+      profileValue: profileValue,
+      hostValue: hostValue,
+      portValue: portValue,
+      restSchemeValue: restSchemeValue,
+      restBasePathValue: restBasePathValue,
+      wsSchemeValue: wsSchemeValue,
+      wsHostValue: wsHostValue,
+      wsPortValue: wsPortValue,
+      wsPathValue: wsPathValue,
+      devModeValue: devModeValue,
+      allowInsecureValue: allowInsecureValue,
+      stunUrls: stunUrls,
+      turnUrl: turnUrl,
+      turnUsername: turnUsername,
+      turnCredential: turnCredential,
+      ipPrivacy: ipPrivacy,
+    );
+  }
+
+  static RemoteDevelopmentConfig _fromValues({
+    required String databaseDirectory,
+    required String attachmentCacheDir,
+    required String profileValue,
+    required String hostValue,
+    required String portValue,
+    required String restSchemeValue,
+    required String restBasePathValue,
+    required String wsSchemeValue,
+    required String wsHostValue,
+    required String wsPortValue,
+    required String wsPathValue,
+    required bool devModeValue,
+    required bool allowInsecureValue,
+    required String stunUrls,
+    required String turnUrl,
+    required String turnUsername,
+    required String turnCredential,
+    required String ipPrivacy,
+  }) {
+    final profile = _profileFor(profileValue);
+    final defaults = _profileDefaults(profile);
+    final host = hostValue.trim().isEmpty ? defaults.host : hostValue.trim();
+    final restScheme = restSchemeValue.trim().isEmpty
+        ? defaults.restScheme
+        : restSchemeValue.trim().toLowerCase();
+    final port = _parsePort(
+      portValue.trim().isEmpty ? defaults.port : portValue.trim(),
+      'HELIX_REMOTE_PORT',
+    );
+    final wsScheme = wsSchemeValue.trim().isEmpty
+        ? _webSocketSchemeFor(restScheme)
+        : wsSchemeValue.trim().toLowerCase();
+    final wsHost = wsHostValue.trim().isEmpty ? host : wsHostValue.trim();
+    final wsPort = _parsePort(
+      wsPortValue.trim().isEmpty ? '$port' : wsPortValue.trim(),
+      'HELIX_REMOTE_WS_PORT',
+    );
+    final restBasePath = _normalizePath(restBasePathValue);
+    final wsPath = wsPathValue.trim().isEmpty
+        ? '/api/v1/ws'
+        : _normalizePath(wsPathValue);
+    final allowInsecure = devModeValue || allowInsecureValue;
+    final plaintext = restScheme == 'http' || wsScheme == 'ws';
+
+    if (profile == RemoteRuntimeProfile.androidPhysical && plaintext) {
+      throw const RemoteConfigurationException(
+        'Physical Android development must use HTTPS/WSS with a trusted '
+        'LAN or staging endpoint. LAN HTTP is intentionally not enabled for '
+        'physical devices.',
+      );
+    }
+
+    final transportPolicy = _policyFor(
+      profile: profile,
+      restScheme: restScheme,
+      wsScheme: wsScheme,
+    );
+    final tlsExpectation = plaintext
+        ? TlsExpectation.notUsedDebugPlaintext
+        : profile == RemoteRuntimeProfile.production
+        ? TlsExpectation.required
+        : TlsExpectation.trustedDevelopmentCertificate;
 
     return RemoteDevelopmentConfig(
-      restBaseUri: Uri.parse('$scheme://$host:$port'),
-      webSocketUri: Uri.parse('$wsScheme://$host:$wsPort/api/v1/ws'),
+      profile: profile,
+      environmentName: profileValue,
+      restBaseUri: Uri(
+        scheme: restScheme,
+        host: host,
+        port: port,
+        path: restBasePath,
+      ),
+      webSocketUri: Uri(
+        scheme: wsScheme,
+        host: wsHost,
+        port: wsPort,
+        path: wsPath,
+      ),
       allowInsecureTransport: allowInsecure,
-      backendHostMode: host == 'localhost' || host == '127.0.0.1'
-          ? 'same-pc'
-          : 'lan',
+      transportPolicy: transportPolicy,
+      tlsExpectation: tlsExpectation,
+      backendHostMode: defaults.hostMode,
       requestTimeoutMs: 15000,
       reconnectPolicy: const ReconnectPolicy(),
       databaseDirectory: databaseDirectory,
@@ -127,6 +287,126 @@ class RemoteDevelopmentConfig {
     );
   }
 
+  static bool _envBool(String? value) {
+    switch (value) {
+      case '1':
+      case 'true':
+      case 'TRUE':
+      case 'yes':
+      case 'YES':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  static _ProfileDefaults _profileDefaults(RemoteRuntimeProfile profile) {
+    switch (profile) {
+      case RemoteRuntimeProfile.production:
+        return const _ProfileDefaults(
+          host: '',
+          port: '443',
+          restScheme: 'https',
+          hostMode: 'production',
+        );
+      case RemoteRuntimeProfile.localWindows:
+        return const _ProfileDefaults(
+          host: '127.0.0.1',
+          port: '8080',
+          restScheme: 'http',
+          hostMode: 'same-pc',
+        );
+      case RemoteRuntimeProfile.androidEmulator:
+        return const _ProfileDefaults(
+          host: '10.0.2.2',
+          port: '8080',
+          restScheme: 'http',
+          hostMode: 'android-emulator-host',
+        );
+      case RemoteRuntimeProfile.androidPhysical:
+        return const _ProfileDefaults(
+          host: '',
+          port: '443',
+          restScheme: 'https',
+          hostMode: 'android-physical-trusted-tls',
+        );
+    }
+  }
+
+  static RemoteRuntimeProfile _profileFor(String value) {
+    switch (value.trim().toLowerCase().replaceAll('-', '_')) {
+      case 'production':
+      case 'prod':
+        return RemoteRuntimeProfile.production;
+      case 'local_windows':
+      case 'windows_dev':
+      case 'local':
+        return RemoteRuntimeProfile.localWindows;
+      case 'android_emulator':
+      case 'emulator':
+        return RemoteRuntimeProfile.androidEmulator;
+      case 'android_physical':
+      case 'physical_android':
+        return RemoteRuntimeProfile.androidPhysical;
+      default:
+        throw RemoteConfigurationException(
+          'Unknown HELIX_REMOTE_PROFILE "$value". Use production, '
+          'local_windows, android_emulator, or android_physical.',
+        );
+    }
+  }
+
+  static int _parsePort(String value, String name) {
+    final port = int.tryParse(value);
+    if (port == null || port < 1 || port > 65535) {
+      throw RemoteConfigurationException(
+        '$name must be a port from 1 to 65535',
+      );
+    }
+    return port;
+  }
+
+  static String _normalizePath(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed == '/') return '';
+    return trimmed.startsWith('/') ? trimmed : '/$trimmed';
+  }
+
+  static RemoteTransportPolicy _policyFor({
+    required RemoteRuntimeProfile profile,
+    required String restScheme,
+    required String wsScheme,
+  }) {
+    final plaintext = restScheme == 'http' || wsScheme == 'ws';
+    if (!plaintext) {
+      return profile == RemoteRuntimeProfile.production
+          ? RemoteTransportPolicy.strictTls
+          : RemoteTransportPolicy.trustedLocalTls;
+    }
+    switch (profile) {
+      case RemoteRuntimeProfile.localWindows:
+        return RemoteTransportPolicy.debugPlaintextLocalhost;
+      case RemoteRuntimeProfile.androidEmulator:
+        return RemoteTransportPolicy.debugPlaintextEmulator;
+      case RemoteRuntimeProfile.production:
+      case RemoteRuntimeProfile.androidPhysical:
+        return RemoteTransportPolicy.strictTls;
+    }
+  }
+
+  static RemoteTransportPolicy _defaultTransportPolicy(
+    RemoteRuntimeProfile profile,
+    String restScheme,
+    String wsScheme,
+  ) => _policyFor(profile: profile, restScheme: restScheme, wsScheme: wsScheme);
+
+  static TlsExpectation _defaultTlsExpectation(
+    String restScheme,
+    String wsScheme,
+  ) => restScheme == 'http' || wsScheme == 'ws'
+      ? TlsExpectation.notUsedDebugPlaintext
+      : TlsExpectation.required;
+
   static RemoteIceConfig _iceConfigFromValues({
     required String stunUrls,
     required String turnUrl,
@@ -140,7 +420,10 @@ class RemoteDevelopmentConfig {
     ];
     if (turnUrl.isNotEmpty) {
       if (turnUsername.isEmpty || turnCredential.isEmpty) {
-        throw StateError('TURN URL requires username and credential');
+        throw const RemoteConfigurationException(
+          'HELIX_REMOTE_TURN_URL requires HELIX_REMOTE_TURN_USERNAME and '
+          'HELIX_REMOTE_TURN_CREDENTIAL.',
+        );
       }
       servers.add(
         IceServerConfig(
@@ -164,7 +447,9 @@ class RemoteDevelopmentConfig {
       case 'direct_and_relay':
         return IpPrivacyMode.directAndRelay;
       default:
-        throw StateError('Unknown HELIX_REMOTE_IP_PRIVACY: $value');
+        throw RemoteConfigurationException(
+          'Unknown HELIX_REMOTE_IP_PRIVACY "$value".',
+        );
     }
   }
 
@@ -175,28 +460,120 @@ class RemoteDevelopmentConfig {
       case 'https':
         return 'wss';
       default:
-        throw ArgumentError.value(restScheme, 'scheme', 'Use http or https');
+        throw RemoteConfigurationException(
+          'Remote REST scheme must be http or https.',
+        );
     }
   }
 
-  void _validateTransport() {
-    if (restBaseUri.scheme != 'http' && restBaseUri.scheme != 'https') {
-      throw StateError('Remote REST URI must use http or https');
+  void _validate() {
+    _validateScheme(restBaseUri.scheme, const {'http', 'https'}, 'REST');
+    _validateScheme(webSocketUri.scheme, const {'ws', 'wss'}, 'WebSocket');
+    if (restBaseUri.host.isEmpty) {
+      throw const RemoteConfigurationException(
+        'HELIX_REMOTE_HOST is required. Production must set an HTTPS host; '
+        'development must choose an explicit HELIX_REMOTE_PROFILE.',
+      );
     }
-    if (webSocketUri.scheme != 'ws' && webSocketUri.scheme != 'wss') {
-      throw StateError('Remote WebSocket URI must use ws or wss');
+    if (webSocketUri.host.isEmpty) {
+      throw const RemoteConfigurationException(
+        'Remote WebSocket host must not be empty.',
+      );
+    }
+    if (restBaseUri.hasQuery || restBaseUri.hasFragment) {
+      throw const RemoteConfigurationException(
+        'Remote REST URI must not include query or fragment components.',
+      );
+    }
+    if (webSocketUri.hasQuery || webSocketUri.hasFragment) {
+      throw const RemoteConfigurationException(
+        'Remote WebSocket URI must not include query or fragment components.',
+      );
     }
     if (webSocketUri.path != '/api/v1/ws') {
-      throw StateError('Remote WebSocket URI must use /api/v1/ws');
+      throw const RemoteConfigurationException(
+        'Remote WebSocket URI must use /api/v1/ws.',
+      );
     }
+    if (requestTimeoutMs <= 0) {
+      throw const RemoteConfigurationException(
+        'Remote request timeout must be positive.',
+      );
+    }
+    if (databaseDirectory.isEmpty || attachmentCacheDir.isEmpty) {
+      throw const RemoteConfigurationException(
+        'Remote database and attachment cache directories must be configured.',
+      );
+    }
+
     final plaintext =
         restBaseUri.scheme == 'http' || webSocketUri.scheme == 'ws';
     if (plaintext && !allowInsecureTransport) {
-      throw StateError(
-        'Plaintext Remote transport requires explicit development mode',
+      throw const RemoteConfigurationException(
+        'Plaintext Remote transport requires HELIX_REMOTE_DEV_MODE=1 and a '
+        'development profile.',
+      );
+    }
+    if (profile == RemoteRuntimeProfile.production) {
+      if (allowInsecureTransport || plaintext) {
+        throw const RemoteConfigurationException(
+          'Production Remote configuration requires HTTPS/WSS and strict TLS.',
+        );
+      }
+      if (_isLocalAddress(restBaseUri.host) ||
+          _isLocalAddress(webSocketUri.host)) {
+        throw const RemoteConfigurationException(
+          'Production Remote configuration must not target localhost or the '
+          'Android emulator host.',
+        );
+      }
+      if (transportPolicy != RemoteTransportPolicy.strictTls ||
+          tlsExpectation != TlsExpectation.required) {
+        throw const RemoteConfigurationException(
+          'Production Remote configuration must use strict TLS policy.',
+        );
+      }
+    }
+    if (profile == RemoteRuntimeProfile.androidEmulator) {
+      if (restBaseUri.host != '10.0.2.2') {
+        throw const RemoteConfigurationException(
+          'Android emulator profile must target HELIX_REMOTE_HOST=10.0.2.2.',
+        );
+      }
+    }
+    if (profile == RemoteRuntimeProfile.androidPhysical &&
+        _isLocalAddress(restBaseUri.host)) {
+      throw const RemoteConfigurationException(
+        'Physical Android profile must target an explicit LAN/staging HTTPS '
+        'host, not localhost.',
       );
     }
   }
+
+  static void _validateScheme(String value, Set<String> allowed, String label) {
+    if (!allowed.contains(value)) {
+      throw RemoteConfigurationException(
+        'Remote $label scheme must be one of: ${allowed.join(', ')}.',
+      );
+    }
+  }
+
+  static bool _isLocalAddress(String host) =>
+      host == 'localhost' || host == '127.0.0.1' || host == '10.0.2.2';
+}
+
+class _ProfileDefaults {
+  const _ProfileDefaults({
+    required this.host,
+    required this.port,
+    required this.restScheme,
+    required this.hostMode,
+  });
+
+  final String host;
+  final String port;
+  final String restScheme;
+  final String hostMode;
 }
 
 class ReconnectPolicy {

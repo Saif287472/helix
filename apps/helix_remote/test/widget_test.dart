@@ -2,7 +2,21 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/main.dart';
+
+RemoteDevelopmentConfig _devConfig() => RemoteDevelopmentConfig(
+  profile: RemoteRuntimeProfile.localWindows,
+  restBaseUri: Uri.parse('http://127.0.0.1:8080'),
+  webSocketUri: Uri.parse('ws://127.0.0.1:8080/api/v1/ws'),
+  allowInsecureTransport: true,
+  backendHostMode: 'same-pc',
+  requestTimeoutMs: 15000,
+  reconnectPolicy: const ReconnectPolicy(),
+  databaseDirectory: Directory.systemTemp.path,
+  attachmentCacheDir: '${Directory.systemTemp.path}/attachments_cache',
+  diagnosticLevel: DiagnosticLevel.info,
+);
 
 void main() {
   testWidgets('HelixRemoteApp launches and shows loading state', (
@@ -10,6 +24,7 @@ void main() {
   ) async {
     final root = RemoteCompositionRoot.production(
       databaseDirectory: Directory.systemTemp.path,
+      devConfig: _devConfig(),
     );
     await tester.pumpWidget(HelixRemoteApp(root: root));
 
@@ -24,6 +39,7 @@ void main() {
     () {
       final root = RemoteCompositionRoot.production(
         databaseDirectory: Directory.systemTemp.path,
+        devConfig: _devConfig(),
       );
       expect(root.startupState, RemoteStartupState.idle);
       root.dispose();
@@ -33,6 +49,7 @@ void main() {
   test('RemoteCompositionRoot accessors throw before initialize()', () {
     final root = RemoteCompositionRoot.production(
       databaseDirectory: Directory.systemTemp.path,
+      devConfig: _devConfig(),
     );
     expect(() => root.database, throwsA(isA<StateError>()));
     expect(() => root.syncEngine, throwsA(isA<StateError>()));
@@ -53,6 +70,7 @@ void main() {
           logNamespace: 'log',
           databaseDirectory: '/tmp',
         ),
+        devConfig: _devConfig(),
       ),
       throwsA(isA<StateError>()),
     );
@@ -69,8 +87,22 @@ void main() {
           logNamespace: 'log',
           databaseDirectory: '/tmp',
         ),
+        devConfig: _devConfig(),
       ),
       throwsA(isA<StateError>()),
     );
+  });
+
+  testWidgets('configuration errors render a stable startup screen', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const HelixRemoteConfigurationErrorApp(
+        message: 'HELIX_REMOTE_HOST is required.',
+      ),
+    );
+
+    expect(find.text('Remote configuration required'), findsOneWidget);
+    expect(find.textContaining('HELIX_REMOTE_HOST'), findsOneWidget);
   });
 }

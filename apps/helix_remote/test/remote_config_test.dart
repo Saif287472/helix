@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_endpoints.dart';
@@ -37,7 +39,7 @@ void main() {
         attachmentCacheDir: '/tmp/cache',
         diagnosticLevel: DiagnosticLevel.info,
       ),
-      throwsStateError,
+      throwsA(isA<RemoteConfigurationException>()),
     );
 
     expect(
@@ -52,12 +54,13 @@ void main() {
         attachmentCacheDir: '/tmp/cache',
         diagnosticLevel: DiagnosticLevel.info,
       ),
-      throwsStateError,
+      throwsA(isA<RemoteConfigurationException>()),
     );
   });
 
   test('Remote config permits plaintext only in explicit development mode', () {
     final dev = RemoteDevelopmentConfig(
+      profile: RemoteRuntimeProfile.localWindows,
       restBaseUri: Uri.parse('http://localhost:8080/api/v1'),
       webSocketUri: Uri.parse('ws://localhost:8080/api/v1/ws'),
       allowInsecureTransport: true,
@@ -70,6 +73,138 @@ void main() {
     );
 
     expect(dev.webSocketUri.scheme, equals('ws'));
+    expect(dev.transportPolicy, RemoteTransportPolicy.debugPlaintextLocalhost);
+    expect(dev.tlsExpectation, TlsExpectation.notUsedDebugPlaintext);
+  });
+
+  test('Remote config parser supports documented development profiles', () {
+    final windows = RemoteDevelopmentConfig.fromEnvironmentValues(
+      databaseDirectory: '/tmp/db',
+      attachmentCacheDir: '/tmp/cache',
+      values: {
+        'HELIX_REMOTE_PROFILE': 'local_windows',
+        'HELIX_REMOTE_DEV_MODE': '1',
+      },
+    );
+    expect(windows.restBaseUri.toString(), equals('http://127.0.0.1:8080'));
+    expect(
+      windows.webSocketUri.toString(),
+      equals('ws://127.0.0.1:8080/api/v1/ws'),
+    );
+
+    final emulator = RemoteDevelopmentConfig.fromEnvironmentValues(
+      databaseDirectory: '/tmp/db',
+      attachmentCacheDir: '/tmp/cache',
+      values: {
+        'HELIX_REMOTE_PROFILE': 'android_emulator',
+        'HELIX_REMOTE_DEV_MODE': '1',
+      },
+    );
+    expect(emulator.restHost, equals('10.0.2.2'));
+    expect(emulator.webSocketHost, equals('10.0.2.2'));
+    expect(
+      emulator.transportPolicy,
+      RemoteTransportPolicy.debugPlaintextEmulator,
+    );
+
+    final physical = RemoteDevelopmentConfig.fromEnvironmentValues(
+      databaseDirectory: '/tmp/db',
+      attachmentCacheDir: '/tmp/cache',
+      values: {
+        'HELIX_REMOTE_PROFILE': 'android_physical',
+        'HELIX_REMOTE_HOST': 'helix-lan.example',
+      },
+    );
+    expect(physical.restScheme, equals('https'));
+    expect(physical.webSocketScheme, equals('wss'));
+    expect(
+      physical.tlsExpectation,
+      TlsExpectation.trustedDevelopmentCertificate,
+    );
+  });
+
+  test('Remote config rejects invalid and incomplete profiles', () {
+    expect(
+      () => RemoteDevelopmentConfig.fromEnvironmentValues(
+        databaseDirectory: '/tmp/db',
+        attachmentCacheDir: '/tmp/cache',
+        values: const {},
+      ),
+      throwsA(isA<RemoteConfigurationException>()),
+    );
+
+    expect(
+      () => RemoteDevelopmentConfig.fromEnvironmentValues(
+        databaseDirectory: '/tmp/db',
+        attachmentCacheDir: '/tmp/cache',
+        values: {
+          'HELIX_REMOTE_PROFILE': 'android_emulator',
+          'HELIX_REMOTE_HOST': 'localhost',
+          'HELIX_REMOTE_DEV_MODE': '1',
+        },
+      ),
+      throwsA(isA<RemoteConfigurationException>()),
+    );
+
+    expect(
+      () => RemoteDevelopmentConfig.fromEnvironmentValues(
+        databaseDirectory: '/tmp/db',
+        attachmentCacheDir: '/tmp/cache',
+        values: {
+          'HELIX_REMOTE_PROFILE': 'local_windows',
+          'HELIX_REMOTE_PORT': '70000',
+          'HELIX_REMOTE_DEV_MODE': '1',
+        },
+      ),
+      throwsA(isA<RemoteConfigurationException>()),
+    );
+  });
+
+  test(
+    'Production policy rejects HTTP, WS, local hosts, and insecure flags',
+    () {
+      expect(
+        () => RemoteDevelopmentConfig.fromEnvironmentValues(
+          databaseDirectory: '/tmp/db',
+          attachmentCacheDir: '/tmp/cache',
+          values: {
+            'HELIX_REMOTE_PROFILE': 'production',
+            'HELIX_REMOTE_HOST': 'api.example.com',
+            'HELIX_REMOTE_REST_SCHEME': 'http',
+            'HELIX_REMOTE_DEV_MODE': '1',
+          },
+        ),
+        throwsA(isA<RemoteConfigurationException>()),
+      );
+
+      expect(
+        () => RemoteDevelopmentConfig.fromEnvironmentValues(
+          databaseDirectory: '/tmp/db',
+          attachmentCacheDir: '/tmp/cache',
+          values: {
+            'HELIX_REMOTE_PROFILE': 'production',
+            'HELIX_REMOTE_HOST': 'localhost',
+          },
+        ),
+        throwsA(isA<RemoteConfigurationException>()),
+      );
+    },
+  );
+
+  test('Physical Android development does not enable LAN HTTP', () {
+    expect(
+      () => RemoteDevelopmentConfig.fromEnvironmentValues(
+        databaseDirectory: '/tmp/db',
+        attachmentCacheDir: '/tmp/cache',
+        values: {
+          'HELIX_REMOTE_PROFILE': 'android_physical',
+          'HELIX_REMOTE_HOST': '192.168.1.20',
+          'HELIX_REMOTE_REST_SCHEME': 'http',
+          'HELIX_REMOTE_DEV_MODE': '1',
+        },
+      ),
+      throwsA(isA<RemoteConfigurationException>()),
+    );
   });
 
   test('Remote config accepts explicit call ICE servers', () {
@@ -121,5 +256,24 @@ void main() {
       fromLegacy.attachmentsUpload.toString(),
       equals('https://remote.example/api/v1/attachments/upload'),
     );
+  });
+
+  test('Android cleartext policy is debug-only and host-scoped', () {
+    final mainManifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    final debugManifest = File(
+      'android/app/src/debug/AndroidManifest.xml',
+    ).readAsStringSync();
+    final networkSecurity = File(
+      'android/app/src/debug/res/xml/helix_remote_debug_network_security.xml',
+    ).readAsStringSync();
+
+    expect(mainManifest, isNot(contains('usesCleartextTraffic')));
+    expect(mainManifest, isNot(contains('networkSecurityConfig')));
+    expect(debugManifest, contains('networkSecurityConfig'));
+    expect(networkSecurity, contains('<domain>10.0.2.2</domain>'));
+    expect(networkSecurity, contains('<domain>127.0.0.1</domain>'));
+    expect(networkSecurity, isNot(contains('<base-config')));
   });
 }

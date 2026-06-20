@@ -8,21 +8,73 @@ import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final appDir = await getApplicationDocumentsDirectory();
-  final dbDir = p.join(appDir.path, 'helix_remote_db');
-  final cacheDir = p.join(appDir.path, 'attachments_cache');
+  try {
+    final appDir = await getApplicationDocumentsDirectory();
+    final dbDir = p.join(appDir.path, 'helix_remote_db');
+    final cacheDir = p.join(appDir.path, 'attachments_cache');
 
-  final devConfig = RemoteDevelopmentConfig.fromDartDefine(
-    databaseDirectory: dbDir,
-    attachmentCacheDir: cacheDir,
-  );
+    final devConfig = RemoteDevelopmentConfig.fromDartDefine(
+      databaseDirectory: dbDir,
+      attachmentCacheDir: cacheDir,
+    );
 
-  final root = RemoteCompositionRoot.production(
-    databaseDirectory: dbDir,
-    devConfig: devConfig,
-  );
+    final root = RemoteCompositionRoot.production(
+      databaseDirectory: dbDir,
+      devConfig: devConfig,
+    );
 
-  runApp(HelixRemoteApp(root: root));
+    runApp(HelixRemoteApp(root: root));
+  } catch (error) {
+    runApp(HelixRemoteConfigurationErrorApp(message: error.toString()));
+  }
+}
+
+class HelixRemoteConfigurationErrorApp extends StatelessWidget {
+  const HelixRemoteConfigurationErrorApp({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Helix Remote Configuration',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF166A64)),
+      ),
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Helix Remote')),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.settings_outlined, size: 56),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Remote configuration required',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(message),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Start the app with one of the documented '
+                    'HELIX_REMOTE_PROFILE launch commands in '
+                    'docs/workflows/ENVIRONMENT.md.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class HelixRemoteApp extends StatefulWidget {

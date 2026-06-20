@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_config.dart';
 
 class _InMemoryKeyValueStore implements KeyValueStore {
   final _store = <String, String>{};
@@ -36,6 +37,20 @@ RemoteProductConfig _validConfig({
   databaseDirectory: databaseDirectory,
 );
 
+RemoteDevelopmentConfig _devConfig({String databaseDirectory = '/tmp'}) =>
+    RemoteDevelopmentConfig(
+      profile: RemoteRuntimeProfile.localWindows,
+      restBaseUri: Uri.parse('http://127.0.0.1:8080'),
+      webSocketUri: Uri.parse('ws://127.0.0.1:8080/api/v1/ws'),
+      allowInsecureTransport: true,
+      backendHostMode: 'same-pc',
+      requestTimeoutMs: 15000,
+      reconnectPolicy: const ReconnectPolicy(),
+      databaseDirectory: databaseDirectory,
+      attachmentCacheDir: '$databaseDirectory/attachments_cache',
+      diagnosticLevel: DiagnosticLevel.info,
+    );
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -43,6 +58,7 @@ void main() {
     test('P5-013: production() instantiates with correct config', () async {
       final root = RemoteCompositionRoot.production(
         databaseDirectory: Directory.systemTemp.path,
+        devConfig: _devConfig(databaseDirectory: Directory.systemTemp.path),
       );
 
       expect(root.config.displayName, equals('Helix Remote'));
@@ -56,14 +72,20 @@ void main() {
 
     test('P5-014: throws StateError when displayName is empty', () {
       expect(
-        () => RemoteCompositionRoot.withConfig(_validConfig(displayName: '')),
+        () => RemoteCompositionRoot.withConfig(
+          _validConfig(displayName: ''),
+          devConfig: _devConfig(),
+        ),
         throwsStateError,
       );
     });
 
     test('P5-014: throws StateError when packageId is empty', () {
       expect(
-        () => RemoteCompositionRoot.withConfig(_validConfig(packageId: '')),
+        () => RemoteCompositionRoot.withConfig(
+          _validConfig(packageId: ''),
+          devConfig: _devConfig(),
+        ),
         throwsStateError,
       );
     });
@@ -74,6 +96,7 @@ void main() {
         expect(
           () => RemoteCompositionRoot.withConfig(
             _validConfig(secureStoragePrefix: 'helix_remote_v1'),
+            devConfig: _devConfig(),
           ),
           throwsStateError,
         );
@@ -84,6 +107,7 @@ void main() {
       expect(
         () => RemoteCompositionRoot.withConfig(
           _validConfig(secureStoragePrefix: ''),
+          devConfig: _devConfig(),
         ),
         throwsStateError,
       );
@@ -93,6 +117,7 @@ void main() {
       expect(
         () => RemoteCompositionRoot.withConfig(
           _validConfig(databaseDirectory: ''),
+          devConfig: _devConfig(),
         ),
         throwsStateError,
       );
@@ -101,6 +126,7 @@ void main() {
     test('Startup state is idle before initialize()', () {
       final root = RemoteCompositionRoot.production(
         databaseDirectory: Directory.systemTemp.path,
+        devConfig: _devConfig(databaseDirectory: Directory.systemTemp.path),
       );
       expect(root.startupState, RemoteStartupState.idle);
       root.dispose();
@@ -109,6 +135,7 @@ void main() {
     test('Service accessors throw StateError before initialize()', () {
       final root = RemoteCompositionRoot.production(
         databaseDirectory: Directory.systemTemp.path,
+        devConfig: _devConfig(databaseDirectory: Directory.systemTemp.path),
       );
       expect(() => root.database, throwsStateError);
       expect(() => root.syncEngine, throwsStateError);
@@ -125,9 +152,11 @@ void main() {
     test('P5-019: two Remote roots are independent objects', () async {
       final root1 = RemoteCompositionRoot.production(
         databaseDirectory: Directory.systemTemp.path,
+        devConfig: _devConfig(databaseDirectory: Directory.systemTemp.path),
       );
       final root2 = RemoteCompositionRoot.production(
         databaseDirectory: Directory.systemTemp.path,
+        devConfig: _devConfig(databaseDirectory: Directory.systemTemp.path),
       );
 
       expect(root1, isNot(same(root2)));
@@ -149,6 +178,7 @@ void main() {
       final store = _InMemoryKeyValueStore();
       final root = RemoteCompositionRoot.withConfig(
         _validConfig(databaseDirectory: tempDir.path),
+        devConfig: _devConfig(databaseDirectory: tempDir.path),
         keyValueStore: store,
       );
 
@@ -180,6 +210,7 @@ void main() {
       final store = _InMemoryKeyValueStore();
       final root1 = RemoteCompositionRoot.withConfig(
         _validConfig(databaseDirectory: tempDir.path),
+        devConfig: _devConfig(databaseDirectory: tempDir.path),
         keyValueStore: store,
       );
       await root1.initialize();
@@ -188,6 +219,7 @@ void main() {
 
       final root2 = RemoteCompositionRoot.withConfig(
         _validConfig(databaseDirectory: tempDir.path),
+        devConfig: _devConfig(databaseDirectory: tempDir.path),
         keyValueStore: store,
       );
       await root2.initialize();
@@ -212,6 +244,7 @@ void main() {
 
       final root = RemoteCompositionRoot.withConfig(
         _validConfig(databaseDirectory: tempDir.path),
+        devConfig: _devConfig(databaseDirectory: tempDir.path),
         keyValueStore: _InMemoryKeyValueStore(),
       );
 
@@ -239,6 +272,7 @@ void main() {
 
       final root = RemoteCompositionRoot.withConfig(
         _validConfig(databaseDirectory: tempDir.path),
+        devConfig: _devConfig(databaseDirectory: tempDir.path),
         keyValueStore: _InMemoryKeyValueStore(),
       );
       await root.initialize();
@@ -262,10 +296,12 @@ void main() {
 
       final root1 = RemoteCompositionRoot.withConfig(
         _validConfig(databaseDirectory: tempDir1.path),
+        devConfig: _devConfig(databaseDirectory: tempDir1.path),
         keyValueStore: _InMemoryKeyValueStore(),
       );
       final root2 = RemoteCompositionRoot.withConfig(
         _validConfig(databaseDirectory: tempDir2.path),
+        devConfig: _devConfig(databaseDirectory: tempDir2.path),
         keyValueStore: _InMemoryKeyValueStore(),
       );
 

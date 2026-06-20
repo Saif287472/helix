@@ -129,7 +129,7 @@ Do not silently expand a phase into unrelated work.
 | Phase | Title | Primary audit coverage | Depends on | Status |
 |---|---|---|---|---|
 | 00 | Baseline, ledger, and reproducible verification | All findings | None | COMPLETE |
-| 01 | Remote runtime configuration and backend bootstrap | HXA-001, HXA-002 | 00 | NOT STARTED |
+| 01 | Remote runtime configuration and backend bootstrap | HXA-001, HXA-002 | 00 | COMPLETE |
 | 02 | Local startup, session recovery, and group-init visibility | HXA-016, HXA-017, HXA-018 | 00 | NOT STARTED |
 | 03 | Remote application lifecycle and observable top-level state | HXA-003, HXA-006, HXA-015, HXA-023 | 01 | NOT STARTED |
 | 04 | Remote authentication, token refresh, logout, and revocation | HXA-004, part of HXA-014 | 03 | NOT STARTED |
@@ -305,7 +305,7 @@ Record exact commands and exit results. “Tests passed” without commands is i
 
 # Phase 01 — Remote runtime configuration and backend bootstrap
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE  
 **Audit coverage:** HXA-001, HXA-002  
 **Purpose:** Make Remote registration reachable through one explicit, safe, reproducible development/manual-test configuration on Windows and Android.
 
@@ -380,7 +380,61 @@ Remote must support clearly separated profiles:
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-20
+- Agent/model identifier: Codex (GPT-5)
+- Starting commit: `cc6d52a`
+- Ending commit or working-tree state: Phase 01 committed locally after this
+  record; expected working tree clean after commit.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `docs/remediation/pre_manual_remediation_ledger.yaml`
+  - `apps/helix_remote/lib/app/remote_config.dart`
+  - `apps/helix_remote/lib/main.dart`
+  - `apps/helix_remote/android/app/src/debug/AndroidManifest.xml`
+  - `apps/helix_remote/android/app/src/debug/res/xml/helix_remote_debug_network_security.xml`
+  - `apps/helix_remote/test/remote_config_test.dart`
+  - `apps/helix_remote/test/widget_test.dart`
+  - `apps/helix_remote/test/composition_root_test.dart`
+  - `services/helix_remote_backend/bin/server.dart`
+  - `services/helix_remote_backend/test/phase01_bootstrap_test.dart`
+  - `scripts/start_remote_backend_dev.ps1`
+  - `scripts/run_remote_windows_dev.ps1`
+  - `scripts/run_remote_android_emulator_dev.ps1`
+  - `scripts/run_remote_android_physical_dev.ps1`
+  - `docs/workflows/ENVIRONMENT.md`
+  - `docs/release/REMOTE_BACKEND_INFRASTRUCTURE.md`
+  - `docs/release/REMOTE_RELEASE_CHECKLIST.md`
+- Tests and commands run with results:
+  - `dart format ...` - PASS.
+  - `flutter test test/remote_config_test.dart test/widget_test.dart test/composition_root_test.dart --no-pub` from `apps/helix_remote` - PASS, 30 tests.
+  - `dart test test/phase01_bootstrap_test.dart` from `services/helix_remote_backend` - PASS.
+  - `flutter analyze --no-pub` from `apps/helix_remote` - PASS.
+  - `flutter test --no-pub` from `apps/helix_remote` - PASS, 103 tests.
+  - `dart analyze` from `services/helix_remote_backend` - PASS.
+  - `dart test` from `services/helix_remote_backend` - PASS, 92 tests.
+  - `flutter build windows --debug --no-pub` from `apps/helix_remote` - PASS.
+  - `flutter build apk --debug --no-pub` from `apps/helix_remote` - PASS.
+  - `$env:HELIX_VERIFY_BUILD='1'; .\scripts\verify.ps1` - PASS,
+    including format/analyze/boundary/secret/release gates, all app/package/
+    backend tests, all four debug builds, and signing credential isolation.
+- Acceptance criteria result: PASS. Remote production requires explicit
+  HTTPS/WSS host configuration and rejects insecure/local targets; Windows and
+  Android emulator development use explicit profile commands; physical Android
+  development is documented as trusted HTTPS/WSS only; config errors render a
+  stable Flutter screen before registration; backend startup is proven by a
+  real entrypoint readiness smoke test.
+- Security-sensitive areas touched: Remote runtime transport configuration,
+  Android debug network-security policy, backend process startup/shutdown. No
+  authentication, crypto, storage, trust, wipe, certificate validation, or
+  release cleartext policy was weakened.
+- Contract or migration changes: None.
+- Remaining manual-only checks: Physical Android trusted HTTPS endpoint and
+  Windows/Android manual registration reachability remain physical/manual lab
+  checks for Phase 18.
+- Deviations from this plan and why: Physical Android LAN HTTP was intentionally
+  not supported; the safer Phase 01 profile requires trusted HTTPS/WSS for
+  physical devices. This avoids a dynamic broad cleartext policy on Android.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1474,8 +1528,8 @@ _Not completed._
 
 | Finding | Primary phase | Final disposition |
 |---|---|---|
-| HXA-001 Remote default HTTPS/WSS vs HTTP/WS backend | 01 | Pending |
-| HXA-002 Remote Android localhost/cleartext packaging | 01 | Pending |
+| HXA-001 Remote default HTTPS/WSS vs HTTP/WS backend | 01 | Complete |
+| HXA-002 Remote Android localhost/cleartext packaging | 01 | Complete |
 | HXA-003 Stored Remote session does not start runtime | 03 | Pending |
 | HXA-004 Refresh token not wired in production | 04 | Pending |
 | HXA-005 Restore code ignored | 05 | Pending |

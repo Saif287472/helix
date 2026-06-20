@@ -33,18 +33,28 @@ void main() async {
   await server.start(host, port);
   print('Helix Remote backend monolith is online.');
 
-  // Handle graceful shutdown
-  ProcessSignal.sigint.watch().listen((signal) async {
-    print('Shutdown signal (SIGINT) received. Disposing services...');
+  var stopping = false;
+  Future<void> stopForSignal(String name) async {
+    if (stopping) return;
+    stopping = true;
+    print('Shutdown signal ($name) received. Disposing services...');
     await server.stop();
     print('Server cleanly shutdown.');
     exit(0);
-  });
+  }
 
-  ProcessSignal.sigterm.watch().listen((signal) async {
-    print('Shutdown signal (SIGTERM) received. Disposing services...');
-    await server.stop();
-    print('Server cleanly shutdown.');
-    exit(0);
-  });
+  void watchSignal(ProcessSignal signal, String name) {
+    if (Platform.isWindows && signal == ProcessSignal.sigterm) {
+      print('Shutdown signal $name is not supported on this platform.');
+      return;
+    }
+    try {
+      signal.watch().listen((_) => stopForSignal(name));
+    } on SignalException {
+      print('Shutdown signal $name is not supported on this platform.');
+    }
+  }
+
+  watchSignal(ProcessSignal.sigint, 'SIGINT');
+  watchSignal(ProcessSignal.sigterm, 'SIGTERM');
 }

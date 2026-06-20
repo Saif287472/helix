@@ -20,6 +20,10 @@ credentials, app-store accounts, or signing keys.
 - Remote application ID is `com.helix.remote`.
 - Remote database filename is `helix_remote.db`.
 - Remote secure-storage prefix is `helix_remote_v1_`.
+- Remote production runtime config rejects HTTP/WS, localhost, emulator hosts,
+  and insecure transport flags.
+- Remote Android release/main manifest does not enable global cleartext traffic
+  or debug network-security config.
 - Remote contains no Local LAN discovery, UDP broadcast, mDNS browsing, or Local
   panic-wipe orchestration.
 
