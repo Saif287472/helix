@@ -1820,7 +1820,7 @@ class BackendDatabase {
 
   List<String> getConversationMembers(String conversationId) {
     final stmt = _db.prepare(
-      'SELECT account_id FROM conversation_members WHERE conversation_id = ?;',
+      'SELECT account_id FROM conversation_members WHERE conversation_id = ? ORDER BY account_id ASC;',
     );
     final res = stmt.select([conversationId]);
     stmt.close();
@@ -2518,8 +2518,9 @@ class BackendDatabase {
     required String groupId,
     required String inviterId,
     required String inviteeId,
+    int? createdAt,
   }) {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final now = createdAt ?? DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
       INSERT INTO group_invites (invite_id, group_id, inviter_id, invitee_id, status, created_at)
       VALUES (?, ?, ?, ?, 'PENDING', ?);
@@ -2615,6 +2616,39 @@ class BackendDatabase {
       'DELETE FROM conversation_members WHERE conversation_id = ? AND account_id = ?;',
     );
     stmt.execute([groupId, accountId]);
+    stmt.close();
+  }
+
+  int countGroupAdmins(String groupId) {
+    final stmt = _db.prepare('''
+      SELECT COUNT(*) FROM conversation_members
+      WHERE conversation_id = ? AND role = 'ADMIN';
+    ''');
+    final res = stmt.select([groupId]);
+    stmt.close();
+    return res.first.columnAt(0) as int;
+  }
+
+  String? promoteFirstRemainingGroupMemberToAdmin(String groupId) {
+    final stmt = _db.prepare('''
+      SELECT account_id FROM conversation_members
+      WHERE conversation_id = ?
+      ORDER BY account_id ASC
+      LIMIT 1;
+    ''');
+    final res = stmt.select([groupId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final promoted = res.first['account_id'] as String;
+    changeGroupMemberRole(groupId, promoted, 'ADMIN');
+    return promoted;
+  }
+
+  void expireGroupInvite(String inviteId) {
+    final stmt = _db.prepare(
+      "UPDATE group_invites SET status = 'EXPIRED' WHERE invite_id = ?;",
+    );
+    stmt.execute([inviteId]);
     stmt.close();
   }
 

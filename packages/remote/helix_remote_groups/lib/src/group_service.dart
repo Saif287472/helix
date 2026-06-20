@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 
@@ -59,7 +60,6 @@ class RemoteGroupService {
     String? avatarUri,
     List<String> initialMemberIds = const [],
   }) {
-    final encKeyId = encryptionKeyProvider(groupId, 0);
     final now = DateTime.now().millisecondsSinceEpoch;
 
     final allMembers = [
@@ -90,12 +90,14 @@ class RemoteGroupService {
       avatarUri: avatarUri,
       epoch: 0,
     );
+    final epochKey = _persistEpochKey(groupId, 0, now);
 
     final payload = {
       'group_id': groupId,
       'name': name,
       'creator_id': creatorId,
-      'encryption_key_id': encKeyId,
+      'epoch': 0,
+      'encryption_key_id': epochKey.keyId,
       'initial_member_ids': allMembers,
     };
     if (avatarUri != null) {
@@ -165,6 +167,7 @@ class RemoteGroupService {
 
     if (accept) {
       db.upsertConversationMember(groupId, selfAccountId, role: kRoleMember);
+      _rotateEpoch(groupId);
     }
 
     db.enqueueOperation(
@@ -260,11 +263,17 @@ class RemoteGroupService {
   /// The authenticated user leaves [groupId].
   void leaveGroup({required String groupId, required String selfAccountId}) {
     db.removeConversationMember(groupId, selfAccountId);
+    final epochKey = _rotateEpoch(groupId);
 
     db.enqueueOperation(
       generateId(),
       kGroupOpLeave,
-      jsonEncode({'group_id': groupId, 'account_id': selfAccountId}),
+      jsonEncode({
+        'group_id': groupId,
+        'account_id': selfAccountId,
+        'epoch': epochKey.epoch,
+        'encryption_key_id': epochKey.keyId,
+      }),
       idempotencyKey: 'group_leave_${groupId}_$selfAccountId',
     );
   }
@@ -274,15 +283,17 @@ class RemoteGroupService {
   void removeMember({required String groupId, required String accountId}) {
     db.removeConversationMember(groupId, accountId);
 
-    // P16-005: Membership change requires a key epoch bump so the removed
-    // member loses forward access. Production key material is rotated by
-    // the server and delivered to remaining devices via group_key_updated.
-    _bumpEpoch(groupId);
+    final epochKey = _rotateEpoch(groupId);
 
     db.enqueueOperation(
       generateId(),
       kGroupOpRemoveMember,
-      jsonEncode({'group_id': groupId, 'account_id': accountId}),
+      jsonEncode({
+        'group_id': groupId,
+        'account_id': accountId,
+        'epoch': epochKey.epoch,
+        'encryption_key_id': epochKey.keyId,
+      }),
       idempotencyKey: 'group_remove_${groupId}_$accountId',
     );
   }
@@ -315,7 +326,46 @@ class RemoteGroupService {
     return meta?['epoch'] as int? ?? 0;
   }
 
-  void _bumpEpoch(String groupId) {
-    db.updateGroupEpoch(groupId, getGroupEpoch(groupId) + 1);
+  Map<String, dynamic>? getGroupEpochKey(String groupId, int epoch) =>
+      db.getGroupEpochKey(groupId, epoch);
+
+  _GroupEpochKey _rotateEpoch(String groupId) {
+    final nextEpoch = getGroupEpoch(groupId) + 1;
+    db.updateGroupEpoch(groupId, nextEpoch);
+    return _persistEpochKey(
+      groupId,
+      nextEpoch,
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
+
+  _GroupEpochKey _persistEpochKey(String groupId, int epoch, int createdAt) {
+    final keyMaterial = encryptionKeyProvider(groupId, epoch);
+    if (keyMaterial.isEmpty) {
+      throw StateError('Group epoch key material must not be empty');
+    }
+    final keyId = _deriveKeyId(groupId, epoch, keyMaterial);
+    db.saveGroupEpochKey(
+      groupId: groupId,
+      epoch: epoch,
+      keyId: keyId,
+      keyMaterial: keyMaterial,
+      createdAt: createdAt,
+    );
+    return _GroupEpochKey(epoch: epoch, keyId: keyId);
+  }
+
+  String _deriveKeyId(String groupId, int epoch, String keyMaterial) {
+    final digest = crypto.sha256.convert(
+      utf8.encode('helix.remote.group.epoch.v1:$groupId:$epoch:$keyMaterial'),
+    );
+    return 'gk_${digest.toString().substring(0, 32)}';
+  }
+}
+
+class _GroupEpochKey {
+  const _GroupEpochKey({required this.epoch, required this.keyId});
+
+  final int epoch;
+  final String keyId;
 }

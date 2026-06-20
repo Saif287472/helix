@@ -385,6 +385,17 @@ class HelixRemoteDatabase {
     ''');
 
     _db.execute('''
+      CREATE TABLE IF NOT EXISTS group_epoch_keys (
+        group_id TEXT NOT NULL,
+        epoch INTEGER NOT NULL,
+        key_id TEXT NOT NULL,
+        key_material TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (group_id, epoch)
+      );
+    ''');
+
+    _db.execute('''
       CREATE TABLE IF NOT EXISTS call_history (
         call_id TEXT PRIMARY KEY,
         peer_id TEXT NOT NULL,
@@ -577,6 +588,19 @@ class HelixRemoteDatabase {
         } catch (_) {}
       }
       _db.execute('PRAGMA user_version = 9;');
+    }
+    if (version < 10) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_epoch_keys (
+          group_id TEXT NOT NULL,
+          epoch INTEGER NOT NULL,
+          key_id TEXT NOT NULL,
+          key_material TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (group_id, epoch)
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 10;');
     }
   }
 
@@ -1915,6 +1939,61 @@ class HelixRemoteDatabase {
     stmt.close();
   }
 
+  void saveGroupEpochKey({
+    required String groupId,
+    required int epoch,
+    required String keyId,
+    required String keyMaterial,
+    required int createdAt,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO group_epoch_keys
+        (group_id, epoch, key_id, key_material, created_at)
+      VALUES (?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([groupId, epoch, keyId, keyMaterial, createdAt]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getGroupEpochKey(String groupId, int epoch) {
+    final stmt = _db.prepare('''
+      SELECT * FROM group_epoch_keys
+      WHERE group_id = ? AND epoch = ?;
+    ''');
+    final res = stmt.select([groupId, epoch]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'group_id': row['group_id'],
+      'epoch': row['epoch'],
+      'key_id': row['key_id'],
+      'key_material': row['key_material'],
+      'created_at': row['created_at'],
+    };
+  }
+
+  List<Map<String, dynamic>> getGroupEpochKeys(String groupId) {
+    final stmt = _db.prepare('''
+      SELECT * FROM group_epoch_keys
+      WHERE group_id = ?
+      ORDER BY epoch ASC;
+    ''');
+    final res = stmt.select([groupId]);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'group_id': row['group_id'],
+            'epoch': row['epoch'],
+            'key_id': row['key_id'],
+            'key_material': row['key_material'],
+            'created_at': row['created_at'],
+          },
+        )
+        .toList();
+  }
+
   // ---------------------------------------------------------------------------
   // Group invites (P16-003)
   // ---------------------------------------------------------------------------
@@ -2004,6 +2083,7 @@ class HelixRemoteDatabase {
       'revisions': _selectAll('revisions'),
       'attachments': _selectAll('attachments'),
       'groups': _selectAll('groups'),
+      'group_epoch_keys': _selectAll('group_epoch_keys'),
       'group_invites': _selectAll('group_invites'),
       'call_history': _selectAll('call_history'),
       'tombstones': _selectAll('tombstones'),
@@ -2035,6 +2115,10 @@ class HelixRemoteDatabase {
       _restoreRows('revisions', decoded['revisions'] as List? ?? const []);
       _restoreRows('attachments', decoded['attachments'] as List? ?? const []);
       _restoreRows('groups', decoded['groups'] as List? ?? const []);
+      _restoreRows(
+        'group_epoch_keys',
+        decoded['group_epoch_keys'] as List? ?? const [],
+      );
       _restoreRows(
         'group_invites',
         decoded['group_invites'] as List? ?? const [],

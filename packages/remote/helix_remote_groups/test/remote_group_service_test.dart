@@ -44,7 +44,8 @@ void main() {
     service = RemoteGroupService(
       db: db,
       generateId: () => 'op_${idCounter++}',
-      encryptionKeyProvider: (groupId, epoch) => 'key_${groupId}_$epoch',
+      encryptionKeyProvider: (groupId, epoch) =>
+          'sender_key_material_${groupId}_$epoch',
     );
   });
 
@@ -93,6 +94,10 @@ void main() {
     expect(payload['group_id'], equals('g1'));
     expect(payload['name'], equals('Queue Group'));
     expect(payload['creator_id'], equals('alice'));
+    expect(payload['epoch'], equals(0));
+    expect(payload['encryption_key_id'], startsWith('gk_'));
+    expect(jsonEncode(payload), isNot(contains('sender_key_material')));
+    expect(service.getGroupEpochKey('g1', 0), isNotNull);
   });
 
   // -------------------------------------------------------------------------
@@ -198,6 +203,8 @@ void main() {
     );
 
     expect(service.getGroupMembers('g1'), contains('bob'));
+    expect(service.getGroupEpoch('g1'), equals(1));
+    expect(service.getGroupEpochKey('g1', 1), isNotNull);
 
     final ops = db.getPendingOperations();
     final respondOp = ops.firstWhere((o) => o['type'] == kGroupOpInviteRespond);
@@ -327,6 +334,8 @@ void main() {
     final payload =
         jsonDecode(leaveOp['payload'] as String) as Map<String, dynamic>;
     expect(payload['account_id'], equals('bob'));
+    expect(payload['epoch'], equals(1));
+    expect(payload['encryption_key_id'], startsWith('gk_'));
   });
 
   test('removeMember removes member locally and enqueues operation', () {
@@ -345,6 +354,9 @@ void main() {
     final payload =
         jsonDecode(removeOp['payload'] as String) as Map<String, dynamic>;
     expect(payload['account_id'], equals('bob'));
+    expect(payload['epoch'], equals(1));
+    expect(payload['encryption_key_id'], startsWith('gk_'));
+    expect(jsonEncode(payload), isNot(contains('sender_key_material')));
   });
 
   // -------------------------------------------------------------------------
@@ -359,9 +371,13 @@ void main() {
       initialMemberIds: ['bob'],
     );
     expect(service.getGroupEpoch('g1'), equals(0));
+    final epoch0 = service.getGroupEpochKey('g1', 0)!;
 
     service.removeMember(groupId: 'g1', accountId: 'bob');
     expect(service.getGroupEpoch('g1'), equals(1));
+    final epoch1 = service.getGroupEpochKey('g1', 1)!;
+    expect(epoch1['key_id'], isNot(equals(epoch0['key_id'])));
+    expect(epoch1['key_material'], isNot(equals(epoch0['key_material'])));
 
     // A second removal bumps it again.
     service.removeMember(groupId: 'g1', accountId: 'alice');
@@ -408,7 +424,7 @@ void main() {
         generateId: () => 'op_test',
         encryptionKeyProvider: (gid, epoch) {
           calls.add({'groupId': gid, 'epoch': epoch});
-          return 'stub_key';
+          return 'stub_key_material';
         },
       );
 
@@ -421,9 +437,44 @@ void main() {
       final ops = db.getPendingOperations();
       final payload =
           jsonDecode(ops.first['payload'] as String) as Map<String, dynamic>;
-      expect(payload['encryption_key_id'], equals('stub_key'));
+      expect(payload['encryption_key_id'], startsWith('gk_'));
+      expect(jsonEncode(payload), isNot(contains('stub_key_material')));
+      expect(
+        svc.getGroupEpochKey('g1', 0)!['key_material'],
+        'stub_key_material',
+      );
     },
   );
+
+  test('P6 membership matrix stores new epoch only for future access', () {
+    service.createGroup(
+      groupId: 'g1',
+      name: 'Matrix Group',
+      creatorId: 'alice',
+      initialMemberIds: ['bob'],
+    );
+    final epoch0 = service.getGroupEpochKey('g1', 0)!;
+
+    service.removeMember(groupId: 'g1', accountId: 'bob');
+    expect(service.getGroupMembers('g1'), isNot(contains('bob')));
+    final epoch1 = service.getGroupEpochKey('g1', 1)!;
+    expect(epoch1['key_material'], isNot(equals(epoch0['key_material'])));
+
+    service.inviteMember(
+      groupId: 'g1',
+      inviteId: 'inv2',
+      inviterId: 'alice',
+      inviteeId: 'carol',
+    );
+    service.respondToInvite(
+      inviteId: 'inv2',
+      selfAccountId: 'carol',
+      accept: true,
+    );
+    final epoch2 = service.getGroupEpochKey('g1', 2)!;
+    expect(service.getGroupMembers('g1'), contains('carol'));
+    expect(epoch2['key_material'], isNot(equals(epoch1['key_material'])));
+  });
 
   // -------------------------------------------------------------------------
   // P16-016: No Local imports — verified by package boundary

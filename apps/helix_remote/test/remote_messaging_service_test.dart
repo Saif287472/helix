@@ -143,6 +143,8 @@ class _FakeRestClient implements HelixRemoteRestClient {
     required String targetDeviceId,
     required Map<String, dynamic> payload,
   }) async => {};
+  @override
+  Future<Map<String, dynamic>> getTurnCredentials() async => {};
 }
 
 class _FakeGateway implements SyncGateway {

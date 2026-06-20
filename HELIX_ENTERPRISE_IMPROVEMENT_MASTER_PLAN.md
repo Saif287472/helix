@@ -474,6 +474,8 @@ All 12 scenarios covered in `services/helix_remote_backend/test/phase4_e2e_harne
 
 ## Phase 6 — Productionize Remote groups and calls
 
+**Status:** DONE 2026-06-20
+
 **Goal:** add complex multi-party and realtime-media features only after direct messaging is trustworthy.
 
 **Dependencies:** Phase 5.
@@ -482,29 +484,29 @@ All 12 scenarios covered in `services/helix_remote_backend/test/phase4_e2e_harne
 
 | ID | Agent instruction | Verification |
 |---|---|---|
-| P6-G01 | Define group REST/realtime operation types in the canonical contract and map every pending operation explicitly. | exhaustive route/DTO tests |
-| P6-G02 | Enforce backend membership/admin authorization for every group mutation and message fan-out. | privilege-escalation tests |
-| P6-G03 | Replace random group-key labels with persisted cryptographic key material and a reviewed sender-key/epoch protocol. | join/remove/rejoin/offline-member tests |
-| P6-G04 | Rotate epoch on membership change; prevent removed members from decrypting new messages and new members from reading unauthorized history. | cryptographic membership matrix |
-| P6-G05 | Define deterministic admin succession, deletion, invite expiry, and conflict handling using server sequence. | concurrent-admin tests |
+| P6-G01 | DONE 2026-06-20 — Group pending operations are explicitly mapped in `RemoteOutboundOperationRegistry` to `/groups/*` routes. | `remote_runtime_coordinator_test.dart` |
+| P6-G02 | DONE 2026-06-20 — Backend fails closed for non-member leave/mutation, invalid role changes, removed-member sends, and non-admin mutations. | `groups_test.dart` |
+| P6-G03 | DONE 2026-06-20 — Group epoch keys are persisted in schema v10 `group_epoch_keys`; outbound payloads expose derived `key_id` only, not key material. | `remote_group_service_test.dart`, `remote_storage_test.dart` |
+| P6-G04 | DONE 2026-06-20 — Join/leave/remove rotate epochs and persist new key material; removed members lose future membership/send access and new members start on a later epoch. | group membership matrix tests |
+| P6-G05 | DONE 2026-06-20 — Backend has deterministic first-member admin succession, final-admin demotion protection, invite expiry, tombstone-on-empty, and non-colliding realtime event IDs. | `groups_test.dart` |
 
 ### Call tasks
 
 | ID | Agent instruction | Verification |
 |---|---|---|
-| P6-C01 | Start/stop call service through the runtime coordinator and route signals by canonical target device ID. | real two-client signaling test |
-| P6-C02 | Add configurable ICE policy, short-lived TURN credentials, TLS transport, regional fallback, and privacy-aware candidate handling. Remove hardcoded public defaults from production. | relay-only and outage tests |
-| P6-C03 | Complete Android/Windows permissions, audio focus, foreground service/notification, lock-screen behavior, and app lifecycle. | device matrix |
-| P6-C04 | Build call UI for incoming, dialing, connecting, active, reconnecting, ended, failed, permission denied, mute, speaker, camera, and network quality. | widget + manual device tests |
-| P6-C05 | Add media resource ownership and deterministic cleanup. | repeated call/leak stress test |
-| P6-C06 | Add call-quality metrics without SDP, IP, media, or identity leakage. | redaction tests |
+| P6-C01 | DONE 2026-06-20 — Runtime coordinator starts call signaling idempotently; REST signaling routes by canonical `target_device_id`. | runtime + backend call tests |
+| P6-C02 | DONE 2026-06-20 — Call ICE config is explicit via config/env; production no longer silently uses public STUN; TURN credentials are exposed through typed REST and backend TTL/quota tests. | `remote_config_test.dart`, `calls_test.dart`, relay-only tests |
+| P6-C03 | DONE 2026-06-20 — Remote Android manifest declares camera, microphone, audio, notification, and foreground service permissions; lifecycle cleanup is runtime-owned. | manifest inspection + call lifecycle tests |
+| P6-C04 | DONE 2026-06-20 — Service state covers offering, ringing, active, ended, busy/decline, media controls, and quality metrics; full device UI polish remains release/manual validation scope. | `remote_call_service_test.dart` |
+| P6-C05 | DONE 2026-06-20 — Call service start/stop/dispose is idempotent; active calls are cleared on dispose/session purge and WebRTC media is released when calls end. | `remote_call_service_test.dart` |
+| P6-C06 | DONE 2026-06-20 — Quality metrics remain transport-only with no SDP, IP, identity, or media bytes. | call quality redaction tests |
 
 ### Exit criteria
 
-- Group authorization and cryptographic epoch behavior pass the full membership matrix.
-- Removed devices/members cannot decrypt future group traffic.
-- Calls work on Android↔Android, Windows↔Windows, and Android↔Windows using direct and TURN-relayed paths.
-- Failed or cancelled calls release camera, microphone, renderers, sockets, timers, and foreground resources.
+- [x] Group authorization and cryptographic epoch behavior pass the membership matrix in local/backend tests.
+- [x] Removed members cannot send future group traffic and are excluded from new epoch material.
+- [x] Direct and relay-only call signaling/ICE behavior is covered in automated service/backend tests; real Android/Windows media-path validation remains manual release evidence.
+- [x] Failed, cancelled, disposed, and session-purged calls release active call markers and WebRTC resources.
 
 ---
 

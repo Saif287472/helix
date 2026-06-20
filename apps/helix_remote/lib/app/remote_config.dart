@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:helix_remote_calls/helix_remote_calls.dart';
+
 class RemoteDevelopmentConfig {
   RemoteDevelopmentConfig({
     required this.restBaseUri,
@@ -11,6 +13,10 @@ class RemoteDevelopmentConfig {
     required this.databaseDirectory,
     required this.attachmentCacheDir,
     required this.diagnosticLevel,
+    this.callIceConfig = const RemoteIceConfig(
+      iceServers: [],
+      ipPrivacy: IpPrivacyMode.relayOnly,
+    ),
   }) {
     _validateTransport();
   }
@@ -24,6 +30,7 @@ class RemoteDevelopmentConfig {
   final String databaseDirectory;
   final String attachmentCacheDir;
   final DiagnosticLevel diagnosticLevel;
+  final RemoteIceConfig callIceConfig;
 
   static RemoteDevelopmentConfig fromPlatform({
     required String databaseDirectory,
@@ -36,6 +43,14 @@ class RemoteDevelopmentConfig {
     final allowInsecure =
         Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1' ||
         Platform.environment['HELIX_REMOTE_ALLOW_INSECURE_TRANSPORT'] == '1';
+    final iceConfig = _iceConfigFromValues(
+      stunUrls: Platform.environment['HELIX_REMOTE_STUN_URLS'] ?? '',
+      turnUrl: Platform.environment['HELIX_REMOTE_TURN_URL'] ?? '',
+      turnUsername: Platform.environment['HELIX_REMOTE_TURN_USERNAME'] ?? '',
+      turnCredential:
+          Platform.environment['HELIX_REMOTE_TURN_CREDENTIAL'] ?? '',
+      ipPrivacy: Platform.environment['HELIX_REMOTE_IP_PRIVACY'] ?? '',
+    );
 
     final mode = host == 'localhost' || host == '127.0.0.1' ? 'same-pc' : 'lan';
     final restScheme = scheme;
@@ -51,6 +66,7 @@ class RemoteDevelopmentConfig {
       databaseDirectory: databaseDirectory,
       attachmentCacheDir: attachmentCacheDir,
       diagnosticLevel: DiagnosticLevel.info,
+      callIceConfig: iceConfig,
     );
   }
 
@@ -80,6 +96,13 @@ class RemoteDevelopmentConfig {
           'HELIX_REMOTE_ALLOW_INSECURE_TRANSPORT',
           defaultValue: false,
         );
+    const stunUrls = String.fromEnvironment('HELIX_REMOTE_STUN_URLS');
+    const turnUrl = String.fromEnvironment('HELIX_REMOTE_TURN_URL');
+    const turnUsername = String.fromEnvironment('HELIX_REMOTE_TURN_USERNAME');
+    const turnCredential = String.fromEnvironment(
+      'HELIX_REMOTE_TURN_CREDENTIAL',
+    );
+    const ipPrivacy = String.fromEnvironment('HELIX_REMOTE_IP_PRIVACY');
     final wsScheme = _webSocketSchemeFor(scheme);
 
     return RemoteDevelopmentConfig(
@@ -94,7 +117,55 @@ class RemoteDevelopmentConfig {
       databaseDirectory: databaseDirectory,
       attachmentCacheDir: attachmentCacheDir,
       diagnosticLevel: DiagnosticLevel.info,
+      callIceConfig: _iceConfigFromValues(
+        stunUrls: stunUrls,
+        turnUrl: turnUrl,
+        turnUsername: turnUsername,
+        turnCredential: turnCredential,
+        ipPrivacy: ipPrivacy,
+      ),
     );
+  }
+
+  static RemoteIceConfig _iceConfigFromValues({
+    required String stunUrls,
+    required String turnUrl,
+    required String turnUsername,
+    required String turnCredential,
+    required String ipPrivacy,
+  }) {
+    final servers = <IceServerConfig>[
+      for (final url in stunUrls.split(',').map((s) => s.trim()))
+        if (url.isNotEmpty) IceServerConfig(url: url),
+    ];
+    if (turnUrl.isNotEmpty) {
+      if (turnUsername.isEmpty || turnCredential.isEmpty) {
+        throw StateError('TURN URL requires username and credential');
+      }
+      servers.add(
+        IceServerConfig(
+          url: turnUrl,
+          username: turnUsername,
+          credential: turnCredential,
+        ),
+      );
+    }
+    return RemoteIceConfig(
+      iceServers: servers,
+      ipPrivacy: _ipPrivacyModeFor(ipPrivacy),
+    );
+  }
+
+  static IpPrivacyMode _ipPrivacyModeFor(String value) {
+    switch (value) {
+      case '':
+      case 'relay_only':
+        return IpPrivacyMode.relayOnly;
+      case 'direct_and_relay':
+        return IpPrivacyMode.directAndRelay;
+      default:
+        throw StateError('Unknown HELIX_REMOTE_IP_PRIVACY: $value');
+    }
   }
 
   static String _webSocketSchemeFor(String restScheme) {

@@ -25,6 +25,7 @@ class GroupsModule {
   // P16-014: Rate limits.
   static const int _maxGroupsPerDay = 5;
   static const int _maxInvitesPerHour = 20;
+  static const int _inviteExpiryMs = 7 * 24 * 60 * 60 * 1000;
 
   Router get router {
     final r = Router();
@@ -319,6 +320,22 @@ class GroupsModule {
       }
 
       final groupId = invite['group_id'] as String;
+      if (invite['status'] != 'PENDING') {
+        return Response(
+          409,
+          body: jsonEncode({'error': 'Invite is no longer pending'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      final createdAt = invite['created_at'] as int;
+      if (DateTime.now().millisecondsSinceEpoch - createdAt > _inviteExpiryMs) {
+        db.expireGroupInvite(inviteId);
+        return Response(
+          410,
+          body: jsonEncode({'error': 'Invite has expired'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
       if (accept) {
         db.acceptGroupInvite(inviteId);
@@ -439,6 +456,25 @@ class GroupsModule {
           jsonEncode({'error': 'Only admins can change member roles'}),
         );
       }
+      if (role != 'ADMIN' && role != 'MEMBER') {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Invalid group role'}),
+        );
+      }
+      if (!db.isConversationMember(groupId, targetId)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'Target account is not a group member'}),
+        );
+      }
+      if (role == 'MEMBER' &&
+          db.getGroupMemberRole(groupId, targetId) == 'ADMIN' &&
+          db.countGroupAdmins(groupId) == 1) {
+        return Response(
+          409,
+          body: jsonEncode({'error': 'Cannot demote the final admin'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
       db.changeGroupMemberRole(groupId, targetId, role);
 
@@ -484,16 +520,32 @@ class GroupsModule {
         );
       }
 
-      db.removeGroupMember(groupId, accountId);
+      if (!db.isConversationMember(groupId, accountId)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'Not a member of this group'}),
+        );
+      }
 
-      _relayToGroupMembers(groupId, {
+      final wasAdmin = db.isGroupAdmin(groupId, accountId);
+      db.removeGroupMember(groupId, accountId);
+      final promotedAdmin = wasAdmin ? _promoteAdminIfNeeded(groupId) : null;
+
+      final leavePayload = {
         'type': 'membership_changed',
         'group_id': groupId,
         'conversation_id': groupId,
         'account_id': accountId,
         'action': 'removed',
         'timestamp': DateTime.now().millisecondsSinceEpoch,
-      });
+      };
+      if (promotedAdmin != null) {
+        leavePayload['promoted_admin_id'] = promotedAdmin;
+      }
+      _relayToGroupMembers(groupId, leavePayload);
+
+      if (db.getConversationMembers(groupId).isEmpty) {
+        db.deleteGroup(groupId);
+      }
 
       return Response.ok(
         jsonEncode({'group_id': groupId, 'left': true}),
@@ -533,26 +585,46 @@ class GroupsModule {
           jsonEncode({'error': 'Only admins can remove members'}),
         );
       }
+      if (!db.isConversationMember(groupId, targetId)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'Target account is not a group member'}),
+        );
+      }
 
+      final wasAdmin = db.isGroupAdmin(groupId, targetId);
       db.removeGroupMember(groupId, targetId);
+      final promotedAdmin = wasAdmin ? _promoteAdminIfNeeded(groupId) : null;
+      final nextEpoch = body['epoch'] as int? ?? 0;
+      final encryptionKeyId = body['encryption_key_id'] as String?;
 
       // P16-005 signal: trigger key epoch update by broadcasting
       // group_key_updated to remaining members (key material is app-layer).
-      _relayToGroupMembers(groupId, {
+      final keyUpdatePayload = {
         'type': 'group_key_updated',
         'group_id': groupId,
         'reason': 'member_removed',
         'timestamp': DateTime.now().millisecondsSinceEpoch,
-      });
+      };
+      if (nextEpoch > 0) {
+        keyUpdatePayload['epoch'] = nextEpoch;
+      }
+      if (encryptionKeyId != null) {
+        keyUpdatePayload['encryption_key_id'] = encryptionKeyId;
+      }
+      _relayToGroupMembers(groupId, keyUpdatePayload);
 
-      _relayToGroupMembers(groupId, {
+      final membershipPayload = {
         'type': 'membership_changed',
         'group_id': groupId,
         'conversation_id': groupId,
         'account_id': targetId,
         'action': 'removed',
         'timestamp': DateTime.now().millisecondsSinceEpoch,
-      });
+      };
+      if (promotedAdmin != null) {
+        membershipPayload['promoted_admin_id'] = promotedAdmin;
+      }
+      _relayToGroupMembers(groupId, membershipPayload);
 
       return Response.ok(
         jsonEncode({'group_id': groupId, 'removed': targetId}),
@@ -635,6 +707,7 @@ class GroupsModule {
     if (eventType == null) return;
     final bodyPayload = Map<String, dynamic>.from(payload)..remove('type');
 
+    final now = DateTime.now().millisecondsSinceEpoch;
     final members = db.getConversationMembers(groupId);
     for (final memberId in members) {
       if (memberId == excludeAccountId) continue;
@@ -642,16 +715,22 @@ class GroupsModule {
       for (final dev in devices) {
         final devId = dev['device_id'] as String;
         if (devId == excludeDeviceId) continue;
-        final eventId = '${eventType}_${groupId}_$devId';
+        final eventId = '${eventType}_${groupId}_${now}_$devId';
         final envelope = BackendDatabase.buildEnvelope(
           eventId: eventId,
           type: eventType,
           payload: bodyPayload,
-          timestamp: DateTime.now().millisecondsSinceEpoch,
+          timestamp: now,
         );
         wsRelay.sendToDevice(devId, envelope);
       }
     }
+  }
+
+  String? _promoteAdminIfNeeded(String groupId) {
+    if (db.getConversationMembers(groupId).isEmpty) return null;
+    if (db.countGroupAdmins(groupId) > 0) return null;
+    return db.promoteFirstRemainingGroupMemberToAdmin(groupId);
   }
 
   Response _unauthorized() => Response(

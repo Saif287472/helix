@@ -259,12 +259,17 @@ class RemoteCompositionRoot {
       final restClient = _restClient!;
       _callService = RemoteCallService(
         db: db,
-        engine: RemoteWebRtcCallEngine(),
+        engine: RemoteWebRtcCallEngine(iceConfig: devConfig.callIceConfig),
         signalingGateway: _RemoteRestCallSignalingGateway(restClient),
+        iceConfig: devConfig.callIceConfig,
       );
 
       String groupKeyProvider(String groupId, int epoch) {
-        return 'gk_${_hexBytes(List<int>.generate(16, (_) => math.Random.secure().nextInt(256)))}_$epoch';
+        final bytes = List<int>.generate(
+          32,
+          (_) => math.Random.secure().nextInt(256),
+        );
+        return _base64Url(bytes);
       }
 
       _groupService = RemoteGroupService(
@@ -279,6 +284,7 @@ class RemoteCompositionRoot {
         drainOutbox: () => _messagingService!.processOutboundQueue(),
         connectRealtime: connectWebSocket,
         disconnectRealtime: disconnectWebSocket,
+        startCallSignaling: () async => _callService!.start(),
         purgeLocalSession: _purgeLocalSessionOnly,
       );
 
@@ -642,12 +648,14 @@ class RemoteCompositionRoot {
     if (deviceId != null && deviceId.isNotEmpty) {
       await _restClient?.revokeDevice(deviceId);
     }
+    await _callService?.endActiveCall();
     await disconnectWebSocket();
     await _purgeLocalSessionOnly();
     _state = RemoteStartupState.unauthenticated;
   }
 
   Future<void> purgeAfterAccountDeletion() async {
+    await _callService?.endActiveCall();
     await disconnectWebSocket();
     await _purgeLocalSessionOnly();
     _database?.deleteFiles();
@@ -817,7 +825,7 @@ class RemoteCompositionRoot {
     await _runtimeCoordinator?.dispose();
     _runtimeCoordinator = null;
     await disconnectWebSocket();
-    _callService?.stop();
+    await _callService?.dispose();
     _messagingService = null;
     _groupService = null;
     _callService = null;

@@ -227,6 +227,46 @@ class RemoteOutboundOperation {
       method: 'POST',
       path: 'accounts/report',
     ),
+    RemoteOutboundOperation._(
+      type: 'group_create',
+      method: 'POST',
+      path: 'groups/create',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_invite',
+      method: 'POST',
+      path: 'groups/invite',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_invite_respond',
+      method: 'POST',
+      path: 'groups/invite/respond',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_update',
+      method: 'POST',
+      path: 'groups/update',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_member_role',
+      method: 'POST',
+      path: 'groups/member-role',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_leave',
+      method: 'POST',
+      path: 'groups/leave',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_remove_member',
+      method: 'POST',
+      path: 'groups/remove',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_delete',
+      method: 'POST',
+      path: 'groups/delete',
+    ),
   ];
 
   static final valuesByType = {

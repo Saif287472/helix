@@ -434,6 +434,129 @@ void main() {
     expect(server.db.isConversationMember('grp14', 'bob'), isFalse);
   });
 
+  test('non-member cannot leave or mutate group membership', () async {
+    server.db.createGroup(
+      groupId: 'grp_leave_guard',
+      name: 'Leave Guard',
+      creatorId: 'alice',
+      encryptionKeyId: '',
+      initialMemberIds: ['alice'],
+    );
+
+    final client = TestHttpClient('http://127.0.0.1:$port', tokenB);
+    final res = await client.post('/api/v1/groups/leave', {
+      'group_id': 'grp_leave_guard',
+    });
+    expect(res.status, equals(403));
+    expect(server.db.getConversationMembers('grp_leave_guard'), ['alice']);
+  });
+
+  test('final admin cannot be demoted', () async {
+    server.db.createGroup(
+      groupId: 'grp_final_admin',
+      name: 'Final Admin',
+      creatorId: 'alice',
+      encryptionKeyId: '',
+      initialMemberIds: ['alice', 'bob'],
+    );
+
+    final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
+    final res = await client.post('/api/v1/groups/member-role', {
+      'group_id': 'grp_final_admin',
+      'account_id': 'alice',
+      'role': 'MEMBER',
+    });
+    expect(res.status, equals(409));
+    expect(server.db.isGroupAdmin('grp_final_admin', 'alice'), isTrue);
+  });
+
+  test(
+    'admin succession promotes first remaining member deterministically',
+    () async {
+      server.db.createGroup(
+        groupId: 'grp_succession',
+        name: 'Succession',
+        creatorId: 'alice',
+        encryptionKeyId: '',
+        initialMemberIds: ['alice', 'carol', 'bob'],
+      );
+
+      final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
+      final res = await client.post('/api/v1/groups/leave', {
+        'group_id': 'grp_succession',
+      });
+      expect(res.status, equals(200));
+      expect(
+        server.db.isConversationMember('grp_succession', 'alice'),
+        isFalse,
+      );
+      expect(server.db.isGroupAdmin('grp_succession', 'bob'), isTrue);
+      expect(server.db.isGroupAdmin('grp_succession', 'carol'), isFalse);
+    },
+  );
+
+  test('expired invite cannot be accepted', () async {
+    server.db.createGroup(
+      groupId: 'grp_expired_invite',
+      name: 'Expired Invite',
+      creatorId: 'alice',
+      encryptionKeyId: '',
+      initialMemberIds: ['alice'],
+    );
+    server.db.createGroupInvite(
+      inviteId: 'inv_expired',
+      groupId: 'grp_expired_invite',
+      inviterId: 'alice',
+      inviteeId: 'bob',
+      createdAt:
+          DateTime.now().millisecondsSinceEpoch - (8 * 24 * 60 * 60 * 1000),
+    );
+
+    final client = TestHttpClient('http://127.0.0.1:$port', tokenB);
+    final res = await client.post('/api/v1/groups/invite/respond', {
+      'invite_id': 'inv_expired',
+      'accept': true,
+    });
+    expect(res.status, equals(410));
+    expect(
+      server.db.isConversationMember('grp_expired_invite', 'bob'),
+      isFalse,
+    );
+    expect(
+      server.db.getGroupInvite('inv_expired')!['status'],
+      equals('EXPIRED'),
+    );
+  });
+
+  test('removed member cannot send future group messages', () async {
+    server.db.createGroup(
+      groupId: 'grp_removed_send',
+      name: 'Removed Send',
+      creatorId: 'alice',
+      encryptionKeyId: '',
+      initialMemberIds: ['alice', 'bob'],
+    );
+
+    final adminClient = TestHttpClient('http://127.0.0.1:$port', tokenA);
+    final remove = await adminClient.post('/api/v1/groups/remove', {
+      'group_id': 'grp_removed_send',
+      'account_id': 'bob',
+      'epoch': 1,
+      'encryption_key_id': 'gk_rotated',
+    });
+    expect(remove.status, equals(200));
+
+    final bobClient = TestHttpClient('http://127.0.0.1:$port', tokenB);
+    final send = await bobClient.post('/api/v1/messages/send', {
+      'message_id': 'msg_removed_bob',
+      'conversation_id': 'grp_removed_send',
+      'envelopes': [
+        {'recipient_device_id': 'dev_alice', 'ciphertext': 'cipher'},
+      ],
+    });
+    expect(send.status, equals(403));
+  });
+
   // -------------------------------------------------------------------------
   // P16-010: Group deletion
   // -------------------------------------------------------------------------

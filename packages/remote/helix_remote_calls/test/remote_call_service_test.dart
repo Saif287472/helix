@@ -13,6 +13,7 @@ import 'package:helix_remote_calls/helix_remote_calls.dart';
 class StubCallEngine implements RemoteCallEngine {
   final _ctrl = StreamController<RemoteCallEngineEvent>.broadcast();
   final List<String> log = [];
+  bool _disposed = false;
 
   @override
   Stream<RemoteCallEngineEvent> get events => _ctrl.stream;
@@ -91,6 +92,8 @@ class StubCallEngine implements RemoteCallEngine {
 
   @override
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     await _ctrl.close();
   }
 }
@@ -193,6 +196,28 @@ void main() {
     expect(sent.sdp, equals('stub_offer_sdp'));
     expect(sent.isVideo, isFalse);
   });
+
+  test(
+    'P6-C01/P6-C05: start is idempotent and dispose releases media',
+    () async {
+      final svc = makeService();
+      svc.start();
+      await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
+      final callId = svc.activeCall!.callId;
+      gateway.sent.clear();
+
+      engine.emitCandidate(
+        callId,
+        'candidate:1 1 UDP 16777215 198.51.100.2 3478 typ relay',
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(gateway.sent, hasLength(1));
+
+      await svc.dispose();
+      expect(engine.log, contains('endCall:$callId'));
+      expect(svc.activeCall, isNull);
+    },
+  );
 
   // P15-002: Inbound offer sets ringing state
   test('P15-002: inbound offer sets call to ringing state', () async {
@@ -560,7 +585,12 @@ void main() {
       // IP privacy mode in RemoteCallService decides what gets forwarded.
       // This contrasts with the Local engine which filters at source to
       // private-range IPs. (P15-019: Local engine file was not modified.)
-      final svc = makeService(iceConfig: const RemoteIceConfig(iceServers: []));
+      final svc = makeService(
+        iceConfig: const RemoteIceConfig(
+          iceServers: [],
+          ipPrivacy: IpPrivacyMode.directAndRelay,
+        ),
+      );
       await svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
 
       final callId = svc.activeCall!.callId;

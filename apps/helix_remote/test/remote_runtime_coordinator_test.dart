@@ -126,8 +126,22 @@ void main() {
         );
         expect(
           registry.knownTypes,
-          containsAll(['SEND_MESSAGE', 'CONTACT_REQUEST', 'SAFETY_REPORT']),
+          containsAll([
+            'SEND_MESSAGE',
+            'CONTACT_REQUEST',
+            'SAFETY_REPORT',
+            'group_create',
+            'group_invite',
+            'group_invite_respond',
+            'group_update',
+            'group_member_role',
+            'group_leave',
+            'group_remove_member',
+            'group_delete',
+          ]),
         );
+        expect(registry.require('group_create').path, 'groups/create');
+        expect(registry.require('group_remove_member').path, 'groups/remove');
       },
     );
   });

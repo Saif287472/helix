@@ -233,7 +233,7 @@ void main() {
     migrated.initialize();
     addTearDown(migrated.close);
 
-    expect(migrated.schemaVersion, equals(9));
+    expect(migrated.schemaVersion, equals(10));
     final devices = migrated.getDevices('acc_v5');
     expect(devices.single.deviceId, equals('1'));
     expect(devices.single.deviceSigningPublicKey, equals('legacy_key'));
@@ -292,7 +292,7 @@ void main() {
     addTearDown(migrated.close);
 
     expect(migrated.getAccount('acc_plain')!.username, equals(marker));
-    expect(migrated.schemaVersion, equals(9));
+    expect(migrated.schemaVersion, equals(10));
     expect(_opensWithoutKey(file), isFalse);
     expect(_databaseFilesContain(file, marker), isFalse);
   });
@@ -380,7 +380,7 @@ void main() {
     reopened.initialize();
     addTearDown(reopened.close);
 
-    expect(reopened.schemaVersion, equals(9));
+    expect(reopened.schemaVersion, equals(10));
     expect(
       reopened.getOrCreateLocalHistorySessionSeed('conv_persist'),
       equals(seed),
@@ -494,6 +494,39 @@ void main() {
       expect(restored.isTombstoned('msg_deleted', 'MESSAGE'), isTrue);
     },
   );
+
+  test('P6 group epoch keys persist and round-trip through backup', () {
+    db.saveGroupEpochKey(
+      groupId: 'group_secure',
+      epoch: 0,
+      keyId: 'gk_zero',
+      keyMaterial: 'base64url_sender_key_seed',
+      createdAt: 1000,
+    );
+    db.saveGroupEpochKey(
+      groupId: 'group_secure',
+      epoch: 1,
+      keyId: 'gk_one',
+      keyMaterial: 'base64url_sender_key_seed_rotated',
+      createdAt: 2000,
+    );
+
+    expect(
+      db.getGroupEpochKey('group_secure', 0)!['key_material'],
+      equals('base64url_sender_key_seed'),
+    );
+    expect(db.getGroupEpochKeys('group_secure'), hasLength(2));
+
+    final restored = HelixRemoteDatabase(File(':memory:'));
+    restored.initialize();
+    addTearDown(restored.close);
+    restored.restoreBackupSnapshot(db.exportBackupSnapshot());
+
+    expect(
+      restored.getGroupEpochKey('group_secure', 1)!['key_id'],
+      equals('gk_one'),
+    );
+  });
 
   test('P17 restore rejects unsupported snapshot versions atomically', () {
     final before = db.getConversations();

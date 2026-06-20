@@ -363,6 +363,10 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   );
 
   @override
+  Future<Map<String, dynamic>> getTurnCredentials() =>
+      _request('GET', 'calls/turn-credentials');
+
+  @override
   Future<void> requestAccountDeletion({required String confirmation}) async {
     await _request(
       'DELETE',

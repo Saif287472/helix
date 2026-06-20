@@ -82,6 +82,8 @@ abstract class HelixRemoteRestClient {
     required Map<String, dynamic> payload,
   });
 
+  Future<Map<String, dynamic>> getTurnCredentials();
+
   set accessToken(String? token);
 
   Future<void> close();

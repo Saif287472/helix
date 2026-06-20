@@ -118,12 +118,24 @@ class RemoteCallService {
   static const int _callTimeoutMs = 60000;
 
   void start() {
+    if (_engineSub != null) return;
     _engineSub = engine.events.listen(_onEngineEvent);
   }
 
-  void stop() {
-    _engineSub?.cancel();
+  Future<void> stop() async {
+    await _engineSub?.cancel();
     _engineSub = null;
+  }
+
+  Future<void> dispose() async {
+    final call = _activeCall;
+    if (call != null) {
+      await engine.endCall(call.callId);
+      db.clearActiveCallMarker();
+      _activeCall = null;
+    }
+    await stop();
+    await engine.dispose();
   }
 
   // ---------------------------------------------------------------------------
@@ -273,6 +285,7 @@ class RemoteCallService {
       ),
       ended: false,
     );
+    db.clearActiveCallMarker();
     _activeCall = null;
   }
 

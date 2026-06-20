@@ -29,16 +29,20 @@ class IceServerConfig {
 class RemoteIceConfig {
   const RemoteIceConfig({
     required this.iceServers,
-    this.ipPrivacy = IpPrivacyMode.directAndRelay,
+    this.ipPrivacy = IpPrivacyMode.relayOnly,
   });
 
-  /// Default: two public STUN servers, no TURN, direct IP allowed.
+  /// Explicit development helper: two public STUN servers, no TURN.
+  ///
+  /// Production composition must inject deployment-specific STUN/TURN
+  /// configuration instead of relying on this helper.
   factory RemoteIceConfig.defaultStun() {
     return const RemoteIceConfig(
       iceServers: [
         IceServerConfig(url: 'stun:stun.l.google.com:19302'),
         IceServerConfig(url: 'stun:stun1.l.google.com:19302'),
       ],
+      ipPrivacy: IpPrivacyMode.directAndRelay,
     );
   }
 

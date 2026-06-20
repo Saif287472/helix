@@ -4,7 +4,12 @@ import 'package:helix_remote_calls/helix_remote_calls.dart';
 
 class RemoteWebRtcCallEngine implements RemoteCallEngine {
   RemoteWebRtcCallEngine({RemoteIceConfig? iceConfig})
-    : _iceConfig = iceConfig ?? RemoteIceConfig.defaultStun();
+    : _iceConfig =
+          iceConfig ??
+          const RemoteIceConfig(
+            iceServers: [],
+            ipPrivacy: IpPrivacyMode.relayOnly,
+          );
 
   final RemoteIceConfig _iceConfig;
   final Map<String, _PeerConnectionState> _calls = {};
@@ -160,6 +165,10 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     if (state != null) {
       await state.pc.close();
       state.pc.dispose();
+    }
+    if (_calls.isEmpty) {
+      await _localStream?.dispose();
+      _localStream = null;
     }
   }
 
