@@ -12,13 +12,15 @@ class RemoteWebSocketClient {
     void Function()? onDone,
     void Function(Map<String, dynamic> payload)? onRawSignal,
     Duration? pingInterval,
+    Duration? connectTimeout,
   }) : _wsUri = wsUri,
        _token = token,
        _onEvent = onEvent,
        _onError = onError,
        _onDone = onDone,
        _onRawSignal = onRawSignal,
-       _pingInterval = pingInterval ?? const Duration(seconds: 30);
+       _pingInterval = pingInterval ?? const Duration(seconds: 30),
+       _connectTimeout = connectTimeout ?? const Duration(seconds: 10);
 
   final Uri _wsUri;
   final String _token;
@@ -27,6 +29,7 @@ class RemoteWebSocketClient {
   final void Function()? _onDone;
   final void Function(Map<String, dynamic> payload)? _onRawSignal;
   final Duration _pingInterval;
+  final Duration _connectTimeout;
 
   WebSocket? _ws;
   StreamSubscription<dynamic>? _subscription;
@@ -45,7 +48,7 @@ class RemoteWebSocketClient {
       final socket = await WebSocket.connect(
         _wsUri.toString(),
         headers: {'Authorization': 'Bearer $_token'},
-      );
+      ).timeout(_connectTimeout);
       if (_disposed || generation != _generation) {
         await socket.close();
         return;

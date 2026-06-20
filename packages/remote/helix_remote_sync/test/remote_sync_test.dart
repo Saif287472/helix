@@ -143,7 +143,8 @@ void main() {
     db.upsertConversation(conversation, ['alice', 'bob']);
   });
 
-  tearDown(() {
+  tearDown(() async {
+    await engine.dispose();
     db.close();
   });
 
@@ -190,6 +191,46 @@ void main() {
     // Processing immediately should also return 0 (nothing is due).
     final processedBackoff = await engine.processOutboundQueue(gateway);
     expect(processedBackoff, equals(0));
+  });
+
+  test('P09 emits state changes for inbound sync and outbox updates', () async {
+    final changes = <RemoteSyncChange>[];
+    final sub = engine.changes.listen(changes.add);
+    addTearDown(sub.cancel);
+
+    gateway.inboundEvents.add(
+      RemoteRealtimeEnvelope(
+        eventId: 'evt_p09_msg',
+        serverSequence: 1,
+        schemaVersion: 1,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        type: 'chat_message',
+        payload: {
+          'message_id': 'msg_p09',
+          'conversation_id': 'conv_123',
+          'sender_account_id': 'bob',
+          'sender_device_id': 'device1',
+          'ciphertext': 'ciphertext_only',
+        },
+      ),
+    );
+
+    expect(await engine.syncInbound(gateway), equals(1));
+    expect(
+      changes.any(
+        (change) =>
+            change.affects(RemoteSyncChangeArea.messages) &&
+            change.affectsConversation('conv_123'),
+      ),
+      isTrue,
+    );
+
+    db.enqueueOperation('op_p09', 'SEND_MESSAGE', '{"ok": true}');
+    expect(await engine.processOutboundQueue(gateway), equals(1));
+    expect(
+      changes.any((change) => change.affects(RemoteSyncChangeArea.outbox)),
+      isTrue,
+    );
   });
 
   test(

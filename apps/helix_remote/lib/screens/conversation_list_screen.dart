@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/app/remote_runtime_coordinator.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
 import 'package:helix_remote/screens/settings_screen.dart';
 import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote_sync/helix_remote_sync.dart';
 
 class ConversationListScreen extends StatefulWidget {
   const ConversationListScreen({
@@ -26,10 +30,31 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   bool _loaded = false;
   bool _showContacts = false;
   String? _statusText;
+  RemoteRuntimeSnapshot? _runtimeSnapshot;
+  StreamSubscription<RemoteSyncChange>? _changeSub;
+  StreamSubscription<RemoteRuntimeSnapshot>? _runtimeSub;
 
   @override
   void initState() {
     super.initState();
+    _runtimeSnapshot = _tryRuntimeSnapshot();
+    _changeSub = widget.messagingService.changes.listen(_onRemoteChange);
+    _runtimeSub = _tryRuntimeCoordinator()?.snapshots.listen((snapshot) {
+      if (mounted) {
+        setState(() => _runtimeSnapshot = snapshot);
+      }
+    });
+    _reload();
+  }
+
+  void _onRemoteChange(RemoteSyncChange change) {
+    if (!change.affects(RemoteSyncChangeArea.conversations) &&
+        !change.affects(RemoteSyncChangeArea.contacts) &&
+        !change.affects(RemoteSyncChangeArea.groups) &&
+        !change.affects(RemoteSyncChangeArea.devices) &&
+        !change.affects(RemoteSyncChangeArea.outbox)) {
+      return;
+    }
     _reload();
   }
 
@@ -48,6 +73,18 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       debugPrint('ConversationListScreen._reload error: $e');
       setState(() => _loaded = true);
     }
+  }
+
+  RemoteRuntimeCoordinator? _tryRuntimeCoordinator() {
+    try {
+      return widget.root.runtimeCoordinator;
+    } on StateError {
+      return null;
+    }
+  }
+
+  RemoteRuntimeSnapshot? _tryRuntimeSnapshot() {
+    return _tryRuntimeCoordinator()?.snapshot;
   }
 
   void _addContact() {
@@ -185,6 +222,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       ),
       body: Column(
         children: [
+          if (_runtimeSnapshot != null)
+            RemoteRuntimeStateBanner(stateLabel: _runtimeSnapshot!.state.name),
           if (_statusText != null)
             MaterialBanner(
               content: Text(_statusText!),
@@ -212,6 +251,13 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               child: const Icon(Icons.refresh),
             ),
     );
+  }
+
+  @override
+  void dispose() {
+    _changeSub?.cancel();
+    _runtimeSub?.cancel();
+    super.dispose();
   }
 
   Widget _buildConversationList() {

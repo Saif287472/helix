@@ -176,10 +176,12 @@ findings:
       - apps/helix_remote/lib/screens/conversation_list_screen.dart
       - apps/helix_remote/lib/screens/conversation_screen.dart
       - packages/remote/helix_remote_sync/lib/src/sync_engine.dart
-    status: pending
+      - apps/helix_remote/test/phase12_remote_messaging_screen_test.dart
+      - packages/remote/helix_remote_sync/test/remote_sync_test.dart
+    status: complete
     tests_required:
       - Runtime snapshot and reactive screen update tests.
-    final_disposition: Pending Phase 09.
+    final_disposition: Completed in Phase 09 with scoped Remote sync change notifications, service-level forwarding for local and synchronized state changes, live conversation/contact screen refresh, runtime health banners, and listener disposal coverage.
   - id: HXA-011
     title: Attachments and calls unreachable
     primary_phase: 11
@@ -366,10 +368,14 @@ findings:
     current_evidence:
       - apps/helix_remote/lib/main.dart::_buildScreen
       - apps/helix_remote/lib/app/composition_root.dart::RemoteStartupState
-    status: pending
+      - apps/helix_remote/lib/app/remote_runtime_coordinator.dart
+      - apps/helix_remote/lib/app/remote_websocket_client.dart
+      - apps/helix_remote/lib/screens/conversation_list_screen.dart
+      - apps/helix_remote/test/remote_runtime_coordinator_test.dart
+    status: complete
     tests_required:
       - Startup lifecycle and runtime health UI tests.
-    final_disposition: Pending Phase 03 primary; runtime health details in Phase 09.
+    final_disposition: Completed across Phase 03 and Phase 09: startup no longer presents syncing as ready, runtime coordinator snapshots drive readiness, and non-ready runtime states have user-visible banner coverage.
   - id: HXA-024
     title: Remote setup forms not keyboard or small-screen safe
     primary_phase: 16

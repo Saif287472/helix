@@ -118,7 +118,9 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
     _initializing = true;
     try {
       await widget.root.initialize();
+      if (!mounted) return;
       final restored = await widget.root.tryRestoreSession();
+      if (!mounted) return;
       if (restored) {
         await widget.root.startRuntime();
       }

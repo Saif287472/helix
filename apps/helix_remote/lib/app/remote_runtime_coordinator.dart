@@ -116,11 +116,17 @@ class RemoteRuntimeCoordinator {
 
       _setState(RemoteRuntimeState.syncing);
       await _refreshSession?.call();
+      if (_disposed) return;
       await _catchUpInbound();
+      if (_disposed) return;
       await drainOutbox();
+      if (_disposed) return;
       await _replenishPrekeys?.call();
+      if (_disposed) return;
       await _connectRealtime();
+      if (_disposed) return;
       await _startCallSignaling?.call();
+      if (_disposed) return;
       _reconnectAttempts = 0;
       _nextRetryAt = null;
       _setState(RemoteRuntimeState.ready);

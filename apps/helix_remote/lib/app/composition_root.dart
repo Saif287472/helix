@@ -163,6 +163,7 @@ class RemoteCompositionRoot {
   RemoteRuntimeCoordinator? _runtimeCoordinator;
   StreamSubscription<RemoteRuntimeSnapshot>? _runtimeSnapshotSub;
   Future<bool>? _tokenRefreshInFlight;
+  Future<void>? _disposeFuture;
   _RefreshFailureKind _lastRefreshFailureKind = _RefreshFailureKind.none;
   final _stateController = StreamController<RemoteStartupState>.broadcast(
     sync: true,
@@ -763,6 +764,7 @@ class RemoteCompositionRoot {
     final wsClient = RemoteWebSocketClient(
       wsUri: devConfig.webSocketUri,
       token: token,
+      connectTimeout: Duration(milliseconds: devConfig.requestTimeoutMs),
       onEvent: (envelope) {
         final applied = _syncEngine?.handleIncomingEnvelope(envelope) ?? false;
         if (!applied) {
@@ -1016,9 +1018,11 @@ class RemoteCompositionRoot {
     await disconnectWebSocket();
     await _callService?.dispose();
     _callService = null;
+    await _messagingService?.dispose();
     _messagingService = null;
     _groupService = null;
     _attachmentService = null;
+    await _syncEngine?.dispose();
     _syncEngine = null;
     _syncGateway = null;
     await _restClient?.close();
@@ -1045,28 +1049,43 @@ class RemoteCompositionRoot {
     _setState(RemoteStartupState.idle);
   }
 
-  Future<void> dispose() async {
+  Future<void> dispose() {
+    return _disposeFuture ??= _disposeOnce();
+  }
+
+  Future<void> _disposeOnce() async {
     _runtimeSnapshotSub?.cancel();
     _runtimeSnapshotSub = null;
     _setState(RemoteStartupState.idle);
-    await _stateController.close();
-    await _runtimeCoordinator?.dispose();
+    unawaited(_stateController.close());
+    await _boundedDispose(_runtimeCoordinator?.dispose());
     _runtimeCoordinator = null;
-    await disconnectWebSocket();
-    await _callService?.dispose();
+    await _boundedDispose(disconnectWebSocket());
+    unawaited(_callService?.dispose());
+    await _boundedDispose(_messagingService?.dispose());
     _messagingService = null;
     _groupService = null;
     _callService = null;
     _attachmentService = null;
+    await _boundedDispose(_syncEngine?.dispose());
     _syncEngine = null;
     _syncGateway = null;
-    await _restClient?.close();
+    await _boundedDispose(_restClient?.close());
     _restClient = null;
     _database?.close();
     _database = null;
     _keyStorage = null;
     _keyValue = null;
     _lastError = null;
+  }
+
+  Future<void> _boundedDispose(Future<void>? cleanup) async {
+    if (cleanup == null) return;
+    try {
+      await cleanup;
+    } catch (e) {
+      _lastError = 'Remote cleanup did not finish cleanly.';
+    }
   }
 }
 

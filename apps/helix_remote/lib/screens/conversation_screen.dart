@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote_sync/helix_remote_sync.dart';
 
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({
@@ -31,15 +32,27 @@ class _ConversationScreenState extends State<ConversationScreen> {
   bool _searching = false;
   bool _typingActive = false;
   String? _errorMessage;
+  StreamSubscription<RemoteSyncChange>? _changeSub;
 
   @override
   void initState() {
     super.initState();
+    _changeSub = widget.messagingService.changes.listen(_onRemoteChange);
     _loadMessages();
   }
 
-  Future<void> _loadMessages() async {
+  void _onRemoteChange(RemoteSyncChange change) {
+    if (!change.affectsConversation(widget.conversationId)) return;
+    if (!change.affects(RemoteSyncChangeArea.messages) &&
+        !change.affects(RemoteSyncChangeArea.conversations)) {
+      return;
+    }
+    unawaited(_refreshVisibleMessages());
+  }
+
+  Future<void> _loadMessages({int? limit}) async {
     try {
+      final effectiveLimit = limit ?? _pageSize;
       final messages = _searching && _searchController.text.trim().isNotEmpty
           ? await widget.messagingService.searchDecryptedHistory(
               conversationId: widget.conversationId,
@@ -47,7 +60,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             )
           : await widget.messagingService.messageHistory(
               widget.conversationId,
-              limit: _pageSize,
+              limit: effectiveLimit,
             );
       if (mounted) {
         setState(() {
@@ -66,6 +79,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
         });
       }
     }
+  }
+
+  Future<void> _refreshVisibleMessages() async {
+    final visibleLimit = _messages.length > _pageSize
+        ? _messages.length
+        : _pageSize;
+    await _loadMessages(limit: visibleLimit);
   }
 
   Future<void> _loadMore() async {
@@ -218,6 +238,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   @override
   void dispose() {
+    _changeSub?.cancel();
     unawaited(_publishTyping(false));
     _controller.dispose();
     _searchController.dispose();

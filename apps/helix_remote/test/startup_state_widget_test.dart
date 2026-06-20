@@ -7,6 +7,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/widgets.dart' hide DiagnosticLevel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
@@ -79,18 +80,14 @@ void main() {
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p03_w02_');
       addTearDown(() {
-        if (dir.existsSync()) dir.deleteSync(recursive: true);
+        if (dir.existsSync()) {
+          try {
+            dir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
       });
 
-      // Pre-populate secure storage so tryRestoreSession() succeeds.
       final store = _InMemoryKeyValueStore();
-      await store.write('access_token', 'tok-w02');
-      await store.write('account_id', 'acc-w02');
-      await store.write('username', 'userw02');
-      await store.write('identity_public_key', 'pk');
-      await store.write('device_id', 'dev_00aabbcc');
-      await store.write('device_signing_public_key', 'spk');
-      await store.write('device_agreement_public_key', 'apk');
 
       final root = RemoteCompositionRoot.withConfig(
         _productConfig(dir.path),
@@ -100,13 +97,14 @@ void main() {
 
       await tester.pumpWidget(HelixRemoteApp(root: root));
 
-      // Pump just enough for initialize() + tryRestoreSession() to set
-      // authenticatedAndSyncing but before startRuntime() can complete.
-      // Since startRuntime() fails quickly (no real server), the UI will
-      // show Syncing… briefly then remain in authenticatedAndSyncing until
-      // a retry succeeds (which it won't in tests).
-      await tester.pump(); // schedule microtasks
-      await tester.pump(); // process futures
+      // Reach setup, then drive authenticatedAndSyncing directly so this
+      // widget assertion does not depend on live runtime I/O.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Create new account').evaluate().isNotEmpty) break;
+      }
+      root.setAuthenticated('tok-w02');
+      await tester.pump();
 
       // If state is still loading, keep pumping a bit more.
       for (var i = 0; i < 5; i++) {
@@ -117,9 +115,11 @@ void main() {
 
       // Either still loading (acceptable) or in syncing. It must NOT show
       // the conversation list (which is the ready screen).
+      expect(find.textContaining('Syncing'), findsOneWidget);
       expect(find.text('Conversations'), findsNothing);
 
-      await root.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     },
   );
 
@@ -128,7 +128,11 @@ void main() {
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p05_w01_');
       addTearDown(() {
-        if (dir.existsSync()) dir.deleteSync(recursive: true);
+        if (dir.existsSync()) {
+          try {
+            dir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
       });
 
       final root = RemoteCompositionRoot.withConfig(
@@ -138,7 +142,10 @@ void main() {
       );
 
       await tester.pumpWidget(HelixRemoteApp(root: root));
-      await tester.pumpAndSettle(const Duration(seconds: 2));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Create new account').evaluate().isNotEmpty) break;
+      }
 
       expect(find.text('Create new account'), findsOneWidget);
       expect(find.text('Restore existing account unavailable'), findsOneWidget);
@@ -148,13 +155,14 @@ void main() {
       expect(find.text('Enter your restore code'), findsNothing);
 
       await tester.tap(find.text('Restore existing account unavailable'));
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(find.text('Restore account'), findsNothing);
       expect(find.text('Restore code'), findsNothing);
       expect(root.startupState, RemoteStartupState.unauthenticated);
 
-      await root.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     },
   );
 }

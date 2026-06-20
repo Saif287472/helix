@@ -1,9 +1,32 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:helix_remote_api/api/realtime_envelope.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
+
+enum RemoteSyncChangeArea {
+  conversations,
+  contacts,
+  messages,
+  groups,
+  devices,
+  outbox,
+  runtime,
+}
+
+class RemoteSyncChange {
+  const RemoteSyncChange({required this.areas, this.conversationId});
+
+  final Set<RemoteSyncChangeArea> areas;
+  final String? conversationId;
+
+  bool affects(RemoteSyncChangeArea area) => areas.contains(area);
+
+  bool affectsConversation(String id) =>
+      conversationId == null || conversationId == id;
+}
 
 abstract class SyncGateway {
   Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
@@ -29,7 +52,12 @@ class RemoteSyncEngine {
   final void Function(Map<String, dynamic> payload)? onCallSignal;
 
   static const String _globalSyncCursorId = '__remote_global_stream__';
+  final _changeController = StreamController<RemoteSyncChange>.broadcast(
+    sync: true,
+  );
   Future<int>? _outboundDrain;
+
+  Stream<RemoteSyncChange> get changes => _changeController.stream;
 
   /// Synchronises incoming events from the server since the last stored cursor.
   ///
@@ -47,6 +75,7 @@ class RemoteSyncEngine {
     int appliedCount = 0;
     int highestSeq = lastSeq;
     var expectedSeq = lastSeq + 1;
+    final appliedChanges = <RemoteSyncChange>[];
 
     db.rawExecute('BEGIN TRANSACTION;');
     try {
@@ -101,6 +130,7 @@ class RemoteSyncEngine {
           expectedSeq = seq + 1;
           if (applied) {
             appliedCount++;
+            appliedChanges.add(_changeFor(env));
           }
         } catch (e) {
           // P4-04: quarantine the malformed event; advance cursor so it does
@@ -127,6 +157,10 @@ class RemoteSyncEngine {
     } catch (_) {
       db.rawExecute('ROLLBACK;');
       rethrow;
+    }
+
+    for (final change in appliedChanges) {
+      _emitChange(change);
     }
 
     return appliedCount;
@@ -187,6 +221,9 @@ class RemoteSyncEngine {
       _recordProcessedEvent(env, seq);
       if (seq > lastSeq) {
         db.updateSyncCursor(_globalSyncCursorId, seq);
+      }
+      if (applied) {
+        _emitChange(_changeFor(env));
       }
       return applied;
     } catch (e) {
@@ -298,6 +335,9 @@ class RemoteSyncEngine {
         );
 
         db.updateOperationStatus(opId, 'COMPLETED', retries);
+        _emitChange(
+          const RemoteSyncChange(areas: {RemoteSyncChangeArea.outbox}),
+        );
         processedCount++;
 
         // P4-07: record queue age for telemetry (age = time from creation to send)
@@ -310,6 +350,9 @@ class RemoteSyncEngine {
         final permanent = _isPermanentOutboundFailure(e);
         final nextStatus = permanent || nextRetries >= 5 ? 'FAILED' : 'PENDING';
         db.updateOperationStatus(opId, nextStatus, nextRetries);
+        _emitChange(
+          const RemoteSyncChange(areas: {RemoteSyncChangeArea.outbox}),
+        );
 
         if (!permanent && nextRetries < 5) {
           final backoffMs = 1000 * (1 << nextRetries);
@@ -325,6 +368,67 @@ class RemoteSyncEngine {
   }
 
   bool _isPermanentOutboundFailure(Object error) => error is StateError;
+
+  RemoteSyncChange _changeFor(RemoteRealtimeEnvelope env) {
+    switch (env.type) {
+      case 'chat_message':
+      case 'message_deleted':
+      case 'message_tombstoned':
+      case 'message_edited':
+      case 'reaction_added':
+      case 'reaction_removed':
+      case 'read_receipt':
+      case 'delivery_receipt':
+        return RemoteSyncChange(
+          areas: const {
+            RemoteSyncChangeArea.messages,
+            RemoteSyncChangeArea.conversations,
+          },
+          conversationId: env.payload['conversation_id'] as String?,
+        );
+      case 'conversation_created':
+      case 'membership_changed':
+        return RemoteSyncChange(
+          areas: const {RemoteSyncChangeArea.conversations},
+          conversationId: env.payload['conversation_id'] as String?,
+        );
+      case 'contact_updated':
+      case 'contact_removed':
+      case 'profile_updated':
+      case 'privacy_updated':
+      case 'presence_updated':
+      case 'safety_notice':
+        return const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts});
+      case 'group_created':
+      case 'group_invite':
+      case 'group_deleted':
+      case 'group_admin_event':
+      case 'group_key_updated':
+        return RemoteSyncChange(
+          areas: const {
+            RemoteSyncChangeArea.groups,
+            RemoteSyncChangeArea.conversations,
+          },
+          conversationId:
+              (env.payload['group_id'] ?? env.payload['conversation_id'])
+                  as String?,
+        );
+      case 'sync_marker':
+        return const RemoteSyncChange(areas: {RemoteSyncChangeArea.runtime});
+      default:
+        return const RemoteSyncChange(areas: {RemoteSyncChangeArea.runtime});
+    }
+  }
+
+  void _emitChange(RemoteSyncChange change) {
+    if (!_changeController.isClosed) {
+      _changeController.add(change);
+    }
+  }
+
+  Future<void> dispose() async {
+    await _changeController.close();
+  }
 }
 
 abstract class _InboundSyncEvent {

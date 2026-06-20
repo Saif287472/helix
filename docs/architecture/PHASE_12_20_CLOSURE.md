@@ -84,7 +84,7 @@ and real-device/staging E2E need their own closure evidence.
 | P12-004 | One-to-one conversation creation | **PARTIAL** | `conversation_list_screen.dart`; `remote_messaging_service.dart`; storage DB | UI -> `createDirectConversation()` -> persistent conversation + outbox | `remote_messaging_service_test.dart` | Contact-list widget path lacks dedicated test | None | Add list-screen widget test in Phase 13 |
 | P12-005 | E2EE text send | **PARTIAL** | `remote_messaging_service.dart`; `remote_message_protector.dart`; `conversation_screen.dart` | UI -> service -> ciphertext local history + outbox/gateway | `remote_messaging_service_test.dart`; `phase12_remote_messaging_screen_test.dart` | Full DH Double Ratchet and external review remain blocked | Missing recipient devices now fail closed with no send op | Continue crypto hardening under security review gate |
 | P12-006 | Offline receive | **PARTIAL** | `remote_sync_gateway.dart`; `remote_websocket_client.dart`; `sync_engine.dart`; runtime coordinator | REST catch-up + realtime envelope handling are composed | `remote_sync_test.dart`; runtime tests | Real backend/client E2E still release-gated | Duplicate event rejection tested | Add real-device/staging E2E |
-| P12-007 | Persistent conversation list | **PARTIAL** | `conversation_list_screen.dart`; storage DB | UI reads `messagingService.conversationList()` from DB | Remote storage/service tests | No stream-based live list refresh yet | None | Add reactive list refresh |
+| P12-007 | Persistent conversation list | **WIRED** | `conversation_list_screen.dart`; storage DB; sync change stream | UI reads `messagingService.conversationList()` from DB and refreshes from scoped Remote sync notifications | Remote storage/service tests; Phase 09 widget tests | Real backend/client E2E still release-gated | None | Continue integrated journey coverage |
 | P12-008 | Persistent message history | **PARTIAL** | `conversation_screen.dart`; storage DB | UI reads `messageHistory()` and decodes local ciphertext | `phase12_remote_messaging_screen_test.dart`; storage tests | Search still decrypts bounded local page/service result | Ciphertext column is correctly named `ciphertext_blob` | Optimize large local search later |
 | P12-009 | Delivery receipts | **PARTIAL** | `conversation_screen.dart`; `remote_messaging_service.dart` | Visible inbound messages enqueue delivery receipts | `phase12_remote_messaging_screen_test.dart` | Backend/device E2E receipt propagation not covered here | No plaintext in receipt payload | Add E2E receipt scenario |
 | P12-010 | Read receipts with privacy setting | **PARTIAL** | `remote_messaging_service.dart`; `conversation_screen.dart` | UI marks read via service; service respects read-receipt toggle | `remote_messaging_service_test.dart`; `phase12_remote_messaging_screen_test.dart` | Dedicated settings UI for this toggle is not present | Toggle suppresses read operation | Wire setting in privacy UI |
@@ -104,8 +104,8 @@ and real-device/staging E2E need their own closure evidence.
 **Phase 12 Summary:** The Remote direct-message path is now service-backed
 instead of widget-local demo state. Account setup, contact request creation,
 direct conversation creation, local encrypted history, search, paging, receipts,
-typing, edits, reactions, deletes, blocking, sync gateway, and runtime wiring all
-have executable evidence. Production-grade Double Ratchet claims, external push,
+typing, edits, reactions, deletes, blocking, sync gateway, reactive screen
+updates, and runtime wiring all have executable evidence. Production-grade Double Ratchet claims, external push,
 manual safety-number verification, and real-device/staging E2E remain separate
 release/security gates.
 
@@ -128,10 +128,10 @@ release/security gates.
 | P13-011 | Request quotas | **VERIFIED COMPONENT ONLY** | Backend rate limiting on requests | Backend-enforced | Backend tests | Not wired | None | N/A for student scope |
 | P13-012 | Report flow with privacy-minimized evidence | **VERIFIED COMPONENT ONLY** | Backend report creation | Backend route | Backend tests | Not wired to app UI | Privacy-minimized payload enforced | Wire report UI |
 | P13-013 | Safety/admin workflow | **VERIFIED COMPONENT ONLY** | Backend safety actions; admin allow-list | Backend: admin-only safety actions | Backend tests | Not wired | Admin access audited | N/A for student scope |
-| P13-014 | Contact/block sync across devices | **PARTIAL** | Backend emits contact request device events; sync engine processes `contact_updated`, `contact_removed`, `profile_updated`, `privacy_updated`, `presence_updated` events | Contact request events update local contacts/request ledger; contact tab reloads synchronized state | `remote_sync_test.dart`; backend contact tests; widget tests | Live reactive refresh while screen is open remains Phase 09 runtime/UI work | None | Wire automatic runtime screen refresh |
+| P13-014 | Contact/block sync across devices | **PARTIAL** | Backend emits contact request device events; sync engine processes `contact_updated`, `contact_removed`, `profile_updated`, `privacy_updated`, `presence_updated` events | Contact request events update local contacts/request ledger; contact tab refreshes automatically from Remote sync notifications | `remote_sync_test.dart`; backend contact tests; Phase 09 widget tests | Block/unblock UI wiring remains later work | None | Continue integrated journey coverage |
 | P13-015 | Tests for blocked-user delivery and group behavior | **PARTIAL** | Backend tests for blocked-user delivery suppression | Direct blocked-user delivery tested | Backend `contacts_test.dart`; group block not implemented | Group block behavior not tested | None | Add group blocking test |
 
-**Phase 13 Summary:** Contact request send, pending sent/received display, accept, reject, cancel, local request persistence, backend contact events, and accepted-contact conversation gating are wired. Block/unblock, privacy settings, profile editing, reporting, and automatic live screen refresh remain broader later-phase work.
+**Phase 13 Summary:** Contact request send, pending sent/received display, accept, reject, cancel, local request persistence, backend contact events, accepted-contact conversation gating, and automatic live contact refresh are wired. Block/unblock, privacy settings, profile editing, and reporting remain broader later-phase work.
 
 ---
 

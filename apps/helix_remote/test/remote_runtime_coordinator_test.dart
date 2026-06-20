@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/remote_runtime_coordinator.dart';
 import 'package:helix_remote/app/remote_sync_gateway.dart';
+import 'package:helix_remote/screens/conversation_screen.dart';
 
 void main() {
   group('RemoteRuntimeCoordinator', () {
@@ -111,6 +112,49 @@ void main() {
         expect(coordinator.snapshot.nextRetryAt, isNotNull);
       },
     );
+
+    test('P09 runtime banner text covers visible runtime states', () {
+      expect(
+        RemoteRuntimeStateBanner.bannerTextFor(RemoteRuntimeState.offline.name),
+        contains('Offline'),
+      );
+      expect(
+        RemoteRuntimeStateBanner.bannerTextFor(
+          RemoteRuntimeState.connecting.name,
+        ),
+        contains('Connecting'),
+      );
+      expect(
+        RemoteRuntimeStateBanner.bannerTextFor(RemoteRuntimeState.syncing.name),
+        contains('Syncing'),
+      );
+      expect(
+        RemoteRuntimeStateBanner.bannerTextFor(
+          RemoteRuntimeState.authRequired.name,
+        ),
+        contains('Sign in'),
+      );
+      expect(
+        RemoteRuntimeStateBanner.bannerTextFor(
+          RemoteRuntimeState.retryScheduled.name,
+        ),
+        contains('Reconnecting'),
+      );
+      expect(
+        RemoteRuntimeStateBanner.bannerTextFor(
+          RemoteRuntimeState.degraded.name,
+        ),
+        contains('degraded'),
+      );
+      expect(
+        RemoteRuntimeStateBanner.bannerTextFor(RemoteRuntimeState.failed.name),
+        contains('failed'),
+      );
+      expect(
+        RemoteRuntimeStateBanner.bannerTextFor(RemoteRuntimeState.ready.name),
+        isNull,
+      );
+    });
   });
 
   group('RemoteOutboundOperationRegistry', () {

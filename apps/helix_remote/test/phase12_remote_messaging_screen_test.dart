@@ -321,6 +321,43 @@ void main() {
     expect(find.text('plain hello'), findsNothing);
   });
 
+  testWidgets('P09 open conversation reacts to inbound sync messages', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationScreen(
+          conversationId: 'dm_alice_bob',
+          messagingService: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('live arrival'), findsNothing);
+
+    final applied = service.syncEngine.handleIncomingEnvelope(
+      RemoteRealtimeEnvelope(
+        eventId: 'evt_live_message',
+        serverSequence: 1,
+        schemaVersion: 1,
+        timestamp: clock().millisecondsSinceEpoch,
+        type: 'chat_message',
+        payload: {
+          'message_id': 'msg_live',
+          'conversation_id': 'dm_alice_bob',
+          'sender_account_id': 'bob',
+          'sender_device_id': 'bob_device',
+          'ciphertext': await cipher('live arrival'),
+        },
+      ),
+    );
+    expect(applied, isTrue);
+
+    await tester.pumpAndSettle();
+    expect(find.text('live arrival'), findsOneWidget);
+  });
+
   testWidgets('P12 conversation screen sends and mutates through service', (
     tester,
   ) async {
@@ -412,4 +449,55 @@ void main() {
     expect(db.getContact('dan'), isNull);
     expect(db.getContactRequest('cr_dan')!.status, 'Cancelled');
   });
+
+  testWidgets(
+    'P09 contact list reacts to inbound contact changes and disposes',
+    (tester) async {
+      final dir = Directory.systemTemp.createTempSync('p09_widget_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final root = RemoteCompositionRoot.production(
+        databaseDirectory: dir.path,
+        devConfig: _devConfig(dir.path),
+      );
+      addTearDown(root.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ConversationListScreen(messagingService: service, root: root),
+        ),
+      );
+      await tester.pump();
+      expect(service.debugChangeListenerCount, equals(1));
+
+      await tester.tap(find.byIcon(Icons.people));
+      await tester.pump();
+      expect(find.text('Eve'), findsNothing);
+
+      final applied = service.syncEngine.handleIncomingEnvelope(
+        RemoteRealtimeEnvelope(
+          eventId: 'evt_contact_eve',
+          serverSequence: 1,
+          schemaVersion: 1,
+          timestamp: clock().millisecondsSinceEpoch,
+          type: 'contact_updated',
+          payload: {
+            'peer_account_id': 'eve',
+            'nickname': 'Eve',
+            'status': 'PendingReceived',
+            'request_id': 'cr_eve',
+            'direction': 'received',
+          },
+        ),
+      );
+      expect(applied, isTrue);
+
+      await tester.pump();
+      expect(find.text('Eve'), findsOneWidget);
+      expect(find.byTooltip('Accept request'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(service.debugChangeListenerCount, equals(0));
+    },
+  );
 }

@@ -137,7 +137,7 @@ Do not silently expand a phase into unrelated work.
 | 06 | Remote contract, route, fixture, and serialization parity | HXA-009, HXA-021 | 04 | COMPLETE |
 | 07 | Remote contact requests and accepted-contact conversation gating | HXA-007 | 06 | COMPLETE |
 | 08 | Remote first-message device discovery and E2EE session establishment | HXA-008 | 06, 07 | COMPLETE |
-| 09 | Remote realtime runtime, reactive screens, and runtime health UI | HXA-010, HXA-023 | 03, 06, 08 | NOT STARTED |
+| 09 | Remote realtime runtime, reactive screens, and runtime health UI | HXA-010, HXA-023 | 03, 06, 08 | COMPLETE |
 | 10 | Remote outbox truthfulness, retries, and failure recovery | HXA-022 | 06, 09 | NOT STARTED |
 | 11 | Remote attachments end to end | Attachment portion of HXA-011 | 08, 09, 10 | NOT STARTED |
 | 12 | Remote calls, incoming-call UX, and viable ICE/TURN policy | Call portion of HXA-011, HXA-012 | 04, 06, 09 | NOT STARTED |
@@ -1062,7 +1062,7 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 # Phase 09 — Remote realtime runtime, reactive screens, and runtime health UI
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE
 **Audit coverage:** HXA-010, HXA-023  
 **Purpose:** Ensure persisted realtime changes immediately update visible UI and users can see synchronization health.
 
@@ -1118,7 +1118,48 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-21
+- Agent/model identifier: Codex (GPT-5)
+- Starting commit: `999be2d`
+- Ending commit or working-tree state: Phase 09 committed locally after this
+  record; expected working tree clean after commit.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `docs/remediation/pre_manual_remediation_ledger.yaml`
+  - `docs/architecture/PHASE_12_20_CLOSURE.md`
+  - `packages/remote/helix_remote_sync/lib/src/sync_engine.dart`
+  - `packages/remote/helix_remote_sync/test/remote_sync_test.dart`
+  - `apps/helix_remote/lib/main.dart`
+  - `apps/helix_remote/lib/app/composition_root.dart`
+  - `apps/helix_remote/lib/app/remote_messaging_service.dart`
+  - `apps/helix_remote/lib/app/remote_runtime_coordinator.dart`
+  - `apps/helix_remote/lib/app/remote_websocket_client.dart`
+  - `apps/helix_remote/lib/screens/conversation_list_screen.dart`
+  - `apps/helix_remote/lib/screens/conversation_screen.dart`
+  - `apps/helix_remote/test/phase12_remote_messaging_screen_test.dart`
+  - `apps/helix_remote/test/remote_runtime_coordinator_test.dart`
+  - `apps/helix_remote/test/startup_state_widget_test.dart`
+- Tests and commands run with results:
+  - `dart format apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/lib/app/composition_root.dart apps/helix_remote/lib/screens/conversation_list_screen.dart apps/helix_remote/lib/screens/conversation_screen.dart apps/helix_remote/test/phase12_remote_messaging_screen_test.dart apps/helix_remote/test/remote_runtime_coordinator_test.dart packages/remote/helix_remote_sync/lib/src/sync_engine.dart packages/remote/helix_remote_sync/test/remote_sync_test.dart` - PASS.
+  - `dart analyze apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/lib/app/composition_root.dart apps/helix_remote/lib/app/remote_runtime_coordinator.dart apps/helix_remote/lib/app/remote_websocket_client.dart apps/helix_remote/lib/main.dart apps/helix_remote/lib/screens/conversation_list_screen.dart apps/helix_remote/lib/screens/conversation_screen.dart apps/helix_remote/test/phase12_remote_messaging_screen_test.dart apps/helix_remote/test/remote_runtime_coordinator_test.dart apps/helix_remote/test/startup_state_widget_test.dart packages/remote/helix_remote_sync/lib/src/sync_engine.dart packages/remote/helix_remote_sync/test/remote_sync_test.dart` - PASS.
+  - `flutter test test/phase12_remote_messaging_screen_test.dart` from `apps/helix_remote` - PASS, 11/11 tests.
+  - `flutter test test/remote_runtime_coordinator_test.dart` from `apps/helix_remote` - PASS, 6/6 tests.
+  - `flutter test test/startup_state_widget_test.dart --no-pub` from `apps/helix_remote` - PASS, 3/3 tests.
+  - `flutter test --no-pub` from `apps/helix_remote` - PASS, 132/132 tests.
+  - `flutter test test/remote_sync_test.dart` from `packages/remote/helix_remote_sync` - PASS, 15/15 tests.
+  - `.\scripts\verify.ps1` from repo root - PASS. Debug builds were skipped by the script default because `HELIX_VERIFY_BUILD` was not set.
+- Acceptance criteria result:
+  - HXA-010 PASS: the sync engine now emits scoped change events after committed inbound sync and outbox updates, and the messaging service forwards both sync-driven and local state changes without exposing message plaintext or key material.
+  - Open conversation and contact-list screens subscribe on mount, refresh visible state when relevant persisted changes arrive, and cancel subscriptions on dispose.
+  - The conversation screen preserves the currently visible page size when refreshing after inbound message changes.
+  - Runtime coordinator snapshots remain the readiness source; the top-level list screen shows runtime health banners for non-ready states, and banner text covers offline, connecting, syncing, retry scheduled, auth required, degraded, failed, and ready.
+  - App boot now stops before runtime startup when the widget is disposed, WebSocket connection attempts observe the configured request timeout, and runtime startup checks disposal between lifecycle steps to avoid duplicate/stale listeners.
+  - Existing sync tests continue to cover duplicate suppression, sequence gaps, rollback, unknown-event handling, and single-flight outbound drains.
+- Security-sensitive areas touched: Remote sync event dispatch, outbox status notifications, runtime health display, and message/contact screen refresh behavior. No authentication, crypto validation, storage encryption, wipe behavior, or plaintext handling was weakened.
+- Contract or migration changes: None.
+- Remaining manual-only checks: Real backend WebSocket reconnect/catch-up while screens are open, platform lifecycle network toggles, and physical-device visual runtime banners remain in integrated/manual phases.
+- Deviations from this plan and why: Group/device changes are surfaced through the product change stream for consumers, but full group/device UI refresh wiring remains with later group/device phases because those screens are not the Phase 09 user-journey blocker.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1741,7 +1782,7 @@ _Not completed._
 | HXA-007 Contact-request lifecycle unreachable | 07 | Complete |
 | HXA-008 First message lacks recipient devices | 08 | Complete |
 | HXA-009 Visible actions target missing/wrong routes | 06 | Complete |
-| HXA-010 Screens do not react to synchronized changes | 09 | Pending |
+| HXA-010 Screens do not react to synchronized changes | 09 | Complete |
 | HXA-011 Attachments and calls unreachable | 11 | Pending; call-specific work coordinated in Phase 12 |
 | HXA-012 No viable ICE path in relay-only default | 12 | Pending |
 | HXA-013 Group management partially reachable | 13 | Pending |
@@ -1754,7 +1795,7 @@ _Not completed._
 | HXA-020 Local Windows firewall/adapter risk | 16 | Pending; physical matrix coordinated in Phase 18 |
 | HXA-021 Compatibility fixtures disagree with auth contract | 06 | Complete |
 | HXA-022 Failed outbox operations invisible | 10 | Pending |
-| HXA-023 Syncing shown as fully ready | 03 | Complete; runtime-health detail coordinated in Phase 09 |
+| HXA-023 Syncing shown as fully ready | 03 | Complete |
 | HXA-024 Remote setup forms not keyboard/small-screen safe | 16 | Pending |
 | HXA-025 Live backup restore not coordinated with runtime | 15 | Pending |
 

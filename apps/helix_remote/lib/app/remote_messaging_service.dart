@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -107,7 +108,9 @@ class RemoteMessagingService {
     required this.protector,
     required this.restClient,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now {
+    _syncChangeSub = syncEngine.changes.listen(_emitChange);
+  }
 
   final HelixRemoteDatabase db;
   final RemoteSyncEngine syncEngine;
@@ -115,6 +118,14 @@ class RemoteMessagingService {
   final RemoteMessageProtector protector;
   final HelixRemoteRestClient restClient;
   final DateTime Function() _clock;
+  late final StreamSubscription<RemoteSyncChange> _syncChangeSub;
+  late final StreamController<RemoteSyncChange> _changeController =
+      StreamController<RemoteSyncChange>.broadcast(
+        sync: true,
+        onListen: () => _changeListenerCount++,
+        onCancel: () => _changeListenerCount--,
+      );
+  int _changeListenerCount = 0;
 
   String? _accountId;
   String? _deviceId;
@@ -132,6 +143,8 @@ class RemoteMessagingService {
 
   bool get readReceiptsEnabled => _readReceiptsEnabled;
   RemotePrivacySettings get privacySettings => _privacySettings;
+  Stream<RemoteSyncChange> get changes => _changeController.stream;
+  int get debugChangeListenerCount => _changeListenerCount;
 
   Future<void> setupAccount({
     required RemoteAccount account,
@@ -141,6 +154,7 @@ class RemoteMessagingService {
     db.upsertDevice(account.accountId, device);
     _accountId = account.accountId;
     _deviceId = device.deviceId;
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.devices}));
   }
 
   void setCryptoKeys({
@@ -175,6 +189,7 @@ class RemoteMessagingService {
         status: 'Verified',
       ),
     );
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.devices}));
   }
 
   void addContact({required String peerAccountId, required String nickname}) {
@@ -185,6 +200,7 @@ class RemoteMessagingService {
         status: 'Accepted',
       ),
     );
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts}));
   }
 
   void sendContactRequest({
@@ -226,6 +242,11 @@ class RemoteMessagingService {
       idempotencyKey: 'contact_request:$id',
     );
     _contactRequestTimestamps.add(now);
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
+    );
   }
 
   void recordIncomingContactRequest({
@@ -250,6 +271,7 @@ class RemoteMessagingService {
         nickname: nickname,
       ),
     );
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts}));
   }
 
   void acceptContactRequest({
@@ -280,6 +302,11 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'contact_accept:$requestId',
     );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
+    );
   }
 
   void rejectContactRequest({
@@ -302,6 +329,11 @@ class RemoteMessagingService {
         'sender_device_id': _deviceId,
       }),
       idempotencyKey: 'contact_reject:$requestId',
+    );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
     );
   }
 
@@ -326,6 +358,11 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'contact_cancel:$requestId',
     );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
+    );
   }
 
   void removeContact(String peerAccountId) {
@@ -339,6 +376,11 @@ class RemoteMessagingService {
         'sender_device_id': _deviceId,
       }),
       idempotencyKey: 'contact_remove:$peerAccountId',
+    );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
     );
   }
 
@@ -360,6 +402,11 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'contact_block:$peerAccountId',
     );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
+    );
   }
 
   void unblockContact(String peerAccountId) {
@@ -373,6 +420,11 @@ class RemoteMessagingService {
         'sender_device_id': _deviceId,
       }),
       idempotencyKey: 'contact_unblock:$peerAccountId',
+    );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
     );
   }
 
@@ -412,6 +464,11 @@ class RemoteMessagingService {
       jsonEncode(settings.toJson()),
       idempotencyKey: 'privacy:${_requireAccountId()}',
     );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
+    );
   }
 
   RemotePresenceSnapshot updatePresence() {
@@ -432,6 +489,11 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'presence:${snapshot.accountId}',
     );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
+    );
     return snapshot;
   }
 
@@ -441,6 +503,11 @@ class RemoteMessagingService {
       'PROFILE_UPDATE',
       jsonEncode({'display_name': displayName}),
       idempotencyKey: 'profile:${_requireAccountId()}',
+    );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.contacts, RemoteSyncChangeArea.outbox},
+      ),
     );
   }
 
@@ -464,6 +531,7 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'report:$id',
     );
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.outbox}));
   }
 
   String createDirectConversation({
@@ -505,6 +573,16 @@ class RemoteMessagingService {
         'sender_device_id': deviceId,
       }),
       idempotencyKey: 'conversation:$id',
+    );
+
+    _emitChange(
+      RemoteSyncChange(
+        areas: const {
+          RemoteSyncChangeArea.conversations,
+          RemoteSyncChangeArea.outbox,
+        },
+        conversationId: id,
+      ),
     );
 
     return id;
@@ -565,12 +643,31 @@ class RemoteMessagingService {
         }),
         idempotencyKey: 'message:$id',
       );
+      _emitChange(
+        RemoteSyncChange(
+          areas: const {
+            RemoteSyncChangeArea.messages,
+            RemoteSyncChangeArea.conversations,
+            RemoteSyncChangeArea.outbox,
+          },
+          conversationId: conversationId,
+        ),
+      );
     } on SecureSessionUnavailableException {
       db.saveMessage(
         localMessage,
         sequence,
         timestamp,
         'SECURE_SESSION_UNAVAILABLE',
+      );
+      _emitChange(
+        RemoteSyncChange(
+          areas: const {
+            RemoteSyncChangeArea.messages,
+            RemoteSyncChangeArea.conversations,
+          },
+          conversationId: conversationId,
+        ),
       );
     }
 
@@ -884,6 +981,15 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'delivery:$receiptId',
     );
+    _emitChange(
+      RemoteSyncChange(
+        areas: const {
+          RemoteSyncChangeArea.messages,
+          RemoteSyncChangeArea.outbox,
+        },
+        conversationId: conversationId,
+      ),
+    );
     return true;
   }
 
@@ -916,6 +1022,15 @@ class RemoteMessagingService {
         'protocol_version': 1,
       }),
       idempotencyKey: 'read:$receiptId',
+    );
+    _emitChange(
+      RemoteSyncChange(
+        areas: const {
+          RemoteSyncChangeArea.messages,
+          RemoteSyncChangeArea.outbox,
+        },
+        conversationId: conversationId,
+      ),
     );
     return true;
   }
@@ -970,6 +1085,15 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'edit:$revisionId',
     );
+    _emitChange(
+      RemoteSyncChange(
+        areas: const {
+          RemoteSyncChangeArea.messages,
+          RemoteSyncChangeArea.outbox,
+        },
+        conversationId: conversationId,
+      ),
+    );
   }
 
   void addReaction({required String messageId, required String reaction}) {
@@ -993,11 +1117,17 @@ class RemoteMessagingService {
       }),
       idempotencyKey: 'reaction:$revisionId',
     );
+    _emitChange(
+      const RemoteSyncChange(
+        areas: {RemoteSyncChangeArea.messages, RemoteSyncChangeArea.outbox},
+      ),
+    );
   }
 
   void deleteForSelf(String messageId) {
     db.saveTombstone(messageId, 'MESSAGE');
     db.deleteMessage(messageId);
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.messages}));
   }
 
   void deleteForEveryone({
@@ -1023,6 +1153,15 @@ class RemoteMessagingService {
         'sender_device_id': _requireDeviceId(),
       }),
       idempotencyKey: 'delete:$messageId',
+    );
+    _emitChange(
+      RemoteSyncChange(
+        areas: const {
+          RemoteSyncChangeArea.messages,
+          RemoteSyncChangeArea.outbox,
+        },
+        conversationId: conversationId,
+      ),
     );
   }
 
@@ -1085,6 +1224,17 @@ class RemoteMessagingService {
       );
     }
     return decoded;
+  }
+
+  void _emitChange(RemoteSyncChange change) {
+    if (!_changeController.isClosed) {
+      _changeController.add(change);
+    }
+  }
+
+  Future<void> dispose() async {
+    await _syncChangeSub.cancel();
+    await _changeController.close();
   }
 
   int _nextLocalSequence(String conversationId) {
