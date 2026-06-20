@@ -3,8 +3,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
 import 'package:helix/providers/app_providers.dart';
@@ -323,6 +323,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ],
     );
 
+    final screen = _buildShell(context, isWide, destinations, body, unread, incomingCount);
+
+    if (!isDesktop) return screen;
+
+    // Ctrl+1–4 keyboard shortcuts for desktop tab navigation (P9-03).
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.digit1, control: true): () =>
+            setState(() => _selectedIndex = 0),
+        const SingleActivator(LogicalKeyboardKey.digit2, control: true): () =>
+            setState(() => _selectedIndex = 1),
+        const SingleActivator(LogicalKeyboardKey.digit3, control: true): () =>
+            setState(() => _selectedIndex = 2),
+        const SingleActivator(LogicalKeyboardKey.digit4, control: true): () =>
+            setState(() => _selectedIndex = 3),
+      },
+      child: Focus(autofocus: true, child: screen),
+    );
+  }
+
+  Widget _buildShell(
+    BuildContext context,
+    bool isWide,
+    List<NavigationDestination> destinations,
+    Widget body,
+    int unread,
+    int incomingCount,
+  ) {
     if (isWide) {
       return Scaffold(
         body: Row(

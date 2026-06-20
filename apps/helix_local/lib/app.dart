@@ -4,11 +4,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:helix_local_domain/core/constants.dart';
 import 'package:helix_local_domain/domain/models.dart';
+import 'package:helix/l10n/helix_l10n.dart';
 import 'package:helix/main.dart' show HelixWindowListener;
 import 'package:helix_local_platform/platform/windows_tray.dart';
 import 'package:helix/providers/app_providers.dart';
@@ -227,6 +229,13 @@ class _HelixAppState extends ConsumerState<HelixApp>
     return MaterialApp(
       title: 'Helix',
       navigatorKey: AppRouter.navigatorKey,
+      localizationsDelegates: const [
+        HelixLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: HelixLocalizations.supportedLocales,
       theme: HelixTheme.light(accentColor: profile?.accentColor ?? 'teal'),
       darkTheme: HelixTheme.dark(
         accentColor: profile?.accentColor ?? 'teal',

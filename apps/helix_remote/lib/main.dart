@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/screens/conversation_list_screen.dart';
@@ -89,6 +90,12 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: widget.root.config.displayName,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('en')],
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -96,6 +103,30 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
           brightness: Brightness.light,
         ),
       ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF166A64),
+          brightness: Brightness.dark,
+        ),
+      ),
+      highContrastTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF166A64),
+          brightness: Brightness.light,
+          contrastLevel: 1.0,
+        ),
+      ),
+      highContrastDarkTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF166A64),
+          brightness: Brightness.dark,
+          contrastLevel: 1.0,
+        ),
+      ),
+      themeMode: ThemeMode.system,
       home: _buildScreen(),
     );
   }
@@ -227,25 +258,16 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
                 TextField(
                   controller: _usernameController,
                   enabled: !_registering,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Username',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                     helperText: 'Letters, numbers, and underscores only.',
+                    errorText: _registrationError,
                   ),
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _register(),
                 ),
                 const SizedBox(height: 16),
-                if (_registrationError != null) ...[
-                  Text(
-                    _registrationError!,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
@@ -306,24 +328,15 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
                 TextField(
                   controller: _restoreCodeController,
                   enabled: !_registering,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Restore code',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: _registrationError,
                   ),
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _restore(),
                 ),
                 const SizedBox(height: 16),
-                if (_registrationError != null) ...[
-                  Text(
-                    _registrationError!,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
