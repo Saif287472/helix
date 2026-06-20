@@ -153,11 +153,13 @@ findings:
     current_evidence:
       - contracts/remote-rest-openapi/openapi.yaml
       - apps/helix_remote/lib/app/remote_endpoints.dart
-      - apps/helix_remote/test/remote_contract_test.dart
-    status: pending
+      - apps/helix_remote/lib/app/remote_sync_gateway.dart
+      - apps/helix_remote/test/remote_contract_parity_test.dart
+      - services/helix_remote_backend/test/contract_route_parity_test.dart
+    status: complete
     tests_required:
       - Route parity and serialization fixture tests.
-    final_disposition: Pending Phase 06.
+    final_disposition: Completed in Phase 06 with OpenAPI/client/backend route parity tests and missing message/profile routes implemented.
   - id: HXA-010
     title: Screens do not react to synchronized changes
     primary_phase: 09
@@ -330,10 +332,10 @@ findings:
       - contracts/compatibility/fixtures
       - contracts/remote-rest-openapi/openapi.yaml
       - packages/remote/helix_remote_api/test/serialization_test.dart
-    status: pending
+    status: complete
     tests_required:
       - Contract, route, fixture, and serialization parity tests.
-    final_disposition: Pending Phase 06.
+    final_disposition: Completed in Phase 06 by updating auth/prekey fixtures to executable response shapes and adding schema-shape assertions.
   - id: HXA-022
     title: Failed outbox operations invisible
     primary_phase: 10

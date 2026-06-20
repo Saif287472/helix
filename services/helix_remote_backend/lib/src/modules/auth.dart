@@ -39,6 +39,7 @@ class AuthModule {
     router.post('/devices/revoke', _revokeDeviceHandler);
     router.post('/devices/lost-device', _lostDeviceHandler);
     router.post('/username', _changeUsernameHandler);
+    router.post('/profile', _updateProfileHandler);
 
     return router;
   }
@@ -326,6 +327,57 @@ class AuthModule {
     final devices = db.getDevices(accountId);
 
     return Response.ok(jsonEncode({'devices': devices}));
+  }
+
+  Future<Response> _updateProfileHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final displayName = (body['display_name'] as String?)?.trim();
+      if (displayName == null ||
+          displayName.isEmpty ||
+          displayName.length > 80) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Invalid display_name'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final profile = db.upsertAccountProfile(
+        accountId: accountId,
+        displayName: displayName,
+      );
+      db.logAudit(
+        accountId,
+        auth['device_id'] as String?,
+        'PROFILE_UPDATED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      _notifySiblingDevices(
+        accountId,
+        exceptDeviceId: auth['device_id'] as String,
+        payload: {
+          'type': 'profile_updated',
+          'account_id': accountId,
+          'display_name': displayName,
+          'profile_version': profile['profile_version'],
+          'updated_at': profile['updated_at'],
+        },
+      );
+
+      return Response.ok(jsonEncode({'profile': profile}));
+    } catch (_) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
   }
 
   Future<Response> _renameDeviceHandler(Request request) async {

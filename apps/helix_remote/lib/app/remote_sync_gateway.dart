@@ -109,7 +109,7 @@ class RemoteSyncGatewayImpl implements SyncGateway {
       req.headers.set('Authorization', auth);
     }
 
-    final body = _buildBody(type, payload);
+    final body = buildRemoteOutboundBody(type, payload);
     req.add(utf8.encode(jsonEncode(body)));
 
     final resp = await req.close();
@@ -133,19 +133,26 @@ class RemoteSyncGatewayImpl implements SyncGateway {
     }
   }
 
-  Map<String, dynamic> _buildBody(String type, Map<String, dynamic> payload) {
-    switch (type) {
-      case 'SEND_MESSAGE':
-        return payload;
-      default:
-        return payload;
-    }
-  }
-
   bool _isAuthFailure(int statusCode) => statusCode == 401 || statusCode == 403;
 
   Future<bool> _refreshAuthOnce() =>
       _refreshAuth?.call() ?? Future.value(false);
+}
+
+Map<String, dynamic> buildRemoteOutboundBody(
+  String type,
+  Map<String, dynamic> payload,
+) {
+  switch (type) {
+    case 'SEND_MESSAGE':
+      return payload;
+    case 'DELIVERY_RECEIPT':
+      return {...payload, 'receipt_type': 'DELIVERY'};
+    case 'READ_RECEIPT':
+      return {...payload, 'receipt_type': 'READ'};
+    default:
+      return payload;
+  }
 }
 
 class RemoteOutboundOperationRegistry {
@@ -250,7 +257,7 @@ class RemoteOutboundOperation {
     RemoteOutboundOperation._(
       type: 'USERNAME_CHANGE',
       method: 'POST',
-      path: 'profile/username',
+      path: 'accounts/username',
     ),
     RemoteOutboundOperation._(
       type: 'PRIVACY_UPDATE',
@@ -265,12 +272,12 @@ class RemoteOutboundOperation {
     RemoteOutboundOperation._(
       type: 'PROFILE_UPDATE',
       method: 'POST',
-      path: 'profile',
+      path: 'accounts/profile',
     ),
     RemoteOutboundOperation._(
       type: 'SAFETY_REPORT',
       method: 'POST',
-      path: 'accounts/report',
+      path: 'contacts/report',
     ),
     RemoteOutboundOperation._(
       type: 'group_create',

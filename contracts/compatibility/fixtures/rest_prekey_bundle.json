@@ -1,8 +1,19 @@
 {
   "account_id": "acc_01h9w2m8g8qpr88v75v1w7jx8q",
-  "device_id": "device1",
-  "identity_key": "3053020101300506032b657004220420d41d8cd98f00b204e9800998ecf8427e",
-  "signed_prekey": "3053020101300506032b65700422042078652d80d22d1df7b788a1e2d7870422",
-  "signed_prekey_signature": "64bytesofsignaturebytesherehexencodedsoitlookslikeavalidsignature",
-  "one_time_prekey": "3053020101300506032b657004220420e10a2cf8d80f8f8303f2df78923a1058"
+  "devices": [
+    {
+      "device_id": "device1",
+      "device_key": "fixture_device_agreement_key",
+      "identity_key": "fixture_device_signing_key",
+      "signed_prekey": {
+        "key_id": 7,
+        "public_key": "fixture_signed_prekey",
+        "signature": "fixture_signed_prekey_signature"
+      },
+      "one_time_prekey": {
+        "key_id": 101,
+        "public_key": "fixture_one_time_prekey"
+      }
+    }
+  ]
 }

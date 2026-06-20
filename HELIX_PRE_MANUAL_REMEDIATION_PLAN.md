@@ -134,7 +134,7 @@ Do not silently expand a phase into unrelated work.
 | 03 | Remote application lifecycle and observable top-level state | HXA-003, HXA-006, HXA-015, HXA-023 | 01 | COMPLETE |
 | 04 | Remote authentication, token refresh, logout, and revocation | HXA-004, part of HXA-014 | 03 | COMPLETE |
 | 05 | Remote recovery strategy and fresh-device account restore | HXA-005 | 04 | COMPLETE |
-| 06 | Remote contract, route, fixture, and serialization parity | HXA-009, HXA-021 | 04 | NOT STARTED |
+| 06 | Remote contract, route, fixture, and serialization parity | HXA-009, HXA-021 | 04 | COMPLETE |
 | 07 | Remote contact requests and accepted-contact conversation gating | HXA-007 | 06 | NOT STARTED |
 | 08 | Remote first-message device discovery and E2EE session establishment | HXA-008 | 06, 07 | NOT STARTED |
 | 09 | Remote realtime runtime, reactive screens, and runtime health UI | HXA-010, HXA-023 | 03, 06, 08 | NOT STARTED |
@@ -305,7 +305,7 @@ Record exact commands and exit results. “Tests passed” without commands is i
 
 # Phase 01 — Remote runtime configuration and backend bootstrap
 
-**Status:** COMPLETE  
+**Status:** COMPLETE
 **Audit coverage:** HXA-001, HXA-002  
 **Purpose:** Make Remote registration reachable through one explicit, safe, reproducible development/manual-test configuration on Windows and Android.
 
@@ -786,7 +786,7 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 # Phase 06 — Remote contract, route, fixture, and serialization parity
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE
 **Audit coverage:** HXA-009, HXA-021  
 **Purpose:** Make OpenAPI/realtime contracts, client paths, backend routes, fixtures, and tests agree exactly.
 
@@ -850,7 +850,44 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-21
+- Agent/model identifier: Codex (GPT-5)
+- Starting commit: `94e243e`
+- Ending commit or working-tree state: Phase 06 committed locally after this
+  record; expected working tree clean after commit.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `docs/remediation/pre_manual_remediation_ledger.yaml`
+  - `apps/helix_remote/lib/app/remote_sync_gateway.dart`
+  - `apps/helix_remote/test/remote_contract_parity_test.dart`
+  - `contracts/remote-rest-openapi/openapi.yaml`
+  - `contracts/compatibility/fixtures/rest_register_response.json`
+  - `contracts/compatibility/fixtures/rest_login_response.json`
+  - `contracts/compatibility/fixtures/rest_prekey_bundle.json`
+  - `packages/remote/helix_remote_api/test/serialization_test.dart`
+  - `services/helix_remote_backend/lib/src/database.dart`
+  - `services/helix_remote_backend/lib/src/modules/auth.dart`
+  - `services/helix_remote_backend/lib/src/modules/messaging.dart`
+  - `services/helix_remote_backend/test/contract_route_parity_test.dart`
+  - `services/helix_remote_backend/test/phase4_e2e_harness_test.dart`
+- Tests and commands run with results:
+  - `dart analyze apps/helix_remote/lib/app/remote_sync_gateway.dart apps/helix_remote/test/remote_contract_parity_test.dart` - PASS.
+  - `dart analyze lib/src/database.dart lib/src/modules/auth.dart lib/src/modules/messaging.dart test/contract_route_parity_test.dart` from `services/helix_remote_backend` - PASS.
+  - `dart analyze test/serialization_test.dart` from `packages/remote/helix_remote_api` - PASS.
+  - `flutter test test/remote_contract_parity_test.dart` from `apps/helix_remote` - PASS, 3/3 tests.
+  - `dart test test/serialization_test.dart` from `packages/remote/helix_remote_api` - PASS, 17/17 tests.
+  - `dart test test/contract_route_parity_test.dart` from `services/helix_remote_backend` - PASS, 1/1 tests.
+  - `dart test test/phase4_e2e_harness_test.dart` from `services/helix_remote_backend` - PASS, 12/12 scenarios.
+  - `.\scripts\verify.ps1` from repo root - PASS. Debug builds were skipped by the script default because `HELIX_VERIFY_BUILD` was not set.
+- Acceptance criteria result:
+  - HXA-009 PASS: `RemoteOutboundOperation` paths now match OpenAPI for username, profile, safety report, edit, reactions, receipts, and typing. Backend routes are mounted for all production outbound operations, and `contract_route_parity_test.dart` fails on 404/405 route drift.
+  - HXA-021 PASS: compatibility fixtures now match executable register/login/prekey bundle response shapes; serialization tests reject the old `access_token` fixture shape and validate realtime envelope required fields while preserving unknown-event quarantine behavior.
+  - Required 404 allowance removed: `phase4_e2e_harness_test.dart` now requires `/api/v1/messages/edit` to return 200 in the edit/delete scenario.
+- Security-sensitive areas touched: Remote backend auth/account profile, message metadata fan-out routes, OpenAPI contract, API fixtures, and client outbound operation serialization. Message content remains ciphertext-only; safety report handling still rejects plaintext fields.
+- Contract or migration changes: Added OpenAPI entries for `/accounts/profile`, `/messages/edit`, `/messages/reactions`, `/messages/receipts`, and `/messages/typing`; added backend schema version 15 with `account_profiles`.
+- Remaining manual-only checks: Real UI/manual verification that profile, reactions, receipts, and typing produce the expected visible outcomes remains in later journey/manual phases. Attachment direct-operation 401 retry remains deferred to Phase 09 runtime health if manual testing shows expiring attachment URLs can outlive access tokens.
+- Deviations from this plan and why: The route parity probe uses malformed JSON to measure mounted route presence without conflating domain-level 404 responses such as "peer not found" with missing handlers.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1639,7 +1676,7 @@ _Not completed._
 | HXA-006 Reset Required has no action | 03 | Complete |
 | HXA-007 Contact-request lifecycle unreachable | 07 | Pending |
 | HXA-008 First message lacks recipient devices | 08 | Pending |
-| HXA-009 Visible actions target missing/wrong routes | 06 | Pending |
+| HXA-009 Visible actions target missing/wrong routes | 06 | Complete |
 | HXA-010 Screens do not react to synchronized changes | 09 | Pending |
 | HXA-011 Attachments and calls unreachable | 11 | Pending; call-specific work coordinated in Phase 12 |
 | HXA-012 No viable ICE path in relay-only default | 12 | Pending |
@@ -1651,7 +1688,7 @@ _Not completed._
 | HXA-018 Local public-lobby failure invisible | 02 | Complete |
 | HXA-019 Local Android permission denial incomplete | 16 | Pending |
 | HXA-020 Local Windows firewall/adapter risk | 16 | Pending; physical matrix coordinated in Phase 18 |
-| HXA-021 Compatibility fixtures disagree with auth contract | 06 | Pending |
+| HXA-021 Compatibility fixtures disagree with auth contract | 06 | Complete |
 | HXA-022 Failed outbox operations invisible | 10 | Pending |
 | HXA-023 Syncing shown as fully ready | 03 | Complete; runtime-health detail coordinated in Phase 09 |
 | HXA-024 Remote setup forms not keyboard/small-screen safe | 16 | Pending |

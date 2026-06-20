@@ -511,6 +511,19 @@ class BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 14;');
     }
+
+    if (version < 15) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS account_profiles (
+          account_id TEXT PRIMARY KEY,
+          display_name TEXT NOT NULL,
+          updated_at INTEGER NOT NULL,
+          profile_version INTEGER NOT NULL DEFAULT 1,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 15;');
+    }
   }
 
   T runInTransaction<T>(T Function() operation) {
@@ -834,6 +847,48 @@ class BackendDatabase {
       'identity_public_key': row['identity_public_key'],
       'created_at': row['created_at'],
       'status': row['status'],
+    };
+  }
+
+  Map<String, dynamic> upsertAccountProfile({
+    required String accountId,
+    required String displayName,
+  }) {
+    final current = getAccountProfile(accountId);
+    final nextVersion = ((current?['profile_version'] as int?) ?? 0) + 1;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO account_profiles (
+        account_id,
+        display_name,
+        updated_at,
+        profile_version
+      )
+      VALUES (?, ?, ?, ?);
+    ''');
+    stmt.execute([accountId, displayName, now, nextVersion]);
+    stmt.close();
+    return {
+      'account_id': accountId,
+      'display_name': displayName,
+      'updated_at': now,
+      'profile_version': nextVersion,
+    };
+  }
+
+  Map<String, dynamic>? getAccountProfile(String accountId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM account_profiles WHERE account_id = ?;',
+    );
+    final res = stmt.select([accountId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'account_id': row['account_id'],
+      'display_name': row['display_name'],
+      'updated_at': row['updated_at'],
+      'profile_version': row['profile_version'],
     };
   }
 

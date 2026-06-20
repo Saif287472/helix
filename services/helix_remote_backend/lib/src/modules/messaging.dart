@@ -21,6 +21,10 @@ class MessagingModule {
     router.get('/sync', _syncMessagesHandler);
     router.post('/cursor', _updateCursorHandler);
     router.post('/delete', _deleteMessageHandler);
+    router.post('/edit', _editMessageHandler);
+    router.post('/reactions', _reactionHandler);
+    router.post('/receipts', _receiptHandler);
+    router.post('/typing', _typingHandler);
     router.get('/device-events', _deviceEventsHandler);
     return router;
   }
@@ -445,6 +449,291 @@ class MessagingModule {
       return Response.internalServerError(
         body: jsonEncode({'error': 'Internal server error'}),
       );
+    }
+  }
+
+  Future<Response> _editMessageHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final messageId = body['message_id'] as String?;
+      final conversationId = body['conversation_id'] as String?;
+      final ciphertext = body['ciphertext'] as String?;
+      final revisionId =
+          body['revision_id'] as String? ??
+          'edit_${messageId}_${DateTime.now().microsecondsSinceEpoch}';
+
+      if (messageId == null ||
+          conversationId == null ||
+          ciphertext == null ||
+          ciphertext.isEmpty) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing edit fields'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final deviceId = auth['device_id'] as String;
+      final msg = db.getMessage(messageId);
+      if (msg == null || msg['conversation_id'] != conversationId) {
+        return Response.notFound(jsonEncode({'error': 'Message not found'}));
+      }
+      if (msg['sender_account_id'] != accountId) {
+        return Response.forbidden(
+          jsonEncode({'error': 'You can only edit your own messages'}),
+        );
+      }
+      if (!db.isConversationMember(conversationId, accountId)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'You are not a member of this conversation'}),
+        );
+      }
+
+      final payload = {
+        'message_id': messageId,
+        'conversation_id': conversationId,
+        'revision_id': revisionId,
+        'sender_account_id': accountId,
+        'sender_device_id': deviceId,
+        'ciphertext': ciphertext,
+      };
+      _fanOutConversationEvent(
+        conversationId: conversationId,
+        senderDeviceId: deviceId,
+        eventType: 'message_edited',
+        eventKey: revisionId,
+        payload: payload,
+      );
+      db.logAudit(
+        accountId,
+        deviceId,
+        'MESSAGE_EDITED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      return Response.ok(
+        jsonEncode({
+          'message': 'Message edit accepted',
+          'message_id': messageId,
+          'revision_id': revisionId,
+        }),
+      );
+    } catch (_) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+
+  Future<Response> _reactionHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final messageId = body['message_id'] as String?;
+      final reaction = body['reaction'] as String?;
+      final revisionId =
+          body['revision_id'] as String? ??
+          'reaction_${messageId}_${DateTime.now().microsecondsSinceEpoch}';
+      if (messageId == null || reaction == null || reaction.isEmpty) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing reaction fields'}),
+        );
+      }
+
+      final msg = db.getMessage(messageId);
+      if (msg == null) {
+        return Response.notFound(jsonEncode({'error': 'Message not found'}));
+      }
+      final conversationId = msg['conversation_id'] as String;
+      final accountId = auth['account_id'] as String;
+      final deviceId = auth['device_id'] as String;
+      if (!db.isConversationMember(conversationId, accountId)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'You are not a member of this conversation'}),
+        );
+      }
+
+      final payload = {
+        'message_id': messageId,
+        'conversation_id': conversationId,
+        'revision_id': revisionId,
+        'account_id': accountId,
+        'device_id': deviceId,
+        'reaction': reaction,
+      };
+      _fanOutConversationEvent(
+        conversationId: conversationId,
+        senderDeviceId: deviceId,
+        eventType: 'reaction_added',
+        eventKey: revisionId,
+        payload: payload,
+      );
+
+      return Response.ok(
+        jsonEncode({'message': 'Reaction accepted', 'revision_id': revisionId}),
+      );
+    } catch (_) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+
+  Future<Response> _receiptHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final messageId = body['message_id'] as String?;
+      final conversationId = body['conversation_id'] as String?;
+      final receiptType = body['receipt_type'] as String?;
+      if (messageId == null ||
+          conversationId == null ||
+          (receiptType != 'DELIVERY' && receiptType != 'READ')) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing receipt fields'}),
+        );
+      }
+      final acceptedReceiptType = receiptType!;
+
+      final accountId = auth['account_id'] as String;
+      final deviceId = auth['device_id'] as String;
+      if (!db.isConversationMember(conversationId, accountId)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'You are not a member of this conversation'}),
+        );
+      }
+
+      final receiptId =
+          '${acceptedReceiptType.toLowerCase()}_${messageId}_${DateTime.now().microsecondsSinceEpoch}';
+      final payload = {
+        'message_id': messageId,
+        'conversation_id': conversationId,
+        'receipt_id': receiptId,
+        'account_id': accountId,
+        'device_id': deviceId,
+        'receipt_type': acceptedReceiptType,
+      };
+      _fanOutConversationEvent(
+        conversationId: conversationId,
+        senderDeviceId: deviceId,
+        eventType: acceptedReceiptType == 'READ'
+            ? 'read_receipt'
+            : 'delivery_receipt',
+        eventKey: receiptId,
+        payload: payload,
+      );
+
+      return Response.ok(
+        jsonEncode({'message': 'Receipt accepted', 'receipt_id': receiptId}),
+      );
+    } catch (_) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+
+  Future<Response> _typingHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final conversationId = body['conversation_id'] as String?;
+      final isTyping = body['is_typing'] as bool?;
+      if (conversationId == null || isTyping == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing typing fields'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final deviceId = auth['device_id'] as String;
+      if (!db.isConversationMember(conversationId, accountId)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'You are not a member of this conversation'}),
+        );
+      }
+
+      final payload = {
+        'conversation_id': conversationId,
+        'account_id': accountId,
+        'device_id': deviceId,
+        'is_typing': isTyping,
+      };
+      _fanOutConversationEvent(
+        conversationId: conversationId,
+        senderDeviceId: deviceId,
+        eventType: 'typing',
+        eventKey:
+            'typing_${accountId}_${DateTime.now().microsecondsSinceEpoch}',
+        payload: payload,
+        persist: false,
+      );
+
+      return Response.ok(jsonEncode({'message': 'Typing state accepted'}));
+    } catch (_) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+
+  void _fanOutConversationEvent({
+    required String conversationId,
+    required String senderDeviceId,
+    required String eventType,
+    required String eventKey,
+    required Map<String, dynamic> payload,
+    bool persist = true,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final memberId in db.getConversationMembers(conversationId)) {
+      for (final dev in db.getDevices(memberId)) {
+        final targetDeviceId = dev['device_id'] as String;
+        if (targetDeviceId == senderDeviceId) {
+          continue;
+        }
+        int? deviceSeq;
+        final eventId = 'evt_${eventType}_${eventKey}_$targetDeviceId';
+        if (persist) {
+          deviceSeq = db.writeDeviceEvent(
+            eventId: eventId,
+            recipientDeviceId: targetDeviceId,
+            eventType: eventType,
+            payload: jsonEncode(payload),
+          );
+        }
+        relay.sendToDevice(
+          targetDeviceId,
+          BackendDatabase.buildEnvelope(
+            eventId: eventId,
+            type: eventType,
+            payload: payload,
+            timestamp: now,
+            serverSequence: deviceSeq,
+          ),
+        );
+      }
     }
   }
 

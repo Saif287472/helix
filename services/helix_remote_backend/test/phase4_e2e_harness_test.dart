@@ -1509,8 +1509,7 @@ void main() {
         'conversation_id': 'conv_s11',
         'ciphertext': 'edited_ciphertext_blob',
       }, token: alice.token);
-      // Edit endpoint may not be fully wired in backend — accept 200 or 404
-      expect(editResp.status, anyOf(200, 404));
+      expect(editResp.status, 200);
       server.rateLimiter.reset('127.0.0.1');
 
       // Delete the message (tombstone)

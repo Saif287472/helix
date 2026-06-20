@@ -1,5 +1,5 @@
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhY2NfMDEiLCJleHAiOjE3MTg3Nzc2MDB9.sig",
-  "refresh_token": "ref_982h3b19283hg1h23g7dgas",
-  "device_id": "device1"
+  "token": "fixture_access_token_contract_value",
+  "refresh_token": "fixture_refresh_token_contract_value",
+  "message": "Login successful"
 }

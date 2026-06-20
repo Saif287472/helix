@@ -194,16 +194,19 @@ void main() {
       final data = RemoteCompatibilityFixtures.loadFixture(
         'rest_register_response.json',
       );
+      expect(data['message'], 'Registration successful');
       expect(data['account_id'], 'acc_01h9w2m8g8qpr88v75v1w7jx8q');
-      expect(data['created_at'], '2026-06-19T06:00:00Z');
+      expect(data['device_id'], 'device1');
     });
 
     test('loads and decodes rest_login_response.json', () {
       final data = RemoteCompatibilityFixtures.loadFixture(
         'rest_login_response.json',
       );
-      expect(data['device_id'], 'device1');
-      expect(data['access_token'], isNotEmpty);
+      expect(data['message'], 'Login successful');
+      expect(data['token'], isNotEmpty);
+      expect(data['refresh_token'], isNotEmpty);
+      expect(data.containsKey('access_token'), isFalse);
     });
 
     test('loads and decodes rest_prekey_bundle.json', () {
@@ -211,15 +214,20 @@ void main() {
         'rest_prekey_bundle.json',
       );
       expect(data['account_id'], 'acc_01h9w2m8g8qpr88v75v1w7jx8q');
-      expect(data['device_id'], 'device1');
-      expect(data['identity_key'], isNotEmpty);
-      expect(data['signed_prekey'], isNotEmpty);
+      final devices = data['devices'] as List<dynamic>;
+      final device = devices.single as Map<String, dynamic>;
+      expect(device['device_id'], 'device1');
+      expect(device['identity_key'], isNotEmpty);
+      expect(device['device_key'], isNotEmpty);
+      expect(device['signed_prekey'], isA<Map<String, dynamic>>());
+      expect(device['one_time_prekey'], isA<Map<String, dynamic>>());
     });
 
     test('loads and decodes realtime_chat_message.json', () {
       final data = RemoteCompatibilityFixtures.loadFixture(
         'realtime_chat_message.json',
       );
+      _expectRealtimeEnvelopeShape(data);
       final envelope = RemoteRealtimeEnvelope.fromJson(data);
       expect(envelope.eventId, '469018e6-e910-4100-84cf-d84bf27ad9a6');
       expect(envelope.type, 'chat_message');
@@ -236,6 +244,7 @@ void main() {
         final data = RemoteCompatibilityFixtures.loadFixture(
           'realtime_unknown_event.json',
         );
+        _expectRealtimeEnvelopeShape(data);
         final envelope = RemoteRealtimeEnvelope.fromJson(data);
         expect(envelope.eventId, 'a90f1111-e910-4100-84cf-d84bf27ad9a6');
         expect(envelope.type, 'new_unrecognized_type');
@@ -243,4 +252,12 @@ void main() {
       },
     );
   });
+}
+
+void _expectRealtimeEnvelopeShape(Map<String, dynamic> data) {
+  expect(data['event_id'], isA<String>());
+  expect(data['schema_version'], isA<int>());
+  expect(data['timestamp'], isA<int>());
+  expect(data['type'], isA<String>());
+  expect(data['payload'], isA<Map<String, dynamic>>());
 }
