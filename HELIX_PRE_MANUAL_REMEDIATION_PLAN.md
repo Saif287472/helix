@@ -133,7 +133,7 @@ Do not silently expand a phase into unrelated work.
 | 02 | Local startup, session recovery, and group-init visibility | HXA-016, HXA-017, HXA-018 | 00 | COMPLETE |
 | 03 | Remote application lifecycle and observable top-level state | HXA-003, HXA-006, HXA-015, HXA-023 | 01 | COMPLETE |
 | 04 | Remote authentication, token refresh, logout, and revocation | HXA-004, part of HXA-014 | 03 | COMPLETE |
-| 05 | Remote recovery strategy and fresh-device account restore | HXA-005 | 04 | NOT STARTED |
+| 05 | Remote recovery strategy and fresh-device account restore | HXA-005 | 04 | COMPLETE |
 | 06 | Remote contract, route, fixture, and serialization parity | HXA-009, HXA-021 | 04 | NOT STARTED |
 | 07 | Remote contact requests and accepted-contact conversation gating | HXA-007 | 06 | NOT STARTED |
 | 08 | Remote first-message device discovery and E2EE session establishment | HXA-008 | 06, 07 | NOT STARTED |
@@ -706,7 +706,7 @@ At minimum, the app must distinguish:
 
 # Phase 05 — Remote recovery strategy and fresh-device account restore
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE
 **Audit coverage:** HXA-005  
 **Purpose:** Eliminate the fake restore path and establish an honest, secure recovery workflow.
 
@@ -755,7 +755,32 @@ Outcome B is acceptable only when architecture/product documents explicitly mark
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-21
+- Agent/model identifier: Codex (GPT-5)
+- Starting commit: `aab07c3`
+- Ending commit or working-tree state: Phase 05 committed locally after this record; working tree clean.
+- Decision gate result: Outcome B — fresh-device account recovery is not ready for this milestone. The Remote setup UI now clearly disables recovery instead of accepting a restore code. Full device-link and backup-restore work remains assigned to later backup/recovery phases where component-level backend/crypto/storage evidence already exists.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `apps/helix_remote/lib/main.dart`
+  - `apps/helix_remote/test/startup_state_widget_test.dart`
+  - `docs/product/remote/BACKUP_RECOVERY.md`
+  - `docs/release/REMOTE_RELEASE_CHECKLIST.md`
+  - `docs/ux_inventory.md`
+- Tests and commands run with results:
+  - `dart analyze apps/helix_remote/lib/main.dart apps/helix_remote/test/startup_state_widget_test.dart` — PASS, no issues found.
+  - `flutter test test/startup_state_widget_test.dart test/widget_test.dart` from `apps/helix_remote` — PASS, 9/9 tests.
+  - `.\scripts\verify.ps1` from repository root — PASS.
+- Acceptance criteria result:
+  - HXA-005 PASS: setup no longer accepts or ignores user-entered recovery material. The "Restore existing account" path is replaced with a disabled "Restore existing account unavailable" setup option, and the restore-code screen/callback/controller were removed.
+  - Outcome B documentation PASS: `docs/product/remote/BACKUP_RECOVERY.md` now states that fresh-device restore is unavailable in the current build and must not accept recovery phrases, restore codes, passkeys, or backup secrets until end-to-end app evidence exists.
+  - Manual-test scope PASS: `docs/release/REMOTE_RELEASE_CHECKLIST.md` now blocks fresh-device restore claims unless a later phase provides app-level evidence for device linking, backup decryption, snapshot restore, prekey publication, and runtime startup. `docs/ux_inventory.md` now describes setup as account registration with recovery visibly unavailable.
+  - Existing-session restore separation PASS: app restart still uses `tryRestoreSession()` for locally stored credentials, while user-entered fresh-device recovery material is not accepted anywhere in setup.
+- Security-sensitive areas touched: Remote setup/auth UX and backup/recovery documentation. No recovery secret, restore code, passkey, backup key, private key, or token is collected, stored, logged, or sent.
+- Contract or migration changes: Product availability documentation changed to make fresh-device setup recovery unavailable in the current build. No API, storage schema, or migration changes.
+- Remaining manual-only checks: Physical-device check that the unauthenticated Remote setup screen shows the disabled recovery option without overflow and offers no restore-code input; later phases must implement real fresh-device recovery before any restore claim is released.
+- Deviations from this plan and why: Chose Outcome B rather than Outcome A because current executable evidence is component/backend-level only; the app does not yet have an end-to-end device-link plus encrypted-backup restore workflow. This avoids accepting sensitive user input that cannot be safely consumed.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1610,7 +1635,7 @@ _Not completed._
 | HXA-002 Remote Android localhost/cleartext packaging | 01 | Complete |
 | HXA-003 Stored Remote session does not start runtime | 03 | Complete |
 | HXA-004 Refresh token not wired in production | 04 | Complete |
-| HXA-005 Restore code ignored | 05 | Pending |
+| HXA-005 Restore code ignored | 05 | Complete |
 | HXA-006 Reset Required has no action | 03 | Complete |
 | HXA-007 Contact-request lifecycle unreachable | 07 | Pending |
 | HXA-008 First message lacks recipient devices | 08 | Pending |

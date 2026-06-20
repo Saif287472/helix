@@ -88,7 +88,7 @@ class HelixRemoteApp extends StatefulWidget {
   State<HelixRemoteApp> createState() => _HelixRemoteAppState();
 }
 
-enum _SetupPath { choose, createAccount, restoreAccount }
+enum _SetupPath { choose, createAccount }
 
 class _HelixRemoteAppState extends State<HelixRemoteApp> {
   RemoteStartupState _startupState = RemoteStartupState.idle;
@@ -98,7 +98,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   bool _registering = false;
   _SetupPath _setupPath = _SetupPath.choose;
   final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _restoreCodeController = TextEditingController();
   StreamSubscription<RemoteStartupState>? _stateSub;
 
   @override
@@ -136,7 +135,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   void dispose() {
     _stateSub?.cancel();
     _usernameController.dispose();
-    _restoreCodeController.dispose();
     widget.root.dispose().ignore();
     super.dispose();
   }
@@ -251,8 +249,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
         return _buildSetupChoiceScreen();
       case _SetupPath.createAccount:
         return _buildCreateAccountScreen();
-      case _SetupPath.restoreAccount:
-        return _buildRestoreAccountScreen();
     }
   }
 
@@ -260,45 +256,49 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(widget.root.config.displayName)),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cloud_outlined, size: 64),
-                const SizedBox(height: 16),
-                Text(
-                  'Welcome to Helix Remote',
-                  style: theme.textTheme.headlineSmall,
-                  textAlign: TextAlign.center,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_outlined, size: 64),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Welcome to Helix Remote',
+                      style: theme.textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'How would you like to continue?',
+                      style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    _SetupOptionTile(
+                      icon: Icons.person_add_outlined,
+                      title: 'Create new account',
+                      subtitle: 'Register a new username on this server.',
+                      onTap: () =>
+                          setState(() => _setupPath = _SetupPath.createAccount),
+                    ),
+                    const SizedBox(height: 12),
+                    _SetupOptionTile(
+                      icon: Icons.restore_outlined,
+                      title: 'Restore existing account unavailable',
+                      subtitle:
+                          'Fresh-device recovery is not enabled in this build. '
+                          'Use an already signed-in device to keep access.',
+                      enabled: false,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'How would you like to continue?',
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                _SetupOptionTile(
-                  icon: Icons.person_add_outlined,
-                  title: 'Create new account',
-                  subtitle: 'Register a new username on this server.',
-                  onTap: () =>
-                      setState(() => _setupPath = _SetupPath.createAccount),
-                ),
-                const SizedBox(height: 12),
-                _SetupOptionTile(
-                  icon: Icons.restore_outlined,
-                  title: 'Restore existing account',
-                  subtitle:
-                      'You have a backup from another device. Enter your restore code.',
-                  onTap: () =>
-                      setState(() => _setupPath = _SetupPath.restoreAccount),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -362,75 +362,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
     );
   }
 
-  Widget _buildRestoreAccountScreen() {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Restore account'),
-        leading: BackButton(
-          onPressed: () => setState(() {
-            _setupPath = _SetupPath.choose;
-            _registrationError = null;
-            _restoreCodeController.clear();
-          }),
-        ),
-      ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.restore_outlined, size: 48),
-                const SizedBox(height: 16),
-                Text(
-                  'Enter your restore code',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Your restore code was shown when you exported a backup '
-                  'from an existing device.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: _restoreCodeController,
-                  enabled: !_registering,
-                  decoration: InputDecoration(
-                    labelText: 'Restore code',
-                    border: const OutlineInputBorder(),
-                    errorText: _registrationError,
-                  ),
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _restore(),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _registering ? null : _restore,
-                    icon: _registering
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.restore_outlined),
-                    label: Text(
-                      _registering ? 'Restoring…' : 'Restore account',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _register() async {
     final username = _usernameController.text.trim();
     if (username.isEmpty || _registering) return;
@@ -456,37 +387,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
           _registering = false;
         });
       }
-    }
-  }
-
-  Future<void> _restore() async {
-    final code = _restoreCodeController.text.trim();
-    if (code.isEmpty || _registering) return;
-    setState(() {
-      _registering = true;
-      _registrationError = null;
-    });
-    try {
-      // Restore is not yet fully implemented — Phase 05 wires the real
-      // recovery flow. For now, attempt stored-session restoration as a hint.
-      final restored = await widget.root.tryRestoreSession();
-      if (mounted) {
-        if (restored) {
-          await widget.root.startRuntime();
-        } else {
-          setState(
-            () => _registrationError =
-                'Could not restore account with that code. '
-                'Make sure the restore code is correct and the server is reachable.',
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _registrationError = 'Restore failed: $e');
-      }
-    } finally {
-      if (mounted) setState(() => _registering = false);
     }
   }
 
@@ -635,27 +535,35 @@ class _SetupOptionTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    this.onTap,
+    this.enabled = true,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final iconColor = enabled
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurface.withAlpha(120);
+    final subtitleColor = enabled
+        ? theme.colorScheme.onSurface.withAlpha(160)
+        : theme.colorScheme.onSurface.withAlpha(120);
     return Card(
       margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(icon, size: 32, color: theme.colorScheme.primary),
+              Icon(icon, size: 32, color: iconColor),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -671,13 +579,21 @@ class _SetupOptionTile extends StatelessWidget {
                     Text(
                       subtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withAlpha(160),
+                        color: subtitleColor,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right),
+              if (enabled)
+                const Icon(Icons.chevron_right)
+              else
+                Text(
+                  'Unavailable',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(140),
+                  ),
+                ),
             ],
           ),
         ),

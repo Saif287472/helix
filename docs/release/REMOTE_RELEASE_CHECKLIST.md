@@ -26,6 +26,9 @@ credentials, app-store accounts, or signing keys.
   or debug network-security config.
 - Remote contains no Local LAN discovery, UDP broadcast, mDNS browsing, or Local
   panic-wipe orchestration.
+- Fresh-device account restore remains disabled in setup unless a later phase
+  provides end-to-end app evidence for device linking, backup decryption,
+  snapshot restore, prekey publication, and runtime startup.
 
 ## Remote Backend
 

@@ -83,7 +83,7 @@ helix_remote uses imperative navigation (`Navigator.push`) with no named-route s
 | State / screen | Class | Primary task |
 |---|---|---|
 | Loading / boot | `_buildLoadingScreen` | Waiting for initialization |
-| Setup (unauthenticated) | `_buildSetupScreen` | Register new device or restore existing account |
+| Setup (unauthenticated) | `_buildSetupScreen` | Register a new account; fresh-device restore is visible as unavailable until backup/recovery is wired end to end |
 | Ready | `ConversationListScreen` | Browse conversations |
 | Conversation | `ConversationScreen` | Send/receive messages |
 | Groups | `GroupsScreen` | Group conversations |

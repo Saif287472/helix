@@ -3,6 +3,18 @@
 Status: Phase 17 implementation evidence  
 Date: 2026-06-19
 
+## Current App Availability
+
+- Fresh-device account restore is not available from the Remote setup screen in
+  the current build.
+- The setup UI must not accept a recovery phrase, restore code, passkey, or
+  backup secret until the full device-link and backup-restore workflow is wired
+  end to end.
+- Existing-session restore after app restart is separate: it uses locally stored
+  credentials and refresh-token rotation, not user-entered recovery material.
+- Manual release testing must treat fresh-device restore as unavailable unless a
+  later phase updates this contract and adds executable app-level evidence.
+
 ## Implemented Behavior
 
 - New devices are linked from an existing active device through a pending device

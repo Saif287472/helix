@@ -3,6 +3,7 @@
 // Verifies:
 //   P03-W01  resetRequired state renders the Reset button (no dead-end screen).
 //   P03-W02  authenticatedAndSyncing renders the Syncing screen, not the ready screen.
+//   P05-W01  fresh-device recovery is visibly disabled and accepts no code.
 
 import 'dart:io';
 
@@ -117,6 +118,41 @@ void main() {
       // Either still loading (acceptable) or in syncing. It must NOT show
       // the conversation list (which is the ready screen).
       expect(find.text('Conversations'), findsNothing);
+
+      await root.dispose();
+    },
+  );
+
+  testWidgets(
+    'P05-W01: setup recovery is disabled instead of accepting restore codes',
+    (tester) async {
+      final dir = Directory.systemTemp.createTempSync('p05_w01_');
+      addTearDown(() {
+        if (dir.existsSync()) dir.deleteSync(recursive: true);
+      });
+
+      final root = RemoteCompositionRoot.withConfig(
+        _productConfig(dir.path),
+        devConfig: _devConfig(dir.path),
+        keyValueStore: _InMemoryKeyValueStore(),
+      );
+
+      await tester.pumpWidget(HelixRemoteApp(root: root));
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+
+      expect(find.text('Create new account'), findsOneWidget);
+      expect(find.text('Restore existing account unavailable'), findsOneWidget);
+      expect(find.text('Unavailable'), findsOneWidget);
+      expect(find.text('Restore account'), findsNothing);
+      expect(find.text('Restore code'), findsNothing);
+      expect(find.text('Enter your restore code'), findsNothing);
+
+      await tester.tap(find.text('Restore existing account unavailable'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Restore account'), findsNothing);
+      expect(find.text('Restore code'), findsNothing);
+      expect(root.startupState, RemoteStartupState.unauthenticated);
 
       await root.dispose();
     },
