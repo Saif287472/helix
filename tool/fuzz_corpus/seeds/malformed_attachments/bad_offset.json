@@ -1,0 +1,1 @@
+{"file_id":"file_fuzz","offset":-1,"file_hash":"sha256:fuzz","expectation":"reject_invalid_offset"}

@@ -1,0 +1,46 @@
+{
+  "schema": "helix-fuzz-corpus-v1",
+  "retention_days": 180,
+  "targets": [
+    {
+      "id": "local_frames",
+      "description": "Malformed Local protocol frames and unsupported frame types",
+      "seed_dir": "tool/fuzz_corpus/seeds/local_frames"
+    },
+    {
+      "id": "local_secure_channel",
+      "description": "Truncated length prefixes and fragmented secure-channel input",
+      "seed_dir": "tool/fuzz_corpus/seeds/local_secure_channel"
+    },
+    {
+      "id": "remote_rest",
+      "description": "Malformed Remote REST request JSON and oversized typed fields",
+      "seed_dir": "tool/fuzz_corpus/seeds/remote_rest"
+    },
+    {
+      "id": "remote_realtime",
+      "description": "Malformed realtime envelope type, sequence, and schema version",
+      "seed_dir": "tool/fuzz_corpus/seeds/remote_realtime"
+    },
+    {
+      "id": "remote_encrypted_envelopes",
+      "description": "Ciphertext envelope mutation without plaintext content",
+      "seed_dir": "tool/fuzz_corpus/seeds/remote_encrypted_envelopes"
+    },
+    {
+      "id": "malformed_migrations",
+      "description": "Migration metadata and schema-version edge cases",
+      "seed_dir": "tool/fuzz_corpus/seeds/malformed_migrations"
+    },
+    {
+      "id": "malformed_backups",
+      "description": "Backup snapshot version, tombstone, and missing-field cases",
+      "seed_dir": "tool/fuzz_corpus/seeds/malformed_backups"
+    },
+    {
+      "id": "malformed_attachments",
+      "description": "Attachment metadata, offset, hash, and quota edge cases",
+      "seed_dir": "tool/fuzz_corpus/seeds/malformed_attachments"
+    }
+  ]
+}

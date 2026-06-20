@@ -64,6 +64,10 @@ if (-not (Test-BuildOnlyEnabled)) {
         dart test tool/secret_scan_test.dart tool/dependency_policy_test.dart tool/documentation_consistency_test.dart tool/risk_coverage_test.dart
     }
 
+    Invoke-Step "Phase 11 release assurance audit" {
+        dart test tool/fuzz_seed_corpus_test.dart tool/phase11_release_assurance_test.dart
+    }
+
     Invoke-Step "Phase 20 release/governance audit" {
         dart test tool/phase20_release_governance_test.dart
     }

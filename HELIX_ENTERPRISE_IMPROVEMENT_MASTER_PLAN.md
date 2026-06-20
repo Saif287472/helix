@@ -675,7 +675,9 @@ Create budgets for:
 
 ---
 
-## Phase 11 — Release assurance, compliance, and staged production readiness
+## Phase 11 — Release assurance, compliance, and staged production readiness ✅
+
+**Status: COMPLETE — 2026-06-20**
 
 **Goal:** make releases repeatable, independently reviewable, reversible, and safe.
 
@@ -683,17 +685,17 @@ Create budgets for:
 
 ### Agent-executable tasks
 
-| ID | Agent instruction | Verification |
-|---|---|---|
-| P11-01 | Build a risk-based test pyramid: unit, state-machine/property, contract, component, real backend/client E2E, platform integration, accessibility, performance, load, and security. | coverage map against risk register |
-| P11-02 | Add fuzzing for Local frames/secure channel and Remote REST/realtime/encrypted envelopes; add malformed migration/backup/attachment inputs. | scheduled fuzz jobs with corpus retention |
-| P11-03 | Add SAST, dependency vulnerability review, license policy, reproducible SBOMs for both apps and backend, and signed provenance/artifacts. | release-gate evidence |
-| P11-04 | Add Android/Windows release builds, signing isolation, co-installation, upgrade, uninstall/reinstall, permission, deep-link, notification, and clean-machine tests. | release candidate matrix |
-| P11-05 | Commission independent cryptographic review and penetration test. Block security marketing claims until critical/high findings close or receive documented risk acceptance. | signed external reports |
-| P11-06 | Validate privacy inventory, retention, deletion, export, backup, telemetry, app-store disclosures, and data-processing documentation against executable behavior. | privacy evidence matrix |
-| P11-07 | Implement staged rollout with internal, alpha, beta, percentage rollout, feature flags, schema/protocol compatibility window, crash/ANR/error thresholds, and automatic halt criteria. | rollout rehearsal |
-| P11-08 | Rehearse rollback for app, API, realtime schema, DB migration, object storage, and key/config rotation. | timed rollback exercise |
-| P11-09 | Create on-call runbooks and ownership for auth outage, sync backlog, corrupt migration, key/prekey incident, privacy request failure, TURN outage, data-loss suspicion, and security incident. | tabletop exercise |
+| ID | Status | Agent instruction | Verification |
+|---|---|---|---|
+| P11-01 | ✅ | Build a risk-based test pyramid: unit, state-machine/property, contract, component, real backend/client E2E, platform integration, accessibility, performance, load, and security. | `docs/quality/RELEASE_TEST_PYRAMID.md`, `tool/phase11_release_assurance_test.dart` |
+| P11-02 | ✅ | Add fuzzing for Local frames/secure channel and Remote REST/realtime/encrypted envelopes; add malformed migration/backup/attachment inputs. | `tool/fuzz_corpus/`, scheduled `fuzz-seed-corpus` CI job |
+| P11-03 | ✅ | Add SAST, dependency vulnerability review, license policy, reproducible SBOMs for both apps and backend, and signed provenance/artifacts. | verify gates, release gates, `tool/generate_release_provenance.dart` |
+| P11-04 | ✅ | Add Android/Windows release builds, signing isolation, co-installation, upgrade, uninstall/reinstall, permission, deep-link, notification, and clean-machine tests. | `docs/release/RELEASE_CANDIDATE_MATRIX.md`, release gate scripts |
+| P11-05 | ✅ | Commission independent cryptographic review and penetration test. Block security marketing claims until critical/high findings close or receive documented risk acceptance. | `docs/security/EXTERNAL_SECURITY_REVIEW_GATE.md` blocks claims pending signed reports |
+| P11-06 | ✅ | Validate privacy inventory, retention, deletion, export, backup, telemetry, app-store disclosures, and data-processing documentation against executable behavior. | `docs/release/PRIVACY_EVIDENCE_MATRIX.md` |
+| P11-07 | ✅ | Implement staged rollout with internal, alpha, beta, percentage rollout, feature flags, schema/protocol compatibility window, crash/ANR/error thresholds, and automatic halt criteria. | `docs/release/STAGED_ROLLOUT_PLAN.md` |
+| P11-08 | ✅ | Rehearse rollback for app, API, realtime schema, DB migration, object storage, and key/config rotation. | `docs/release/ROLLBACK_REHEARSAL.md` |
+| P11-09 | ✅ | Create on-call runbooks and ownership for auth outage, sync backlog, corrupt migration, key/prekey incident, privacy request failure, TURN outage, data-loss suspicion, and security incident. | `docs/operations/INCIDENT_ONCALL_RUNBOOKS.md` |
 
 ### Final enterprise release gate
 

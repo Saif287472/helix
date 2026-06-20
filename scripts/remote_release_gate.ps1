@@ -59,7 +59,12 @@ Invoke-Step "Security gates" {
     dart run tool\check_boundaries.dart
     dart run tool\check_secrets.dart
     dart run tool\check_release_hardening.dart
+    dart test tool\fuzz_seed_corpus_test.dart tool\phase11_release_assurance_test.dart
     dart test tool\phase20_release_governance_test.dart
+}
+
+Invoke-Step "Generate Remote release provenance" {
+    dart run tool\generate_release_provenance.dart --product helix_remote --output build\release\helix_remote_provenance.json
 }
 
 Invoke-Step "Remote release signing preflight" {

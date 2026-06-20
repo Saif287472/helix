@@ -2,9 +2,10 @@
 
 Status: required before strong production claims
 
-Helix Local may not make strong marketing claims about forward secrecy,
-cryptographic protocol novelty, or complete forensic erasure until an external
-security review is complete.
+Helix Local and Helix Remote may not make strong marketing claims about forward
+secrecy, cryptographic protocol novelty, production-reviewed cryptography,
+complete forensic erasure, or enterprise readiness until independent external
+review is complete.
 
 ## Required Review Inputs
 
@@ -22,6 +23,15 @@ security review is complete.
 - Findings and severity.
 - Fixed findings with verification evidence.
 - Explicit approval for any strengthened security claim.
+
+## Phase 11 Gate
+
+- Independent cryptographic review: BLOCKED until an external reviewer signs the
+  reviewed commit, scope, findings, and closure evidence.
+- Penetration test: BLOCKED until an external tester completes app/backend
+  coverage and Critical/High findings are closed or explicitly risk-accepted.
+- Security marketing claims remain blocked while any Critical/High finding is
+  open in auth, crypto, storage, sync, wipe, deletion, or authorization.
 
 ## Phase 7 Gate
 

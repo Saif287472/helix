@@ -31,6 +31,10 @@ Invoke-Step "Generate Local SBOM" {
     dart run tool/generate_local_sbom.dart --output build/release/helix_local_sbom.json
 }
 
+Invoke-Step "Generate Local release provenance" {
+    dart run tool/generate_release_provenance.dart --product helix_local --output build/release/helix_local_provenance.json
+}
+
 Invoke-Step "Dependency health advisory" {
     flutter pub outdated
 }

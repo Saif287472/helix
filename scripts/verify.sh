@@ -60,6 +60,8 @@ run_step "Forbidden import tests + cycle detection (P4-010/P4-015)" dart test to
 
 run_step "Phase 0 guardrail tests" dart test tool/secret_scan_test.dart tool/dependency_policy_test.dart tool/documentation_consistency_test.dart tool/risk_coverage_test.dart
 
+run_step "Phase 11 release assurance audit" dart test tool/fuzz_seed_corpus_test.dart tool/phase11_release_assurance_test.dart
+
 run_step "Phase 20 release/governance audit" dart test tool/phase20_release_governance_test.dart
 
 run_step "Dependency graph (P4-014)" dart run tool/dep_graph.dart
