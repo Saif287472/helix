@@ -130,7 +130,7 @@ Do not silently expand a phase into unrelated work.
 |---|---|---|---|---|
 | 00 | Baseline, ledger, and reproducible verification | All findings | None | COMPLETE |
 | 01 | Remote runtime configuration and backend bootstrap | HXA-001, HXA-002 | 00 | COMPLETE |
-| 02 | Local startup, session recovery, and group-init visibility | HXA-016, HXA-017, HXA-018 | 00 | NOT STARTED |
+| 02 | Local startup, session recovery, and group-init visibility | HXA-016, HXA-017, HXA-018 | 00 | COMPLETE |
 | 03 | Remote application lifecycle and observable top-level state | HXA-003, HXA-006, HXA-015, HXA-023 | 01 | NOT STARTED |
 | 04 | Remote authentication, token refresh, logout, and revocation | HXA-004, part of HXA-014 | 03 | NOT STARTED |
 | 05 | Remote recovery strategy and fresh-device account restore | HXA-005 | 04 | NOT STARTED |
@@ -440,7 +440,7 @@ Remote must support clearly separated profiles:
 
 # Phase 02 — Local startup, session recovery, and group-init visibility
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE  
 **Audit coverage:** HXA-016, HXA-017, HXA-018  
 **Purpose:** Ensure Local never becomes permanently unusable after a transient initialization failure.
 
@@ -503,7 +503,33 @@ Remote must support clearly separated profiles:
 
 ## Completion record
 
-_Not completed._
+- Date: 2026-06-21
+- Agent/model identifier: Claude Sonnet 4.6 (claude-sonnet-4-6)
+- Starting commit: `8abc6fc`
+- Ending commit or working-tree state: Phase 02 committed locally after this record; working tree clean.
+- Files changed:
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+  - `apps/helix_local/lib/app.dart`
+  - `apps/helix_local/lib/providers/groups_providers.dart`
+  - `apps/helix_local/lib/ui/screens/home/home_screen.dart`
+  - `apps/helix_local/lib/ui/screens/home/_home_tab.dart`
+  - `apps/helix_local/test/app_init_recovery_test.dart` (new)
+  - `apps/helix_local/test/home_session_retry_test.dart` (new)
+  - `apps/helix_local/test/home_group_startup_test.dart` (new)
+- Tests and commands run with results:
+  - `flutter analyze --no-pub` from `apps/helix_local` — PASS, no issues (23.5 s).
+  - `flutter test --no-pub` from `apps/helix_local` — PASS, 231/231 tests (28 s), including all 14 new Phase 02 tests (P02-A01–A03, P02-B01–B05, P02-C01–C06).
+  - `dart run tool/check_boundaries.dart` from repo root — exit 0, "Boundary check passed." (PowerShell 5.1 emits a benign stderr NativeCommandError for "Running build hooks…" which is unrelated to the check result; confirmed pre-existing before this phase).
+  - `dart format --output=none --set-exit-if-changed` on all changed files — PASS after auto-format applied.
+- Acceptance criteria result:
+  - HXA-016 PASS: `_ErrorApp` now accepts `onRetry: () => ref.invalidate(localAppInitProvider)`. The Retry button re-runs `localAppInitProvider` from scratch. Error text is redacted via regex before display. Tested by P02-A01–A03.
+  - HXA-017 PASS: `_sessionInitStarted` (permanent one-way bool) replaced with `_SessionInitPhase` enum (`idle/starting/active/failed`). `_initSession` sets `starting` atomically; on success sets `active`; on failure cleans up all partial resources (TCP socket, discovery, session service) and sets `failed`. `_retrySession()` clears provider error state and resets the enum to `idle` before re-running. Rapid double-tap is blocked by the `starting` guard. Session error is surfaced as `_SessionErrorPanel` in the Home tab with a Retry button wired to `onRetrySession`. Tested by P02-B01–B05.
+  - HXA-018 PASS: `createPublicLobby()` is now wrapped in `.then(…).catchError(…)` that writes to `lobbyInitErrorProvider` (`StateProvider<String?>`). The `_LobbyErrorPanel` widget watches this provider and appears in the Home groups section with an independent Retry button (`_retryLobby`) that clears the error and retries only the lobby without restarting the DM session. `groupsAsync.error` no longer silently returns `SizedBox.shrink()`. Tested by P02-C01–C06.
+- Security-sensitive areas touched: None. No transport, crypto, identity, trust, storage, wipe, auth, or product isolation behavior changed. Redaction regex prevents accidental display of key-length hex/base64 strings in error UI.
+- Contract or migration changes: None.
+- Remaining manual-only checks: Physical-device session recovery (TCP bind failure on Android, mDNS failure on Windows, lobby multicast failure) remain physical/manual lab checks for Phase 18.
+- Deviations from this plan and why: No destructive "Reset Required" flow added in this phase — the plan's section A.5 describes it as "for truly unrecoverable product-scoped storage/key states". The current failure modes (TCP bind, discovery, lobby) are all transient and recoverable via Retry; no key/storage corruption scenario was identified in the current code paths that would require a destructive reset gate here. If such a scenario is identified in later phases it will be added as a deferred discovery.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1543,9 +1569,9 @@ _Not completed._
 | HXA-013 Group management partially reachable | 13 | Pending |
 | HXA-014 Device linking and logout absent | 14 | Pending; token/logout subset coordinated in Phase 04 |
 | HXA-015 Account deletion leaves authenticated UI | 15 | Pending; lifecycle foundation coordinated in Phase 03 |
-| HXA-016 Local app init has no retry | 02 | Pending |
-| HXA-017 Local Home session cannot retry | 02 | Pending |
-| HXA-018 Local public-lobby failure invisible | 02 | Pending |
+| HXA-016 Local app init has no retry | 02 | Complete |
+| HXA-017 Local Home session cannot retry | 02 | Complete |
+| HXA-018 Local public-lobby failure invisible | 02 | Complete |
 | HXA-019 Local Android permission denial incomplete | 16 | Pending |
 | HXA-020 Local Windows firewall/adapter risk | 16 | Pending; physical matrix coordinated in Phase 18 |
 | HXA-021 Compatibility fixtures disagree with auth contract | 06 | Pending |

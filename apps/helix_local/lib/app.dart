@@ -199,7 +199,10 @@ class _HelixAppState extends ConsumerState<HelixApp>
 
     return initAsync.when(
       loading: () => const _SplashScreen(),
-      error: (err, _) => _ErrorApp(message: err.toString()),
+      error: (err, _) => _ErrorApp(
+        message: err.toString(),
+        onRetry: () => ref.invalidate(localAppInitProvider),
+      ),
       data: (_) => _buildApp(context),
     );
   }
@@ -308,9 +311,16 @@ class _SplashScreen extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ErrorApp extends StatelessWidget {
-  const _ErrorApp({required this.message});
+  const _ErrorApp({required this.message, required this.onRetry});
 
   final String message;
+  final VoidCallback onRetry;
+
+  /// Redacts long hex or base64 sequences that may contain key material.
+  static String _redact(String raw) => raw.replaceAllMapped(
+    RegExp(r'[0-9a-fA-F]{48,}|[A-Za-z0-9+/]{48,}={0,2}'),
+    (_) => '[redacted]',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -331,9 +341,15 @@ class _ErrorApp extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  message,
+                  _redact(message),
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.red),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
                 ),
               ],
             ),

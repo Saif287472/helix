@@ -37,8 +37,14 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
+/// Tracks the in-flight state of session initialization inside HomeScreen.
+/// This is intentionally separate from [SessionState] (which is the
+/// authoritative runtime state) — it exists only to enforce the single-flight
+/// invariant and to let [_retrySession] reset cleanly.
+enum _SessionInitPhase { idle, starting, active, failed }
+
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  bool _sessionInitStarted = false;
+  _SessionInitPhase _sessionInitPhase = _SessionInitPhase.idle;
   int _selectedIndex = 0;
   ServerSocket? _tcpServer;
 
@@ -73,8 +79,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _initSession() async {
-    if (_sessionInitStarted) return;
-    _sessionInitStarted = true;
+    // Single-flight guard: prevent concurrent or duplicate starts.
+    if (_sessionInitPhase == _SessionInitPhase.starting ||
+        _sessionInitPhase == _SessionInitPhase.active) {
+      return;
+    }
 
     final profileSvc = ref.read(profileServiceProvider);
     if (profileSvc.isFirstRun ||
@@ -86,13 +95,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final sessionSvc = ref.read(sessionServiceProvider);
     if (sessionSvc.state.phase == SessionPhase.active) {
       if (mounted) {
+        setState(() => _sessionInitPhase = _SessionInitPhase.active);
         ref
             .read(sessionStateProvider.notifier)
             .startSession(sessionSvc.sessionId);
       }
       return;
     }
-    if (sessionSvc.state.phase == SessionPhase.starting) return;
+
+    setState(() => _sessionInitPhase = _SessionInitPhase.starting);
 
     final discoverySvc = ref.read(discoveryCoordinatorProvider);
     final requestSvc = ref.read(requestServiceProvider);
@@ -167,7 +178,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             deviceSuffix: identity.deviceSuffix,
             endpoint: await _localEndpoint(_tcpServer!.port),
           );
-      unawaited(ref.read(groupServiceProvider).createPublicLobby());
+
+      // Lobby startup is tracked independently so DM session health is not
+      // affected by a transient lobby failure.
+      ref
+          .read(groupServiceProvider)
+          .createPublicLobby()
+          .then((_) {
+            if (mounted) {
+              ref.read(lobbyInitErrorProvider.notifier).state = null;
+            }
+          })
+          .catchError((Object e) {
+            AppLogger.instance.warn('session', 'Public lobby init failed: $e');
+            if (mounted) {
+              ref.read(lobbyInitErrorProvider.notifier).state = e.toString();
+            }
+          });
+
       ref.read(foregroundServiceBridgeProvider);
       ref.read(notificationActionBridgeProvider);
       ref.read(newMessageNotificationBridgeProvider);
@@ -210,10 +238,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         } catch (_) {}
       }
 
+      if (mounted) setState(() => _sessionInitPhase = _SessionInitPhase.active);
       debugPrint('[Helix] Session started, TCP port ${_tcpServer!.port}');
     } catch (e, st) {
       debugPrint('[Helix] Session init failed: $e\n$st');
       AppLogger.instance.error('session', 'Session init failed: $e', st);
+      // Clean up all partially initialized resources so Retry starts fresh.
       if (_tcpServer != null) {
         try {
           await _tcpServer!.close();
@@ -225,8 +255,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) {
         ref.read(activeTcpPortProvider.notifier).state = 0;
         ref.read(sessionStateProvider.notifier).setError(e.toString());
+        setState(() => _sessionInitPhase = _SessionInitPhase.failed);
       }
     }
+  }
+
+  /// Clears error state and re-runs session initialization.
+  /// Rapid double-taps are ignored by the [_sessionInitPhase] guard in
+  /// [_initSession].
+  Future<void> _retrySession() async {
+    if (!mounted) return;
+    if (_sessionInitPhase == _SessionInitPhase.starting) return;
+    // Reset provider error so the home tab stops showing the error panel.
+    ref.read(sessionStateProvider.notifier).stopSession();
+    ref.read(lobbyInitErrorProvider.notifier).state = null;
+    setState(() => _sessionInitPhase = _SessionInitPhase.idle);
+    await _initSession();
   }
 
   @override
@@ -316,7 +360,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final body = IndexedStack(
       index: _selectedIndex,
       children: [
-        _HomeTab(onSelectTab: (int i) => setState(() => _selectedIndex = i)),
+        _HomeTab(
+          onSelectTab: (int i) => setState(() => _selectedIndex = i),
+          onRetrySession: _retrySession,
+        ),
         const RequestsScreen(),
         const _ChatsTab(),
         const SettingsScreen(),

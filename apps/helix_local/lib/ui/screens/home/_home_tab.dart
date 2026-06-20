@@ -5,9 +5,12 @@ part of 'home_screen.dart';
 // ---------------------------------------------------------------------------
 
 class _HomeTab extends ConsumerStatefulWidget {
-  const _HomeTab({this.onSelectTab});
+  const _HomeTab({this.onSelectTab, this.onRetrySession});
 
   final void Function(int index)? onSelectTab;
+
+  /// Called when the user taps Retry on the session-error panel (HXA-017).
+  final VoidCallback? onRetrySession;
 
   @override
   ConsumerState<_HomeTab> createState() => _HomeTabState();
@@ -399,6 +402,19 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
         .updatePreferences(homeWelcomeDismissed: true);
   }
 
+  /// Retries public-lobby creation without restarting the DM session (HXA-018).
+  Future<void> _retryLobby() async {
+    if (!mounted) return;
+    ref.read(lobbyInitErrorProvider.notifier).state = null;
+    try {
+      await ref.read(groupServiceProvider).createPublicLobby();
+    } catch (e) {
+      if (mounted) {
+        ref.read(lobbyInitErrorProvider.notifier).state = e.toString();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -409,6 +425,8 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     final groupsAsync = ref.watch(groupSnapshotsProvider);
     final groupService = ref.read(groupServiceProvider);
     final isGroupServiceInitialized = groupService.isInitialized;
+    final sessionState = ref.watch(sessionStateProvider);
+    final lobbyError = ref.watch(lobbyInitErrorProvider);
 
     ref.listen<SessionState>(sessionStateProvider, (_, next) {
       if (!_autoRefreshDone && next.phase == SessionPhase.active) {
@@ -430,6 +448,14 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Session error panel (HXA-017) ──────────────────────────
+                  if (sessionState.error != null)
+                    _SessionErrorPanel(
+                      error: sessionState.error!,
+                      onRetry: widget.onRetrySession,
+                    ),
+                  if (sessionState.error != null) const SizedBox(height: 12),
+
                   // ── Profile card ───────────────────────────────────────────
                   profileAsync.when(
                     data: (profile) => _ProfileCard(
@@ -527,6 +553,12 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   const SizedBox(height: 20),
 
                   // ── Groups ─────────────────────────────────────────────────
+                  // Lobby error panel (HXA-018): non-blocking, independently
+                  // retryable, shown even when DM session is healthy.
+                  if (lobbyError != null) ...[
+                    _LobbyErrorPanel(error: lobbyError, onRetry: _retryLobby),
+                    const SizedBox(height: 12),
+                  ],
                   groupsAsync.when(
                     data: (groups) => groups.isEmpty
                         ? const SizedBox.shrink()
@@ -1173,6 +1205,126 @@ class _SummaryChip extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Welcome banner
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Session error panel (HXA-017) — shown when Home session init fails.
+// Retry re-runs the full session startup path. DM is unavailable until
+// retry succeeds, so this panel is non-dismissible.
+// ---------------------------------------------------------------------------
+
+class _SessionErrorPanel extends StatelessWidget {
+  const _SessionErrorPanel({required this.error, this.onRetry});
+
+  final String error;
+  final VoidCallback? onRetry;
+
+  /// Redacts long hex/base64 sequences that may contain key material.
+  static String _redact(String raw) => raw.replaceAllMapped(
+    RegExp(r'[0-9a-fA-F]{48,}|[A-Za-z0-9+/]{48,}={0,2}'),
+    (_) => '[redacted]',
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.error.withAlpha(80)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Session failed to start',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _redact(error),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onErrorContainer,
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: theme.colorScheme.error,
+              foregroundColor: theme.colorScheme.onError,
+            ),
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lobby error panel (HXA-018) — shown when public-lobby init fails.
+// Non-blocking: DM session remains usable. Retry targets only the lobby.
+// ---------------------------------------------------------------------------
+
+class _LobbyErrorPanel extends StatelessWidget {
+  const _LobbyErrorPanel({required this.error, required this.onRetry});
+
+  final String error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withAlpha(160),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.forum_outlined,
+            size: 20,
+            color: theme.colorScheme.onSurface.withAlpha(160),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Public lobby unavailable — tap Retry to reconnect.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withAlpha(180),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
       ),
     );
   }

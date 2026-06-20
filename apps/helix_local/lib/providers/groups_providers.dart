@@ -15,6 +15,11 @@ import 'package:helix_local_groups/helix_groups.dart';
 import 'package:helix_local_groups/platform/multicast_lock_android.dart';
 import 'package:helix_local_groups/platform/multicast_lock_stub.dart';
 
+/// Tracks a non-fatal public-lobby startup error independently of session health.
+/// Null means no error (or lobby successfully started). Non-null means the last
+/// lobby init attempt failed and the user should be offered an inline retry.
+final lobbyInitErrorProvider = StateProvider<String?>((ref) => null);
+
 final groupServiceProvider = Provider<GroupService>((ref) {
   late final GroupService service;
 
