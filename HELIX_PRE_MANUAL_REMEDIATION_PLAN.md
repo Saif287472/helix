@@ -1398,7 +1398,7 @@ Completed on 2026-06-21.
 
 # Phase 13 — Remote groups end to end
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE  
 **Audit coverage:** HXA-013  
 **Purpose:** Connect existing group services to complete group navigation, membership, messaging, and administration.
 
@@ -1441,7 +1441,24 @@ Completed on 2026-06-21.
 
 ## Completion record
 
-_Not completed._
+**Date:** 2026-06-21  
+**Commit:** (pending)  
+**Implemented:**
+- `GroupsScreen` rewritten with: `onTap` navigation to `ConversationScreen`; popup menu with Open, Invite member (admin only), Leave group, Delete group (admin only); invite dialog; leave/delete confirmation.
+- `_isAdmin()` check using `getGroupMembersWithRoles()` to gate admin-only controls.
+- `_groupConversations()` filters conversations by `type == 'GROUP'` or member count > 2.
+- `GroupsScreen` constructor updated: replaced `root` param with `RemoteAttachmentService? attachmentService` for testability.
+- `SettingsScreen` updated to pass `_tryAttachmentService(root)` to `GroupsScreen`.
+- Group service operations wired: `createGroup`, `inviteMember`, `respondToInvite`, `leaveGroup`, `deleteGroup` — all produce outbox operations for server delivery via `RemoteSyncEngine`.
+
+**Tests added:**
+- `apps/helix_remote/test/groups_ui_test.dart` — P13-W01 widget tests (9 cases): empty state, create dialog, group tile navigation, popup menu role gating, invite dialog, pending invites. P13-A01 service tests (4 cases): createGroup, admin role, inviteMember, leaveGroup with epoch rotation.
+
+**Verification:** `flutter test --no-pub apps/helix_remote/test/groups_ui_test.dart` — 13 tests pass.
+
+**Deviations:**
+- Concurrent admin operations and backend authorization enforcement are server-side concerns not testable without a backend.
+- Key distribution/rotation for membership changes is handled by `RemoteGroupService._rotateEpoch()` (already implemented), which increments epoch and re-keys.
 
 ---
 
@@ -1861,7 +1878,7 @@ _Not completed._
 | HXA-010 Screens do not react to synchronized changes | 09 | Complete |
 | HXA-011 Attachments and calls unreachable | 11 | Complete (attachments Phase 11; calls Phase 12) |
 | HXA-012 No viable ICE path in relay-only default | 12 | Complete |
-| HXA-013 Group management partially reachable | 13 | Pending |
+| HXA-013 Group management partially reachable | 13 | Complete |
 | HXA-014 Device linking and logout absent | 14 | Pending; Phase 04 token/logout subset complete |
 | HXA-015 Account deletion leaves authenticated UI | 15 | Lifecycle navigation replacement complete in Phase 03; full account deletion and restore in Phase 15 |
 | HXA-016 Local app init has no retry | 02 | Complete |

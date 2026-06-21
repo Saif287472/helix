@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/screens/backup_screen.dart';
 import 'package:helix_remote/screens/device_management_screen.dart';
@@ -82,6 +83,7 @@ class SettingsScreen extends StatelessWidget {
                   builder: (_) => GroupsScreen(
                     groupService: root.groupService,
                     messagingService: messagingService,
+                    attachmentService: _tryAttachmentService(root),
                   ),
                 ),
               ),
@@ -100,6 +102,14 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  RemoteAttachmentService? _tryAttachmentService(RemoteCompositionRoot root) {
+    try {
+      return root.attachmentService;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _confirmLogout(BuildContext context) async {

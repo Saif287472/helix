@@ -1,6 +1,10 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/screens/conversation_screen.dart';
+import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 
 class GroupsScreen extends StatefulWidget {
@@ -8,10 +12,12 @@ class GroupsScreen extends StatefulWidget {
     super.key,
     required this.groupService,
     required this.messagingService,
+    this.attachmentService,
   });
 
   final RemoteGroupService groupService;
   final RemoteMessagingService messagingService;
+  final RemoteAttachmentService? attachmentService;
 
   @override
   State<GroupsScreen> createState() => _GroupsScreenState();
@@ -24,13 +30,33 @@ class _GroupsScreenState extends State<GroupsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadInvites();
+    _reload();
   }
 
-  void _loadInvites() {
+  void _reload() {
     setState(() {
       _invites = widget.groupService.db.getGroupInvites();
     });
+  }
+
+  String get _currentAccountId =>
+      widget.messagingService.currentAccountId ?? '';
+
+  bool _isAdmin(String groupId) {
+    final members = widget.groupService.getGroupMembersWithRoles(groupId);
+    final me = members
+        .where((m) => m['account_id'] == _currentAccountId)
+        .firstOrNull;
+    return me?['role'] == kRoleAdmin;
+  }
+
+  List<RemoteConversation> _groupConversations() {
+    return widget.messagingService.conversationList().where((c) {
+      final members = widget.messagingService.conversationMemberIds(
+        c.conversationId,
+      );
+      return members.length > 2 || c.type == 'group' || c.type == 'GROUP';
+    }).toList();
   }
 
   void _createGroup() {
@@ -53,15 +79,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
               final groupId = _randomId();
-              final creatorId =
-                  widget.messagingService.currentAccountId ?? 'unknown';
               widget.groupService.createGroup(
                 groupId: groupId,
                 name: name,
-                creatorId: creatorId,
+                creatorId: _currentAccountId,
               );
               Navigator.pop(ctx);
               setState(() => _status = 'Group "$name" created (queued)');
+              _reload();
             },
             child: const Text('Create'),
           ),
@@ -72,14 +97,129 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   void _respondToInvite(Map<String, dynamic> invite, bool accept) {
     final inviteId = invite['invite_id'] as String;
-    final accountId = widget.messagingService.currentAccountId ?? '';
     widget.groupService.respondToInvite(
       inviteId: inviteId,
-      selfAccountId: accountId,
+      selfAccountId: _currentAccountId,
       accept: accept,
     );
-    _loadInvites();
     setState(() => _status = accept ? 'Invite accepted' : 'Invite rejected');
+    _reload();
+  }
+
+  void _openGroup(String groupId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ConversationScreen(
+          conversationId: groupId,
+          messagingService: widget.messagingService,
+          attachmentService: widget.attachmentService,
+        ),
+      ),
+    );
+  }
+
+  void _inviteMember(String groupId) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Invite Member'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Account ID to invite',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final inviteeId = controller.text.trim();
+              if (inviteeId.isEmpty) return;
+              final inviteId = _randomId();
+              try {
+                widget.groupService.inviteMember(
+                  groupId: groupId,
+                  inviteId: inviteId,
+                  inviterId: _currentAccountId,
+                  inviteeId: inviteeId,
+                );
+                Navigator.pop(ctx);
+                setState(() => _status = 'Invite sent to $inviteeId');
+              } catch (e) {
+                Navigator.pop(ctx);
+                setState(() => _status = 'Invite failed: $e');
+              }
+            },
+            child: const Text('Invite'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _leaveGroup(String groupId, String title) async {
+    final confirmed = await _confirm(
+      title: 'Leave "$title"?',
+      message: 'You will lose access to this group conversation.',
+      confirmLabel: 'Leave',
+    );
+    if (!confirmed) return;
+    try {
+      widget.groupService.leaveGroup(
+        groupId: groupId,
+        selfAccountId: _currentAccountId,
+      );
+      setState(() => _status = 'Left group "$title"');
+      _reload();
+    } catch (e) {
+      setState(() => _status = 'Leave failed: $e');
+    }
+  }
+
+  Future<void> _deleteGroup(String groupId, String title) async {
+    final confirmed = await _confirm(
+      title: 'Delete "$title"?',
+      message: 'This will permanently delete the group for all members.',
+      confirmLabel: 'Delete',
+    );
+    if (!confirmed) return;
+    try {
+      widget.groupService.deleteGroup(groupId);
+      setState(() => _status = 'Group "$title" deleted');
+      _reload();
+    } catch (e) {
+      setState(() => _status = 'Delete failed: $e');
+    }
+  }
+
+  Future<bool> _confirm({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   String _randomId() {
@@ -89,6 +229,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final groups = _groupConversations();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Groups'),
@@ -135,39 +277,80 @@ class _GroupsScreenState extends State<GroupsScreen> {
               child: Text(_status!, textAlign: TextAlign.center),
             ),
           Expanded(
-            child:
-                widget.messagingService
-                    .conversationList()
-                    .where((c) {
-                      final members = widget.messagingService
-                          .conversationMemberIds(c.conversationId);
-                      return members.length > 2 || c.type == 'group';
-                    })
-                    .toList()
-                    .isEmpty
+            child: groups.isEmpty
                 ? const Center(child: Text('No groups yet'))
-                : ListView(
-                    children: widget.messagingService
-                        .conversationList()
-                        .where((c) {
-                          final members = widget.messagingService
-                              .conversationMemberIds(c.conversationId);
-                          return members.length > 2 || c.type == 'group';
-                        })
-                        .map(
-                          (c) => Card(
-                            child: ListTile(
-                              leading: const Icon(Icons.group),
-                              title: Text(
-                                c.title.isNotEmpty ? c.title : c.conversationId,
+                : ListView.builder(
+                    itemCount: groups.length,
+                    itemBuilder: (context, index) {
+                      final c = groups[index];
+                      final memberCount = widget.messagingService
+                          .conversationMemberIds(c.conversationId)
+                          .length;
+                      final isAdmin = _isAdmin(c.conversationId);
+                      final title = c.title.isNotEmpty
+                          ? c.title
+                          : c.conversationId;
+                      return Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.group),
+                          title: Text(title),
+                          subtitle: Text('Members: $memberCount'),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (value) {
+                              switch (value) {
+                                case 'open':
+                                  _openGroup(c.conversationId);
+                                case 'invite':
+                                  _inviteMember(c.conversationId);
+                                case 'leave':
+                                  _leaveGroup(c.conversationId, title);
+                                case 'delete':
+                                  _deleteGroup(c.conversationId, title);
+                              }
+                            },
+                            itemBuilder: (ctx) => [
+                              const PopupMenuItem(
+                                value: 'open',
+                                child: ListTile(
+                                  leading: Icon(Icons.chat),
+                                  title: Text('Open'),
+                                ),
                               ),
-                              subtitle: Text(
-                                'Members: ${widget.messagingService.conversationMemberIds(c.conversationId).length}',
+                              if (isAdmin)
+                                const PopupMenuItem(
+                                  value: 'invite',
+                                  child: ListTile(
+                                    leading: Icon(Icons.person_add),
+                                    title: Text('Invite member'),
+                                  ),
+                                ),
+                              const PopupMenuItem(
+                                value: 'leave',
+                                child: ListTile(
+                                  leading: Icon(Icons.exit_to_app),
+                                  title: Text('Leave group'),
+                                ),
                               ),
-                            ),
+                              if (isAdmin)
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: ListTile(
+                                    leading: Icon(
+                                      Icons.delete_forever,
+                                      color: Colors.red,
+                                    ),
+                                    title: Text(
+                                      'Delete group',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                        )
-                        .toList(),
+                          onTap: () => _openGroup(c.conversationId),
+                        ),
+                      );
+                    },
                   ),
           ),
         ],
