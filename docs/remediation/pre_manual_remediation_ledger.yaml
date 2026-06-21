@@ -191,13 +191,18 @@ findings:
     affected_targets: [Remote Windows, Remote Android, Remote backend]
     current_evidence:
       - apps/helix_remote/lib/app/remote_attachment_service.dart
+      - apps/helix_remote/lib/app/remote_messaging_service.dart
+      - apps/helix_remote/lib/screens/conversation_screen.dart
+      - apps/helix_remote/test/remote_attachment_service_test.dart
+      - apps/helix_remote/test/remote_messaging_service_test.dart
+      - apps/helix_remote/test/phase12_remote_messaging_screen_test.dart
       - packages/remote/helix_remote_calls/lib/src/call_engine.dart
       - docs/architecture/PHASE_12_20_CLOSURE.md
-    status: pending
+    status: partial
     tests_required:
       - Attachment vertical slice in Phase 11.
       - Call reachability and incoming-call tests in Phase 12.
-    final_disposition: Pending Phase 11 primary; call-specific work coordinated in Phase 12.
+    final_disposition: Attachment portion completed in Phase 11 with reachable composer controls, encrypted upload/download/export flow, payload-safe encrypted attachment metadata messages, and raw-key persistence prevention. Call-specific reachability remains coordinated in Phase 12.
   - id: HXA-012
     title: No viable ICE path in relay-only default
     primary_phase: 12

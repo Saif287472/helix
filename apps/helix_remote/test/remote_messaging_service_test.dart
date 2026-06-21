@@ -520,6 +520,75 @@ void main() {
     },
   );
 
+  test('P11 attachment metadata is encrypted and rendered locally', () async {
+    final bundle = await _validPreKeyBundle(deviceId: 'bob_attachment_1');
+    service = RemoteMessagingService(
+      db: db,
+      syncEngine: RemoteSyncEngine(db),
+      gateway: gateway,
+      protector: _FakeProtector(),
+      restClient: _FakeRestClient(bundles: {'bob': bundle}),
+      clock: clock,
+    );
+    await service.setupAccount(
+      account: RemoteAccount(
+        accountId: 'alice',
+        username: 'alice',
+        identityPublicKey: 'alice_identity_key',
+        createdAt: clock(),
+      ),
+      device: RemoteDevice(
+        deviceId: 'alice_device_1',
+        deviceName: 'Alice phone',
+        deviceSigningPublicKey: 'alice_device_signing_key',
+        deviceAgreementPublicKey: 'alice_device_agreement_key',
+        createdAt: clock(),
+      ),
+    );
+    final aliceAgreement = await crypto.X25519().newKeyPair();
+    final aliceAgreementPub = await aliceAgreement.extractPublicKey();
+    service.setCryptoKeys(
+      devicePrivateKey: Uint8List.fromList(
+        await aliceAgreement.extractPrivateKeyBytes(),
+      ),
+      devicePublicKey: Uint8List.fromList(aliceAgreementPub.bytes),
+    );
+    service.addContact(peerAccountId: 'bob', nickname: 'Bob');
+    final conversationId = service.createDirectConversation(
+      peerAccountId: 'bob',
+      conversationId: 'dm_attachment',
+    );
+
+    const keyDeliverySecret = 'attachment-key-delivery-secret';
+    await service.sendAttachment(
+      conversationId: conversationId,
+      messageId: 'msg_attachment',
+      manifest: const RemoteAttachmentManifest(
+        fileId: 'file_opaque_hash',
+        fileSize: 512,
+        fileHash: 'file_opaque_hash',
+        mimeType: 'application/pdf',
+      ),
+      filename: 'contract.pdf',
+      keyDeliverySecret: keyDeliverySecret,
+      recipientDeviceIds: const [],
+    );
+
+    final pendingSend = db.getPendingOperations().singleWhere(
+      (op) => op['type'] == 'SEND_MESSAGE',
+    );
+    final payloadText = pendingSend['payload'] as String;
+    expect(payloadText, isNot(contains('contract.pdf')));
+    expect(payloadText, isNot(contains(keyDeliverySecret)));
+    expect(payloadText, isNot(contains(RemoteAttachmentContent.messageType)));
+
+    final history = await service.messageHistory(conversationId);
+    expect(history.single.text, 'Attachment: contract.pdf');
+    expect(history.single.attachment, isNotNull);
+    expect(history.single.attachment!.fileId, 'file_opaque_hash');
+    expect(history.single.attachment!.keyDeliverySecret, keyDeliverySecret);
+  });
+
   test('P2-08 trust decisions persist key change state', () {
     service.recordTrustDecision(
       accountId: 'bob',

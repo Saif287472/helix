@@ -139,7 +139,7 @@ Do not silently expand a phase into unrelated work.
 | 08 | Remote first-message device discovery and E2EE session establishment | HXA-008 | 06, 07 | COMPLETE |
 | 09 | Remote realtime runtime, reactive screens, and runtime health UI | HXA-010, HXA-023 | 03, 06, 08 | COMPLETE |
 | 10 | Remote outbox truthfulness, retries, and failure recovery | HXA-022 | 06, 09 | COMPLETE |
-| 11 | Remote attachments end to end | Attachment portion of HXA-011 | 08, 09, 10 | NOT STARTED |
+| 11 | Remote attachments end to end | Attachment portion of HXA-011 | 08, 09, 10 | COMPLETE |
 | 12 | Remote calls, incoming-call UX, and viable ICE/TURN policy | Call portion of HXA-011, HXA-012 | 04, 06, 09 | NOT STARTED |
 | 13 | Remote groups end to end | HXA-013 | 07, 08, 09, 10 | NOT STARTED |
 | 14 | Remote device linking, device security, and lost-device workflows | Remaining HXA-014 | 04, 06, 09 | NOT STARTED |
@@ -1248,7 +1248,7 @@ Completed on 2026-06-21.
 
 # Phase 11 — Remote attachments end to end
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE
 **Audit coverage:** Attachment portion of HXA-011  
 **Purpose:** Make attachment services reachable and complete from user selection through peer download/export.
 
@@ -1293,7 +1293,37 @@ Completed on 2026-06-21.
 
 ## Completion record
 
-_Not completed._
+Completed on 2026-06-21.
+
+- Starting commit: `cd827b1`
+- Ending commit: Phase 11 local commit `Complete phase 11 remote attachments`
+- Files changed:
+  - `apps/helix_remote/pubspec.yaml`
+  - `apps/helix_remote/lib/app/remote_attachment_service.dart`
+  - `apps/helix_remote/lib/app/remote_messaging_service.dart`
+  - `apps/helix_remote/lib/screens/conversation_list_screen.dart`
+  - `apps/helix_remote/lib/screens/conversation_screen.dart`
+  - `apps/helix_remote/test/remote_attachment_service_test.dart`
+  - `apps/helix_remote/test/remote_messaging_service_test.dart`
+  - `apps/helix_remote/test/phase12_remote_messaging_screen_test.dart`
+  - `docs/architecture/PHASE_12_20_CLOSURE.md`
+  - `docs/remediation/pre_manual_remediation_ledger.yaml`
+  - `HELIX_PRE_MANUAL_REMEDIATION_PLAN.md`
+- Verification evidence:
+  - `flutter pub get` PASS.
+  - `dart format apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/lib/app/remote_attachment_service.dart apps/helix_remote/lib/screens/conversation_list_screen.dart apps/helix_remote/lib/screens/conversation_screen.dart apps/helix_remote/test/remote_attachment_service_test.dart apps/helix_remote/test/remote_messaging_service_test.dart apps/helix_remote/test/phase12_remote_messaging_screen_test.dart` PASS.
+  - `dart analyze apps/helix_remote/lib/app/remote_messaging_service.dart apps/helix_remote/lib/app/remote_attachment_service.dart apps/helix_remote/lib/screens/conversation_list_screen.dart apps/helix_remote/lib/screens/conversation_screen.dart apps/helix_remote/test/remote_attachment_service_test.dart apps/helix_remote/test/remote_messaging_service_test.dart apps/helix_remote/test/phase12_remote_messaging_screen_test.dart` PASS.
+  - `flutter test test/remote_attachment_service_test.dart --no-pub` PASS.
+  - `flutter test test/remote_messaging_service_test.dart --no-pub` PASS.
+  - `flutter test test/phase12_remote_messaging_screen_test.dart --no-pub` PASS.
+  - `.\scripts\verify.ps1` PASS.
+- Audit result:
+  - HXA-011 attachment portion PASS: Remote conversations expose attachment controls only when the attachment service is available; selected files are encrypted and uploaded before an encrypted attachment metadata message is queued; recipient download/import verifies ciphertext integrity; export requires an explicit privacy warning; raw attachment keys are not stored in the local database or server-visible outbox payload.
+- Security-sensitive areas touched: Remote attachment encryption metadata, local attachment key wrapping/import, Remote message plaintext classification, file picker/export UI, and attachment cache status records. No authentication, E2EE message protection, storage encryption, wipe behavior, or secret logging was weakened.
+- Contract or migration changes: No database migration or backend route change. `file_picker` is now a direct Remote app dependency, matching the already reviewed workspace lock entry.
+- Remaining manual-only checks: Physical Android scoped-storage picker behavior, Windows native save-dialog behavior, large-file interruption UX, and real two-client attachment transfer remain part of integrated/manual Phase 17/18 evidence.
+- Deviations from this plan and why: Cancellation/retry is represented by visible failed transfer status and re-running the attachment action; resumable backend/client upload/download primitives already existed and remain covered by attachment service tests.
+- Newly discovered defects and assigned future phase: None.
 
 ---
 
@@ -1808,7 +1838,7 @@ _Not completed._
 | HXA-008 First message lacks recipient devices | 08 | Complete |
 | HXA-009 Visible actions target missing/wrong routes | 06 | Complete |
 | HXA-010 Screens do not react to synchronized changes | 09 | Complete |
-| HXA-011 Attachments and calls unreachable | 11 | Pending; call-specific work coordinated in Phase 12 |
+| HXA-011 Attachments and calls unreachable | 11 | Attachment portion complete; call-specific work coordinated in Phase 12 |
 | HXA-012 No viable ICE path in relay-only default | 12 | Pending |
 | HXA-013 Group management partially reachable | 13 | Pending |
 | HXA-014 Device linking and logout absent | 14 | Pending; Phase 04 token/logout subset complete |

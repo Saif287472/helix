@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/app/remote_runtime_coordinator.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
@@ -155,9 +156,18 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         builder: (_) => ConversationScreen(
           conversationId: convId,
           messagingService: widget.messagingService,
+          attachmentService: _tryAttachmentService(),
         ),
       ),
     );
+  }
+
+  RemoteAttachmentService? _tryAttachmentService() {
+    try {
+      return widget.root.attachmentService;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _acceptRequest(RemoteContact contact, RemoteContactRequest request) {
@@ -317,6 +327,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               builder: (_) => ConversationScreen(
                 conversationId: conv.conversationId,
                 messagingService: widget.messagingService,
+                attachmentService: _tryAttachmentService(),
               ),
             ),
           ),

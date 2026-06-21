@@ -38,6 +38,7 @@ class RemoteAttachmentService {
     0x31,
     0x0a,
   ]);
+  static const String _deliverySecretVersion = 'helix.remote.attachment-key.v1';
 
   /// Prepares a file for upload: generates random key/IV, encrypts the file
   /// to a temporary ciphertext file, saves metadata locally.
@@ -100,6 +101,7 @@ class RemoteAttachmentService {
       'size_bytes': tempCipherFile.lengthSync(),
       'file_hash': sha256Hash,
       'encrypted_key': wrappedKeyStr,
+      'key_delivery_secret': _encodeDeliverySecret(keyBytes, ivBytes),
       'ciphertext_path': tempCipherFile.path,
     };
 
@@ -154,6 +156,10 @@ class RemoteAttachmentService {
         'size_bytes': tempThumbCipherFile.lengthSync(),
         'file_hash': thumbSha256Hash,
         'encrypted_key': thumbWrappedStr,
+        'key_delivery_secret': _encodeDeliverySecret(
+          thumbKeyBytes,
+          thumbIvBytes,
+        ),
         'ciphertext_path': tempThumbCipherFile.path,
       };
     }
@@ -397,6 +403,67 @@ class RemoteAttachmentService {
     );
   }
 
+  Future<void> importAttachmentKeyFromMessage({
+    required RemoteAttachmentManifest manifest,
+    required String filename,
+    required String keyDeliverySecret,
+  }) async {
+    if (db.getAttachment(manifest.fileId) != null) return;
+    final keyParts = _decodeDeliverySecret(keyDeliverySecret);
+    final wrappedKey = await _crypto.wrapAttachmentKey(
+      keyParts['key']!,
+      keyParts['iv']!,
+      wrappingKey,
+    );
+    db.saveAttachment(
+      attachmentId: manifest.fileId,
+      filename: filename,
+      sizeBytes: manifest.fileSize,
+      encryptedKey: base64Url.encode(wrappedKey),
+      status: 'PENDING',
+    );
+  }
+
+  void updateAttachmentStatus(String attachmentId, String status) {
+    final localAttachment = db.getAttachment(attachmentId);
+    if (localAttachment == null) return;
+    db.saveAttachment(
+      attachmentId: attachmentId,
+      filename: localAttachment['filename'] as String,
+      sizeBytes: localAttachment['size_bytes'] as int,
+      encryptedKey: localAttachment['encrypted_key'] as String,
+      localPath: localAttachment['local_path'] as String?,
+      importedSourcePath: localAttachment['imported_source_path'] as String?,
+      encryptedCachePath: localAttachment['encrypted_cache_path'] as String?,
+      downloadedCiphertextPath:
+          localAttachment['downloaded_ciphertext_path'] as String?,
+      exportedPlaintextPath:
+          localAttachment['exported_plaintext_path'] as String?,
+      status: status,
+    );
+  }
+
+  void markAttachmentExported({
+    required String attachmentId,
+    required String exportedPlaintextPath,
+  }) {
+    final localAttachment = db.getAttachment(attachmentId);
+    if (localAttachment == null) return;
+    db.saveAttachment(
+      attachmentId: attachmentId,
+      filename: localAttachment['filename'] as String,
+      sizeBytes: localAttachment['size_bytes'] as int,
+      encryptedKey: localAttachment['encrypted_key'] as String,
+      localPath: localAttachment['local_path'] as String?,
+      importedSourcePath: localAttachment['imported_source_path'] as String?,
+      encryptedCachePath: localAttachment['encrypted_cache_path'] as String?,
+      downloadedCiphertextPath:
+          localAttachment['downloaded_ciphertext_path'] as String?,
+      exportedPlaintextPath: exportedPlaintextPath,
+      status: localAttachment['status'] as String,
+    );
+  }
+
   AttachmentKeyPackage buildKeyDeliveryPackage({
     required String attachmentId,
     required String attachmentKey,
@@ -602,6 +669,31 @@ class RemoteAttachmentService {
   String _randomFileStem() {
     final bytes = _crypto.aesGcm.newNonce();
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  String _encodeDeliverySecret(Uint8List keyBytes, Uint8List ivBytes) {
+    return base64Url.encode(
+      utf8.encode(
+        jsonEncode({
+          'version': _deliverySecretVersion,
+          'key': base64Url.encode(keyBytes),
+          'iv': base64Url.encode(ivBytes),
+        }),
+      ),
+    );
+  }
+
+  Map<String, Uint8List> _decodeDeliverySecret(String secret) {
+    final decoded =
+        jsonDecode(utf8.decode(base64Url.decode(secret)))
+            as Map<String, dynamic>;
+    if (decoded['version'] != _deliverySecretVersion) {
+      throw StateError('Unsupported attachment key delivery version');
+    }
+    return {
+      'key': Uint8List.fromList(base64Url.decode(decoded['key'] as String)),
+      'iv': Uint8List.fromList(base64Url.decode(decoded['iv'] as String)),
+    };
   }
 
   void _deleteIfAppOwned(String? path) {

@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart' hide DiagnosticLevel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
+import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/screens/conversation_list_screen.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
@@ -539,5 +541,110 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
     expect(find.textContaining('secret-context-hash'), findsNothing);
     expect(find.textContaining('private display'), findsNothing);
+  });
+
+  testWidgets('P11 attachment control is reachable only with service', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationScreen(
+          conversationId: 'dm_alice_bob',
+          messagingService: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Attach file'), findsNothing);
+
+    final attachmentDir = Directory.systemTemp.createTempSync(
+      'p11_attachment_ui_',
+    );
+    addTearDown(() => attachmentDir.deleteSync(recursive: true));
+    final attachmentService = RemoteAttachmentService(
+      baseUrl: 'http://127.0.0.1:9',
+      authToken: 'test-token',
+      db: db,
+      tempDir: attachmentDir,
+      wrappingKey: Uint8List(32),
+    );
+    var pickerCalled = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationScreen(
+          conversationId: 'dm_alice_bob',
+          messagingService: service,
+          attachmentService: attachmentService,
+          pickAttachmentFile: () async {
+            pickerCalled = true;
+            return null;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Attach file'), findsOneWidget);
+    await tester.tap(find.byTooltip('Attach file'));
+    await tester.pump();
+    expect(pickerCalled, isTrue);
+  });
+
+  testWidgets('P11 encrypted attachment messages render file actions', (
+    tester,
+  ) async {
+    const keyDeliverySecret = 'delivery-secret';
+    final attachmentPlaintext = jsonEncode(
+      const RemoteAttachmentContent(
+        fileId: 'file_rendered',
+        filename: 'photo.png',
+        fileSize: 2048,
+        fileHash: 'file_rendered',
+        mimeType: 'image/png',
+        keyDeliverySecret: keyDeliverySecret,
+      ).toMessageJson(),
+    );
+    db.saveMessage(
+      RemoteMessage(
+        messageId: 'msg_attachment_rendered',
+        conversationId: 'dm_alice_bob',
+        senderAccountId: 'bob',
+        senderDeviceId: 'bob_device',
+        ciphertext: await cipher(attachmentPlaintext),
+      ),
+      3,
+      clock().millisecondsSinceEpoch,
+      RemoteMessageStatus.delivered,
+    );
+
+    final attachmentDir = Directory.systemTemp.createTempSync(
+      'p11_attachment_card_',
+    );
+    addTearDown(() => attachmentDir.deleteSync(recursive: true));
+    final attachmentService = RemoteAttachmentService(
+      baseUrl: 'http://127.0.0.1:9',
+      authToken: 'test-token',
+      db: db,
+      tempDir: attachmentDir,
+      wrappingKey: Uint8List(32),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationScreen(
+          conversationId: 'dm_alice_bob',
+          messagingService: service,
+          attachmentService: attachmentService,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Attachment: photo.png'), findsOneWidget);
+    expect(find.text('photo.png'), findsOneWidget);
+    expect(find.textContaining('Not downloaded'), findsOneWidget);
+    expect(find.byTooltip('Download attachment'), findsOneWidget);
+    expect(find.textContaining(keyDeliverySecret), findsNothing);
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
@@ -214,6 +215,57 @@ void main() {
         localAttachmentAfterDownload['local_path'],
         equals(decryptedFile.path),
       );
+    },
+  );
+
+  test(
+    'P11 key delivery secret imports without raw-key database persistence',
+    () async {
+      final sender = RemoteAttachmentService(
+        baseUrl: 'http://127.0.0.1:$port',
+        authToken: token,
+        db: db,
+        tempDir: clientTempDir,
+        wrappingKey: wrappingKey,
+      );
+
+      final plaintextFile = File(p.join(clientTempDir.path, 'contract.pdf'));
+      await plaintextFile.writeAsBytes(List.generate(256, (i) => i % 251));
+
+      final prepared = await sender.prepareAttachment(plaintextFile);
+      final attachmentId = prepared['attachment_id'] as String;
+      final deliverySecret = prepared['key_delivery_secret'] as String;
+      final senderRow = db.getAttachment(attachmentId)!;
+      expect(deliverySecret, isNotEmpty);
+      expect(senderRow['encrypted_key'], isNot(equals(deliverySecret)));
+
+      final recipientDb = HelixRemoteDatabase(File(':memory:'));
+      recipientDb.initialize();
+      addTearDown(recipientDb.close);
+      final recipient = RemoteAttachmentService(
+        baseUrl: 'http://127.0.0.1:$port',
+        authToken: token,
+        db: recipientDb,
+        tempDir: clientTempDir,
+        wrappingKey: generateWrappingKey(),
+      );
+
+      await recipient.importAttachmentKeyFromMessage(
+        manifest: RemoteAttachmentManifest(
+          fileId: attachmentId,
+          fileSize: prepared['size_bytes'] as int,
+          fileHash: prepared['file_hash'] as String,
+          mimeType: 'application/pdf',
+        ),
+        filename: prepared['filename'] as String,
+        keyDeliverySecret: deliverySecret,
+      );
+
+      final recipientRow = recipientDb.getAttachment(attachmentId)!;
+      expect(recipientRow['filename'], 'contract.pdf');
+      expect(recipientRow['status'], 'PENDING');
+      expect(recipientRow['encrypted_key'], isNot(equals(deliverySecret)));
+      expect(jsonEncode(recipientRow), isNot(contains(deliverySecret)));
     },
   );
 

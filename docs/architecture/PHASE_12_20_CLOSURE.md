@@ -139,24 +139,24 @@ release/security gates.
 
 | ID | Item | Status | Implementation Files | Production/Dev Wiring Path | Tests | Missing Integration | Security/Data Risk | Repair Task |
 |---|---|---|---|---|---|---|---|---|
-| P14-001 | Client-side random attachment key | **VERIFIED COMPONENT ONLY** | `packages/remote/helix_remote_crypto/lib/src/attachment_crypto.dart` - `generateAttachmentKeys()` | Crypto layer generates random 256-bit key + 96-bit IV | `remote_crypto_test.dart` - roundtrip tests | Not wired to upload flow | None | Wire key generation into attachment service |
-| P14-002 | Client-side encryption before upload | **VERIFIED COMPONENT ONLY** | `attachment_crypto.dart` - `encryptFile()` | AES-256-GCM encrypt | Crypto tests | Not wired to `RemoteAttachmentService` | None | Wire encrypt step |
+| P14-001 | Client-side random attachment key | **WIRED** | `RemoteAttachmentService.prepareAttachment()`; `attachment_crypto.dart` | Conversation attachment action -> random key/IV -> local wrapping-key protected DB copy -> E2EE key delivery secret | `remote_attachment_service_test.dart`; `phase12_remote_messaging_screen_test.dart` | Physical Android/Windows picker verification remains manual | Raw key not persisted | Manual device picker/export matrix |
+| P14-002 | Client-side encryption before upload | **WIRED** | `RemoteAttachmentService.prepareAttachment()` | Selected file is chunk-encrypted to cache before upload | `remote_attachment_service_test.dart` | Physical large-file interruption remains manual | Server receives ciphertext only | Manual interruption matrix |
 | P14-003 | Opaque object ID without plaintext filename | **VERIFIED COMPONENT ONLY** | Backend `attachments.dart` - uses `file_id` in URL paths | Content-addressed or opaque ID model | Backend tests | Not wired to app | No plaintext filename used | Verify opaque ID model |
-| P14-004 | Resumable upload | **VERIFIED COMPONENT ONLY** | Backend `attachments.dart` upload/resume; service `uploadFile` with resume | Backend: range-based resume via `offset` header | `attachments_test.dart` (backend): 7 tests | `RemoteAttachmentService.uploadFile` reads entire file into memory | High memory for large files | Add streaming/incremental upload |
-| P14-005 | Resumable download | **VERIFIED COMPONENT ONLY** | Backend `attachments.dart` range download; service download | Backend: range requests | Backend tests | `downloadFile` reads entire server response into memory | High memory | Add streaming download |
-| P14-006 | Integrity verification | **VERIFIED COMPONENT ONLY** | Backend hash verification on upload; client hash check on download | SHA-256 hash comparison | Backend tests (hash-mismatch -> FAILED) | Client-side hash check not verified | None | Wire client-side integrity check |
+| P14-004 | Resumable upload | **WIRED** | Backend `attachments.dart`; `RemoteAttachmentService.uploadAttachment()`; `ConversationScreen` | Backend range resume via `offset`; client streams ciphertext file chunks | `remote_attachment_service_test.dart`; backend `attachments_test.dart` | Physical network-loss UX remains manual | None | Manual interruption matrix |
+| P14-005 | Resumable download | **WIRED** | Backend `attachments.dart`; `RemoteAttachmentService.downloadAttachment()`; `ConversationScreen` | Backend range requests; client resumes ciphertext file and decrypts after verification | `remote_attachment_service_test.dart`; backend tests | Physical network-loss UX remains manual | None | Manual interruption matrix |
+| P14-006 | Integrity verification | **WIRED** | `RemoteAttachmentService.downloadAttachment()` | SHA-256 ciphertext hash check before plaintext cache write | `remote_attachment_service_test.dart` tamper rejection | None | Tampered downloads fail closed | Monitor |
 | P14-007 | Encrypted thumbnail strategy | **PARTIAL** | `RemoteAttachmentService.prepareEncryptedThumbnail()` | Separate thumbnail encrypt with own key | `remote_attachment_service_test.dart` - thumbnail test | Not wired into upload flow | Thumbnail key delivery not separate | Wire thumbnail into upload |
-| P14-008 | File size and quota limits | **VERIFIED COMPONENT ONLY** | Backend size limits; service size validation | Backend: max file size; service: `validateFileSize()` | `remote_attachment_service_test.dart` - size limit test | Not wired to backend enforcement | None | Wire quota UI |
-| P14-009 | Malware-risk UX without scanning claims | **VERIFIED COMPONENT ONLY** | `apps/helix_remote/lib/app/attachment_safety.dart` | Warning UX text without scanning claims | `remote_attachment_service_test.dart` - warning test | Not wired to download flow | No server scanning claimed | Wire warning into download flow |
+| P14-008 | File size and quota limits | **WIRED** | `RemoteAttachmentService.prepareAttachment()`; backend limits | Composer attachment path enforces client size limit before upload | `remote_attachment_service_test.dart` | Backend quota UI remains basic | None | Add richer quota copy later |
+| P14-009 | Malware-risk UX without scanning claims | **WIRED** | `attachment_safety.dart`; `ConversationScreen` | Download action shows E2EE/no-server-scan warning before decrypt/export path | `remote_attachment_service_test.dart`; widget tests | Physical dialog review remains manual | No server scanning claimed | Manual UX review |
 | P14-010 | Attachment expiry policy | **VERIFIED COMPONENT ONLY** | Backend `AttachmentsModule.runLifecycleRules()` | Removes unreferenced attachments after retention | Backend tests | Not wired | None | N/A for student scope |
 | P14-011 | Orphan cleanup after transaction failure | **VERIFIED COMPONENT ONLY** | Backend `AttachmentsModule.cleanupOrphans()` | Removes PENDING/UPLOADING records older than threshold | Backend tests | Not wired | None | N/A for student scope |
 | P14-012 | Object storage lifecycle rules | **OUT OF STUDENT SCOPE** | Backend cleanup rules; requires object storage | Backend file-system cleanup | Backend tests | Not applicable for local dev | None | Use local filesystem for student scope |
 | P14-013 | Cache eviction without deleting server history | **VERIFIED COMPONENT ONLY** | `RemoteAttachmentService.evictLocalCache()` | Sets CACHE_EVICTED status; server copy unaffected | `remote_attachment_service_test.dart` | Not wired to UI | Safe local-only deletion | Wire cache eviction UI |
-| P14-014 | External export warning | **VERIFIED COMPONENT ONLY** | `apps/helix_remote/lib/app/attachment_export.dart` | Warning that export removes E2EE | `remote_attachment_service_test.dart` | Not wired | None | Wire export warning |
-| P14-015 | Multi-device attachment key delivery | **DEFECTIVE** | `RemoteAttachmentService.buildKeyDeliveryPackage()` has raw-key fallback when no `encryptForDevice` supplied | `encrypted_key` field holds raw key/IV material; no per-device encryption by default | `remote_attachment_service_test.dart` - key package tests | Not wired to app | **Raw key material stored in DB when encryptor not supplied** | Remove raw-key fallback; enforce per-device encryption |
+| P14-014 | External export warning | **WIRED** | `attachment_export.dart`; `ConversationScreen` | Export action shows explicit warning before writing decrypted bytes outside Helix scope | `remote_attachment_service_test.dart`; widget tests | Physical save-dialog review remains manual | Export path recorded as external plaintext | Manual export matrix |
+| P14-015 | Multi-device attachment key delivery | **PARTIAL** | `RemoteAttachmentService`; `RemoteMessagingService.sendAttachment()` | Attachment key is delivered inside the encrypted X3DH message envelope; local DB stores only wrapping-key protected key material | `remote_attachment_service_test.dart`; `remote_messaging_service_test.dart` | Dedicated per-device attachment-key slots are still not a separate protocol object | Raw-key DB fallback removed; server-visible outbox has no key/filename plaintext | Consider separate key-slot protocol after E2E review |
 | P14-016 | Load, interruption, and corruption tests | **PARTIAL** | Backend `attachments_test.dart` - resume/hash/upload tests | Backend: 7 tests cover upload/resume/hash/cleanup | 7 backend tests | No client-side corruption/recovery test | None | Add client-side corruption test |
 
-**Phase 14 Summary:** Strong attachment primitives exist, but **raw-key fallback (DEFECTIVE)** allows unencrypted key storage. The app does not use attachment services. Upload/download read entire content into memory despite streaming claims.
+**Phase 14 Summary:** Phase 11 wires the Remote app to the attachment service for select, encrypted upload, encrypted metadata message queueing, download, verification, and export warning. Raw attachment keys are no longer persisted as fallback data; they are delivered inside the encrypted message envelope while the local database stores only wrapping-key protected key material. Physical Android/Windows picker/export and interruption checks remain manual/integrated evidence.
 
 ---
 
@@ -386,10 +386,10 @@ release/security gates.
   an existing database lacks its secure-storage key.
 - File: `apps/helix_remote/lib/app/composition_root.dart`
 
-### 6. Attachment raw-key fallback (DEFECTIVE)
-- `buildKeyDeliveryPackage` silently uses raw key when no encryptor supplied
-- File: `apps/helix_remote/lib/app/remote_attachment_service.dart`
-- Repair: Stage 6.3
+### 6. Attachment raw-key fallback (CLOSED IN PHASE 11)
+- Attachment delivery now keeps raw key material out of the local database and server-visible outbox payload.
+- Files: `apps/helix_remote/lib/app/remote_attachment_service.dart`, `apps/helix_remote/lib/app/remote_messaging_service.dart`
+- Evidence: `remote_attachment_service_test.dart`, `remote_messaging_service_test.dart`
 
 ### 7. No concrete Remote WebRTC engine
 - `RemoteCallEngine` is abstract; `RemoteWebRtcCallEngine` does not exist

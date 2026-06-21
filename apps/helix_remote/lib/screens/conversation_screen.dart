@@ -1,18 +1,36 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:helix_remote/app/attachment_export.dart';
+import 'package:helix_remote/app/attachment_safety.dart';
+import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
+import 'package:path/path.dart' as p;
+
+typedef AttachmentFilePicker = Future<File?> Function();
+typedef AttachmentFileExporter =
+    Future<String?> Function(RemoteAttachmentContent attachment, File file);
 
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({
     super.key,
     required this.conversationId,
     required this.messagingService,
+    this.attachmentService,
+    this.pickAttachmentFile,
+    this.exportAttachmentFile,
   });
 
   final String conversationId;
   final RemoteMessagingService messagingService;
+  final RemoteAttachmentService? attachmentService;
+  final AttachmentFilePicker? pickAttachmentFile;
+  final AttachmentFileExporter? exportAttachmentFile;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -31,7 +49,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   bool _hasMore = false;
   bool _searching = false;
   bool _typingActive = false;
+  bool _attachmentBusy = false;
   String? _errorMessage;
+  String? _attachmentStatus;
   StreamSubscription<RemoteSyncChange>? _changeSub;
 
   @override
@@ -132,6 +152,197 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ).showSnackBar(SnackBar(content: Text('Send failed: $e')));
       }
     }
+  }
+
+  Future<void> _attachFile() async {
+    final attachmentService = widget.attachmentService;
+    if (attachmentService == null || _attachmentBusy) return;
+    String? attachmentId;
+    try {
+      final selected =
+          await (widget.pickAttachmentFile ?? _pickAttachmentFile)();
+      if (selected == null) return;
+      if (!mounted) return;
+      setState(() {
+        _attachmentBusy = true;
+        _attachmentStatus = 'Preparing attachment';
+      });
+
+      final prepared = await attachmentService.prepareAttachment(selected);
+      attachmentId = prepared['attachment_id'] as String;
+      final ciphertextPath = prepared['ciphertext_path'] as String;
+      if (!mounted) return;
+      setState(() => _attachmentStatus = 'Uploading attachment');
+
+      await attachmentService.uploadAttachment(
+        attachmentId: attachmentId,
+        ciphertextPath: ciphertextPath,
+      );
+
+      final manifest = RemoteAttachmentManifest(
+        fileId: attachmentId,
+        fileSize: prepared['size_bytes'] as int,
+        fileHash: prepared['file_hash'] as String,
+        mimeType: _inferMimeType(selected.path),
+      );
+      final recipientDeviceIds = widget.messagingService
+          .recipientDeviceIdsForConversation(widget.conversationId);
+      if (!mounted) return;
+      setState(() => _attachmentStatus = 'Queueing attachment message');
+      final messageId = await widget.messagingService.sendAttachment(
+        conversationId: widget.conversationId,
+        manifest: manifest,
+        filename: prepared['filename'] as String,
+        keyDeliverySecret: prepared['key_delivery_secret'] as String,
+        recipientDeviceIds: recipientDeviceIds,
+      );
+      await attachmentService.registerReference(
+        fileId: attachmentId,
+        messageId: messageId,
+      );
+      if (!mounted) return;
+      setState(() => _attachmentStatus = 'Attachment queued');
+      await _loadMessages();
+    } catch (e) {
+      if (attachmentId != null) {
+        attachmentService.updateAttachmentStatus(attachmentId, 'FAILED');
+      }
+      if (mounted) {
+        setState(() => _attachmentStatus = 'Attachment failed');
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Attachment failed: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _attachmentBusy = false);
+      }
+    }
+  }
+
+  Future<File?> _pickAttachmentFile() async {
+    final file = await FilePicker.pickFile(
+      dialogTitle: 'Select attachment',
+      lockParentWindow: true,
+    );
+    final path = file?.path;
+    if (path == null || path.isEmpty) return null;
+    return File(path);
+  }
+
+  Future<void> _downloadAttachment(RemoteAttachmentContent attachment) async {
+    final attachmentService = widget.attachmentService;
+    if (attachmentService == null || _attachmentBusy) return;
+    final proceed = await _confirm(
+      title: 'Open attachment?',
+      message: RemoteAttachmentSafety.malwareWarningMessage,
+      confirmLabel: 'Download',
+    );
+    if (!proceed) return;
+    try {
+      setState(() {
+        _attachmentBusy = true;
+        _attachmentStatus = 'Downloading attachment';
+      });
+      await attachmentService.importAttachmentKeyFromMessage(
+        manifest: attachment.manifest,
+        filename: attachment.filename,
+        keyDeliverySecret: attachment.keyDeliverySecret,
+      );
+      await attachmentService.downloadAttachment(
+        attachmentId: attachment.fileId,
+        savePath: p.join(
+          attachmentService.tempDir.path,
+          '${attachment.fileId}.download.enc',
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _attachmentStatus = 'Attachment downloaded');
+      await _refreshVisibleMessages();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _attachmentStatus = 'Attachment download failed');
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _attachmentBusy = false);
+      }
+    }
+  }
+
+  Future<void> _exportAttachment(RemoteAttachmentContent attachment) async {
+    final attachmentService = widget.attachmentService;
+    final path = attachment.localPath;
+    if (attachmentService == null || path == null || _attachmentBusy) return;
+    final source = File(path);
+    if (!source.existsSync()) return;
+    final proceed = await _confirm(
+      title: 'Export decrypted file?',
+      message: RemoteAttachmentExport.exportWarningMessage,
+      confirmLabel: 'Export',
+    );
+    if (!proceed) return;
+    try {
+      final exportedPath =
+          await (widget.exportAttachmentFile ?? _exportAttachmentFile)(
+            attachment,
+            source,
+          );
+      if (exportedPath == null) return;
+      attachmentService.markAttachmentExported(
+        attachmentId: attachment.fileId,
+        exportedPlaintextPath: exportedPath,
+      );
+      if (!mounted) return;
+      setState(() => _attachmentStatus = 'Attachment exported');
+      await _refreshVisibleMessages();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      }
+    }
+  }
+
+  Future<String?> _exportAttachmentFile(
+    RemoteAttachmentContent attachment,
+    File file,
+  ) {
+    return FilePicker.saveFile(
+      dialogTitle: 'Export decrypted attachment',
+      fileName: attachment.filename,
+      bytes: Uint8List.fromList(file.readAsBytesSync()),
+      lockParentWindow: true,
+    );
+  }
+
+  Future<bool> _confirm({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   Future<void> _publishTyping(bool isTyping) async {
@@ -283,6 +494,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         children: [
           if (_searching) _buildSearchField(),
           if (!_searching && _hasMore) _buildLoadEarlierButton(),
+          if (_attachmentStatus != null) _buildAttachmentBanner(),
           Expanded(child: _buildMessageList()),
           _buildInput(),
         ],
@@ -356,8 +568,26 @@ class _ConversationScreenState extends State<ConversationScreen> {
           onReact: () => _addReaction(msg),
           onDeleteSelf: () => _deleteForSelf(msg),
           onDeleteEveryone: () => _deleteForEveryone(msg),
+          onDownloadAttachment: msg.attachment == null
+              ? null
+              : () => _downloadAttachment(msg.attachment!),
+          onExportAttachment: msg.attachment == null
+              ? null
+              : () => _exportAttachment(msg.attachment!),
         );
       },
+    );
+  }
+
+  Widget _buildAttachmentBanner() {
+    return MaterialBanner(
+      content: Text(_attachmentStatus!),
+      actions: [
+        TextButton(
+          onPressed: () => setState(() => _attachmentStatus = null),
+          child: const Text('Dismiss'),
+        ),
+      ],
     );
   }
 
@@ -380,6 +610,19 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ),
             ),
             const SizedBox(width: 8),
+            if (widget.attachmentService != null) ...[
+              IconButton(
+                icon: _attachmentBusy
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.attach_file),
+                onPressed: _attachmentBusy ? null : _attachFile,
+                tooltip: 'Attach file',
+              ),
+              const SizedBox(width: 4),
+            ],
             IconButton(
               icon: const Icon(Icons.send),
               onPressed: _send,
@@ -389,6 +632,24 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ),
       ),
     );
+  }
+
+  String _inferMimeType(String path) {
+    switch (p.extension(path).toLowerCase()) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.pdf':
+        return 'application/pdf';
+      case '.txt':
+        return 'text/plain';
+      default:
+        return 'application/octet-stream';
+    }
   }
 }
 
@@ -400,6 +661,8 @@ class _MessageTile extends StatelessWidget {
     required this.onReact,
     required this.onDeleteSelf,
     required this.onDeleteEveryone,
+    required this.onDownloadAttachment,
+    required this.onExportAttachment,
   });
 
   final RemoteDecryptedMessage message;
@@ -408,6 +671,8 @@ class _MessageTile extends StatelessWidget {
   final VoidCallback onReact;
   final VoidCallback onDeleteSelf;
   final VoidCallback onDeleteEveryone;
+  final VoidCallback? onDownloadAttachment;
+  final VoidCallback? onExportAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -523,6 +788,12 @@ class _MessageTile extends StatelessWidget {
               children: message.reactions.map((r) => Text(r)).toList(),
             ),
           ),
+        if (message.attachment != null)
+          _AttachmentCard(
+            attachment: message.attachment!,
+            onDownload: onDownloadAttachment,
+            onExport: onExportAttachment,
+          ),
       ],
     );
   }
@@ -532,6 +803,72 @@ class _MessageTile extends StatelessWidget {
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+}
+
+class _AttachmentCard extends StatelessWidget {
+  const _AttachmentCard({
+    required this.attachment,
+    required this.onDownload,
+    required this.onExport,
+  });
+
+  final RemoteAttachmentContent attachment;
+  final VoidCallback? onDownload;
+  final VoidCallback? onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    final downloaded =
+        attachment.localStatus == 'DOWNLOADED' && attachment.localPath != null;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.insert_drive_file, size: 20),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(attachment.filename),
+                Text(
+                  '${_formatBytes(attachment.fileSize)} - '
+                  '${attachment.localStatus ?? 'Not downloaded'}',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (downloaded)
+            IconButton(
+              tooltip: 'Export attachment',
+              icon: const Icon(Icons.save_alt),
+              onPressed: onExport,
+            )
+          else
+            IconButton(
+              tooltip: 'Download attachment',
+              icon: const Icon(Icons.download),
+              onPressed: onDownload,
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    return '${(kb / 1024).toStringAsFixed(1)} MB';
   }
 }
 

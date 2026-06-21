@@ -30,6 +30,7 @@ dependencies:
     path: ../../packages/remote/helix_remote_groups
   path: ^1.9.1
   path_provider: ^2.1.6
+  file_picker: ^12.0.0-beta.5
   cryptography: ^2.9.0
   crypto: ^3.0.7
   flutter_secure_storage: ^10.3.1

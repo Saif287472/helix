@@ -45,6 +45,7 @@ class RemoteDecryptedMessage {
     required this.timestamp,
     this.reactions = const [],
     this.edited = false,
+    this.attachment,
   });
 
   final String messageId;
@@ -56,6 +57,104 @@ class RemoteDecryptedMessage {
   final int timestamp;
   final List<String> reactions;
   final bool edited;
+  final RemoteAttachmentContent? attachment;
+}
+
+class RemoteAttachmentContent {
+  const RemoteAttachmentContent({
+    required this.fileId,
+    required this.filename,
+    required this.fileSize,
+    required this.fileHash,
+    required this.mimeType,
+    required this.keyDeliverySecret,
+    this.thumbnailFileId,
+    this.thumbnailFileSize,
+    this.thumbnailFileHash,
+    this.localStatus,
+    this.localPath,
+  });
+
+  static const messageType = 'helix.remote.attachment.v1';
+
+  final String fileId;
+  final String filename;
+  final int fileSize;
+  final String fileHash;
+  final String mimeType;
+  final String keyDeliverySecret;
+  final String? thumbnailFileId;
+  final int? thumbnailFileSize;
+  final String? thumbnailFileHash;
+  final String? localStatus;
+  final String? localPath;
+
+  String get displayText => 'Attachment: $filename';
+
+  RemoteAttachmentManifest get manifest => RemoteAttachmentManifest(
+    fileId: fileId,
+    fileSize: fileSize,
+    fileHash: fileHash,
+    mimeType: mimeType,
+    thumbnailFileId: thumbnailFileId,
+    thumbnailFileSize: thumbnailFileSize,
+    thumbnailFileHash: thumbnailFileHash,
+  );
+
+  Map<String, dynamic> toMessageJson() => {
+    'type': messageType,
+    'version': 1,
+    'filename': filename,
+    'manifest': manifest.toJson(),
+    'key_delivery': {
+      'scheme': 'x3dh-message-envelope',
+      'secret': keyDeliverySecret,
+    },
+  };
+
+  RemoteAttachmentContent withLocalState({
+    required String? status,
+    required String? path,
+  }) {
+    return RemoteAttachmentContent(
+      fileId: fileId,
+      filename: filename,
+      fileSize: fileSize,
+      fileHash: fileHash,
+      mimeType: mimeType,
+      keyDeliverySecret: keyDeliverySecret,
+      thumbnailFileId: thumbnailFileId,
+      thumbnailFileSize: thumbnailFileSize,
+      thumbnailFileHash: thumbnailFileHash,
+      localStatus: status,
+      localPath: path,
+    );
+  }
+
+  static RemoteAttachmentContent? tryParse(String plaintext) {
+    try {
+      final decoded = jsonDecode(plaintext);
+      if (decoded is! Map<String, dynamic>) return null;
+      if (decoded['type'] != messageType) return null;
+      final manifest = RemoteAttachmentManifest.fromJson(
+        decoded['manifest'] as Map<String, dynamic>,
+      );
+      final keyDelivery = decoded['key_delivery'] as Map<String, dynamic>;
+      return RemoteAttachmentContent(
+        fileId: manifest.fileId,
+        filename: decoded['filename'] as String,
+        fileSize: manifest.fileSize,
+        fileHash: manifest.fileHash,
+        mimeType: manifest.mimeType,
+        keyDeliverySecret: keyDelivery['secret'] as String,
+        thumbnailFileId: manifest.thumbnailFileId,
+        thumbnailFileSize: manifest.thumbnailFileSize,
+        thumbnailFileHash: manifest.thumbnailFileHash,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class RemotePushNotificationPreview {
@@ -691,6 +790,33 @@ class RemoteMessagingService {
     return id;
   }
 
+  Future<String> sendAttachment({
+    required String conversationId,
+    required RemoteAttachmentManifest manifest,
+    required String filename,
+    required String keyDeliverySecret,
+    required List<String> recipientDeviceIds,
+    String? messageId,
+  }) {
+    final content = RemoteAttachmentContent(
+      fileId: manifest.fileId,
+      filename: filename,
+      fileSize: manifest.fileSize,
+      fileHash: manifest.fileHash,
+      mimeType: manifest.mimeType,
+      keyDeliverySecret: keyDeliverySecret,
+      thumbnailFileId: manifest.thumbnailFileId,
+      thumbnailFileSize: manifest.thumbnailFileSize,
+      thumbnailFileHash: manifest.thumbnailFileHash,
+    );
+    return sendText(
+      conversationId: conversationId,
+      plaintext: jsonEncode(content.toMessageJson()),
+      recipientDeviceIds: recipientDeviceIds,
+      messageId: messageId,
+    );
+  }
+
   Future<List<Map<String, dynamic>>> _buildX3dhEnvelopes({
     required String conversationId,
     required String messageId,
@@ -1270,21 +1396,32 @@ class RemoteMessagingService {
         }
       }
 
+      final plaintext = await protector.decryptText(
+        conversationId: conversationId,
+        messageId: messageId,
+        ciphertext: ciphertext,
+      );
+      final parsedAttachment = RemoteAttachmentContent.tryParse(plaintext);
+      final localAttachment = parsedAttachment == null
+          ? null
+          : db.getAttachment(parsedAttachment.fileId);
+      final attachment = parsedAttachment?.withLocalState(
+        status: localAttachment?['status'] as String?,
+        path: localAttachment?['local_path'] as String?,
+      );
+
       decoded.add(
         RemoteDecryptedMessage(
           messageId: messageId,
           conversationId: conversationId,
           senderAccountId: row['sender_account_id'] as String,
           senderDeviceId: row['sender_device_id'] as String,
-          text: await protector.decryptText(
-            conversationId: conversationId,
-            messageId: messageId,
-            ciphertext: ciphertext,
-          ),
+          text: attachment?.displayText ?? plaintext,
           status: row['status'] as String,
           timestamp: row['timestamp'] as int,
           reactions: reactions,
           edited: edited,
+          attachment: attachment,
         ),
       );
     }
