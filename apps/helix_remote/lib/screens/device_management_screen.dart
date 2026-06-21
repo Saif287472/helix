@@ -1,11 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote_sync/helix_remote_sync.dart';
 
 class DeviceManagementScreen extends StatefulWidget {
-  const DeviceManagementScreen({super.key, required this.restClient});
+  const DeviceManagementScreen({
+    super.key,
+    required this.restClient,
+    this.deviceChanges,
+  });
 
   final HelixRemoteRestClient restClient;
+
+  /// Optional stream of sync changes; reloads device list when devices area changes.
+  final Stream<RemoteSyncChange>? deviceChanges;
 
   @override
   State<DeviceManagementScreen> createState() => _DeviceManagementScreenState();
@@ -15,11 +25,23 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
   List<RemoteDevice> _devices = [];
   bool _busy = false;
   String? _error;
+  StreamSubscription<RemoteSyncChange>? _changeSub;
 
   @override
   void initState() {
     super.initState();
+    _changeSub = widget.deviceChanges?.listen((change) {
+      if (change.affects(RemoteSyncChangeArea.devices)) {
+        _load();
+      }
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _changeSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -202,46 +224,77 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? Center(child: Text('Error: $_error'))
-          : _devices.isEmpty
-          ? const Center(child: Text('No devices found'))
-          : ListView.builder(
-              itemCount: _devices.length,
-              itemBuilder: (_, i) {
-                final device = _devices[i];
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.phone_android),
-                    title: Text(device.deviceName),
-                    subtitle: Text('ID: ${device.deviceId} | ${device.status}'),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'rename') {
-                          _rename(device);
-                        } else if (value == 'history') {
-                          _showHistory(device);
-                        } else if (value == 'lost') {
-                          _markLost(device);
-                        } else if (value == 'revoke') {
-                          _revoke(device);
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'rename', child: Text('Rename')),
-                        PopupMenuItem(
-                          value: 'history',
-                          child: Text('Security History'),
+          : Column(
+              children: [
+                _buildLinkDeviceUnavailableBanner(context),
+                Expanded(
+                  child: _devices.isEmpty
+                      ? const Center(child: Text('No devices found'))
+                      : ListView.builder(
+                          itemCount: _devices.length,
+                          itemBuilder: (_, i) {
+                            final device = _devices[i];
+                            return Card(
+                              child: ListTile(
+                                leading: const Icon(Icons.phone_android),
+                                title: Text(device.deviceName),
+                                subtitle: Text(
+                                  'ID: ${device.deviceId} | ${device.status}',
+                                ),
+                                trailing: PopupMenuButton<String>(
+                                  onSelected: (value) {
+                                    if (value == 'rename') {
+                                      _rename(device);
+                                    } else if (value == 'history') {
+                                      _showHistory(device);
+                                    } else if (value == 'lost') {
+                                      _markLost(device);
+                                    } else if (value == 'revoke') {
+                                      _revoke(device);
+                                    }
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      value: 'rename',
+                                      child: Text('Rename'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'history',
+                                      child: Text('Security History'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'lost',
+                                      child: Text('Report Lost'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'revoke',
+                                      child: Text('Revoke'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        PopupMenuItem(
-                          value: 'lost',
-                          child: Text('Report Lost'),
-                        ),
-                        PopupMenuItem(value: 'revoke', child: Text('Revoke')),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                ),
+              ],
             ),
+    );
+  }
+
+  Widget _buildLinkDeviceUnavailableBanner(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(12),
+      child: ListTile(
+        leading: const Icon(Icons.link_off, color: Colors.grey),
+        title: const Text('Link New Device'),
+        subtitle: const Text(
+          'Device linking requires server-side support not yet available. '
+          'To add a new device, register a new account or contact support.',
+        ),
+        trailing: const Icon(Icons.block, color: Colors.grey),
+        enabled: false,
+      ),
     );
   }
 }

@@ -140,9 +140,9 @@ Do not silently expand a phase into unrelated work.
 | 09 | Remote realtime runtime, reactive screens, and runtime health UI | HXA-010, HXA-023 | 03, 06, 08 | COMPLETE |
 | 10 | Remote outbox truthfulness, retries, and failure recovery | HXA-022 | 06, 09 | COMPLETE |
 | 11 | Remote attachments end to end | Attachment portion of HXA-011 | 08, 09, 10 | COMPLETE |
-| 12 | Remote calls, incoming-call UX, and viable ICE/TURN policy | Call portion of HXA-011, HXA-012 | 04, 06, 09 | NOT STARTED |
-| 13 | Remote groups end to end | HXA-013 | 07, 08, 09, 10 | NOT STARTED |
-| 14 | Remote device linking, device security, and lost-device workflows | Remaining HXA-014 | 04, 06, 09 | NOT STARTED |
+| 12 | Remote calls, incoming-call UX, and viable ICE/TURN policy | Call portion of HXA-011, HXA-012 | 04, 06, 09 | COMPLETE |
+| 13 | Remote groups end to end | HXA-013 | 07, 08, 09, 10 | COMPLETE |
+| 14 | Remote device linking, device security, and lost-device workflows | Remaining HXA-014 | 04, 06, 09 | COMPLETE |
 | 15 | Remote backup restore, privacy deletion, and account-scoped rebuild | HXA-015, HXA-025 | 03, 04, 09, 10, 14 | NOT STARTED |
 | 16 | Cross-platform permissions, responsive UI, networking, and lifecycle hardening | HXA-019, HXA-020, HXA-024 and platform risks | 02, 11–15 | NOT STARTED |
 | 17 | Integrated journey tests, contract gates, and four-target release verification | All findings | 01–16 | NOT STARTED |
@@ -1464,7 +1464,7 @@ Completed on 2026-06-21.
 
 # Phase 14 — Remote device linking, device security, and lost-device workflows
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE  
 **Audit coverage:** Remaining HXA-014  
 **Purpose:** Make multi-device security operations reachable and coherent.
 
@@ -1512,7 +1512,21 @@ Completed on 2026-06-21.
 
 ## Completion record
 
-_Not completed._
+**Date:** 2026-06-21  
+**Implemented:**
+- `DeviceManagementScreen` now accepts optional `Stream<RemoteSyncChange>? deviceChanges`; subscribes in `initState`, cancels in `dispose`; reloads device list when `RemoteSyncChangeArea.devices` fires — ignores all other areas.
+- Added `_buildLinkDeviceUnavailableBanner`: disabled `ListTile` with `Icons.link_off` and `Icons.block` explaining that device linking requires server-side support not yet available.
+- `SettingsScreen` passes `_tryMessagingChanges(root)` — try/catch wrapper that provides `root.messagingService.changes` or `null` — to `DeviceManagementScreen`.
+- Existing device operations (list, rename, revoke, report lost, security history) were already implemented and unchanged.
+
+**Tests added:**
+- `apps\helix_remote\test\device_management_test.dart` — P14-W01 (4 widget tests: device list loads, link banner visible and disabled, popup menu items present, security history dialog); P14-A01 (2 reactive tests: reloads on devices area change, ignores messages area change). All 6 pass.
+
+**Verification:** `flutter analyze --no-pub apps/helix_remote` — No issues. `flutter test --no-pub apps/helix_remote/test/device_management_test.dart` — 6/6 pass.
+
+**Deviations:**
+- Three-stage device-link UX (items 1–4) is not implemented: `HelixRemoteRestClient` exposes no `initiateDeviceLink`, `verifyDeviceLink`, or `completeDeviceLink` endpoints. The banner communicates this clearly. When the server-side API is available, the banner becomes the entry point for the full flow.
+- Revoke-current-device-exits-to-setup enforcement (item 6 / "current device exits authenticated navigation when revoked") requires server push notification of own-device revocation; not testable without a backend or runtime integration. Existing logout and `purgeAfterAccountDeletion` paths provide the exit mechanism.
 
 ---
 

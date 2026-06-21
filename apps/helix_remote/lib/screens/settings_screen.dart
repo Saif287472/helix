@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
@@ -6,6 +8,7 @@ import 'package:helix_remote/screens/backup_screen.dart';
 import 'package:helix_remote/screens/device_management_screen.dart';
 import 'package:helix_remote/screens/groups_screen.dart';
 import 'package:helix_remote/screens/privacy_screen.dart';
+import 'package:helix_remote_sync/helix_remote_sync.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
@@ -49,8 +52,10 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      DeviceManagementScreen(restClient: root.restClient),
+                  builder: (_) => DeviceManagementScreen(
+                    restClient: root.restClient,
+                    deviceChanges: _tryMessagingChanges(root),
+                  ),
                 ),
               ),
             ),
@@ -107,6 +112,14 @@ class SettingsScreen extends StatelessWidget {
   RemoteAttachmentService? _tryAttachmentService(RemoteCompositionRoot root) {
     try {
       return root.attachmentService;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Stream<RemoteSyncChange>? _tryMessagingChanges(RemoteCompositionRoot root) {
+    try {
+      return root.messagingService.changes;
     } catch (_) {
       return null;
     }
