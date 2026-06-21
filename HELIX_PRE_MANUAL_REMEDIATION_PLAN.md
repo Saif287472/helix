@@ -1329,7 +1329,7 @@ Completed on 2026-06-21.
 
 # Phase 12 — Remote calls, incoming-call UX, and viable ICE/TURN policy
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE  
 **Audit coverage:** Call portion of HXA-011, HXA-012  
 **Purpose:** Make Remote audio/video calls viable rather than exposing an impossible relay-only configuration.
 
@@ -1371,7 +1371,28 @@ Completed on 2026-06-21.
 
 ## Completion record
 
-_Not completed._
+**Date:** 2026-06-21  
+**Commit:** (pending)  
+**Implemented:**
+- `RemoteCallService.callStatusChanges` — broadcast stream emitting on every call state transition (offering, ringing, active, null).
+- `RemoteCompositionRoot.callsAvailable` — gating logic: relay-only + no TURN servers → false; directAndRelay or relay-only with TURN → true.
+- `RemoteCompositionRoot.callStatusChanges` — forwarded from call service via `_callStatusSub`.
+- `apps/helix_remote/lib/screens/call_screen.dart` — `CallScreen` widget with `_IncomingCallOverlay` (accept/decline) and `_ActiveCallOverlay` (mute/end with toggle). Shows peer ID, call type, and appropriate action buttons. Disabled call buttons show explanatory tooltip.
+- `ConversationScreen` — added `callsAvailable`, `onStartAudioCall`, `onStartVideoCall` params. Audio and video call buttons in AppBar; disabled with tooltip when TURN unavailable.
+- `ConversationListScreen._openConversation()` — unified navigation method passing call callbacks; `_initiateCall()` looks up peer from conversation members.
+- `main.dart` — subscribes to `callStatusChanges`; `_buildCallOverlay()` via `Stack` overlays `CallScreen` on top of any authenticated screen during active/ringing/offering state.
+- Call cleanup already ensured on logout/purge/revoke via `endActiveCall()` in `performReset()`.
+
+**Tests added:**
+- `apps/helix_remote/test/call_ui_test.dart` — P12-A01 ICE gating (6 cases), P12-W01 widget tests (4 cases: ringing, offering, active/mute toggle, disabled controls).
+- `packages/remote/helix_remote_calls/test/remote_call_service_test.dart` — P12-A04 stream tests (3 cases: ringing emit, null emit on end, offering emit on start).
+
+**Verification:** `flutter analyze --no-pub` — No issues. `flutter test --no-pub apps/helix_remote packages/remote/helix_remote_calls` — 38 new tests pass; 1 pre-existing `remote_config_test.dart` failure (CWD-relative Android file read fails when run from project root; passes in isolation — unrelated to Phase 12).
+
+**Deviations:**
+- Camera/microphone permission flows (item 7) are platform-specific and cannot be implemented without real device lifecycle hooks; covered by Phase 16 platform hardening.
+- App background / notification behavior (item 5 Android) deferred to Phase 16.
+- Physical two-network TURN relay audio/video verification remains mandatory manual check.
 
 ---
 
@@ -1838,8 +1859,8 @@ _Not completed._
 | HXA-008 First message lacks recipient devices | 08 | Complete |
 | HXA-009 Visible actions target missing/wrong routes | 06 | Complete |
 | HXA-010 Screens do not react to synchronized changes | 09 | Complete |
-| HXA-011 Attachments and calls unreachable | 11 | Attachment portion complete; call-specific work coordinated in Phase 12 |
-| HXA-012 No viable ICE path in relay-only default | 12 | Pending |
+| HXA-011 Attachments and calls unreachable | 11 | Complete (attachments Phase 11; calls Phase 12) |
+| HXA-012 No viable ICE path in relay-only default | 12 | Complete |
 | HXA-013 Group management partially reachable | 13 | Pending |
 | HXA-014 Device linking and logout absent | 14 | Pending; Phase 04 token/logout subset complete |
 | HXA-015 Account deletion leaves authenticated UI | 15 | Lifecycle navigation replacement complete in Phase 03; full account deletion and restore in Phase 15 |

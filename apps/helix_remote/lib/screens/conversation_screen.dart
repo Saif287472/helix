@@ -24,6 +24,9 @@ class ConversationScreen extends StatefulWidget {
     this.attachmentService,
     this.pickAttachmentFile,
     this.exportAttachmentFile,
+    this.callsAvailable = false,
+    this.onStartAudioCall,
+    this.onStartVideoCall,
   });
 
   final String conversationId;
@@ -31,6 +34,9 @@ class ConversationScreen extends StatefulWidget {
   final RemoteAttachmentService? attachmentService;
   final AttachmentFilePicker? pickAttachmentFile;
   final AttachmentFileExporter? exportAttachmentFile;
+  final bool callsAvailable;
+  final VoidCallback? onStartAudioCall;
+  final VoidCallback? onStartVideoCall;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -462,6 +468,20 @@ class _ConversationScreenState extends State<ConversationScreen> {
       appBar: AppBar(
         title: Text(widget.conversationId),
         actions: [
+          IconButton(
+            tooltip: widget.callsAvailable
+                ? 'Audio call'
+                : 'Calls require TURN relay configuration',
+            icon: const Icon(Icons.call),
+            onPressed: widget.callsAvailable ? widget.onStartAudioCall : null,
+          ),
+          IconButton(
+            tooltip: widget.callsAvailable
+                ? 'Video call'
+                : 'Calls require TURN relay configuration',
+            icon: const Icon(Icons.video_call),
+            onPressed: widget.callsAvailable ? widget.onStartVideoCall : null,
+          ),
           IconButton(
             tooltip: 'Search',
             icon: Icon(_searching ? Icons.search_off : Icons.search),

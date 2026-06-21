@@ -162,6 +162,10 @@ class RemoteCompositionRoot {
   RemoteGroupService? _groupService;
   RemoteRuntimeCoordinator? _runtimeCoordinator;
   StreamSubscription<RemoteRuntimeSnapshot>? _runtimeSnapshotSub;
+  StreamSubscription<RemoteCallStatus?>? _callStatusSub;
+  final _callStatusController = StreamController<RemoteCallStatus?>.broadcast(
+    sync: true,
+  );
   Future<bool>? _tokenRefreshInFlight;
   Future<void>? _disposeFuture;
   _RefreshFailureKind _lastRefreshFailureKind = _RefreshFailureKind.none;
@@ -185,6 +189,21 @@ class RemoteCompositionRoot {
       _requireReady(_callService, 'callService');
   RemoteGroupService get groupService =>
       _requireReady(_groupService, 'groupService');
+
+  /// True when the ICE configuration supports establishing calls.
+  /// relay-only + no TURN servers → false (calls would fail to connect).
+  bool get callsAvailable {
+    final config = devConfig.callIceConfig;
+    if (config.ipPrivacy == IpPrivacyMode.relayOnly) {
+      return config.iceServers.any(
+        (s) => s.url.startsWith('turn:') || s.url.startsWith('turns:'),
+      );
+    }
+    return true;
+  }
+
+  Stream<RemoteCallStatus?> get callStatusChanges =>
+      _callStatusController.stream;
   RemoteRuntimeCoordinator get runtimeCoordinator =>
       _requireReady(_runtimeCoordinator, 'runtimeCoordinator');
 
@@ -280,6 +299,10 @@ class RemoteCompositionRoot {
         signalingGateway: _RemoteRestCallSignalingGateway(restClient),
         iceConfig: devConfig.callIceConfig,
       );
+      _callStatusSub?.cancel();
+      _callStatusSub = _callService!.callStatusChanges.listen((status) {
+        if (!_callStatusController.isClosed) _callStatusController.add(status);
+      });
 
       String groupKeyProvider(String groupId, int epoch) {
         final bytes = List<int>.generate(
@@ -1012,6 +1035,8 @@ class RemoteCompositionRoot {
   Future<void> performReset() async {
     _runtimeSnapshotSub?.cancel();
     _runtimeSnapshotSub = null;
+    _callStatusSub?.cancel();
+    _callStatusSub = null;
     await _callService?.endActiveCall();
     await _runtimeCoordinator?.dispose();
     _runtimeCoordinator = null;
@@ -1056,8 +1081,11 @@ class RemoteCompositionRoot {
   Future<void> _disposeOnce() async {
     _runtimeSnapshotSub?.cancel();
     _runtimeSnapshotSub = null;
+    _callStatusSub?.cancel();
+    _callStatusSub = null;
     _setState(RemoteStartupState.idle);
     unawaited(_stateController.close());
+    unawaited(_callStatusController.close());
     await _boundedDispose(_runtimeCoordinator?.dispose());
     _runtimeCoordinator = null;
     await _boundedDispose(disconnectWebSocket());

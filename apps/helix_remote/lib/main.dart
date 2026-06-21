@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
+import 'package:helix_remote/screens/call_screen.dart';
 import 'package:helix_remote/screens/conversation_list_screen.dart';
+import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -97,8 +99,10 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   bool _initializing = false;
   bool _registering = false;
   _SetupPath _setupPath = _SetupPath.choose;
+  RemoteCallStatus? _activeCallStatus;
   final TextEditingController _usernameController = TextEditingController();
   StreamSubscription<RemoteStartupState>? _stateSub;
+  StreamSubscription<RemoteCallStatus?>? _callSub;
 
   @override
   void initState() {
@@ -109,6 +113,10 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
         _startupState = state;
         _errorMessage = widget.root.lastError;
       });
+    });
+    _callSub = widget.root.callStatusChanges.listen((status) {
+      if (!mounted) return;
+      setState(() => _activeCallStatus = status);
     });
     _startBoot();
   }
@@ -136,6 +144,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   @override
   void dispose() {
     _stateSub?.cancel();
+    _callSub?.cancel();
     _usernameController.dispose();
     widget.root.dispose().ignore();
     super.dispose();
@@ -187,6 +196,38 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
   }
 
   Widget _buildScreen() {
+    final base = _buildBaseScreen();
+    final callStatus = _activeCallStatus;
+    if (callStatus != null &&
+        (callStatus.state == RemoteCallState.ringing ||
+            callStatus.state == RemoteCallState.offering ||
+            callStatus.state == RemoteCallState.active) &&
+        (_startupState == RemoteStartupState.ready ||
+            _startupState == RemoteStartupState.authenticatedAndSyncing)) {
+      return Stack(
+        children: [
+          base,
+          Positioned.fill(child: _buildCallOverlay(callStatus)),
+        ],
+      );
+    }
+    return base;
+  }
+
+  Widget _buildCallOverlay(RemoteCallStatus callStatus) {
+    return CallScreen(
+      callStatus: callStatus,
+      onAccept: callStatus.state == RemoteCallState.ringing
+          ? () => widget.root.callService.acceptIncomingCall().ignore()
+          : null,
+      onDecline: () => widget.root.callService.endActiveCall().ignore(),
+      onEnd: () => widget.root.callService.endActiveCall().ignore(),
+      onMute: ({required bool muted}) =>
+          widget.root.callService.setMuted(muted: muted).ignore(),
+    );
+  }
+
+  Widget _buildBaseScreen() {
     switch (_startupState) {
       case RemoteStartupState.idle:
       case RemoteStartupState.loadingConfiguration:

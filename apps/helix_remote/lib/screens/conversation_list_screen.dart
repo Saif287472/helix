@@ -151,15 +151,48 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           ? contact.nickname
           : contact.peerAccountId,
     );
+    _openConversation(convId);
+  }
+
+  void _openConversation(String conversationId) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ConversationScreen(
-          conversationId: convId,
+          conversationId: conversationId,
           messagingService: widget.messagingService,
           attachmentService: _tryAttachmentService(),
+          callsAvailable: _tryCallsAvailable(),
+          onStartAudioCall: () => _initiateCall(conversationId, isVideo: false),
+          onStartVideoCall: () => _initiateCall(conversationId, isVideo: true),
         ),
       ),
     );
+  }
+
+  bool _tryCallsAvailable() {
+    try {
+      return widget.root.callsAvailable;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _initiateCall(String conversationId, {required bool isVideo}) {
+    final accountId = widget.messagingService.currentAccountId;
+    final members = widget.messagingService.conversationMemberIds(
+      conversationId,
+    );
+    final peer = members.where((id) => id != accountId).firstOrNull;
+    if (peer == null) return;
+    try {
+      widget.root.callService.startOutgoingCall(peerId: peer, isVideo: isVideo);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Call failed: $e')));
+      }
+    }
   }
 
   RemoteAttachmentService? _tryAttachmentService() {
@@ -322,15 +355,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           title: Text(conv.title),
           subtitle: Text(conv.conversationId),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ConversationScreen(
-                conversationId: conv.conversationId,
-                messagingService: widget.messagingService,
-                attachmentService: _tryAttachmentService(),
-              ),
-            ),
-          ),
+          onTap: () => _openConversation(conv.conversationId),
         );
       },
     );

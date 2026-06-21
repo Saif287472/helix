@@ -110,6 +110,19 @@ class RemoteCallService {
   RemoteCallStatus? _activeCall;
   RemoteCallStatus? get activeCall => _activeCall;
 
+  final _callStatusController = StreamController<RemoteCallStatus?>.broadcast(
+    sync: true,
+  );
+
+  Stream<RemoteCallStatus?> get callStatusChanges =>
+      _callStatusController.stream;
+
+  void _emitCallStatus() {
+    if (!_callStatusController.isClosed) {
+      _callStatusController.add(_activeCall);
+    }
+  }
+
   String? _pendingOfferSdp;
 
   StreamSubscription<RemoteCallEngineEvent>? _engineSub;
@@ -133,8 +146,10 @@ class RemoteCallService {
       await engine.endCall(call.callId);
       db.clearActiveCallMarker();
       _activeCall = null;
+      _emitCallStatus();
     }
     await stop();
+    await _callStatusController.close();
     await engine.dispose();
   }
 
@@ -155,6 +170,7 @@ class RemoteCallService {
       direction: kCallDirectionOutgoing,
       state: RemoteCallState.offering,
     );
+    _emitCallStatus();
     db.setActiveCallMarker(
       callId: callId,
       peerId: peerId,
@@ -189,6 +205,7 @@ class RemoteCallService {
     _persistCallHistory(call, ended: true);
     db.clearActiveCallMarker();
     _activeCall = null;
+    _emitCallStatus();
   }
 
   // ---------------------------------------------------------------------------
@@ -231,6 +248,7 @@ class RemoteCallService {
       direction: kCallDirectionIncoming,
       state: RemoteCallState.ringing,
     );
+    _emitCallStatus();
   }
 
   Future<void> acceptIncomingCall() async {
@@ -251,6 +269,7 @@ class RemoteCallService {
       state: RemoteCallState.active,
       startedAt: DateTime.now(),
     );
+    _emitCallStatus();
     db.setActiveCallMarker(
       callId: call.callId,
       peerId: call.peerId,
@@ -287,6 +306,7 @@ class RemoteCallService {
     );
     db.clearActiveCallMarker();
     _activeCall = null;
+    _emitCallStatus();
   }
 
   Future<void> _handleInboundAnswer(RemoteCallSignal signal) async {
@@ -303,6 +323,7 @@ class RemoteCallService {
       state: RemoteCallState.active,
       startedAt: DateTime.now(),
     );
+    _emitCallStatus();
   }
 
   Future<void> _handleInboundIce(RemoteCallSignal signal) async {
@@ -335,6 +356,7 @@ class RemoteCallService {
     );
     db.clearActiveCallMarker();
     _activeCall = null;
+    _emitCallStatus();
   }
 
   // ---------------------------------------------------------------------------

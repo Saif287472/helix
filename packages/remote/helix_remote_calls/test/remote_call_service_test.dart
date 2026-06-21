@@ -642,4 +642,75 @@ void main() {
     await svc.endActiveCall();
     expect(engine.log, isEmpty);
   });
+
+  // ---------------------------------------------------------------------------
+  // P12-A04: callStatusChanges stream (Phase 12)
+  // ---------------------------------------------------------------------------
+
+  test('P12-A04: callStatusChanges emits ringing on inbound offer', () async {
+    final svc = makeService();
+    final emitted = <RemoteCallStatus?>[];
+    final sub = svc.callStatusChanges.listen(emitted.add);
+
+    await svc.processInboundSignal(
+      const RemoteCallSignal(
+        callId: 'c-p12-001',
+        signalType: kSignalOffer,
+        sdp: 'offer-sdp',
+        isVideo: false,
+        peerId: 'alice',
+      ),
+    );
+
+    expect(emitted.length, 1);
+    expect(emitted.first?.state, RemoteCallState.ringing);
+    expect(emitted.first?.peerId, 'alice');
+
+    await sub.cancel();
+    await svc.dispose();
+  });
+
+  test(
+    'P12-A04: callStatusChanges emits null after endActiveCall (logout cleanup)',
+    () async {
+      final svc = makeService();
+      final emitted = <RemoteCallStatus?>[];
+      final sub = svc.callStatusChanges.listen(emitted.add);
+
+      await svc.processInboundSignal(
+        const RemoteCallSignal(
+          callId: 'c-p12-002',
+          signalType: kSignalOffer,
+          sdp: 'offer-sdp',
+          isVideo: false,
+          peerId: 'bob',
+        ),
+      );
+      await svc.endActiveCall();
+
+      expect(emitted.length, 2);
+      expect(emitted.last, isNull);
+
+      await sub.cancel();
+      await svc.dispose();
+    },
+  );
+
+  test(
+    'P12-A04: callStatusChanges emits offering on startOutgoingCall',
+    () async {
+      final svc = makeService();
+      final emitted = <RemoteCallStatus?>[];
+      final sub = svc.callStatusChanges.listen(emitted.add);
+
+      await svc.startOutgoingCall(peerId: 'charlie', isVideo: true);
+
+      expect(emitted.length, 1);
+      expect(emitted.first?.state, RemoteCallState.offering);
+      expect(emitted.first?.isVideo, isTrue);
+
+      await sub.cancel();
+      await svc.dispose();
+    },
+  );
 }
