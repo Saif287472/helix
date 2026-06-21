@@ -13,11 +13,19 @@ class BackupScreen extends StatefulWidget {
     required this.db,
     required this.restClient,
     required this.tempDir,
+    this.onBeforeRestore,
+    this.onAfterRestore,
   });
 
   final HelixRemoteDatabase db;
   final HelixRemoteRestClient restClient;
   final String tempDir;
+
+  /// Called before the restore begins; should quiesce WS/calls/sync.
+  final Future<void> Function()? onBeforeRestore;
+
+  /// Called after restore completes (success or failure); should reconnect.
+  final Future<void> Function()? onAfterRestore;
 
   @override
   State<BackupScreen> createState() => _BackupScreenState();
@@ -72,25 +80,35 @@ class _BackupScreenState extends State<BackupScreen> {
     if (passphrase == null) return;
     setState(() {
       _busy = true;
-      _status = 'Downloading backup...';
+      _status = 'Quiescing runtime before restore…';
     });
+    await widget.onBeforeRestore?.call();
     try {
+      setState(() => _status = 'Downloading backup…');
       final backup = await widget.restClient.downloadBackup();
       final backupData = backup['backup_data'] as String;
       final envelope = RemoteBackupEnvelope.fromJson(
         jsonDecode(backupData) as Map<String, dynamic>,
       );
+      setState(() => _status = 'Decrypting…');
       final plaintext = await _backupCrypto.decryptBackupEnvelope(
         envelope,
         passphrase: passphrase,
       );
       final snapshot = utf8.decode(plaintext);
+      setState(() => _status = 'Validating backup in staging…');
       _validateSnapshotInStaging(snapshot);
+      setState(() => _status = 'Restoring…');
       widget.db.restoreBackupSnapshot(snapshot);
-      setState(() => _status = 'Backup restored successfully');
+      setState(
+        () => _status =
+            'Backup restored. Services reconnecting — '
+            'close and reopen the app to see fully updated data.',
+      );
     } catch (e) {
       setState(() => _status = 'Restore failed: $e');
     } finally {
+      await widget.onAfterRestore?.call();
       setState(() => _busy = false);
     }
   }
@@ -104,30 +122,11 @@ class _BackupScreenState extends State<BackupScreen> {
     required String title,
     required String action,
   }) async {
-    final controller = TextEditingController();
     final secret = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'Recovery secret'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: Text(action),
-          ),
-        ],
-      ),
+      builder: (ctx) =>
+          _RecoverySecretDialog(title: title, actionLabel: action),
     );
-    controller.dispose();
     if (secret == null || secret.trim().isEmpty) return null;
     return secret.trim();
   }
@@ -182,6 +181,47 @@ class _BackupScreenState extends State<BackupScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RecoverySecretDialog extends StatefulWidget {
+  const _RecoverySecretDialog({required this.title, required this.actionLabel});
+  final String title;
+  final String actionLabel;
+  @override
+  State<_RecoverySecretDialog> createState() => _RecoverySecretDialogState();
+}
+
+class _RecoverySecretDialogState extends State<_RecoverySecretDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        obscureText: true,
+        decoration: const InputDecoration(labelText: 'Recovery secret'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: Text(widget.actionLabel),
+        ),
+      ],
     );
   }
 }

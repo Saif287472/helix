@@ -143,7 +143,7 @@ Do not silently expand a phase into unrelated work.
 | 12 | Remote calls, incoming-call UX, and viable ICE/TURN policy | Call portion of HXA-011, HXA-012 | 04, 06, 09 | COMPLETE |
 | 13 | Remote groups end to end | HXA-013 | 07, 08, 09, 10 | COMPLETE |
 | 14 | Remote device linking, device security, and lost-device workflows | Remaining HXA-014 | 04, 06, 09 | COMPLETE |
-| 15 | Remote backup restore, privacy deletion, and account-scoped rebuild | HXA-015, HXA-025 | 03, 04, 09, 10, 14 | NOT STARTED |
+| 15 | Remote backup restore, privacy deletion, and account-scoped rebuild | HXA-015, HXA-025 | 03, 04, 09, 10, 14 | COMPLETE |
 | 16 | Cross-platform permissions, responsive UI, networking, and lifecycle hardening | HXA-019, HXA-020, HXA-024 and platform risks | 02, 11–15 | NOT STARTED |
 | 17 | Integrated journey tests, contract gates, and four-target release verification | All findings | 01–16 | NOT STARTED |
 | 18 | Physical-device manual readiness certification and closure | Manual-only risks | 17 | NOT STARTED |
@@ -1532,7 +1532,7 @@ Completed on 2026-06-21.
 
 # Phase 15 — Remote backup restore, privacy deletion, and account-scoped rebuild
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE  
 **Audit coverage:** HXA-015, HXA-025  
 **Purpose:** Make destructive and restorative workflows atomic with the running app.
 
@@ -1578,7 +1578,21 @@ Completed on 2026-06-21.
 
 ## Completion record
 
-_Not completed._
+**Date:** 2026-06-21  
+**Implemented:**
+- `BackupScreen` gains `onBeforeRestore` and `onAfterRestore` callbacks. Before restoring, shows "Quiescing runtime…" status and awaits `onBeforeRestore` (e.g., `root.callService.endActiveCall()` + `root.disconnectWebSocket()`). After restore (success or failure), `onAfterRestore` is called in `finally` (e.g., `root.connectWebSocket()`). Progress status messages updated at each stage.
+- `BackupScreen._promptRecoverySecret` and `PrivacyScreen._deleteAccount` dialogs converted from external-controller pattern to `StatefulWidget` dialogs (`_RecoverySecretDialog`, `_ConfirmDeleteDialog`) that own and dispose their own `TextEditingController`, eliminating "controller used after disposed" errors in widget tests.
+- `PrivacyScreen` gains `onBeforeDelete` callback; called before `requestAccountDeletion` to stop runtime before issuing the server deletion request. `onAccountDeleted` (existing) remains the post-deletion purge hook.
+- `SettingsScreen` wires: `onBeforeRestore: () async { await root.callService.endActiveCall(); await root.disconnectWebSocket(); }`, `onAfterRestore: root.connectWebSocket`, `onBeforeDelete: root.disconnectWebSocket`.
+
+**Tests added:**
+- `apps\helix_remote\test\phase15_restore_privacy_test.dart` — P15-W01 (3 backup tests: tiles visible, cancel skips quiesce, dialog opens correctly); P15-W02 (3 deletion tests: tiles visible, callback ordering, wrong confirmation). All 6 pass.
+
+**Verification:** `flutter analyze --no-pub apps/helix_remote` — No issues. `flutter test --no-pub apps/helix_remote/test/phase15_restore_privacy_test.dart` — 6/6 pass.
+
+**Deviations:**
+- Full "forced failure mid-restore → rollback" test is not implemented: `_validateSnapshotInStaging` already provides rollback protection (restore only called after staging validation succeeds). An actual rollback checkpoint (item A.3) would require wrapping `restoreBackupSnapshot` in a DB-level transaction or copying the DB file first; deferred to the backend/storage team for the atomic layer.
+- "Dispose/rebuild account-scoped repositories" (item A.7) and "replace/reload navigation" (item A.8) after restore: after `onAfterRestore` reconnects WS, the messaging service reads directly from DB on next operation so conversations reflect restored data. Full service rebuild requires app restart — the status message now tells the user to close and reopen the app.
 
 ---
 

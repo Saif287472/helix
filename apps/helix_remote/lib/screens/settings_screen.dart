@@ -39,6 +39,11 @@ class SettingsScreen extends StatelessWidget {
                     db: root.database,
                     restClient: root.restClient,
                     tempDir: root.devConfig.attachmentCacheDir,
+                    onBeforeRestore: () async {
+                      await root.callService.endActiveCall();
+                      await root.disconnectWebSocket();
+                    },
+                    onAfterRestore: root.connectWebSocket,
                   ),
                 ),
               ),
@@ -71,6 +76,7 @@ class SettingsScreen extends StatelessWidget {
                   builder: (_) => PrivacyScreen(
                     restClient: root.restClient,
                     messagingService: messagingService,
+                    onBeforeDelete: root.disconnectWebSocket,
                     onAccountDeleted: root.purgeAfterAccountDeletion,
                   ),
                 ),

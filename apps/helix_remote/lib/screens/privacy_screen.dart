@@ -11,11 +11,16 @@ class PrivacyScreen extends StatefulWidget {
     super.key,
     required this.restClient,
     required this.messagingService,
+    this.onBeforeDelete,
     this.onAccountDeleted,
   });
 
   final HelixRemoteRestClient restClient;
   final RemoteMessagingService messagingService;
+
+  /// Called before the server deletion request; should stop WS/calls/sync.
+  final Future<void> Function()? onBeforeDelete;
+
   final Future<void> Function()? onAccountDeleted;
 
   @override
@@ -64,38 +69,10 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
       setState(() => _status = 'Not logged in');
       return;
     }
-    final controller = TextEditingController();
     final confirmed = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Type DELETE $accountId to confirm.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Confirmation'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      builder: (ctx) => _ConfirmDeleteDialog(accountId: accountId),
     );
-    controller.dispose();
     if (confirmed == null) return;
     if (confirmed != 'DELETE $accountId') {
       setState(() => _status = 'Deletion confirmation did not match');
@@ -103,9 +80,11 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     }
     setState(() {
       _busy = true;
-      _status = 'Deleting account...';
+      _status = 'Stopping runtime before deletion…';
     });
+    await widget.onBeforeDelete?.call();
     try {
+      setState(() => _status = 'Deleting account…');
       await widget.restClient.requestAccountDeletion(confirmation: confirmed);
       await widget.onAccountDeleted?.call();
       setState(() => _status = 'Account deleted and local app data cleared.');
@@ -171,6 +150,54 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ConfirmDeleteDialog extends StatefulWidget {
+  const _ConfirmDeleteDialog({required this.accountId});
+  final String accountId;
+  @override
+  State<_ConfirmDeleteDialog> createState() => _ConfirmDeleteDialogState();
+}
+
+class _ConfirmDeleteDialogState extends State<_ConfirmDeleteDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Delete Account'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Type DELETE ${widget.accountId} to confirm.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Confirmation'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          child: const Text('Delete'),
+        ),
+      ],
     );
   }
 }
