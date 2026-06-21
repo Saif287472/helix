@@ -361,43 +361,49 @@ class _HelixRemoteAppState extends State<HelixRemoteApp> {
           }),
         ),
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _usernameController,
-                  enabled: !_registering,
-                  decoration: InputDecoration(
-                    labelText: 'Username',
-                    border: const OutlineInputBorder(),
-                    helperText: 'Letters, numbers, and underscores only.',
-                    errorText: _registrationError,
-                  ),
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _register(),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _registering ? null : _register,
-                    icon: _registering
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.person_add_outlined),
-                    label: Text(
-                      _registering ? 'Creating account…' : 'Create account',
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _usernameController,
+                      enabled: !_registering,
+                      decoration: InputDecoration(
+                        labelText: 'Username',
+                        border: const OutlineInputBorder(),
+                        helperText: 'Letters, numbers, and underscores only.',
+                        errorText: _registrationError,
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _register(),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _registering ? null : _register,
+                        icon: _registering
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.person_add_outlined),
+                        label: Text(
+                          _registering ? 'Creating account…' : 'Create account',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

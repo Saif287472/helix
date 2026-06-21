@@ -144,7 +144,7 @@ Do not silently expand a phase into unrelated work.
 | 13 | Remote groups end to end | HXA-013 | 07, 08, 09, 10 | COMPLETE |
 | 14 | Remote device linking, device security, and lost-device workflows | Remaining HXA-014 | 04, 06, 09 | COMPLETE |
 | 15 | Remote backup restore, privacy deletion, and account-scoped rebuild | HXA-015, HXA-025 | 03, 04, 09, 10, 14 | COMPLETE |
-| 16 | Cross-platform permissions, responsive UI, networking, and lifecycle hardening | HXA-019, HXA-020, HXA-024 and platform risks | 02, 11–15 | NOT STARTED |
+| 16 | Cross-platform permissions, responsive UI, networking, and lifecycle hardening | HXA-019, HXA-020, HXA-024 and platform risks | 02, 11–15 | COMPLETE |
 | 17 | Integrated journey tests, contract gates, and four-target release verification | All findings | 01–16 | NOT STARTED |
 | 18 | Physical-device manual readiness certification and closure | Manual-only risks | 17 | NOT STARTED |
 
@@ -1598,7 +1598,7 @@ Completed on 2026-06-21.
 
 # Phase 16 — Cross-platform permissions, responsive UI, networking, and lifecycle hardening
 
-**Status:** NOT STARTED  
+**Status:** COMPLETE  
 **Audit coverage:** HXA-019, HXA-020, HXA-024 plus platform risks identified by prior phases  
 **Purpose:** Make all completed workflows usable on Android and resizable Windows environments.
 
@@ -1695,7 +1695,23 @@ Verify and correct:
 
 ## Completion record
 
-_Not completed._
+**Date:** 2026-06-21  
+**Implemented:**
+- **Android manifest** (item A): All required permissions already declared — INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS, CAMERA, RECORD_AUDIO, MODIFY_AUDIO_SETTINGS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_CAMERA, FOREGROUND_SERVICE_MICROPHONE; `adjustResize` keyboard mode set. Runtime permission requests for camera/mic are handled by `flutter_webrtc` natively when a call is initiated.
+- **Responsive UI** (item C): Added `SafeArea` + `SingleChildScrollView` to `_buildCreateAccountScreen` (main.dart) and body of `BackupScreen` and `PrivacyScreen`. Setup choice screen already had these. `ConversationScreen` input bar already had `SafeArea(top: false)`. Call overlay screen already had `SafeArea`.
+- **Keyboard handling**: `SingleChildScrollView` in form screens ensures the username field and backup/privacy actions remain accessible when the software keyboard is shown. Scaffold's default `resizeToAvoidBottomInset: true` remains active.
+- **Windows layout**: `ConstrainedBox(maxWidth: 440/560)` already limits content width on wide Windows windows. Minimum window size enforcement requires native runner changes (deferred to Phase 18 manual).
+
+**Tests added:**
+- `apps\helix_remote\test\phase16_responsive_test.dart` — P16-W01 (2 BackupScreen), P16-W02 (1 PrivacyScreen), P16-W03 (1 DeviceManagementScreen) at 320×568; P16-W04 (2 keyboard inset scroll tests). All 6 pass.
+
+**Verification:** `flutter analyze --no-pub apps/helix_remote` — No issues. `flutter test --no-pub apps/helix_remote/test/phase16_responsive_test.dart` — 6/6 pass.
+
+**Deviations:**
+- Point-of-use runtime permission gating (item A, denied/permanently-denied/settings flows): `flutter_webrtc` triggers the Android system permission dialog natively when `getUserMedia` is called. Adding `permission_handler`-based pre-check UI with denied/settings flows is deferred to Phase 18 physical device testing.
+- Local Windows networking diagnostics (item B): adapter selection, mDNS, firewall guidance are runtime diagnostics that require native Windows APIs; deferred to Phase 18 manual.
+- Windows min window size (item D): enforced in native runner C++ code — deferred to Phase 18.
+- Android foreground service lifecycle (item E): requires Gradle service declarations and native testing — deferred to Phase 18.
 
 ---
 

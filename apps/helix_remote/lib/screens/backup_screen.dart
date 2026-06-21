@@ -145,40 +145,42 @@ class _BackupScreenState extends State<BackupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Backup & Restore')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.upload),
-                title: const Text('Create Backup'),
-                subtitle: const Text('Encrypt and upload app data'),
-                enabled: !_busy,
-                onTap: _createBackup,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.upload),
+                  title: const Text('Create Backup'),
+                  subtitle: const Text('Encrypt and upload app data'),
+                  enabled: !_busy,
+                  onTap: _createBackup,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.download),
-                title: const Text('Restore Backup'),
-                subtitle: const Text('Decrypt, validate, then restore'),
-                enabled: !_busy,
-                onTap: _restoreBackup,
+              const SizedBox(height: 8),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.download),
+                  title: const Text('Restore Backup'),
+                  subtitle: const Text('Decrypt, validate, then restore'),
+                  enabled: !_busy,
+                  onTap: _restoreBackup,
+                ),
               ),
-            ),
-            if (_status != null) ...[
-              const SizedBox(height: 16),
-              Text(_status!, textAlign: TextAlign.center),
+              if (_status != null) ...[
+                const SizedBox(height: 16),
+                Text(_status!, textAlign: TextAlign.center),
+              ],
+              if (_busy)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
             ],
-            if (_busy)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-          ],
+          ),
         ),
       ),
     );

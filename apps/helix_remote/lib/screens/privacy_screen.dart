@@ -114,40 +114,46 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Privacy & Account')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.file_download),
-                title: const Text('Export My Data'),
-                subtitle: const Text('Save JSON file outside encrypted app DB'),
-                enabled: !_busy,
-                onTap: _exportData,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.file_download),
+                  title: const Text('Export My Data'),
+                  subtitle: const Text(
+                    'Save JSON file outside encrypted app DB',
+                  ),
+                  enabled: !_busy,
+                  onTap: _exportData,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.delete_forever, color: Colors.red),
-                title: const Text('Delete Account'),
-                subtitle: const Text('Permanently delete account and all data'),
-                enabled: !_busy,
-                onTap: _deleteAccount,
+              const SizedBox(height: 8),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text('Delete Account'),
+                  subtitle: const Text(
+                    'Permanently delete account and all data',
+                  ),
+                  enabled: !_busy,
+                  onTap: _deleteAccount,
+                ),
               ),
-            ),
-            if (_status != null) ...[
-              const SizedBox(height: 16),
-              Text(_status!, textAlign: TextAlign.center),
+              if (_status != null) ...[
+                const SizedBox(height: 16),
+                Text(_status!, textAlign: TextAlign.center),
+              ],
+              if (_busy)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
             ],
-            if (_busy)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-          ],
+          ),
         ),
       ),
     );
