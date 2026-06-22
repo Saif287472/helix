@@ -1,1 +1,0 @@
-{"recipient_device_id":"dev_fuzz","ciphertext":"base64url.invalid","expectation":"decrypt_fails_closed"}

@@ -1,7 +1,0 @@
-{
-  "@@locale": "en",
-  "appName": "Helix",
-  "@appName": {
-    "description": "Application name used by generated Flutter localization scaffolding."
-  }
-}
