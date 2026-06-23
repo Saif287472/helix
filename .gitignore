@@ -65,6 +65,9 @@ secrets/
 private/
 local.properties
 
+# Generated codebase extracts (large AI-readable dumps, regenerate with tool/extract_*.dart)
+docs/codebase/
+
 # Local databases and diagnostic exports
 *.db
 *.sqlite
