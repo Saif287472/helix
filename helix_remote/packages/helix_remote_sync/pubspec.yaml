@@ -1,0 +1,25 @@
+name: helix_remote_sync
+description: Synchronization and outbound offline queues coordinator for Helix Remote.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.18.0
+  helix_remote_domain:
+    path: ../helix_remote_domain
+  helix_remote_storage:
+    path: ../helix_remote_storage
+  helix_remote_api:
+    path: ../helix_remote_api
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  path: ^1.9.1

@@ -1,0 +1,746 @@
+part of '../database.dart';
+
+extension BackendAccountsDevicesRepository on BackendDatabase {
+  // Account operations
+  void createAccount(
+    String accountId,
+    String username,
+    String identityPublicKey,
+  ) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT INTO accounts (account_id, username, identity_public_key, created_at, status)
+      VALUES (?, ?, ?, ?, 'ACTIVE');
+    ''');
+    stmt.execute([accountId, username, identityPublicKey, now]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getAccount(String accountId) {
+    final stmt = _db.prepare('SELECT * FROM accounts WHERE account_id = ?;');
+    final result = stmt.select([accountId]);
+    stmt.close();
+    if (result.isEmpty) return null;
+    final row = result.first;
+    return {
+      'account_id': row['account_id'],
+      'username': row['username'],
+      'identity_public_key': row['identity_public_key'],
+      'created_at': row['created_at'],
+      'status': row['status'],
+    };
+  }
+
+  bool accountExists(String accountId) => getAccount(accountId) != null;
+
+  Map<String, dynamic>? getAccountByUsername(String username) {
+    final stmt = _db.prepare('SELECT * FROM accounts WHERE username = ?;');
+    final result = stmt.select([username]);
+    stmt.close();
+    if (result.isEmpty) return null;
+    final row = result.first;
+    return {
+      'account_id': row['account_id'],
+      'username': row['username'],
+      'identity_public_key': row['identity_public_key'],
+      'created_at': row['created_at'],
+      'status': row['status'],
+    };
+  }
+
+  Map<String, dynamic> upsertAccountProfile({
+    required String accountId,
+    required String displayName,
+  }) {
+    final current = getAccountProfile(accountId);
+    final nextVersion = ((current?['profile_version'] as int?) ?? 0) + 1;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO account_profiles (
+        account_id,
+        display_name,
+        updated_at,
+        profile_version
+      )
+      VALUES (?, ?, ?, ?);
+    ''');
+    stmt.execute([accountId, displayName, now, nextVersion]);
+    stmt.close();
+    return {
+      'account_id': accountId,
+      'display_name': displayName,
+      'updated_at': now,
+      'profile_version': nextVersion,
+    };
+  }
+
+  Map<String, dynamic>? getAccountProfile(String accountId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM account_profiles WHERE account_id = ?;',
+    );
+    final res = stmt.select([accountId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'account_id': row['account_id'],
+      'display_name': row['display_name'],
+      'updated_at': row['updated_at'],
+      'profile_version': row['profile_version'],
+    };
+  }
+
+  void updateUsername(String accountId, String username) {
+    final stmt = _db.prepare(
+      'UPDATE accounts SET username = ? WHERE account_id = ?;',
+    );
+    stmt.execute([username, accountId]);
+    stmt.close();
+  }
+
+  Map<String, dynamic> exportAccountData(String accountId) {
+    final deviceIds = getDevices(
+      accountId,
+    ).map((device) => device['device_id'] as String).toList();
+
+    return {
+      'export_version': 1,
+      'exported_at': DateTime.now().millisecondsSinceEpoch,
+      'account': getAccount(accountId),
+      'devices': getDevices(accountId),
+      'device_revocations': _selectWhere(
+        'device_revocations',
+        'account_id = ?',
+        [accountId],
+      ),
+      'pending_device_links': _selectWhere(
+        'pending_device_links',
+        'account_id = ?',
+        [accountId],
+      ),
+      'public_prekeys': {
+        'signed_prekeys': _selectWhere('signed_prekeys', 'account_id = ?', [
+          accountId,
+        ]),
+        'one_time_prekeys': _selectWhere('one_time_prekeys', 'account_id = ?', [
+          accountId,
+        ]),
+      },
+      'contacts': getContacts(accountId),
+      'contact_requests': getContactRequests(accountId),
+      'privacy': getPrivacy(accountId),
+      'conversations': _selectWhere(
+        'conversations',
+        'conversation_id IN (SELECT conversation_id FROM conversation_members WHERE account_id = ?)',
+        [accountId],
+      ),
+      'memberships': _selectWhere('conversation_members', 'account_id = ?', [
+        accountId,
+      ]),
+      'message_mailbox': deviceIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : _selectWhere(
+              'messages',
+              'recipient_device_id IN (${List.filled(deviceIds.length, '?').join(', ')}) OR sender_account_id = ?',
+              [...deviceIds, accountId],
+            ),
+      'attachments': _selectWhere('attachments', 'account_id = ?', [accountId]),
+      'backup': getBackup(accountId),
+      'reports': [
+        ..._selectWhere('reports', 'reporter_account_id = ?', [accountId]),
+        ..._selectWhere('reports', 'subject_account_id = ?', [accountId]),
+      ],
+      'audit': _selectWhere('audit_logs', 'account_id = ?', [accountId]),
+    };
+  }
+
+  void deleteAccountData(String accountId) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final devices = getDevices(
+        accountId,
+      ).map((device) => device['device_id'] as String).toList();
+      for (final deviceId in devices) {
+        deleteMessagesForDevice(deviceId);
+      }
+
+      for (final table in [
+        'audit_logs',
+        'group_creation_log',
+        'turn_credential_log',
+        'pending_device_links',
+        'device_revocations',
+      ]) {
+        _deleteWhere(table, 'account_id = ?', [accountId]);
+      }
+      for (final table in ['reports']) {
+        _deleteWhere(
+          table,
+          'reporter_account_id = ? OR subject_account_id = ?',
+          [accountId, accountId],
+        );
+      }
+      _deleteWhere('outbox', 'payload LIKE ?', ['%$accountId%']);
+
+      final stmt = _db.prepare('DELETE FROM accounts WHERE account_id = ?;');
+      stmt.execute([accountId]);
+      stmt.close();
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  // Device operations
+  void registerDevice(
+    String deviceId,
+    String accountId,
+    String deviceSigningPublicKey,
+    String deviceAgreementPublicKeyOrName, [
+    String? deviceName,
+  ]) {
+    final resolvedDeviceName = deviceName ?? deviceAgreementPublicKeyOrName;
+    final resolvedAgreementPublicKey = deviceName == null
+        ? deviceSigningPublicKey
+        : deviceAgreementPublicKeyOrName;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO devices (device_id, account_id, device_signing_public_key, device_agreement_public_key, device_name, status, created_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?);
+    ''');
+    stmt.execute([
+      deviceId,
+      accountId,
+      deviceSigningPublicKey,
+      resolvedAgreementPublicKey,
+      resolvedDeviceName,
+      now,
+      now,
+    ]);
+    stmt.close();
+  }
+
+  List<Map<String, dynamic>> getDevices(String accountId) {
+    final stmt = _db.prepare(
+      "SELECT * FROM devices WHERE account_id = ? AND status = 'ACTIVE';",
+    );
+    final result = stmt.select([accountId]);
+    stmt.close();
+    return result
+        .map(
+          (row) => {
+            'device_id': row['device_id'],
+            'account_id': row['account_id'],
+            'device_signing_public_key': row['device_signing_public_key'],
+            'device_agreement_public_key': row['device_agreement_public_key'],
+            'device_name': row['device_name'],
+            'status': row['status'],
+            'push_token': row['push_token'],
+            'created_at': row['created_at'],
+            'last_seen_at': row['last_seen_at'],
+          },
+        )
+        .toList();
+  }
+
+  void revokeDevice(String accountId, String deviceId) {
+    final stmt = _db.prepare(
+      "UPDATE devices SET status = 'REVOKED' WHERE account_id = ? AND device_id = ?;",
+    );
+    stmt.execute([accountId, deviceId]);
+    stmt.close();
+  }
+
+  void renameDevice(String accountId, String deviceId, String deviceName) {
+    final stmt = _db.prepare('''
+      UPDATE devices SET device_name = ?
+      WHERE account_id = ? AND device_id = ? AND status = 'ACTIVE';
+    ''');
+    stmt.execute([deviceName, accountId, deviceId]);
+    stmt.close();
+  }
+
+  int activeDeviceCount(String accountId) {
+    final stmt = _db.prepare(
+      "SELECT COUNT(*) AS count FROM devices WHERE account_id = ? AND status = 'ACTIVE';",
+    );
+    final res = stmt.select([accountId]);
+    stmt.close();
+    return res.first['count'] as int;
+  }
+
+  bool isDeviceActive(String accountId, String deviceId) {
+    final stmt = _db.prepare('''
+      SELECT 1 FROM devices
+      WHERE account_id = ? AND device_id = ? AND status = 'ACTIVE';
+    ''');
+    final res = stmt.select([accountId, deviceId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
+  void updateDeviceLastSeen(String accountId, String deviceId, int timestamp) {
+    final stmt = _db.prepare('''
+      UPDATE devices SET last_seen_at = ?
+      WHERE account_id = ? AND device_id = ?;
+    ''');
+    stmt.execute([timestamp, accountId, deviceId]);
+    stmt.close();
+  }
+
+  void updateDevicePushToken(
+    String accountId,
+    String deviceId,
+    String pushToken,
+  ) {
+    final stmt = _db.prepare(
+      'UPDATE devices SET push_token = ? WHERE account_id = ? AND device_id = ?;',
+    );
+    stmt.execute([pushToken, accountId, deviceId]);
+    stmt.close();
+  }
+
+  String? getDevicePushToken(String deviceId) {
+    final stmt = _db.prepare(
+      "SELECT push_token FROM devices WHERE device_id = ? AND status = 'ACTIVE';",
+    );
+    final res = stmt.select([deviceId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    return res.first['push_token'] as String?;
+  }
+
+  List<Map<String, dynamic>> getDevicesOfDevice(String deviceId) {
+    final stmt = _db.prepare('SELECT * FROM devices WHERE device_id = ?;');
+    final result = stmt.select([deviceId]);
+    stmt.close();
+    return result
+        .map(
+          (row) => {
+            'device_id': row['device_id'],
+            'account_id': row['account_id'],
+          },
+        )
+        .toList();
+  }
+
+  void createDeviceLinkRequest({
+    required String linkId,
+    required String accountId,
+    required String requestedByDeviceId,
+    required String newDeviceId,
+    required String newDevicePublicKey,
+    required String newDeviceName,
+    required String verificationCodeHash,
+    String? newDeviceSigningPublicKey,
+    String? newDeviceAgreementPublicKey,
+    String requestNonce = '',
+    int expiresAt = 0,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final signingKey = newDeviceSigningPublicKey ?? newDevicePublicKey;
+    final agreementKey = newDeviceAgreementPublicKey ?? newDevicePublicKey;
+    final stmt = _db.prepare('''
+      INSERT INTO pending_device_links (
+        link_id,
+        account_id,
+        requested_by_device_id,
+        new_device_id,
+        new_device_public_key,
+        new_device_signing_public_key,
+        new_device_agreement_public_key,
+        new_device_name,
+        verification_code_hash,
+        status,
+        created_at,
+        request_nonce,
+        expires_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?);
+    ''');
+    stmt.execute([
+      linkId,
+      accountId,
+      requestedByDeviceId,
+      newDeviceId,
+      newDevicePublicKey,
+      signingKey,
+      agreementKey,
+      newDeviceName,
+      verificationCodeHash,
+      now,
+      requestNonce,
+      expiresAt,
+    ]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getDeviceLinkRequest(String linkId) {
+    final stmt = _db.prepare(
+      'SELECT * FROM pending_device_links WHERE link_id = ?;',
+    );
+    final res = stmt.select([linkId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'link_id': row['link_id'],
+      'account_id': row['account_id'],
+      'requested_by_device_id': row['requested_by_device_id'],
+      'new_device_id': row['new_device_id'],
+      'new_device_public_key': row['new_device_public_key'],
+      'new_device_signing_public_key':
+          row['new_device_signing_public_key'] ?? row['new_device_public_key'],
+      'new_device_agreement_public_key':
+          row['new_device_agreement_public_key'] ??
+          row['new_device_public_key'],
+      'new_device_name': row['new_device_name'],
+      'verification_code_hash': row['verification_code_hash'],
+      'status': row['status'],
+      'created_at': row['created_at'],
+      'approved_at': row['approved_at'],
+      'expires_at': row['expires_at'] ?? 0,
+      'request_nonce': row['request_nonce'] ?? '',
+      'approved_by_device_id': row['approved_by_device_id'],
+      'approval_transcript_hash': row['approval_transcript_hash'] ?? '',
+      'rejected_at': row['rejected_at'],
+      'completed_at': row['completed_at'],
+    };
+  }
+
+  bool approveDeviceLinkRequest({
+    required String linkId,
+    required String accountId,
+    required String verificationCodeHash,
+    String? approvedByDeviceId,
+    String approvalTranscriptHash = '',
+    int? now,
+  }) {
+    final link = getDeviceLinkRequest(linkId);
+    final currentTime = now ?? DateTime.now().millisecondsSinceEpoch;
+    final expiresAt = (link?['expires_at'] as int?) ?? 0;
+    if (link == null ||
+        link['account_id'] != accountId ||
+        link['status'] != 'PENDING' ||
+        link['verification_code_hash'] != verificationCodeHash ||
+        (expiresAt > 0 && currentTime >= expiresAt) ||
+        (approvedByDeviceId != null &&
+            link['new_device_id'] == approvedByDeviceId)) {
+      return false;
+    }
+
+    final stmt = _db.prepare('''
+      UPDATE pending_device_links
+      SET status = 'APPROVED',
+          approved_at = ?,
+          approved_by_device_id = ?,
+          approval_transcript_hash = ?
+      WHERE link_id = ? AND status = 'PENDING';
+    ''');
+    stmt.execute([
+      currentTime,
+      approvedByDeviceId,
+      approvalTranscriptHash,
+      linkId,
+    ]);
+    final changed = _db.updatedRows;
+    stmt.close();
+    return changed == 1;
+  }
+
+  bool rejectDeviceLinkRequest({
+    required String linkId,
+    required String accountId,
+    required String verificationCodeHash,
+    required String rejectedByDeviceId,
+    int? now,
+  }) {
+    final link = getDeviceLinkRequest(linkId);
+    final currentTime = now ?? DateTime.now().millisecondsSinceEpoch;
+    if (link == null ||
+        link['account_id'] != accountId ||
+        link['status'] != 'PENDING' ||
+        link['verification_code_hash'] != verificationCodeHash ||
+        link['new_device_id'] == rejectedByDeviceId) {
+      return false;
+    }
+
+    final stmt = _db.prepare('''
+      UPDATE pending_device_links
+      SET status = 'REJECTED',
+          rejected_at = ?,
+          approved_by_device_id = ?
+      WHERE link_id = ? AND status = 'PENDING';
+    ''');
+    stmt.execute([currentTime, rejectedByDeviceId, linkId]);
+    final changed = _db.updatedRows;
+    stmt.close();
+    return changed == 1;
+  }
+
+  bool completeDeviceLinkRequest(String linkId, {int? now}) {
+    final stmt = _db.prepare(
+      "UPDATE pending_device_links SET status = 'LINKED', completed_at = ? WHERE link_id = ? AND status = 'APPROVED';",
+    );
+    stmt.execute([now ?? DateTime.now().millisecondsSinceEpoch, linkId]);
+    final changed = _db.updatedRows;
+    stmt.close();
+    return changed == 1;
+  }
+
+  void deletePrekeysForDevice(String accountId, String deviceId) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      var stmt = _db.prepare(
+        'DELETE FROM one_time_prekeys WHERE account_id = ? AND device_id = ?;',
+      );
+      stmt.execute([accountId, deviceId]);
+      stmt.close();
+
+      stmt = _db.prepare(
+        'DELETE FROM signed_prekeys WHERE account_id = ? AND device_id = ?;',
+      );
+      stmt.execute([accountId, deviceId]);
+      stmt.close();
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  void expirePendingDeviceLinksForDevice(
+    String accountId,
+    String deviceId, {
+    int? now,
+  }) {
+    final stmt = _db.prepare('''
+      UPDATE pending_device_links
+      SET status = 'REJECTED', rejected_at = ?
+      WHERE account_id = ?
+        AND status IN ('PENDING', 'APPROVED')
+        AND (new_device_id = ? OR requested_by_device_id = ? OR approved_by_device_id = ?);
+    ''');
+    stmt.execute([
+      now ?? DateTime.now().millisecondsSinceEpoch,
+      accountId,
+      deviceId,
+      deviceId,
+      deviceId,
+    ]);
+    stmt.close();
+  }
+
+  void recordDeviceRevocation({
+    required String revocationId,
+    required String accountId,
+    required String revokedDeviceId,
+    required String reason,
+    String? revokedByDeviceId,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      INSERT INTO device_revocations (
+        revocation_id,
+        account_id,
+        revoked_device_id,
+        revoked_by_device_id,
+        reason,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?);
+    ''');
+    stmt.execute([
+      revocationId,
+      accountId,
+      revokedDeviceId,
+      revokedByDeviceId,
+      reason,
+      now,
+    ]);
+    stmt.close();
+  }
+
+  Map<String, dynamic>? getDeviceRevocation(String accountId, String deviceId) {
+    final stmt = _db.prepare('''
+      SELECT * FROM device_revocations
+      WHERE account_id = ? AND revoked_device_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1;
+    ''');
+    final res = stmt.select([accountId, deviceId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final row = res.first;
+    return {
+      'revocation_id': row['revocation_id'],
+      'account_id': row['account_id'],
+      'revoked_device_id': row['revoked_device_id'],
+      'revoked_by_device_id': row['revoked_by_device_id'],
+      'reason': row['reason'],
+      'created_at': row['created_at'],
+    };
+  }
+
+  List<Map<String, dynamic>> getDeviceSecurityHistory(
+    String accountId,
+    String deviceId,
+  ) {
+    final audit = _selectWhere(
+      'audit_logs',
+      "account_id = ? AND (device_id = ? OR action IN ('DEVICE_LINK_REQUESTED', 'DEVICE_LINK_APPROVED', 'DEVICE_LINK_REJECTED', 'DEVICE_LINK_COMPLETED', 'DEVICE_LINK_COMPLETION_REPLAYED'))",
+      [accountId, deviceId],
+    );
+    final revocations = _selectWhere(
+      'device_revocations',
+      'account_id = ? AND revoked_device_id = ?',
+      [accountId, deviceId],
+    );
+    return [
+      ...audit.map(
+        (row) => {
+          'type': row['action'],
+          'device_id': row['device_id'],
+          'timestamp': row['timestamp'],
+        },
+      ),
+      ...revocations.map(
+        (row) => {
+          'type': 'DEVICE_REVOKED',
+          'device_id': row['revoked_device_id'],
+          'reason': row['reason'],
+          'timestamp': row['created_at'],
+        },
+      ),
+    ]..sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+  }
+
+  void deleteMessagesForDevice(String deviceId) {
+    final stmt = _db.prepare(
+      'DELETE FROM messages WHERE recipient_device_id = ?;',
+    );
+    stmt.execute([deviceId]);
+    stmt.close();
+  }
+
+  // Prekey operations
+  void publishPrekeys({
+    required String accountId,
+    required String deviceId,
+    required int signedPrekeyId,
+    required String signedPrekey,
+    required String signature,
+    required List<Map<String, dynamic>> oneTimePrekeys,
+  }) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final signedStmt = _db.prepare('''
+        INSERT OR REPLACE INTO signed_prekeys (account_id, device_id, key_id, public_key, signature)
+        VALUES (?, ?, ?, ?, ?);
+      ''');
+      signedStmt.execute([
+        accountId,
+        deviceId,
+        signedPrekeyId,
+        signedPrekey,
+        signature,
+      ]);
+      signedStmt.close();
+
+      // For simplicity, we overwrite Bob's OTKs or append. Let's delete existing OTKs and insert new ones.
+      final clearOtkStmt = _db.prepare(
+        'DELETE FROM one_time_prekeys WHERE account_id = ? AND device_id = ?;',
+      );
+      clearOtkStmt.execute([accountId, deviceId]);
+      clearOtkStmt.close();
+
+      final otkStmt = _db.prepare('''
+        INSERT INTO one_time_prekeys (account_id, device_id, key_id, public_key)
+        VALUES (?, ?, ?, ?);
+      ''');
+      for (final otk in oneTimePrekeys) {
+        otkStmt.execute([
+          accountId,
+          deviceId,
+          otk['key_id'],
+          otk['public_key'],
+        ]);
+      }
+      otkStmt.close();
+
+      _db.execute('COMMIT;');
+    } catch (e) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  Map<String, dynamic>? getPrekeyBundleForDevice(
+    String accountId,
+    String deviceId,
+  ) {
+    // 1. Get account identity key
+    final acc = getAccount(accountId);
+    if (acc == null) return null;
+
+    // 2. Get device identity key
+    final devStmt = _db.prepare(
+      "SELECT * FROM devices WHERE account_id = ? AND device_id = ? AND status = 'ACTIVE';",
+    );
+    final devRes = devStmt.select([accountId, deviceId]);
+    devStmt.close();
+    if (devRes.isEmpty) return null;
+    final devRow = devRes.first;
+
+    // 3. Get signed prekey
+    final spkStmt = _db.prepare(
+      'SELECT * FROM signed_prekeys WHERE account_id = ? AND device_id = ?;',
+    );
+    final spkRes = spkStmt.select([accountId, deviceId]);
+    spkStmt.close();
+    if (spkRes.isEmpty) return null;
+    final spkRow = spkRes.first;
+
+    // 4. Get one OTK (atomic retrieval - fetch and delete)
+    Map<String, dynamic>? otkData;
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final otkStmt = _db.prepare(
+        'SELECT * FROM one_time_prekeys WHERE account_id = ? AND device_id = ? LIMIT 1;',
+      );
+      final otkRes = otkStmt.select([accountId, deviceId]);
+      otkStmt.close();
+
+      if (otkRes.isNotEmpty) {
+        final otkRow = otkRes.first;
+        otkData = {
+          'key_id': otkRow['key_id'],
+          'public_key': otkRow['public_key'],
+        };
+        // Delete this OTK
+        final delStmt = _db.prepare(
+          'DELETE FROM one_time_prekeys WHERE account_id = ? AND device_id = ? AND key_id = ?;',
+        );
+        delStmt.execute([accountId, deviceId, otkRow['key_id']]);
+        delStmt.close();
+      }
+      _db.execute('COMMIT;');
+    } catch (e) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+
+    return {
+      'identity_key': acc['identity_public_key'],
+      'device_id': deviceId,
+      'device_key': devRow['device_agreement_public_key'],
+      'signed_prekey': {
+        'key_id': spkRow['key_id'],
+        'public_key': spkRow['public_key'],
+        'signature': spkRow['signature'],
+      },
+      'one_time_prekey': otkData,
+    };
+  }
+}

@@ -1,0 +1,15 @@
+name: helix_local_crypto
+description: Session key derivation, HKDF, and chain-key ratcheting.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  cryptography: ^2.9.0
+  crypto: ^3.0.7
+  helix_local_domain:
+    path: ../helix_local_domain

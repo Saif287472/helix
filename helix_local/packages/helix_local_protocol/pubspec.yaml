@@ -1,0 +1,15 @@
+name: helix_local_protocol
+description: Protocol frame definitions, CBOR codecs, versioning, and gateway/use-case contracts.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  cbor: ^6.5.1
+  meta: ^1.18.0
+  helix_local_domain:
+    path: ../helix_local_domain

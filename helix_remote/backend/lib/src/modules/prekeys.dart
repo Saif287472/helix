@@ -1,0 +1,127 @@
+import 'dart:convert';
+import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
+import 'package:helix_remote_backend/src/database.dart';
+
+class PrekeysModule {
+  final BackendDatabase db;
+
+  PrekeysModule(this.db);
+
+  Router get router {
+    final router = Router();
+    router.post('/publish', _publishHandler);
+    router.get('/bundle', _bundleHandler);
+    return router;
+  }
+
+  Future<Response> _publishHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final signedPrekeyId = body['signed_prekey_id'] as int?;
+      final signedPrekey = body['signed_prekey'] as String?;
+      final signature = body['signature'] as String?;
+      final oneTimePrekeysList = body['one_time_prekeys'] as List?;
+
+      if (signedPrekeyId == null ||
+          signedPrekey == null ||
+          signature == null ||
+          oneTimePrekeysList == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing prekey publication fields'}),
+        );
+      }
+
+      final accountId = auth['account_id'] as String;
+      final deviceId = auth['device_id'] as String;
+
+      final oneTimePrekeys = oneTimePrekeysList.map((otk) {
+        final map = otk as Map<String, dynamic>;
+        return {
+          'key_id': map['key_id'] as int,
+          'public_key': map['public_key'] as String,
+        };
+      }).toList();
+
+      db.publishPrekeys(
+        accountId: accountId,
+        deviceId: deviceId,
+        signedPrekeyId: signedPrekeyId,
+        signedPrekey: signedPrekey,
+        signature: signature,
+        oneTimePrekeys: oneTimePrekeys,
+      );
+
+      db.logAudit(
+        accountId,
+        deviceId,
+        'PREKEYS_PUBLISHED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      return Response.ok(
+        jsonEncode({'message': 'Prekeys published successfully'}),
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+
+  Future<Response> _bundleHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+
+    final targetAccountId = request.url.queryParameters['account_id'];
+    if (targetAccountId == null) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Missing account_id parameter'}),
+      );
+    }
+
+    try {
+      // 1. Get all active devices for the target account
+      final devices = db.getDevices(targetAccountId);
+      if (devices.isEmpty) {
+        return Response.notFound(
+          jsonEncode({'error': 'No active devices found for this account'}),
+        );
+      }
+
+      final deviceBundles = <Map<String, dynamic>>[];
+      for (final device in devices) {
+        final deviceId = device['device_id'] as String;
+        final bundle = db.getPrekeyBundleForDevice(targetAccountId, deviceId);
+        if (bundle != null) {
+          deviceBundles.add(bundle);
+        }
+      }
+
+      db.logAudit(
+        auth['account_id'] as String,
+        auth['device_id'] as String?,
+        'PREKEY_BUNDLE_REQUEST',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      return Response.ok(
+        jsonEncode({'account_id': targetAccountId, 'devices': deviceBundles}),
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+}

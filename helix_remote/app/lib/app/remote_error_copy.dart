@@ -1,0 +1,106 @@
+import 'package:helix_remote/app/remote_rest_client.dart';
+
+class RemoteUserErrorCopy {
+  const RemoteUserErrorCopy._();
+
+  static String refreshFailure(RemoteRestException error, Uri backend) {
+    switch (error.failureKind) {
+      case RemoteRestFailureKind.serverDown:
+        return serverUnavailable(backend);
+      case RemoteRestFailureKind.noInternet:
+        return networkUnavailable();
+      case RemoteRestFailureKind.timeout:
+        return timeout(backend);
+      case RemoteRestFailureKind.http:
+      case RemoteRestFailureKind.unknown:
+        break;
+    }
+    switch (error.statusCode) {
+      case 400:
+        return 'The saved session request was invalid. Sign in again or '
+            'change the server URL if this keeps happening.';
+      case 409:
+        return 'Your session state changed on another device. Tap Retry to '
+            'sync the latest account state.';
+      case 429:
+        return 'Too many session refresh attempts. Wait a moment, then tap '
+            'Retry.';
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        return 'The Helix Remote server is having trouble. Tap Retry after '
+            'the server is healthy.';
+      default:
+        return unknownStartup();
+    }
+  }
+
+  static String registrationFailure(RemoteRestException error, Uri backend) {
+    switch (error.failureKind) {
+      case RemoteRestFailureKind.serverDown:
+        return 'Could not reach Helix Remote backend at $backend. '
+            '${serverHint(backend)}';
+      case RemoteRestFailureKind.noInternet:
+        return networkUnavailable().replaceFirst('tap Retry', 'try again');
+      case RemoteRestFailureKind.timeout:
+        return 'Helix Remote backend did not respond in time at $backend. '
+            'Check the connection and try again.';
+      case RemoteRestFailureKind.http:
+        switch (error.statusCode) {
+          case 400:
+            return 'Account details were not accepted by this server. '
+                'Check the username and try again.';
+          case 409:
+            return 'That username or device is already registered. Choose '
+                'another username or sign in with an existing device.';
+          case 429:
+            return 'Too many registration attempts. Wait a moment, then try '
+                'again.';
+          default:
+            return 'Registration failed because the server returned HTTP '
+                '${error.statusCode ?? 'unknown'}. Try again later.';
+        }
+      case RemoteRestFailureKind.unknown:
+        return unknownRegistration();
+    }
+  }
+
+  static String serverUnavailable(Uri backend) {
+    return 'Helix Remote server is unreachable at $backend. '
+        '${serverHint(backend)}';
+  }
+
+  static String serverHint(Uri backend) {
+    final host = backend.host;
+    if (host == '10.0.2.2') {
+      return 'Start the Helix Remote backend on your PC, then tap Retry.';
+    }
+    if (host == 'localhost' || host == '127.0.0.1') {
+      return 'On a physical Android device, localhost points to the phone. '
+          'Restart with --dart-define=HELIX_REMOTE_HOST=<your PC LAN IP> '
+          'and make sure the backend is running.';
+    }
+    return 'Start the Helix Remote backend, then tap Retry. If it is already '
+        'running, check the server URL and firewall.';
+  }
+
+  static String networkUnavailable() =>
+      'Network unavailable. Reconnect to Wi-Fi or mobile data, then tap Retry.';
+
+  static String timeout(Uri backend) =>
+      'Helix Remote server did not respond in time at $backend. Check the '
+      'connection and tap Retry.';
+
+  static String authExpired() =>
+      'Your session expired or this device was revoked. Sign in again to '
+      'continue.';
+
+  static String unknownStartup() =>
+      'Helix Remote could not finish startup because of an unexpected error. '
+      'Tap Retry, or change the server URL if it keeps happening.';
+
+  static String unknownRegistration() =>
+      'Registration failed because of an unexpected error. Try again, or '
+      'change the server URL if it keeps happening.';
+}

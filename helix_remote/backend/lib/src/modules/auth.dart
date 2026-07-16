@@ -1,0 +1,117 @@
+import 'dart:convert';
+import 'dart:math';
+import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
+import 'package:cryptography/cryptography.dart' as crypto;
+import 'package:crypto/crypto.dart' as crypto_pkg;
+import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/jwt.dart';
+
+part 'auth/challenge_login.dart';
+part 'auth/devices.dart';
+part 'auth/profile.dart';
+part 'auth/refresh.dart';
+part 'auth/registration.dart';
+
+abstract class AuthModuleBase {
+  BackendDatabase get db;
+  JwtHelper get jwt;
+  void Function(String deviceId, Map<String, dynamic> payload)?
+  get notifyDevice;
+  DateTime Function() get _now;
+  Map<String, _LoginChallenge> get _challenges;
+  crypto.Ed25519 get _ed25519;
+
+  bool _isValidUsername(String username);
+
+  String _serverAudience(Request request);
+
+  void _notifySiblingDevices(
+    String accountId, {
+    required String exceptDeviceId,
+    required Map<String, dynamic> payload,
+  });
+}
+
+class AuthModule extends AuthModuleBase
+    with
+        AuthChallengeLoginHandlers,
+        AuthDeviceHandlers,
+        AuthProfileHandlers,
+        AuthRefreshHandlers,
+        AuthRegistrationHandlers {
+  @override
+  final BackendDatabase db;
+  @override
+  final JwtHelper jwt;
+  @override
+  final void Function(String deviceId, Map<String, dynamic> payload)?
+  notifyDevice;
+  @override
+  final DateTime Function() _now;
+  @override
+  final Map<String, _LoginChallenge> _challenges = {}; // key: "account_id:device_id"
+  @override
+  final crypto.Ed25519 _ed25519 = crypto.Ed25519();
+
+  AuthModule(this.db, this.jwt, {this.notifyDevice, DateTime Function()? now})
+    : _now = now ?? DateTime.now;
+
+  Router get router {
+    final router = Router();
+
+    // Public routes
+    router.post('/register', _registerHandler);
+    router.get('/challenge', _challengeHandler);
+    router.post('/login', _loginHandler);
+    router.post('/refresh', _refreshHandler);
+
+    // Auth routes (enforced by middleware in main, but we can verify here too)
+    router.get('/devices', _listDevicesHandler);
+    router.post('/devices/rename', _renameDeviceHandler);
+    router.get('/devices/security-history', _deviceSecurityHistoryHandler);
+    router.post('/devices/link/request', _requestDeviceLinkHandler);
+    router.post('/devices/link/request-new', _requestNewDeviceLinkHandler);
+    router.post('/devices/link/verify', _verifyDeviceLinkHandler);
+    router.post('/devices/link/reject', _rejectDeviceLinkHandler);
+    router.post('/devices/link/complete', _completeDeviceLinkHandler);
+    router.post('/devices/link/complete-new', _completeNewDeviceLinkHandler);
+    router.post('/devices/revoke', _revokeDeviceHandler);
+    router.post('/devices/lost-device', _lostDeviceHandler);
+    router.put('/devices/push-token', _updatePushTokenHandler);
+    router.post('/username', _changeUsernameHandler);
+    router.post('/profile', _updateProfileHandler);
+    router.get('/profile', _getProfileHandler);
+
+    return router;
+  }
+
+  static String base64UrlEncode(List<int> bytes) => _authBase64UrlEncode(bytes);
+
+  @override
+  bool _isValidUsername(String username) {
+    if (username.length < 3 || username.length > 30) return false;
+    if (username.startsWith('helix_')) return false;
+    return RegExp(r'^[a-z0-9_]+$').hasMatch(username);
+  }
+
+  @override
+  void _notifySiblingDevices(
+    String accountId, {
+    required String exceptDeviceId,
+    required Map<String, dynamic> payload,
+  }) {
+    final notifier = notifyDevice;
+    if (notifier == null) return;
+    for (final device in db.getDevices(accountId)) {
+      final deviceId = device['device_id'] as String;
+      if (deviceId != exceptDeviceId) {
+        notifier(deviceId, payload);
+      }
+    }
+  }
+}
+
+String _authBase64UrlEncode(List<int> bytes) {
+  return base64Url.encode(bytes).replaceAll('=', '');
+}

@@ -1,0 +1,407 @@
+part of '../conversation_screen.dart';
+
+extension _ConversationMessageActions on _ConversationScreenState {
+  // ---------------------------------------------------------------------------
+  // Selection mode
+  // ---------------------------------------------------------------------------
+
+  void _enterSelectionMode(RemoteDecryptedMessage msg, Offset globalPos) {
+    _update(() {
+      _selectionMode = true;
+      _selectedIds.add(msg.messageId);
+    });
+    _showMessageOverlay(msg, globalPos);
+  }
+
+  void _toggleSelection(String msgId) {
+    _update(() {
+      if (_selectedIds.contains(msgId)) {
+        _selectedIds.remove(msgId);
+        if (_selectedIds.isEmpty) _selectionMode = false;
+      } else {
+        _selectedIds.add(msgId);
+      }
+    });
+  }
+
+  void _exitSelectionMode() {
+    _update(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _replyToSelected() {
+    final msg = _messages.firstWhere((m) => _selectedIds.contains(m.messageId));
+    _update(() {
+      _replyTo = msg;
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _copySelected() async {
+    final text = _messages
+        .where((m) => _selectedIds.contains(m.messageId))
+        .map((m) => m.text)
+        .join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Copied')));
+    _exitSelectionMode();
+  }
+
+  Future<void> _deleteSelected() async {
+    final toDelete = _messages
+        .where((m) => _selectedIds.contains(m.messageId))
+        .toList();
+    _exitSelectionMode();
+    for (final msg in toDelete) {
+      widget.messagingService.deleteForSelf(msg.messageId);
+    }
+    await _loadMessages();
+  }
+
+  Future<void> _deleteEveryoneSelected() async {
+    final myId = widget.messagingService.currentAccountId;
+    final toDelete = _messages
+        .where(
+          (m) =>
+              _selectedIds.contains(m.messageId) && m.senderAccountId == myId,
+        )
+        .toList();
+    _exitSelectionMode();
+    for (final msg in toDelete) {
+      widget.messagingService.deleteForEveryone(
+        messageId: msg.messageId,
+        conversationId: msg.conversationId,
+      );
+    }
+    await _loadMessages();
+  }
+
+  bool get _allSelectedAreMine {
+    final myId = widget.messagingService.currentAccountId;
+    return _messages
+        .where((m) => _selectedIds.contains(m.messageId))
+        .every((m) => m.senderAccountId == myId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message overlay (emoji + actions)
+  // ---------------------------------------------------------------------------
+
+  void _showMessageOverlay(RemoteDecryptedMessage message, Offset globalPos) {
+    final isMine =
+        message.senderAccountId == widget.messagingService.currentAccountId;
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black54,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final screen = MediaQuery.of(ctx).size;
+        final emojiTop = (globalPos.dy - 76).clamp(8.0, screen.height - 80.0);
+        final menuTop = (globalPos.dy + 8).clamp(60.0, screen.height - 280.0);
+
+        Widget actionItem(
+          IconData icon,
+          String label,
+          VoidCallback fn, {
+          Color? color,
+        }) {
+          final c = color ?? Colors.white;
+          return InkWell(
+            onTap: fn,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(icon, color: c, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: c, fontSize: 15),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Material(
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              // Dismiss on background tap
+              GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                behavior: HitTestBehavior.opaque,
+                child: const SizedBox.expand(),
+              ),
+              // Emoji bar
+              Positioned(
+                top: emojiTop,
+                left: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black38,
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      for (final emoji in _kReactionEmojis)
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _addReaction(message, emoji);
+                            _exitSelectionMode();
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              emoji,
+                              style: const TextStyle(fontSize: 24),
+                            ),
+                          ),
+                        ),
+                      const VerticalDivider(width: 16, color: Colors.white24),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(ctx),
+                        child: const Padding(
+                          padding: EdgeInsets.all(6),
+                          child: Icon(
+                            Icons.add_reaction_outlined,
+                            color: Colors.white70,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Action menu
+              Positioned(
+                top: menuTop,
+                right: isMine ? 8 : null,
+                left: isMine ? null : 8,
+                width: 230,
+                child: Material(
+                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFF2A2A2A),
+                  elevation: 8,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      actionItem(Icons.reply, 'Reply', () {
+                        Navigator.pop(ctx);
+                        _update(() => _replyTo = message);
+                        _exitSelectionMode();
+                      }),
+                      actionItem(Icons.copy, 'Copy', () {
+                        Navigator.pop(ctx);
+                        _exitSelectionMode();
+                        Clipboard.setData(ClipboardData(text: message.text));
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text('Copied')));
+                      }),
+                      if (isMine)
+                        actionItem(Icons.edit_outlined, 'Edit message', () {
+                          Navigator.pop(ctx);
+                          _exitSelectionMode();
+                          _editMessage(message);
+                        }),
+                      const Divider(height: 1, color: Colors.white12),
+                      actionItem(
+                        Icons.delete_outline,
+                        'Delete for me',
+                        () {
+                          Navigator.pop(ctx);
+                          _exitSelectionMode();
+                          _deleteForSelf(message);
+                        },
+                        color: const Color(0xFFFF6B6B),
+                      ),
+                      if (isMine)
+                        actionItem(
+                          Icons.delete_forever_outlined,
+                          'Delete for everyone',
+                          () {
+                            Navigator.pop(ctx);
+                            _exitSelectionMode();
+                            _deleteForEveryone(message);
+                          },
+                          color: const Color(0xFFFF6B6B),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _publishTyping(bool isTyping) async {
+    if (_typingActive == isTyping) return;
+    _typingActive = isTyping;
+    try {
+      await widget.messagingService.publishTyping(
+        conversationId: widget.conversationId,
+        isTyping: isTyping,
+      );
+    } catch (_) {}
+  }
+
+  void _markVisibleReceipts(List<RemoteDecryptedMessage> messages) {
+    final currentAccountId = widget.messagingService.currentAccountId;
+    if (currentAccountId == null) return;
+    for (final message in messages) {
+      if (message.senderAccountId == currentAccountId) continue;
+      if (!_receiptMarked.add(message.messageId)) continue;
+      unawaited(
+        widget.messagingService.markDelivered(
+          messageId: message.messageId,
+          conversationId: message.conversationId,
+        ),
+      );
+      unawaited(
+        widget.messagingService.markRead(
+          messageId: message.messageId,
+          conversationId: message.conversationId,
+        ),
+      );
+    }
+  }
+
+  Future<void> _editMessage(RemoteDecryptedMessage message) async {
+    var draft = message.text;
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit message'),
+        content: TextFormField(
+          initialValue: draft,
+          autofocus: true,
+          maxLines: null,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+          onChanged: (v) => draft = v,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, draft.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (updated == null || updated.isEmpty || updated == message.text) return;
+    await widget.messagingService.editMessage(
+      messageId: message.messageId,
+      conversationId: message.conversationId,
+      plaintext: updated,
+    );
+    await _loadMessages();
+  }
+
+  Future<void> _addReaction(
+    RemoteDecryptedMessage message,
+    String emoji,
+  ) async {
+    widget.messagingService.addReaction(
+      messageId: message.messageId,
+      reaction: emoji,
+    );
+    await _loadMessages();
+  }
+
+  Future<void> _quickReact(RemoteDecryptedMessage message) =>
+      _addReaction(message, _kReactionEmojis.first);
+
+  void _showReactionDetails(RemoteDecryptedMessage message) {
+    final details = widget.messagingService.reactionDetails(message.messageId);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              ListTile(
+                leading: const Icon(Icons.add_reaction_outlined),
+                title: Text('${details.length} reaction participants'),
+              ),
+              for (final detail in details)
+                ListTile(
+                  leading: CircleAvatar(child: Text(detail.reaction)),
+                  title: Text(detail.accountId),
+                  subtitle: Text(
+                    DateTime.fromMillisecondsSinceEpoch(
+                      detail.timestamp,
+                    ).toLocal().toString(),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteForSelf(RemoteDecryptedMessage message) async {
+    widget.messagingService.deleteForSelf(message.messageId);
+    await _loadMessages();
+  }
+
+  Future<void> _deleteForEveryone(RemoteDecryptedMessage message) async {
+    widget.messagingService.deleteForEveryone(
+      messageId: message.messageId,
+      conversationId: message.conversationId,
+    );
+    await _loadMessages();
+  }
+
+  void _blockPeer() {
+    final current = widget.messagingService.currentAccountId;
+    final peer = widget.messagingService
+        .conversationMemberIds(widget.conversationId)
+        .where((id) => id != current)
+        .firstOrNull;
+    if (peer == null) return;
+    widget.messagingService.blockContact(peer);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Contact blocked')));
+  }
+}

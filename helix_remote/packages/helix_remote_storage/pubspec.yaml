@@ -1,0 +1,27 @@
+name: helix_remote_storage
+description: Encrypted local SQLite persistence layer for Helix Remote.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqlite3: ^3.3.3
+  meta: ^1.18.0
+  path: ^1.9.1
+  helix_remote_domain:
+    path: ../helix_remote_domain
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlcipher
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

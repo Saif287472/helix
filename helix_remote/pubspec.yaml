@@ -1,0 +1,22 @@
+name: helix_remote_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+workspace:
+  - app
+  - backend
+  - tool
+  - packages/helix_remote_domain
+  - packages/helix_remote_api
+  - packages/helix_remote_crypto
+  - packages/helix_remote_storage
+  - packages/helix_remote_sync
+  - packages/helix_remote_calls
+  - packages/helix_remote_groups
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlcipher

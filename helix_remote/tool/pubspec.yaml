@@ -1,0 +1,9 @@
+name: helix_remote_tool
+description: Extraction and tooling scripts for helix_remote.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace

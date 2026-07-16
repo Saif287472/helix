@@ -1,0 +1,24 @@
+name: helix_remote_calls
+description: Remote WebRTC call engine for Helix Remote (internet, STUN/TURN). Isolated from Local LAN call engine.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_webrtc: ^1.5.1
+  uuid: ^4.5.3
+  helix_remote_domain:
+    path: ../helix_remote_domain
+  helix_remote_storage:
+    path: ../helix_remote_storage
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  path: ^1.9.1

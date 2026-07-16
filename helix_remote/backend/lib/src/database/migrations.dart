@@ -1,0 +1,918 @@
+part of '../database.dart';
+
+extension BackendDatabaseMigrations on BackendDatabase {
+  void _initializeSchema() {
+    _db.execute('PRAGMA foreign_keys = ON;');
+
+    final versionRow = _db.select('PRAGMA user_version;');
+    final version = versionRow.first.columnAt(0) as int;
+
+    if (version < 1) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS accounts (
+          account_id TEXT PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          identity_public_key TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          status TEXT NOT NULL
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS devices (
+          device_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          device_signing_public_key TEXT NOT NULL,
+          device_agreement_public_key TEXT NOT NULL,
+          device_name TEXT NOT NULL,
+          status TEXT NOT NULL,
+          push_token TEXT,
+          created_at INTEGER NOT NULL,
+          last_seen_at INTEGER NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS signed_prekeys (
+          account_id TEXT NOT NULL,
+          device_id TEXT NOT NULL,
+          key_id INTEGER NOT NULL,
+          public_key TEXT NOT NULL,
+          signature TEXT NOT NULL,
+          PRIMARY KEY(account_id, device_id),
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS one_time_prekeys (
+          account_id TEXT NOT NULL,
+          device_id TEXT NOT NULL,
+          key_id INTEGER NOT NULL,
+          public_key TEXT NOT NULL,
+          PRIMARY KEY(account_id, device_id, key_id),
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS contacts (
+          account_id TEXT NOT NULL,
+          peer_account_id TEXT NOT NULL,
+          nickname TEXT,
+          status TEXT NOT NULL,
+          PRIMARY KEY(account_id, peer_account_id),
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(peer_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS conversations (
+          conversation_id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          title TEXT,
+          created_at INTEGER NOT NULL,
+          last_sequence INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS conversation_members (
+          conversation_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'MEMBER',
+          PRIMARY KEY(conversation_id, account_id),
+          FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS messages (
+          message_id TEXT NOT NULL,
+          conversation_id TEXT NOT NULL,
+          sender_account_id TEXT NOT NULL,
+          sender_device_id TEXT NOT NULL,
+          recipient_device_id TEXT NOT NULL,
+          ciphertext TEXT NOT NULL,
+          server_sequence INTEGER NOT NULL,
+          timestamp INTEGER NOT NULL,
+          PRIMARY KEY(conversation_id, recipient_device_id, server_sequence),
+          FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          FOREIGN KEY(sender_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(sender_device_id) REFERENCES devices(device_id) ON DELETE CASCADE,
+          FOREIGN KEY(recipient_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS sync_cursors (
+          account_id TEXT NOT NULL,
+          device_id TEXT NOT NULL,
+          conversation_id TEXT NOT NULL,
+          last_sequence INTEGER NOT NULL,
+          PRIMARY KEY(account_id, device_id, conversation_id),
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(device_id) REFERENCES devices(device_id) ON DELETE CASCADE,
+          FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS outbox (
+          event_id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          status TEXT NOT NULL,
+          retries INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS backups (
+          account_id TEXT PRIMARY KEY,
+          backup_id TEXT NOT NULL DEFAULT '',
+          version INTEGER NOT NULL DEFAULT 1,
+          kdf TEXT NOT NULL DEFAULT '',
+          salt TEXT NOT NULL DEFAULT '',
+          backup_key_hint TEXT NOT NULL DEFAULT '',
+          backup_data TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          deletion_watermark INTEGER NOT NULL DEFAULT 0,
+          requires_reupload INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          event_id TEXT PRIMARY KEY,
+          account_id TEXT,
+          device_id TEXT,
+          action TEXT NOT NULL,
+          client_ip TEXT,
+          user_agent TEXT,
+          timestamp INTEGER NOT NULL
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 1;');
+    }
+
+    if (version < 2) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS refresh_tokens (
+          token_hash TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          device_id TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          revoked INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS tombstones (
+          item_id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          deleted_at INTEGER NOT NULL
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 2;');
+    }
+
+    if (version < 3) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS contact_requests (
+          request_id TEXT PRIMARY KEY,
+          requester_account_id TEXT NOT NULL,
+          target_account_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY(requester_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(target_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS account_privacy (
+          account_id TEXT PRIMARY KEY,
+          search_discoverable INTEGER NOT NULL DEFAULT 1,
+          presence_visibility TEXT NOT NULL DEFAULT 'CONTACTS',
+          last_seen_visibility TEXT NOT NULL DEFAULT 'CONTACTS',
+          profile_version INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS reports (
+          report_id TEXT PRIMARY KEY,
+          reporter_account_id TEXT NOT NULL,
+          subject_account_id TEXT NOT NULL,
+          category TEXT NOT NULL,
+          reason_code TEXT NOT NULL,
+          context_hash TEXT,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(reporter_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(subject_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS safety_actions (
+          action_id TEXT PRIMARY KEY,
+          report_id TEXT NOT NULL,
+          actor_account_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(report_id) REFERENCES reports(report_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 3;');
+    }
+
+    if (version < 4) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS attachments (
+          file_id TEXT PRIMARY KEY,
+          file_size INTEGER NOT NULL,
+          file_hash TEXT NOT NULL,
+          uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 4;');
+    }
+
+    if (version < 5) {
+      _db.execute('DROP TABLE IF EXISTS attachments;');
+      _db.execute('''
+        CREATE TABLE attachments (
+          file_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          file_size INTEGER NOT NULL,
+          file_hash TEXT NOT NULL,
+          uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS attachment_references (
+          file_id TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          PRIMARY KEY(file_id, message_id),
+          FOREIGN KEY(file_id) REFERENCES attachments(file_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 5;');
+    }
+
+    if (version < 6) {
+      _db.execute('DROP TABLE IF EXISTS attachment_references;');
+      _db.execute('DROP TABLE IF EXISTS attachments;');
+      _db.execute('''
+        CREATE TABLE attachments (
+          file_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          file_size INTEGER NOT NULL,
+          file_hash TEXT NOT NULL,
+          uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS attachment_references (
+          file_id TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          PRIMARY KEY(file_id, message_id),
+          FOREIGN KEY(file_id) REFERENCES attachments(file_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 6;');
+    }
+
+    if (version < 7) {
+      // Tracks TURN credential issuance per account for quota enforcement (P15-005/P15-018).
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS turn_credential_log (
+          log_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          device_id TEXT,
+          issued_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 7;');
+    }
+
+    if (version < 8) {
+      // P16-001: Group metadata linked to conversations.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS groups (
+          group_id TEXT PRIMARY KEY,
+          creator_id TEXT NOT NULL,
+          encryption_key_id TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          FOREIGN KEY(creator_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      // P16-003: Invite lifecycle (PENDING/ACCEPTED/REJECTED).
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_invites (
+          invite_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          inviter_id TEXT NOT NULL,
+          invitee_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          FOREIGN KEY(inviter_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(invitee_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      // P16-014: Rate-limit group creation per account (5 per day).
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_creation_log (
+          log_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 8;');
+    }
+
+    if (version < 9) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_device_links (
+          link_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          requested_by_device_id TEXT NOT NULL,
+          new_device_id TEXT NOT NULL,
+          new_device_public_key TEXT NOT NULL,
+          new_device_name TEXT NOT NULL,
+          verification_code_hash TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          approved_at INTEGER,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(requested_by_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS device_revocations (
+          revocation_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          revoked_device_id TEXT NOT NULL,
+          revoked_by_device_id TEXT,
+          reason TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+
+      for (final statement in [
+        "ALTER TABLE backups ADD COLUMN backup_id TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE backups ADD COLUMN version INTEGER NOT NULL DEFAULT 1;",
+        "ALTER TABLE backups ADD COLUMN kdf TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE backups ADD COLUMN salt TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE backups ADD COLUMN backup_key_hint TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE backups ADD COLUMN deletion_watermark INTEGER NOT NULL DEFAULT 0;",
+        "ALTER TABLE backups ADD COLUMN requires_reupload INTEGER NOT NULL DEFAULT 0;",
+      ]) {
+        try {
+          _db.execute(statement);
+        } catch (_) {}
+      }
+
+      _db.execute('PRAGMA user_version = 9;');
+    }
+
+    if (version < 10) {
+      // Phase 18 is policy/control focused. No new tables are required; the
+      // version marks databases that have account export/delete helper support.
+      _db.execute('PRAGMA user_version = 10;');
+    }
+
+    if (version < 11) {
+      // Phase 19 adds operational health and aggregate metrics helpers. No new
+      // tables are required.
+      _db.execute('PRAGMA user_version = 11;');
+    }
+
+    if (version < 12) {
+      // Stage 3: per-device event stream for proper cursor tracking
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS device_events (
+          event_id TEXT NOT NULL,
+          recipient_device_id TEXT NOT NULL,
+          device_sequence INTEGER NOT NULL,
+          schema_version INTEGER NOT NULL DEFAULT 1,
+          event_type TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          payload TEXT NOT NULL,
+          PRIMARY KEY(recipient_device_id, device_sequence),
+          FOREIGN KEY(recipient_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_calls (
+          call_id TEXT PRIMARY KEY,
+          caller_account_id TEXT NOT NULL,
+          caller_device_id TEXT NOT NULL,
+          callee_account_id TEXT NOT NULL,
+          is_video INTEGER NOT NULL,
+          offer_sdp TEXT,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          answered_by_device_id TEXT,
+          FOREIGN KEY(caller_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(callee_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(caller_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_call_devices (
+          call_id TEXT NOT NULL,
+          target_device_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(call_id, target_device_id),
+          FOREIGN KEY(call_id) REFERENCES pending_calls(call_id) ON DELETE CASCADE,
+          FOREIGN KEY(target_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS call_signal_requests (
+          call_id TEXT NOT NULL,
+          sender_device_id TEXT NOT NULL,
+          request_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(call_id, sender_device_id, request_id)
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 12;');
+    }
+    if (version < 13) {
+      final columns = _tableColumns('devices');
+      if (columns.contains('device_public_key')) {
+        _db.execute('ALTER TABLE devices RENAME TO devices_v12;');
+        _db.execute('''
+          CREATE TABLE devices (
+            device_id TEXT PRIMARY KEY,
+            account_id TEXT NOT NULL,
+            device_signing_public_key TEXT NOT NULL,
+            device_agreement_public_key TEXT NOT NULL,
+            device_name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            push_token TEXT,
+            created_at INTEGER NOT NULL,
+            last_seen_at INTEGER NOT NULL,
+            FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+          );
+        ''');
+        _db.execute('''
+          INSERT INTO devices (
+            device_id,
+            account_id,
+            device_signing_public_key,
+            device_agreement_public_key,
+            device_name,
+            status,
+            push_token,
+            created_at,
+            last_seen_at
+          )
+          SELECT
+            device_id,
+            account_id,
+            device_public_key,
+            device_public_key,
+            device_name,
+            status,
+            push_token,
+            created_at,
+            last_seen_at
+          FROM devices_v12;
+        ''');
+        _db.execute('DROP TABLE devices_v12;');
+      }
+      _db.execute('PRAGMA user_version = 13;');
+    }
+
+    if (version < 14) {
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_outbox_status_created
+        ON outbox(status, created_at);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_account_timestamp
+        ON audit_logs(account_id, timestamp DESC);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_tombstones_type_deleted
+        ON tombstones(type, deleted_at);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_device_events_recipient_sequence
+        ON device_events(recipient_device_id, device_sequence);
+      ''');
+      _db.execute('PRAGMA user_version = 14;');
+    }
+
+    if (version < 15) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS account_profiles (
+          account_id TEXT PRIMARY KEY,
+          display_name TEXT NOT NULL,
+          updated_at INTEGER NOT NULL,
+          profile_version INTEGER NOT NULL DEFAULT 1,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 15;');
+    }
+    if (version < 16) {
+      try {
+        _db.execute(
+          'ALTER TABLE turn_credential_log ADD COLUMN device_id TEXT;',
+        );
+      } catch (_) {}
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_turn_credential_log_account_issued
+        ON turn_credential_log(account_id, issued_at);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_turn_credential_log_device_issued
+        ON turn_credential_log(device_id, issued_at);
+      ''');
+      _db.execute('PRAGMA user_version = 16;');
+    }
+    if (version < 17) {
+      try {
+        _db.execute('ALTER TABLE pending_calls ADD COLUMN offer_sdp TEXT;');
+      } catch (_) {}
+      _db.execute('PRAGMA user_version = 17;');
+    }
+
+    if (version < 18) {
+      // Repair: pending_calls tables may be missing if the DB was already at
+      // version >= 12 when call signaling was added to migration 12, causing
+      // migration 12 to be skipped entirely on that DB.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_calls (
+          call_id TEXT PRIMARY KEY,
+          caller_account_id TEXT NOT NULL,
+          caller_device_id TEXT NOT NULL,
+          callee_account_id TEXT NOT NULL,
+          is_video INTEGER NOT NULL,
+          offer_sdp TEXT,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          answered_by_device_id TEXT,
+          FOREIGN KEY(caller_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(callee_account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
+          FOREIGN KEY(caller_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_call_devices (
+          call_id TEXT NOT NULL,
+          target_device_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(call_id, target_device_id),
+          FOREIGN KEY(call_id) REFERENCES pending_calls(call_id) ON DELETE CASCADE,
+          FOREIGN KEY(target_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS call_signal_requests (
+          call_id TEXT NOT NULL,
+          sender_device_id TEXT NOT NULL,
+          request_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(call_id, sender_device_id, request_id)
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS device_events (
+          event_id TEXT NOT NULL,
+          recipient_device_id TEXT NOT NULL,
+          device_sequence INTEGER NOT NULL,
+          schema_version INTEGER NOT NULL DEFAULT 1,
+          event_type TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          payload TEXT NOT NULL,
+          PRIMARY KEY(recipient_device_id, device_sequence),
+          FOREIGN KEY(recipient_device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 18;');
+    }
+    if (version < 19) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS attachment_recipient_grants (
+          file_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          granted_at INTEGER NOT NULL,
+          PRIMARY KEY(file_id, account_id),
+          FOREIGN KEY(file_id) REFERENCES attachments(file_id) ON DELETE CASCADE,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_attachment_recipient_grants_account
+        ON attachment_recipient_grants(account_id, file_id);
+      ''');
+      _db.execute('PRAGMA user_version = 19;');
+    }
+    if (version < 20) {
+      for (final statement in [
+        "ALTER TABLE pending_device_links ADD COLUMN new_device_signing_public_key TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE pending_device_links ADD COLUMN new_device_agreement_public_key TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE pending_device_links ADD COLUMN request_nonce TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE pending_device_links ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0;",
+        "ALTER TABLE pending_device_links ADD COLUMN approved_by_device_id TEXT;",
+        "ALTER TABLE pending_device_links ADD COLUMN approval_transcript_hash TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE pending_device_links ADD COLUMN rejected_at INTEGER;",
+        "ALTER TABLE pending_device_links ADD COLUMN completed_at INTEGER;",
+      ]) {
+        try {
+          _db.execute(statement);
+        } catch (_) {}
+      }
+      _db.execute('''
+        UPDATE pending_device_links
+        SET new_device_signing_public_key = new_device_public_key
+        WHERE new_device_signing_public_key = '';
+      ''');
+      _db.execute('''
+        UPDATE pending_device_links
+        SET new_device_agreement_public_key = new_device_public_key
+        WHERE new_device_agreement_public_key = '';
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_pending_device_links_account_status
+        ON pending_device_links(account_id, status, expires_at);
+      ''');
+      _db.execute('PRAGMA user_version = 20;');
+    }
+    if (version < 21) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS backup_media_objects (
+          object_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          byte_size INTEGER NOT NULL,
+          sha256 TEXT NOT NULL,
+          uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          retention_until INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_backup_media_account_status
+        ON backup_media_objects(account_id, status, updated_at);
+      ''');
+      _db.execute('PRAGMA user_version = 21;');
+    }
+    if (version < 22) {
+      // F6: Group-add privacy, join links, join requests, blocked members,
+      // moderated messages, and creator-protection columns.
+      for (final statement in [
+        "ALTER TABLE groups ADD COLUMN add_policy TEXT NOT NULL DEFAULT 'EVERYONE';",
+        'ALTER TABLE groups ADD COLUMN creator_protected INTEGER NOT NULL DEFAULT 1;',
+        'ALTER TABLE groups ADD COLUMN history_sharing_enabled INTEGER NOT NULL DEFAULT 0;',
+      ]) {
+        try {
+          _db.execute(statement);
+        } catch (_) {}
+      }
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_join_links (
+          link_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          creator_id TEXT NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          requires_approval INTEGER NOT NULL DEFAULT 0,
+          expires_at INTEGER NOT NULL,
+          revoked_at INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_group_join_links_token
+        ON group_join_links(token);
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_join_requests (
+          request_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          requester_id TEXT NOT NULL,
+          link_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          FOREIGN KEY(requester_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_group_join_requests_group_status
+        ON group_join_requests(group_id, status, created_at);
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_blocked_members (
+          group_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          created_by TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(group_id, account_id),
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_moderated_messages (
+          message_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          moderated_by TEXT NOT NULL,
+          moderated_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS group_history_packages (
+          package_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          for_account_id TEXT NOT NULL,
+          from_sequence INTEGER NOT NULL,
+          to_sequence INTEGER NOT NULL,
+          encrypted_package TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 22;');
+    }
+
+    if (version < 23) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS device_push_tokens (
+          token_id   TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+          device_id  TEXT NOT NULL REFERENCES devices(device_id)  ON DELETE CASCADE,
+          push_token TEXT NOT NULL,
+          token_type TEXT NOT NULL DEFAULT 'FCM',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          UNIQUE(device_id)
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS call_metrics (
+          metric_id           TEXT PRIMARY KEY,
+          call_id             TEXT NOT NULL,
+          account_id          TEXT NOT NULL,
+          device_id           TEXT NOT NULL,
+          connection_type     TEXT,
+          setup_time_ms       INTEGER,
+          reconnect_count     INTEGER NOT NULL DEFAULT 0,
+          packet_loss_percent REAL,
+          peer_rtt_ms         REAL,
+          call_outcome        TEXT,
+          duration_seconds    INTEGER NOT NULL DEFAULT 0,
+          recorded_at         INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_call_metrics_account
+          ON call_metrics(account_id, recorded_at DESC);
+      ''');
+      _db.execute('PRAGMA user_version = 23;');
+    }
+
+    if (version < 24) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS call_rooms (
+          room_id          TEXT PRIMARY KEY,
+          host_account_id  TEXT NOT NULL,
+          host_device_id   TEXT NOT NULL,
+          status           TEXT NOT NULL DEFAULT 'WAITING',
+          is_video         INTEGER NOT NULL DEFAULT 0,
+          max_participants INTEGER NOT NULL DEFAULT 4,
+          room_key_id      TEXT,
+          room_key_epoch   INTEGER NOT NULL DEFAULT 0,
+          created_at       INTEGER NOT NULL,
+          started_at       INTEGER,
+          ended_at         INTEGER
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS call_room_participants (
+          room_id           TEXT NOT NULL REFERENCES call_rooms(room_id) ON DELETE CASCADE,
+          account_id        TEXT NOT NULL,
+          device_id         TEXT NOT NULL,
+          role              TEXT NOT NULL DEFAULT 'PARTICIPANT',
+          status            TEXT NOT NULL DEFAULT 'INVITED',
+          is_screen_sharing INTEGER NOT NULL DEFAULT 0,
+          joined_at         INTEGER,
+          left_at           INTEGER,
+          PRIMARY KEY (room_id, device_id)
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_crp_account
+          ON call_room_participants(account_id, status);
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS call_room_keys (
+          room_id      TEXT NOT NULL REFERENCES call_rooms(room_id) ON DELETE CASCADE,
+          epoch        INTEGER NOT NULL,
+          device_id    TEXT NOT NULL,
+          wrapped_key  TEXT NOT NULL,
+          delivered_at INTEGER,
+          PRIMARY KEY (room_id, epoch, device_id)
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS call_links (
+          link_id           TEXT PRIMARY KEY,
+          link_token        TEXT NOT NULL UNIQUE,
+          room_id           TEXT REFERENCES call_rooms(room_id) ON DELETE SET NULL,
+          created_by        TEXT NOT NULL,
+          requires_approval INTEGER NOT NULL DEFAULT 0,
+          max_uses          INTEGER NOT NULL DEFAULT 0,
+          use_count         INTEGER NOT NULL DEFAULT 0,
+          created_at        INTEGER NOT NULL,
+          expires_at        INTEGER NOT NULL,
+          revoked_at        INTEGER
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_call_links_token
+          ON call_links(link_token);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_call_links_owner
+          ON call_links(created_by, created_at DESC);
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS scheduled_calls (
+          scheduled_call_id TEXT PRIMARY KEY,
+          room_id           TEXT REFERENCES call_rooms(room_id) ON DELETE SET NULL,
+          host_account_id   TEXT NOT NULL,
+          title             TEXT NOT NULL,
+          scheduled_at      INTEGER NOT NULL,
+          created_at        INTEGER NOT NULL,
+          cancelled_at      INTEGER
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_scheduled_calls_host
+          ON scheduled_calls(host_account_id, scheduled_at);
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS scheduled_call_attendees (
+          scheduled_call_id TEXT NOT NULL
+            REFERENCES scheduled_calls(scheduled_call_id) ON DELETE CASCADE,
+          account_id        TEXT NOT NULL,
+          rsvp_status       TEXT NOT NULL DEFAULT 'PENDING',
+          notified_at       INTEGER,
+          PRIMARY KEY (scheduled_call_id, account_id)
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 24;');
+    }
+  }
+}

@@ -1,0 +1,35 @@
+# Dart/Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+build/
+*.iml
+.idea/
+.vscode/
+coverage/
+
+# Android
+app/android/.gradle/
+app/android/local.properties
+app/android/GeneratedPluginRegistrant.java
+app/android/key.properties
+*.keystore
+*.jks
+
+# Windows
+app/windows/flutter/ephemeral/
+
+# Backend
+backend/build/
+backend/bin/*.exe
+
+# Runtime data
+attachments_storage/
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+.DS_Store
+Thumbs.db
