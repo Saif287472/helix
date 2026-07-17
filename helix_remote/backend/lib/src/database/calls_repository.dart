@@ -150,10 +150,16 @@ extension BackendCallsRepository on BackendDatabase {
     required int now,
   }) {
     final call = getPendingCall(callId);
+    final targetDevices = getPendingCallTargetDevices(callId);
+    // A call whose callee is federated has no locally-tracked target
+    // devices at all (device fan-out is delegated to the callee's home
+    // server, see Milestone 5.1) -- in that case any answering device
+    // asserted by the trusted remote server is accepted; otherwise the
+    // answering device must be one of the ones we rang.
     if (call == null ||
         call['status'] != 'RINGING' ||
         (call['expires_at'] as int) <= now ||
-        !getPendingCallTargetDevices(callId).contains(targetDeviceId)) {
+        (targetDevices.isNotEmpty && !targetDevices.contains(targetDeviceId))) {
       return false;
     }
 

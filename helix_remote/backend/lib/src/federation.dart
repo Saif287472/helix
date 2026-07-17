@@ -252,6 +252,30 @@ class FederationClient {
     );
   }
 
+  /// Milestone 5.1: relays a single WebRTC call signal (offer/answer/ice/
+  /// decline/busy/cancel/end) to the domain hosting the other party. Calls
+  /// are bilateral (no home-server-authority concept, unlike groups) — each
+  /// server just forwards signals to whichever domain the *other* leg of
+  /// the call lives on, mirroring [proxyMessage]'s bilateral relay pattern.
+  Future<Map<String, dynamic>> proxyCallSignal({
+    required String domain,
+    required String senderAccountId,
+    required String senderDeviceId,
+    required Map<String, dynamic> signal,
+    String? requestId,
+  }) async {
+    return _postToDomain(
+      domain: domain,
+      path: '/api/v1/s2s/calls/signal',
+      body: {
+        'sender_account_id': senderAccountId,
+        'sender_device_id': senderDeviceId,
+        'signal': signal,
+        if (requestId != null) 'request_id': requestId,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> _postToDomain({
     required String domain,
     required String path,

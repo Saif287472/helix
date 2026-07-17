@@ -1033,5 +1033,66 @@ extension BackendDatabaseMigrations on BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 27;');
     }
+
+    if (version < 28) {
+      // Milestone 5.1: federated 1:1 call signaling. pending_calls'
+      // caller/callee account+device FKs and pending_call_devices'
+      // target_device_id FK all point at local-only tables, which reject a
+      // genuinely-external qualified id (user@domain) or a remote device id
+      // -- both legs of a federated call need to record the OTHER party's
+      // identity locally. Same rename/create/copy/drop pattern as the v13
+      // devices rebuild and the v27 group_invites rebuild.
+      _db.execute('ALTER TABLE pending_calls RENAME TO pending_calls_v18;');
+      _db.execute('''
+        CREATE TABLE pending_calls (
+          call_id TEXT PRIMARY KEY,
+          caller_account_id TEXT NOT NULL,
+          caller_device_id TEXT NOT NULL,
+          callee_account_id TEXT NOT NULL,
+          is_video INTEGER NOT NULL,
+          offer_sdp TEXT,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          answered_by_device_id TEXT
+        );
+      ''');
+      _db.execute('''
+        INSERT INTO pending_calls (
+          call_id, caller_account_id, caller_device_id, callee_account_id,
+          is_video, offer_sdp, status, created_at, expires_at, answered_by_device_id
+        )
+        SELECT
+          call_id, caller_account_id, caller_device_id, callee_account_id,
+          is_video, offer_sdp, status, created_at, expires_at, answered_by_device_id
+        FROM pending_calls_v18;
+      ''');
+      _db.execute('DROP TABLE pending_calls_v18;');
+
+      _db.execute(
+        'ALTER TABLE pending_call_devices RENAME TO pending_call_devices_v18;',
+      );
+      _db.execute('''
+        CREATE TABLE pending_call_devices (
+          call_id TEXT NOT NULL,
+          target_device_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(call_id, target_device_id),
+          FOREIGN KEY(call_id) REFERENCES pending_calls(call_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        INSERT INTO pending_call_devices (
+          call_id, target_device_id, status, created_at, updated_at
+        )
+        SELECT call_id, target_device_id, status, created_at, updated_at
+        FROM pending_call_devices_v18;
+      ''');
+      _db.execute('DROP TABLE pending_call_devices_v18;');
+
+      _db.execute('PRAGMA user_version = 28;');
+    }
   }
 }

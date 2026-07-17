@@ -180,6 +180,8 @@ class BackendServer {
       wsRelay,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
+      federationClient: federationClient,
+      localDomain: federationDomain,
     );
     final groupsModule = GroupsModule(
       db,
@@ -230,6 +232,7 @@ class BackendServer {
       wsRelay,
       localDomain: federationDomain,
       groupsModule: groupsModule,
+      callsModule: callsModule,
     );
     outboxWorker.federationClient = federationClient;
     router.mount('/api/v1/s2s', s2sModule.router.call);

@@ -5,15 +5,24 @@ import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 
+/// Milestone 5.1: federated call signaling has no home-server-authority
+/// concept the way groups do (ADR 020) — a call is inherently bilateral
+/// (caller/callee), so each server just relays signals to whichever domain
+/// the *other* party lives on, mirroring the message-proxy pattern from
+/// Milestone 3. See [FederationClient.proxyCallSignal] and
+/// `S2SModule._callsSignalHandler`.
 class CallsModule {
   CallsModule(
     this.db,
     this.wsRelay, {
     required this.turnSecret,
     required this.turnUrl,
+    this.federationClient,
+    this.localDomain,
   }) {
     wsRelay.setCallSignalHandler(_handleWebSocketSignal);
   }
@@ -22,6 +31,8 @@ class CallsModule {
   final WebSocketRelay wsRelay;
   final String turnSecret;
   final String turnUrl;
+  final FederationClient? federationClient;
+  final String? localDomain;
 
   static const int _maxCredentialsPerHour = 10;
   static const int _maxDeviceCredentialsPerHour = 10;
@@ -85,6 +96,85 @@ class CallsModule {
   }
 
   Map<String, int> metrics() => Map.unmodifiable(_metrics);
+
+  // ---------------------------------------------------------------------
+  // Milestone 5.1: federation helpers
+  // ---------------------------------------------------------------------
+
+  bool _isExternal(String accountId) {
+    final at = accountId.lastIndexOf('@');
+    if (at <= 0 || at == accountId.length - 1) return false;
+    final domain = accountId.substring(at + 1).toLowerCase();
+    return localDomain == null || domain != localDomain!.toLowerCase();
+  }
+
+  String _qualify(String accountId) {
+    if (accountId.contains('@') ||
+        localDomain == null ||
+        localDomain!.isEmpty) {
+      return accountId;
+    }
+    return '$accountId@${localDomain!.toLowerCase()}';
+  }
+
+  String _localAccountId(String accountId) {
+    final at = accountId.lastIndexOf('@');
+    if (at <= 0 || at == accountId.length - 1) return accountId;
+    final domain = accountId.substring(at + 1).toLowerCase();
+    if (localDomain != null && domain == localDomain!.toLowerCase()) {
+      return accountId.substring(0, at);
+    }
+    return accountId;
+  }
+
+  /// Entry point for `POST /api/v1/s2s/calls/signal`: relays a signal that
+  /// a trusted remote server asserts one of its own local devices sent.
+  /// Reuses the exact same dispatch as a local WS/REST signal
+  /// (`_routeSignal`/`_routeOffer`/`_routeSessionSignal`) with
+  /// `trustedRemote: true`, which skips the local-device-active checks that
+  /// can't be verified for a device that lives on another server, and
+  /// skips re-running the trust gate (the sending server already enforced
+  /// it before proxying — same trust posture as `/s2s/messages/proxy`).
+  Future<Map<String, dynamic>> receiveFederatedSignal({
+    required String senderAccountId,
+    required String senderDeviceId,
+    required Map<String, dynamic> signal,
+    String? requestId,
+  }) {
+    final message = Map<String, dynamic>.of(signal);
+    final calleeAccountId = message['callee_account_id'];
+    if (calleeAccountId is String) {
+      message['callee_account_id'] = _localAccountId(calleeAccountId);
+    }
+    return _routeSignal(
+      accountId: senderAccountId,
+      deviceId: senderDeviceId,
+      clientIp: 's2s',
+      message: {if (requestId != null) 'request_id': requestId, 'payload': message},
+      trustedRemote: true,
+    );
+  }
+
+  Future<Map<String, dynamic>?> _proxyCallSignal({
+    required String domain,
+    required String senderAccountId,
+    required String senderDeviceId,
+    required Map<String, dynamic> canonicalPayload,
+    String? requestId,
+  }) async {
+    if (federationClient == null) return null;
+    try {
+      return await federationClient!.proxyCallSignal(
+        domain: domain,
+        senderAccountId: senderAccountId,
+        senderDeviceId: senderDeviceId,
+        signal: canonicalPayload,
+        requestId: requestId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<Response> _handleTurnCredentials(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
@@ -187,6 +277,7 @@ class CallsModule {
     required String deviceId,
     required String? clientIp,
     required Map<String, dynamic> message,
+    bool trustedRemote = false,
   }) async {
     final rateLimit = _checkSignalRateLimit(
       accountId: accountId,
@@ -237,6 +328,7 @@ class CallsModule {
         signal: signal,
         requestId: requestId,
         now: now,
+        trustedRemote: trustedRemote,
       );
     }
     return _routeSessionSignal(
@@ -245,16 +337,18 @@ class CallsModule {
       signal: signal,
       requestId: requestId,
       now: now,
+      trustedRemote: trustedRemote,
     );
   }
 
-  Map<String, dynamic> _routeOffer({
+  Future<Map<String, dynamic>> _routeOffer({
     required String accountId,
     required String deviceId,
     required _ParsedCallSignal signal,
     required String? requestId,
     required int now,
-  }) {
+    bool trustedRemote = false,
+  }) async {
     final calleeAccountId = signal.calleeAccountId;
     if (calleeAccountId == null) {
       return {'status': 'rejected', 'reason': 'callee_account_id is required'};
@@ -262,13 +356,28 @@ class CallsModule {
     if (calleeAccountId == accountId) {
       return {'status': 'rejected', 'reason': 'self-calls are not supported'};
     }
-    if (!db.areContacts(accountId, calleeAccountId) ||
-        !db.areContacts(calleeAccountId, accountId)) {
-      _increment('rejected');
-      return {
-        'status': 'rejected',
-        'reason': 'callee is not an accepted contact',
-      };
+    final calleeExternal = _isExternal(calleeAccountId);
+    if (!trustedRemote) {
+      // A signal arriving via trusted S2S already had its trust gate
+      // enforced by the sending server before it proxied the offer here
+      // (same posture as /s2s/messages/proxy) -- only re-check for
+      // locally-originated offers.
+      if (_isExternal(accountId) || calleeExternal) {
+        if (!db.hasSharedDirectConversation(accountId, calleeAccountId)) {
+          _increment('rejected');
+          return {
+            'status': 'rejected',
+            'reason': 'callee is not reachable (no federated conversation)',
+          };
+        }
+      } else if (!db.areContacts(accountId, calleeAccountId) ||
+          !db.areContacts(calleeAccountId, accountId)) {
+        _increment('rejected');
+        return {
+          'status': 'rejected',
+          'reason': 'callee is not an accepted contact',
+        };
+      }
     }
     if (_accountSignalRate.count('offer:$accountId') > _maxOffersPerMinute) {
       _increment('rate_limited');
@@ -284,6 +393,57 @@ class CallsModule {
       _increment('rejected');
       return {'status': 'rejected', 'reason': 'concurrent call limit reached'};
     }
+
+    if (calleeExternal) {
+      if (federationClient == null) {
+        return {'status': 'rejected', 'reason': 'Federation is not configured'};
+      }
+      final expiresAt = now + _pendingCallTtlMs;
+      db.createPendingCall(
+        callId: signal.callId,
+        callerAccountId: accountId,
+        callerDeviceId: deviceId,
+        calleeAccountId: calleeAccountId,
+        isVideo: signal.isVideo,
+        offerSdp: signal.sdp,
+        createdAt: now,
+        expiresAt: expiresAt,
+        targetDeviceIds: const [],
+      );
+      final canonical = signal.toCanonicalPayload(
+        callerAccountId: _qualify(accountId),
+        callerDeviceId: deviceId,
+        calleeAccountId: calleeAccountId,
+        targetDeviceId: null,
+        createdAt: now,
+        expiresAt: expiresAt,
+      );
+      final result = await _proxyCallSignal(
+        domain: FederationClient.domainOf(calleeAccountId)!,
+        senderAccountId: _qualify(accountId),
+        senderDeviceId: deviceId,
+        canonicalPayload: canonical,
+        requestId: requestId,
+      );
+      if (result == null) {
+        db.markPendingCallTerminal(
+          callId: signal.callId,
+          status: 'FAILED',
+          now: now,
+        );
+        _increment('rejected');
+        return {
+          'status': 'rejected',
+          'reason': 'failed to reach callee server',
+          'call_id': signal.callId,
+        };
+      }
+      _increment(
+        result['delivered'] == true ? 'offers_delivered' : 'offers_queued',
+      );
+      return result;
+    }
+
     final devices = db.getDevices(calleeAccountId);
     if (devices.isEmpty) {
       return {'status': 'no_active_devices', 'call_id': signal.callId};
@@ -349,13 +509,14 @@ class CallsModule {
     };
   }
 
-  Map<String, dynamic> _routeSessionSignal({
+  Future<Map<String, dynamic>> _routeSessionSignal({
     required String accountId,
     required String deviceId,
     required _ParsedCallSignal signal,
     required String? requestId,
     required int now,
-  }) {
+    bool trustedRemote = false,
+  }) async {
     final session = db.getPendingCall(signal.callId);
     if (session == null) {
       return {'status': 'expired', 'reason': 'unknown or ended call'};
@@ -382,11 +543,21 @@ class CallsModule {
     if (!isCaller && !isCallee) {
       return {'status': 'rejected', 'reason': 'not a call participant'};
     }
-    if (isCallee && !db.isDeviceActive(calleeAccountId, deviceId)) {
-      return {'status': 'rejected', 'reason': 'callee device is not active'};
-    }
-    if (isCallee && !targetDeviceIds.contains(deviceId)) {
-      return {'status': 'rejected', 'reason': 'callee device was not targeted'};
+    // These two checks are local-device-table lookups that can't be
+    // verified for a party whose devices live on another server -- a
+    // trusted S2S signal has already been vetted by the sending server.
+    if (!trustedRemote) {
+      if (isCallee && !db.isDeviceActive(calleeAccountId, deviceId)) {
+        return {'status': 'rejected', 'reason': 'callee device is not active'};
+      }
+      if (isCallee &&
+          targetDeviceIds.isNotEmpty &&
+          !targetDeviceIds.contains(deviceId)) {
+        return {
+          'status': 'rejected',
+          'reason': 'callee device was not targeted',
+        };
+      }
     }
 
     final terminal = {'decline', 'busy', 'cancel', 'end'};
@@ -430,14 +601,14 @@ class CallsModule {
         return {'status': 'rejected', 'reason': 'only caller can cancel'};
       }
       final result = isCaller
-          ? _sendToCalleeDevices(
+          ? await _sendToCalleeDevices(
               signal: signal,
               session: session,
               senderDeviceId: deviceId,
               requestId: requestId,
               now: now,
             )
-          : _sendToCaller(
+          : await _sendToCaller(
               signal: signal,
               session: session,
               senderDeviceId: deviceId,
@@ -702,7 +873,7 @@ class CallsModule {
     return _json(200, {'status': 'recorded', 'metric_id': metricId});
   }
 
-  Map<String, dynamic> _sendToCaller({
+  Future<Map<String, dynamic>> _sendToCaller({
     required _ParsedCallSignal signal,
     required Map<String, dynamic> session,
     required String senderDeviceId,
@@ -721,23 +892,47 @@ class CallsModule {
     );
   }
 
-  Map<String, dynamic> _sendToCalleeDevices({
+  Future<Map<String, dynamic>> _sendToCalleeDevices({
     required _ParsedCallSignal signal,
     required Map<String, dynamic> session,
     required String senderDeviceId,
     required String? requestId,
     required int now,
-  }) {
-    var delivered = 0;
+  }) async {
+    final calleeAccountId = session['callee_account_id'] as String;
     final targetDeviceIds = db.getPendingCallTargetDevices(signal.callId);
+    if (targetDeviceIds.isEmpty && _isExternal(calleeAccountId)) {
+      // Callee's devices are delegated entirely to their home server (see
+      // _routeOffer) -- a single proxy call lets that server fan out to
+      // whichever of its own local devices are still relevant.
+      final proxied = await _proxySessionSignal(
+        signal: signal,
+        session: session,
+        senderAccountId: session['caller_account_id'] as String,
+        senderDeviceId: senderDeviceId,
+        targetAccountId: calleeAccountId,
+        targetDeviceId: null,
+        requestId: requestId,
+        now: now,
+      );
+      if (proxied != null) return proxied;
+      return {
+        'status': 'queued',
+        'delivered': false,
+        'call_id': signal.callId,
+        'delivered_count': 0,
+        'queued_count': 0,
+      };
+    }
+    var delivered = 0;
     for (final targetDeviceId in targetDeviceIds) {
-      final result = _sendToDevice(
+      final result = await _sendToDevice(
         targetDeviceId: targetDeviceId,
         signal: signal,
         session: session,
         senderAccountId: session['caller_account_id'] as String,
         senderDeviceId: senderDeviceId,
-        targetAccountId: session['callee_account_id'] as String,
+        targetAccountId: calleeAccountId,
         requestId: requestId,
         now: now,
       );
@@ -756,7 +951,42 @@ class CallsModule {
     };
   }
 
-  Map<String, dynamic> _sendToDevice({
+  /// Shared proxy path for [_sendToDevice]/[_sendToCalleeDevices]: relays a
+  /// post-offer session signal (answer/ice/decline/busy/cancel/end) to
+  /// whichever domain `targetAccountId` lives on. `targetDeviceId`, when
+  /// known, is meaningful to the remote server (it's one of *its own* local
+  /// devices, since device ids always originate from whichever server the
+  /// owning account is local to); when null, the remote server resolves
+  /// its own fan-out the same way [_sendToCalleeDevices] would locally.
+  Future<Map<String, dynamic>?> _proxySessionSignal({
+    required _ParsedCallSignal signal,
+    required Map<String, dynamic> session,
+    required String senderAccountId,
+    required String senderDeviceId,
+    required String targetAccountId,
+    required String? targetDeviceId,
+    required String? requestId,
+    required int now,
+  }) async {
+    if (federationClient == null) return null;
+    final canonical = signal.toCanonicalPayload(
+      callerAccountId: _qualify(senderAccountId),
+      callerDeviceId: senderDeviceId,
+      calleeAccountId: targetAccountId,
+      targetDeviceId: targetDeviceId,
+      createdAt: now,
+      expiresAt: session['expires_at'] as int,
+    );
+    return _proxyCallSignal(
+      domain: FederationClient.domainOf(targetAccountId)!,
+      senderAccountId: _qualify(senderAccountId),
+      senderDeviceId: senderDeviceId,
+      canonicalPayload: canonical,
+      requestId: requestId,
+    );
+  }
+
+  Future<Map<String, dynamic>> _sendToDevice({
     required String targetDeviceId,
     required _ParsedCallSignal signal,
     required Map<String, dynamic> session,
@@ -765,7 +995,26 @@ class CallsModule {
     required String targetAccountId,
     required String? requestId,
     required int now,
-  }) {
+  }) async {
+    if (_isExternal(targetAccountId)) {
+      final proxied = await _proxySessionSignal(
+        signal: signal,
+        session: session,
+        senderAccountId: senderAccountId,
+        senderDeviceId: senderDeviceId,
+        targetAccountId: targetAccountId,
+        targetDeviceId: targetDeviceId,
+        requestId: requestId,
+        now: now,
+      );
+      return proxied ??
+          {
+            'status': 'queued',
+            'delivered': false,
+            'call_id': signal.callId,
+            'target_device_id': targetDeviceId,
+          };
+    }
     if (!db.isDeviceActive(targetAccountId, targetDeviceId)) {
       return {'status': 'rejected', 'reason': 'target device is not active'};
     }

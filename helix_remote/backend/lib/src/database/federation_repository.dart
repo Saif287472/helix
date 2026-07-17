@@ -1,6 +1,39 @@
 part of '../database.dart';
 
 extension BackendFederationRepository on BackendDatabase {
+  /// True if `accountIdA` and `accountIdB` are both members (local or
+  /// federated) of the same DIRECT conversation. Milestone 5's federated
+  /// call trust gate reuses this instead of `areContacts` (which is
+  /// local-only and has no federated equivalent) — a federated call is only
+  /// allowed between two accounts that already have an established
+  /// federated DIRECT conversation, mirroring how Milestone 3 federated
+  /// messaging is already authorized via conversation membership rather
+  /// than a separate contacts concept.
+  bool hasSharedDirectConversation(String accountIdA, String accountIdB) {
+    final stmt = _db.prepare('''
+      SELECT c.conversation_id FROM conversations c
+      WHERE c.type = 'DIRECT'
+        AND EXISTS (
+          SELECT 1 FROM conversation_members m
+            WHERE m.conversation_id = c.conversation_id AND m.account_id = ?
+          UNION
+          SELECT 1 FROM federated_conversation_members m
+            WHERE m.conversation_id = c.conversation_id AND m.account_id = ?
+        )
+        AND EXISTS (
+          SELECT 1 FROM conversation_members m
+            WHERE m.conversation_id = c.conversation_id AND m.account_id = ?
+          UNION
+          SELECT 1 FROM federated_conversation_members m
+            WHERE m.conversation_id = c.conversation_id AND m.account_id = ?
+        )
+      LIMIT 1;
+    ''');
+    final res = stmt.select([accountIdA, accountIdA, accountIdB, accountIdB]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
   void upsertFederationServer({
     required String serverId,
     String? domain,

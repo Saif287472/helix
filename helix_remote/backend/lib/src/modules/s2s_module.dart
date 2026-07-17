@@ -4,6 +4,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
+import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/modules/groups.dart';
 import 'package:helix_remote_backend/src/modules/messaging.dart';
 
@@ -12,8 +13,15 @@ class S2SModule {
   final MessageRelay relay;
   final String? localDomain;
   final GroupsModule? groupsModule;
+  final CallsModule? callsModule;
 
-  S2SModule(this.db, this.relay, {this.localDomain, this.groupsModule});
+  S2SModule(
+    this.db,
+    this.relay, {
+    this.localDomain,
+    this.groupsModule,
+    this.callsModule,
+  });
 
   Router get router {
     final router = Router();
@@ -28,6 +36,7 @@ class S2SModule {
       '/groups/epoch-key/deliver-batch',
       _groupsEpochKeyDeliverBatchHandler,
     );
+    router.post('/calls/signal', _callsSignalHandler);
     return router;
   }
 
@@ -613,6 +622,58 @@ class S2SModule {
       }
       return Response.ok(
         jsonEncode({'delivered': delivered}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Milestone 5.1: federated WebRTC call signaling
+  // ---------------------------------------------------------------------
+
+  Future<Response> _callsSignalHandler(Request request) async {
+    if (callsModule == null) {
+      return Response(
+        503,
+        body: jsonEncode({'error': 'Call federation is not configured'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final senderAccountId = body['sender_account_id'] as String?;
+      final senderDeviceId = body['sender_device_id'] as String?;
+      final signal = body['signal'] as Map<String, dynamic>?;
+      if (senderAccountId == null || senderDeviceId == null || signal == null) {
+        return Response.badRequest(
+          body: jsonEncode({
+            'error': 'Missing sender_account_id, sender_device_id, or signal',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      final result = await callsModule!.receiveFederatedSignal(
+        senderAccountId: senderAccountId,
+        senderDeviceId: senderDeviceId,
+        signal: signal,
+        requestId: body['request_id'] as String?,
+      );
+      final status = switch (result['status']) {
+        'delivered' || 'queued' || 'partial' || 'duplicate' => 200,
+        'no_active_devices' || 'answered_elsewhere' => 409,
+        'rate_limited' => 429,
+        'expired' => 410,
+        _ => 400,
+      };
+      return Response(
+        status,
+        body: jsonEncode(result),
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e) {
