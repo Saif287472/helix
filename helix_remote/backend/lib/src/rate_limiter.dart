@@ -1,3 +1,5 @@
+import 'dart:async';
+
 class TokenBucket {
   final double maxTokens;
   final double refillRatePerMs;
@@ -22,6 +24,18 @@ class TokenBucket {
     }
     return false;
   }
+
+  /// Whether this bucket would already be fully refilled if [nowMs] elapsed
+  /// since [lastRefill] were applied, without mutating any state. `tokens`
+  /// itself is only updated lazily inside [consume], so a bucket idle since
+  /// before it last emptied can sit well below `maxTokens` in memory even
+  /// though it has long since earned a full refill — this computes the
+  /// projected value instead of comparing the (possibly stale) field.
+  bool isFullyRefilledAt(int nowMs) {
+    final elapsed = nowMs - lastRefill;
+    final projected = elapsed > 0 ? tokens + elapsed * refillRatePerMs : tokens;
+    return projected >= maxTokens;
+  }
 }
 
 abstract interface class RateLimitStore {
@@ -33,10 +47,33 @@ abstract interface class RateLimitStore {
 
   void reset(String key);
   int get trackedKeys;
+
+  /// Releases any background resources (e.g. a cleanup timer). Safe to call
+  /// more than once.
+  void dispose();
 }
 
 class InMemoryRateLimitStore implements RateLimitStore {
+  // Unbounded growth guard: a client (or spoofed IP) hitting a
+  // rate-limited endpoint once creates a bucket that otherwise lives
+  // forever. Periodically evicting buckets that have sat idle long enough
+  // to be fully refilled keeps the map bounded to actually-active keys.
+  InMemoryRateLimitStore({Duration cleanupInterval = const Duration(minutes: 5)}) {
+    if (cleanupInterval > Duration.zero) {
+      _cleanupTimer = Timer.periodic(
+        cleanupInterval,
+        (_) => _evictIdleBuckets(),
+      );
+    }
+  }
+
   final Map<String, TokenBucket> _buckets = {};
+  Timer? _cleanupTimer;
+
+  void _evictIdleBuckets() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _buckets.removeWhere((_, bucket) => bucket.isFullyRefilledAt(now));
+  }
 
   @override
   TokenBucket bucketFor(
@@ -60,6 +97,12 @@ class InMemoryRateLimitStore implements RateLimitStore {
 
   @override
   int get trackedKeys => _buckets.length;
+
+  @override
+  void dispose() {
+    _cleanupTimer?.cancel();
+    _cleanupTimer = null;
+  }
 }
 
 class RateLimiter {
@@ -84,6 +127,10 @@ class RateLimiter {
 
   void reset(String key) {
     store.reset(key);
+  }
+
+  void dispose() {
+    store.dispose();
   }
 
   Map<String, dynamic> stats() => {

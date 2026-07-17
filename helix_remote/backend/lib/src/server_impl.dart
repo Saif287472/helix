@@ -257,6 +257,7 @@ class BackendServer {
 
   Future<void> stop() async {
     outboxWorker.stop();
+    rateLimiter.dispose();
     await _httpServer?.close(force: true);
     db.close();
   }

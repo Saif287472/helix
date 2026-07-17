@@ -571,7 +571,7 @@ mixin AuthDeviceHandlers on AuthModuleBase {
 
       db.revokeDevice(accountId, deviceToRevoke);
       db.revokeAllRefreshTokensForDevice(accountId, deviceToRevoke);
-      db.deleteMessagesForDevice(deviceToRevoke);
+      await db.deleteMessagesForDevice(deviceToRevoke);
       db.deletePrekeysForDevice(accountId, deviceToRevoke);
       db.updateDevicePushToken(accountId, deviceToRevoke, '');
       db.expirePendingDeviceLinksForDevice(accountId, deviceToRevoke);
@@ -636,7 +636,7 @@ mixin AuthDeviceHandlers on AuthModuleBase {
       }
       db.revokeDevice(accountId, lostDeviceId);
       db.revokeAllRefreshTokensForDevice(accountId, lostDeviceId);
-      db.deleteMessagesForDevice(lostDeviceId);
+      await db.deleteMessagesForDevice(lostDeviceId);
       db.deletePrekeysForDevice(accountId, lostDeviceId);
       db.updateDevicePushToken(accountId, lostDeviceId, '');
       db.expirePendingDeviceLinksForDevice(accountId, lostDeviceId);

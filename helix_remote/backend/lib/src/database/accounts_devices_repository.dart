@@ -157,13 +157,14 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
   void deleteAccountData(String accountId) {
     _db.execute('BEGIN TRANSACTION;');
     try {
-      final devices = getDevices(
-        accountId,
-      ).map((device) => device['device_id'] as String).toList();
-      for (final deviceId in devices) {
-        deleteMessagesForDevice(deviceId);
-      }
-
+      // No explicit message cleanup here: `messages.recipient_device_id`
+      // cascades from `devices`, which cascades from `accounts` (foreign_keys
+      // is ON), so the DELETE FROM accounts below already removes every
+      // message for every device on this account as part of the same atomic
+      // transaction. Deleting it again per-device first would just be
+      // redundant work inside this transaction — and the chunked, yielding
+      // deleteMessagesForDevice must never run inside a transaction anyway
+      // (see its doc comment).
       for (final table in [
         'audit_logs',
         'group_creation_log',
@@ -616,12 +617,28 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     ]..sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
   }
 
-  void deleteMessagesForDevice(String deviceId) {
-    final stmt = _db.prepare(
-      'DELETE FROM messages WHERE recipient_device_id = ?;',
-    );
-    stmt.execute([deviceId]);
-    stmt.close();
+  // Deletes in bounded chunks and yields between them so a device with a
+  // very large mailbox (e.g. long-offline before revocation) doesn't hold
+  // SQLite's single writer lock for the entire delete, starving every other
+  // account's writes for its duration. Standard SQLite has no `DELETE ...
+  // LIMIT` (that requires a non-default compile flag), so the chunk is
+  // selected via a `rowid IN (SELECT ... LIMIT ?)` subquery instead — the
+  // portable equivalent. Must never be called from within an existing
+  // transaction: the `await` between chunks would let other requests
+  // interleave their own writes into that transaction.
+  Future<void> deleteMessagesForDevice(String deviceId) async {
+    const chunkSize = 500;
+    while (true) {
+      final stmt = _db.prepare('''
+        DELETE FROM messages WHERE rowid IN (
+          SELECT rowid FROM messages WHERE recipient_device_id = ? LIMIT ?
+        );
+      ''');
+      stmt.execute([deviceId, chunkSize]);
+      stmt.close();
+      if (_db.updatedRows == 0) return;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
   }
 
   // Prekey operations
