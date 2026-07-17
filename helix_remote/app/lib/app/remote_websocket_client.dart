@@ -163,6 +163,13 @@ class RemoteWebSocketClient {
       final envelope = RemoteRealtimeEnvelope.fromJson(map);
       if (envelope.eventId.isNotEmpty) {
         _onEvent(envelope);
+        // Paces the server's offline-event replay: it waits for this ack
+        // before sending the next page instead of blasting the whole
+        // backlog through the sink unthrottled.
+        final serverSequence = envelope.serverSequence;
+        if (serverSequence != null) {
+          _sendReplayAck(serverSequence);
+        }
       }
     } catch (e) {
       _onError?.call('WebSocket data error: $e');
@@ -192,6 +199,17 @@ class RemoteWebSocketClient {
       );
     } catch (e) {
       _onError?.call('Ack send error: $e');
+    }
+  }
+
+  void _sendReplayAck(int serverSequence) {
+    try {
+      _ws?.add(
+        jsonEncode({'type': 'replay_ack', 'server_sequence': serverSequence}),
+      );
+    } catch (_) {
+      // Best-effort pacing signal only — the server falls back to a
+      // timeout if it never arrives, so failures here are not surfaced.
     }
   }
 

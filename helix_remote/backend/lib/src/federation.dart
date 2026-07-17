@@ -127,6 +127,7 @@ class FederationClient {
     final uri = Uri.parse(address).resolve(
       '/api/v1/s2s/prekeys/bundle?account_id=${Uri.encodeQueryComponent(accountId)}',
     );
+    await _rejectUnsafeFederationTarget(uri);
     final headers = await S2SSignatures.signHeaders(
       identity: identity,
       path: uri.path,
@@ -146,6 +147,7 @@ class FederationClient {
     final address = server['address'] as String;
     final encodedBody = jsonEncode(body);
     final uri = Uri.parse(address).resolve('/api/v1/s2s/messages/proxy');
+    await _rejectUnsafeFederationTarget(uri);
     final headers = await S2SSignatures.signHeaders(
       identity: identity,
       path: uri.path,
@@ -223,6 +225,7 @@ class FederationClient {
     final uri = Uri.parse(address).resolve(
       '/api/v1/s2s/groups/state?group_id=${Uri.encodeQueryComponent(groupId)}',
     );
+    await _rejectUnsafeFederationTarget(uri);
     final headers = await S2SSignatures.signHeaders(
       identity: identity,
       path: uri.path,
@@ -285,6 +288,7 @@ class FederationClient {
     final address = server['address'] as String;
     final encodedBody = jsonEncode(body);
     final uri = Uri.parse(address).resolve(path);
+    await _rejectUnsafeFederationTarget(uri);
     final headers = await S2SSignatures.signHeaders(
       identity: identity,
       path: uri.path,
@@ -321,6 +325,40 @@ class FederationClient {
     }
     if (responseBody.trim().isEmpty) return <String, dynamic>{};
     return jsonDecode(responseBody) as Map<String, dynamic>;
+  }
+
+  /// Rejects federation requests whose resolved target is a link-local
+  /// address (RFC 3927 `169.254.0.0/16`, RFC 4291 `fe80::/10`) — the address
+  /// class cloud providers expose their instance-metadata service on (e.g.
+  /// `169.254.169.254`). A peer's `address` is learned from the federation
+  /// directory, which may be compromised or malicious, so it must not be
+  /// trusted enough to reach a class of address with no legitimate use as a
+  /// federation partner. Loopback/private ranges are deliberately NOT
+  /// blocked here: this deployment legitimately federates multiple
+  /// self-hosted servers on private or same-host addresses.
+  Future<void> _rejectUnsafeFederationTarget(Uri uri) async {
+    final host = uri.host;
+    List<InternetAddress> candidates;
+    final literal = InternetAddress.tryParse(host);
+    if (literal != null) {
+      candidates = [literal];
+    } else {
+      try {
+        candidates = await InternetAddress.lookup(host);
+      } catch (_) {
+        // Let the actual request surface the DNS failure naturally.
+        return;
+      }
+    }
+    for (final addr in candidates) {
+      if (addr.isLinkLocal) {
+        throw FederationHttpException(
+          403,
+          'SSRF blocked: federation target $host resolves to a link-local address',
+          uri,
+        );
+      }
+    }
   }
 
   String? _domainFromAccountId(String accountId) => domainOf(accountId);

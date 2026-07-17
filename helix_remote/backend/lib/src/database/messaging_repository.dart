@@ -317,20 +317,39 @@ extension BackendMessagingRepository on BackendDatabase {
     ''');
     final res = stmt.select([deviceId, sinceSequence]);
     stmt.close();
-    return res
-        .map(
-          (row) => {
-            'event_id': row['event_id'],
-            'recipient_device_id': row['recipient_device_id'],
-            'device_sequence': row['device_sequence'],
-            'schema_version': row['schema_version'],
-            'event_type': row['event_type'],
-            'timestamp': row['timestamp'],
-            'payload': row['payload'],
-          },
-        )
-        .toList();
+    return res.map(_mapDeviceEventRow).toList();
   }
+
+  /// Bounded-page variant of [getDeviceEvents] for WebSocket offline replay:
+  /// callers page through a device's backlog with [limit]-sized `LIMIT`
+  /// queries (advancing [sinceSequence] each call) instead of materializing
+  /// the entire backlog — which can be tens of thousands of rows — in one
+  /// query and one Dart `List`.
+  List<Map<String, dynamic>> getDeviceEventsPage(
+    String deviceId,
+    int sinceSequence, {
+    required int limit,
+  }) {
+    final stmt = _db.prepare('''
+      SELECT * FROM device_events
+      WHERE recipient_device_id = ? AND device_sequence > ?
+      ORDER BY device_sequence ASC
+      LIMIT ?;
+    ''');
+    final res = stmt.select([deviceId, sinceSequence, limit]);
+    stmt.close();
+    return res.map(_mapDeviceEventRow).toList();
+  }
+
+  Map<String, dynamic> _mapDeviceEventRow(Row row) => {
+    'event_id': row['event_id'],
+    'recipient_device_id': row['recipient_device_id'],
+    'device_sequence': row['device_sequence'],
+    'schema_version': row['schema_version'],
+    'event_type': row['event_type'],
+    'timestamp': row['timestamp'],
+    'payload': row['payload'],
+  };
 
   int? getLastDeviceSequence(String deviceId) {
     final stmt = _db.prepare(

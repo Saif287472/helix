@@ -14,6 +14,10 @@ class WebSocketRelay implements MessageRelay {
   final int maxReconnectsPerMinute;
   final Map<String, WebSocketChannel> _connections = {}; // key: deviceId
   final Map<String, List<int>> _reconnectAttempts = {};
+  // Pacing signal for offline-event replay: completed when the client sends
+  // a `replay_ack` for the current page, or timed out so old clients that
+  // never send one are not blocked forever. Keyed by deviceId.
+  final Map<String, Completer<void>> _replayWaiters = {};
   Future<Map<String, dynamic>> Function({
     required String accountId,
     required String deviceId,
@@ -136,6 +140,8 @@ class WebSocketRelay implements MessageRelay {
                 sequence,
               );
             }
+          } else if (payload['type'] == 'replay_ack') {
+            _replayWaiters.remove(deviceId)?.complete();
           } else if (payload['type'] == 'ping') {
             // Reply to client keepalive so the client can detect a dead server.
             try {
@@ -173,11 +179,13 @@ class WebSocketRelay implements MessageRelay {
         if (identical(_connections[deviceId], socket)) {
           _connections.remove(deviceId);
         }
+        _replayWaiters.remove(deviceId)?.complete();
       },
       onError: (_) {
         if (identical(_connections[deviceId], socket)) {
           _connections.remove(deviceId);
         }
+        _replayWaiters.remove(deviceId)?.complete();
       },
     );
   }
@@ -187,34 +195,69 @@ class WebSocketRelay implements MessageRelay {
   // when a device has a large offline queue (e.g. fresh connect with since=0).
   static const _replayBatchSize = 20;
 
+  // Offline events are paged through in bounded `_replayPageSize` queries
+  // instead of loading a device's entire backlog (which can be tens of
+  // thousands of rows) into one Dart List. Between pages we wait for the
+  // client to send a `replay_ack` for the page it just received — real
+  // backpressure paced to the client's actual throughput, unlike a bare
+  // `Future.delayed(Duration.zero)` yield, which does not wait for a slow
+  // client (or a full TCP send buffer) to drain. Clients that never send
+  // the ack (older app versions) are not blocked forever: `_replayAckTimeout`
+  // falls back to sending the next page unconditionally.
+  static const _replayPageSize = 50;
+  static const _replayAckTimeout = Duration(seconds: 5);
+
   Future<void> _replayOfflineEvents(
     WebSocketChannel socket,
     String deviceId,
     int sinceSequence,
   ) async {
     try {
-      final offlineEvents = db.getDeviceEvents(deviceId, sinceSequence);
-      for (var i = 0; i < offlineEvents.length; i++) {
+      var cursor = sinceSequence;
+      while (true) {
         if (socket.closeCode != null) return;
-        final row = offlineEvents[i];
-        final payload =
-            jsonDecode(row['payload'] as String) as Map<String, dynamic>;
-        socket.sink.add(
-          jsonEncode({
-            'event_id': row['event_id'],
-            'schema_version': row['schema_version'],
-            'timestamp': row['timestamp'],
-            'type': row['event_type'],
-            'payload': payload,
-            'server_sequence': row['device_sequence'],
-          }),
+        final page = db.getDeviceEventsPage(
+          deviceId,
+          cursor,
+          limit: _replayPageSize,
         );
-        if ((i + 1) % _replayBatchSize == 0) {
-          await Future<void>.delayed(Duration.zero);
+        if (page.isEmpty) return;
+
+        for (var i = 0; i < page.length; i++) {
+          if (socket.closeCode != null) return;
+          final row = page[i];
+          final payload =
+              jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+          socket.sink.add(
+            jsonEncode({
+              'event_id': row['event_id'],
+              'schema_version': row['schema_version'],
+              'timestamp': row['timestamp'],
+              'type': row['event_type'],
+              'payload': payload,
+              'server_sequence': row['device_sequence'],
+            }),
+          );
+          if ((i + 1) % _replayBatchSize == 0) {
+            await Future<void>.delayed(Duration.zero);
+          }
+        }
+
+        cursor = page.last['device_sequence'] as int;
+        if (page.length < _replayPageSize) return; // last page
+
+        if (socket.closeCode != null) return;
+        final waiter = Completer<void>();
+        _replayWaiters[deviceId] = waiter;
+        await waiter.future.timeout(_replayAckTimeout, onTimeout: () {});
+        if (identical(_replayWaiters[deviceId], waiter)) {
+          _replayWaiters.remove(deviceId);
         }
       }
     } catch (e) {
       stderr.writeln('Offline event replay error for $deviceId: $e');
+    } finally {
+      _replayWaiters.remove(deviceId);
     }
   }
 

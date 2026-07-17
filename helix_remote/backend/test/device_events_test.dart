@@ -216,6 +216,66 @@ void main() {
   );
 
   test(
+    'getDeviceEventsPage pages through a backlog in bounded, ordered chunks',
+    () async {
+      server.db.createAccount(
+        'paged_account',
+        'paged_user',
+        'paged_identity_public_key',
+      );
+      server.db.registerDevice(
+        'paged_device',
+        'paged_account',
+        'paged_signing_key',
+        'paged_agreement_key',
+        'Paged Device',
+      );
+      for (var i = 0; i < 120; i++) {
+        server.db.writeDeviceEvent(
+          eventId: 'evt_page_$i',
+          recipientDeviceId: 'paged_device',
+          eventType: 'chat_message',
+          payload: jsonEncode({'i': i}),
+        );
+      }
+
+      final page1 = server.db.getDeviceEventsPage(
+        'paged_device',
+        0,
+        limit: 50,
+      );
+      expect(page1, hasLength(50));
+      expect(page1.first['device_sequence'], equals(1));
+      expect(page1.last['device_sequence'], equals(50));
+
+      final page2 = server.db.getDeviceEventsPage(
+        'paged_device',
+        page1.last['device_sequence'] as int,
+        limit: 50,
+      );
+      expect(page2, hasLength(50));
+      expect(page2.first['device_sequence'], equals(51));
+      expect(page2.last['device_sequence'], equals(100));
+
+      final page3 = server.db.getDeviceEventsPage(
+        'paged_device',
+        page2.last['device_sequence'] as int,
+        limit: 50,
+      );
+      expect(page3, hasLength(20));
+      expect(page3.first['device_sequence'], equals(101));
+      expect(page3.last['device_sequence'], equals(120));
+
+      final page4 = server.db.getDeviceEventsPage(
+        'paged_device',
+        page3.last['device_sequence'] as int,
+        limit: 50,
+      );
+      expect(page4, isEmpty);
+    },
+  );
+
+  test(
     'device-events REST endpoint returns proper envelope format',
     () async {
       final aliceKeys = await ed25519.newKeyPair();
