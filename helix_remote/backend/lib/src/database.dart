@@ -9,10 +9,13 @@ part 'database/backups_outbox_repository.dart';
 part 'database/calls_repository.dart';
 part 'database/contacts_repository.dart';
 part 'database/group_calls_repository.dart';
+part 'database/group_federation_repository.dart';
 part 'database/groups_repository.dart';
 part 'database/messaging_repository.dart';
+part 'database/federation_repository.dart';
 part 'database/migrations.dart';
 part 'database/operational_repository.dart';
+part 'database/server_config_repository.dart';
 
 class BackendDatabase {
   final Database _db;

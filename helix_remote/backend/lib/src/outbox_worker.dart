@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io' show stderr;
 
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 
 class OutboxWorker {
@@ -20,6 +21,12 @@ class OutboxWorker {
   bool pushProviderAvailable;
   final int maxRetries;
   Timer? _timer;
+
+  /// Set post-construction once a server identity/federation config is
+  /// available (mirrors how `BackendServer.serverIdentity` is assigned
+  /// after construction). Used to retry failed S2S group-sync/epoch-key/
+  /// event-relay pushes queued by [GroupsModule]/[MessagingModule].
+  FederationClient? federationClient;
 
   bool get pushProviderConfigured => _pushProvider.isConfigured;
 
@@ -58,6 +65,16 @@ class OutboxWorker {
           await _processPush(
             eventId: eventId,
             payload: payload,
+            retries: retries,
+            processed: processed,
+          );
+        } else if (type == 'S2S_GROUP_SYNC' ||
+            type == 'S2S_EPOCH_KEY' ||
+            type == 'S2S_EVENT_RELAY') {
+          await _processS2SRetry(
+            type: type,
+            eventId: eventId,
+            payloadJson: item['payload'] as String,
             retries: retries,
             processed: processed,
           );
@@ -125,6 +142,64 @@ class OutboxWorker {
       processed['completed'] = processed['completed']! + 1;
     } catch (e) {
       stderr.writeln('[OutboxWorker] FCM delivery error event=$eventId: $e');
+      _failOrDlq(eventId, retries, processed);
+    }
+  }
+
+  /// Retries a queued S2S push (group roster sync, epoch key delivery, or
+  /// conversation event relay) that failed its original fire-and-forget
+  /// attempt. Payload shape is `{'domain': ..., 'body'|'deliveries'|'events': ...}`
+  /// depending on `type`, matching what [GroupsModule]/[MessagingModule]
+  /// enqueue on failure.
+  Future<void> _processS2SRetry({
+    required String type,
+    required String eventId,
+    required String payloadJson,
+    required int retries,
+    required Map<String, int> processed,
+  }) async {
+    final client = federationClient;
+    if (client == null) {
+      _failOrDlq(eventId, retries, processed);
+      return;
+    }
+    Map<String, dynamic> payload;
+    try {
+      payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+    } catch (_) {
+      db.updateOutboxStatus(eventId, 'DLQ', retries + 1);
+      processed['dlq'] = processed['dlq']! + 1;
+      return;
+    }
+    final domain = payload['domain'] as String?;
+    if (domain == null) {
+      db.updateOutboxStatus(eventId, 'DLQ', retries + 1);
+      processed['dlq'] = processed['dlq']! + 1;
+      return;
+    }
+    try {
+      switch (type) {
+        case 'S2S_GROUP_SYNC':
+          await client.syncGroupState(
+            domain: domain,
+            body: (payload['body'] as Map).cast<String, dynamic>(),
+          );
+        case 'S2S_EPOCH_KEY':
+          await client.deliverEpochKeyBatch(
+            domain: domain,
+            deliveries: (payload['deliveries'] as List)
+                .cast<Map<String, dynamic>>(),
+          );
+        case 'S2S_EVENT_RELAY':
+          await client.relayConversationEventBatch(
+            domain: domain,
+            events: (payload['events'] as List).cast<Map<String, dynamic>>(),
+          );
+      }
+      db.updateOutboxStatus(eventId, 'COMPLETED', retries);
+      processed['completed'] = processed['completed']! + 1;
+    } catch (e) {
+      stderr.writeln('[OutboxWorker] S2S retry error event=$eventId: $e');
       _failOrDlq(eventId, retries, processed);
     }
   }

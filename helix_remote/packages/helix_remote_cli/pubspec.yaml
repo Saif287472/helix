@@ -1,0 +1,27 @@
+name: helix_remote_cli
+description: Pure Dart CLI client for Helix Remote.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  meta: ^1.18.0
+  path: ^1.8.3
+  sqlite3: ^3.3.3
+  helix_remote_domain:
+    path: ../helix_remote_domain
+  helix_remote_api:
+    path: ../helix_remote_api
+  helix_remote_crypto:
+    path: ../helix_remote_crypto
+  helix_remote_storage:
+    path: ../helix_remote_storage
+
+dev_dependencies:
+  test: ^1.31.0
+  helix_remote_backend:
+    path: ../../backend

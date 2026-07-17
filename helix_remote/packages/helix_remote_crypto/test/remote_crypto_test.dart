@@ -323,22 +323,27 @@ void main() {
     });
 
     test(
-      'Scenario B current symmetric chain coverage: early out-of-order delivery is rejected and replay fails',
+      'Scenario B current symmetric chain coverage: early out-of-order delivery is decrypted successfully using skipped-keys',
       () async {
-        final rootKey = crypto.SecretKey(List.generate(32, (i) => i + 30));
-        final sendKey = crypto.SecretKey(List.generate(32, (i) => i + 40));
-        final receiveKey = crypto.SecretKey(List.generate(32, (i) => i + 50));
+        final x25519 = crypto.X25519();
+        final bobIdentityKey = await x25519.newKeyPair();
+        final bobIdentityPublic = await bobIdentityKey.extractPublicKey();
 
-        final alice = DoubleRatchetSession(
-          rootKey: rootKey,
-          sendingChainKey: sendKey,
-          receivingChainKey: receiveKey,
+        final sharedSecret = crypto.SecretKey(List.generate(32, (i) => i));
+
+        final alice = await DoubleRatchetSession.initiate(
+          sharedKey: sharedSecret,
+          peerPublicKey: bobIdentityPublic,
         );
-        final bob = DoubleRatchetSession(
-          rootKey: rootKey,
-          sendingChainKey: receiveKey,
-          receivingChainKey: sendKey,
+        final bob = await DoubleRatchetSession.receive(
+          sharedKey: sharedSecret,
+          localKeyPair: bobIdentityKey,
         );
+
+        // Advance bob once by receiving a dummy message so his receiving chain is initialized
+        final setupMsg = Uint8List.fromList('setup'.codeUnits);
+        final setupCt = await alice.encrypt(setupMsg);
+        expect(await bob.decrypt(setupCt), setupMsg);
 
         final p1 = Uint8List.fromList('message-1'.codeUnits);
         final p2 = Uint8List.fromList('message-2'.codeUnits);
@@ -348,20 +353,56 @@ void main() {
         final c2 = await alice.encrypt(p2);
         final c3 = await alice.encrypt(p3);
 
-        // Current implementation is a simple symmetric chain with no skipped-key
-        // cache. True 3 -> 1 -> 2 successful out-of-order delivery remains
-        // BLOCKED pending a reviewed ratchet implementation.
-        expect(() => bob.decrypt(c3), throwsA(anything));
-
+        // With skipped-key cache, 3 -> 1 -> 2 out-of-order delivery succeeds!
+        expect(await bob.decrypt(c3), p3);
         expect(await bob.decrypt(c1), p1);
         expect(await bob.decrypt(c2), p2);
 
-        // Replaying message 2 after the receive chain advances must fail without
-        // preventing the next valid message from decrypting.
+        // Replaying message 2 after it has been decrypted must fail.
         expect(() => bob.decrypt(c2), throwsA(anything));
-        expect(await bob.decrypt(c3), p3);
       },
     );
+
+    test('Full Signal-compatible Double Ratchet session with DH ratchets', () async {
+      final x25519 = crypto.X25519();
+      final bobIdentityKey = await x25519.newKeyPair();
+      final bobIdentityPublic = await bobIdentityKey.extractPublicKey();
+
+      final sharedSecret = crypto.SecretKey(List.generate(32, (i) => i));
+
+      // 1. Initialise Alice (initiator) and Bob (receiver)
+      final alice = await DoubleRatchetSession.initiate(
+        sharedKey: sharedSecret,
+        peerPublicKey: bobIdentityPublic,
+      );
+      final bob = await DoubleRatchetSession.receive(
+        sharedKey: sharedSecret,
+        localKeyPair: bobIdentityKey,
+      );
+
+      // 2. Alice sends message to Bob (generates Alice's first DH key)
+      final p1 = Uint8List.fromList('Message 1 from Alice'.codeUnits);
+      final c1 = await alice.encrypt(p1);
+
+      // Bob decrypts (triggers Bob's first DH ratchet step to generate Bob's local keypair)
+      final d1 = await bob.decrypt(c1);
+      expect(d1, p1);
+
+      // 3. Bob replies to Alice (uses Bob's generated local keypair and Alice's public key)
+      final p2 = Uint8List.fromList('Message 2 from Bob'.codeUnits);
+      final c2 = await bob.encrypt(p2);
+
+      // Alice decrypts (triggers Alice's first DH ratchet step)
+      final d2 = await alice.decrypt(c2);
+      expect(d2, p2);
+
+      // 4. Alice sends another message to Bob
+      final p3 = Uint8List.fromList('Message 3 from Alice'.codeUnits);
+      final c3 = await alice.encrypt(p3);
+
+      final d3 = await bob.decrypt(c3);
+      expect(d3, p3);
+    });
   });
 
   // ---------------------------------------------------------------------------

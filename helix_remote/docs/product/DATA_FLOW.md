@@ -7,7 +7,7 @@ This document maps the network and data pathways of Helix Remote.
 sequenceDiagram
     participant Client (App)
     participant Server (REST)
-    participant DB (PostgreSQL)
+    participant DB (SQLite)
 
     Client->>Server: POST /auth/register (username, identity keys)
     Server->>DB: Store credentials & public prekeys
@@ -19,13 +19,13 @@ sequenceDiagram
 sequenceDiagram
     participant Alice
     participant Server (WebSocket)
-    participant S3 Storage
+    participant Local Storage
     participant Bob (Offline/Online)
 
     Note over Alice: Encrypts file with random key K
-    Alice->>S3 Storage: Upload encrypted payload
-    Alice->>Server: Send envelope (to: Bob, S3 link, ciphertext encrypted with K)
+    Alice->>Local Storage: Upload encrypted payload
+    Alice->>Server: Send envelope (to: Bob, storage link, ciphertext encrypted with K)
     Note over Server: Purges envelope upon Bob delivery acknowledgment
     Server->>Bob: Forward envelope
-    Note over Bob: Decrypts envelope, downloads attachment from S3, decrypts payload with K
+    Note over Bob: Decrypts envelope, downloads attachment, decrypts payload with K
 ```

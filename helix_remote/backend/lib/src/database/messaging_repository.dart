@@ -24,21 +24,69 @@ extension BackendMessagingRepository on BackendDatabase {
       );
       clearMemStmt.execute([conversationId]);
       clearMemStmt.close();
+      final clearFedMemStmt = _db.prepare(
+        'DELETE FROM federated_conversation_members WHERE conversation_id = ?;',
+      );
+      clearFedMemStmt.execute([conversationId]);
+      clearFedMemStmt.close();
 
-      final memStmt = _db.prepare('''
-        INSERT INTO conversation_members (conversation_id, account_id, role)
-        VALUES (?, ?, 'MEMBER');
-      ''');
       for (final memberId in memberAccountIds) {
-        memStmt.execute([conversationId, memberId]);
+        upsertConversationMemberRow(conversationId, memberId, 'MEMBER');
       }
-      memStmt.close();
 
       _db.execute('COMMIT;');
     } catch (e) {
       _db.execute('ROLLBACK;');
       rethrow;
     }
+  }
+
+  /// Writes a member row to the correct table: `conversation_members` for
+  /// local accounts, `federated_conversation_members` (v26 shadow table,
+  /// no FK) for accounts qualified as user@domain that don't exist locally.
+  /// Shared by DIRECT conversation creation and group membership mutations
+  /// so both paths stay consistent about what counts as "external".
+  void upsertConversationMemberRow(
+    String conversationId,
+    String accountId,
+    String role,
+  ) {
+    final at = accountId.lastIndexOf('@');
+    if (at > 0 && at < accountId.length - 1 && !accountExists(accountId)) {
+      final stmt = _db.prepare('''
+        INSERT OR REPLACE INTO federated_conversation_members (
+          conversation_id, account_id, domain, role
+        )
+        VALUES (?, ?, ?, ?);
+      ''');
+      stmt.execute([
+        conversationId,
+        accountId,
+        accountId.substring(at + 1).toLowerCase(),
+        role,
+      ]);
+      stmt.close();
+    } else {
+      final stmt = _db.prepare('''
+        INSERT OR REPLACE INTO conversation_members (conversation_id, account_id, role)
+        VALUES (?, ?, ?);
+      ''');
+      stmt.execute([conversationId, accountId, role]);
+      stmt.close();
+    }
+  }
+
+  void removeConversationMemberRow(String conversationId, String accountId) {
+    final localStmt = _db.prepare(
+      'DELETE FROM conversation_members WHERE conversation_id = ? AND account_id = ?;',
+    );
+    localStmt.execute([conversationId, accountId]);
+    localStmt.close();
+    final fedStmt = _db.prepare(
+      'DELETE FROM federated_conversation_members WHERE conversation_id = ? AND account_id = ?;',
+    );
+    fedStmt.execute([conversationId, accountId]);
+    fedStmt.close();
   }
 
   bool isConversationMember(String conversationId, String accountId) {

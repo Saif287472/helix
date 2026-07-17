@@ -5,6 +5,8 @@ export 'src/websocket.dart';
 export 'src/jwt.dart';
 export 'src/outbox_worker.dart';
 export 'src/rate_limiter.dart';
+export 'src/federation.dart';
+export 'src/directory_server.dart';
 export 'src/repositories.dart';
 export 'src/migrations.dart';
 export 'src/object_storage.dart';

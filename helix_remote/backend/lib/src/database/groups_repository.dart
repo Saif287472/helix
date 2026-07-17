@@ -4,13 +4,18 @@ extension BackendGroupsRepository on BackendDatabase {
   // Group operations (P16-001 to P16-014)
   // ---------------------------------------------------------------------------
 
-  /// Creates a GROUP conversation, group metadata row, and sets creator to ADMIN.
+  /// Creates a GROUP conversation, group metadata row, and sets creator to
+  /// ADMIN. This server becomes the group's home (authoritative) server;
+  /// `homeDomain` is recorded so participant servers can be told where to
+  /// proxy future admin actions. Member ids may be qualified (user@domain)
+  /// for federated members — see [BackendMessagingRepository.upsertConversationMemberRow].
   void createGroup({
     required String groupId,
     required String name,
     required String creatorId,
     required String encryptionKeyId,
     required List<String> initialMemberIds,
+    String? homeDomain,
   }) {
     _db.execute('BEGIN TRANSACTION;');
     try {
@@ -28,26 +33,26 @@ extension BackendGroupsRepository on BackendDatabase {
       );
       clearStmt.execute([groupId]);
       clearStmt.close();
+      final clearFedStmt = _db.prepare(
+        'DELETE FROM federated_conversation_members WHERE conversation_id = ?;',
+      );
+      clearFedStmt.execute([groupId]);
+      clearFedStmt.close();
 
-      final memStmt = _db.prepare('''
-        INSERT INTO conversation_members (conversation_id, account_id, role)
-        VALUES (?, ?, ?);
-      ''');
       final allMembers = [
         ...initialMemberIds,
         if (!initialMemberIds.contains(creatorId)) creatorId,
       ];
       for (final memberId in allMembers) {
         final role = memberId == creatorId ? 'ADMIN' : 'MEMBER';
-        memStmt.execute([groupId, memberId, role]);
+        upsertConversationMemberRow(groupId, memberId, role);
       }
-      memStmt.close();
 
       final grpStmt = _db.prepare('''
-        INSERT OR REPLACE INTO groups (group_id, creator_id, encryption_key_id, status, created_at)
-        VALUES (?, ?, ?, 'ACTIVE', ?);
+        INSERT OR REPLACE INTO groups (group_id, creator_id, encryption_key_id, status, created_at, home_domain)
+        VALUES (?, ?, ?, 'ACTIVE', ?, ?);
       ''');
-      grpStmt.execute([groupId, creatorId, encryptionKeyId, now]);
+      grpStmt.execute([groupId, creatorId, encryptionKeyId, now, homeDomain]);
       grpStmt.close();
 
       _db.execute('COMMIT;');
@@ -74,6 +79,8 @@ extension BackendGroupsRepository on BackendDatabase {
       'encryption_key_id': row['encryption_key_id'],
       'status': row['status'],
       'created_at': row['created_at'],
+      'home_domain': row['home_domain'],
+      'add_policy': row['add_policy'],
     };
   }
 
@@ -176,12 +183,11 @@ extension BackendGroupsRepository on BackendDatabase {
       updStmt.execute([inviteId]);
       updStmt.close();
 
-      final memStmt = _db.prepare('''
-        INSERT OR IGNORE INTO conversation_members (conversation_id, account_id, role)
-        VALUES (?, ?, 'MEMBER');
-      ''');
-      memStmt.execute([invite['group_id'], invite['invitee_id']]);
-      memStmt.close();
+      upsertConversationMemberRow(
+        invite['group_id'] as String,
+        invite['invitee_id'] as String,
+        'MEMBER',
+      );
 
       _db.execute('COMMIT;');
     } catch (_) {
@@ -209,20 +215,11 @@ extension BackendGroupsRepository on BackendDatabase {
   }
 
   void changeGroupMemberRole(String groupId, String accountId, String role) {
-    final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO conversation_members (conversation_id, account_id, role)
-      VALUES (?, ?, ?);
-    ''');
-    stmt.execute([groupId, accountId, role]);
-    stmt.close();
+    upsertConversationMemberRow(groupId, accountId, role);
   }
 
   void removeGroupMember(String groupId, String accountId) {
-    final stmt = _db.prepare(
-      'DELETE FROM conversation_members WHERE conversation_id = ? AND account_id = ?;',
-    );
-    stmt.execute([groupId, accountId]);
-    stmt.close();
+    removeConversationMemberRow(groupId, accountId);
   }
 
   int countGroupAdmins(String groupId) {
@@ -362,12 +359,7 @@ extension BackendGroupsRepository on BackendDatabase {
       updStmt.execute([newOwnerId, groupId]);
       updStmt.close();
       // New owner must be ADMIN.
-      final roleStmt = _db.prepare('''
-        INSERT OR REPLACE INTO conversation_members (conversation_id, account_id, role)
-        VALUES (?, ?, 'ADMIN');
-      ''');
-      roleStmt.execute([groupId, newOwnerId]);
-      roleStmt.close();
+      upsertConversationMemberRow(groupId, newOwnerId, 'ADMIN');
       _db.execute('COMMIT;');
     } catch (_) {
       _db.execute('ROLLBACK;');
@@ -380,12 +372,7 @@ extension BackendGroupsRepository on BackendDatabase {
   // ---------------------------------------------------------------------------
 
   void addGroupMember(String groupId, String accountId) {
-    final stmt = _db.prepare('''
-      INSERT OR IGNORE INTO conversation_members (conversation_id, account_id, role)
-      VALUES (?, ?, 'MEMBER');
-    ''');
-    stmt.execute([groupId, accountId]);
-    stmt.close();
+    upsertConversationMemberRow(groupId, accountId, 'MEMBER');
   }
 
   // ---------------------------------------------------------------------------

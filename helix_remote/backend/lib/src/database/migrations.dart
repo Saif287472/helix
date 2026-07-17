@@ -914,5 +914,124 @@ extension BackendDatabaseMigrations on BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 24;');
     }
+
+    if (version < 25) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS server_configuration (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 25;');
+    }
+
+    if (version < 26) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS federation_servers (
+          server_id TEXT PRIMARY KEY,
+          domain TEXT UNIQUE,
+          public_key TEXT NOT NULL,
+          address TEXT,
+          trust_source TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS federated_conversation_members (
+          conversation_id TEXT NOT NULL
+            REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          account_id TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'MEMBER',
+          PRIMARY KEY(conversation_id, account_id)
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_federated_members_domain
+          ON federated_conversation_members(domain);
+      ''');
+      _db.execute('PRAGMA user_version = 26;');
+    }
+
+    if (version < 27) {
+      // Milestone 4.1: federated group membership. A group's home server is
+      // whichever server processed its creation; other servers hosting a
+      // member keep a synced read-model in federated_groups /
+      // federated_group_invites (same shadow-table pattern as
+      // federated_conversation_members, v26).
+      for (final statement in [
+        'ALTER TABLE groups ADD COLUMN home_domain TEXT;',
+      ]) {
+        try {
+          _db.execute(statement);
+        } catch (_) {}
+      }
+
+      // group_invites.inviter_id/invitee_id originally had FKs to the local
+      // accounts table, which reject a genuinely-external qualified id
+      // (user@domain). A group's home server must be able to track an
+      // invite whose invitee (or, if a federated admin sent it via S2S
+      // proxy, whose inviter) lives on another server, so rebuild the table
+      // without those two FKs (group_id -> conversations is kept). Follows
+      // the same rename/create/copy/drop pattern as the v13 devices rebuild.
+      _db.execute('ALTER TABLE group_invites RENAME TO group_invites_v8;');
+      _db.execute('''
+        CREATE TABLE group_invites (
+          invite_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          inviter_id TEXT NOT NULL,
+          invitee_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY(group_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        INSERT INTO group_invites (
+          invite_id, group_id, inviter_id, invitee_id, status, created_at
+        )
+        SELECT invite_id, group_id, inviter_id, invitee_id, status, created_at
+        FROM group_invites_v8;
+      ''');
+      _db.execute('DROP TABLE group_invites_v8;');
+
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS federated_groups (
+          group_id TEXT PRIMARY KEY
+            REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+          home_server_id TEXT NOT NULL,
+          home_domain TEXT NOT NULL,
+          creator_id TEXT NOT NULL,
+          name TEXT,
+          encryption_key_id TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          add_policy TEXT NOT NULL DEFAULT 'EVERYONE',
+          created_at INTEGER NOT NULL,
+          synced_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_federated_groups_home
+          ON federated_groups(home_server_id);
+      ''');
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS federated_group_invites (
+          invite_id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL,
+          home_server_id TEXT NOT NULL,
+          home_domain TEXT NOT NULL,
+          inviter_id TEXT NOT NULL,
+          invitee_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          created_at INTEGER NOT NULL,
+          synced_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_federated_group_invites_invitee
+          ON federated_group_invites(invitee_id, status);
+      ''');
+      _db.execute('PRAGMA user_version = 27;');
+    }
   }
 }

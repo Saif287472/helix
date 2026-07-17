@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/federation.dart';
 
 class PrekeysModule {
   final BackendDatabase db;
+  final FederationClient? federationClient;
+  final String? localDomain;
 
-  PrekeysModule(this.db);
+  PrekeysModule(this.db, {this.federationClient, this.localDomain});
 
   Router get router {
     final router = Router();
@@ -82,7 +85,8 @@ class PrekeysModule {
       return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
     }
 
-    final targetAccountId = request.url.queryParameters['account_id'];
+    final requestedAccountId = request.url.queryParameters['account_id'];
+    final targetAccountId = _localAccountId(requestedAccountId);
     if (targetAccountId == null) {
       return Response.badRequest(
         body: jsonEncode({'error': 'Missing account_id parameter'}),
@@ -90,6 +94,30 @@ class PrekeysModule {
     }
 
     try {
+      if (_isExternalAccount(requestedAccountId)) {
+        if (federationClient == null) {
+          return Response(
+            503,
+            body: jsonEncode({'error': 'Federation is not configured'}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+        final bundle = await federationClient!.fetchRemotePrekeyBundle(
+          requestedAccountId!,
+        );
+        db.logAudit(
+          auth['account_id'] as String,
+          auth['device_id'] as String?,
+          'FEDERATED_PREKEY_BUNDLE_REQUEST',
+          request.context['client_ip'] as String?,
+          null,
+        );
+        return Response.ok(
+          jsonEncode(bundle),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
       // 1. Get all active devices for the target account
       final devices = db.getDevices(targetAccountId);
       if (devices.isEmpty) {
@@ -117,11 +145,31 @@ class PrekeysModule {
 
       return Response.ok(
         jsonEncode({'account_id': targetAccountId, 'devices': deviceBundles}),
+        headers: {'Content-Type': 'application/json'},
       );
     } catch (e) {
       return Response.internalServerError(
         body: jsonEncode({'error': 'Internal server error'}),
       );
     }
+  }
+
+  bool _isExternalAccount(String? accountId) {
+    if (accountId == null) return false;
+    final at = accountId.lastIndexOf('@');
+    if (at <= 0 || at == accountId.length - 1) return false;
+    final domain = accountId.substring(at + 1).toLowerCase();
+    return localDomain == null || domain != localDomain!.toLowerCase();
+  }
+
+  String? _localAccountId(String? accountId) {
+    if (accountId == null || accountId.isEmpty) return null;
+    final at = accountId.lastIndexOf('@');
+    if (at <= 0 || at == accountId.length - 1) return accountId;
+    final domain = accountId.substring(at + 1).toLowerCase();
+    if (localDomain != null && domain == localDomain!.toLowerCase()) {
+      return accountId.substring(0, at);
+    }
+    return accountId;
   }
 }

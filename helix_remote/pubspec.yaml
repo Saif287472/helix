@@ -6,6 +6,7 @@ environment:
 
 workspace:
   - app
+  - admin
   - backend
   - tool
   - packages/helix_remote_domain
@@ -15,6 +16,7 @@ workspace:
   - packages/helix_remote_sync
   - packages/helix_remote_calls
   - packages/helix_remote_groups
+  - packages/helix_remote_cli
 
 hooks:
   user_defines:

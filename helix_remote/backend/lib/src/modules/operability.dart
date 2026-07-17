@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
+import 'package:helix_remote_backend/src/server_identity.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -19,6 +22,12 @@ class OperabilityModule {
     required this.adminAccountIds,
     required this.turnSecret,
     required this.turnUrl,
+    this.logFilePath,
+    this.serverIdentity,
+    this.federationClient,
+    this.federationDomain,
+    this.federationDirectoryUrl = '',
+    this.publicBaseUrl = '',
   });
 
   final BackendDatabase db;
@@ -29,6 +38,12 @@ class OperabilityModule {
   final Set<String> adminAccountIds;
   final String turnSecret;
   final String turnUrl;
+  final String? logFilePath;
+  final ServerIdentity? serverIdentity;
+  final FederationClient? federationClient;
+  final String? federationDomain;
+  final String federationDirectoryUrl;
+  final String publicBaseUrl;
 
   static const sloTargets = {
     'availability_monthly': '99.5%',
@@ -63,6 +78,12 @@ class OperabilityModule {
     final router = Router();
     router.get('/metrics', _metrics);
     router.get('/support-diagnostic', _supportDiagnostic);
+    router.get('/config', _config);
+    router.post('/backup', _backup);
+    router.get('/users', _users);
+    router.get('/logs', _logs);
+    router.get('/federation', _federationStatus);
+    router.post('/federation/worldwide', _setWorldwideMode);
     return router;
   }
 
@@ -225,6 +246,220 @@ class OperabilityModule {
       'configured': turnSecret.trim().isNotEmpty && urls.isNotEmpty,
       'url_count': urls.length,
       'live_reachability': 'not_checked',
+    };
+  }
+
+  Response _config(Request request) {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    _auditAdminRead(request, 'ADMIN_CONFIG_READ');
+
+    final serverId = db.getServerConfig('server_id') ?? 'unknown';
+    final serverPubKey = db.getServerConfig('server_public_key') ?? 'unknown';
+
+    return _json({
+      'server_id': serverId,
+      'server_public_key': serverPubKey,
+      'port': Platform.environment['HELIX_REMOTE_PORT'] ?? '8080',
+      'host': Platform.environment['HELIX_REMOTE_HOST'] ?? '127.0.0.1',
+      'dev_mode': Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1',
+      'db_path':
+          Platform.environment['HELIX_REMOTE_DB_PATH'] ?? 'remote_backend.db',
+      'attachments_dir':
+          Platform.environment['HELIX_REMOTE_ATTACHMENTS_DIR'] ?? 'not_set',
+      'push_configured': outboxWorker.pushProviderConfigured,
+      'turn_configured':
+          turnSecret.trim().isNotEmpty &&
+          CallsModule.resolveTurnUrls(turnUrl).isNotEmpty,
+      'federation': _federationConfig(),
+    });
+  }
+
+  Response _federationStatus(Request request) {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    _auditAdminRead(request, 'ADMIN_FEDERATION_STATUS_READ');
+    return _json(_federationConfig());
+  }
+
+  Future<Response> _setWorldwideMode(Request request) async {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final enabled = body['enabled'] as bool?;
+    if (enabled == null) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Missing enabled flag'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+
+    if (!enabled) {
+      db.setServerConfig('federation_worldwide_mode', 'false');
+      db.logAudit(
+        (request.context['auth'] as Map<String, dynamic>?)?['account_id']
+            as String?,
+        (request.context['auth'] as Map<String, dynamic>?)?['device_id']
+            as String?,
+        'ADMIN_FEDERATION_WORLDWIDE_DISABLED',
+        request.context['client_ip'] as String?,
+        request.headers['user-agent'],
+      );
+      return _json(_federationConfig());
+    }
+
+    final domain = (body['domain'] as String? ?? federationDomain ?? '').trim();
+    final address = (body['address'] as String? ?? publicBaseUrl).trim();
+    final directory =
+        (body['directory_url'] as String? ?? federationDirectoryUrl).trim();
+    if (domain.isEmpty || address.isEmpty || directory.isEmpty) {
+      return Response.badRequest(
+        body: jsonEncode({
+          'error': 'domain, address, and directory_url are required',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    if (serverIdentity == null || federationClient == null) {
+      return _json({
+        'error': 'Server identity is not initialized',
+      }, status: 503);
+    }
+
+    db.setServerConfig('federation_worldwide_mode', 'true');
+    db.setServerConfig('federation_domain', domain);
+    db.setServerConfig('federation_public_base_url', address);
+    db.setServerConfig('federation_directory_url', directory);
+
+    final users = db
+        .getAllUsersPaginated(limit: 10000, offset: 0)
+        .map((user) => '${user['account_id']}@$domain')
+        .toList();
+    final registrationClient = directory == federationDirectoryUrl
+        ? federationClient!
+        : FederationClient(
+            db: db,
+            identity: serverIdentity!,
+            directoryUrl: directory,
+          );
+    final registration = await registrationClient.registerDirectory(
+      domain: domain,
+      address: address,
+      users: users,
+    );
+    db.logAudit(
+      (request.context['auth'] as Map<String, dynamic>?)?['account_id']
+          as String?,
+      (request.context['auth'] as Map<String, dynamic>?)?['device_id']
+          as String?,
+      'ADMIN_FEDERATION_WORLDWIDE_ENABLED',
+      request.context['client_ip'] as String?,
+      request.headers['user-agent'],
+    );
+    return _json({
+      ..._federationConfig(),
+      'directory_registration': registration,
+    });
+  }
+
+  Response _backup(Request request) {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    _auditAdminRead(request, 'ADMIN_BACKUP_TRIGGER');
+
+    try {
+      final dbDir = Directory('backups');
+      if (!dbDir.existsSync()) {
+        dbDir.createSync(recursive: true);
+      }
+      final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+      final backupPath = 'backups/backup_$timestamp.db';
+
+      db.vacuumInto(backupPath);
+
+      return _json({
+        'status': 'success',
+        'backup_file': backupPath,
+        'timestamp': timestamp,
+      });
+    } catch (e) {
+      return _json({'error': 'Failed to create backup: $e'}, status: 500);
+    }
+  }
+
+  Response _users(Request request) {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    _auditAdminRead(request, 'ADMIN_USERS_LIST_READ');
+
+    final params = request.url.queryParameters;
+    final limit = int.tryParse(params['limit'] ?? '') ?? 50;
+    final offset = int.tryParse(params['offset'] ?? '') ?? 0;
+
+    if (limit <= 0 || offset < 0) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Invalid limit or offset'}),
+      );
+    }
+
+    final users = db.getAllUsersPaginated(limit: limit, offset: offset);
+    return _json({'users': users, 'limit': limit, 'offset': offset});
+  }
+
+  Response _logs(Request request) {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    _auditAdminRead(request, 'ADMIN_LOGS_READ');
+
+    if (logFilePath == null || logFilePath!.isEmpty) {
+      return _json({
+        'message':
+            'Log file not configured. Please set HELIX_REMOTE_LOG_FILE to enable log tailing.',
+        'logs': [],
+      });
+    }
+
+    final file = File(logFilePath!);
+    if (!file.existsSync()) {
+      return _json({
+        'message': 'Log file configured but does not exist at: $logFilePath',
+        'logs': [],
+      });
+    }
+
+    try {
+      final lines = file.readAsLinesSync();
+      final tail = lines.length > 100
+          ? lines.sublist(lines.length - 100)
+          : lines;
+      return _json({'logs': tail});
+    } catch (e) {
+      return _json({'error': 'Failed to read logs: $e'}, status: 500);
+    }
+  }
+
+  Map<String, dynamic> _federationConfig() {
+    final domain =
+        db.getServerConfig('federation_domain') ?? federationDomain ?? '';
+    final directory =
+        db.getServerConfig('federation_directory_url') ??
+        federationDirectoryUrl;
+    final address =
+        db.getServerConfig('federation_public_base_url') ?? publicBaseUrl;
+    return {
+      'worldwide_mode':
+          db.getServerConfig('federation_worldwide_mode') == 'true',
+      'domain': domain,
+      'directory_url': directory,
+      'public_base_url': address,
+      'server_identity_ready': serverIdentity != null,
     };
   }
 

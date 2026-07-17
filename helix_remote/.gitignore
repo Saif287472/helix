@@ -17,8 +17,8 @@ app/android/key.properties
 *.keystore
 *.jks
 
-# Windows
-app/windows/flutter/ephemeral/
+# Flutter generated build config (per-platform, per-app)
+**/ephemeral/
 
 # Backend
 backend/build/
@@ -26,6 +26,7 @@ backend/bin/*.exe
 
 # Runtime data
 attachments_storage/
+backup_media_storage/
 *.db
 *.db-shm
 *.db-wal

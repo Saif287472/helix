@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
+import 'package:helix_remote_backend/src/server_identity.dart';
 
 void main() async {
   // On Windows without cmake/MSVC, native assets can't compile sqlite3 from
@@ -90,6 +91,17 @@ void main() async {
     turnSecret: turnSecret,
     pushProvider: pushProvider,
   );
+
+  final identity = await ServerIdentity.loadOrCreate(server.db);
+  server.serverIdentity = identity;
+  print('==================================================');
+  print('Helix Server ID: ${identity.serverId}');
+  if (identity.adminToken != null) {
+    print('Helix Admin Token (Generated on first boot):');
+    print('  ${identity.adminToken}');
+    print('Save this token! It is required to log into Helix Admin.');
+  }
+  print('==================================================');
 
   print('Starting server on http://$host:$port...');
   await server.start(host, port);

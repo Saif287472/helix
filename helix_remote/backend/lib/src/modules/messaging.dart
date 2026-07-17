@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/federation.dart';
 
 abstract class MessageRelay {
   void sendToDevice(String deviceId, Map<String, dynamic> payload);
@@ -11,8 +13,16 @@ class MessagingModule {
   final BackendDatabase db;
   final MessageRelay relay;
   final void Function(String messageId)? onMessageDeleted;
+  final FederationClient? federationClient;
+  final String? localDomain;
 
-  MessagingModule(this.db, this.relay, {this.onMessageDeleted});
+  MessagingModule(
+    this.db,
+    this.relay, {
+    this.onMessageDeleted,
+    this.federationClient,
+    this.localDomain,
+  });
 
   Router get router {
     final router = Router();
@@ -46,6 +56,17 @@ class MessagingModule {
       if (conversationId == null || type == null || membersList == null) {
         return Response.badRequest(
           body: jsonEncode({'error': 'Missing conversation fields'}),
+        );
+      }
+
+      if (type == 'GROUP') {
+        // GROUP conversations must go through POST /api/v1/groups/create,
+        // which also creates the groups row (home-server bookkeeping for
+        // federation) that this generic path doesn't know about.
+        return Response.badRequest(
+          body: jsonEncode({
+            'error': 'Use POST /api/v1/groups/create for GROUP conversations',
+          }),
         );
       }
 
@@ -124,6 +145,12 @@ class MessagingModule {
       }
 
       final conversationMembers = db.getConversationMembers(conversationId);
+      final federatedConversationMembers = db.getFederatedConversationMembers(
+        conversationId,
+      );
+      final allowedFederatedAccountIds = federatedConversationMembers
+          .map((member) => member['account_id'] as String)
+          .toSet();
       final requiredRecipientDeviceIds = <String>{};
       final allowedRecipientDeviceIds = <String>{};
       for (final memberId in conversationMembers) {
@@ -141,6 +168,7 @@ class MessagingModule {
       }
 
       final envelopeByDeviceId = <String, Map<String, dynamic>>{};
+      final federatedEnvelopes = <Map<String, dynamic>>[];
       for (final env in envelopes) {
         final envMap = env as Map<String, dynamic>;
         if (envMap.containsKey('plaintext') ||
@@ -153,6 +181,9 @@ class MessagingModule {
           );
         }
         final recipientDeviceId = envMap['recipient_device_id'] as String?;
+        final recipientAccountId =
+            envMap['recipient_account_id'] as String? ??
+            envMap['recipientAccountId'] as String?;
         final ciphertext = envMap['ciphertext'] as String?;
         if (recipientDeviceId == null ||
             ciphertext == null ||
@@ -160,6 +191,15 @@ class MessagingModule {
           return Response.badRequest(
             body: jsonEncode({'error': 'Invalid per-device envelope'}),
           );
+        }
+        if (_isExternalAccount(recipientAccountId)) {
+          if (!allowedFederatedAccountIds.contains(recipientAccountId)) {
+            return Response.forbidden(
+              jsonEncode({'error': 'Envelope targets a non-member server'}),
+            );
+          }
+          federatedEnvelopes.add(envMap);
+          continue;
         }
         if (!allowedRecipientDeviceIds.contains(recipientDeviceId)) {
           return Response.forbidden(
@@ -183,6 +223,7 @@ class MessagingModule {
 
       int allocatedSeq = 0;
       final processedEnvelopes = <Map<String, dynamic>>[];
+      final federatedResults = <Map<String, dynamic>>[];
 
       for (final entry in envelopeByDeviceId.entries) {
         final recipientDeviceId = entry.key;
@@ -270,6 +311,49 @@ class MessagingModule {
         processedEnvelopes.add(envelopePayload);
       }
 
+      if (federatedEnvelopes.isNotEmpty) {
+        if (federationClient == null) {
+          return Response(
+            503,
+            body: jsonEncode({'error': 'Federation is not configured'}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+        // Milestone 4.3: batch by destination domain instead of one HTTP
+        // call per recipient device — a group message can fan out to many
+        // federated devices on the same remote server, and each domain
+        // only needs one signed round-trip.
+        final envelopesByDomain = <String, List<Map<String, dynamic>>>{};
+        for (final env in federatedEnvelopes) {
+          final recipientAccountId = env['recipient_account_id'] as String;
+          final domain = FederationClient.domainOf(recipientAccountId)!;
+          (envelopesByDomain[domain] ??= []).add({
+            'message_id': messageId,
+            'conversation_id': conversationId,
+            'sender_account_id': _qualifiedLocalAccountId(senderAccountId),
+            'sender_device_id': senderDeviceId,
+            'recipient_account_id': recipientAccountId,
+            'recipient_device_id': env['recipient_device_id'],
+            'ciphertext': env['ciphertext'],
+          });
+        }
+        final batchResults = await Future.wait(
+          envelopesByDomain.entries.map((entry) async {
+            final result = await federationClient!.proxyMessageBatch(
+              domain: entry.key,
+              envelopes: entry.value,
+            );
+            return MapEntry(entry.key, result);
+          }),
+        );
+        for (final entry in batchResults) {
+          final results = entry.value['results'] as List? ?? const [];
+          for (final r in results) {
+            federatedResults.add(r as Map<String, dynamic>);
+          }
+        }
+      }
+
       db.logAudit(
         senderAccountId,
         senderDeviceId,
@@ -283,6 +367,7 @@ class MessagingModule {
           'message': 'Message processed',
           'sequence': allocatedSeq,
           'envelopes_count': processedEnvelopes.length,
+          'federated_envelopes_count': federatedResults.length,
         }),
       );
     } catch (e) {
@@ -290,6 +375,23 @@ class MessagingModule {
         body: jsonEncode({'error': 'Internal server error'}),
       );
     }
+  }
+
+  bool _isExternalAccount(String? accountId) {
+    if (accountId == null) return false;
+    final at = accountId.lastIndexOf('@');
+    if (at <= 0 || at == accountId.length - 1) return false;
+    final domain = accountId.substring(at + 1).toLowerCase();
+    return localDomain == null || domain != localDomain!.toLowerCase();
+  }
+
+  String _qualifiedLocalAccountId(String accountId) {
+    if (accountId.contains('@') ||
+        localDomain == null ||
+        localDomain!.isEmpty) {
+      return accountId;
+    }
+    return '$accountId@${localDomain!.toLowerCase()}';
   }
 
   Future<Response> _syncMessagesHandler(Request request) async {
@@ -502,7 +604,7 @@ class MessagingModule {
         'sender_device_id': deviceId,
         'ciphertext': ciphertext,
       };
-      _fanOutConversationEvent(
+      await _fanOutConversationEvent(
         conversationId: conversationId,
         senderDeviceId: deviceId,
         eventType: 'message_edited',
@@ -572,7 +674,7 @@ class MessagingModule {
         'device_id': deviceId,
         'reaction': reaction,
       };
-      _fanOutConversationEvent(
+      await _fanOutConversationEvent(
         conversationId: conversationId,
         senderDeviceId: deviceId,
         eventType: 'reaction_added',
@@ -629,7 +731,7 @@ class MessagingModule {
         'device_id': deviceId,
         'receipt_type': acceptedReceiptType,
       };
-      _fanOutConversationEvent(
+      await _fanOutConversationEvent(
         conversationId: conversationId,
         senderDeviceId: deviceId,
         eventType: acceptedReceiptType == 'READ'
@@ -680,7 +782,7 @@ class MessagingModule {
         'device_id': deviceId,
         'is_typing': isTyping,
       };
-      _fanOutConversationEvent(
+      await _fanOutConversationEvent(
         conversationId: conversationId,
         senderDeviceId: deviceId,
         eventType: 'typing',
@@ -698,14 +800,14 @@ class MessagingModule {
     }
   }
 
-  void _fanOutConversationEvent({
+  Future<void> _fanOutConversationEvent({
     required String conversationId,
     required String senderDeviceId,
     required String eventType,
     required String eventKey,
     required Map<String, dynamic> payload,
     bool persist = true,
-  }) {
+  }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final memberId in db.getConversationMembers(conversationId)) {
       for (final dev in db.getDevices(memberId)) {
@@ -735,6 +837,46 @@ class MessagingModule {
         );
       }
     }
+
+    // Milestone 4.3: also relay to federated members of this conversation
+    // (fixes the same gap for existing federated DIRECT conversations,
+    // which never received edits/reactions/receipts/typing before this).
+    final federatedMembers = db.getFederatedConversationMembers(
+      conversationId,
+    );
+    if (federatedMembers.isEmpty || federationClient == null) return;
+    final eventsByDomain = <String, List<Map<String, dynamic>>>{};
+    for (final member in federatedMembers) {
+      final domain = member['domain'] as String;
+      (eventsByDomain[domain] ??= []).add({
+        'conversation_id': conversationId,
+        'event_type': eventType,
+        'event_key': eventKey,
+        'persist': persist,
+        // No specific recipient_device_id is known for a federated member
+        // (device enumeration lives on their own server) — the remote
+        // server fans this out to all of that account's local devices.
+        'recipient_account_id': member['account_id'],
+        'payload': payload,
+      });
+    }
+    await Future.wait(
+      eventsByDomain.entries.map((entry) async {
+        try {
+          await federationClient!.relayConversationEventBatch(
+            domain: entry.key,
+            events: entry.value,
+          );
+        } catch (_) {
+          if (!persist) return;
+          db.enqueueOutbox(
+            's2s_evtrelay_${eventType}_${eventKey}_${entry.key}_${DateTime.now().millisecondsSinceEpoch}',
+            'S2S_EVENT_RELAY',
+            jsonEncode({'domain': entry.key, 'events': entry.value}),
+          );
+        }
+      }),
+    );
   }
 
   Future<Response> _deviceEventsHandler(Request request) async {
