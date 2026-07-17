@@ -114,8 +114,7 @@ void main() {
         expect(root.startupState, RemoteStartupState.authenticatedAndSyncing);
         expect(await store.read('access_token'), equals('fresh-access'));
         expect(await store.read('refresh_token'), equals('refresh-2'));
-        expect(await store.read('access_token.pending'), isNull);
-        expect(await store.read('refresh_token.pending'), isNull);
+        expect(await store.read('token_rotation.pending'), isNull);
       },
     );
 
@@ -195,9 +194,14 @@ void main() {
         final store = _InMemoryKeyValueStore();
         await store.write('access_token', 'stale-access');
         await store.write('refresh_token', 'stale-refresh');
-        // Pending keys left over from a crash mid-rotation.
-        await store.write('access_token.pending', 'recovered-access');
-        await store.write('refresh_token.pending', 'recovered-refresh');
+        // Pending pair left over from a crash mid-rotation.
+        await store.write(
+          'token_rotation.pending',
+          jsonEncode({
+            'access_token': 'recovered-access',
+            'refresh_token': 'recovered-refresh',
+          }),
+        );
         await store.write('account_id', 'acc-p04');
         await store.write('username', 'phase4');
         await store.write('identity_public_key', 'identity-pk');
@@ -219,9 +223,8 @@ void main() {
         final restored = await root.tryRestoreSession();
 
         expect(restored, isTrue);
-        // Pending keys must be gone after recovery.
-        expect(await store.read('access_token.pending'), isNull);
-        expect(await store.read('refresh_token.pending'), isNull);
+        // Pending key must be gone after recovery.
+        expect(await store.read('token_rotation.pending'), isNull);
         // Main keys should hold the server-returned fresh tokens.
         expect(await store.read('access_token'), equals('rotated-access'));
         expect(await store.read('refresh_token'), equals('rotated-refresh'));

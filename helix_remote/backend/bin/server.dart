@@ -1,6 +1,8 @@
 // ignore_for_file: avoid_print
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
@@ -25,7 +27,7 @@ void main() async {
     exit(78);
   }
   final resolvedJwtSecret =
-      jwtSecret ?? 'helix_remote_explicit_dev_mode_secret_min_32_bytes';
+      jwtSecret ?? base64Url.encode(List.generate(32, (_) => Random.secure().nextInt(256)));
   final dbPath =
       Platform.environment['HELIX_REMOTE_DB_PATH'] ?? 'remote_backend.db';
 

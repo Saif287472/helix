@@ -591,6 +591,38 @@ void main() {
     expect(server.db.getAttachment('completed_c'), isNotNull);
   });
 
+  test('cleanupOrphans sanitizes path-traversal file ids', () {
+    final module = AttachmentsModule(server.db, storageDir: tempStorageDir);
+    final canary = File(
+      'canary_dart_test_${DateTime.now().microsecondsSinceEpoch}.txt',
+    );
+    canary.writeAsStringSync('do not delete me');
+    addTearDown(() {
+      if (canary.existsSync()) canary.deleteSync();
+    });
+
+    final pastTime = DateTime.now()
+        .subtract(const Duration(hours: 2))
+        .millisecondsSinceEpoch;
+    final maliciousFileId = '../${canary.path}';
+    server.db.createAttachment(
+      fileId: maliciousFileId,
+      accountId: 'user1',
+      fileSize: 100,
+      fileHash: maliciousFileId,
+      createdAt: pastTime,
+    );
+
+    final removed = module.cleanupOrphans(staleAfter: const Duration(hours: 1));
+
+    // The DB row is still reclaimed, but the traversal must not escape
+    // the storage directory to delete the file living outside it.
+    expect(removed, equals(1));
+    expect(server.db.getAttachment(maliciousFileId), isNull);
+    expect(canary.existsSync(), isTrue);
+    expect(canary.readAsStringSync(), equals('do not delete me'));
+  });
+
   // P14-012: Object storage lifecycle rules
   test(
     'runLifecycleRules expires unreferenced completed attachments older than retention period',

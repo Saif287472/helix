@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as p;
 import 'package:helix_remote_backend/src/database.dart';
 
 class AttachmentsModule {
@@ -162,7 +163,7 @@ class AttachmentsModule {
       for (final fileId in fileIds) {
         final count = db.getAttachmentReferenceCount(fileId);
         if (count == 0) {
-          final file = File('${storageDir.path}/$fileId');
+          final file = File('${storageDir.path}/${p.basename(fileId)}');
           if (file.existsSync()) {
             file.deleteSync();
           }
@@ -183,7 +184,7 @@ class AttachmentsModule {
     final orphanIds = db.getOrphanAttachmentIds(threshold);
     var count = 0;
     for (final fileId in orphanIds) {
-      final file = File('${storageDir.path}/$fileId');
+      final file = File('${storageDir.path}/${p.basename(fileId)}');
       if (file.existsSync()) {
         file.deleteSync();
       }
@@ -201,7 +202,7 @@ class AttachmentsModule {
     var count = 0;
     for (final fileId in candidateIds) {
       if (db.getAttachmentReferenceCount(fileId) == 0) {
-        final file = File('${storageDir.path}/$fileId');
+        final file = File('${storageDir.path}/${p.basename(fileId)}');
         if (file.existsSync()) {
           file.deleteSync();
         }
@@ -230,7 +231,7 @@ class AttachmentsModule {
       );
     }
 
-    final file = File('${storageDir.path}/$fileId');
+    final file = File('${storageDir.path}/${p.basename(fileId)}');
     int uploadedBytes = 0;
     if (file.existsSync()) {
       uploadedBytes = file.lengthSync();
@@ -274,7 +275,7 @@ class AttachmentsModule {
     final offsetStr = queryParams['offset'];
     final offset = offsetStr != null ? int.tryParse(offsetStr) ?? 0 : 0;
 
-    final file = File('${storageDir.path}/$fileId');
+    final file = File('${storageDir.path}/${p.basename(fileId)}');
     IOSink sink;
 
     if (offset == 0) {
@@ -420,7 +421,7 @@ class AttachmentsModule {
       );
     }
 
-    final file = File('${storageDir.path}/$fileId');
+    final file = File('${storageDir.path}/${p.basename(fileId)}');
     if (!file.existsSync()) {
       return Response.notFound(jsonEncode({'error': 'File not found on disk'}));
     }

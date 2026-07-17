@@ -99,8 +99,7 @@ const _pendingRegistrationKey = 'registration.pending';
 const _resetKeys = [
   'access_token',
   'refresh_token',
-  'access_token.pending',
-  'refresh_token.pending',
+  'token_rotation.pending',
   'account_id',
   'username',
   'identity_public_key',

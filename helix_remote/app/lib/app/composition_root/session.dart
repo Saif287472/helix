@@ -108,34 +108,40 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
     required String refreshToken,
   }) async {
     final store = _requireReady(_keyValue, 'keyValue');
-    await store.write('refresh_token.pending', refreshToken);
-    await store.write('access_token.pending', accessToken);
+    // The pending marker is a single JSON blob written in one atomic `write`
+    // call, so a crash can never leave behind a mismatched half-rotated pair
+    // (unlike writing the two tokens as separate pending keys).
+    await store.write(
+      'token_rotation.pending',
+      jsonEncode({'access_token': accessToken, 'refresh_token': refreshToken}),
+    );
     await store.write('refresh_token', refreshToken);
     await store.write('access_token', accessToken);
-    await store.delete('refresh_token.pending');
-    await store.delete('access_token.pending');
+    await store.delete('token_rotation.pending');
   }
 
   bool _isAuthFailure(int? statusCode) =>
       statusCode == 401 || statusCode == 403;
 
-  /// Promotes `.pending` tokens to main keys if an interrupted rotation left
-  /// them behind, then deletes the `.pending` entries.
+  /// Promotes the pending token pair to the main keys if an interrupted
+  /// rotation left it behind, then deletes the pending entry.
   ///
   /// Called once at the start of [tryRestoreSession] so a crash mid-rotation
-  /// does not leave stale or mismatched tokens. If both main and pending keys
-  /// exist, the pending ones are always at least as fresh (they were written
-  /// first in [_persistRotatedTokens]).
+  /// does not leave stale or mismatched tokens. The pending value is always
+  /// a complete `{access_token, refresh_token}` pair (written atomically in
+  /// [_persistRotatedTokens]), so recovery can never promote only one half
+  /// of a rotated pair.
   Future<void> _recoverInterruptedTokenRotation(KeyValueStore store) async {
-    final pendingAccess = await store.read('access_token.pending');
-    final pendingRefresh = await store.read('refresh_token.pending');
-    if (pendingAccess == null && pendingRefresh == null) return;
+    final pending = await store.read('token_rotation.pending');
+    if (pending == null) return;
+    final tokens = jsonDecode(pending) as Map<String, dynamic>;
+    final pendingAccess = tokens['access_token'] as String?;
+    final pendingRefresh = tokens['refresh_token'] as String?;
     if (pendingAccess != null) await store.write('access_token', pendingAccess);
     if (pendingRefresh != null) {
       await store.write('refresh_token', pendingRefresh);
     }
-    await store.delete('access_token.pending');
-    await store.delete('refresh_token.pending');
+    await store.delete('token_rotation.pending');
   }
 
   @override

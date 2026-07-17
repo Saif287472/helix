@@ -164,6 +164,49 @@ void main() {
     );
 
     test(
+      'registration rejects a mangled account or device signature',
+      () async {
+        final material = await createTestRegistrationMaterial(
+          accountId: 'forged_account',
+          username: 'forged_user',
+          deviceId: 'forged_device',
+          deviceName: 'Forged Phone',
+        );
+
+        final tamperedAccountSig = registrationBody(
+          accountId: 'forged_account',
+          username: 'forged_user',
+          deviceId: 'forged_device',
+          deviceName: 'Forged Phone',
+          material: material,
+        );
+        tamperedAccountSig['account_registration_signature'] =
+            testBase64Url(List.filled(64, 7));
+        final accountSigResponse = await postJson(
+          '/api/v1/accounts/register',
+          tamperedAccountSig,
+        );
+        expect(accountSigResponse.statusCode, equals(400));
+
+        final tamperedDeviceSig = registrationBody(
+          accountId: 'forged_account',
+          username: 'forged_user',
+          deviceId: 'forged_device',
+          deviceName: 'Forged Phone',
+          material: material,
+        );
+        tamperedDeviceSig['device_registration_signature'] = testBase64Url(
+          List.filled(64, 7),
+        );
+        final deviceSigResponse = await postJson(
+          '/api/v1/accounts/register',
+          tamperedDeviceSig,
+        );
+        expect(deviceSigResponse.statusCode, equals(400));
+      },
+    );
+
+    test(
       'registration rejects usernames and display names outside policy',
       () async {
         Future<_Response> attempt({

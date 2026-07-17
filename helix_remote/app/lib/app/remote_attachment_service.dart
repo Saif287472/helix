@@ -625,8 +625,7 @@ class RemoteAttachmentService {
   Uint8List _chunkNonce(Uint8List ivBytes, int index) {
     final nonce = Uint8List.fromList(ivBytes);
     final view = ByteData.sublistView(nonce);
-    final low = view.getUint32(8, Endian.big);
-    view.setUint32(8, low ^ index, Endian.big);
+    view.setUint32(8, index, Endian.big);
     return nonce;
   }
 
