@@ -13,6 +13,7 @@ void main() async {
     'extract_03_app.dart',
     'extract_04_packages_crypto_sync.dart',
     'extract_05_packages_rest.dart',
+    'extract_06_admin_and_cli.dart',
   ];
 
   for (final script in scripts) {
