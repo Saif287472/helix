@@ -69,7 +69,7 @@ class PrivacyComplianceModule {
       request.context['client_ip'] as String?,
       null,
     );
-    db.deleteAccountData(accountId);
+    await db.deleteAccountData(accountId);
 
     return Response.ok(
       jsonEncode({'deleted': true, 'account_id': accountId}),

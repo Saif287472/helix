@@ -456,7 +456,7 @@ void main() {
   group('Attachment and Backup Encryption (P9-011 / P9-012)', () {
     test('Attachment encrypt/decrypt round-trip', () async {
       final helper = RemoteAttachmentCrypto();
-      final keys = helper.generateAttachmentKeys();
+      final keys = await helper.generateAttachmentKeys();
 
       final pt = Uint8List.fromList('Private File Content'.codeUnits);
       final ct = await helper.encryptFile(pt, keys['key']!, keys['iv']!);
@@ -465,8 +465,8 @@ void main() {
 
     test('Attachment decryption with wrong key throws', () async {
       final helper = RemoteAttachmentCrypto();
-      final keys = helper.generateAttachmentKeys();
-      final wrongKeys = helper.generateAttachmentKeys();
+      final keys = await helper.generateAttachmentKeys();
+      final wrongKeys = await helper.generateAttachmentKeys();
 
       final ct = await helper.encryptFile(
         Uint8List.fromList('secret'.codeUnits),

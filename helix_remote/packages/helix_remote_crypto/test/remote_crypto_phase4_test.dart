@@ -555,7 +555,7 @@ void main() {
     test('wrapAttachmentKey / unwrapAttachmentKey round-trip', () async {
       final helper = RemoteAttachmentCrypto();
       final wrappingKey = Uint8List.fromList(List.generate(32, (i) => i + 100));
-      final keys = helper.generateAttachmentKeys();
+      final keys = await helper.generateAttachmentKeys();
 
       final wrapped = await helper.wrapAttachmentKey(
         keys['key']!,
@@ -572,7 +572,7 @@ void main() {
       final helper = RemoteAttachmentCrypto();
       final correct = Uint8List.fromList(List.generate(32, (i) => i));
       final wrong = Uint8List.fromList(List.generate(32, (i) => i + 1));
-      final keys = helper.generateAttachmentKeys();
+      final keys = await helper.generateAttachmentKeys();
 
       final wrapped = await helper.wrapAttachmentKey(
         keys['key']!,
@@ -589,7 +589,7 @@ void main() {
     test('tampered wrapped blob is rejected', () async {
       final helper = RemoteAttachmentCrypto();
       final wrappingKey = Uint8List.fromList(List.generate(32, (i) => i + 50));
-      final keys = helper.generateAttachmentKeys();
+      final keys = await helper.generateAttachmentKeys();
 
       final wrapped = await helper.wrapAttachmentKey(
         keys['key']!,
@@ -606,13 +606,13 @@ void main() {
       );
     });
 
-    test('generateAttachmentKeys produces unique key and IV on each call', () {
+    test('generateAttachmentKeys produces unique key and IV on each call', () async {
       final helper = RemoteAttachmentCrypto();
       const n = 20;
       final keyStrings = <String>{};
       final ivStrings = <String>{};
       for (var i = 0; i < n; i++) {
-        final kv = helper.generateAttachmentKeys();
+        final kv = await helper.generateAttachmentKeys();
         keyStrings.add(String.fromCharCodes(kv['key']!));
         ivStrings.add(String.fromCharCodes(kv['iv']!));
       }
@@ -628,16 +628,16 @@ void main() {
       );
     });
 
-    test('attachment key is 32 bytes; IV is 12 bytes', () {
+    test('attachment key is 32 bytes; IV is 12 bytes', () async {
       final helper = RemoteAttachmentCrypto();
-      final keys = helper.generateAttachmentKeys();
+      final keys = await helper.generateAttachmentKeys();
       expect(keys['key']!.length, equals(32));
       expect(keys['iv']!.length, equals(12));
     });
 
     test('encryptFile / decryptFile round-trip', () async {
       final helper = RemoteAttachmentCrypto();
-      final keys = helper.generateAttachmentKeys();
+      final keys = await helper.generateAttachmentKeys();
       final pt = Uint8List.fromList('attachment payload content'.codeUnits);
       final ct = await helper.encryptFile(pt, keys['key']!, keys['iv']!);
       expect(
@@ -656,7 +656,7 @@ void main() {
       'AES-GCM ciphertext layout: nonce(12) || ciphertext(n) || mac(16)',
       () async {
         final helper = RemoteAttachmentCrypto();
-        final keys = helper.generateAttachmentKeys();
+        final keys = await helper.generateAttachmentKeys();
         const pt = [0x01, 0x02, 0x03, 0x04];
         final ct = await helper.encryptFile(
           Uint8List.fromList(pt),

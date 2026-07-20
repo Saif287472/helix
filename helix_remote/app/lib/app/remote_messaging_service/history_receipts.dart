@@ -6,6 +6,19 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
   // Key = messageId; value = (ciphertextHashCode, decryptedPlaintext).
   // Invalidated automatically when the ciphertext changes (e.g. after an edit).
   final Map<String, (int, String)> _decryptCache = {};
+
+  /// Plaintexts at or above this size are JSON-decoded on a background
+  /// isolate so large payloads (media collections, long texts) cannot
+  /// stall the UI event loop.
+  static const int _isolateDecodeThresholdBytes = 64 * 1024;
+
+  Future<RemoteMessageContentEnvelope?> _decodeEnvelope(String plaintext) {
+    if (plaintext.length < _isolateDecodeThresholdBytes) {
+      return Future.value(RemoteMessageContentEnvelope.tryDecode(plaintext));
+    }
+    return Isolate.run(() => RemoteMessageContentEnvelope.tryDecode(plaintext));
+  }
+
   void recordTrustDecision({
     required String accountId,
     required String deviceId,
@@ -181,22 +194,39 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
         );
         _decryptCache[messageId] = (cipherHash, plaintext);
       }
-      final parsedMedia = RemoteMediaContent.tryParse(plaintext);
-      final parsedPoll = RemotePollContent.tryParse(plaintext);
-      final parsedEvent = RemoteEventContent.tryParse(plaintext);
-      final parsedLocation = RemoteLocationContent.tryParse(plaintext);
-      final parsedSticker = RemoteStickerContent.tryParse(plaintext);
-      final parsedAttachment =
-          parsedMedia?.attachment ??
-          parsedSticker?.attachment ??
-          RemoteAttachmentContent.tryParse(plaintext);
+      // Decode the JSON envelope once per message (instead of once per
+      // content type) and dispatch on it; large payloads decode off-isolate.
+      final envelope = await _decodeEnvelope(plaintext);
+      RemoteMediaContent? parsedMedia;
+      RemotePollContent? parsedPoll;
+      RemoteEventContent? parsedEvent;
+      RemoteLocationContent? parsedLocation;
+      RemoteStickerContent? parsedSticker;
+      RemoteAttachmentContent? parsedAttachment;
+      if (envelope != null) {
+        parsedMedia = RemoteMediaContent.fromEnvelope(envelope);
+        parsedPoll = RemotePollContent.fromEnvelope(envelope);
+        parsedEvent = RemoteEventContent.fromEnvelope(envelope);
+        parsedLocation = RemoteLocationContent.fromEnvelope(envelope);
+        parsedSticker = RemoteStickerContent.fromEnvelope(envelope);
+        parsedAttachment =
+            parsedMedia?.attachment ??
+            parsedSticker?.attachment ??
+            RemoteAttachmentContent.fromEnvelope(envelope);
+      } else {
+        // Legacy (pre-envelope) attachment JSON.
+        parsedAttachment = await RemoteAttachmentContent.tryParse(plaintext);
+      }
       final textContent =
           parsedAttachment == null &&
               parsedPoll == null &&
               parsedEvent == null &&
               parsedLocation == null &&
               parsedSticker == null
-          ? RemoteTextContent.parse(plaintext)
+          ? (envelope != null
+                ? (RemoteTextContent.fromEnvelope(envelope) ??
+                      RemoteTextContent(text: plaintext))
+                : await RemoteTextContent.parse(plaintext))
           : null;
       final contentPrivacy =
           parsedMedia?.privacy ??

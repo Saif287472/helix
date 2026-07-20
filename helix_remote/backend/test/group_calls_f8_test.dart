@@ -63,22 +63,6 @@ void main() {
 
   String base() => 'http://127.0.0.1:$port/api/v1';
 
-  Future<String> _register(String username) async {
-    final http = HttpClient();
-    final req = await http.postUrl(Uri.parse('${base()}/auth/register'));
-    req.headers.set('Content-Type', 'application/json');
-    req.write(jsonEncode({
-      'account_id': username,
-      'device_id': '${username}_dev1',
-      'password': 'pass_$username',
-      'device_name': 'Phone',
-    }));
-    final res = await req.close();
-    final body = await res.transform(utf8.decoder).join();
-    http.close();
-    return (jsonDecode(body) as Map<String, dynamic>)['access_token'] as String;
-  }
-
   setUp(() async {
     server = BackendServer.create(
       sqliteDb: sqlite3.openInMemory(),
@@ -88,9 +72,28 @@ void main() {
     );
     await server.start('127.0.0.1', 0);
     port = server.httpServer!.port;
-    tokenAlice = await _register('alice');
-    tokenBob = await _register('bob');
-    tokenCarol = await _register('carol');
+
+    server.db.createAccount('alice', 'alice_user', 'alice_identity_key');
+    server.db.registerDevice('alice_dev1', 'alice', 'alice_device_key', 'Alice Phone');
+    server.db.createAccount('bob', 'bob_user', 'bob_identity_key');
+    server.db.registerDevice('bob_dev1', 'bob', 'bob_device_key', 'Bob Phone');
+    server.db.createAccount('carol', 'carol_user', 'carol_identity_key');
+    server.db.registerDevice('carol_dev1', 'carol', 'carol_device_key', 'Carol Phone');
+
+    tokenAlice = server.jwt.generateToken({
+      'account_id': 'alice',
+      'device_id': 'alice_dev1',
+    }, const Duration(hours: 1));
+
+    tokenBob = server.jwt.generateToken({
+      'account_id': 'bob',
+      'device_id': 'bob_dev1',
+    }, const Duration(hours: 1));
+
+    tokenCarol = server.jwt.generateToken({
+      'account_id': 'carol',
+      'device_id': 'carol_dev1',
+    }, const Duration(hours: 1));
   });
 
   tearDown(() async => server.stop());
@@ -135,37 +138,41 @@ void main() {
     });
 
     test('room rejects a 5th joiner', () async {
-      // alice is host (counts as 1), bob + carol join (3). A 4th would be rejected.
-      // We only have 3 accounts so test the capacity count directly via join attempts.
       final alice = _Client(base(), tokenAlice);
       final bob = _Client(base(), tokenBob);
       final carol = _Client(base(), tokenCarol);
 
-      final create = await alice.post('/group-calls/', {'is_video': true});
-      final roomId = create.json['room_id'] as String;
-      await bob.post('/group-calls/$roomId/join', {});
-      await carol.post('/group-calls/$roomId/join', {});
-
-      // Register a 4th account and try to join — should get 409 room_full.
-      final http = HttpClient();
-      final req = await http.postUrl(Uri.parse('${base()}/auth/register'));
-      req.headers.set('Content-Type', 'application/json');
-      req.write(jsonEncode({
+      // Seed dave and eve directly.
+      server.db.createAccount('dave', 'dave_user', 'dave_identity_key');
+      server.db.registerDevice('dave_dev1', 'dave', 'dave_device_key', 'Dave Phone');
+      final tokenDave = server.jwt.generateToken({
         'account_id': 'dave',
         'device_id': 'dave_dev1',
-        'password': 'pass_dave',
-        'device_name': 'Phone',
-      }));
-      final res = await req.close();
-      final tokenDave =
-          (jsonDecode(await res.transform(utf8.decoder).join())
-              as Map<String, dynamic>)['access_token'] as String;
-      http.close();
-
+      }, const Duration(hours: 1));
       final dave = _Client(base(), tokenDave);
-      final join4 = await dave.post('/group-calls/$roomId/join', {});
-      expect(join4.status, 409);
-      expect(join4.json['error'], contains('room_full'));
+
+      server.db.createAccount('eve', 'eve_user', 'eve_identity_key');
+      server.db.registerDevice('eve_dev1', 'eve', 'eve_device_key', 'Eve Phone');
+      final tokenEve = server.jwt.generateToken({
+        'account_id': 'eve',
+        'device_id': 'eve_dev1',
+      }, const Duration(hours: 1));
+      final eve = _Client(base(), tokenEve);
+
+      final create = await alice.post('/group-calls/', {'is_video': true});
+      final roomId = create.json['room_id'] as String;
+
+      // Alice, Bob, Carol, Dave join -> 4 participants (max capacity).
+      await alice.post('/group-calls/$roomId/join', {});
+      await bob.post('/group-calls/$roomId/join', {});
+      await carol.post('/group-calls/$roomId/join', {});
+      final joinDave = await dave.post('/group-calls/$roomId/join', {});
+      expect(joinDave.status, 200);
+
+      // Eve attempts to join (5th) -> should get 409 room_full.
+      final joinEve = await eve.post('/group-calls/$roomId/join', {});
+      expect(joinEve.status, 409);
+      expect(joinEve.json['error'], contains('room_full'));
     });
 
     test('participant can leave room', () async {

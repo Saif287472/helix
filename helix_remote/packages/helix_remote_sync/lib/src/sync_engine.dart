@@ -869,7 +869,13 @@ class _TypingEvent extends _InboundSyncEvent {
   const _TypingEvent();
 
   @override
-  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) => false;
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (env.timestamp < now - 15000) {
+      return false;
+    }
+    return true;
+  }
 }
 
 class _SyncMarkerEvent extends _InboundSyncEvent {

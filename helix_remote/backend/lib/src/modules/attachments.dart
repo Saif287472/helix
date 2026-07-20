@@ -233,8 +233,8 @@ class AttachmentsModule {
 
     final file = File('${storageDir.path}/${p.basename(fileId)}');
     int uploadedBytes = 0;
-    if (file.existsSync()) {
-      uploadedBytes = file.lengthSync();
+    if (await file.exists()) {
+      uploadedBytes = await file.length();
     }
 
     // Sync database state if mismatch
@@ -279,12 +279,12 @@ class AttachmentsModule {
     IOSink sink;
 
     if (offset == 0) {
-      if (file.existsSync()) {
-        file.deleteSync();
+      if (await file.exists()) {
+        await file.delete();
       }
       sink = file.openWrite(mode: FileMode.write);
     } else {
-      if (!file.existsSync()) {
+      if (!await file.exists()) {
         return Response.badRequest(
           body: jsonEncode({
             'error':
@@ -292,7 +292,7 @@ class AttachmentsModule {
           }),
         );
       }
-      final currentSize = file.lengthSync();
+      final currentSize = await file.length();
       if (offset > currentSize) {
         return Response.badRequest(
           body: jsonEncode({
@@ -303,9 +303,9 @@ class AttachmentsModule {
       }
       // Truncate to offset to support clean resume
       if (currentSize > offset) {
-        final raf = file.openSync(mode: FileMode.writeOnlyAppend);
-        raf.truncateSync(offset);
-        raf.closeSync();
+        final raf = await file.open(mode: FileMode.writeOnlyAppend);
+        await raf.truncate(offset);
+        await raf.close();
       }
       sink = file.openWrite(mode: FileMode.append);
     }
@@ -314,11 +314,11 @@ class AttachmentsModule {
       await sink.addStream(request.read());
       await sink.close();
 
-      final finalSize = file.lengthSync();
+      final finalSize = await file.length();
       final expectedSize = attachment['file_size'] as int;
 
       if (finalSize > expectedSize) {
-        file.deleteSync();
+        await file.delete();
         db.updateAttachmentProgress(fileId, 0, 'FAILED');
         return Response.badRequest(
           body: jsonEncode({
@@ -329,12 +329,14 @@ class AttachmentsModule {
 
       if (finalSize == expectedSize) {
         // Verify hash
-        final bytes = file.readAsBytesSync();
-        final actualHash = sha256.convert(bytes).toString();
+        final actualHash = (await sha256
+                .bind(file.openRead())
+                .first)
+            .toString();
         final expectedHash = attachment['file_hash'] as String;
 
         if (actualHash != expectedHash) {
-          file.deleteSync();
+          await file.delete();
           db.updateAttachmentProgress(fileId, 0, 'FAILED');
           return Response.badRequest(
             body: jsonEncode({
@@ -422,11 +424,11 @@ class AttachmentsModule {
     }
 
     final file = File('${storageDir.path}/${p.basename(fileId)}');
-    if (!file.existsSync()) {
+    if (!await file.exists()) {
       return Response.notFound(jsonEncode({'error': 'File not found on disk'}));
     }
 
-    final totalLength = file.lengthSync();
+    final totalLength = await file.length();
     final rangeHeader = request.headers['range'];
 
     if (rangeHeader != null && rangeHeader.startsWith('bytes=')) {

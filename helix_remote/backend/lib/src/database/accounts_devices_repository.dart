@@ -154,17 +154,28 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     };
   }
 
-  void deleteAccountData(String accountId) {
+  Future<void> deleteAccountData(String accountId) async {
+    // Drain the account's message mailboxes in bounded, yielding chunks
+    // BEFORE the cascade transaction. A large mailbox deleted purely via
+    // ON DELETE CASCADE holds SQLite's single writer lock for the whole
+    // delete, starving every other request (WS heartbeats included) for
+    // seconds. After the drains, the final cascade only sweeps stragglers
+    // that arrived in between, so the transaction below stays short.
+    await _deleteMessagesChunked(
+      'recipient_device_id IN (SELECT device_id FROM devices WHERE account_id = ?)',
+      [accountId],
+    );
+    await _deleteMessagesChunked('sender_account_id = ?', [accountId]);
+
     _db.execute('BEGIN TRANSACTION;');
     try {
       // No explicit message cleanup here: `messages.recipient_device_id`
       // cascades from `devices`, which cascades from `accounts` (foreign_keys
       // is ON), so the DELETE FROM accounts below already removes every
-      // message for every device on this account as part of the same atomic
-      // transaction. Deleting it again per-device first would just be
-      // redundant work inside this transaction — and the chunked, yielding
-      // deleteMessagesForDevice must never run inside a transaction anyway
-      // (see its doc comment).
+      // remaining message for this account as part of the same atomic
+      // transaction — the chunked drains above are a performance measure,
+      // not a correctness requirement, and must never run inside this
+      // transaction (see _deleteMessagesChunked's doc comment).
       for (final table in [
         'audit_logs',
         'group_creation_log',
@@ -620,21 +631,28 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
   // Deletes in bounded chunks and yields between them so a device with a
   // very large mailbox (e.g. long-offline before revocation) doesn't hold
   // SQLite's single writer lock for the entire delete, starving every other
-  // account's writes for its duration. Standard SQLite has no `DELETE ...
-  // LIMIT` (that requires a non-default compile flag), so the chunk is
-  // selected via a `rowid IN (SELECT ... LIMIT ?)` subquery instead — the
-  // portable equivalent. Must never be called from within an existing
-  // transaction: the `await` between chunks would let other requests
-  // interleave their own writes into that transaction.
-  Future<void> deleteMessagesForDevice(String deviceId) async {
+  // account's writes for its duration.
+  Future<void> deleteMessagesForDevice(String deviceId) =>
+      _deleteMessagesChunked('recipient_device_id = ?', [deviceId]);
+
+  // Chunked, yielding delete over `messages`. Standard SQLite has no
+  // `DELETE ... LIMIT` (that requires a non-default compile flag), so the
+  // chunk is selected via a `rowid IN (SELECT ... LIMIT ?)` subquery
+  // instead — the portable equivalent. Must never be called from within an
+  // existing transaction: the `await` between chunks would let other
+  // requests interleave their own writes into that transaction.
+  Future<void> _deleteMessagesChunked(
+    String where,
+    List<Object?> params,
+  ) async {
     const chunkSize = 500;
     while (true) {
       final stmt = _db.prepare('''
         DELETE FROM messages WHERE rowid IN (
-          SELECT rowid FROM messages WHERE recipient_device_id = ? LIMIT ?
+          SELECT rowid FROM messages WHERE $where LIMIT ?
         );
       ''');
-      stmt.execute([deviceId, chunkSize]);
+      stmt.execute([...params, chunkSize]);
       stmt.close();
       if (_db.updatedRows == 0) return;
       await Future<void>.delayed(const Duration(milliseconds: 10));

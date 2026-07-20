@@ -700,10 +700,26 @@ class CallsModule {
         )) {
       return _json(404, {'error': 'pending call not found'});
     }
+    final deviceId = auth['device_id'] as String;
+    final accepted = db.markPendingCallAnswered(
+      callId: callId,
+      targetDeviceId: deviceId,
+      now: now,
+    );
+    if (accepted) {
+      _notifyAnsweredElsewhere(
+        callId: callId,
+        answeredDeviceId: deviceId,
+        requestId: null,
+        session: session,
+        now: now,
+      );
+    }
+    final updatedSession = db.getPendingCall(callId) ?? session;
     return _json(200, {
       'status': 'accepted',
       'call_id': callId,
-      'call': _pendingCallResponse(session),
+      'call': _pendingCallResponse(updatedSession),
     });
   }
 

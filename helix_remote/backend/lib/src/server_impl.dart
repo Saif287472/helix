@@ -45,6 +45,7 @@ class BackendServer {
   final String? federationDomain;
   final String federationDirectoryUrl;
   final String publicBaseUrl;
+  final String serverAudience;
   HttpServer? _httpServer;
   HttpServer? get httpServer => _httpServer;
 
@@ -66,6 +67,7 @@ class BackendServer {
     this.federationDomain,
     required this.federationDirectoryUrl,
     required this.publicBaseUrl,
+    this.serverAudience = '',
   });
 
   factory BackendServer.create({
@@ -88,6 +90,7 @@ class BackendServer {
     String? federationDomain,
     String? federationDirectoryUrl,
     String? publicBaseUrl,
+    String? serverAudience,
   }) {
     final db = BackendDatabase(sqliteDb);
     final jwt = JwtHelper(jwtSecret);
@@ -134,7 +137,24 @@ class BackendServer {
           publicBaseUrl ??
           Platform.environment['HELIX_REMOTE_PUBLIC_BASE_URL'] ??
           '',
+      serverAudience:
+          serverAudience ??
+          Platform.environment['HELIX_REMOTE_SERVER_AUDIENCE'] ??
+          _audienceFromBaseUrl(
+            publicBaseUrl ??
+                Platform.environment['HELIX_REMOTE_PUBLIC_BASE_URL'] ??
+                '',
+          ),
     );
+  }
+
+  /// Derive a stable audience (host[:port]) from the configured public base
+  /// URL so signed challenges never depend on the client-sent Host header.
+  static String _audienceFromBaseUrl(String baseUrl) {
+    if (baseUrl.isEmpty) return '';
+    final uri = Uri.tryParse(baseUrl);
+    if (uri == null || uri.host.isEmpty) return '';
+    return uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
   }
 
   Handler getHandler() {
@@ -145,6 +165,7 @@ class BackendServer {
       jwt,
       notifyDevice: wsRelay.sendToDevice,
       now: now,
+      configuredAudience: serverAudience.isEmpty ? null : serverAudience,
     );
     final federationClient = serverIdentity == null
         ? null

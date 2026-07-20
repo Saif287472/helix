@@ -52,7 +52,7 @@ class RemoteAttachmentService {
       throw ArgumentError('File size exceeds the 10MB limit');
     }
 
-    final keys = _crypto.generateAttachmentKeys();
+    final keys = await _crypto.generateAttachmentKeys();
     final keyBytes = keys['key']!;
     final ivBytes = keys['iv']!;
 
@@ -110,7 +110,7 @@ class RemoteAttachmentService {
         throw ArgumentError('Thumbnail file size exceeds the 1MB limit');
       }
 
-      final thumbKeys = _crypto.generateAttachmentKeys();
+      final thumbKeys = await _crypto.generateAttachmentKeys();
       final thumbKeyBytes = thumbKeys['key']!;
       final thumbIvBytes = thumbKeys['iv']!;
 

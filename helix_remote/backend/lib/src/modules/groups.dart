@@ -521,6 +521,12 @@ class GroupsModule {
         );
       }
 
+      if (db.isGroupMemberBlocked(groupId, inviteeId)) {
+        return Response.forbidden(
+          jsonEncode({'error': 'User is blocked from this group'}),
+        );
+      }
+
       if (db.hasOpenGroupInvite(groupId, inviteeId)) {
         return Response.badRequest(
           body: jsonEncode({

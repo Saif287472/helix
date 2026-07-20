@@ -39,32 +39,37 @@ class ServerIdentity {
     final publicKeyBase64 = db.getServerConfig('server_public_key');
     final privateKeyBase64 = db.getServerConfig('server_private_key');
 
+    final String resolvedServerId;
+    final crypto.SimpleKeyPair keyPair;
     if (serverId != null && publicKeyBase64 != null && privateKeyBase64 != null) {
       final pubBytes = base64Decode(publicKeyBase64);
       final privBytes = base64Decode(privateKeyBase64);
-      final keyPair = crypto.SimpleKeyPairData(
+      keyPair = crypto.SimpleKeyPairData(
         privBytes,
         publicKey: crypto.SimplePublicKey(pubBytes, type: crypto.KeyPairType.ed25519),
         type: crypto.KeyPairType.ed25519,
       );
-      return ServerIdentity(serverId: serverId, serverKeyPair: keyPair);
+      resolvedServerId = serverId;
+    } else {
+      // Generate new Server ID and Keypair
+      resolvedServerId = generateUuidV4();
+      final algorithm = crypto.Ed25519();
+      final newKeyPair = await algorithm.newKeyPair();
+      final newPublicKey = await newKeyPair.extractPublicKey();
+      final newPrivateKeyBytes = await newKeyPair.extractPrivateKeyBytes();
+      db.setServerConfig('server_id', resolvedServerId);
+      db.setServerConfig('server_public_key', base64Encode(newPublicKey.bytes));
+      db.setServerConfig('server_private_key', base64Encode(newPrivateKeyBytes));
+      keyPair = newKeyPair;
     }
 
-    // Generate new Server ID and Keypair
-    final newServerId = generateUuidV4();
-    final algorithm = crypto.Ed25519();
-    final newKeyPair = await algorithm.newKeyPair();
-    final newPublicKey = await newKeyPair.extractPublicKey();
-    final newPrivateKeyBytes = await newKeyPair.extractPrivateKeyBytes();
-
-    final newPubBase64 = base64Encode(newPublicKey.bytes);
-    final newPrivBase64 = base64Encode(newPrivateKeyBytes);
-
-    db.setServerConfig('server_id', newServerId);
-    db.setServerConfig('server_public_key', newPubBase64);
-    db.setServerConfig('server_private_key', newPrivBase64);
-
-    // Generate Admin Token on first boot if not set in environment and doesn't exist in DB
+    // Admin token generation is intentionally independent of server identity
+    // (above): it fires whenever no token hash is on record, regardless of
+    // whether the server identity itself is new or pre-existing. This lets
+    // an operator who lost their token recover by clearing just
+    // 'admin_token_hash' (e.g. via bin/reset_admin_token.dart) without
+    // regenerating the server's federation identity/keypair as a side
+    // effect.
     String? generatedAdminToken;
     if (db.getServerConfig('admin_token_hash') == null) {
       final random = Random.secure();
@@ -75,8 +80,8 @@ class ServerIdentity {
     }
 
     return ServerIdentity(
-      serverId: newServerId,
-      serverKeyPair: newKeyPair,
+      serverId: resolvedServerId,
+      serverKeyPair: keyPair,
       adminToken: generatedAdminToken,
     );
   }

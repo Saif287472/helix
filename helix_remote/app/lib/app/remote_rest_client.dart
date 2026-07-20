@@ -330,7 +330,10 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       'device_signing_public_key': deviceSigningPublicKey,
       'device_agreement_public_key': deviceAgreementPublicKey,
     },
-    idempotencyKey: 'device-link-request:$accountId:$deviceId',
+    // Unique per invocation: each call carries a freshly generated keypair,
+    // so a reused key would replay a cached response with stale keys.
+    idempotencyKey:
+        'device-link-request:$accountId:$deviceId:${_newCorrelationId()}',
     skipAuthRefresh: true,
   );
 

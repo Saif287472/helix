@@ -162,7 +162,7 @@ void main() {
       },
     );
 
-    test('cleanup marks only oldest inactive accounts deleted', () {
+    test('cleanup evicts only oldest inactive accounts', () {
       final registry = RemoteAccountRuntimeRegistry()
         ..addAccount(_account('active', active: true, lastUsedAtMs: 3000))
         ..addAccount(_account('old_a', lastUsedAtMs: 100))
@@ -176,10 +176,8 @@ void main() {
 
       expect(removed.map((account) => account.accountId), ['old_a']);
       expect(
-        registry.accounts
-            .singleWhere((account) => account.accountId == 'old_a')
-            .status,
-        equals('deleted'),
+        registry.accounts.where((account) => account.accountId == 'old_a'),
+        isEmpty,
       );
       expect(registry.activeAccount!.accountId, equals('active'));
     });

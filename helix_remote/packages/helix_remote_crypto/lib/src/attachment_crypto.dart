@@ -6,9 +6,11 @@ class RemoteAttachmentCrypto {
   final crypto.AesGcm aesGcm = crypto.AesGcm.with256bits();
 
   /// Generate a random 256-bit symmetric key and 96-bit IV.
-  Map<String, Uint8List> generateAttachmentKeys() {
+  Future<Map<String, Uint8List>> generateAttachmentKeys() async {
+    final secretKey = await aesGcm.newSecretKey();
+    final keyBytes = await secretKey.extractBytes();
+    final key = Uint8List.fromList(keyBytes);
     final rand = Random.secure();
-    final key = Uint8List.fromList(List.generate(32, (_) => rand.nextInt(256)));
     final iv = Uint8List.fromList(List.generate(12, (_) => rand.nextInt(256)));
     return {'key': key, 'iv': iv};
   }

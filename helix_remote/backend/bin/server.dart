@@ -7,6 +7,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
+import 'src/admin_token_file.dart';
 
 void main() async {
   // On Windows without cmake/MSVC, native assets can't compile sqlite3 from
@@ -20,14 +21,17 @@ void main() async {
   final host = Platform.environment['HELIX_REMOTE_HOST'] ?? '127.0.0.1';
   final devMode = Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1';
   final jwtSecret = Platform.environment['HELIX_REMOTE_JWT_SECRET'];
-  if (!devMode && (jwtSecret == null || jwtSecret.length < 32)) {
+  if (jwtSecret == null || jwtSecret.isEmpty) {
+    stderr.writeln('FATAL: HELIX_REMOTE_JWT_SECRET required');
+    exit(1);
+  }
+  if (!devMode && jwtSecret.length < 32) {
     stderr.writeln(
       'HELIX_REMOTE_JWT_SECRET must be set to at least 32 bytes outside explicit HELIX_REMOTE_DEV_MODE=1.',
     );
     exit(78);
   }
-  final resolvedJwtSecret =
-      jwtSecret ?? base64Url.encode(List.generate(32, (_) => Random.secure().nextInt(256)));
+  final resolvedJwtSecret = jwtSecret;
   final dbPath =
       Platform.environment['HELIX_REMOTE_DB_PATH'] ?? 'remote_backend.db';
 
@@ -96,12 +100,28 @@ void main() async {
 
   final identity = await ServerIdentity.loadOrCreate(server.db);
   server.serverIdentity = identity;
+  final adminTokenOverride = Platform.environment['HELIX_REMOTE_ADMIN_TOKEN'];
   print('==================================================');
   print('Helix Server ID: ${identity.serverId}');
-  if (identity.adminToken != null) {
+  if (adminTokenOverride != null && adminTokenOverride.isNotEmpty) {
+    print('Helix Admin Token: using HELIX_REMOTE_ADMIN_TOKEN from environment.');
+  } else if (identity.adminToken != null) {
+    final adminTokenFile = writeAdminTokenFile(
+      dbPath: dbPath,
+      serverId: identity.serverId,
+      adminToken: identity.adminToken!,
+    );
     print('Helix Admin Token (Generated on first boot):');
     print('  ${identity.adminToken}');
+    print('Also saved to: ${adminTokenFile.path}');
     print('Save this token! It is required to log into Helix Admin.');
+  } else {
+    print(
+      'Helix Admin Token: already configured from a previous boot. Check '
+      'ADMIN_TOKEN.txt next to the database, or run '
+      'bin/reset_admin_token.dart to mint a new one, or set '
+      'HELIX_REMOTE_ADMIN_TOKEN to override it.',
+    );
   }
   print('==================================================');
 

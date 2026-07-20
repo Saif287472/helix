@@ -353,7 +353,7 @@ extension BackendGroupsRepository on BackendDatabase {
     try {
       // Update creator_id and clear creator_protected on the group.
       final updStmt = _db.prepare('''
-        UPDATE groups SET creator_id = ?, creator_protected = 0
+        UPDATE groups SET creator_id = ?, creator_protected = 1
         WHERE group_id = ?;
       ''');
       updStmt.execute([newOwnerId, groupId]);

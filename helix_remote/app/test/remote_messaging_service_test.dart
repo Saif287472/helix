@@ -401,7 +401,7 @@ void main() {
     expect(history.single.replyTo!.snippet, 'original body');
   });
 
-  test('F0 content envelope parser accepts versioned and legacy payloads', () {
+  test('F0 content envelope parser accepts versioned and legacy payloads', () async {
     final encoded = const RemoteTextContent(
       text: 'wrapped body',
       replyTo: RemoteReplyReference(
@@ -411,10 +411,10 @@ void main() {
       ),
     ).toPlaintext();
 
-    final decodedEnvelope = RemoteMessageContentEnvelope.tryDecode(encoded)!;
+    final decodedEnvelope = (await RemoteMessageContentEnvelope.tryDecode(encoded))!;
     expect(decodedEnvelope.contentType, RemoteCapability.contentTextV1);
 
-    final parsed = RemoteTextContent.parse(encoded);
+    final parsed = await RemoteTextContent.parse(encoded);
     expect(parsed.text, 'wrapped body');
     expect(parsed.replyTo!.messageId, 'msg_parent');
 
@@ -429,7 +429,7 @@ void main() {
       },
     });
     expect(
-      RemoteTextContent.parse(legacyReply).replyTo!.messageId,
+      (await RemoteTextContent.parse(legacyReply)).replyTo!.messageId,
       'legacy_parent',
     );
 
@@ -449,7 +449,7 @@ void main() {
       },
     });
     expect(
-      RemoteAttachmentContent.tryParse(legacyAttachment)!.filename,
+      (await RemoteAttachmentContent.tryParse(legacyAttachment))!.filename,
       'legacy.pdf',
     );
   });

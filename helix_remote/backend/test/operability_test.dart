@@ -22,6 +22,7 @@ void main() {
       turnSecret: 'phase19_turn_secret',
       turnUrl: 'turn:turn.test.example:3478',
       wsReconnectsPerMinute: 2,
+      pushProvider: FcmPushProvider(projectId: 'test-project', accessToken: 'test-token'),
     );
 
     server.db.createAccount('admin', 'admin_user', 'admin_key');

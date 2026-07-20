@@ -80,29 +80,22 @@ void main() {
     await server.start('127.0.0.1', 0);
     port = server.httpServer!.port;
 
-    Future<String> register(String username) async {
-      final http = HttpClient();
-      final req = await http.postUrl(
-        Uri.parse('${base()}/auth/register'),
-      );
-      req.headers.set('Content-Type', 'application/json');
-      req.write(
-        jsonEncode({
-          'account_id': username,
-          'device_id': '${username}_device1',
-          'password': 'pass_$username',
-          'device_name': 'Phone',
-        }),
-      );
-      final res = await req.close();
-      final body = await res.transform(utf8.decoder).join();
-      final decoded = jsonDecode(body) as Map<String, dynamic>;
-      http.close();
-      return decoded['access_token'] as String;
-    }
+    server.db.createAccount('alice', 'alice_user', 'alice_identity_key');
+    server.db.registerDevice('alice_device1', 'alice', 'alice_device_key', 'Alice Phone');
+    server.db.createAccount('bob', 'bob_user', 'bob_identity_key');
+    server.db.registerDevice('bob_device1', 'bob', 'bob_device_key', 'Bob Phone');
+    server.db.addContact('alice', 'bob', null);
+    server.db.addContact('bob', 'alice', null);
 
-    tokenAlice = await register('alice');
-    tokenBob = await register('bob');
+    tokenAlice = server.jwt.generateToken({
+      'account_id': 'alice',
+      'device_id': 'alice_device1',
+    }, const Duration(hours: 1));
+
+    tokenBob = server.jwt.generateToken({
+      'account_id': 'bob',
+      'device_id': 'bob_device1',
+    }, const Duration(hours: 1));
   });
 
   tearDown(() async => server.stop());
@@ -201,21 +194,7 @@ void main() {
   group('multi-device ring', () {
     setUp(() async {
       // Register a second device for Alice (token not needed by these tests).
-      final http = HttpClient();
-      final req = await http.postUrl(
-        Uri.parse('${base()}/auth/register'),
-      );
-      req.headers.set('Content-Type', 'application/json');
-      req.write(
-        jsonEncode({
-          'account_id': 'alice',
-          'device_id': 'alice_device2',
-          'password': 'pass_alice',
-          'device_name': 'Tablet',
-        }),
-      );
-      await (await req.close()).drain<void>();
-      http.close();
+      server.db.registerDevice('alice_device2', 'alice', 'alice_device_key2', 'Tablet');
     });
 
     test('offer reaches all callee devices', () async {

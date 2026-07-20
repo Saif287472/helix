@@ -284,24 +284,24 @@ class BackupsModule {
     final offset =
         int.tryParse(request.url.queryParameters['offset'] ?? '') ?? 0;
     final file = _mediaFile(objectId);
-    if (offset == 0 && file.existsSync()) {
-      file.deleteSync();
+    if (offset == 0 && await file.exists()) {
+      await file.delete();
     } else if (offset > 0) {
-      if (!file.existsSync()) {
+      if (!await file.exists()) {
         return Response.badRequest(
           body: jsonEncode({'error': 'Cannot resume missing object'}),
         );
       }
-      final currentSize = file.lengthSync();
+      final currentSize = await file.length();
       if (offset > currentSize) {
         return Response.badRequest(
           body: jsonEncode({'error': 'Resume offset is beyond object size'}),
         );
       }
       if (currentSize > offset) {
-        final raf = file.openSync(mode: FileMode.writeOnlyAppend);
-        raf.truncateSync(offset);
-        raf.closeSync();
+        final raf = await file.open(mode: FileMode.writeOnlyAppend);
+        await raf.truncate(offset);
+        await raf.close();
       }
     }
 
@@ -311,10 +311,10 @@ class BackupsModule {
     try {
       await sink.addStream(request.read());
       await sink.close();
-      final uploadedBytes = file.lengthSync();
+      final uploadedBytes = await file.length();
       final expectedSize = object['byte_size'] as int;
       if (uploadedBytes > expectedSize) {
-        file.deleteSync();
+        await file.delete();
         db.updateBackupMediaProgress(
           objectId: objectId,
           uploadedBytes: 0,
@@ -340,9 +340,9 @@ class BackupsModule {
         );
       }
 
-      final actualHash = sha256.convert(file.readAsBytesSync()).toString();
+      final actualHash = (await sha256.bind(file.openRead()).first).toString();
       if (actualHash != object['sha256']) {
-        file.deleteSync();
+        await file.delete();
         db.updateBackupMediaProgress(
           objectId: objectId,
           uploadedBytes: 0,
@@ -388,14 +388,15 @@ class BackupsModule {
       return Response.notFound(jsonEncode({'error': 'Backup media not found'}));
     }
     final file = _mediaFile(objectId);
-    if (!file.existsSync()) {
+    if (!await file.exists()) {
       return Response.notFound(jsonEncode({'error': 'Object missing on disk'}));
     }
+    final contentLength = await file.length();
     return Response.ok(
       file.openRead(),
       headers: {
         'Content-Type': 'application/octet-stream',
-        'Content-Length': file.lengthSync().toString(),
+        'Content-Length': contentLength.toString(),
         'X-Content-SHA256': object['sha256'] as String,
       },
     );

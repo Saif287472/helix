@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -262,7 +263,6 @@ class RemoteMessagingService extends RemoteMessagingServiceBase
   @override
   late final StreamController<RemoteSyncChange> _changeController =
       StreamController<RemoteSyncChange>.broadcast(
-        sync: true,
         onListen: () => _changeListenerCount++,
         onCancel: () => _changeListenerCount--,
       );

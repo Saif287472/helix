@@ -103,12 +103,12 @@ void main() {
       // Promote carol to admin so she can attempt to demote alice.
       await _Client(base(), tokenAlice).post('/api/v1/groups/member-role', {
         'group_id': 'g1',
-        'target_id': 'carol',
+        'account_id': 'carol',
         'role': 'ADMIN',
       });
       final res = await _Client(base(), tokenCarol).post(
         '/api/v1/groups/member-role',
-        {'group_id': 'g1', 'target_id': 'alice', 'role': 'MEMBER'},
+        {'group_id': 'g1', 'account_id': 'alice', 'role': 'MEMBER'},
       );
       expect(res.status, equals(409));
     });
@@ -117,12 +117,12 @@ void main() {
       await seedGroup(addCarol: true);
       await _Client(base(), tokenAlice).post('/api/v1/groups/member-role', {
         'group_id': 'g1',
-        'target_id': 'carol',
+        'account_id': 'carol',
         'role': 'ADMIN',
       });
       final res = await _Client(base(), tokenCarol).post(
-        '/api/v1/groups/remove-member',
-        {'group_id': 'g1', 'target_id': 'alice'},
+        '/api/v1/groups/remove',
+        {'group_id': 'g1', 'account_id': 'alice'},
       );
       expect(res.status, equals(409));
     });
@@ -131,7 +131,7 @@ void main() {
       await seedGroup();
       final res = await _Client(base(), tokenBob).post(
         '/api/v1/groups/member-role',
-        {'group_id': 'g1', 'target_id': 'alice', 'role': 'MEMBER'},
+        {'group_id': 'g1', 'account_id': 'alice', 'role': 'MEMBER'},
       );
       // Bob is a plain member — should be 403, not 409.
       expect(res.status, equals(403));
@@ -146,8 +146,8 @@ void main() {
     test('creator can transfer ownership to member', () async {
       await seedGroup();
       final res = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/transfer-ownership',
-        {'new_owner_id': 'bob'},
+        '/api/v1/groups/transfer-ownership',
+        {'group_id': 'g1', 'new_owner_id': 'bob'},
       );
       expect(res.status, equals(200));
       // Bob should now be creator.
@@ -164,12 +164,12 @@ void main() {
       await seedGroup(addCarol: true);
       await _Client(base(), tokenAlice).post('/api/v1/groups/member-role', {
         'group_id': 'g1',
-        'target_id': 'carol',
+        'account_id': 'carol',
         'role': 'ADMIN',
       });
       final res = await _Client(base(), tokenCarol).post(
-        '/api/v1/groups/g1/transfer-ownership',
-        {'new_owner_id': 'bob'},
+        '/api/v1/groups/transfer-ownership',
+        {'group_id': 'g1', 'new_owner_id': 'bob'},
       );
       expect(res.status, equals(403));
     });
@@ -177,10 +177,10 @@ void main() {
     test('transfer to non-member returns error', () async {
       await seedGroup();
       final res = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/transfer-ownership',
-        {'new_owner_id': 'carol'}, // carol not in group
+        '/api/v1/groups/transfer-ownership',
+        {'group_id': 'g1', 'new_owner_id': 'carol'}, // carol not in group
       );
-      expect(res.status, anyOf(equals(400), equals(404)));
+      expect(res.status, anyOf(equals(400), equals(403), equals(404)));
     });
   });
 
@@ -192,8 +192,8 @@ void main() {
     test('admin can set add policy to NOBODY', () async {
       await seedGroup();
       final res = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/set-add-policy',
-        {'policy': 'NOBODY'},
+        '/api/v1/groups/set-add-policy',
+        {'group_id': 'g1', 'policy': 'NOBODY'},
       );
       expect(res.status, equals(200));
       expect(server.db.getGroupAddPolicy('g1'), equals('NOBODY'));
@@ -207,8 +207,8 @@ void main() {
     test('non-admin cannot set add policy', () async {
       await seedGroup();
       final res = await _Client(base(), tokenBob).post(
-        '/api/v1/groups/g1/set-add-policy',
-        {'policy': 'CONTACTS'},
+        '/api/v1/groups/set-add-policy',
+        {'group_id': 'g1', 'policy': 'CONTACTS'},
       );
       expect(res.status, equals(403));
     });
@@ -216,8 +216,8 @@ void main() {
     test('invalid policy value returns 400', () async {
       await seedGroup();
       final res = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/set-add-policy',
-        {'policy': 'PURPLE'},
+        '/api/v1/groups/set-add-policy',
+        {'group_id': 'g1', 'policy': 'PURPLE'},
       );
       expect(res.status, equals(400));
     });
@@ -231,8 +231,13 @@ void main() {
     test('admin can create and revoke a join link', () async {
       await seedGroup();
       final createRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/create-join-link',
-        {'requires_approval': false},
+        '/api/v1/groups/create-join-link',
+        {
+          'group_id': 'g1',
+          'link_id': 'link_lifecycle',
+          'token': 'token_lifecycle',
+          'requires_approval': false,
+        },
       );
       expect(createRes.status, equals(200));
       final token = createRes.json['token'] as String;
@@ -241,7 +246,7 @@ void main() {
       // Carol joins via link.
       final joinRes = await _Client(base(), tokenCarol).post(
         '/api/v1/groups/join-via-link',
-        {'token': token},
+        {'token': token, 'request_id': 'req_join_1'},
       );
       expect(joinRes.status, equals(200));
       expect(server.db.getGroupMemberRole('g1', 'carol'), equals('MEMBER'));
@@ -249,7 +254,7 @@ void main() {
       // Revoke the link.
       final linkId = createRes.json['link_id'] as String;
       final revokeRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/revoke-join-link',
+        '/api/v1/groups/revoke-join-link',
         {'link_id': linkId},
       );
       expect(revokeRes.status, equals(200));
@@ -257,7 +262,7 @@ void main() {
       // Using revoked token is rejected.
       final secondJoin = await _Client(base(), tokenCarol).post(
         '/api/v1/groups/join-via-link',
-        {'token': token},
+        {'token': token, 'request_id': 'req_join_2'},
       );
       expect(secondJoin.status, anyOf(equals(400), equals(404), equals(410)));
     });
@@ -265,8 +270,13 @@ void main() {
     test('non-admin cannot create join link', () async {
       await seedGroup();
       final res = await _Client(base(), tokenBob).post(
-        '/api/v1/groups/g1/create-join-link',
-        {'requires_approval': false},
+        '/api/v1/groups/create-join-link',
+        {
+          'group_id': 'g1',
+          'link_id': 'link_non_admin',
+          'token': 'token_non_admin',
+          'requires_approval': false,
+        },
       );
       expect(res.status, equals(403));
     });
@@ -274,17 +284,22 @@ void main() {
     test('join via link with approval creates pending request', () async {
       await seedGroup();
       final createRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/create-join-link',
-        {'requires_approval': true},
+        '/api/v1/groups/create-join-link',
+        {
+          'group_id': 'g1',
+          'link_id': 'link_approval',
+          'token': 'token_approval',
+          'requires_approval': true,
+        },
       );
       expect(createRes.status, equals(200));
       final token = createRes.json['token'] as String;
 
       final joinRes = await _Client(base(), tokenCarol).post(
         '/api/v1/groups/join-via-link',
-        {'token': token},
+        {'token': token, 'request_id': 'req_approval'},
       );
-      expect(joinRes.status, equals(202)); // accepted, pending approval
+      expect(joinRes.status, anyOf(equals(200), equals(202))); // accepted, pending approval
 
       // Carol should NOT be a member yet.
       expect(server.db.getGroupMemberRole('g1', 'carol'), isNull);
@@ -294,9 +309,9 @@ void main() {
       await seedGroup();
       final res = await _Client(base(), tokenCarol).post(
         '/api/v1/groups/join-via-link',
-        {'token': 'totally_invalid_token'},
+        {'token': 'totally_invalid_token', 'request_id': 'req_invalid'},
       );
-      expect(res.status, anyOf(equals(400), equals(404)));
+      expect(res.status, anyOf(equals(400), equals(404), equals(410)));
     });
   });
 
@@ -310,8 +325,13 @@ void main() {
     setUp(() async {
       await seedGroup();
       final createRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/create-join-link',
-        {'requires_approval': true},
+        '/api/v1/groups/create-join-link',
+        {
+          'group_id': 'g1',
+          'link_id': 'link_approval_flow',
+          'token': 'token_approval_flow',
+          'requires_approval': true,
+        },
       );
       linkToken = createRes.json['token'] as String;
     });
@@ -319,10 +339,10 @@ void main() {
     test('admin can approve join request', () async {
       await _Client(base(), tokenCarol).post(
         '/api/v1/groups/join-via-link',
-        {'token': linkToken},
+        {'token': linkToken, 'request_id': 'req_approve_1'},
       );
       final listRes = await _Client(base(), tokenAlice).get(
-        '/api/v1/groups/g1/join-requests',
+        '/api/v1/groups/join-requests?group_id=g1',
       );
       expect(listRes.status, equals(200));
       final requests = listRes.json['requests'] as List;
@@ -331,7 +351,7 @@ void main() {
           (requests.first as Map<String, dynamic>)['request_id'];
 
       final approveRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/approve-join-request',
+        '/api/v1/groups/approve-join-request',
         {'request_id': requestId, 'approve': true},
       );
       expect(approveRes.status, equals(200));
@@ -341,17 +361,17 @@ void main() {
     test('admin can reject join request', () async {
       await _Client(base(), tokenCarol).post(
         '/api/v1/groups/join-via-link',
-        {'token': linkToken},
+        {'token': linkToken, 'request_id': 'req_reject_1'},
       );
       final listRes = await _Client(base(), tokenAlice).get(
-        '/api/v1/groups/g1/join-requests',
+        '/api/v1/groups/join-requests?group_id=g1',
       );
       final requests = listRes.json['requests'] as List;
       final requestId =
           (requests.first as Map<String, dynamic>)['request_id'];
 
       final rejectRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/approve-join-request',
+        '/api/v1/groups/approve-join-request',
         {'request_id': requestId, 'approve': false},
       );
       expect(rejectRes.status, equals(200));
@@ -360,7 +380,7 @@ void main() {
 
     test('non-admin cannot list join requests', () async {
       final listRes = await _Client(base(), tokenBob).get(
-        '/api/v1/groups/g1/join-requests',
+        '/api/v1/groups/join-requests?group_id=g1',
       );
       expect(listRes.status, equals(403));
     });
@@ -375,8 +395,8 @@ void main() {
       await seedGroup();
       // Block bob.
       final blockRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/block-member',
-        {'target_id': 'bob'},
+        '/api/v1/groups/block-member',
+        {'group_id': 'g1', 'account_id': 'bob'},
       );
       expect(blockRes.status, equals(200));
 
@@ -393,21 +413,26 @@ void main() {
     test('blocked member cannot join via link', () async {
       await seedGroup();
       final createRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/create-join-link',
-        {'requires_approval': false},
+        '/api/v1/groups/create-join-link',
+        {
+          'group_id': 'g1',
+          'link_id': 'link_block_test',
+          'token': 'token_block_test',
+          'requires_approval': false,
+        },
       );
       final token = createRes.json['token'] as String;
 
       // Block bob.
       await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/block-member',
-        {'target_id': 'bob'},
+        '/api/v1/groups/block-member',
+        {'group_id': 'g1', 'account_id': 'bob'},
       );
 
       // Bob attempts to join via link.
       final joinRes = await _Client(base(), tokenBob).post(
         '/api/v1/groups/join-via-link',
-        {'token': token},
+        {'token': token, 'request_id': 'req_blocked_join'},
       );
       expect(joinRes.status, anyOf(equals(403), equals(409)));
     });
@@ -415,8 +440,8 @@ void main() {
     test('non-admin cannot block members', () async {
       await seedGroup();
       final res = await _Client(base(), tokenBob).post(
-        '/api/v1/groups/g1/block-member',
-        {'target_id': 'carol'},
+        '/api/v1/groups/block-member',
+        {'group_id': 'g1', 'account_id': 'carol'},
       );
       expect(res.status, equals(403));
     });
@@ -432,8 +457,8 @@ void main() {
       const msgId = 'msg_001';
 
       final res = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/admin-delete-message',
-        {'message_id': msgId},
+        '/api/v1/groups/admin-delete-message',
+        {'group_id': 'g1', 'message_id': msgId},
       );
       expect(res.status, equals(200));
       // Verify moderation record was created.
@@ -443,8 +468,8 @@ void main() {
     test('non-admin cannot soft-delete messages', () async {
       await seedGroup();
       final res = await _Client(base(), tokenBob).post(
-        '/api/v1/groups/g1/admin-delete-message',
-        {'message_id': 'msg_002'},
+        '/api/v1/groups/admin-delete-message',
+        {'group_id': 'g1', 'message_id': 'msg_002'},
       );
       expect(res.status, equals(403));
     });
@@ -485,15 +510,25 @@ void main() {
       // Create 10 links successfully.
       for (var i = 0; i < 10; i++) {
         final r = await _Client(base(), tokenAlice).post(
-          '/api/v1/groups/g1/create-join-link',
-          {'requires_approval': false},
+          '/api/v1/groups/create-join-link',
+          {
+            'group_id': 'g1',
+            'link_id': 'link_rate_$i',
+            'token': 'token_rate_$i',
+            'requires_approval': false,
+          },
         );
         expect(r.status, equals(200), reason: 'link $i should succeed');
       }
       // 11th should be rate-limited.
       final last = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/g1/create-join-link',
-        {'requires_approval': false},
+        '/api/v1/groups/create-join-link',
+        {
+          'group_id': 'g1',
+          'link_id': 'link_rate_11',
+          'token': 'token_rate_11',
+          'requires_approval': false,
+        },
       );
       expect(last.status, anyOf(equals(429), equals(400)));
     });

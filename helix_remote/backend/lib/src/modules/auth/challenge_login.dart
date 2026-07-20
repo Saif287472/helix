@@ -179,6 +179,12 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
 
   @override
   String _serverAudience(Request request) {
+    // Prefer the server-side configured audience: the Host header is
+    // client-controlled and must not define the audience of signed challenges.
+    final configured = configuredAudience;
+    if (configured != null && configured.isNotEmpty) {
+      return configured;
+    }
     final host = request.requestedUri.host;
     final port = request.requestedUri.hasPort
         ? ':${request.requestedUri.port}'

@@ -36,13 +36,6 @@ class GroupCallsModule {
   Router get router {
     final r = Router();
     r.post('/', _handleCreateRoom);
-    r.get('/<roomId>', _handleGetRoom);
-    r.post('/<roomId>/join', _handleJoinRoom);
-    r.post('/<roomId>/leave', _handleLeaveRoom);
-    r.post('/<roomId>/end', _handleEndRoom);
-    r.post('/<roomId>/kick', _handleKickParticipant);
-    r.post('/<roomId>/key', _handleDeliverRoomKey);
-    r.post('/<roomId>/screen-sharing', _handleScreenSharing);
     r.post('/links', _handleCreateLink);
     r.get('/links/<token>', _handleResolveLink);
     r.delete('/links/<token>', _handleRevokeLink);
@@ -50,6 +43,13 @@ class GroupCallsModule {
     r.get('/scheduled', _handleListScheduled);
     r.post('/scheduled/<id>/rsvp', _handleRsvp);
     r.delete('/scheduled/<id>', _handleCancelScheduled);
+    r.get('/<roomId>', _handleGetRoom);
+    r.post('/<roomId>/join', _handleJoinRoom);
+    r.post('/<roomId>/leave', _handleLeaveRoom);
+    r.post('/<roomId>/end', _handleEndRoom);
+    r.post('/<roomId>/kick', _handleKickParticipant);
+    r.post('/<roomId>/key', _handleDeliverRoomKey);
+    r.post('/<roomId>/screen-sharing', _handleScreenSharing);
     return r;
   }
 

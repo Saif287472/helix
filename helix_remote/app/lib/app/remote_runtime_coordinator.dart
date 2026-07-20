@@ -64,9 +64,8 @@ class RemoteRuntimeCoordinator {
   final Duration _reconnectBaseDelay;
   final Duration _reconnectMaxDelay;
 
-  final _stateController = StreamController<RemoteRuntimeSnapshot>.broadcast(
-    sync: true,
-  );
+  final _stateController =
+      StreamController<RemoteRuntimeSnapshot>.broadcast();
 
   RemoteRuntimeState _state = RemoteRuntimeState.offline;
   Future<void>? _startup;

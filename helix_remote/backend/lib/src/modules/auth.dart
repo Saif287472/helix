@@ -22,6 +22,10 @@ abstract class AuthModuleBase {
   Map<String, _LoginChallenge> get _challenges;
   crypto.Ed25519 get _ed25519;
 
+  /// Server-side audience for signed challenges. When set, it takes
+  /// precedence over the client-controlled Host header.
+  String? get configuredAudience;
+
   bool _isValidUsername(String username);
 
   String _serverAudience(Request request);
@@ -53,9 +57,16 @@ class AuthModule extends AuthModuleBase
   final Map<String, _LoginChallenge> _challenges = {}; // key: "account_id:device_id"
   @override
   final crypto.Ed25519 _ed25519 = crypto.Ed25519();
+  @override
+  final String? configuredAudience;
 
-  AuthModule(this.db, this.jwt, {this.notifyDevice, DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+  AuthModule(
+    this.db,
+    this.jwt, {
+    this.notifyDevice,
+    DateTime Function()? now,
+    this.configuredAudience,
+  }) : _now = now ?? DateTime.now;
 
   Router get router {
     final router = Router();

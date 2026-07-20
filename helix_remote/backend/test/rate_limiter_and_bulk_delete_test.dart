@@ -128,7 +128,7 @@ void main() {
     test(
       'deleteAccountData cascades message cleanup without an explicit '
       'per-device delete loop',
-      () {
+      () async {
         db.saveMessage(
           messageId: 'cascade_msg_1',
           conversationId: 'conv_bulk',
@@ -139,7 +139,7 @@ void main() {
         );
         expect(db.getMessage('cascade_msg_1'), isNotNull);
 
-        db.deleteAccountData('bulk_recipient');
+        await db.deleteAccountData('bulk_recipient');
 
         expect(db.getMessage('cascade_msg_1'), isNull);
         expect(db.getAccount('bulk_recipient'), isNull);

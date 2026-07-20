@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:helix_remote_domain/domain/attachment.dart';
 import 'package:helix_remote_domain/domain/capabilities.dart';
@@ -27,9 +28,9 @@ class RemoteMessageContentEnvelope {
     });
   }
 
-  static RemoteMessageContentEnvelope? tryDecode(String plaintext) {
+  static Future<RemoteMessageContentEnvelope?> tryDecode(String plaintext) async {
     try {
-      final decoded = jsonDecode(plaintext);
+      final decoded = await Isolate.run(() => jsonDecode(plaintext));
       if (decoded is! Map<String, dynamic>) return null;
       if (decoded['type'] != envelopeType || decoded['version'] != 1) {
         return null;
@@ -173,22 +174,30 @@ class RemoteTextContent {
     ).encode();
   }
 
-  static RemoteTextContent parse(String plaintext) {
-    final envelope = RemoteMessageContentEnvelope.tryDecode(plaintext);
+  /// Parse from an already-decoded envelope. Returns null when the envelope
+  /// does not carry text content; callers should fall back to treating the
+  /// raw plaintext as the message text.
+  static RemoteTextContent? fromEnvelope(
+    RemoteMessageContentEnvelope envelope,
+  ) {
+    if (envelope.contentType != messageType) return null;
+    final text = envelope.payload['text'];
+    if (text is! String) return null;
+    return RemoteTextContent(
+      text: text,
+      replyTo: RemoteReplyReference.tryParse(envelope.payload['reply_to']),
+      privacy: RemoteContentPrivacy.tryParse(envelope.payload['privacy']),
+    );
+  }
+
+  static Future<RemoteTextContent> parse(String plaintext) async {
+    final envelope = await RemoteMessageContentEnvelope.tryDecode(plaintext);
     if (envelope != null && envelope.contentType == messageType) {
-      final text = envelope.payload['text'];
-      if (text is String) {
-        return RemoteTextContent(
-          text: text,
-          replyTo: RemoteReplyReference.tryParse(envelope.payload['reply_to']),
-          privacy: RemoteContentPrivacy.tryParse(envelope.payload['privacy']),
-        );
-      }
-      return RemoteTextContent(text: plaintext);
+      return fromEnvelope(envelope) ?? RemoteTextContent(text: plaintext);
     }
 
     try {
-      final decoded = jsonDecode(plaintext);
+      final decoded = await Isolate.run(() => jsonDecode(plaintext));
       if (decoded is! Map<String, dynamic>) {
         return RemoteTextContent(text: plaintext);
       }
@@ -301,14 +310,22 @@ class RemoteAttachmentContent {
     );
   }
 
-  static RemoteAttachmentContent? tryParse(String plaintext) {
-    final envelope = RemoteMessageContentEnvelope.tryDecode(plaintext);
+  /// Parse from an already-decoded envelope (no legacy JSON fallback).
+  static RemoteAttachmentContent? fromEnvelope(
+    RemoteMessageContentEnvelope envelope,
+  ) {
+    if (envelope.contentType != messageType) return null;
+    return _fromPayload(envelope.payload);
+  }
+
+  static Future<RemoteAttachmentContent?> tryParse(String plaintext) async {
+    final envelope = await RemoteMessageContentEnvelope.tryDecode(plaintext);
     if (envelope != null && envelope.contentType == messageType) {
       return _fromPayload(envelope.payload);
     }
 
     try {
-      final decoded = jsonDecode(plaintext);
+      final decoded = await Isolate.run(() => jsonDecode(plaintext));
       if (decoded is! Map<String, dynamic>) return null;
       if (decoded['type'] != legacyMessageType &&
           decoded['type'] != messageType) {
@@ -424,9 +441,16 @@ class RemoteMediaContent {
     if (privacy != null && privacy!.hasPolicy) 'privacy': privacy!.toJson(),
   };
 
-  static RemoteMediaContent? tryParse(String plaintext) {
-    final envelope = RemoteMessageContentEnvelope.tryDecode(plaintext);
+  static Future<RemoteMediaContent?> tryParse(String plaintext) async {
+    final envelope = await RemoteMessageContentEnvelope.tryDecode(plaintext);
     if (envelope == null) return null;
+    return fromEnvelope(envelope);
+  }
+
+  /// Parse from an already-decoded envelope.
+  static RemoteMediaContent? fromEnvelope(
+    RemoteMessageContentEnvelope envelope,
+  ) {
     if (!{
       RemoteCapability.contentVoiceNoteV1,
       RemoteCapability.contentInstantVideoV1,
@@ -559,9 +583,17 @@ class RemotePollContent {
     },
   ).encode();
 
-  static RemotePollContent? tryParse(String plaintext) {
-    final envelope = RemoteMessageContentEnvelope.tryDecode(plaintext);
-    if (envelope == null || envelope.contentType != messageType) return null;
+  static Future<RemotePollContent?> tryParse(String plaintext) async {
+    final envelope = await RemoteMessageContentEnvelope.tryDecode(plaintext);
+    if (envelope == null) return null;
+    return fromEnvelope(envelope);
+  }
+
+  /// Parse from an already-decoded envelope.
+  static RemotePollContent? fromEnvelope(
+    RemoteMessageContentEnvelope envelope,
+  ) {
+    if (envelope.contentType != messageType) return null;
     try {
       final options = (envelope.payload['options'] as List)
           .map(RemotePollOption.tryParse)
@@ -632,9 +664,17 @@ class RemoteEventContent {
     },
   ).encode();
 
-  static RemoteEventContent? tryParse(String plaintext) {
-    final envelope = RemoteMessageContentEnvelope.tryDecode(plaintext);
-    if (envelope == null || envelope.contentType != messageType) return null;
+  static Future<RemoteEventContent?> tryParse(String plaintext) async {
+    final envelope = await RemoteMessageContentEnvelope.tryDecode(plaintext);
+    if (envelope == null) return null;
+    return fromEnvelope(envelope);
+  }
+
+  /// Parse from an already-decoded envelope.
+  static RemoteEventContent? fromEnvelope(
+    RemoteMessageContentEnvelope envelope,
+  ) {
+    if (envelope.contentType != messageType) return null;
     try {
       return RemoteEventContent(
         eventId: envelope.payload['event_id'] as String,
@@ -702,9 +742,17 @@ class RemoteLocationContent {
     },
   ).encode();
 
-  static RemoteLocationContent? tryParse(String plaintext) {
-    final envelope = RemoteMessageContentEnvelope.tryDecode(plaintext);
-    if (envelope == null || envelope.contentType != messageType) return null;
+  static Future<RemoteLocationContent?> tryParse(String plaintext) async {
+    final envelope = await RemoteMessageContentEnvelope.tryDecode(plaintext);
+    if (envelope == null) return null;
+    return fromEnvelope(envelope);
+  }
+
+  /// Parse from an already-decoded envelope.
+  static RemoteLocationContent? fromEnvelope(
+    RemoteMessageContentEnvelope envelope,
+  ) {
+    if (envelope.contentType != messageType) return null;
     try {
       return RemoteLocationContent(
         locationId: envelope.payload['location_id'] as String,
@@ -757,9 +805,17 @@ class RemoteStickerContent {
     },
   ).encode();
 
-  static RemoteStickerContent? tryParse(String plaintext) {
-    final envelope = RemoteMessageContentEnvelope.tryDecode(plaintext);
-    if (envelope == null || envelope.contentType != messageType) return null;
+  static Future<RemoteStickerContent?> tryParse(String plaintext) async {
+    final envelope = await RemoteMessageContentEnvelope.tryDecode(plaintext);
+    if (envelope == null) return null;
+    return fromEnvelope(envelope);
+  }
+
+  /// Parse from an already-decoded envelope.
+  static RemoteStickerContent? fromEnvelope(
+    RemoteMessageContentEnvelope envelope,
+  ) {
+    if (envelope.contentType != messageType) return null;
     try {
       final attachment = RemoteAttachmentContent._fromPayload(
         envelope.payload['attachment'] as Map<String, dynamic>,

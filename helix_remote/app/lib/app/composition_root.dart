@@ -405,9 +405,8 @@ class RemoteCompositionRoot extends RemoteCompositionRootBase
   @override
   StreamSubscription<RemoteSyncChange>? _outboxChangeSub;
   @override
-  final _callStatusController = StreamController<RemoteCallStatus?>.broadcast(
-    sync: true,
-  );
+  final _callStatusController =
+      StreamController<RemoteCallStatus?>.broadcast();
   @override
   Future<bool>? _tokenRefreshInFlight;
   @override
@@ -415,9 +414,7 @@ class RemoteCompositionRoot extends RemoteCompositionRootBase
   @override
   _RefreshFailureKind _lastRefreshFailureKind = _RefreshFailureKind.none;
   @override
-  final _stateController = StreamController<RemoteStartupState>.broadcast(
-    sync: true,
-  );
+  final _stateController = StreamController<RemoteStartupState>.broadcast();
 
   RemoteSecureKeyStorage get keyStorage =>
       _requireReady(_keyStorage, 'keyStorage');

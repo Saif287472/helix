@@ -99,8 +99,9 @@ class OutboxWorker {
     required int retries,
     required Map<String, int> processed,
   }) async {
-    // Key is 'recipient_device_id' as stored by the messaging module.
-    final targetDeviceId = payload['recipient_device_id'] as String?;
+    // Key is 'recipient_device_id' (messaging) or 'target_device_id' (calls).
+    final targetDeviceId = (payload['recipient_device_id'] ??
+        payload['target_device_id']) as String?;
 
     if (targetDeviceId == null || targetDeviceId.isEmpty) {
       // No device to deliver to — treat as silently completed.

@@ -29,6 +29,7 @@ void main() {
           'TEMP': Platform.environment['TEMP'] ?? tempDir.path,
           'TMP': Platform.environment['TMP'] ?? tempDir.path,
           'HELIX_REMOTE_DEV_MODE': '1',
+          'HELIX_REMOTE_JWT_SECRET': 'phase01_bootstrap_dev_secret',
           'HELIX_REMOTE_HOST': '127.0.0.1',
           'HELIX_REMOTE_PORT': '$port',
           'HELIX_REMOTE_DB_PATH': '${tempDir.path}/backend.db',

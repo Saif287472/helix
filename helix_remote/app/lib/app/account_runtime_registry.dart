@@ -410,13 +410,10 @@ class RemoteAccountRuntimeRegistry {
   }
 
   void removeAccount(String accountId, {required int nowMs}) {
-    final account = _accounts[accountId];
+    // Evict the descriptor entirely: keeping tombstones in the registry leaks
+    // memory for every account ever removed over the process lifetime.
+    final account = _accounts.remove(accountId);
     if (account == null) return;
-    _accounts[accountId] = account.copyWith(
-      active: false,
-      status: 'deleted',
-      lastUsedAtMs: nowMs,
-    );
     _proxies.remove(accountId);
     if (_activeAccountId == accountId) {
       _activeAccountId = null;

@@ -18,6 +18,14 @@ extension BackendServerConfigRepository on BackendDatabase {
     stmt.close();
   }
 
+  void deleteServerConfig(String key) {
+    final stmt = _db.prepare(
+      'DELETE FROM server_configuration WHERE key = ?;',
+    );
+    stmt.execute([key]);
+    stmt.close();
+  }
+
   List<Map<String, dynamic>> getAllUsersPaginated({
     required int limit,
     required int offset,
