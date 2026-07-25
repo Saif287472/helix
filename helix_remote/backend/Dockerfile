@@ -1,30 +1,21 @@
 FROM dart:stable AS build
-
 WORKDIR /app
-
-# Copy all files in the workspace
-COPY . .
-
-# Resolve dependencies for the workspace
-RUN dart pub get
-
-# Compile the backend AOT executable
+RUN apt-get update
+RUN apt-get install -y libsqlite3-dev
+RUN rm -rf /var/lib/apt/lists/*
+COPY backend ./backend
+COPY packages/helix_remote_domain ./packages/helix_remote_domain
+RUN sed -i '/resolution: workspace/d' backend/pubspec.yaml
+RUN sed -i '/resolution: workspace/d' packages/helix_remote_domain/pubspec.yaml
 WORKDIR /app/backend
-RUN dart compile exe bin/server.dart -o bin/server
+RUN dart pub get
+RUN dart build cli --target=bin/server.dart --output=/app/out
 
-# Stage 2: Runtime
 FROM debian:bookworm-slim
-
-# Install runtime sqlite3 libraries and CA certs
-RUN apt-get update && apt-get install -y sqlite3 libsqlite3-dev ca-certificates && rm -rf /var/lib/apt/lists/*
-
+RUN apt-get update
+RUN apt-get install -y libsqlite3-dev ca-certificates
+RUN rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-
-# Copy the compiled binary from the build stage
-COPY --from=build /app/backend/bin/server /app/bin/server
-
-# Expose the default port
+COPY --from=build /app/out/bundle /app/bundle
 EXPOSE 8080
-
-# Run the compiled binary
-CMD ["/app/bin/server"]
+CMD ["/app/bundle/bin/server"]

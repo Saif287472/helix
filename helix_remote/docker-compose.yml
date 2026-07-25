@@ -7,7 +7,7 @@ services:
       dockerfile: backend/Dockerfile
     container_name: helix-backend
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - helix-data:/app/data
     environment:
@@ -15,6 +15,7 @@ services:
       - HELIX_REMOTE_HOST=0.0.0.0
       - HELIX_REMOTE_DEV_MODE=0
       - HELIX_REMOTE_JWT_SECRET=production_jwt_secret_please_change_me_to_something_secure
+      - HELIX_REMOTE_ADMIN_TOKEN=production_admin_token_please_change_me_to_something_secure
       - HELIX_REMOTE_DB_PATH=/app/data/remote_backend.db
       - HELIX_REMOTE_ATTACHMENTS_DIR=/app/data/attachments
       - HELIX_REMOTE_LOG_FILE=/app/data/server.log
