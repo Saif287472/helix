@@ -44,12 +44,14 @@ class _MainAdminPageState extends State<MainAdminPage> {
   AdminClient? _client;
   String _selectedTab = 'dashboard';
   bool _isLoading = false;
+  bool _isDarkMode = true;
 
   final _urlController = TextEditingController(text: 'http://127.0.0.1:8080');
   final _tokenController = TextEditingController();
   final _federationDomainController = TextEditingController();
   final _federationAddressController = TextEditingController();
   final _federationDirectoryController = TextEditingController();
+  final _settingsUrlController = TextEditingController(text: 'http://127.0.0.1:8080');
 
   Map<String, dynamic>? _metrics;
   Map<String, dynamic>? _config;
@@ -63,6 +65,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
     _federationDomainController.dispose();
     _federationAddressController.dispose();
     _federationDirectoryController.dispose();
+    _settingsUrlController.dispose();
     super.dispose();
   }
 
@@ -182,12 +185,15 @@ class _MainAdminPageState extends State<MainAdminPage> {
     if (_client == null) {
       return _buildLoginScreen();
     }
-    return Scaffold(
-      body: Row(
-        children: [
-          _buildSidebar(),
-          Expanded(child: _buildMainContent()),
-        ],
+    return Theme(
+      data: _isDarkMode ? ThemeData.dark() : ThemeData.light(),
+      child: Scaffold(
+        body: Row(
+          children: [
+            _buildSidebar(),
+            Expanded(child: _buildMainContent()),
+          ],
+        ),
       ),
     );
   }
@@ -338,6 +344,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           _sidebarItem(Icons.terminal, 'Log Tailing', 'logs'),
           _sidebarItem(Icons.backup, 'Maintenance & Backups', 'backup'),
           _sidebarItem(Icons.menu_book, 'Self-Hosting Guide', 'guide'),
+          _sidebarItem(Icons.tune, 'Settings', 'settings'),
           const Spacer(),
           const Divider(),
           ListTile(
@@ -386,11 +393,14 @@ class _MainAdminPageState extends State<MainAdminPage> {
               color: isSelected ? const Color(0xFF00E5FF) : Colors.white70,
             ),
             const SizedBox(width: 16),
-            Text(
-              title,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            Expanded(
+              child: Text(
+                title,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.white70,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
               ),
             ),
           ],
@@ -437,6 +447,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
         return _buildBackupTab();
       case 'guide':
         return _buildGuideTab();
+      case 'settings':
+        return _buildSettingsTab();
       default:
         return const Center(child: Text('Tab not found'));
     }
@@ -740,6 +752,62 @@ class _MainAdminPageState extends State<MainAdminPage> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsTab() {
+    return SingleChildScrollView(
+      child: Card(
+        color: const Color(0xFF161624),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'App Settings',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 24),
+              SwitchListTile(
+                title: const Text('Dark Mode'),
+                subtitle: const Text('Toggle between dark and light theme'),
+                value: _isDarkMode,
+                onChanged: (v) => setState(() => _isDarkMode = v),
+                secondary: const Icon(Icons.dark_mode),
+              ),
+              const Divider(),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _settingsUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Backend Server URL',
+                  prefixIcon: Icon(Icons.dns),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _urlController.text = _settingsUrlController.text.trim();
+                  setState(() {
+                    _client = null;
+                    _metrics = null;
+                    _config = null;
+                    _logs = [];
+                  });
+                },
+                icon: const Icon(Icons.swap_horiz),
+                label: const Text('Apply & Reconnect'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8A2BE2),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ],
           ),
         ),
       ),
