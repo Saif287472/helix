@@ -46,7 +46,9 @@ why, so you don't re-break things that were already debugged.
 - Nginx reverse proxy: `/etc/nginx/sites-available/hr.agiletechbd.com` (symlinked into
   `sites-enabled/`), proxies `hr.agiletechbd.com` → `http://127.0.0.1:8080`, with
   WebSocket upgrade headers configured (needed for the app's realtime `/api/v1/ws`
-  endpoint) and a 3600s proxy read timeout for long-lived connections.
+  endpoint) and a 3600s proxy read timeout for long-lived connections. **Source of
+  truth is now `helix_remote/deploy/nginx/hr.agiletechbd.com.conf` in the repo** —
+  see "Deployment workflow" below.
 - TLS: real Let's Encrypt certificate via certbot's Nginx plugin, deployed and
   confirmed live over HTTPS. Auto-renewal via `certbot.timer` (systemd), confirmed
   active.
@@ -130,6 +132,26 @@ changed since this handoff was written.
 - No non-root SSH/deploy user — everything has been done as `root` over password SSH.
   Acceptable for this low-stakes personal context but a hardening candidate later
   (e.g. SSH key auth, non-root deploy user, non-root container user).
+
+## Deployment workflow (standard going forward)
+As of 2026-07-26, changes should flow **local repo → GitHub → VPS `git pull`**,
+not be edited live on the VPS. This applies to code, the Dockerfile, and the
+nginx config (now tracked at `helix_remote/deploy/nginx/hr.agiletechbd.com.conf`).
+
+1. Fix/edit locally, commit, push to GitHub.
+2. On the VPS: `cd /opt/helix-remote/helix_remote && git pull`.
+3. If backend code/Dockerfile changed: `docker compose build && docker compose up -d`.
+4. If the nginx config changed: copy `deploy/nginx/hr.agiletechbd.com.conf` to
+   `/etc/nginx/sites-available/hr.agiletechbd.com`, then `nginx -t && systemctl
+   reload nginx`.
+
+**Known-fixed incident (2026-07-26):** the nginx config unconditionally sent
+`Connection: upgrade` on every proxied request (not just `/api/v1/ws`), which
+made Dart's `shelf_io` server detach the socket and drop the request body on
+every POST — causing every registration/login attempt to fail with a silent,
+unlogged `500`. Fixed by scoping the upgrade headers to the `/api/v1/ws`
+location only. If you ever rebuild the VPS from scratch, deploy from
+`deploy/nginx/hr.agiletechbd.com.conf` (which has the fix), not from memory.
 
 ## Useful commands for you
 ```bash
