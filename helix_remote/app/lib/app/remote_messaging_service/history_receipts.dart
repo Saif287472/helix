@@ -71,8 +71,11 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
     required String messageId,
     required String conversationId,
   }) async {
-    final receiptId =
-        'delivery_${messageId}_${_clock().microsecondsSinceEpoch}';
+    // Deterministic (no timestamp suffix) so repeat calls for the same
+    // message — e.g. reopening the conversation re-renders already-acked
+    // messages — hit the same op_id and INSERT OR IGNORE dedupes them,
+    // instead of piling up a fresh outbox row every time.
+    final receiptId = 'delivery_$messageId';
     db.saveMessageReceipt(
       receiptId: receiptId,
       messageId: messageId,
@@ -114,7 +117,8 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
       return false;
     }
 
-    final receiptId = 'read_${messageId}_${_clock().microsecondsSinceEpoch}';
+    // Deterministic for the same reason as markDelivered above.
+    final receiptId = 'read_$messageId';
     db.saveMessageReceipt(
       receiptId: receiptId,
       messageId: messageId,

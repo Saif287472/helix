@@ -509,6 +509,79 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       _createRuntimeTables();
       _db.execute('PRAGMA user_version = 23;');
     }
+    if (version < 24) {
+      // DELIVERY_RECEIPT/READ_RECEIPT ops used to embed a microsecond
+      // timestamp in their op_id, so re-rendering an already-acked message
+      // (e.g. reopening a conversation) minted a brand-new outbox row every
+      // time instead of being caught by INSERT OR IGNORE. Collapse whatever
+      // duplicates already accumulated before the id became deterministic.
+      _dedupeReceiptOutboxOperations();
+      _db.execute('PRAGMA user_version = 24;');
+    }
+  }
+
+  void _dedupeReceiptOutboxOperations() {
+    final stmt = _db.prepare('''
+      SELECT op_id, type, payload, status, created_at FROM pending_operations
+      WHERE type IN ('DELIVERY_RECEIPT', 'READ_RECEIPT');
+    ''');
+    final rows = stmt.select();
+    stmt.close();
+
+    final groups = <String, List<Map<String, Object?>>>{};
+    for (final row in rows) {
+      String? messageId;
+      try {
+        final payload =
+            jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+        messageId = payload['message_id'] as String?;
+      } catch (_) {
+        messageId = null;
+      }
+      if (messageId == null) continue;
+      final key = '${row['type']}|$messageId';
+      (groups[key] ??= []).add({
+        'op_id': row['op_id'],
+        'status': row['status'],
+        'created_at': row['created_at'],
+      });
+    }
+
+    final toDelete = <String>[];
+    for (final group in groups.values) {
+      if (group.length <= 1) continue;
+      // A completed copy means the server already has this receipt — every
+      // other queued/failed duplicate for the same message is pure waste.
+      final hasCompleted = group.any((op) => op['status'] == 'COMPLETED');
+      if (hasCompleted) {
+        toDelete.addAll(
+          group
+              .where((op) => op['status'] != 'COMPLETED')
+              .map((op) => op['op_id'] as String),
+        );
+        continue;
+      }
+      group.sort(
+        (a, b) =>
+            (a['created_at'] as int).compareTo(b['created_at'] as int),
+      );
+      toDelete.addAll(group.skip(1).map((op) => op['op_id'] as String));
+    }
+
+    if (toDelete.isEmpty) return;
+    _db.execute('BEGIN;');
+    try {
+      final delStmt = _db.prepare(
+        'DELETE FROM pending_operations WHERE op_id = ?;',
+      );
+      for (final opId in toDelete) {
+        delStmt.execute([opId]);
+      }
+      delStmt.close();
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+    }
   }
 
   void _createPrivacyTables() {
