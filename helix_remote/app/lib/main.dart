@@ -45,7 +45,7 @@ void main() {
 
 enum _BootState { loading, needsUrl, running }
 
-const _kDefaultServerUrl = 'https://helix.agiletechbd.com';
+const _kDefaultServerUrl = 'https://hr.agiletechbd.com';
 
 class HelixRemoteBootstrap extends StatefulWidget {
   const HelixRemoteBootstrap({super.key});
