@@ -97,12 +97,16 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
       }),
       idempotencyKey: 'delivery:$receiptId',
     );
+    // outbox only: this device sending its own delivery receipt doesn't
+    // change this conversation's message content, so it shouldn't trigger
+    // conversation_screen's messages-area reload. It used to include
+    // `messages` too, which meant opening a conversation with N unread
+    // messages fired up to N redundant full-page reloads (each unread
+    // message's markDelivered/markRead call re-triggering the listener),
+    // compounding the outbox-growth bug this mixin also had.
     _emitChange(
       RemoteSyncChange(
-        areas: const {
-          RemoteSyncChangeArea.messages,
-          RemoteSyncChangeArea.outbox,
-        },
+        areas: const {RemoteSyncChangeArea.outbox},
         conversationId: conversationId,
       ),
     );
@@ -140,12 +144,10 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
       }),
       idempotencyKey: 'read:$receiptId',
     );
+    // See markDelivered above: outbox only, same reasoning.
     _emitChange(
       RemoteSyncChange(
-        areas: const {
-          RemoteSyncChangeArea.messages,
-          RemoteSyncChangeArea.outbox,
-        },
+        areas: const {RemoteSyncChangeArea.outbox},
         conversationId: conversationId,
       ),
     );
