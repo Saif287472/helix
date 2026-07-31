@@ -24,6 +24,8 @@ abstract class HelixRemoteRestClient {
 
   Future<Map<String, dynamic>> autoIssueGlobalInvite();
 
+  Future<Map<String, dynamic>> matchPhoneHashes(List<String> phoneHashes);
+
   Future<Map<String, dynamic>> getChallenge({
     required String accountId,
     required String deviceId,

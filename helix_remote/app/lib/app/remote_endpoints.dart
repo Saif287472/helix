@@ -11,6 +11,7 @@ class RemoteApiEndpoints {
   );
   Uri get accountsInviteAutoIssue => api('accounts/invite/auto-issue');
   Uri get contactsDiscoverySalt => api('contacts/discovery-salt');
+  Uri get contactsMatch => api('contacts/match');
   Uri accountsChallenge({
     required String accountId,
     required String deviceId,

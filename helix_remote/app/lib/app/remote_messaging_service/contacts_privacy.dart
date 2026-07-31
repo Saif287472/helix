@@ -237,6 +237,38 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
     );
   }
 
+  /// Records phone-book display names learned from matching the device's
+  /// contacts against the backend's /contacts/match endpoint. These are
+  /// local-only overrides that feed into [peerDisplayName] - they exist
+  /// independently of the `contacts` table since a match can be found for
+  /// an account that isn't a Helix contact yet.
+  void recordPhoneContactMatches(Map<String, String> accountIdToPhoneBookName) {
+    if (accountIdToPhoneBookName.isEmpty) return;
+    final now = _clock().millisecondsSinceEpoch;
+    accountIdToPhoneBookName.forEach((accountId, phoneBookName) {
+      final trimmed = phoneBookName.trim();
+      if (trimmed.isEmpty) return;
+      db.savePhoneContactName(
+        peerAccountId: accountId,
+        phoneBookName: trimmed,
+        updatedAt: now,
+      );
+    });
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts}));
+  }
+
+  /// The device's own phone-book label for [peerAccountId], if a contacts
+  /// sync has matched it. Null when no override is known.
+  String? phoneBookNameFor(String peerAccountId) =>
+      db.phoneContactName(peerAccountId);
+
+  /// Every persisted phone-book override, keyed by account ID. Includes
+  /// accounts that aren't Helix contacts yet - the Contacts screen uses
+  /// this to surface matched-but-not-added phone-book suggestions, and it
+  /// survives across app restarts since it's read straight from local
+  /// storage rather than a single sync's in-memory result.
+  Map<String, String> phoneContactOverrides() => db.phoneContactNames();
+
   List<RemoteContact> searchLocalContacts(String query) {
     final normalized = query.toLowerCase();
     return db

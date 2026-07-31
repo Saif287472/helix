@@ -216,4 +216,52 @@ mixin RemoteAccountsContactsRepository on HelixRemoteDatabaseBase {
       nickname: row['nickname'] as String? ?? '',
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Phone-book name override operations
+  //
+  // Local-only labels learned from matching the device's phone book against
+  // the backend's /contacts/match endpoint. Independent of the `contacts`
+  // table (a phone-book match may exist for an account that isn't a Helix
+  // contact yet), and never synced - each device keeps its own.
+  // ---------------------------------------------------------------------------
+
+  void savePhoneContactName({
+    required String peerAccountId,
+    required String phoneBookName,
+    required int updatedAt,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO phone_contact_names (
+        peer_account_id,
+        phone_book_name,
+        updated_at
+      )
+      VALUES (?, ?, ?);
+    ''');
+    stmt.execute([peerAccountId, phoneBookName, updatedAt]);
+    stmt.close();
+  }
+
+  String? phoneContactName(String peerAccountId) {
+    final stmt = _db.prepare(
+      'SELECT phone_book_name FROM phone_contact_names WHERE peer_account_id = ?;',
+    );
+    final res = stmt.select([peerAccountId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    return res.first['phone_book_name'] as String;
+  }
+
+  Map<String, String> phoneContactNames() {
+    final stmt = _db.prepare(
+      'SELECT peer_account_id, phone_book_name FROM phone_contact_names;',
+    );
+    final res = stmt.select();
+    stmt.close();
+    return {
+      for (final row in res)
+        row['peer_account_id'] as String: row['phone_book_name'] as String,
+    };
+  }
 }

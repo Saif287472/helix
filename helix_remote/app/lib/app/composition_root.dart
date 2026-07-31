@@ -20,6 +20,7 @@ import 'package:helix_remote/app/remote_sync_gateway.dart';
 import 'package:helix_remote/app/remote_websocket_client.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/services/message_latency_tracer.dart';
+import 'package:helix_remote/services/phone_contacts_service.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 import 'package:helix_remote_domain/models.dart';
@@ -30,6 +31,7 @@ import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as p;
 
 part 'composition_root/call_signaling_gateway.dart';
+part 'composition_root/contacts_sync.dart';
 part 'composition_root/lifecycle.dart';
 part 'composition_root/local_security.dart';
 part 'composition_root/pending_registration.dart';
@@ -297,6 +299,7 @@ class RemoteCompositionRoot extends RemoteCompositionRootBase
     with
         RemoteCompositionLifecycle,
         RemoteCompositionRegistration,
+        RemoteCompositionContactsSync,
         RemoteCompositionSession,
         RemoteCompositionRuntime,
         RemoteCompositionLocalSecurity {

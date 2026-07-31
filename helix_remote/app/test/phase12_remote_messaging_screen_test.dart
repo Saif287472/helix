@@ -100,6 +100,11 @@ class _FakeRestClient implements HelixRemoteRestClient {
   Future<Map<String, dynamic>> autoIssueGlobalInvite() async => {};
 
   @override
+  Future<Map<String, dynamic>> matchPhoneHashes(
+    List<String> phoneHashes,
+  ) async => {};
+
+  @override
   Future<Map<String, dynamic>> getChallenge({
     required String accountId,
     required String deviceId,
@@ -594,6 +599,56 @@ void main() {
     expect(db.getContact('dan'), isNull);
     expect(db.getContactRequest('cr_dan')!.status, 'Cancelled');
   });
+
+  testWidgets(
+    'P07 phone-book overrides feed into the contacts list and surface '
+    'not-yet-added matches as suggestions',
+    (tester) async {
+      // Bob is already an accepted contact (nickname 'Bob' from setUp); a
+      // phone-book match should override that display without touching the
+      // persisted nickname. Dave has no contact row at all - he should show
+      // up as a suggestion the user can add.
+      service.recordPhoneContactMatches({
+        'bob': 'Bobby (Phone)',
+        'dave': 'Dave M.',
+      });
+
+      final dir = Directory.systemTemp.createTempSync('p07b_widget_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final root = RemoteCompositionRoot.production(
+        databaseDirectory: dir.path,
+        devConfig: _devConfig(dir.path),
+      );
+      addTearDown(root.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ContactsScreen(messagingService: service, root: root),
+        ),
+      );
+      await tester.pump();
+
+      // Existing contact's tile now shows the phone-book name, not the
+      // stored nickname - peerDisplayName()'s resolution order, applied
+      // here without mutating the underlying contact record.
+      expect(find.text('Bobby (Phone)'), findsOneWidget);
+      expect(find.text('Bob'), findsNothing);
+      expect(db.getContact('bob')!.nickname, equals('Bob'));
+
+      // Dave isn't a contact yet - he appears as a phone-book suggestion.
+      expect(find.text('From your phone book'), findsOneWidget);
+      expect(find.text('Dave M.'), findsOneWidget);
+      expect(db.getContact('dave'), isNull);
+
+      await tester.tap(find.text('Add'));
+      await tester.pump();
+
+      expect(db.getContact('dave')!.status, 'PendingSent');
+      expect(db.getContact('dave')!.nickname, equals('Dave M.'));
+      // Now that Dave is a contact, he moves out of the suggestions section.
+      expect(find.text('From your phone book'), findsNothing);
+    },
+  );
 
   testWidgets(
     'P09 contact list reacts to inbound contact changes and disposes',

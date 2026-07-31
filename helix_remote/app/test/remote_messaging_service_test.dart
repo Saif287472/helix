@@ -90,6 +90,10 @@ class _FakeRestClient implements HelixRemoteRestClient {
   @override
   Future<Map<String, dynamic>> autoIssueGlobalInvite() async => {};
   @override
+  Future<Map<String, dynamic>> matchPhoneHashes(
+    List<String> phoneHashes,
+  ) async => {};
+  @override
   Future<Map<String, dynamic>> getChallenge({
     required String accountId,
     required String deviceId,

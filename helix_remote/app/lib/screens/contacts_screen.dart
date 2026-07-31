@@ -7,6 +7,7 @@ import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/screens/add_contact_screen.dart';
 import 'package:helix_remote/screens/conversation_list_screen.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
+import 'package:helix_remote/services/phone_contacts_service.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
@@ -16,10 +17,14 @@ class ContactsScreen extends StatefulWidget {
     super.key,
     required this.messagingService,
     required this.root,
+    this.phoneContactsService,
   });
 
   final RemoteMessagingService messagingService;
   final RemoteCompositionRoot root;
+
+  /// Overridable for tests; defaults to the real OS phone-book reader.
+  final PhoneContactsService? phoneContactsService;
 
   @override
   State<ContactsScreen> createState() => _ContactsScreenState();
@@ -31,10 +36,15 @@ class _ContactsScreenState extends State<ContactsScreen> {
   int _pendingReceivedCount = 0;
   bool _loaded = false;
   bool _showSearch = false;
+  bool _syncingContacts = false;
+  bool _syncBannerDismissed = false;
   String _searchQuery = '';
   String? _statusText;
   final TextEditingController _searchController = TextEditingController();
   StreamSubscription<RemoteSyncChange>? _changeSub;
+
+  PhoneContactsService get _phoneContactsService =>
+      widget.phoneContactsService ?? const DevicePhoneContactsService();
 
   @override
   void initState() {
@@ -60,7 +70,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
         if (request.direction == 'received') pendingReceivedCount++;
       }
       final entries = contacts
-          .map((contact) => _ContactSearchEntry(contact))
+          .map(
+            (contact) => _ContactSearchEntry(
+              contact,
+              phoneBookName: widget.messagingService.phoneBookNameFor(
+                contact.peerAccountId,
+              ),
+            ),
+          )
           .toList(growable: false);
       if (mounted) {
         setState(() {
@@ -92,6 +109,73 @@ class _ContactsScreenState extends State<ContactsScreen> {
     if (_searchQuery.isEmpty) return _contacts;
     final q = _searchQuery.toLowerCase();
     return _contacts.where((entry) => entry.searchText.contains(q)).toList();
+  }
+
+  /// Matched phone-book contacts that aren't a Helix contact (in any
+  /// status) yet - shown as suggestions at the top of the list. Sourced
+  /// from the persisted phone-book overrides table, so a match survives
+  /// app restarts rather than only lasting until the next sync.
+  List<_PhoneBookSuggestion> get _phoneBookSuggestions {
+    if (_searchQuery.isNotEmpty) return const [];
+    final knownPeerIds = _contacts
+        .map((e) => e.contact.peerAccountId)
+        .toSet();
+    final overrides = widget.messagingService.phoneContactOverrides();
+    return overrides.entries
+        .where((e) => !knownPeerIds.contains(e.key))
+        .map(
+          (e) => _PhoneBookSuggestion(accountId: e.key, phoneBookName: e.value),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> _runContactsSync() async {
+    if (_syncingContacts) return;
+    setState(() {
+      _syncingContacts = true;
+      _syncBannerDismissed = true;
+    });
+    try {
+      final permission = await _phoneContactsService.requestPermission();
+      if (permission != PhoneContactsPermissionResult.granted) {
+        if (mounted) {
+          setState(() {
+            _syncingContacts = false;
+            _statusText = 'Contacts permission not granted';
+          });
+        }
+        return;
+      }
+      final phoneBook = await _phoneContactsService.loadContacts();
+      final matches = await widget.root.syncPhoneContacts(phoneBook);
+      if (!mounted) return;
+      // recordPhoneContactMatches() (called inside syncPhoneContacts) emits
+      // a contacts-area change, which _onRemoteChange picks up and reloads -
+      // this just adds the status message on top of that reload.
+      _reload(
+        statusText: matches.isEmpty
+            ? 'No phone contacts found on Helix'
+            : '${matches.length} phone contact${matches.length == 1 ? '' : 's'} found on Helix',
+      );
+    } catch (e) {
+      if (mounted) setState(() => _statusText = 'Contacts sync failed: $e');
+    } finally {
+      if (mounted) setState(() => _syncingContacts = false);
+    }
+  }
+
+  Future<void> _addFromPhoneBook(_PhoneBookSuggestion suggestion) async {
+    try {
+      widget.messagingService.sendContactRequest(
+        peerAccountId: suggestion.accountId,
+        nickname: suggestion.phoneBookName,
+      );
+      _reload(
+        statusText: 'Contact request sent to ${suggestion.phoneBookName}',
+      );
+    } catch (e) {
+      _reload(statusText: '$e');
+    }
   }
 
   Future<void> _startConversation(RemoteContact contact) async {
@@ -300,6 +384,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
               ),
         actions: [
           IconButton(
+            icon: _syncingContacts
+                ? SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: cs.onPrimary,
+                    ),
+                  )
+                : Icon(Icons.contacts_outlined, color: cs.onPrimary),
+            onPressed: _syncingContacts ? null : _runContactsSync,
+            tooltip: 'Sync phone contacts',
+          ),
+          IconButton(
             icon: Icon(Icons.sync, color: cs.onPrimary),
             onPressed: _sync,
             tooltip: 'Sync now',
@@ -324,6 +421,24 @@ class _ContactsScreenState extends State<ContactsScreen> {
       ),
       body: Column(
         children: [
+          if (!_syncBannerDismissed && !_syncingContacts)
+            MaterialBanner(
+              content: const Text(
+                'Find contacts already on Helix? Phone numbers are hashed '
+                'before comparison and never sent in the clear.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      setState(() => _syncBannerDismissed = true),
+                  child: const Text('Not now'),
+                ),
+                FilledButton(
+                  onPressed: _runContactsSync,
+                  child: const Text('Sync contacts'),
+                ),
+              ],
+            ),
           if (_pendingReceivedCount > 0)
             MaterialBanner(
               content: Text(
@@ -357,7 +472,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Widget _buildList() {
     final list = _filteredContacts;
-    if (list.isEmpty) {
+    final suggestions = _phoneBookSuggestions;
+    if (list.isEmpty && suggestions.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -381,41 +497,134 @@ class _ContactsScreenState extends State<ContactsScreen> {
         ),
       );
     }
+
+    final items = <Widget>[];
+    if (suggestions.isNotEmpty) {
+      items.add(_buildSectionHeader('From your phone book'));
+      for (final suggestion in suggestions) {
+        items.add(
+          _PhoneBookSuggestionTile(
+            suggestion: suggestion,
+            onAdd: () => _addFromPhoneBook(suggestion),
+          ),
+        );
+      }
+      if (list.isNotEmpty) items.add(_buildSectionHeader('Contacts'));
+    }
+    for (final entry in list) {
+      items.add(_buildContactTile(entry));
+    }
+
     return ListView.separated(
-      itemCount: list.length,
+      itemCount: items.length,
       separatorBuilder: (_, _) => Divider(
         height: 1,
         indent: 72,
         color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
       ),
-      itemBuilder: (context, index) {
-        final contact = list[index].contact;
-        final request = _openRequestsByPeer[contact.peerAccountId];
-        return ContactTile(
-          contact: contact,
-          request: request,
-          onTap: () => _startConversation(contact),
-          onAccept: request != null
-              ? () => _acceptRequest(contact, request)
-              : null,
-          onReject: request != null
-              ? () => _rejectRequest(contact, request)
-              : null,
-          onCancel: request != null
-              ? () => _cancelRequest(contact, request)
-              : null,
-          onRemove: () => _removeContact(contact),
-        );
-      },
+      itemBuilder: (context, index) => items[index],
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        title,
+        style: Theme.of(
+          context,
+        ).textTheme.labelLarge?.copyWith(color: cs.primary),
+      ),
+    );
+  }
+
+  Widget _buildContactTile(_ContactSearchEntry entry) {
+    final contact = entry.contact;
+    final request = _openRequestsByPeer[contact.peerAccountId];
+    final override = entry.phoneBookName;
+    final displayContact = (override != null && override.isNotEmpty)
+        ? RemoteContact(
+            peerAccountId: contact.peerAccountId,
+            nickname: override,
+            status: contact.status,
+          )
+        : contact;
+    return ContactTile(
+      contact: displayContact,
+      request: request,
+      onTap: () => _startConversation(contact),
+      onAccept: request != null
+          ? () => _acceptRequest(contact, request)
+          : null,
+      onReject: request != null
+          ? () => _rejectRequest(contact, request)
+          : null,
+      onCancel: request != null
+          ? () => _cancelRequest(contact, request)
+          : null,
+      onRemove: () => _removeContact(contact),
+    );
+  }
+}
+
+class _PhoneBookSuggestion {
+  const _PhoneBookSuggestion({
+    required this.accountId,
+    required this.phoneBookName,
+  });
+
+  final String accountId;
+  final String phoneBookName;
+}
+
+class _PhoneBookSuggestionTile extends StatelessWidget {
+  const _PhoneBookSuggestionTile({
+    required this.suggestion,
+    required this.onAdd,
+  });
+
+  final _PhoneBookSuggestion suggestion;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final initial = suggestion.phoneBookName.isEmpty
+        ? '?'
+        : suggestion.phoneBookName.substring(0, 1).toUpperCase();
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: cs.primaryContainer,
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: cs.onPrimaryContainer,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      title: Text(
+        suggestion.phoneBookName,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: const Text('Found via phone contacts'),
+      trailing: FilledButton(onPressed: onAdd, child: const Text('Add')),
     );
   }
 }
 
 class _ContactSearchEntry {
-  _ContactSearchEntry(this.contact)
+  _ContactSearchEntry(this.contact, {this.phoneBookName})
     : searchText =
-          '${contact.nickname.toLowerCase()} ${contact.peerAccountId.toLowerCase()}';
+          '${contact.nickname.toLowerCase()} '
+          '${contact.peerAccountId.toLowerCase()} '
+          '${(phoneBookName ?? '').toLowerCase()}';
 
   final RemoteContact contact;
+  final String? phoneBookName;
   final String searchText;
 }

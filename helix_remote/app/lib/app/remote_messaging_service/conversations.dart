@@ -372,15 +372,20 @@ mixin RemoteConversationManagement on RemoteMessagingServiceBase {
       db.getConversationMembers(conversationId);
 
   /// Returns the display name to show for a DM conversation.
-  /// For a 1-to-1 conversation it resolves the peer's nickname from contacts,
-  /// falling back to the raw account ID if not in the contact list yet.
-  /// Returns null for group conversations.
+  /// For a 1-to-1 conversation it prefers a phone-book name learned from
+  /// contacts sync, then the peer's nickname from contacts, falling back to
+  /// the raw account ID if neither is known. Returns null for group
+  /// conversations.
   String? peerDisplayName(String conversationId) {
     final myId = _accountId;
     if (myId == null) return null;
     final members = db.getConversationMembers(conversationId);
     final peerId = members.firstWhere((id) => id != myId, orElse: () => '');
     if (peerId.isEmpty) return null;
+    final phoneBookName = db.phoneContactName(peerId);
+    if (phoneBookName != null && phoneBookName.isNotEmpty) {
+      return phoneBookName;
+    }
     final contact = db.getContacts().firstWhere(
       (c) => c.peerAccountId == peerId,
       orElse: () =>

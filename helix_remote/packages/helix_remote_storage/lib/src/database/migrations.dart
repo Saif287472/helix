@@ -36,6 +36,7 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       );
     ''');
     _createContactRequestsTable();
+    _createPhoneContactNamesTable();
 
     _db.execute('''
       CREATE TABLE IF NOT EXISTS conversations (
@@ -530,6 +531,20 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       }
       _db.execute('PRAGMA user_version = 25;');
     }
+    if (version < 26) {
+      _createPhoneContactNamesTable();
+      _db.execute('PRAGMA user_version = 26;');
+    }
+  }
+
+  void _createPhoneContactNamesTable() {
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS phone_contact_names (
+        peer_account_id TEXT PRIMARY KEY,
+        phone_book_name TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    ''');
   }
 
   void _dedupeReceiptOutboxOperations() {
