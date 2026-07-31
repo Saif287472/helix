@@ -340,17 +340,26 @@ class HelixRemoteApp extends StatefulWidget {
 
 enum _SetupPath { choose, createAccount }
 
+enum _CreateAccountStep { enterDetails, enterOtp }
+
 class _HelixRemoteAppState extends State<HelixRemoteApp>
     with WidgetsBindingObserver {
   RemoteStartupState _startupState = RemoteStartupState.idle;
   String? _errorMessage;
   String? _registrationError;
   String? _displayNameError;
+  String? _phoneError;
+  String? _inviteError;
+  String? _otpError;
   bool _initializing = false;
   bool _registering = false;
+  bool _sendingCode = false;
   _SetupPath _setupPath = _SetupPath.choose;
+  _CreateAccountStep _createAccountStep = _CreateAccountStep.enterDetails;
   RemoteCallStatus? _activeCallStatus;
-  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _inviteController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
   final TextEditingController _displayNameController = TextEditingController();
   StreamSubscription<RemoteStartupState>? _stateSub;
   StreamSubscription<RemoteCallStatus?>? _callSub;
@@ -450,7 +459,9 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     _stateSub?.cancel();
     _callSub?.cancel();
     _connectivitySub?.cancel();
-    _usernameController.dispose();
+    _phoneController.dispose();
+    _inviteController.dispose();
+    _otpController.dispose();
     _displayNameController.dispose();
     widget.root.dispose().ignore();
     AndroidCallRuntimeService.setCallActive(
@@ -589,7 +600,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
                     _SetupOptionTile(
                       icon: Icons.person_add_outlined,
                       title: 'Create new account',
-                      subtitle: 'Register a new username on this server.',
+                      subtitle: 'Register with your phone number.',
                       onTap: () =>
                           setState(() => _setupPath = _SetupPath.createAccount),
                     ),
@@ -656,10 +667,19 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
         title: const Text('Create account'),
         leading: BackButton(
           onPressed: () => setState(() {
+            if (_createAccountStep == _CreateAccountStep.enterOtp) {
+              _createAccountStep = _CreateAccountStep.enterDetails;
+              _otpController.clear();
+              _otpError = null;
+              return;
+            }
             _setupPath = _SetupPath.choose;
             _registrationError = null;
             _displayNameError = null;
-            _usernameController.clear();
+            _phoneError = null;
+            _inviteError = null;
+            _phoneController.clear();
+            _inviteController.clear();
             _displayNameController.clear();
           }),
         ),
@@ -671,56 +691,9 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
               constraints: const BoxConstraints(maxWidth: 440),
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: _usernameController,
-                      enabled: !_registering,
-                      decoration: InputDecoration(
-                        labelText: 'Username',
-                        hintText: 'e.g. hasan_dev',
-                        border: const OutlineInputBorder(),
-                        helperText: RemoteAccountValidation.usernameRules,
-                        errorText: _registrationError,
-                      ),
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _displayNameController,
-                      enabled: !_registering,
-                      decoration: InputDecoration(
-                        labelText: 'Display name',
-                        hintText: 'e.g. Hasan',
-                        border: const OutlineInputBorder(),
-                        helperText: RemoteAccountValidation.displayNameRules,
-                        errorText: _displayNameError,
-                      ),
-                      textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _register(),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _registering ? null : _register,
-                        icon: _registering
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.person_add_outlined),
-                        label: Text(
-                          _registering ? 'Creating account…' : 'Create account',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                child: _createAccountStep == _CreateAccountStep.enterDetails
+                    ? _buildAccountDetailsStep()
+                    : _buildOtpStep(),
               ),
             ),
           ),
@@ -729,36 +702,192 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     );
   }
 
-  Future<void> _register() async {
-    if (_registering) return;
-    final username = RemoteAccountValidation.normalizeUsername(
-      _usernameController.text,
+  Widget _buildAccountDetailsStep() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: _phoneController,
+          enabled: !_sendingCode,
+          decoration: InputDecoration(
+            labelText: 'Phone number',
+            hintText: 'e.g. +15551234567',
+            border: const OutlineInputBorder(),
+            helperText: RemoteAccountValidation.phoneNumberRules,
+            errorText: _phoneError,
+          ),
+          keyboardType: TextInputType.phone,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _inviteController,
+          enabled: !_sendingCode,
+          decoration: InputDecoration(
+            labelText: 'Invite code',
+            border: const OutlineInputBorder(),
+            errorText: _inviteError,
+          ),
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _displayNameController,
+          enabled: !_sendingCode,
+          decoration: InputDecoration(
+            labelText: 'Display name',
+            hintText: 'e.g. Hasan',
+            border: const OutlineInputBorder(),
+            helperText: RemoteAccountValidation.displayNameRules,
+            errorText: _displayNameError,
+          ),
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _sendVerificationCode(),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _sendingCode ? null : _sendVerificationCode,
+            icon: _sendingCode
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sms_outlined),
+            label: Text(
+              _sendingCode ? 'Sending code…' : 'Send verification code',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOtpStep() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'We sent a code to ${RemoteAccountValidation.normalizePhoneNumber(_phoneController.text)}. '
+          'Since real SMS delivery isn\'t available yet, check your '
+          'notifications for it.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _otpController,
+          enabled: !_registering,
+          decoration: InputDecoration(
+            labelText: 'Verification code',
+            border: const OutlineInputBorder(),
+            errorText: _otpError ?? _registrationError,
+          ),
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _register(),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _registering ? null : _register,
+            icon: _registering
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.person_add_outlined),
+            label: Text(_registering ? 'Creating account…' : 'Create account'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _sendVerificationCode() async {
+    if (_sendingCode) return;
+    final phoneNumber = RemoteAccountValidation.normalizePhoneNumber(
+      _phoneController.text,
     );
     final displayName = RemoteAccountValidation.normalizeDisplayName(
       _displayNameController.text,
     );
-    final usernameError = RemoteAccountValidation.usernameError(username);
+    final inviteCode = _inviteController.text.trim();
+    final phoneError = RemoteAccountValidation.phoneNumberError(phoneNumber);
     final displayNameError = RemoteAccountValidation.displayNameError(
       displayName,
     );
-    if (usernameError != null || displayNameError != null) {
+    final inviteError = inviteCode.isEmpty
+        ? 'Invite code cannot be empty.'
+        : null;
+    if (phoneError != null || displayNameError != null || inviteError != null) {
       setState(() {
-        _registrationError = usernameError;
+        _phoneError = phoneError;
         _displayNameError = displayNameError;
-        _errorMessage = usernameError ?? displayNameError;
+        _inviteError = inviteError;
+        _errorMessage = phoneError ?? displayNameError ?? inviteError;
       });
       return;
     }
 
     setState(() {
-      _registering = true;
-      _registrationError = null;
+      _sendingCode = true;
+      _phoneError = null;
       _displayNameError = null;
+      _inviteError = null;
       _errorMessage = null;
     });
 
     try {
-      await widget.root.registerAndLogin(username, displayName);
+      await widget.root.requestOtp(phoneNumber);
+      if (mounted) {
+        setState(() => _createAccountStep = _CreateAccountStep.enterOtp);
+      }
+    } catch (e, st) {
+      AppLogger.instance.warn('auth', 'OTP request failed: $e', st);
+      if (mounted) {
+        setState(() {
+          _phoneError = _formatRegistrationError(e);
+          _errorMessage = _phoneError;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingCode = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _register() async {
+    if (_registering) return;
+    final otpCode = _otpController.text.trim();
+    if (otpCode.isEmpty) {
+      setState(() => _otpError = 'Verification code cannot be empty.');
+      return;
+    }
+
+    setState(() {
+      _registering = true;
+      _otpError = null;
+      _registrationError = null;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.root.registerAndLogin(
+        phoneNumber: RemoteAccountValidation.normalizePhoneNumber(
+          _phoneController.text,
+        ),
+        displayName: RemoteAccountValidation.normalizeDisplayName(
+          _displayNameController.text,
+        ),
+        otpCode: otpCode,
+        inviteCode: _inviteController.text.trim(),
+      );
     } catch (e, st) {
       AppLogger.instance.warn('auth', 'Registration failed: $e', st);
       if (mounted) {

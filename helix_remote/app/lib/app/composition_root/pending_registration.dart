@@ -2,7 +2,8 @@ part of '../composition_root.dart';
 
 class _PendingRegistration {
   const _PendingRegistration({
-    required this.username,
+    required this.phoneNumber,
+    required this.phoneHash,
     required this.displayName,
     required this.accountId,
     required this.deviceId,
@@ -20,7 +21,8 @@ class _PendingRegistration {
     required this.deviceRegistrationSignature,
   });
 
-  final String username;
+  final String phoneNumber;
+  final String phoneHash;
   final String displayName;
   final String accountId;
   final String deviceId;
@@ -44,7 +46,8 @@ class _PendingRegistration {
       _base64UrlDecode(deviceAgreementPublicKey);
 
   static Future<_PendingRegistration> create({
-    required String username,
+    required String phoneNumber,
+    required String phoneHash,
     required String displayName,
   }) async {
     final ed25519 = crypto_pkg.Ed25519();
@@ -79,7 +82,7 @@ class _PendingRegistration {
 
     final transcript = _registrationTranscript(
       accountId: accountId,
-      username: username,
+      phoneHash: phoneHash,
       accountIdentityPublicKey: accountIdentityPublicKey,
       deviceId: deviceId,
       deviceSigningPublicKey: deviceSigningPublicKey,
@@ -96,7 +99,8 @@ class _PendingRegistration {
     );
 
     return _PendingRegistration(
-      username: username,
+      phoneNumber: phoneNumber,
+      phoneHash: phoneHash,
       displayName: displayName,
       accountId: accountId,
       deviceId: deviceId,
@@ -139,7 +143,8 @@ class _PendingRegistration {
     );
 
     return _PendingRegistration(
-      username: _requireString(json, 'username'),
+      phoneNumber: _requireString(json, 'phone_number'),
+      phoneHash: _requireString(json, 'phone_hash'),
       displayName: _requireString(json, 'display_name'),
       accountId: _requireString(json, 'account_id'),
       deviceId: _requireString(json, 'device_id'),
@@ -177,7 +182,8 @@ class _PendingRegistration {
   }
 
   Map<String, dynamic> toJson() => {
-    'username': username,
+    'phone_number': phoneNumber,
+    'phone_hash': phoneHash,
     'display_name': displayName,
     'account_id': accountId,
     'device_id': deviceId,

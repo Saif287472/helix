@@ -7,7 +7,24 @@ import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_cli/helix_remote_cli.dart';
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
+import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_domain/models.dart';
+
+String _seedInvite(BackendServer server) {
+  final code = generateInviteCode();
+  final now = DateTime.now().millisecondsSinceEpoch;
+  server.db.createInviteCredential(
+    inviteId: generateInviteId(),
+    inviteCodeHash: hashInviteCode(code),
+    serverAddress: 'https://test.local',
+    issuerType: 'ADMIN',
+    issuerLabel: 'cli-x3dh-test-harness',
+    createdAt: now,
+    expiresAt: now + const Duration(days: 7).inMilliseconds,
+  );
+  return code;
+}
 
 void main() {
   late BackendServer server;
@@ -71,18 +88,33 @@ void main() {
 
   test('Prekey Upload, Bundle Query, and X3DH Session Initiation E2E', () async {
     // 1. Register Alice and Bob
+    const alicePhoneNumber = '+15550000001';
+    const bobPhoneNumber = '+15550000002';
+    final salt = (await aliceRestClient.fetchDiscoverySalt())['salt'] as String;
+    final aliceOtp = await aliceRestClient.requestPhoneOtp(
+      phoneHash: cliPhoneHash(salt, alicePhoneNumber),
+    );
     await aliceClient.register(
       restClient: aliceRestClient,
       accountId: 'alice_acc_1',
-      username: 'alice',
+      phoneNumber: alicePhoneNumber,
+      displayName: 'Alice',
+      otpCode: aliceOtp['code'] as String,
+      inviteCode: _seedInvite(server),
       deviceId: 'device_cli_alice',
       deviceName: 'Alice Client',
     );
 
+    final bobOtp = await bobRestClient.requestPhoneOtp(
+      phoneHash: cliPhoneHash(salt, bobPhoneNumber),
+    );
     await bobClient.register(
       restClient: bobRestClient,
       accountId: 'bob_acc_1',
-      username: 'bob',
+      phoneNumber: bobPhoneNumber,
+      displayName: 'Bob',
+      otpCode: bobOtp['code'] as String,
+      inviteCode: _seedInvite(server),
       deviceId: 'device_cli_bob',
       deviceName: 'Bob Client',
     );
@@ -96,51 +128,69 @@ void main() {
     expect(bobRestClient.accessToken, isNotNull);
 
     // 3. Bob generates and publishes prekeys (Signed Prekey & One-Time Prekeys)
-    await bobClient.publishPrekeys(restClient: bobRestClient, oneTimePrekeysCount: 5);
+    await bobClient.publishPrekeys(
+      restClient: bobRestClient,
+      oneTimePrekeysCount: 5,
+    );
 
     // Verify Bob's prekeys are stored locally
     final bobPrekeys = bobClient.db.getLocalPrekeys(deviceId: 'device_cli_bob');
     expect(bobPrekeys, isNotEmpty);
-    expect(bobPrekeys.where((k) => k['role'] == 'one_time_prekey').length, equals(5));
+    expect(
+      bobPrekeys.where((k) => k['role'] == 'one_time_prekey').length,
+      equals(5),
+    );
 
     // 4. Manually insert each other's device profiles in local DB (simulating directory lookup/sync)
     final aliceIdPub = await aliceClient.storage.readKey('identity_public');
-    final aliceDevSignPub = await aliceClient.storage.readKey('device_signing_public');
+    final aliceDevSignPub = await aliceClient.storage.readKey(
+      'device_signing_public',
+    );
     final aliceDevAgreePub = await aliceClient.storage.readKey('device_public');
 
     final bobIdPub = await bobClient.storage.readKey('identity_public');
-    final bobDevSignPub = await bobClient.storage.readKey('device_signing_public');
+    final bobDevSignPub = await bobClient.storage.readKey(
+      'device_signing_public',
+    );
     final bobDevAgreePub = await bobClient.storage.readKey('device_public');
 
     // Bob records Alice's device
-    bobClient.db.upsertAccount(RemoteAccount(
-      accountId: 'alice_acc_1',
-      username: 'alice',
-      identityPublicKey: aliceIdPub!,
-      createdAt: DateTime.now(),
-    ));
-    bobClient.db.upsertDevice('alice_acc_1', RemoteDevice(
-      deviceId: 'device_cli_alice',
-      deviceName: 'Alice Client',
-      deviceSigningPublicKey: aliceDevSignPub!,
-      deviceAgreementPublicKey: aliceDevAgreePub!,
-      createdAt: DateTime.now(),
-    ));
+    bobClient.db.upsertAccount(
+      RemoteAccount(
+        accountId: 'alice_acc_1',
+        identityPublicKey: aliceIdPub!,
+        createdAt: DateTime.now(),
+      ),
+    );
+    bobClient.db.upsertDevice(
+      'alice_acc_1',
+      RemoteDevice(
+        deviceId: 'device_cli_alice',
+        deviceName: 'Alice Client',
+        deviceSigningPublicKey: aliceDevSignPub!,
+        deviceAgreementPublicKey: aliceDevAgreePub!,
+        createdAt: DateTime.now(),
+      ),
+    );
 
     // Alice records Bob's device
-    aliceClient.db.upsertAccount(RemoteAccount(
-      accountId: 'bob_acc_1',
-      username: 'bob',
-      identityPublicKey: bobIdPub!,
-      createdAt: DateTime.now(),
-    ));
-    aliceClient.db.upsertDevice('bob_acc_1', RemoteDevice(
-      deviceId: 'device_cli_bob',
-      deviceName: 'Bob Client',
-      deviceSigningPublicKey: bobDevSignPub!,
-      deviceAgreementPublicKey: bobDevAgreePub!,
-      createdAt: DateTime.now(),
-    ));
+    aliceClient.db.upsertAccount(
+      RemoteAccount(
+        accountId: 'bob_acc_1',
+        identityPublicKey: bobIdPub!,
+        createdAt: DateTime.now(),
+      ),
+    );
+    aliceClient.db.upsertDevice(
+      'bob_acc_1',
+      RemoteDevice(
+        deviceId: 'device_cli_bob',
+        deviceName: 'Bob Client',
+        deviceSigningPublicKey: bobDevSignPub!,
+        deviceAgreementPublicKey: bobDevAgreePub!,
+        createdAt: DateTime.now(),
+      ),
+    );
 
     // 5. Alice queries Bob's bundle and initiates E2EE session
     final aliceSession = await aliceClient.initiateSessionWithPeer(
@@ -151,8 +201,12 @@ void main() {
 
     // Retrieve the session parameters saved during X3DH initiation
     final sessionId = 'direct:conv_123:bob_acc_1:device_cli_bob';
-    final epPublicBase64 = await aliceClient.storage.readKey('session_init_ephemeral_$sessionId');
-    final otkIdStr = await aliceClient.storage.readKey('session_init_otk_id_$sessionId');
+    final epPublicBase64 = await aliceClient.storage.readKey(
+      'session_init_ephemeral_$sessionId',
+    );
+    final otkIdStr = await aliceClient.storage.readKey(
+      'session_init_otk_id_$sessionId',
+    );
     final otkId = otkIdStr != null ? int.parse(otkIdStr) : null;
 
     expect(epPublicBase64, isNotNull);
@@ -175,7 +229,9 @@ void main() {
     expect(decrypted, equals(plaintext));
 
     // Verify Bob can encrypt back and Alice decrypts
-    final bobReply = Uint8List.fromList('Hello Alice! Received your secure message.'.codeUnits);
+    final bobReply = Uint8List.fromList(
+      'Hello Alice! Received your secure message.'.codeUnits,
+    );
     final replyCiphertext = await bobSession.encrypt(bobReply);
 
     final aliceDecrypted = await aliceSession.decrypt(replyCiphertext);

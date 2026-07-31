@@ -7,16 +7,14 @@ mixin RemoteAccountsContactsRepository on HelixRemoteDatabaseBase {
 
   void upsertAccount(RemoteAccount account) {
     final stmt = _db.prepare('''
-      INSERT INTO accounts (account_id, username, identity_public_key, created_at, status)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO accounts (account_id, identity_public_key, created_at, status)
+      VALUES (?, ?, ?, ?)
       ON CONFLICT(account_id) DO UPDATE SET
-        username = excluded.username,
         identity_public_key = excluded.identity_public_key,
         status = excluded.status;
     ''');
     stmt.execute([
       account.accountId,
-      account.username,
       account.identityPublicKey,
       account.createdAt.millisecondsSinceEpoch,
       account.status,
@@ -32,7 +30,6 @@ mixin RemoteAccountsContactsRepository on HelixRemoteDatabaseBase {
     final row = res.first;
     return RemoteAccount(
       accountId: row['account_id'] as String,
-      username: row['username'] as String,
       identityPublicKey: row['identity_public_key'] as String,
       createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
       status: row['status'] as String,

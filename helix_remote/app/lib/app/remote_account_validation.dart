@@ -1,26 +1,30 @@
 class RemoteAccountValidation {
   const RemoteAccountValidation._();
 
-  static const usernameRules =
-      'Use 3-30 lowercase letters, numbers, or underscores.';
   static const displayNameRules = 'Use 1-80 characters.';
+  static const phoneNumberRules =
+      'Enter your number in international format, e.g. +15551234567.';
 
-  static final RegExp _usernamePattern = RegExp(r'^[a-z0-9_]+$');
+  static final RegExp _e164Pattern = RegExp(r'^\+[1-9]\d{7,14}$');
 
-  static String normalizeUsername(String value) => value.trim().toLowerCase();
+  /// Strips everything but digits and a leading `+`, adding the `+` if the
+  /// user omitted it. This is intentionally a light touch, not a full
+  /// libphonenumber-style parser - good enough for E.164 validation without
+  /// pulling in a new dependency for this alone.
+  static String normalizePhoneNumber(String value) {
+    final digitsAndPlus = value.trim().replaceAll(RegExp(r'[^\d+]'), '');
+    if (digitsAndPlus.startsWith('+')) return digitsAndPlus;
+    if (digitsAndPlus.isEmpty) return '';
+    return '+$digitsAndPlus';
+  }
 
   static String normalizeDisplayName(String value) => value.trim();
 
-  static String? usernameError(String value) {
-    final username = normalizeUsername(value);
-    if (username.isEmpty) return 'Username cannot be empty.';
-    if (username.length < 3) return 'Username must be at least 3 characters.';
-    if (username.length > 30) return 'Username must be 30 characters or less.';
-    if (username.startsWith('helix_')) {
-      return 'Usernames starting with helix_ are reserved.';
-    }
-    if (!_usernamePattern.hasMatch(username)) {
-      return 'Use lowercase letters, numbers, and underscores only.';
+  static String? phoneNumberError(String value) {
+    final phoneNumber = normalizePhoneNumber(value);
+    if (phoneNumber.isEmpty) return 'Phone number cannot be empty.';
+    if (!_e164Pattern.hasMatch(phoneNumber)) {
+      return 'Enter a valid phone number in international format.';
     }
     return null;
   }
@@ -34,5 +38,6 @@ class RemoteAccountValidation {
     return null;
   }
 
-  static bool isValidUsername(String value) => usernameError(value) == null;
+  static bool isValidPhoneNumber(String value) =>
+      phoneNumberError(value) == null;
 }

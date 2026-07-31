@@ -14,8 +14,6 @@ mixin RemoteMessagingCore on RemoteMessagingServiceBase {
     db.upsertAccount(account);
     db.upsertDevice(account.accountId, device);
     _accountId = account.accountId;
-    _username = account.username;
-    _displayName = account.username;
     _deviceId = device.deviceId;
     _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.devices}));
   }
@@ -56,9 +54,7 @@ mixin RemoteMessagingCore on RemoteMessagingServiceBase {
   }
 
   String? get currentAccountId => _accountId;
-  String? get currentUsername => _username;
-  String? get currentDisplayName =>
-      _displayName?.isNotEmpty == true ? _displayName : _username;
+  String? get currentDisplayName => _displayName;
   void setDisplayName(String name) => _displayName = name;
 
   @override

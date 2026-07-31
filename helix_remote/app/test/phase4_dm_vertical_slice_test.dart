@@ -488,7 +488,6 @@ void main() {
       db.upsertAccount(
         RemoteAccount(
           accountId: 'alice',
-          username: 'alice',
           identityPublicKey: 'alice_identity_key',
           createdAt: DateTime.fromMillisecondsSinceEpoch(1),
         ),

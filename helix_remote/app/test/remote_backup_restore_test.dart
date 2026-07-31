@@ -146,7 +146,6 @@ void main() {
       db.upsertAccount(
         RemoteAccount(
           accountId: 'acc_p5',
-          username: 'phase5_user',
           identityPublicKey: 'phase5_identity_key',
           createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
           status: 'Active',
@@ -249,7 +248,6 @@ void main() {
       source.upsertAccount(
         RemoteAccount(
           accountId: 'acc_restore_p5',
-          username: 'restore_p5_user',
           identityPublicKey: 'restore_identity_p5',
           createdAt: DateTime.fromMillisecondsSinceEpoch(2000),
           status: 'Active',
@@ -271,8 +269,8 @@ void main() {
       fresh.restoreBackupSnapshot(snapshot);
 
       expect(
-        fresh.getAccount('acc_restore_p5')?.username,
-        equals('restore_p5_user'),
+        fresh.getAccount('acc_restore_p5')?.identityPublicKey,
+        equals('restore_identity_p5'),
       );
       expect(
         fresh.getAttachment('att_restore_p5')!['filename'],
@@ -342,7 +340,6 @@ void main() {
       source.upsertAccount(
         RemoteAccount(
           accountId: 'acc_install_b',
-          username: 'install_b_user',
           identityPublicKey: 'install_b_identity',
           createdAt: DateTime.fromMillisecondsSinceEpoch(3000),
           status: 'Active',
@@ -358,8 +355,8 @@ void main() {
       installB.restoreBackupSnapshot(snapshot);
 
       expect(
-        installB.getAccount('acc_install_b')?.username,
-        equals('install_b_user'),
+        installB.getAccount('acc_install_b')?.identityPublicKey,
+        equals('install_b_identity'),
       );
     },
   );
@@ -401,7 +398,6 @@ void main() {
     source.upsertAccount(
       RemoteAccount(
         accountId: 'acc_transfer',
-        username: 'transfer_user',
         identityPublicKey: 'transfer_identity',
         createdAt: DateTime.fromMillisecondsSinceEpoch(4000),
         status: 'Active',
@@ -416,7 +412,10 @@ void main() {
     final restored = _freshDb();
     addTearDown(restored.close);
     restored.restoreTransferArchive(archive);
-    expect(restored.getAccount('acc_transfer')?.username, 'transfer_user');
+    expect(
+      restored.getAccount('acc_transfer')?.identityPublicKey,
+      'transfer_identity',
+    );
   });
 
   test('F3 locked and view-once content is excluded from backup snapshots', () {

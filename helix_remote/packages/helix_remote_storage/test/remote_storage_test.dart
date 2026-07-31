@@ -47,7 +47,6 @@ void main() {
   test('Account and Device persistence operations', () {
     final account = RemoteAccount(
       accountId: 'acc_123',
-      username: 'alice',
       identityPublicKey: 'alice_identity_public_key',
       createdAt: DateTime.now(),
       status: 'Active',
@@ -57,8 +56,10 @@ void main() {
 
     final retrievedAcc = db.getAccount('acc_123');
     expect(retrievedAcc, isNotNull);
-    expect(retrievedAcc!.username, equals('alice'));
-    expect(retrievedAcc.identityPublicKey, equals('alice_identity_public_key'));
+    expect(
+      retrievedAcc!.identityPublicKey,
+      equals('alice_identity_public_key'),
+    );
 
     final device = RemoteDevice(
       deviceId: 'device1',
@@ -361,8 +362,7 @@ void main() {
     encrypted.upsertAccount(
       RemoteAccount(
         accountId: 'acc_p2',
-        username: marker,
-        identityPublicKey: 'identity_p2',
+        identityPublicKey: marker,
         createdAt: DateTime.fromMillisecondsSinceEpoch(2000),
         status: 'Active',
       ),
@@ -393,7 +393,7 @@ void main() {
     migrated.initialize();
     addTearDown(migrated.close);
 
-    expect(migrated.getAccount('acc_plain')!.username, equals(marker));
+    expect(migrated.getAccount('acc_plain')!.identityPublicKey, equals(marker));
     expect(migrated.schemaVersion, equals(18));
     expect(_opensWithoutKey(file), isFalse);
     expect(_databaseFilesContain(file, marker), isFalse);
@@ -424,7 +424,7 @@ void main() {
       expect(_hasPlaintextSqliteHeader(file), isTrue);
       expect(File('${file.path}.p2-encrypted-temp').existsSync(), isFalse);
       expect(File('${file.path}.p2-plaintext-backup').existsSync(), isFalse);
-      expect(_readPlaintextUsername(file), equals(marker));
+      expect(_readPlaintextIdentityKey(file), equals(marker));
 
       final retry = HelixRemoteDatabase(file, password: key);
       retry.initialize();
@@ -523,7 +523,6 @@ void main() {
     () {
       final account = RemoteAccount(
         accountId: 'acc_restore',
-        username: 'restore_user',
         identityPublicKey: 'restore_identity',
         createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
         status: 'Active',
@@ -583,8 +582,8 @@ void main() {
       restored.restoreBackupSnapshot(snapshot);
 
       expect(
-        restored.getAccount('acc_restore')!.username,
-        equals('restore_user'),
+        restored.getAccount('acc_restore')!.identityPublicKey,
+        equals('restore_identity'),
       );
       expect(
         restored.getDevices('acc_restore').single.deviceName,
@@ -1140,8 +1139,8 @@ void _createPlaintextV6Database(File file, String marker) {
     ..execute('''
       INSERT INTO accounts VALUES (
         'acc_plain',
+        'legacy_placeholder',
         '$marker',
-        'identity_plain',
         3000,
         'Active'
       );
@@ -1150,14 +1149,14 @@ void _createPlaintextV6Database(File file, String marker) {
     ..close();
 }
 
-String _readPlaintextUsername(File file) {
+String _readPlaintextIdentityKey(File file) {
   final raw = sqlite.sqlite3.open(file.path);
   try {
     return raw
             .select(
-              "SELECT username FROM accounts WHERE account_id = 'acc_plain';",
+              "SELECT identity_public_key FROM accounts WHERE account_id = 'acc_plain';",
             )
-            .first['username']
+            .first['identity_public_key']
         as String;
   } finally {
     raw.close();

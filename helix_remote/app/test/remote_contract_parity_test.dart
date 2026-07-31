@@ -23,7 +23,6 @@ void main() {
 
   test('P06-W02: known corrected operation paths do not regress', () {
     final registry = RemoteOutboundOperationRegistry();
-    expect(registry.require('USERNAME_CHANGE').path, 'accounts/username');
     expect(registry.require('PROFILE_UPDATE').path, 'accounts/profile');
     expect(registry.require('SAFETY_REPORT').path, 'contacts/report');
     expect(registry.require('EDIT_MESSAGE').path, 'messages/edit');
@@ -53,8 +52,9 @@ void main() {
 
   test('RP2-003: account validation schema matches app/backend rules', () {
     final text = _openApiText();
-    expect(text, contains("pattern: '^(?!helix_)[a-z0-9_]+\$'"));
-    expect(text, contains('maxLength: 30'));
+    expect(text, contains('phone_hash:'));
+    expect(text, contains('otp_code:'));
+    expect(text, contains('invite_code:'));
     expect(text, contains('display_name:'));
     expect(text, contains('maxLength: 80'));
   });

@@ -70,7 +70,9 @@ class _FakeRestClient implements HelixRemoteRestClient {
   @override
   Future<Map<String, dynamic>> registerAccount({
     required String accountId,
-    required String username,
+    required String phoneHash,
+    required String otpCode,
+    required String inviteCode,
     required String displayName,
     required String accountIdentityPublicKey,
     required String deviceId,
@@ -80,6 +82,22 @@ class _FakeRestClient implements HelixRemoteRestClient {
     required String deviceRegistrationSignature,
     required String deviceName,
   }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> fetchDiscoverySalt() async => {};
+
+  @override
+  Future<Map<String, dynamic>> requestPhoneOtp({
+    required String phoneHash,
+  }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> lookupInvite({
+    required String inviteCode,
+  }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> autoIssueGlobalInvite() async => {};
 
   @override
   Future<Map<String, dynamic>> getChallenge({
@@ -220,9 +238,6 @@ class _FakeRestClient implements HelixRemoteRestClient {
       {};
 
   @override
-  Future<Map<String, dynamic>> changeUsername(String username) async => {};
-
-  @override
   Future<Map<String, dynamic>> sendCallSignal({
     String? targetAccountId,
     String? targetDeviceId,
@@ -330,7 +345,6 @@ void main() {
     await service.setupAccount(
       account: RemoteAccount(
         accountId: 'alice',
-        username: 'alice',
         identityPublicKey: 'alice_identity_key',
         createdAt: clock(),
       ),

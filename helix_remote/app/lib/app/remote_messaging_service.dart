@@ -187,8 +187,6 @@ abstract class RemoteMessagingServiceBase {
 
   String? get _accountId;
   set _accountId(String? value);
-  String? get _username;
-  set _username(String? value);
   String? get _displayName;
   set _displayName(String? value);
   String? get _deviceId;
@@ -272,8 +270,6 @@ class RemoteMessagingService extends RemoteMessagingServiceBase
 
   @override
   String? _accountId;
-  @override
-  String? _username;
   @override
   String? _displayName;
   @override

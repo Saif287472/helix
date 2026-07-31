@@ -13,6 +13,7 @@ import 'package:helix_remote/app/remote_error_copy.dart';
 import 'package:helix_remote/app/remote_ice_config_provider.dart';
 import 'package:helix_remote/app/remote_message_protector.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/app/phone_hashing.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/app/remote_runtime_coordinator.dart';
 import 'package:helix_remote/app/remote_sync_gateway.dart';
@@ -101,7 +102,7 @@ const _resetKeys = [
   'refresh_token',
   'token_rotation.pending',
   'account_id',
-  'username',
+  'phone_number',
   'identity_public_key',
   'identity_private_key',
   'device_id',
@@ -191,7 +192,7 @@ void _dispatchInboundCallSignal(
 
 String _registrationTranscript({
   required String accountId,
-  required String username,
+  required String phoneHash,
   required String accountIdentityPublicKey,
   required String deviceId,
   required String deviceSigningPublicKey,
@@ -199,9 +200,9 @@ String _registrationTranscript({
   required String deviceName,
 }) {
   return [
-    'helix.remote.registration.v2',
+    'helix.remote.registration.v3',
     accountId,
-    username,
+    phoneHash,
     accountIdentityPublicKey,
     deviceId,
     deviceSigningPublicKey,
@@ -405,8 +406,7 @@ class RemoteCompositionRoot extends RemoteCompositionRootBase
   @override
   StreamSubscription<RemoteSyncChange>? _outboxChangeSub;
   @override
-  final _callStatusController =
-      StreamController<RemoteCallStatus?>.broadcast();
+  final _callStatusController = StreamController<RemoteCallStatus?>.broadcast();
   @override
   Future<bool>? _tokenRefreshInFlight;
   @override

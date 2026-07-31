@@ -2,15 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 class CliRestClient {
-  CliRestClient({
-    required this.baseUrl,
-    this.accessToken,
-  });
+  CliRestClient({required this.baseUrl, this.accessToken});
 
   final String baseUrl;
   String? accessToken;
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     final client = HttpClient();
     try {
       final request = await client.postUrl(Uri.parse('$baseUrl$path'));
@@ -24,13 +24,18 @@ class CliRestClient {
       if (response.statusCode >= 400) {
         throw HttpException('HTTP ${response.statusCode}: $responseBody');
       }
-      return responseBody.isNotEmpty ? (jsonDecode(responseBody) as Map<String, dynamic>) : {};
+      return responseBody.isNotEmpty
+          ? (jsonDecode(responseBody) as Map<String, dynamic>)
+          : {};
     } finally {
       client.close();
     }
   }
 
-  Future<Map<String, dynamic>> _get(String path, Map<String, String> query) async {
+  Future<Map<String, dynamic>> _get(
+    String path,
+    Map<String, String> query,
+  ) async {
     final client = HttpClient();
     try {
       final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
@@ -43,15 +48,37 @@ class CliRestClient {
       if (response.statusCode >= 400) {
         throw HttpException('HTTP ${response.statusCode}: $responseBody');
       }
-      return responseBody.isNotEmpty ? (jsonDecode(responseBody) as Map<String, dynamic>) : {};
+      return responseBody.isNotEmpty
+          ? (jsonDecode(responseBody) as Map<String, dynamic>)
+          : {};
     } finally {
       client.close();
     }
   }
 
+  Future<Map<String, dynamic>> fetchDiscoverySalt() async {
+    return _get('/api/v1/contacts/discovery-salt', {});
+  }
+
+  Future<Map<String, dynamic>> requestPhoneOtp({
+    required String phoneHash,
+  }) async {
+    return _post('/api/v1/accounts/phone/otp/request', {
+      'phone_hash': phoneHash,
+    });
+  }
+
+  Future<Map<String, dynamic>> lookupInvite({
+    required String inviteCode,
+  }) async {
+    return _get('/api/v1/accounts/invite/lookup', {'invite_code': inviteCode});
+  }
+
   Future<Map<String, dynamic>> registerAccount({
     required String accountId,
-    required String username,
+    required String phoneHash,
+    required String otpCode,
+    required String inviteCode,
     required String displayName,
     required String accountIdentityPublicKey,
     required String deviceId,
@@ -63,7 +90,9 @@ class CliRestClient {
   }) async {
     return _post('/api/v1/accounts/register', {
       'account_id': accountId,
-      'username': username,
+      'phone_hash': phoneHash,
+      'otp_code': otpCode,
+      'invite_code': inviteCode,
       'display_name': displayName,
       'account_identity_public_key': accountIdentityPublicKey,
       'device_id': deviceId,
@@ -72,7 +101,7 @@ class CliRestClient {
       'account_registration_signature': accountRegistrationSignature,
       'device_registration_signature': deviceRegistrationSignature,
       'device_name': deviceName,
-      'registration_version': 2,
+      'registration_version': 3,
     });
   }
 
@@ -114,10 +143,10 @@ class CliRestClient {
     });
   }
 
-  Future<Map<String, dynamic>> getPreKeyBundle({required String accountId}) async {
-    return _get('/api/v1/prekeys/bundle', {
-      'account_id': accountId,
-    });
+  Future<Map<String, dynamic>> getPreKeyBundle({
+    required String accountId,
+  }) async {
+    return _get('/api/v1/prekeys/bundle', {'account_id': accountId});
   }
 
   Future<Map<String, dynamic>> createConversation({

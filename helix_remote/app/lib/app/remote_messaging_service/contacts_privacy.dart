@@ -237,18 +237,6 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
     );
   }
 
-  void changeUsername(String username) {
-    final normalized = RemoteAccountValidation.normalizeUsername(username);
-    final error = RemoteAccountValidation.usernameError(normalized);
-    if (error != null) throw StateError(error);
-    db.enqueueOperation(
-      'username_${_clock().microsecondsSinceEpoch}',
-      'USERNAME_CHANGE',
-      jsonEncode({'username': normalized}),
-      idempotencyKey: 'username:${_requireAccountId()}:$normalized',
-    );
-  }
-
   List<RemoteContact> searchLocalContacts(String query) {
     final normalized = query.toLowerCase();
     return db

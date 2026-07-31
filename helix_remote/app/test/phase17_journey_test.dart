@@ -84,7 +84,6 @@ Future<_Harness> _buildHarness() async {
   await messaging.setupAccount(
     account: RemoteAccount(
       accountId: 'alice',
-      username: 'alice',
       identityPublicKey: 'ipk',
       createdAt: DateTime.now(),
     ),

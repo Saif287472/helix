@@ -53,7 +53,7 @@ Future<void> _seedSession(_InMemoryKeyValueStore store) async {
   await store.write('access_token', 'expired-access');
   await store.write('refresh_token', 'refresh-1');
   await store.write('account_id', 'acc-p04');
-  await store.write('username', 'phase4');
+  await store.write('phone_number', '+15550000004');
   await store.write('identity_public_key', 'identity-pk');
   await store.write('device_id', 'dev_00aabbcc');
   await store.write('device_signing_public_key', 'signing-pk');
@@ -203,7 +203,7 @@ void main() {
           }),
         );
         await store.write('account_id', 'acc-p04');
-        await store.write('username', 'phase4');
+        await store.write('phone_number', '+15550000004');
         await store.write('identity_public_key', 'identity-pk');
         await store.write('device_id', 'dev_00aabbcc');
         await store.write('device_signing_public_key', 'signing-pk');

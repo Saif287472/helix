@@ -242,7 +242,9 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   @override
   Future<Map<String, dynamic>> registerAccount({
     required String accountId,
-    required String username,
+    required String phoneHash,
+    required String otpCode,
+    required String inviteCode,
     required String displayName,
     required String accountIdentityPublicKey,
     required String deviceId,
@@ -255,9 +257,11 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     'POST',
     'accounts/register',
     body: {
-      'registration_version': 2,
+      'registration_version': 3,
       'account_id': accountId,
-      'username': username,
+      'phone_hash': phoneHash,
+      'otp_code': otpCode,
+      'invite_code': inviteCode,
       'display_name': displayName,
       'account_identity_public_key': accountIdentityPublicKey,
       'device_id': deviceId,
@@ -269,6 +273,30 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     },
     idempotencyKey: 'register:$accountId:$deviceId',
   );
+
+  @override
+  Future<Map<String, dynamic>> fetchDiscoverySalt() =>
+      _request('GET', 'contacts/discovery-salt');
+
+  @override
+  Future<Map<String, dynamic>> requestPhoneOtp({required String phoneHash}) =>
+      _request(
+        'POST',
+        'accounts/phone/otp/request',
+        body: {'phone_hash': phoneHash},
+      );
+
+  @override
+  Future<Map<String, dynamic>> lookupInvite({required String inviteCode}) =>
+      _request(
+        'GET',
+        'accounts/invite/lookup',
+        queryParameters: {'invite_code': inviteCode},
+      );
+
+  @override
+  Future<Map<String, dynamic>> autoIssueGlobalInvite() =>
+      _request('POST', 'accounts/invite/auto-issue');
 
   @override
   Future<Map<String, dynamic>> getChallenge({
@@ -589,18 +617,6 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       'POST',
       'accounts/profile',
       body: {'display_name': normalized},
-    );
-  }
-
-  @override
-  Future<Map<String, dynamic>> changeUsername(String username) {
-    final normalized = RemoteAccountValidation.normalizeUsername(username);
-    final error = RemoteAccountValidation.usernameError(normalized);
-    if (error != null) throw ArgumentError.value(username, 'username', error);
-    return _request(
-      'POST',
-      'accounts/username',
-      body: {'username': normalized},
     );
   }
 

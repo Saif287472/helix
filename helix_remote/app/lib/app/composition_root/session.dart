@@ -160,7 +160,7 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
     }
     final accountId = await store.read('account_id');
     if (accountId == null || accountId.isEmpty) return false;
-    final username = await store.read('username');
+    final phoneNumber = await store.read('phone_number');
     final pubKey = await store.read('identity_public_key');
     final deviceIdStr = await store.read('device_id');
     final deviceSigningPubKey =
@@ -172,13 +172,13 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
     final deviceAgreementPrivStr =
         await store.read('device_agreement_private_key') ??
         await store.read('device_private_key');
-    final hasUser = username != null;
+    final hasPhone = phoneNumber != null;
     final hasKey = pubKey != null;
     final hasDeviceId = deviceIdStr != null;
     final hasDeviceKey =
         deviceSigningPubKey != null && deviceAgreementPubKey != null;
     final hasDevicePriv = deviceAgreementPrivStr != null;
-    final hasSession = hasUser && hasKey && hasDeviceId && hasDeviceKey;
+    final hasSession = hasPhone && hasKey && hasDeviceId && hasDeviceKey;
     final refreshed = await refreshAccessToken();
     if (!refreshed) {
       if (_lastRefreshFailureKind == _RefreshFailureKind.transient) {
@@ -202,7 +202,6 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
       ms.setupAccount(
         account: RemoteAccount(
           accountId: accountId,
-          username: username,
           identityPublicKey: pubKey,
           createdAt: DateTime.now(),
         ),

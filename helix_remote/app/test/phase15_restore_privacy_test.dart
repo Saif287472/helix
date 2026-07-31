@@ -132,7 +132,6 @@ Future<RemoteMessagingService> _makeMessaging(HelixRemoteDatabase db) async {
   await svc.setupAccount(
     account: RemoteAccount(
       accountId: 'alice',
-      username: 'alice',
       identityPublicKey: 'ipk',
       createdAt: DateTime.now(),
     ),

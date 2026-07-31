@@ -65,7 +65,10 @@ void main() {
       final firstServer = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => firstServer.close(force: true));
       firstServer.listen((request) async {
-        if (request.method == 'POST' &&
+        if (request.method == 'GET' &&
+            request.uri.path == '/api/v1/contacts/discovery-salt') {
+          _writeJson(request, {'salt': base64.encode(List.filled(32, 1))});
+        } else if (request.method == 'POST' &&
             request.uri.path == '/api/v1/accounts/register') {
           firstRegistration =
               jsonDecode(await utf8.decodeStream(request))
@@ -97,7 +100,12 @@ void main() {
 
       Object? firstError;
       try {
-        await root1.registerAndLogin('retry_user', 'Retry User');
+        await root1.registerAndLogin(
+          phoneNumber: '+15551234567',
+          displayName: 'Retry User',
+          otpCode: '000000',
+          inviteCode: 'test_invite',
+        );
       } catch (e) {
         firstError = e;
       }
@@ -113,7 +121,10 @@ void main() {
       final secondServer = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => secondServer.close(force: true));
       secondServer.listen((request) async {
-        if (request.method == 'POST' &&
+        if (request.method == 'GET' &&
+            request.uri.path == '/api/v1/contacts/discovery-salt') {
+          _writeJson(request, {'salt': base64.encode(List.filled(32, 1))});
+        } else if (request.method == 'POST' &&
             request.uri.path == '/api/v1/accounts/register') {
           secondRegistration =
               jsonDecode(await utf8.decodeStream(request))
@@ -147,7 +158,12 @@ void main() {
       await root2.initialize();
       Object? secondError;
       try {
-        await root2.registerAndLogin('retry_user', 'Retry User');
+        await root2.registerAndLogin(
+          phoneNumber: '+15551234567',
+          displayName: 'Retry User',
+          otpCode: '000000',
+          inviteCode: 'test_invite',
+        );
       } catch (e) {
         secondError = e;
       }

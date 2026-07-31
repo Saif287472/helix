@@ -260,11 +260,6 @@ class RemoteOutboundOperation {
       path: 'contacts/unblock',
     ),
     RemoteOutboundOperation._(
-      type: 'USERNAME_CHANGE',
-      method: 'POST',
-      path: 'accounts/username',
-    ),
-    RemoteOutboundOperation._(
       type: 'PRIVACY_UPDATE',
       method: 'POST',
       path: 'contacts/privacy',

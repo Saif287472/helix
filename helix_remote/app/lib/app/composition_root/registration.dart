@@ -1,20 +1,78 @@
 part of '../composition_root.dart';
 
+const _discoverySaltKey = 'contacts.discovery_salt';
+
 mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
-  Future<void> registerAndLogin(String username, String displayName) async {
+  /// Fetches and caches the per-deployment discovery salt used to hash
+  /// phone numbers (see `phone_hashing.dart`). Cached hard once fetched -
+  /// this must never be re-fetched/rotated client-side, since that would
+  /// silently change every phone hash this device computes.
+  Future<String> _getOrFetchDiscoverySalt({
+    required KeyValueStore store,
+    required HelixRemoteRestClient rest,
+  }) async {
+    final cached = await store.read(_discoverySaltKey);
+    if (cached != null && cached.isNotEmpty) return cached;
+    final response = await rest.fetchDiscoverySalt();
+    final salt = response['salt'] as String;
+    await store.write(_discoverySaltKey, salt);
+    return salt;
+  }
+
+  /// Requests a one-time verification code for [phoneNumber] and fires a
+  /// local notification displaying it. There is no real SMS/push delivery
+  /// yet (an explicit, documented placeholder - see the phone OTP backend
+  /// module), so the code is simply returned in the HTTP response and the
+  /// client immediately shows it, rather than actually arriving out of band.
+  Future<void> requestOtp(String phoneNumber) async {
+    final rest = _requireReady(_restClient, 'restClient');
+    final store = _requireReady(_keyValue, 'keyValue');
+    final normalizedPhone = RemoteAccountValidation.normalizePhoneNumber(
+      phoneNumber,
+    );
+    final salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
+    final hash = phoneHash(salt, normalizedPhone);
+    final response = await rest.requestPhoneOtp(phoneHash: hash);
+    final code = response['code'] as String;
+    await LocalNotificationService.showVerificationCode(code: code);
+  }
+
+  /// Validates an invite code without consuming it, so the UI can fail fast
+  /// on a bad/expired code before starting the phone+OTP signup flow.
+  Future<Map<String, dynamic>> lookupInvite(String inviteCode) async {
+    final rest = _requireReady(_restClient, 'restClient');
+    return rest.lookupInvite(inviteCode: inviteCode);
+  }
+
+  /// Self-issues a free invite for Helix Global's signup path and fires a
+  /// local notification with the code, tappable to auto-fill.
+  Future<String> requestGlobalAutoInvite() async {
+    final rest = _requireReady(_restClient, 'restClient');
+    final response = await rest.autoIssueGlobalInvite();
+    final code = response['invite_code'] as String;
+    await LocalNotificationService.showInviteCode(code: code);
+    return code;
+  }
+
+  Future<void> registerAndLogin({
+    required String phoneNumber,
+    required String displayName,
+    required String otpCode,
+    required String inviteCode,
+  }) async {
     if (_state != RemoteStartupState.unauthenticated) {
       throw StateError('Cannot register in state $_state');
     }
-    final normalizedUsername = RemoteAccountValidation.normalizeUsername(
-      username,
+    final normalizedPhone = RemoteAccountValidation.normalizePhoneNumber(
+      phoneNumber,
     );
     final normalizedDisplayName = RemoteAccountValidation.normalizeDisplayName(
       displayName,
     );
-    final usernameError = RemoteAccountValidation.usernameError(
-      normalizedUsername,
+    final phoneError = RemoteAccountValidation.phoneNumberError(
+      normalizedPhone,
     );
-    if (usernameError != null) throw StateError(usernameError);
+    if (phoneError != null) throw StateError(phoneError);
     final displayNameError = RemoteAccountValidation.displayNameError(
       normalizedDisplayName,
     );
@@ -24,9 +82,13 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     final store = _requireReady(_keyValue, 'keyValue');
     final ms = _requireReady(_messagingService, 'messagingService');
 
+    final salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
+    final normalizedPhoneHash = phoneHash(salt, normalizedPhone);
+
     final pendingRegistration = await _loadOrCreatePendingRegistration(
       store: store,
-      username: normalizedUsername,
+      phoneNumber: normalizedPhone,
+      phoneHash: normalizedPhoneHash,
       displayName: normalizedDisplayName,
     );
     final deviceSigningEd25519 = crypto_pkg.Ed25519();
@@ -49,7 +111,9 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
 
     await rest.registerAccount(
       accountId: accountIdStr,
-      username: normalizedUsername,
+      phoneHash: normalizedPhoneHash,
+      otpCode: otpCode,
+      inviteCode: inviteCode,
       displayName: normalizedDisplayName,
       accountIdentityPublicKey: pubKeyStr,
       deviceId: deviceIdStr,
@@ -86,7 +150,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     await store.write('access_token', accessToken);
     await store.write('refresh_token', refreshToken);
     await store.write('account_id', accountIdStr);
-    await store.write('username', normalizedUsername);
+    await store.write('phone_number', normalizedPhone);
     await store.write('identity_public_key', pubKeyStr);
     await store.write('identity_private_key', identityPrivStr);
     await store.write('device_id', deviceIdStr);
@@ -110,7 +174,6 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     ms.setupAccount(
       account: RemoteAccount(
         accountId: accountIdStr,
-        username: normalizedUsername,
         identityPublicKey: pubKeyStr,
         createdAt: DateTime.now(),
       ),
@@ -131,12 +194,13 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
 
   Future<_PendingRegistration> _loadOrCreatePendingRegistration({
     required KeyValueStore store,
-    required String username,
+    required String phoneNumber,
+    required String phoneHash,
     required String displayName,
   }) async {
     final existing = await _readPendingRegistration(store);
     if (existing != null &&
-        existing.username == username &&
+        existing.phoneHash == phoneHash &&
         existing.displayName == displayName) {
       return existing;
     }
@@ -144,7 +208,8 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
       await _clearPendingRegistration(store);
     }
     final created = await _PendingRegistration.create(
-      username: username,
+      phoneNumber: phoneNumber,
+      phoneHash: phoneHash,
       displayName: displayName,
     );
     await store.write(_pendingRegistrationKey, jsonEncode(created.toJson()));

@@ -50,10 +50,10 @@ class RemoteUserErrorCopy {
         switch (error.statusCode) {
           case 400:
             return 'Account details were not accepted by this server. '
-                'Check the username and try again.';
+                'Check the phone number and try again.';
           case 409:
-            return 'That username or device is already registered. Choose '
-                'another username or sign in with an existing device.';
+            return 'That phone number or device is already registered. Use '
+                'a different number, or sign in with an existing device.';
           case 429:
             return 'Too many registration attempts. Wait a moment, then try '
                 'again.';

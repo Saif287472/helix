@@ -12,6 +12,7 @@ dependencies:
   meta: ^1.18.0
   path: ^1.8.3
   sqlite3: ^3.3.3
+  crypto: ^3.0.7
   helix_remote_domain:
     path: ../helix_remote_domain
   helix_remote_api:

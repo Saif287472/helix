@@ -3,27 +3,27 @@ import 'package:helix_remote/app/remote_account_validation.dart';
 
 void main() {
   group('RemoteAccountValidation', () {
-    test('normalizes and validates usernames consistently', () {
+    test('normalizes and validates phone numbers consistently', () {
       expect(
-        RemoteAccountValidation.normalizeUsername(' Alice_01 '),
-        'alice_01',
+        RemoteAccountValidation.normalizePhoneNumber(' +1 (555) 123-4567 '),
+        '+15551234567',
       );
-      expect(RemoteAccountValidation.usernameError('alice_01'), isNull);
+      expect(RemoteAccountValidation.phoneNumberError('+15551234567'), isNull);
       expect(
-        RemoteAccountValidation.usernameError('ab'),
-        contains('at least 3'),
-      );
-      expect(
-        RemoteAccountValidation.usernameError('helix_admin'),
-        contains('reserved'),
+        RemoteAccountValidation.phoneNumberError(''),
+        contains('cannot be empty'),
       );
       expect(
-        RemoteAccountValidation.usernameError('bad-name'),
-        contains('underscores only'),
+        RemoteAccountValidation.phoneNumberError('12345'),
+        contains('valid phone number'),
       );
       expect(
-        RemoteAccountValidation.usernameError(List.filled(31, 'a').join()),
-        contains('30 characters or less'),
+        RemoteAccountValidation.phoneNumberError('+0123'),
+        contains('valid phone number'),
+      );
+      expect(
+        RemoteAccountValidation.isValidPhoneNumber('+15551234567'),
+        isTrue,
       );
     });
 

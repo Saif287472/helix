@@ -36,7 +36,7 @@ void main() {
   test('CLI Bootstrapping and Local Identity Creation', () async {
     await client.bootstrap(
       accountId: 'alice_acc_1',
-      username: 'alice',
+      phoneHash: 'alice_phone_hash',
       deviceId: 'device_cli_alice',
       deviceName: 'Alice CLI Client',
     );
@@ -62,8 +62,7 @@ void main() {
     // Verify record persistence in SQLite Database
     final localAccount = client.db.getAccount('alice_acc_1');
     expect(localAccount, isNotNull);
-    expect(localAccount!.username, equals('alice'));
-    expect(localAccount.identityPublicKey, equals(pubIdentity));
+    expect(localAccount!.identityPublicKey, equals(pubIdentity));
 
     final localDevices = client.db.getDevices('alice_acc_1');
     expect(localDevices, isNotEmpty);
@@ -78,7 +77,7 @@ void main() {
 
     final contacts = client.listContacts();
     expect(contacts.length, equals(2));
-    
+
     final bob = contacts.firstWhere((c) => c.peerAccountId == 'bob_acc_1');
     expect(bob.nickname, equals('Bob'));
     expect(bob.status, equals('active'));
@@ -109,7 +108,12 @@ void main() {
     expect(d1, p1);
 
     // Save Bob's session to the CLI database
-    await client.saveSession('session_bob_1', 'conv_1', bob, peerAccountId: 'alice_acc_1');
+    await client.saveSession(
+      'session_bob_1',
+      'conv_1',
+      bob,
+      peerAccountId: 'alice_acc_1',
+    );
 
     // Reconstruct Bob's session from the CLI database
     final bobRestored = await client.loadSession('session_bob_1');

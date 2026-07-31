@@ -2,7 +2,10 @@ import 'dart:io';
 import 'package:helix_remote_cli/helix_remote_cli.dart';
 
 void main(List<String> args) async {
-  if (args.isEmpty || args[0] == 'help' || args[0] == '--help' || args[0] == '-h') {
+  if (args.isEmpty ||
+      args[0] == 'help' ||
+      args[0] == '--help' ||
+      args[0] == '-h') {
     _printHelp();
     return;
   }
@@ -17,16 +20,16 @@ void main(List<String> args) async {
     switch (command) {
       case 'bootstrap':
         if (args.length < 3) {
-          print('Usage: bootstrap <accountId> <username> [deviceId]');
+          print('Usage: bootstrap <accountId> <phoneHash> [deviceId]');
           exit(1);
         }
         final accountId = args[1];
-        final username = args[2];
+        final phoneHash = args[2];
         final deviceId = args.length > 3 ? args[3] : 'cli_device';
-        print('Bootstrapping client identity for Account: $accountId ($username)...');
+        print('Bootstrapping client identity for Account: $accountId...');
         await client.bootstrap(
           accountId: accountId,
-          username: username,
+          phoneHash: phoneHash,
           deviceId: deviceId,
           deviceName: 'CLI Terminal Client',
         );
@@ -71,11 +74,11 @@ void main(List<String> args) async {
           print('Status: Client not bootstrapped.');
         } else {
           final accountId = await client.storage.readKey('account_id');
-          final username = await client.storage.readKey('username');
+          final phoneHash = await client.storage.readKey('phone_hash');
           final deviceId = await client.storage.readKey('device_id');
           print('Helix CLI Client Status:');
           print('  Account ID: $accountId');
-          print('  Username:   $username');
+          print('  Phone hash: $phoneHash');
           print('  Device ID:  $deviceId');
           print('  Identity Public Key: $identityPub');
           print('  Database Path:       ${dbFile.absolute.path}');
@@ -98,9 +101,19 @@ void _printHelp() {
   print('Usage: main.dart <command> [arguments]');
   print('');
   print('Available commands:');
-  print('  bootstrap <accountId> <username> [deviceId]   Bootstrap local client identity & generate keypairs');
-  print('  contacts add <peerAccountId> <nickname>       Add a new contact to registry');
-  print('  contacts list                                 List all contacts in registry');
-  print('  status                                        Display current bootstrap & account details');
-  print('  help                                          Show this help manual');
+  print(
+    '  bootstrap <accountId> <phoneHash> [deviceId]  Bootstrap local client identity & generate keypairs',
+  );
+  print(
+    '  contacts add <peerAccountId> <nickname>       Add a new contact to registry',
+  );
+  print(
+    '  contacts list                                 List all contacts in registry',
+  );
+  print(
+    '  status                                        Display current bootstrap & account details',
+  );
+  print(
+    '  help                                          Show this help manual',
+  );
 }

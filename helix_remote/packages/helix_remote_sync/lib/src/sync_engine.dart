@@ -41,7 +41,12 @@ abstract class SyncGateway {
 }
 
 class RemoteSyncEngine {
-  RemoteSyncEngine(this.db, {this.diagnostics, this.onCallSignal, this.onTrace});
+  RemoteSyncEngine(
+    this.db, {
+    this.diagnostics,
+    this.onCallSignal,
+    this.onTrace,
+  });
 
   final HelixRemoteDatabase db;
   final void Function(String message)? diagnostics;
@@ -398,8 +403,9 @@ class RemoteSyncEngine {
     try {
       final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
 
-      final traceMsgId =
-          type == 'SEND_MESSAGE' ? payload['message_id'] as String? : null;
+      final traceMsgId = type == 'SEND_MESSAGE'
+          ? payload['message_id'] as String?
+          : null;
       if (traceMsgId != null) onTrace?.call(traceMsgId, 'send_attempt');
 
       await gateway.sendOutboundOperation(
@@ -426,11 +432,15 @@ class RemoteSyncEngine {
           ),
         );
       } else {
-        _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.outbox}));
+        _emitChange(
+          const RemoteSyncChange(areas: {RemoteSyncChangeArea.outbox}),
+        );
       }
 
       final ageMs = DateTime.now().millisecondsSinceEpoch - createdAt;
-      diagnostics?.call('Remote outbound op completed type=$type age=${ageMs}ms');
+      diagnostics?.call(
+        'Remote outbound op completed type=$type age=${ageMs}ms',
+      );
       return true;
     } catch (e) {
       final nextRetries = retries + 1;
@@ -535,7 +545,7 @@ abstract class _InboundSyncEvent {
       case 'contact_removed':
         return const _ContactRemovedEvent();
       case 'profile_updated':
-        return const _ProfileUpdatedEvent();
+        return const _SyncMarkerEvent();
       case 'privacy_updated':
       case 'presence_updated':
       case 'safety_notice':
@@ -787,27 +797,6 @@ class _ContactRemovedEvent extends _InboundSyncEvent {
         env.payload['updated_at'] as int? ?? env.timestamp,
       );
     }
-    return true;
-  }
-}
-
-class _ProfileUpdatedEvent extends _InboundSyncEvent {
-  const _ProfileUpdatedEvent();
-
-  @override
-  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
-    final accountId = _InboundSyncEvent.requireString(env, 'account_id');
-    final existing = db.getAccount(accountId);
-    if (existing == null) return false;
-    db.upsertAccount(
-      RemoteAccount(
-        accountId: existing.accountId,
-        username: env.payload['username'] as String? ?? existing.username,
-        identityPublicKey: existing.identityPublicKey,
-        createdAt: existing.createdAt,
-        status: existing.status,
-      ),
-    );
     return true;
   }
 }

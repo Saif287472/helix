@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_backend/helix_remote_backend.dart';
+import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 
@@ -31,7 +32,7 @@ class _RegistrationMaterial {
 
 Future<_RegistrationMaterial> _registrationMaterial({
   required String accountId,
-  required String username,
+  required String phoneHash,
   required String deviceId,
   required String deviceName,
 }) async {
@@ -49,9 +50,9 @@ Future<_RegistrationMaterial> _registrationMaterial({
   );
   final deviceAgreementPublicKey = _base64UrlEncode(agreementPublicKey.bytes);
   final transcript = [
-    'helix.remote.registration.v2',
+    'helix.remote.registration.v3',
     accountId,
-    username,
+    phoneHash,
     accountIdentityPublicKey,
     deviceId,
     deviceSigningPublicKeyStr,
@@ -77,23 +78,47 @@ Future<_RegistrationMaterial> _registrationMaterial({
   );
 }
 
+/// Seeds a redeemable invite credential directly in the database, bypassing
+/// the admin-token HTTP flow (these tests only care that a valid invite
+/// exists for the registration under test).
+String _seedInvite(BackendDatabase db) {
+  final code = generateInviteCode();
+  final now = DateTime.now().millisecondsSinceEpoch;
+  db.createInviteCredential(
+    inviteId: generateInviteId(),
+    inviteCodeHash: hashInviteCode(code),
+    serverAddress: 'https://test.local',
+    issuerType: 'ADMIN',
+    issuerLabel: 'contract-test-harness',
+    createdAt: now,
+    expiresAt: now + const Duration(days: 7).inMilliseconds,
+  );
+  return code;
+}
+
 Future<_RegistrationMaterial> _register(
-  HelixRemoteRestClient client, {
+  HelixRemoteRestClient client,
+  BackendDatabase db, {
   required String accountId,
-  required String username,
+  required String phoneHash,
   required String deviceId,
   required String deviceName,
 }) async {
   final material = await _registrationMaterial(
     accountId: accountId,
-    username: username,
+    phoneHash: phoneHash,
     deviceId: deviceId,
     deviceName: deviceName,
   );
+  final otpResult = await client.requestPhoneOtp(phoneHash: phoneHash);
+  final otpCode = otpResult['code'] as String;
+  final inviteCode = _seedInvite(db);
   await client.registerAccount(
     accountId: accountId,
-    username: username,
-    displayName: username,
+    phoneHash: phoneHash,
+    otpCode: otpCode,
+    inviteCode: inviteCode,
+    displayName: phoneHash,
     accountIdentityPublicKey: material.accountIdentityPublicKey,
     deviceId: deviceId,
     deviceSigningPublicKey: material.deviceSigningPublicKey,
@@ -144,13 +169,18 @@ void main() {
       () async {
         final material = await _registrationMaterial(
           accountId: 'test_account',
-          username: 'test_user',
+          phoneHash: 'test_user_phone_hash',
           deviceId: 'test_device_1',
           deviceName: 'Test Phone',
         );
+        final otpResult = await client.requestPhoneOtp(
+          phoneHash: 'test_user_phone_hash',
+        );
         final regResult = await client.registerAccount(
           accountId: 'test_account',
-          username: 'test_user',
+          phoneHash: 'test_user_phone_hash',
+          otpCode: otpResult['code'] as String,
+          inviteCode: _seedInvite(server.db),
           displayName: 'Test User',
           accountIdentityPublicKey: material.accountIdentityPublicKey,
           deviceId: 'test_device_1',
@@ -202,8 +232,9 @@ void main() {
       () async {
         await _register(
           client,
+          server.db,
           accountId: 'dup_account',
-          username: 'dup_user',
+          phoneHash: 'dup_user_phone_hash',
           deviceId: 'dup_device_1',
           deviceName: 'Dup Phone',
         );
@@ -211,8 +242,9 @@ void main() {
         expect(
           () => _register(
             client,
+            server.db,
             accountId: 'dup_account',
-            username: 'dup_user_alt',
+            phoneHash: 'dup_user_alt_phone_hash',
             deviceId: 'dup_device_2',
             deviceName: 'Dup Phone 2',
           ),
@@ -227,8 +259,9 @@ void main() {
       () async {
         await _register(
           client,
+          server.db,
           accountId: 'bad_sig_account',
-          username: 'bad_sig_user',
+          phoneHash: 'bad_sig_user_phone_hash',
           deviceId: 'bad_sig_device',
           deviceName: 'Bad Sig Phone',
         );
@@ -265,8 +298,9 @@ void main() {
       () async {
         final material = await _register(
           client,
+          server.db,
           accountId: 'prekey_account',
-          username: 'prekey_user',
+          phoneHash: 'prekey_user_phone_hash',
           deviceId: 'prekey_device',
           deviceName: 'Prekey Phone',
         );
@@ -299,8 +333,9 @@ void main() {
 
         await _register(
           client,
+          server.db,
           accountId: 'other_account',
-          username: 'other_user',
+          phoneHash: 'other_user_phone_hash',
           deviceId: 'other_device',
           deviceName: 'Other Phone',
         );

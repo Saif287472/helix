@@ -528,7 +528,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.person_outline,
             color: const Color(0xFF3B82F6),
             title: 'Account',
-            subtitle: 'Profile name, username and account ID',
+            subtitle: 'Profile name and account ID',
             onTap: _openProfile,
           ),
           _SettingsItem(
@@ -814,14 +814,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final cs = theme.colorScheme;
 
     final serverUri = widget.root.devConfig.restBaseUri;
-    final username = widget.messagingService.currentUsername ?? '';
     final rawDisplayName = widget.messagingService.currentDisplayName ?? '';
     final accountId = widget.messagingService.currentAccountId ?? '';
-    final hasCustomName =
-        rawDisplayName.isNotEmpty && rawDisplayName != username;
-    final displayName = hasCustomName
-        ? rawDisplayName
-        : (username.isNotEmpty ? username : 'Account');
+    final displayName = rawDisplayName.isNotEmpty ? rawDisplayName : 'Account';
     final groups = _filteredGroups(serverUri);
     final destructiveItems = [
       _SettingsItem(
@@ -861,7 +856,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 10),
             _ProfileCard(
               displayName: displayName,
-              username: username,
               accountId: accountId,
               serverUri: serverUri,
               onTap: _openProfile,
@@ -971,7 +965,6 @@ class _SettingsSearchField extends StatelessWidget {
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.displayName,
-    required this.username,
     required this.accountId,
     required this.serverUri,
     required this.onTap,
@@ -980,7 +973,6 @@ class _ProfileCard extends StatelessWidget {
   });
 
   final String displayName;
-  final String username;
   final String accountId;
   final Uri serverUri;
   final VoidCallback onTap;
@@ -991,9 +983,9 @@ class _ProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final accountLabel = username.isNotEmpty
-        ? '@$username'
-        : (accountId.isNotEmpty ? _shortId(accountId) : 'Helix account');
+    final accountLabel = accountId.isNotEmpty
+        ? _shortId(accountId)
+        : 'Helix account';
     final serverLabel = serverUri.host.isNotEmpty
         ? serverUri.host
         : serverUri.toString();

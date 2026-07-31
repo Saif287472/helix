@@ -82,7 +82,9 @@ void main() {
 
     final response = await client.registerAccount(
       accountId: 'account',
-      username: 'alice',
+      phoneHash: 'alice_phone_hash',
+      otpCode: '000000',
+      inviteCode: 'test_invite',
       displayName: 'Alice',
       accountIdentityPublicKey: 'account_pk',
       deviceId: 'device',

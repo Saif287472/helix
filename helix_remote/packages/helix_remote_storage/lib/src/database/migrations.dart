@@ -8,7 +8,6 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
     _db.execute('''
       CREATE TABLE IF NOT EXISTS accounts (
         account_id TEXT PRIMARY KEY,
-        username TEXT NOT NULL,
         identity_public_key TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         status TEXT NOT NULL
@@ -518,6 +517,19 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       _dedupeReceiptOutboxOperations();
       _db.execute('PRAGMA user_version = 24;');
     }
+    if (version < 25) {
+      // Accounts are now identified by a hashed phone number, not a
+      // user-chosen username; the local mirror of the account row never
+      // had a UNIQUE constraint on this column, so a plain DROP COLUMN is
+      // safe (unlike the backend's `accounts` table).
+      final hasUsername = _db
+          .select("PRAGMA table_info(accounts);")
+          .any((row) => row['name'] == 'username');
+      if (hasUsername) {
+        _db.execute('ALTER TABLE accounts DROP COLUMN username;');
+      }
+      _db.execute('PRAGMA user_version = 25;');
+    }
   }
 
   void _dedupeReceiptOutboxOperations() {
@@ -562,8 +574,7 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
         continue;
       }
       group.sort(
-        (a, b) =>
-            (a['created_at'] as int).compareTo(b['created_at'] as int),
+        (a, b) => (a['created_at'] as int).compareTo(b['created_at'] as int),
       );
       toDelete.addAll(group.skip(1).map((op) => op['op_id'] as String));
     }

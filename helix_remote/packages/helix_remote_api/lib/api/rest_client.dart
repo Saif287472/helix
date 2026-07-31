@@ -3,7 +3,9 @@ import 'package:helix_remote_domain/models.dart';
 abstract class HelixRemoteRestClient {
   Future<Map<String, dynamic>> registerAccount({
     required String accountId,
-    required String username,
+    required String phoneHash,
+    required String otpCode,
+    required String inviteCode,
     required String displayName,
     required String accountIdentityPublicKey,
     required String deviceId,
@@ -13,6 +15,14 @@ abstract class HelixRemoteRestClient {
     required String deviceRegistrationSignature,
     required String deviceName,
   });
+
+  Future<Map<String, dynamic>> fetchDiscoverySalt();
+
+  Future<Map<String, dynamic>> requestPhoneOtp({required String phoneHash});
+
+  Future<Map<String, dynamic>> lookupInvite({required String inviteCode});
+
+  Future<Map<String, dynamic>> autoIssueGlobalInvite();
 
   Future<Map<String, dynamic>> getChallenge({
     required String accountId,
@@ -113,7 +123,6 @@ abstract class HelixRemoteRestClient {
 
   Future<Map<String, dynamic>> getMyProfile();
   Future<Map<String, dynamic>> updateDisplayName(String displayName);
-  Future<Map<String, dynamic>> changeUsername(String username);
 
   Future<Map<String, dynamic>> sendCallSignal({
     String? targetAccountId,

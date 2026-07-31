@@ -250,7 +250,6 @@ void main() {
       db.upsertAccount(
         RemoteAccount(
           accountId: 'alice',
-          username: 'alice_old',
           identityPublicKey: 'alice_identity',
           createdAt: DateTime.now(),
         ),
@@ -391,7 +390,7 @@ void main() {
           schemaVersion: 1,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           type: 'profile_updated',
-          payload: {'account_id': 'alice', 'username': 'alice_new'},
+          payload: {'account_id': 'alice', 'display_name': 'Alice New'},
         ),
         RemoteRealtimeEnvelope(
           eventId: 'event_privacy_updated',
@@ -458,7 +457,6 @@ void main() {
       );
       expect(db.getContact('carol'), isNull);
       expect(db.getContactRequest('cr_carol')!.status, 'Accepted');
-      expect(db.getAccount('alice')!.username, equals('alice_new'));
 
       final receipts = db.getMessageReceipts('msg_typed_1');
       expect(

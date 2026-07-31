@@ -65,7 +65,9 @@ class _FakeRestClient implements HelixRemoteRestClient {
   @override
   Future<Map<String, dynamic>> registerAccount({
     required String accountId,
-    required String username,
+    required String phoneHash,
+    required String otpCode,
+    required String inviteCode,
     required String displayName,
     required String accountIdentityPublicKey,
     required String deviceId,
@@ -75,6 +77,18 @@ class _FakeRestClient implements HelixRemoteRestClient {
     required String deviceRegistrationSignature,
     required String deviceName,
   }) async => {};
+  @override
+  Future<Map<String, dynamic>> fetchDiscoverySalt() async => {};
+  @override
+  Future<Map<String, dynamic>> requestPhoneOtp({
+    required String phoneHash,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> lookupInvite({
+    required String inviteCode,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> autoIssueGlobalInvite() async => {};
   @override
   Future<Map<String, dynamic>> getChallenge({
     required String accountId,
@@ -195,8 +209,6 @@ class _FakeRestClient implements HelixRemoteRestClient {
   Future<Map<String, dynamic>> updateDisplayName(String displayName) async =>
       {};
   @override
-  Future<Map<String, dynamic>> changeUsername(String username) async => {};
-  @override
   Future<Map<String, dynamic>> sendCallSignal({
     String? targetAccountId,
     String? targetDeviceId,
@@ -292,7 +304,6 @@ void main() {
     await service.setupAccount(
       account: RemoteAccount(
         accountId: 'alice',
-        username: 'alice',
         identityPublicKey: 'alice_identity_key',
         createdAt: clock(),
       ),
@@ -401,58 +412,63 @@ void main() {
     expect(history.single.replyTo!.snippet, 'original body');
   });
 
-  test('F0 content envelope parser accepts versioned and legacy payloads', () async {
-    final encoded = const RemoteTextContent(
-      text: 'wrapped body',
-      replyTo: RemoteReplyReference(
-        messageId: 'msg_parent',
-        senderAccountId: 'bob',
-        snippet: 'parent',
-      ),
-    ).toPlaintext();
+  test(
+    'F0 content envelope parser accepts versioned and legacy payloads',
+    () async {
+      final encoded = const RemoteTextContent(
+        text: 'wrapped body',
+        replyTo: RemoteReplyReference(
+          messageId: 'msg_parent',
+          senderAccountId: 'bob',
+          snippet: 'parent',
+        ),
+      ).toPlaintext();
 
-    final decodedEnvelope = (await RemoteMessageContentEnvelope.tryDecode(encoded))!;
-    expect(decodedEnvelope.contentType, RemoteCapability.contentTextV1);
+      final decodedEnvelope = (await RemoteMessageContentEnvelope.tryDecode(
+        encoded,
+      ))!;
+      expect(decodedEnvelope.contentType, RemoteCapability.contentTextV1);
 
-    final parsed = await RemoteTextContent.parse(encoded);
-    expect(parsed.text, 'wrapped body');
-    expect(parsed.replyTo!.messageId, 'msg_parent');
+      final parsed = await RemoteTextContent.parse(encoded);
+      expect(parsed.text, 'wrapped body');
+      expect(parsed.replyTo!.messageId, 'msg_parent');
 
-    final legacyReply = jsonEncode({
-      'type': 'helix.remote.text.v1',
-      'version': 1,
-      'text': 'legacy reply',
-      'reply_to': {
-        'message_id': 'legacy_parent',
-        'sender_account_id': 'carol',
-        'snippet': 'old',
-      },
-    });
-    expect(
-      (await RemoteTextContent.parse(legacyReply)).replyTo!.messageId,
-      'legacy_parent',
-    );
+      final legacyReply = jsonEncode({
+        'type': 'helix.remote.text.v1',
+        'version': 1,
+        'text': 'legacy reply',
+        'reply_to': {
+          'message_id': 'legacy_parent',
+          'sender_account_id': 'carol',
+          'snippet': 'old',
+        },
+      });
+      expect(
+        (await RemoteTextContent.parse(legacyReply)).replyTo!.messageId,
+        'legacy_parent',
+      );
 
-    final legacyAttachment = jsonEncode({
-      'type': RemoteAttachmentContent.legacyMessageType,
-      'version': 1,
-      'filename': 'legacy.pdf',
-      'manifest': const RemoteAttachmentManifest(
-        fileId: 'file_legacy',
-        fileSize: 7,
-        fileHash: 'file_legacy',
-        mimeType: 'application/pdf',
-      ).toJson(),
-      'key_delivery': {
-        'scheme': 'x3dh-message-envelope',
-        'secret': 'legacy_secret',
-      },
-    });
-    expect(
-      (await RemoteAttachmentContent.tryParse(legacyAttachment))!.filename,
-      'legacy.pdf',
-    );
-  });
+      final legacyAttachment = jsonEncode({
+        'type': RemoteAttachmentContent.legacyMessageType,
+        'version': 1,
+        'filename': 'legacy.pdf',
+        'manifest': const RemoteAttachmentManifest(
+          fileId: 'file_legacy',
+          fileSize: 7,
+          fileHash: 'file_legacy',
+          mimeType: 'application/pdf',
+        ).toJson(),
+        'key_delivery': {
+          'scheme': 'x3dh-message-envelope',
+          'secret': 'legacy_secret',
+        },
+      });
+      expect(
+        (await RemoteAttachmentContent.tryParse(legacyAttachment))!.filename,
+        'legacy.pdf',
+      );
+    },
+  );
 
   test('P2-07 missing secure session never enqueues network send', () async {
     final conversationId = service.createDirectConversation(
@@ -507,7 +523,6 @@ void main() {
     await service.setupAccount(
       account: RemoteAccount(
         accountId: 'alice',
-        username: 'alice',
         identityPublicKey: 'alice_identity_key',
         createdAt: clock(),
       ),
@@ -572,7 +587,6 @@ void main() {
     await service.setupAccount(
       account: RemoteAccount(
         accountId: 'alice',
-        username: 'alice',
         identityPublicKey: 'alice_identity_key',
         createdAt: clock(),
       ),
@@ -631,9 +645,9 @@ void main() {
       );
       db.enqueueOperation(
         'op_failed',
-        'USERNAME_CHANGE',
-        jsonEncode({'username': 'alice2'}),
-        idempotencyKey: 'username:alice:alice2',
+        'DEVICE_RENAME',
+        jsonEncode({'device_name': 'Alice new phone'}),
+        idempotencyKey: 'device_rename:alice:alice_device_1',
       );
       db.updateOperationStatus('op_failed', 'FAILED', 5);
 
@@ -663,7 +677,7 @@ void main() {
       );
       expect(
         db.getOperationById('op_failed')!['idempotency_key'],
-        'username:alice:alice2',
+        'device_rename:alice:alice_device_1',
       );
     },
   );
@@ -681,7 +695,6 @@ void main() {
     await service.setupAccount(
       account: RemoteAccount(
         accountId: 'alice',
-        username: 'alice',
         identityPublicKey: 'alice_identity_key',
         createdAt: clock(),
       ),
@@ -1343,10 +1356,6 @@ void main() {
     service.unblockContact('mallory');
     expect(db.getContact('mallory'), isNull);
 
-    service.changeUsername(' Alice_New ');
-    expect(() => service.changeUsername('Helix Bad'), throwsStateError);
-    expect(() => service.changeUsername('helix_admin'), throwsStateError);
-
     service.updatePrivacy(
       const RemotePrivacySettings(
         searchDiscoverable: false,
@@ -1376,8 +1385,6 @@ void main() {
     expect(payloads, contains('CONTACT_REMOVE'));
     expect(payloads, contains('CONTACT_BLOCK'));
     expect(payloads, contains('CONTACT_UNBLOCK'));
-    expect(payloads, contains('USERNAME_CHANGE'));
-    expect(payloads, contains('\\"username\\":\\"alice_new\\"'));
     expect(payloads, contains('PRIVACY_UPDATE'));
     expect(payloads, contains('PRESENCE_UPDATE'));
     expect(payloads, contains('PROFILE_UPDATE'));

@@ -4,6 +4,13 @@ class RemoteApiEndpoints {
   final Uri _origin;
 
   Uri get accountsRegister => api('accounts/register');
+  Uri get accountsPhoneOtpRequest => api('accounts/phone/otp/request');
+  Uri accountsInviteLookup(String inviteCode) => api(
+    'accounts/invite/lookup',
+    queryParameters: {'invite_code': inviteCode},
+  );
+  Uri get accountsInviteAutoIssue => api('accounts/invite/auto-issue');
+  Uri get contactsDiscoverySalt => api('contacts/discovery-salt');
   Uri accountsChallenge({
     required String accountId,
     required String deviceId,

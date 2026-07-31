@@ -31,6 +31,13 @@ class LocalNotificationService {
     enableVibration: true,
   );
 
+  static const _verificationChannel = AndroidNotificationChannel(
+    'helix_verification_codes',
+    'Verification Codes',
+    description: 'One-time codes for signup and invites',
+    importance: Importance.high,
+  );
+
   static Future<void> init() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
@@ -50,6 +57,11 @@ class LocalNotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.createNotificationChannel(_incomingCallChannel);
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(_verificationChannel);
 
     // Request runtime permission on Android 13+.
     await _plugin
@@ -86,6 +98,47 @@ class LocalNotificationService {
       peerAccountId.hashCode & 0x7fffffff,
       'New contact request',
       'Someone wants to connect with you',
+      NotificationDetails(android: androidDetails),
+    );
+  }
+
+  /// Self-fired the moment the app receives a phone-verification code from
+  /// the server - there is no real SMS/push delivery yet (see the backend's
+  /// phone OTP module), so this simulates "you got a text" rather than
+  /// being a genuine out-of-band channel.
+  static Future<void> showVerificationCode({required String code}) async {
+    if (!_ready) return;
+    final androidDetails = AndroidNotificationDetails(
+      _verificationChannel.id,
+      _verificationChannel.name,
+      channelDescription: _verificationChannel.description,
+      importance: Importance.high,
+      priority: Priority.high,
+      autoCancel: true,
+    );
+    await _plugin.show(
+      'verification_code'.hashCode & 0x7fffffff,
+      'Your Helix verification code',
+      code,
+      NotificationDetails(android: androidDetails),
+    );
+  }
+
+  /// Self-fired for Helix Global's auto-issued signup invite.
+  static Future<void> showInviteCode({required String code}) async {
+    if (!_ready) return;
+    final androidDetails = AndroidNotificationDetails(
+      _verificationChannel.id,
+      _verificationChannel.name,
+      channelDescription: _verificationChannel.description,
+      importance: Importance.high,
+      priority: Priority.high,
+      autoCancel: true,
+    );
+    await _plugin.show(
+      'invite_code'.hashCode & 0x7fffffff,
+      'Your Helix Global invite code',
+      code,
       NotificationDetails(android: androidDetails),
     );
   }

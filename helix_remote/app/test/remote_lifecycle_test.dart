@@ -148,7 +148,7 @@ void main() {
         await store.write('access_token', 'tok-abc');
         await store.write('refresh_token', 'refresh-abc');
         await store.write('account_id', 'acc-123');
-        await store.write('username', 'testuser');
+        await store.write('phone_number', '+15550001234');
         await store.write('identity_public_key', 'aabbcc');
         await store.write('device_id', 'dev_00112233');
         await store.write('device_signing_public_key', 'ddeegg');
@@ -292,7 +292,7 @@ void main() {
         await store.write('access_token', 'tok-xyz');
         await store.write('refresh_token', 'refresh-xyz');
         await store.write('account_id', 'acc-xyz');
-        await store.write('username', 'userxyz');
+        await store.write('phone_number', '+15559998877');
         await store.write('identity_public_key', 'pk');
         await store.write('device_id', 'dev_00aabbcc');
         await store.write('device_signing_public_key', 'spk');

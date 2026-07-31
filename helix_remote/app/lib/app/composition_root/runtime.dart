@@ -219,7 +219,7 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
       'refresh_token',
       'token_rotation.pending',
       'account_id',
-      'username',
+      'phone_number',
       'identity_public_key',
       'identity_private_key',
       'device_id',

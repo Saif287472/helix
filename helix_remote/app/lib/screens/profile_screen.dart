@@ -18,11 +18,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _displayNameCtrl;
-  late final TextEditingController _usernameCtrl;
   bool _savingName = false;
-  bool _savingUsername = false;
   String? _nameError;
-  String? _usernameError;
 
   @override
   void initState() {
@@ -30,15 +27,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _displayNameCtrl = TextEditingController(
       text: widget.messagingService.currentDisplayName ?? '',
     );
-    _usernameCtrl = TextEditingController(
-      text: widget.messagingService.currentUsername ?? '',
-    );
   }
 
   @override
   void dispose() {
     _displayNameCtrl.dispose();
-    _usernameCtrl.dispose();
     super.dispose();
   }
 
@@ -74,38 +67,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } finally {
       if (mounted) setState(() => _savingName = false);
-    }
-  }
-
-  Future<void> _saveUsername() async {
-    final name = RemoteAccountValidation.normalizeUsername(_usernameCtrl.text);
-    final error = RemoteAccountValidation.usernameError(name);
-    if (error != null) {
-      setState(() => _usernameError = error);
-      return;
-    }
-    setState(() {
-      _savingUsername = true;
-      _usernameError = null;
-    });
-    try {
-      await widget.root.restClient.changeUsername(name);
-      if (mounted) {
-        _usernameCtrl.text = name;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Username updated')));
-        setState(() {});
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _usernameError =
-              'Could not save. Check your connection and try again.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _savingUsername = false);
     }
   }
 
@@ -169,40 +130,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               FilledButton(
                 onPressed: _savingName ? null : _saveDisplayName,
                 child: _savingName
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Username
-          Text('Username', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _usernameCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Used for search',
-                    prefixText: '@',
-                    border: const OutlineInputBorder(),
-                    helperText: RemoteAccountValidation.usernameRules,
-                    errorText: _usernameError,
-                  ),
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _saveUsername(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _savingUsername ? null : _saveUsername,
-                child: _savingUsername
                     ? const SizedBox.square(
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),

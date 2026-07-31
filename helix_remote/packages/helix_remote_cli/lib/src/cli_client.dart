@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart' as hashing;
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
@@ -10,11 +11,17 @@ import 'cli_rest_client.dart';
 import 'cli_message_envelope.dart';
 import 'dart:async';
 
+/// Salted HMAC-SHA256 phone hash, mirroring the backend's and mobile app's
+/// implementation exactly so a given salt+E.164 number always produces the
+/// same phone_hash regardless of which client computed it.
+String cliPhoneHash(String saltBase64, String e164Number) {
+  final saltBytes = base64.decode(saltBase64);
+  final hmac = hashing.Hmac(hashing.sha256, saltBytes);
+  return hmac.convert(utf8.encode(e164Number)).toString();
+}
+
 class HelixCliClient {
-  HelixCliClient({
-    required this.dbFile,
-    required this.keyFile,
-  });
+  HelixCliClient({required this.dbFile, required this.keyFile});
 
   final File dbFile;
   final File keyFile;
@@ -26,7 +33,7 @@ class HelixCliClient {
 
   void initialize() {
     if (_initialized) return;
-    
+
     // 1. Initialize SQLite Database
     db = HelixRemoteDatabase(dbFile);
     db.initialize();
@@ -52,7 +59,7 @@ class HelixCliClient {
   /// Bootstraps local client identity (Account Identity Key, Device Keys, and Signed Prekey).
   Future<void> bootstrap({
     required String accountId,
-    required String username,
+    required String phoneHash,
     required String deviceId,
     required String deviceName,
   }) async {
@@ -79,23 +86,37 @@ class HelixCliClient {
 
     // 5. Sign the Signed Prekey with the Account Identity Key (Ed25519)
     final prekeyBytes = Uint8List.fromList(spkKeyPairData.publicKey.bytes);
-    final signatureObj = await ed25519.sign(prekeyBytes, keyPair: identitySigningKeyPair);
+    final signatureObj = await ed25519.sign(
+      prekeyBytes,
+      keyPair: identitySigningKeyPair,
+    );
     final signatureBytes = Uint8List.fromList(signatureObj.bytes);
 
-    final accountIdentityPub = _toBase64Url(identityKeyPairData.publicKey.bytes);
+    final accountIdentityPub = _toBase64Url(
+      identityKeyPairData.publicKey.bytes,
+    );
     final devSigningPub = _toBase64Url(devSignKeyPairData.publicKey.bytes);
     final devAgreementPub = _toBase64Url(deviceKeyPairData.publicKey.bytes);
     final spkPub = _toBase64Url(spkKeyPairData.publicKey.bytes);
     final spkSignature = _toBase64Url(signatureBytes);
 
     // 6. Persist private/public material in file-based Secure Storage
-    await storage.writeKey('identity_private', base64Encode(identityKeyPairData.bytes));
+    await storage.writeKey(
+      'identity_private',
+      base64Encode(identityKeyPairData.bytes),
+    );
     await storage.writeKey('identity_public', accountIdentityPub);
-    
-    await storage.writeKey('device_signing_private', base64Encode(devSignKeyPairData.bytes));
+
+    await storage.writeKey(
+      'device_signing_private',
+      base64Encode(devSignKeyPairData.bytes),
+    );
     await storage.writeKey('device_signing_public', devSigningPub);
 
-    await storage.writeKey('device_private', base64Encode(deviceKeyPairData.bytes));
+    await storage.writeKey(
+      'device_private',
+      base64Encode(deviceKeyPairData.bytes),
+    );
     await storage.writeKey('device_public', devAgreementPub);
 
     await storage.writeKey('spk_private', base64Encode(spkKeyPairData.bytes));
@@ -104,27 +125,31 @@ class HelixCliClient {
 
     // Save account config helper keys
     await storage.writeKey('account_id', accountId);
-    await storage.writeKey('username', username);
+    await storage.writeKey('phone_hash', phoneHash);
     await storage.writeKey('device_id', deviceId);
 
     // 7. Record own identity inside local SQLite database
     final now = DateTime.now();
-    db.upsertAccount(RemoteAccount(
-      accountId: accountId,
-      username: username,
-      identityPublicKey: accountIdentityPub,
-      createdAt: now,
-      status: 'Active',
-    ));
+    db.upsertAccount(
+      RemoteAccount(
+        accountId: accountId,
+        identityPublicKey: accountIdentityPub,
+        createdAt: now,
+        status: 'Active',
+      ),
+    );
 
-    db.upsertDevice(accountId, RemoteDevice(
-      deviceId: deviceId,
-      deviceName: deviceName,
-      deviceSigningPublicKey: devSigningPub,
-      deviceAgreementPublicKey: devAgreementPub,
-      createdAt: now,
-      status: 'Active',
-    ));
+    db.upsertDevice(
+      accountId,
+      RemoteDevice(
+        deviceId: deviceId,
+        deviceName: deviceName,
+        deviceSigningPublicKey: devSigningPub,
+        deviceAgreementPublicKey: devAgreementPub,
+        createdAt: now,
+        status: 'Active',
+      ),
+    );
 
     db.saveLocalPrekey(
       keyId: 1,
@@ -139,17 +164,27 @@ class HelixCliClient {
   }
 
   /// Registers client identity with a remote backend server and bootstraps local storage.
+  ///
+  /// `phoneNumber` must already be in E.164 form (e.g. `+15551234567`);
+  /// `otpCode` comes from a prior `restClient.requestPhoneOtp()` call and
+  /// `inviteCode` from an admin-issued or Helix-Global auto-issued invite.
   Future<void> register({
     required CliRestClient restClient,
     required String accountId,
-    required String username,
+    required String phoneNumber,
+    required String displayName,
+    required String otpCode,
+    required String inviteCode,
     required String deviceId,
     required String deviceName,
   }) async {
+    final saltResult = await restClient.fetchDiscoverySalt();
+    final phoneHash = _phoneHash(saltResult['salt'] as String, phoneNumber);
+
     // Generate all keys and populate local state
     await bootstrap(
       accountId: accountId,
-      username: username,
+      phoneHash: phoneHash,
       deviceId: deviceId,
       deviceName: deviceName,
     );
@@ -164,20 +199,26 @@ class HelixCliClient {
     final ed25519 = crypto.Ed25519();
     final accountKeyPair = crypto.SimpleKeyPairData(
       _decodeB64(privIdentity!),
-      publicKey: crypto.SimplePublicKey(_decodeB64(pubIdentity!), type: crypto.KeyPairType.ed25519),
+      publicKey: crypto.SimplePublicKey(
+        _decodeB64(pubIdentity!),
+        type: crypto.KeyPairType.ed25519,
+      ),
       type: crypto.KeyPairType.ed25519,
     );
     final deviceSigningKeyPair = crypto.SimpleKeyPairData(
       _decodeB64(privDevSigning!),
-      publicKey: crypto.SimplePublicKey(_decodeB64(pubDevSigning!), type: crypto.KeyPairType.ed25519),
+      publicKey: crypto.SimplePublicKey(
+        _decodeB64(pubDevSigning!),
+        type: crypto.KeyPairType.ed25519,
+      ),
       type: crypto.KeyPairType.ed25519,
     );
 
     // Compute Registration Signatures
     final transcript = [
-      'helix.remote.registration.v2',
+      'helix.remote.registration.v3',
       accountId,
-      username,
+      phoneHash,
       pubIdentity,
       deviceId,
       pubDevSigning,
@@ -185,8 +226,14 @@ class HelixCliClient {
       deviceName,
     ].join('\n');
 
-    final accountRegSigObj = await ed25519.sign(utf8.encode(transcript), keyPair: accountKeyPair);
-    final deviceRegSigObj = await ed25519.sign(utf8.encode(transcript), keyPair: deviceSigningKeyPair);
+    final accountRegSigObj = await ed25519.sign(
+      utf8.encode(transcript),
+      keyPair: accountKeyPair,
+    );
+    final deviceRegSigObj = await ed25519.sign(
+      utf8.encode(transcript),
+      keyPair: deviceSigningKeyPair,
+    );
 
     final accountRegSig = _toBase64Url(accountRegSigObj.bytes);
     final deviceRegSig = _toBase64Url(deviceRegSigObj.bytes);
@@ -194,8 +241,10 @@ class HelixCliClient {
     // Call REST register endpoint
     await restClient.registerAccount(
       accountId: accountId,
-      username: username,
-      displayName: username,
+      phoneHash: phoneHash,
+      otpCode: otpCode,
+      inviteCode: inviteCode,
+      displayName: displayName,
       accountIdentityPublicKey: pubIdentity,
       deviceId: deviceId,
       deviceSigningPublicKey: pubDevSigning!,
@@ -209,6 +258,9 @@ class HelixCliClient {
   String _toBase64Url(List<int> bytes) {
     return base64Url.encode(bytes).replaceAll('=', '');
   }
+
+  String _phoneHash(String saltBase64, String e164Number) =>
+      cliPhoneHash(saltBase64, e164Number);
 
   List<int> _decodeB64(String value) {
     try {
@@ -224,11 +276,13 @@ class HelixCliClient {
 
   void addContact(String peerAccountId, String nickname) {
     initialize();
-    db.upsertContact(RemoteContact(
-      peerAccountId: peerAccountId,
-      nickname: nickname,
-      status: 'active',
-    ));
+    db.upsertContact(
+      RemoteContact(
+        peerAccountId: peerAccountId,
+        nickname: nickname,
+        status: 'active',
+      ),
+    );
   }
 
   List<RemoteContact> listContacts() {
@@ -250,8 +304,12 @@ class HelixCliClient {
     initialize();
 
     final rootKeyBytes = await session.rk.extractBytes();
-    final ckSendBytes = session.ckSend != null ? await session.ckSend!.extractBytes() : null;
-    final ckRecvBytes = session.ckRecv != null ? await session.ckRecv!.extractBytes() : null;
+    final ckSendBytes = session.ckSend != null
+        ? await session.ckSend!.extractBytes()
+        : null;
+    final ckRecvBytes = session.ckRecv != null
+        ? await session.ckRecv!.extractBytes()
+        : null;
 
     final Map<String, String> skippedKeysBase64 = {};
     for (final entry in session.skippedMessageKeys.entries) {
@@ -283,11 +341,20 @@ class HelixCliClient {
     // Save DH keys if set
     if (session.dHk != null) {
       final dhkData = await session.dHk!.extract();
-      await storage.writeKey('session_dhk_private_$sessionId', base64Encode(dhkData.bytes));
-      await storage.writeKey('session_dhk_public_$sessionId', base64Encode(dhkData.publicKey.bytes));
+      await storage.writeKey(
+        'session_dhk_private_$sessionId',
+        base64Encode(dhkData.bytes),
+      );
+      await storage.writeKey(
+        'session_dhk_public_$sessionId',
+        base64Encode(dhkData.publicKey.bytes),
+      );
     }
     if (session.dHp != null) {
-      await storage.writeKey('session_dhp_public_$sessionId', base64Encode(session.dHp!.bytes));
+      await storage.writeKey(
+        'session_dhp_public_$sessionId',
+        base64Encode(session.dHp!.bytes),
+      );
     }
   }
 
@@ -297,31 +364,45 @@ class HelixCliClient {
     final sessionMap = db.getCryptoSession(sessionId);
     if (sessionMap == null) return null;
 
-    final rootKey = crypto.SecretKey(_decodeB64(sessionMap['root_key'] as String));
+    final rootKey = crypto.SecretKey(
+      _decodeB64(sessionMap['root_key'] as String),
+    );
     final sendKeyRaw = sessionMap['sending_chain_key'] as String;
     final recvKeyRaw = sessionMap['receiving_chain_key'] as String;
-    
-    final sendKey = sendKeyRaw.isNotEmpty ? crypto.SecretKey(_decodeB64(sendKeyRaw)) : null;
-    final recvKey = recvKeyRaw.isNotEmpty ? crypto.SecretKey(_decodeB64(recvKeyRaw)) : null;
+
+    final sendKey = sendKeyRaw.isNotEmpty
+        ? crypto.SecretKey(_decodeB64(sendKeyRaw))
+        : null;
+    final recvKey = recvKeyRaw.isNotEmpty
+        ? crypto.SecretKey(_decodeB64(recvKeyRaw))
+        : null;
 
     final skippedKeysJson = sessionMap['skipped_keys_json'] as String? ?? '[]';
-    final Map<String, dynamic> skippedKeysDecoded = skippedKeysJson.startsWith('{')
+    final Map<String, dynamic> skippedKeysDecoded =
+        skippedKeysJson.startsWith('{')
         ? jsonDecode(skippedKeysJson) as Map<String, dynamic>
         : {};
 
     final Map<String, crypto.SecretKey> skippedKeys = {};
     for (final entry in skippedKeysDecoded.entries) {
-      skippedKeys[entry.key] = crypto.SecretKey(_decodeB64(entry.value as String));
+      skippedKeys[entry.key] = crypto.SecretKey(
+        _decodeB64(entry.value as String),
+      );
     }
 
     // Load DH keys if set
     crypto.SimpleKeyPair? dHk;
-    final dhkPrivateStr = await storage.readKey('session_dhk_private_$sessionId');
+    final dhkPrivateStr = await storage.readKey(
+      'session_dhk_private_$sessionId',
+    );
     final dhkPublicStr = await storage.readKey('session_dhk_public_$sessionId');
     if (dhkPrivateStr != null && dhkPublicStr != null) {
       dHk = crypto.SimpleKeyPairData(
         _decodeB64(dhkPrivateStr),
-        publicKey: crypto.SimplePublicKey(_decodeB64(dhkPublicStr), type: crypto.KeyPairType.x25519),
+        publicKey: crypto.SimplePublicKey(
+          _decodeB64(dhkPublicStr),
+          type: crypto.KeyPairType.x25519,
+        ),
         type: crypto.KeyPairType.x25519,
       );
     }
@@ -399,16 +480,17 @@ class HelixCliClient {
     );
   }
 
-  Future<void> login({
-    required CliRestClient restClient,
-  }) async {
+  Future<void> login({required CliRestClient restClient}) async {
     final accountId = await storage.readKey('account_id');
     final deviceId = await storage.readKey('device_id');
     if (accountId == null || deviceId == null) {
       throw StateError('Client not bootstrapped');
     }
 
-    final challengeRes = await restClient.getChallenge(accountId: accountId, deviceId: deviceId);
+    final challengeRes = await restClient.getChallenge(
+      accountId: accountId,
+      deviceId: deviceId,
+    );
     final challenge = challengeRes['challenge'] as String;
 
     // Load local device signing key
@@ -420,16 +502,26 @@ class HelixCliClient {
     final ed25519 = crypto.Ed25519();
     final identityKeyPair = crypto.SimpleKeyPairData(
       _decodeB64(privStr),
-      publicKey: crypto.SimplePublicKey(_decodeB64(pubStr), type: crypto.KeyPairType.ed25519),
+      publicKey: crypto.SimplePublicKey(
+        _decodeB64(pubStr),
+        type: crypto.KeyPairType.ed25519,
+      ),
       type: crypto.KeyPairType.ed25519,
     );
 
     // Sign challenge
-    final signatureObj = await ed25519.sign(utf8.encode(challenge), keyPair: identityKeyPair);
+    final signatureObj = await ed25519.sign(
+      utf8.encode(challenge),
+      keyPair: identityKeyPair,
+    );
     final signature = _toBase64Url(signatureObj.bytes);
 
     // Login
-    await restClient.loginDevice(accountId: accountId, deviceId: deviceId, signature: signature);
+    await restClient.loginDevice(
+      accountId: accountId,
+      deviceId: deviceId,
+      signature: signature,
+    );
   }
 
   Future<DoubleRatchetSession> initiateSessionWithPeer({
@@ -462,7 +554,9 @@ class HelixCliClient {
       _decodeB64(device['signed_prekey']['public_key'] as String),
       type: crypto.KeyPairType.x25519,
     );
-    final bobSignedPrekeySignature = _decodeB64(device['signed_prekey']['signature'] as String);
+    final bobSignedPrekeySignature = _decodeB64(
+      device['signed_prekey']['signature'] as String,
+    );
 
     crypto.SimplePublicKey? bobOneTimePrekey;
     if (device['one_time_prekey'] != null) {
@@ -481,7 +575,10 @@ class HelixCliClient {
 
     final aliceIdentityKeyPair = crypto.SimpleKeyPairData(
       _decodeB64(aliceDevPrivate),
-      publicKey: crypto.SimplePublicKey(_decodeB64(aliceDevPublic), type: crypto.KeyPairType.x25519),
+      publicKey: crypto.SimplePublicKey(
+        _decodeB64(aliceDevPublic),
+        type: crypto.KeyPairType.x25519,
+      ),
       type: crypto.KeyPairType.x25519,
     );
 
@@ -519,9 +616,15 @@ class HelixCliClient {
 
     // Save extra session metadata for Bob to consume
     final epPublic = await aliceEphemeralKey.extractPublicKey();
-    await storage.writeKey('session_init_ephemeral_$sessionId', base64Encode(epPublic.bytes));
+    await storage.writeKey(
+      'session_init_ephemeral_$sessionId',
+      base64Encode(epPublic.bytes),
+    );
     if (device['one_time_prekey'] != null) {
-      await storage.writeKey('session_init_otk_id_$sessionId', '${device['one_time_prekey']['key_id']}');
+      await storage.writeKey(
+        'session_init_otk_id_$sessionId',
+        '${device['one_time_prekey']['key_id']}',
+      );
     }
 
     return session;
@@ -544,7 +647,10 @@ class HelixCliClient {
     }
     final bobIdentityKeyPair = crypto.SimpleKeyPairData(
       _decodeB64(bobIdPrivate),
-      publicKey: crypto.SimplePublicKey(_decodeB64(bobIdPublic), type: crypto.KeyPairType.x25519),
+      publicKey: crypto.SimplePublicKey(
+        _decodeB64(bobIdPublic),
+        type: crypto.KeyPairType.x25519,
+      ),
       type: crypto.KeyPairType.x25519,
     );
 
@@ -556,18 +662,25 @@ class HelixCliClient {
     }
     final bobSignedPrekeyKeyPair = crypto.SimpleKeyPairData(
       _decodeB64(bobSpkPrivate),
-      publicKey: crypto.SimplePublicKey(_decodeB64(bobSpkPublic), type: crypto.KeyPairType.x25519),
+      publicKey: crypto.SimplePublicKey(
+        _decodeB64(bobSpkPublic),
+        type: crypto.KeyPairType.x25519,
+      ),
       type: crypto.KeyPairType.x25519,
     );
 
     // Load consumed One-Time Prekey (OPK_Bob) if any
     crypto.SimpleKeyPair? bobOneTimePrekeyKeyPair;
     if (bobOneTimePrekeyId != null) {
-      final otkPrivate = await storage.readKey('otk_private_$bobOneTimePrekeyId');
+      final otkPrivate = await storage.readKey(
+        'otk_private_$bobOneTimePrekeyId',
+      );
       if (otkPrivate != null) {
         final x25519 = crypto.X25519();
         final privateKeyBytes = _decodeB64(otkPrivate);
-        bobOneTimePrekeyKeyPair = await x25519.newKeyPairFromSeed(privateKeyBytes);
+        bobOneTimePrekeyKeyPair = await x25519.newKeyPairFromSeed(
+          privateKeyBytes,
+        );
       }
     }
 
@@ -643,46 +756,58 @@ class HelixCliClient {
     final pending = db.getPendingOperations();
     for (final op in pending) {
       if (op['type'] != 'SEND_MESSAGE') continue;
-      
+
       final opId = op['op_id'] as String;
       final retries = op['retries'] as int;
-      final payload = jsonDecode(op['payload'] as String) as Map<String, dynamic>;
-      
+      final payload =
+          jsonDecode(op['payload'] as String) as Map<String, dynamic>;
+
       final messageId = payload['message_id'] as String;
       final conversationId = payload['conversation_id'] as String;
       final peerAccountId = payload['peer_account_id'] as String;
       final plaintext = payload['plaintext'] as String;
-      
+
       try {
         // 1. Resolve or establish E2EE session with the peer
-        final bundle = await restClient.getPreKeyBundle(accountId: peerAccountId);
+        final bundle = await restClient.getPreKeyBundle(
+          accountId: peerAccountId,
+        );
         final devices = bundle['devices'] as List;
         if (devices.isEmpty) {
           throw StateError('No active devices for peer: $peerAccountId');
         }
-        
+
         final envelopes = <Map<String, dynamic>>[];
         String? finalPackedEnvelope;
-        
+
         for (final device in devices) {
           final peerDeviceId = device['device_id'] as String;
-          final sessionId = 'direct:$conversationId:$peerAccountId:$peerDeviceId';
-          
+          final sessionId =
+              'direct:$conversationId:$peerAccountId:$peerDeviceId';
+
           DoubleRatchetSession session;
           final existingSession = await loadSession(sessionId);
-          
+
           String packedEnvelope;
-          
+
           if (existingSession != null) {
             session = existingSession;
-            final doubleRatchetCt = await session.encrypt(Uint8List.fromList(plaintext.codeUnits));
+            final doubleRatchetCt = await session.encrypt(
+              Uint8List.fromList(plaintext.codeUnits),
+            );
             final envelope = CliMessageEnvelope(
               isInit: false,
               ciphertext: base64Encode(doubleRatchetCt),
             );
             packedEnvelope = envelope.pack();
-            
-            await saveSession(sessionId, conversationId, session, peerAccountId: peerAccountId, peerDeviceId: peerDeviceId);
+
+            await saveSession(
+              sessionId,
+              conversationId,
+              session,
+              peerAccountId: peerAccountId,
+              peerDeviceId: peerDeviceId,
+            );
           } else {
             // Initiate new session
             session = await initiateSessionWithPeer(
@@ -690,12 +815,18 @@ class HelixCliClient {
               peerAccountId: peerAccountId,
               conversationId: conversationId,
             );
-            
-            final doubleRatchetCt = await session.encrypt(Uint8List.fromList(plaintext.codeUnits));
-            
-            final epKey = await storage.readKey('session_init_ephemeral_$sessionId');
-            final otkId = await storage.readKey('session_init_otk_id_$sessionId');
-            
+
+            final doubleRatchetCt = await session.encrypt(
+              Uint8List.fromList(plaintext.codeUnits),
+            );
+
+            final epKey = await storage.readKey(
+              'session_init_ephemeral_$sessionId',
+            );
+            final otkId = await storage.readKey(
+              'session_init_otk_id_$sessionId',
+            );
+
             final envelope = CliMessageEnvelope(
               isInit: true,
               ciphertext: base64Encode(doubleRatchetCt),
@@ -703,36 +834,42 @@ class HelixCliClient {
               oneTimePrekeyId: otkId != null ? int.parse(otkId) : null,
             );
             packedEnvelope = envelope.pack();
-            
+
             // Clear the initiation metadata
             await storage.deleteKey('session_init_ephemeral_$sessionId');
             await storage.deleteKey('session_init_otk_id_$sessionId');
-            
+
             // Save the session again to commit the Advanced counter
-            await saveSession(sessionId, conversationId, session, peerAccountId: peerAccountId, peerDeviceId: peerDeviceId);
+            await saveSession(
+              sessionId,
+              conversationId,
+              session,
+              peerAccountId: peerAccountId,
+              peerDeviceId: peerDeviceId,
+            );
           }
-          
+
           envelopes.add({
             'recipient_device_id': peerDeviceId,
             'ciphertext': packedEnvelope,
           });
           finalPackedEnvelope = packedEnvelope;
         }
-        
+
         // 2. Upload envelopes to the backend message registry
         await restClient.sendMessage(
           messageId: messageId,
           conversationId: conversationId,
           envelopes: envelopes,
         );
-        
+
         // 3. Mark pending operation as completed and save to local SQLite
         db.updateOperationStatus(opId, 'COMPLETED', retries);
-        
+
         // Retrieve account ID and device ID from storage
         final accountId = await storage.readKey('account_id');
         final deviceId = await storage.readKey('device_id');
-        
+
         db.saveMessage(
           RemoteMessage(
             messageId: messageId,
@@ -748,7 +885,10 @@ class HelixCliClient {
       } catch (e) {
         db.updateOperationStatus(opId, 'FAILED', retries + 1);
         final backoff = Duration(seconds: (retries + 1) * 2);
-        db.scheduleNextOperationAttempt(opId, DateTime.now().add(backoff).millisecondsSinceEpoch);
+        db.scheduleNextOperationAttempt(
+          opId,
+          DateTime.now().add(backoff).millisecondsSinceEpoch,
+        );
         rethrow;
       }
     }
@@ -772,9 +912,7 @@ class HelixCliClient {
     // Connect
     _webSocket = await WebSocket.connect(
       uri.toString(),
-      headers: {
-        'Authorization': 'Bearer ${restClient.accessToken}',
-      },
+      headers: {'Authorization': 'Bearer ${restClient.accessToken}'},
     );
 
     _wsSubscription = _webSocket!.listen(
@@ -796,7 +934,8 @@ class HelixCliClient {
             final envelope = CliMessageEnvelope.unpack(packedCiphertext);
             final doubleRatchetCt = _decodeB64(envelope.ciphertext);
 
-            final sessionId = 'direct:$conversationId:$senderAccountId:$senderDeviceId';
+            final sessionId =
+                'direct:$conversationId:$senderAccountId:$senderDeviceId';
             DoubleRatchetSession session;
 
             if (envelope.isInit) {
@@ -812,13 +951,17 @@ class HelixCliClient {
               // 2. Load existing session
               final existing = await loadSession(sessionId);
               if (existing == null) {
-                throw StateError('E2EE session not found for message: $messageId');
+                throw StateError(
+                  'E2EE session not found for message: $messageId',
+                );
               }
               session = existing;
             }
 
             // 3. Decrypt ciphertext using Double Ratchet
-            final plaintextBytes = await session.decrypt(Uint8List.fromList(doubleRatchetCt));
+            final plaintextBytes = await session.decrypt(
+              Uint8List.fromList(doubleRatchetCt),
+            );
             final plaintext = String.fromCharCodes(plaintextBytes);
 
             // 4. Save session updates (counters/ratchet keys/skipped keys)
@@ -845,11 +988,13 @@ class HelixCliClient {
             );
 
             // 6. Send cursor acknowledgment back to server
-            _webSocket?.add(jsonEncode({
-              'type': 'ack',
-              'conversation_id': conversationId,
-              'sequence': serverSeq,
-            }));
+            _webSocket?.add(
+              jsonEncode({
+                'type': 'ack',
+                'conversation_id': conversationId,
+                'sequence': serverSeq,
+              }),
+            );
 
             // 7. Invoke client callback
             onMessageReceived?.call(messageId, plaintext);

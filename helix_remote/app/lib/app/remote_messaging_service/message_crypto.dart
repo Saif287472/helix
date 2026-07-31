@@ -172,7 +172,6 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
       db.upsertAccount(
         RemoteAccount(
           accountId: accountId,
-          username: accountId,
           identityPublicKey:
               result['account_identity_key'] as String? ??
               firstDevice?['identity_key'] as String? ??

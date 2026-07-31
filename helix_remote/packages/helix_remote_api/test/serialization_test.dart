@@ -7,14 +7,13 @@ void main() {
     test('RemoteAccount fromJson and toJson', () {
       final json = {
         'account_id': 'acc_123',
-        'username': 'alice',
         'identity_public_key': 'hexkey',
         'created_at': '2026-06-19T06:00:00.000Z',
         'status': 'Active',
       };
       final account = RemoteAccount.fromJson(json);
       expect(account.accountId, 'acc_123');
-      expect(account.username, 'alice');
+      expect(account.identityPublicKey, 'hexkey');
       expect(account.createdAt, DateTime.utc(2026, 6, 19, 6, 0, 0));
       expect(account.toJson()['account_id'], 'acc_123');
     });
