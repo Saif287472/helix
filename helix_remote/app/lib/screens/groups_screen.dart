@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
+import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 
 class GroupsScreen extends StatefulWidget {
@@ -54,7 +55,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
   String get _currentAccountId =>
       widget.messagingService.currentAccountId ?? '';
 
-  bool _isGroupConversation(dynamic conv) =>
+  bool _isGroupConversation(RemoteConversation conv) =>
       conv.type == 'group' || conv.type == 'GROUP';
 
   bool _isCurrentUserAdmin(String groupId) {
@@ -341,21 +342,23 @@ class _GroupsScreenState extends State<GroupsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
           title: const Text('Group-Add Privacy'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final policy in [
-                kGroupAddPolicyEveryone,
-                kGroupAddPolicyContacts,
-                kGroupAddPolicyNobody,
-              ])
-                RadioListTile<String>(
-                  title: Text(_policyLabel(policy)),
-                  value: policy,
-                  groupValue: selected,
-                  onChanged: (v) => setSt(() => selected = v!),
-                ),
-            ],
+          content: RadioGroup<String>(
+            groupValue: selected,
+            onChanged: (v) => setSt(() => selected = v!),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final policy in [
+                  kGroupAddPolicyEveryone,
+                  kGroupAddPolicyContacts,
+                  kGroupAddPolicyNobody,
+                ])
+                  RadioListTile<String>(
+                    title: Text(_policyLabel(policy)),
+                    value: policy,
+                  ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -385,22 +388,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
           title: const Text('Notification Policy'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final policy in [
-                kGroupNotificationAll,
-                kGroupNotificationMentionsOnly,
-                kGroupNotificationAdminOnly,
-                kGroupNotificationMuted,
-              ])
-                RadioListTile<String>(
-                  title: Text(_notifPolicyLabel(policy)),
-                  value: policy,
-                  groupValue: selected,
-                  onChanged: (v) => setSt(() => selected = v!),
-                ),
-            ],
+          content: RadioGroup<String>(
+            groupValue: selected,
+            onChanged: (v) => setSt(() => selected = v!),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final policy in [
+                  kGroupNotificationAll,
+                  kGroupNotificationMentionsOnly,
+                  kGroupNotificationAdminOnly,
+                  kGroupNotificationMuted,
+                ])
+                  RadioListTile<String>(
+                    title: Text(_notifPolicyLabel(policy)),
+                    value: policy,
+                  ),
+              ],
+            ),
           ),
           actions: [
             TextButton(

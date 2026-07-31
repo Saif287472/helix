@@ -6,9 +6,9 @@ import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
-import 'cli_secure_storage.dart';
-import 'cli_rest_client.dart';
-import 'cli_message_envelope.dart';
+import 'package:helix_remote_cli/src/cli_secure_storage.dart';
+import 'package:helix_remote_cli/src/cli_rest_client.dart';
+import 'package:helix_remote_cli/src/cli_message_envelope.dart';
 import 'dart:async';
 
 /// Salted HMAC-SHA256 phone hash, mirroring the backend's and mobile app's
@@ -45,7 +45,7 @@ class HelixCliClient {
   }
 
   WebSocket? _webSocket;
-  StreamSubscription? _wsSubscription;
+  StreamSubscription<dynamic>? _wsSubscription;
 
   void close() {
     if (_initialized) {
@@ -247,7 +247,7 @@ class HelixCliClient {
       displayName: displayName,
       accountIdentityPublicKey: pubIdentity,
       deviceId: deviceId,
-      deviceSigningPublicKey: pubDevSigning!,
+      deviceSigningPublicKey: pubDevSigning,
       deviceAgreementPublicKey: pubDevAgreement!,
       accountRegistrationSignature: accountRegSig,
       deviceRegistrationSignature: deviceRegSig,
@@ -550,18 +550,20 @@ class HelixCliClient {
       _decodeB64(device['device_key'] as String),
       type: crypto.KeyPairType.x25519,
     );
+    final signedPrekey = device['signed_prekey'] as Map<String, dynamic>;
     final bobSignedPrekey = crypto.SimplePublicKey(
-      _decodeB64(device['signed_prekey']['public_key'] as String),
+      _decodeB64(signedPrekey['public_key'] as String),
       type: crypto.KeyPairType.x25519,
     );
     final bobSignedPrekeySignature = _decodeB64(
-      device['signed_prekey']['signature'] as String,
+      signedPrekey['signature'] as String,
     );
 
     crypto.SimplePublicKey? bobOneTimePrekey;
-    if (device['one_time_prekey'] != null) {
+    final oneTimePrekey = device['one_time_prekey'] as Map<String, dynamic>?;
+    if (oneTimePrekey != null) {
       bobOneTimePrekey = crypto.SimplePublicKey(
-        _decodeB64(device['one_time_prekey']['public_key'] as String),
+        _decodeB64(oneTimePrekey['public_key'] as String),
         type: crypto.KeyPairType.x25519,
       );
     }
@@ -620,10 +622,10 @@ class HelixCliClient {
       'session_init_ephemeral_$sessionId',
       base64Encode(epPublic.bytes),
     );
-    if (device['one_time_prekey'] != null) {
+    if (oneTimePrekey != null) {
       await storage.writeKey(
         'session_init_otk_id_$sessionId',
-        '${device['one_time_prekey']['key_id']}',
+        '${oneTimePrekey['key_id']}',
       );
     }
 
@@ -772,7 +774,8 @@ class HelixCliClient {
         final bundle = await restClient.getPreKeyBundle(
           accountId: peerAccountId,
         );
-        final devices = bundle['devices'] as List;
+        final devices = (bundle['devices'] as List)
+            .cast<Map<String, dynamic>>();
         if (devices.isEmpty) {
           throw StateError('No active devices for peer: $peerAccountId');
         }

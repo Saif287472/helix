@@ -65,10 +65,6 @@ class DoubleRatchetSession {
     this.dHp,
     required this.rk,
     this.ckSend,
-    this.ckRecv,
-    this.ns = 0,
-    this.nr = 0,
-    this.pn = 0,
     Map<String, crypto.SecretKey>? skippedKeys,
   }) {
     if (skippedKeys != null) {
@@ -171,7 +167,7 @@ class DoubleRatchetSession {
     // If local keys are null, fall back to simple symmetric-only decryption (old tests compatibility)
     if (dHk == null) {
       final derived = await _ratchetSymmetric(
-        receivingChainKey!,
+        receivingChainKey,
         'sending-message-key',
       );
       final candidateNextChainKey = derived.nextChainKey;
@@ -409,7 +405,7 @@ class DoubleRatchetSession {
     final nextDhp = peerPublicKey;
 
     // Skip any remaining keys in current receiving chain before updating keys
-    final skipRes = await _skipMessageKeysStep(
+    await _skipMessageKeysStep(
       until: headerPn,
       currentNr: currentNr,
       currentCkRecv: currentCkRecv,

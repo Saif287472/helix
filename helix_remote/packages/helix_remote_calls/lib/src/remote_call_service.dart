@@ -490,9 +490,9 @@ class RemoteCallService {
       'reconnect_count': reconnects,
       'call_outcome': outcome,
       'duration_seconds': durationSec,
-      if (setupMs != null) 'setup_time_ms': setupMs,
-      if (loss != null) 'packet_loss_percent': loss,
-      if (rtt != null) 'peer_rtt_ms': rtt,
+      'setup_time_ms': ?setupMs,
+      'packet_loss_percent': ?loss,
+      'peer_rtt_ms': ?rtt,
     }).ignore();
   }
 

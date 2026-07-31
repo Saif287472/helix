@@ -64,11 +64,13 @@ void main() {
 
     final result = await match([bobHash, carolHash, unknownHash]);
     expect(result['statusCode'], 200);
-    final matches = (result['body'] as Map<String, dynamic>)['matches'] as Map;
+    final matches =
+        (result['body'] as Map<String, dynamic>)['matches']
+            as Map<String, dynamic>;
     expect(matches.keys, containsAll([bobHash, carolHash]));
     expect(matches.containsKey(unknownHash), isFalse);
-    expect(matches[bobHash]['account_id'], 'bob');
-    expect(matches[carolHash]['account_id'], 'carol');
+    expect((matches[bobHash] as Map<String, dynamic>)['account_id'], 'bob');
+    expect((matches[carolHash] as Map<String, dynamic>)['account_id'], 'carol');
   });
 
   test('excludes accounts with phone_discoverable disabled', () async {

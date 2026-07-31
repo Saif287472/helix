@@ -150,10 +150,7 @@ class CallsModule {
       accountId: senderAccountId,
       deviceId: senderDeviceId,
       clientIp: 's2s',
-      message: {
-        if (requestId != null) 'request_id': requestId,
-        'payload': message,
-      },
+      message: {'request_id': ?requestId, 'payload': message},
       trustedRemote: true,
     );
   }

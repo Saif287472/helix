@@ -279,7 +279,7 @@ class GroupsModule {
       'created_at':
           group?['created_at'] ?? DateTime.now().millisecondsSinceEpoch,
       'members': members,
-      if (event != null) 'event': event,
+      'event': ?event,
     };
   }
 

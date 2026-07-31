@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:io';
 import 'package:helix_remote_cli/helix_remote_cli.dart';
 

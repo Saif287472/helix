@@ -1,4 +1,5 @@
 /// Domain models for F8 group calls, call links, and scheduled calls.
+library;
 
 // ---------------------------------------------------------------------------
 // Call room

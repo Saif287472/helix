@@ -379,7 +379,7 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('scheduled calls', () {
-    int _futureMs(int minutesFromNow) => DateTime.now()
+    int futureMs(int minutesFromNow) => DateTime.now()
         .add(Duration(minutes: minutesFromNow))
         .millisecondsSinceEpoch;
 
@@ -387,7 +387,7 @@ void main() {
       final alice = _Client(base(), tokenAlice);
       final r = await alice.post('/group-calls/scheduled', {
         'title': 'Weekly sync',
-        'scheduled_at': _futureMs(60),
+        'scheduled_at': futureMs(60),
         'attendee_ids': ['bob'],
       });
       expect(r.status, 200);
@@ -401,7 +401,7 @@ void main() {
 
       await alice.post('/group-calls/scheduled', {
         'title': 'Team standup',
-        'scheduled_at': _futureMs(30),
+        'scheduled_at': futureMs(30),
         'attendee_ids': ['bob'],
       });
 
@@ -417,7 +417,7 @@ void main() {
 
       final create = await alice.post('/group-calls/scheduled', {
         'title': 'Design review',
-        'scheduled_at': _futureMs(120),
+        'scheduled_at': futureMs(120),
         'attendee_ids': ['bob'],
       });
       final scId = create.json['scheduled_call_id'] as String;
@@ -435,7 +435,7 @@ void main() {
 
       final create = await alice.post('/group-calls/scheduled', {
         'title': 'Retro',
-        'scheduled_at': _futureMs(90),
+        'scheduled_at': futureMs(90),
         'attendee_ids': ['bob'],
       });
       final scId = create.json['scheduled_call_id'] as String;
@@ -451,7 +451,7 @@ void main() {
 
       final create = await alice.post('/group-calls/scheduled', {
         'title': 'All hands',
-        'scheduled_at': _futureMs(180),
+        'scheduled_at': futureMs(180),
         'attendee_ids': [],
       });
       final scId = create.json['scheduled_call_id'] as String;
@@ -467,7 +467,7 @@ void main() {
 
       final create = await alice.post('/group-calls/scheduled', {
         'title': 'Sprint planning',
-        'scheduled_at': _futureMs(60),
+        'scheduled_at': futureMs(60),
         'attendee_ids': ['bob'],
       });
       final scId = create.json['scheduled_call_id'] as String;

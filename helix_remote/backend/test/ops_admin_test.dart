@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:helix_remote_backend/helix_remote_backend.dart';
-import 'package:helix_remote_backend/src/server_impl.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
@@ -12,7 +11,6 @@ void main() {
   late HttpClient httpClient;
   late int port;
   late ServerIdentity identity;
-  late String generatedToken;
   late File tempLogFile;
 
   setUp(() async {
@@ -35,10 +33,6 @@ void main() {
 
     // Initialise identity
     identity = await ServerIdentity.loadOrCreate(server.db);
-    generatedToken =
-        identity.adminToken ??
-        server.db.getServerConfig('admin_token_hash') ??
-        '';
 
     // Since we're in in-memory DB, adminToken will be returned by loadOrCreate because it is first boot.
     // However, it is a base64 encoded token. If we generate a hash in the database, the raw token is returned by loadOrCreate.
@@ -138,7 +132,7 @@ void main() {
     );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
-    final users = body['users'] as List;
+    final users = (body['users'] as List).cast<Map<String, dynamic>>();
     expect(users, isNotEmpty);
     expect(users[0]['account_id'], equals('user1'));
     expect(users[0].containsKey('username'), isFalse);

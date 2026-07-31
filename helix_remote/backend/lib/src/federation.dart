@@ -274,7 +274,7 @@ class FederationClient {
         'sender_account_id': senderAccountId,
         'sender_device_id': senderDeviceId,
         'signal': signal,
-        if (requestId != null) 'request_id': requestId,
+        'request_id': ?requestId,
       },
     );
   }
