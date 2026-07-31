@@ -5,10 +5,12 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:crypto/crypto.dart' as crypto_pkg;
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
 
 part 'auth/challenge_login.dart';
 part 'auth/devices.dart';
+part 'auth/invites.dart';
 part 'auth/phone_otp.dart';
 part 'auth/profile.dart';
 part 'auth/refresh.dart';
@@ -26,6 +28,16 @@ abstract class AuthModuleBase {
   /// Server-side audience for signed challenges. When set, it takes
   /// precedence over the client-controlled Host header.
   String? get configuredAudience;
+
+  /// This server's public base URL, used to record `server_address` on
+  /// Global-auto-issued invites (empty string if unconfigured).
+  String get publicBaseUrl;
+
+  /// True only for the actual Helix Global deployment. Set once at process
+  /// startup (see `BackendServer.create`), never toggleable through any
+  /// HTTP endpoint - a self-hosted admin token must never be able to flip
+  /// this and bypass their own invite-only registration requirement.
+  bool get globalInstanceMode;
 
   /// Verifies (without consuming) that `code` matches the latest,
   /// unexpired, unconsumed OTP challenge for `phoneHash`. Declared here so
@@ -50,6 +62,7 @@ class AuthModule extends AuthModuleBase
     with
         AuthChallengeLoginHandlers,
         AuthDeviceHandlers,
+        AuthInviteHandlers,
         AuthPhoneOtpHandlers,
         AuthProfileHandlers,
         AuthRefreshHandlers,
@@ -69,6 +82,10 @@ class AuthModule extends AuthModuleBase
   final crypto.Ed25519 _ed25519 = crypto.Ed25519();
   @override
   final String? configuredAudience;
+  @override
+  final String publicBaseUrl;
+  @override
+  final bool globalInstanceMode;
 
   AuthModule(
     this.db,
@@ -76,6 +93,8 @@ class AuthModule extends AuthModuleBase
     this.notifyDevice,
     DateTime Function()? now,
     this.configuredAudience,
+    this.publicBaseUrl = '',
+    this.globalInstanceMode = false,
   }) : _now = now ?? DateTime.now;
 
   Router get router {
@@ -84,6 +103,8 @@ class AuthModule extends AuthModuleBase
     // Public routes
     router.post('/register', _registerHandler);
     router.post('/phone/otp/request', _requestPhoneOtpHandler);
+    router.get('/invite/lookup', _lookupInviteHandler);
+    router.post('/invite/auto-issue', _autoIssueInviteHandler);
     router.get('/challenge', _challengeHandler);
     router.post('/login', _loginHandler);
     router.post('/refresh', _refreshHandler);

@@ -113,21 +113,15 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
 
-        final create = await _postJson(
-          client,
-          portA,
-          '/api/v1/groups/create',
-          {
-            'group_id': 'grp_1',
-            'name': 'Cross-server crew',
-            'encryption_key_id': 'ek_1',
-            'initial_member_ids': ['bob@b.test'],
-          },
-          token: alice.token,
-        );
+        final create = await _postJson(client, portA, '/api/v1/groups/create', {
+          'group_id': 'grp_1',
+          'name': 'Cross-server crew',
+          'encryption_key_id': 'ek_1',
+          'initial_member_ids': ['bob@b.test'],
+        }, token: alice.token);
         expect(create.statusCode, equals(200), reason: create.body);
 
         // Bob's own server should now have a synced read-model.
@@ -166,9 +160,9 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
-        final carol = await _register(client, portC, 'carol');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
+        final carol = await _register(client, portC, serverC.db, 'carol');
 
         await _postJson(client, portA, '/api/v1/groups/create', {
           'group_id': 'grp_2',
@@ -177,17 +171,11 @@ void main() {
           'initial_member_ids': ['bob@b.test'],
         }, token: alice.token);
 
-        final invite = await _postJson(
-          client,
-          portA,
-          '/api/v1/groups/invite',
-          {
-            'invite_id': 'inv_1',
-            'group_id': 'grp_2',
-            'invitee_id': 'carol@c.test',
-          },
-          token: alice.token,
-        );
+        final invite = await _postJson(client, portA, '/api/v1/groups/invite', {
+          'invite_id': 'inv_1',
+          'group_id': 'grp_2',
+          'invitee_id': 'carol@c.test',
+        }, token: alice.token);
         expect(invite.statusCode, equals(200), reason: invite.body);
 
         // Carol's own server should have learned about the pending invite.
@@ -260,8 +248,8 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
 
         await _postJson(client, portA, '/api/v1/groups/create', {
           'group_id': 'grp_3',
@@ -315,8 +303,8 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
 
         await _postJson(client, portA, '/api/v1/groups/create', {
           'group_id': 'grp_4',
@@ -346,9 +334,9 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
-        final carol = await _register(client, portC, 'carol');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
+        final carol = await _register(client, portC, serverC.db, 'carol');
 
         serverB.db.publishPrekeys(
           accountId: 'bob',
@@ -400,10 +388,11 @@ void main() {
           '/api/v1/messages/device-events?since_sequence=0',
           token: bob.token,
         );
-        final bobChatEvent = ((jsonDecode(bobEvents.body) as Map<String, dynamic>)['events']
-                as List)
-            .map((e) => e as Map<String, dynamic>)
-            .firstWhere((e) => e['type'] == 'chat_message');
+        final bobChatEvent =
+            ((jsonDecode(bobEvents.body) as Map<String, dynamic>)['events']
+                    as List)
+                .map((e) => e as Map<String, dynamic>)
+                .firstWhere((e) => e['type'] == 'chat_message');
         expect(
           (bobChatEvent['payload'] as Map<String, dynamic>)['ciphertext'],
           equals('ct_for_bob'),
@@ -415,10 +404,11 @@ void main() {
           '/api/v1/messages/device-events?since_sequence=0',
           token: carol.token,
         );
-        final carolChatEvent = ((jsonDecode(carolEvents.body) as Map<String, dynamic>)['events']
-                as List)
-            .map((e) => e as Map<String, dynamic>)
-            .firstWhere((e) => e['type'] == 'chat_message');
+        final carolChatEvent =
+            ((jsonDecode(carolEvents.body) as Map<String, dynamic>)['events']
+                    as List)
+                .map((e) => e as Map<String, dynamic>)
+                .firstWhere((e) => e['type'] == 'chat_message');
         expect(
           (carolChatEvent['payload'] as Map<String, dynamic>)['ciphertext'],
           equals('ct_for_carol'),
@@ -434,9 +424,9 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
-        final carol = await _register(client, portC, 'carol');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
+        final carol = await _register(client, portC, serverC.db, 'carol');
 
         await _postJson(client, portA, '/api/v1/groups/create', {
           'group_id': 'grp_6',
@@ -478,10 +468,11 @@ void main() {
           '/api/v1/messages/device-events?since_sequence=0',
           token: bob.token,
         );
-        final bobKeyEvent = ((jsonDecode(bobEvents.body) as Map<String, dynamic>)['events']
-                as List)
-            .map((e) => e as Map<String, dynamic>)
-            .firstWhere((e) => e['type'] == 'group_epoch_key');
+        final bobKeyEvent =
+            ((jsonDecode(bobEvents.body) as Map<String, dynamic>)['events']
+                    as List)
+                .map((e) => e as Map<String, dynamic>)
+                .firstWhere((e) => e['type'] == 'group_epoch_key');
         expect(
           (bobKeyEvent['payload'] as Map<String, dynamic>)['wrapped_key'],
           equals('wrapped_for_bob'),
@@ -493,10 +484,11 @@ void main() {
           '/api/v1/messages/device-events?since_sequence=0',
           token: carol.token,
         );
-        final carolKeyEvent = ((jsonDecode(carolEvents.body) as Map<String, dynamic>)['events']
-                as List)
-            .map((e) => e as Map<String, dynamic>)
-            .firstWhere((e) => e['type'] == 'group_epoch_key');
+        final carolKeyEvent =
+            ((jsonDecode(carolEvents.body) as Map<String, dynamic>)['events']
+                    as List)
+                .map((e) => e as Map<String, dynamic>)
+                .firstWhere((e) => e['type'] == 'group_epoch_key');
         expect(
           (carolKeyEvent['payload'] as Map<String, dynamic>)['wrapped_key'],
           equals('wrapped_for_carol'),
@@ -512,7 +504,7 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
+        final alice = await _register(client, portA, serverA.db, 'alice');
         // A second local member is needed so the message has at least one
         // local recipient device: MessagingModule only writes a `messages`
         // row when saveMessage() runs for a local envelope (a purely
@@ -520,8 +512,8 @@ void main() {
         // deliberately out-of-scope gap for this milestone, see plan §4.3.2
         // -- so reacting to a message with zero local recipients would 404
         // regardless of federation).
-        await _register(client, portA, 'dave');
-        final bob = await _register(client, portB, 'bob');
+        await _register(client, portA, serverA.db, 'dave');
+        final bob = await _register(client, portB, serverB.db, 'bob');
 
         serverB.db.publishPrekeys(
           accountId: 'bob',
@@ -543,10 +535,7 @@ void main() {
           'message_id': 'msg_grp_7_1',
           'conversation_id': 'grp_7',
           'envelopes': [
-            {
-              'recipient_device_id': 'dave_device',
-              'ciphertext': 'ct_for_dave',
-            },
+            {'recipient_device_id': 'dave_device', 'ciphertext': 'ct_for_dave'},
             {
               'recipient_account_id': 'bob@b.test',
               'recipient_device_id': 'bob_device',
@@ -598,7 +587,7 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
+        final alice = await _register(client, portA, serverA.db, 'alice');
         await _postJson(client, portA, '/api/v1/groups/create', {
           'group_id': 'grp_8',
           'name': 'Spoof test',
@@ -654,12 +643,14 @@ class _RegisteredUser {
 Future<_RegisteredUser> _register(
   HttpClient client,
   int port,
+  BackendDatabase db,
   String accountId,
 ) async {
   final material = await registerTestAccount(
     client: client,
     host: '127.0.0.1',
     port: port,
+    db: db,
     accountId: accountId,
     username: '${accountId}_user',
     deviceId: '${accountId}_device',
@@ -689,7 +680,11 @@ Future<void> _registerServer({
     identity: identity,
     directoryUrl: directoryUrl,
   );
-  await client.registerDirectory(domain: domain, address: address, users: users);
+  await client.registerDirectory(
+    domain: domain,
+    address: address,
+    users: users,
+  );
 }
 
 Future<_Response> _getJson(

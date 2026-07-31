@@ -92,8 +92,8 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
 
         // Establish a federated DIRECT conversation -- this is the trust
         // gate a federated call reuses instead of local `contacts`.
@@ -172,19 +172,13 @@ void main() {
         expect(answerPayload['target_device_id'], equals('alice_device'));
 
         // ICE candidate from alice, now routed to bob's specific device.
-        final iceRes = await _postJson(
-          client,
-          portA,
-          '/api/v1/calls/signal',
-          {
-            'payload': {
-              'signal_type': 'ice',
-              'call_id': 'call_fed_1',
-              'candidate': 'candidate:1 1 UDP 1 1.1.1.1 1 typ host',
-            },
+        final iceRes = await _postJson(client, portA, '/api/v1/calls/signal', {
+          'payload': {
+            'signal_type': 'ice',
+            'call_id': 'call_fed_1',
+            'candidate': 'candidate:1 1 UDP 1 1.1.1.1 1 typ host',
           },
-          token: alice.token,
-        );
+        }, token: alice.token);
         expect(iceRes.statusCode, equals(200), reason: iceRes.body);
         final iceEvent = await _nextWsJson(bobEvents);
         expect(
@@ -193,15 +187,9 @@ void main() {
         );
 
         // Bob ends the call; alice's session must be marked terminal too.
-        final endRes = await _postJson(
-          client,
-          portB,
-          '/api/v1/calls/signal',
-          {
-            'payload': {'signal_type': 'end', 'call_id': 'call_fed_1'},
-          },
-          token: bob.token,
-        );
+        final endRes = await _postJson(client, portB, '/api/v1/calls/signal', {
+          'payload': {'signal_type': 'end', 'call_id': 'call_fed_1'},
+        }, token: bob.token);
         expect(endRes.statusCode, equals(200), reason: endRes.body);
         final endEvent = await _nextWsJson(aliceEvents);
         expect(
@@ -228,8 +216,8 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        await _register(client, portB, 'bob');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        await _register(client, portB, serverB.db, 'bob');
 
         final offerRes = await _postJson(
           client,
@@ -254,13 +242,19 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
-        await _postJson(client, portA, '/api/v1/messages/conversations/create', {
-          'conversation_id': 'conv_call_2',
-          'type': 'DIRECT',
-          'members': ['alice', 'bob@b.test'],
-        }, token: alice.token);
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
+        await _postJson(
+          client,
+          portA,
+          '/api/v1/messages/conversations/create',
+          {
+            'conversation_id': 'conv_call_2',
+            'type': 'DIRECT',
+            'members': ['alice', 'bob@b.test'],
+          },
+          token: alice.token,
+        );
 
         final aliceWs = await WebSocket.connect(
           'ws://127.0.0.1:$portA/api/v1/ws',
@@ -316,8 +310,8 @@ void main() {
     () async {
       final client = HttpClient();
       try {
-        final alice = await _register(client, portA, 'alice');
-        final bob = await _register(client, portB, 'bob');
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        final bob = await _register(client, portB, serverB.db, 'bob');
 
         final aliceTurn = await _getJson(
           client,
@@ -353,12 +347,14 @@ class _RegisteredUser {
 Future<_RegisteredUser> _register(
   HttpClient client,
   int port,
+  BackendDatabase db,
   String accountId,
 ) async {
   final material = await registerTestAccount(
     client: client,
     host: '127.0.0.1',
     port: port,
+    db: db,
     accountId: accountId,
     username: '${accountId}_user',
     deviceId: '${accountId}_device',
@@ -388,7 +384,11 @@ Future<void> _registerServer({
     identity: identity,
     directoryUrl: directoryUrl,
   );
-  await client.registerDirectory(domain: domain, address: address, users: users);
+  await client.registerDirectory(
+    domain: domain,
+    address: address,
+    users: users,
+  );
 }
 
 Future<Map<String, dynamic>> _nextWsJson(

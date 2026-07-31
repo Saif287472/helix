@@ -9,6 +9,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       final registrationVersion = body['registration_version'];
       final phoneHash = body['phone_hash'] as String?;
       final otpCode = body['otp_code'] as String?;
+      final inviteCode = body['invite_code'] as String?;
       final identityPublicKey = body['account_identity_public_key'] as String?;
       final deviceId = body['device_id'] as String?;
       final deviceSigningPublicKey =
@@ -26,6 +27,8 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
           phoneHash == null ||
           phoneHash.isEmpty ||
           otpCode == null ||
+          inviteCode == null ||
+          inviteCode.isEmpty ||
           identityPublicKey == null ||
           deviceId == null ||
           deviceSigningPublicKey == null ||
@@ -66,12 +69,24 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
 
       if (existingAccount == null) {
         // A brand-new account: this phone number must not already belong
-        // to a different account, and the OTP just requested for it must
-        // check out before we create anything.
+        // to a different account, and both the invite and the OTP just
+        // requested for it must check out before we create anything.
         if (phoneOwner != null) {
           return Response(
             409,
             body: jsonEncode({'error': 'Phone number is already registered'}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+
+        final now = _now().millisecondsSinceEpoch;
+        final invite = db.getInviteByCodeHash(hashInviteCode(inviteCode));
+        if (invite == null ||
+            invite['status'] != 'PENDING' ||
+            (invite['expires_at'] as int) < now) {
+          return Response(
+            403,
+            body: jsonEncode({'error': 'Invalid or expired invite code'}),
             headers: {'Content-Type': 'application/json'},
           );
         }
@@ -85,6 +100,20 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
           );
         }
 
+        // Redeem last, only once every other check has passed, so a wrong
+        // OTP guess never burns a scarce invite credential.
+        final redeemed = db.redeemInviteCredential(
+          inviteId: invite['invite_id'] as String,
+          accountId: accountId,
+          now: now,
+        );
+        if (!redeemed) {
+          return Response(
+            403,
+            body: jsonEncode({'error': 'Invite code already used'}),
+          );
+        }
+
         db.createAccount(
           accountId,
           _reservedUsername(accountId),
@@ -92,10 +121,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
           phoneHash: phoneHash,
         );
         db.upsertAccountProfile(accountId: accountId, displayName: displayName);
-        db.markOtpConsumed(
-          otpResult.challengeId!,
-          _now().millisecondsSinceEpoch,
-        );
+        db.markOtpConsumed(otpResult.challengeId!, now);
         db.logAudit(
           accountId,
           deviceId,

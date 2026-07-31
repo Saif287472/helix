@@ -74,6 +74,7 @@ void main() {
         deviceName: deviceName,
       );
       final otpCode = await requestOtp(username);
+      final inviteCode = seedTestInvite(server.db);
       final response = await postJson(
         '/api/v1/accounts/register',
         registrationBody(
@@ -83,6 +84,7 @@ void main() {
           deviceName: deviceName,
           material: material,
           otpCode: otpCode,
+          inviteCode: inviteCode,
         ),
       );
       expect(response.statusCode, equals(200));
@@ -166,6 +168,7 @@ void main() {
           material: material,
           // Key validation rejects this before the OTP is ever checked.
           otpCode: '000000',
+          inviteCode: '000000',
         );
         final signing = body['device_signing_public_key'];
         body['device_signing_public_key'] = body['device_agreement_public_key'];
@@ -194,6 +197,7 @@ void main() {
           material: material,
           // Signature validation rejects this before the OTP is checked.
           otpCode: '000000',
+          inviteCode: '000000',
         );
         tamperedAccountSig['account_registration_signature'] = testBase64Url(
           List.filled(64, 7),
@@ -211,6 +215,7 @@ void main() {
           deviceName: 'Forged Phone',
           material: material,
           otpCode: '000000',
+          inviteCode: '000000',
         );
         tamperedDeviceSig['device_registration_signature'] = testBase64Url(
           List.filled(64, 7),
@@ -249,6 +254,7 @@ void main() {
             deviceName: 'Policy Phone',
             material: material,
             otpCode: '000000',
+            inviteCode: '000000',
           ),
         );
       }
@@ -288,6 +294,7 @@ void main() {
           deviceName: 'Replay Phone',
           material: material,
           otpCode: replayOtpCode,
+          inviteCode: seedTestInvite(server.db),
         )..['display_name'] = 'Replay User';
 
         final first = await postJson('/api/v1/accounts/register', body);
@@ -314,6 +321,7 @@ void main() {
             // Account already exists, so this hits the device-link-required
             // rejection before the OTP is ever checked again.
             otpCode: '000000',
+            inviteCode: '000000',
           )..['display_name'] = 'Replay User',
         );
         expect(otherDevice.statusCode, equals(403));

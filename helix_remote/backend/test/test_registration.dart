@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cryptography/cryptography.dart' as crypto;
+import 'package:helix_remote_backend/helix_remote_backend.dart';
+import 'package:helix_remote_backend/src/invite_codes.dart';
 
 class TestRegistrationMaterial {
   const TestRegistrationMaterial({
@@ -87,6 +89,7 @@ Map<String, dynamic> registrationBody({
   required String deviceName,
   required TestRegistrationMaterial material,
   required String otpCode,
+  required String inviteCode,
   String? displayName,
 }) {
   return {
@@ -94,6 +97,7 @@ Map<String, dynamic> registrationBody({
     'account_id': accountId,
     'phone_hash': username,
     'otp_code': otpCode,
+    'invite_code': inviteCode,
     'display_name': displayName ?? username,
     'account_identity_public_key': material.accountIdentityPublicKey,
     'device_id': deviceId,
@@ -155,10 +159,33 @@ Future<String> requestTestOtp({
   return body['code'] as String;
 }
 
+/// Directly seeds a redeemable invite credential via the database, bypassing
+/// the admin-token HTTP flow (tests generally don't care who issued it, just
+/// that a valid one exists for the registration under test).
+String seedTestInvite(
+  BackendDatabase db, {
+  String serverAddress = 'https://test.local',
+  Duration validity = const Duration(days: 7),
+}) {
+  final code = generateInviteCode();
+  final now = DateTime.now().millisecondsSinceEpoch;
+  db.createInviteCredential(
+    inviteId: generateInviteId(),
+    inviteCodeHash: hashInviteCode(code),
+    serverAddress: serverAddress,
+    issuerType: 'ADMIN',
+    issuerLabel: 'test-harness',
+    createdAt: now,
+    expiresAt: now + validity.inMilliseconds,
+  );
+  return code;
+}
+
 Future<TestRegistrationMaterial> registerTestAccount({
   required HttpClient client,
   required String host,
   required int port,
+  required BackendDatabase db,
   required String accountId,
   required String username,
   required String deviceId,
@@ -176,6 +203,7 @@ Future<TestRegistrationMaterial> registerTestAccount({
     port: port,
     phoneHash: username,
   );
+  final inviteCode = seedTestInvite(db);
   final request = await client.post(host, port, '/api/v1/accounts/register');
   request.headers.contentType = ContentType.json;
   request.write(
@@ -187,6 +215,7 @@ Future<TestRegistrationMaterial> registerTestAccount({
         deviceName: deviceName,
         material: material,
         otpCode: otpCode,
+        inviteCode: inviteCode,
       ),
     ),
   );

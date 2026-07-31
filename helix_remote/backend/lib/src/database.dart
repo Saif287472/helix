@@ -13,6 +13,7 @@ part 'database/group_federation_repository.dart';
 part 'database/groups_repository.dart';
 part 'database/messaging_repository.dart';
 part 'database/federation_repository.dart';
+part 'database/invites_repository.dart';
 part 'database/migrations.dart';
 part 'database/operational_repository.dart';
 part 'database/phone_otp_repository.dart';

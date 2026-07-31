@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
+import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
@@ -28,7 +29,8 @@ class OperabilityModule {
     this.federationDomain,
     this.federationDirectoryUrl = '',
     this.publicBaseUrl = '',
-  });
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
   final BackendDatabase db;
   final RateLimiter rateLimiter;
@@ -44,6 +46,7 @@ class OperabilityModule {
   final String? federationDomain;
   final String federationDirectoryUrl;
   final String publicBaseUrl;
+  final DateTime Function() _now;
 
   static const sloTargets = {
     'availability_monthly': '99.5%',
@@ -82,6 +85,8 @@ class OperabilityModule {
     router.post('/backup', _backup);
     router.get('/users', _users);
     router.get('/logs', _logs);
+    router.post('/invites', _createInvite);
+    router.get('/invites', _listInvites);
     router.get('/federation', _federationStatus);
     router.post('/federation/worldwide', _setWorldwideMode);
     return router;
@@ -410,6 +415,83 @@ class OperabilityModule {
 
     final users = db.getAllUsersPaginated(limit: limit, offset: offset);
     return _json({'users': users, 'limit': limit, 'offset': offset});
+  }
+
+  static const _inviteValidity = Duration(days: 7);
+
+  Future<Response> _createInvite(Request request) async {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    _auditAdminRead(request, 'ADMIN_INVITE_CREATED');
+
+    final now = _now().millisecondsSinceEpoch;
+    final inviteId = generateInviteId();
+    final code = generateInviteCode();
+    final expiresAt = now + _inviteValidity.inMilliseconds;
+
+    db.createInviteCredential(
+      inviteId: inviteId,
+      inviteCodeHash: hashInviteCode(code),
+      serverAddress: publicBaseUrl,
+      issuerType: 'ADMIN',
+      issuerLabel: 'admin',
+      createdAt: now,
+      expiresAt: expiresAt,
+    );
+
+    return _json({
+      'invite_id': inviteId,
+      'invite_code': code,
+      'shareable_url': '$publicBaseUrl/join?invite=$code',
+      'expires_at': expiresAt,
+    });
+  }
+
+  Response _listInvites(Request request) {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    _auditAdminRead(request, 'ADMIN_INVITES_LIST_READ');
+
+    final params = request.url.queryParameters;
+    final limit = int.tryParse(params['limit'] ?? '') ?? 50;
+    final offset = int.tryParse(params['offset'] ?? '') ?? 0;
+    if (limit <= 0 || offset < 0) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Invalid limit or offset'}),
+      );
+    }
+
+    final now = _now().millisecondsSinceEpoch;
+    final invites = db
+        .getInviteCredentialsPaginated(limit: limit, offset: offset)
+        .map(
+          (invite) => {
+            'invite_id': invite['invite_id'],
+            'issuer_type': invite['issuer_type'],
+            'issuer_label': invite['issuer_label'],
+            // Never expose invite_code_hash - it's internal-only.
+            'status': _displayInviteStatus(invite, now),
+            'created_at': invite['created_at'],
+            'expires_at': invite['expires_at'],
+            'redeemed_at': invite['redeemed_at'],
+            'redeemed_by_account_id': invite['redeemed_by_account_id'],
+          },
+        )
+        .toList();
+
+    return _json({'invites': invites, 'limit': limit, 'offset': offset});
+  }
+
+  /// `invite_credentials.status` only ever stores 'PENDING'/'REDEEMED' -
+  /// expiry is derived at read time rather than written back, so there's no
+  /// sweep job needed to keep it accurate.
+  String _displayInviteStatus(Map<String, dynamic> invite, int now) {
+    if (invite['status'] == 'PENDING' && (invite['expires_at'] as int) < now) {
+      return 'EXPIRED';
+    }
+    return invite['status'] as String;
   }
 
   Response _logs(Request request) {

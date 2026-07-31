@@ -58,6 +58,7 @@ Future<_Response> _getJson(
 
 Future<String> _registerAndLogin(
   int port,
+  BackendDatabase db,
   String accountId,
   String username,
   String deviceId,
@@ -78,6 +79,7 @@ Future<String> _registerAndLogin(
   );
   final otpCode =
       (jsonDecode(otpResponse.body) as Map<String, dynamic>)['code'] as String;
+  final inviteCode = seedTestInvite(db);
   await _postJson('127.0.0.1', port, '/api/v1/accounts/register', {
     ...registrationBody(
       accountId: accountId,
@@ -86,6 +88,7 @@ Future<String> _registerAndLogin(
       deviceName: '$username phone',
       material: material,
       otpCode: otpCode,
+      inviteCode: inviteCode,
     ),
   });
 
@@ -148,6 +151,7 @@ void main() {
 
       final aliceToken = await _registerAndLogin(
         port,
+        server.db,
         'alice_dev',
         'alice_user',
         'alice_device_1',
@@ -156,6 +160,7 @@ void main() {
       );
       await _registerAndLogin(
         port,
+        server.db,
         'bob_dev',
         'bob_user',
         'bob_device_1',
@@ -290,6 +295,7 @@ void main() {
 
       final aliceToken = await _registerAndLogin(
         port,
+        server.db,
         'alice_rest',
         'alice_rest_user',
         'alice_device_1',
@@ -298,6 +304,7 @@ void main() {
       );
       final bobToken = await _registerAndLogin(
         port,
+        server.db,
         'bob_rest',
         'bob_rest_user',
         'bob_device_1',

@@ -419,6 +419,7 @@ _registerAndLogin(
     {'phone_hash': username},
   );
   final otpCode = otpResp.body['code'] as String;
+  final inviteCode = seedTestInvite(server.db);
 
   final regResp = await _post(
     client,
@@ -431,6 +432,7 @@ _registerAndLogin(
       deviceName: deviceName,
       material: regMaterial,
       otpCode: otpCode,
+      inviteCode: inviteCode,
     ),
   );
   expect(regResp.status, 200, reason: 'Registration failed for $accountId');

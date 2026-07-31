@@ -45,6 +45,7 @@ class BackendServer {
   final String? federationDomain;
   final String federationDirectoryUrl;
   final String publicBaseUrl;
+  final bool globalInstanceMode;
   final String serverAudience;
   HttpServer? _httpServer;
   HttpServer? get httpServer => _httpServer;
@@ -67,6 +68,7 @@ class BackendServer {
     this.federationDomain,
     required this.federationDirectoryUrl,
     required this.publicBaseUrl,
+    this.globalInstanceMode = false,
     this.serverAudience = '',
   });
 
@@ -90,6 +92,7 @@ class BackendServer {
     String? federationDomain,
     String? federationDirectoryUrl,
     String? publicBaseUrl,
+    bool? globalInstanceMode,
     String? serverAudience,
   }) {
     final db = BackendDatabase(sqliteDb);
@@ -137,6 +140,9 @@ class BackendServer {
           publicBaseUrl ??
           Platform.environment['HELIX_REMOTE_PUBLIC_BASE_URL'] ??
           '',
+      globalInstanceMode:
+          globalInstanceMode ??
+          (Platform.environment['HELIX_REMOTE_GLOBAL_INSTANCE_MODE'] == 'true'),
       serverAudience:
           serverAudience ??
           Platform.environment['HELIX_REMOTE_SERVER_AUDIENCE'] ??
@@ -166,6 +172,8 @@ class BackendServer {
       notifyDevice: wsRelay.sendToDevice,
       now: now,
       configuredAudience: serverAudience.isEmpty ? null : serverAudience,
+      publicBaseUrl: publicBaseUrl,
+      globalInstanceMode: globalInstanceMode,
     );
     final federationClient = serverIdentity == null
         ? null
@@ -230,6 +238,7 @@ class BackendServer {
       federationDomain: federationDomain,
       federationDirectoryUrl: federationDirectoryUrl,
       publicBaseUrl: publicBaseUrl,
+      now: now,
     );
 
     // Map modules
@@ -354,6 +363,8 @@ class BackendServer {
             path.endsWith('/accounts/login') ||
             path.endsWith('/accounts/refresh') ||
             path.endsWith('/accounts/phone/otp/request') ||
+            path.endsWith('/accounts/invite/lookup') ||
+            path.endsWith('/accounts/invite/auto-issue') ||
             path.endsWith('/contacts/discovery-salt') ||
             path.endsWith('/devices/link/request-new') ||
             path.endsWith('/devices/link/complete-new') ||

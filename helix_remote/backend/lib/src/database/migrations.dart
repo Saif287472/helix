@@ -1125,5 +1125,38 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 30;');
     }
+
+    if (version < 31) {
+      // redeemed_by_account_id deliberately has no FK: it's a historical
+      // audit reference, not a live relationship, and redemption happens
+      // atomically before the account row exists (see
+      // AuthRegistrationHandlers._registerHandler). It must also keep
+      // showing which account redeemed an invite even if that account is
+      // later deleted, which an ON DELETE SET NULL/CASCADE FK would erase.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS invite_credentials (
+          invite_id              TEXT PRIMARY KEY,
+          invite_code_hash       TEXT NOT NULL,
+          server_address         TEXT NOT NULL,
+          issuer_type            TEXT NOT NULL,
+          issuer_label           TEXT,
+          status                 TEXT NOT NULL,
+          created_at             INTEGER NOT NULL,
+          expires_at             INTEGER NOT NULL,
+          redeemed_at            INTEGER,
+          redeemed_by_account_id TEXT
+        );
+      ''');
+      _db.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_invite_credentials_code_hash
+          ON invite_credentials(invite_code_hash);
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_invite_credentials_status
+          ON invite_credentials(status);
+      ''');
+
+      _db.execute('PRAGMA user_version = 31;');
+    }
   }
 }

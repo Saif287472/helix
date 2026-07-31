@@ -514,6 +514,65 @@ paths:
         '429':
           description: Too many verification code requests
 
+  /accounts/invite/lookup:
+    get:
+      summary: >-
+        Validate an invite code without consuming it, so the client can fail
+        fast on a bad/expired code before starting the phone+OTP signup flow.
+      operationId: lookupInvite
+      tags: [Auth]
+      parameters:
+        - name: invite_code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lookup result (valid or not - never a 404)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [valid]
+                properties:
+                  valid:
+                    type: boolean
+                  server_address:
+                    type: string
+                  issuer_type:
+                    type: string
+                    enum: [ADMIN, SYSTEM_GLOBAL]
+        '400':
+          description: Missing invite_code
+
+  /accounts/invite/auto-issue:
+    post:
+      summary: >-
+        Self-issues a free invite for Helix Global's signup path. Gated
+        server-side by whether this deployment is actually Helix Global -
+        a self-hosted server always rejects this regardless of what the
+        client claims.
+      operationId: autoIssueInvite
+      tags: [Auth]
+      responses:
+        '200':
+          description: Invite issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invite_code, expires_at]
+                properties:
+                  invite_code:
+                    type: string
+                  expires_at:
+                    type: integer
+        '403':
+          description: This server is not Helix Global
+        '429':
+          description: Too many invite requests from this address
+
   # ─── Prekeys ──────────────────────────────────────────────────
   /accounts/profile:
     post:
@@ -2224,6 +2283,7 @@ components:
         - account_id
         - phone_hash
         - otp_code
+        - invite_code
         - display_name
         - registration_version
         - account_identity_public_key
@@ -2250,6 +2310,13 @@ components:
           description: >-
             The one-time code obtained from POST /accounts/phone/otp/request
             for this phone_hash.
+        invite_code:
+          type: string
+          description: >-
+            A redeemable invite credential (admin-issued or Helix-Global
+            auto-issued via POST /accounts/invite/auto-issue). Consumed
+            atomically alongside registration; invalid/expired/already-used
+            codes are rejected with 403.
         display_name:
           type: string
           minLength: 1

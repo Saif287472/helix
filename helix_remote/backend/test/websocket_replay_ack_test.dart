@@ -38,72 +38,69 @@ void main() {
     await server.stop();
   });
 
-  test(
-    'reconnect with a backlog spanning multiple pages replays every event, '
-    'in order, once the client acknowledges each page',
-    () async {
-      final material = await registerTestAccount(
-        client: client,
-        host: '127.0.0.1',
-        port: port,
-        accountId: 'replay_acc',
-        username: 'replay_user',
-        deviceId: 'replay_device',
-        deviceName: 'Replay Phone',
-      );
-      final loginResult = await loginTestAccount(
-        client: client,
-        host: '127.0.0.1',
-        port: port,
-        accountId: 'replay_acc',
-        deviceId: 'replay_device',
-        deviceSigningKeyPair: material.deviceSigningKeyPair,
-      );
-      final token = loginResult['token'] as String;
+  test('reconnect with a backlog spanning multiple pages replays every event, '
+      'in order, once the client acknowledges each page', () async {
+    final material = await registerTestAccount(
+      client: client,
+      host: '127.0.0.1',
+      port: port,
+      db: server.db,
+      accountId: 'replay_acc',
+      username: 'replay_user',
+      deviceId: 'replay_device',
+      deviceName: 'Replay Phone',
+    );
+    final loginResult = await loginTestAccount(
+      client: client,
+      host: '127.0.0.1',
+      port: port,
+      accountId: 'replay_acc',
+      deviceId: 'replay_device',
+      deviceSigningKeyPair: material.deviceSigningKeyPair,
+    );
+    final token = loginResult['token'] as String;
 
-      // Seed a backlog spanning three replay pages (page size is 50).
-      const totalEvents = 120;
-      for (var i = 0; i < totalEvents; i++) {
-        server.db.writeDeviceEvent(
-          eventId: 'evt_replay_$i',
-          recipientDeviceId: 'replay_device',
-          eventType: 'chat_message',
-          payload: jsonEncode({'i': i}),
-        );
+    // Seed a backlog spanning three replay pages (page size is 50).
+    const totalEvents = 120;
+    for (var i = 0; i < totalEvents; i++) {
+      server.db.writeDeviceEvent(
+        eventId: 'evt_replay_$i',
+        recipientDeviceId: 'replay_device',
+        eventType: 'chat_message',
+        payload: jsonEncode({'i': i}),
+      );
+    }
+
+    final ws = await WebSocket.connect(
+      'ws://127.0.0.1:$port/api/v1/ws?since=0',
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    final received = <int>[];
+    final done = Completer<void>();
+    final sub = ws.listen((data) {
+      final map = jsonDecode(data as String) as Map<String, dynamic>;
+      final seq = map['server_sequence'] as int?;
+      if (seq == null) return;
+      received.add(seq);
+      ws.add(jsonEncode({'type': 'replay_ack', 'server_sequence': seq}));
+      if (received.length == totalEvents && !done.isCompleted) {
+        done.complete();
       }
+    });
 
-      final ws = await WebSocket.connect(
-        'ws://127.0.0.1:$port/api/v1/ws?since=0',
-        headers: {'Authorization': 'Bearer $token'},
-      );
+    final stopwatch = Stopwatch()..start();
+    await done.future.timeout(const Duration(seconds: 10));
+    stopwatch.stop();
 
-      final received = <int>[];
-      final done = Completer<void>();
-      final sub = ws.listen((data) {
-        final map = jsonDecode(data as String) as Map<String, dynamic>;
-        final seq = map['server_sequence'] as int?;
-        if (seq == null) return;
-        received.add(seq);
-        ws.add(jsonEncode({'type': 'replay_ack', 'server_sequence': seq}));
-        if (received.length == totalEvents && !done.isCompleted) {
-          done.complete();
-        }
-      });
+    expect(received, hasLength(totalEvents));
+    expect(received, equals(List.generate(totalEvents, (i) => i + 1)));
+    // With prompt acks each page should advance immediately rather than
+    // waiting out the 5-second no-ack timeout fallback (two page
+    // boundaries would cost 10s+ if pacing fell back to timeouts).
+    expect(stopwatch.elapsed, lessThan(const Duration(seconds: 4)));
 
-      final stopwatch = Stopwatch()..start();
-      await done.future.timeout(const Duration(seconds: 10));
-      stopwatch.stop();
-
-      expect(received, hasLength(totalEvents));
-      expect(received, equals(List.generate(totalEvents, (i) => i + 1)));
-      // With prompt acks each page should advance immediately rather than
-      // waiting out the 5-second no-ack timeout fallback (two page
-      // boundaries would cost 10s+ if pacing fell back to timeouts).
-      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 4)));
-
-      await sub.cancel();
-      await ws.close();
-    },
-    timeout: const Timeout(Duration(seconds: 20)),
-  );
+    await sub.cancel();
+    await ws.close();
+  }, timeout: const Timeout(Duration(seconds: 20)));
 }

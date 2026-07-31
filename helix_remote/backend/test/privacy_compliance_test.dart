@@ -38,6 +38,7 @@ void main() {
       final alice = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'alice',
         username: 'alice_privacy',
@@ -100,6 +101,7 @@ void main() {
       final alice = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'alice_delete',
         username: 'alice_delete_user',
@@ -137,6 +139,7 @@ void main() {
     final alice = await _registerAndLogin(
       client,
       port,
+      server.db,
       ed25519,
       accountId: 'alice',
       username: 'alice_admin_denied',
@@ -145,6 +148,7 @@ void main() {
     final admin = await _registerAndLogin(
       client,
       port,
+      server.db,
       ed25519,
       accountId: 'admin',
       username: 'admin_user',
@@ -200,6 +204,7 @@ void main() {
     final alice = await _registerAndLogin(
       client,
       port,
+      server.db,
       ed25519,
       accountId: 'alice',
       username: 'alice_report',
@@ -208,6 +213,7 @@ void main() {
     await _registerAndLogin(
       client,
       port,
+      server.db,
       ed25519,
       accountId: 'bob',
       username: 'bob_report',
@@ -300,6 +306,7 @@ class _Response {
 Future<_AuthTokens> _registerAndLogin(
   HttpClient client,
   int port,
+  BackendDatabase db,
   crypto.Ed25519 ed25519, {
   required String accountId,
   required String username,
@@ -319,6 +326,7 @@ Future<_AuthTokens> _registerAndLogin(
   );
   final otpCode =
       (jsonDecode(otpResponse.body) as Map<String, dynamic>)['code'] as String;
+  final inviteCode = seedTestInvite(db);
   final register = await _postJson(client, port, '/api/v1/accounts/register', {
     ...registrationBody(
       accountId: accountId,
@@ -327,6 +335,7 @@ Future<_AuthTokens> _registerAndLogin(
       deviceName: deviceId,
       material: material,
       otpCode: otpCode,
+      inviteCode: inviteCode,
     ),
   });
   expect(register.statusCode, equals(200));

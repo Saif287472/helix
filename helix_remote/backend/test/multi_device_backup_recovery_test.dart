@@ -37,6 +37,7 @@ void main() {
       final alice1 = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'alice',
         username: 'alice_user',
@@ -61,8 +62,9 @@ void main() {
               deviceName: 'Alice Laptop',
               material: aliceLaptopMaterial,
               // 'alice' already exists, so the handler rejects this before
-              // ever checking the OTP - its value doesn't matter here.
+              // ever checking the invite/OTP - their values don't matter here.
               otpCode: '000000',
+              inviteCode: '000000',
             ),
           });
       expect(directRegister.statusCode, equals(403));
@@ -171,6 +173,7 @@ void main() {
       final alice1 = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'alice_f1',
         username: 'alice_f1_user',
@@ -337,6 +340,7 @@ void main() {
       final alice = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'alice_final_device',
         username: 'alice_final_device_user',
@@ -388,6 +392,7 @@ void main() {
       final alice1 = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'alice',
         username: 'alice_fanout',
@@ -406,6 +411,7 @@ void main() {
       final bob = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'bob',
         username: 'bob_fanout',
@@ -518,6 +524,7 @@ void main() {
       final alice = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'alice',
         username: 'alice_backup',
@@ -602,6 +609,7 @@ void main() {
       final alice = await _registerAndLogin(
         client,
         port,
+        server.db,
         ed25519,
         accountId: 'alice',
         username: 'alice_lost',
@@ -673,6 +681,7 @@ class _Response {
 Future<_AuthTokens> _registerAndLogin(
   HttpClient client,
   int port,
+  BackendDatabase db,
   crypto.Ed25519 ed25519, {
   required String accountId,
   required String username,
@@ -693,6 +702,7 @@ Future<_AuthTokens> _registerAndLogin(
   );
   final otpCode =
       (jsonDecode(otpResponse.body) as Map<String, dynamic>)['code'] as String;
+  final inviteCode = seedTestInvite(db);
   final register = await _postJson(client, port, '/api/v1/accounts/register', {
     ...registrationBody(
       accountId: accountId,
@@ -701,6 +711,7 @@ Future<_AuthTokens> _registerAndLogin(
       deviceName: deviceName,
       material: material,
       otpCode: otpCode,
+      inviteCode: inviteCode,
     ),
   });
   expect(register.statusCode, equals(200));

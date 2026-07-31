@@ -34,6 +34,7 @@ void main() {
         client: client,
         host: '127.0.0.1',
         port: port,
+        db: server.db,
         accountId: 'phase06_acc',
         username: 'phase06',
         deviceId: 'phase06_device',

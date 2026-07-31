@@ -62,6 +62,7 @@ void main() {
           deviceName: 'Alice Phone',
           material: aliceMaterial,
           otpCode: aliceOtpCode,
+          inviteCode: seedTestInvite(server.db),
         ),
       );
       expect(regAliceRes.statusCode, equals(200));
@@ -96,6 +97,7 @@ void main() {
           deviceName: 'Bob Phone',
           material: bobMaterial,
           otpCode: bobOtpCode,
+          inviteCode: seedTestInvite(server.db),
         ),
       );
       expect(regBobRes.statusCode, equals(200));
@@ -411,6 +413,7 @@ void main() {
         deviceName: 'Carol Phone',
         material: carolMaterial,
         otpCode: carolOtpCode,
+        inviteCode: seedTestInvite(server.db),
       ),
     );
     expect(regRes.statusCode, equals(200));
@@ -527,6 +530,7 @@ void main() {
         deviceName: 'Alice Phone',
         material: aliceDelMaterial,
         otpCode: aliceDelOtpCode,
+        inviteCode: seedTestInvite(server.db),
       ),
     );
 
@@ -663,6 +667,7 @@ void main() {
         deviceName: 'Alice Quota Phone',
         material: aliceQuotaMaterial,
         otpCode: aliceQuotaOtpCode,
+        inviteCode: seedTestInvite(server.db),
       ),
     );
 
