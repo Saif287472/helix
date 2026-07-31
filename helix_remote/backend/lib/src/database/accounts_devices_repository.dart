@@ -2,17 +2,26 @@ part of '../database.dart';
 
 extension BackendAccountsDevicesRepository on BackendDatabase {
   // Account operations
+  //
+  // `username` remains a required, unique DB column for now: it predates
+  // phone-based identity and is deeply referenced by foreign keys from many
+  // other tables, so dropping it outright would require rebuilding every
+  // dependent table (see the phone_hash migration notes). Phone-based
+  // registrations satisfy the column with a reserved, never-user-visible
+  // value (see AuthRegistrationHandlers) and identify accounts by
+  // `phone_hash` everywhere that matters instead.
   void createAccount(
     String accountId,
     String username,
-    String identityPublicKey,
-  ) {
+    String identityPublicKey, {
+    String? phoneHash,
+  }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
-      INSERT INTO accounts (account_id, username, identity_public_key, created_at, status)
-      VALUES (?, ?, ?, ?, 'ACTIVE');
+      INSERT INTO accounts (account_id, username, identity_public_key, phone_hash, created_at, status)
+      VALUES (?, ?, ?, ?, ?, 'ACTIVE');
     ''');
-    stmt.execute([accountId, username, identityPublicKey, now]);
+    stmt.execute([accountId, username, identityPublicKey, phoneHash, now]);
     stmt.close();
   }
 
@@ -25,6 +34,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     return {
       'account_id': row['account_id'],
       'username': row['username'],
+      'phone_hash': row['phone_hash'],
       'identity_public_key': row['identity_public_key'],
       'created_at': row['created_at'],
       'status': row['status'],
@@ -33,15 +43,19 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
 
   bool accountExists(String accountId) => getAccount(accountId) != null;
 
-  Map<String, dynamic>? getAccountByUsername(String username) {
-    final stmt = _db.prepare('SELECT * FROM accounts WHERE username = ?;');
-    final result = stmt.select([username]);
+  /// Looks up an account by its salted phone-number hash (see
+  /// `phone_hash.dart`). This is the identity lookup used by phone-based
+  /// registration and login; the server never sees a raw phone number.
+  Map<String, dynamic>? getAccountByPhoneHash(String phoneHash) {
+    final stmt = _db.prepare('SELECT * FROM accounts WHERE phone_hash = ?;');
+    final result = stmt.select([phoneHash]);
     stmt.close();
     if (result.isEmpty) return null;
     final row = result.first;
     return {
       'account_id': row['account_id'],
       'username': row['username'],
+      'phone_hash': row['phone_hash'],
       'identity_public_key': row['identity_public_key'],
       'created_at': row['created_at'],
       'status': row['status'],
@@ -88,14 +102,6 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       'updated_at': row['updated_at'],
       'profile_version': row['profile_version'],
     };
-  }
-
-  void updateUsername(String accountId, String username) {
-    final stmt = _db.prepare(
-      'UPDATE accounts SET username = ? WHERE account_id = ?;',
-    );
-    stmt.execute([username, accountId]);
-    stmt.close();
   }
 
   Map<String, dynamic> exportAccountData(String accountId) {

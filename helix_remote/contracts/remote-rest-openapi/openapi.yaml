@@ -474,41 +474,45 @@ paths:
         '403':
           description: Forbidden
 
-  /accounts/username:
+  /accounts/phone/otp/request:
     post:
-      summary: Update or set the display username
-      operationId: updateUsername
+      summary: >-
+        Request a one-time verification code for a phone number, identified
+        only by its salted hash. There is no real SMS/push delivery yet, so
+        the code is returned directly in the response; the client is
+        expected to self-fire a local notification with it. This is an
+        explicit placeholder, not a secure out-of-band channel.
+      operationId: requestPhoneOtp
       tags: [Auth]
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [username]
+              required: [phone_hash]
               properties:
-                username:
+                phone_hash:
                   type: string
-                  minLength: 3
-                  maxLength: 30
-                  pattern: '^(?!helix_)[a-z0-9_]+$'
       responses:
         '200':
-          description: Username updated
+          description: Verification code issued
           content:
             application/json:
               schema:
                 type: object
-                required: [message, username]
+                required: [challenge_id, code, expires_at]
                 properties:
-                  message:
+                  challenge_id:
                     type: string
-                  username:
+                  code:
                     type: string
-        '401':
-          description: Unauthorized
+                  expires_at:
+                    type: integer
+        '400':
+          description: Missing phone_hash
+        '429':
+          description: Too many verification code requests
 
   # ─── Prekeys ──────────────────────────────────────────────────
   /accounts/profile:
@@ -612,6 +616,28 @@ paths:
           description: Account not found
 
   # ─── Contacts ─────────────────────────────────────────────────
+  /contacts/discovery-salt:
+    get:
+      summary: >-
+        Get the per-deployment, non-secret discovery salt used to hash
+        phone numbers for privacy-preserving contact matching. Unauthenticated:
+        needed before an account exists (signup) and by contacts sync.
+        Self-heals on first call; never rotated afterward.
+      operationId: getContactsDiscoverySalt
+      tags: [Contacts]
+      responses:
+        '200':
+          description: Discovery salt
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salt]
+                properties:
+                  salt:
+                    type: string
+                    description: Base64-encoded 32-byte salt.
+
   /contacts/:
     get:
       summary: List contacts for the authenticated account
@@ -2196,7 +2222,8 @@ components:
       type: object
       required:
         - account_id
-        - username
+        - phone_hash
+        - otp_code
         - display_name
         - registration_version
         - account_identity_public_key
@@ -2209,14 +2236,20 @@ components:
       properties:
         registration_version:
           type: integer
-          enum: [2]
+          enum: [3]
         account_id:
           type: string
-        username:
+        phone_hash:
           type: string
-          minLength: 3
-          maxLength: 30
-          pattern: '^(?!helix_)[a-z0-9_]+$'
+          description: >-
+            Salted HMAC-SHA256 hash of the account's E.164 phone number (see
+            GET /contacts/discovery-salt). The server never sees a raw
+            phone number.
+        otp_code:
+          type: string
+          description: >-
+            The one-time code obtained from POST /accounts/phone/otp/request
+            for this phone_hash.
         display_name:
           type: string
           minLength: 1
@@ -2234,10 +2267,10 @@ components:
           description: Base64url-encoded X25519 device agreement public key
         account_registration_signature:
           type: string
-          description: Ed25519 signature over the v2 registration transcript using the account identity key
+          description: Ed25519 signature over the v3 registration transcript using the account identity key
         device_registration_signature:
           type: string
-          description: Ed25519 signature over the v2 registration transcript using the device signing key
+          description: Ed25519 signature over the v3 registration transcript using the device signing key
         device_name:
           type: string
 

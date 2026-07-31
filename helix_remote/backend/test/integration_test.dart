@@ -40,6 +40,16 @@ void main() {
         deviceId: 'alice_device_1',
         deviceName: 'Alice Phone',
       );
+      final aliceOtpRes = await _postJson(
+        client,
+        'localhost',
+        port,
+        '/api/v1/accounts/phone/otp/request',
+        {'phone_hash': 'alice_user'},
+      );
+      final aliceOtpCode =
+          (jsonDecode(aliceOtpRes.body) as Map<String, dynamic>)['code']
+              as String;
       final regAliceRes = await _postJson(
         client,
         'localhost',
@@ -51,6 +61,7 @@ void main() {
           deviceId: 'alice_device_1',
           deviceName: 'Alice Phone',
           material: aliceMaterial,
+          otpCode: aliceOtpCode,
         ),
       );
       expect(regAliceRes.statusCode, equals(200));
@@ -63,6 +74,16 @@ void main() {
         deviceId: 'bob_device_1',
         deviceName: 'Bob Phone',
       );
+      final bobOtpRes = await _postJson(
+        client,
+        'localhost',
+        port,
+        '/api/v1/accounts/phone/otp/request',
+        {'phone_hash': 'bob_user'},
+      );
+      final bobOtpCode =
+          (jsonDecode(bobOtpRes.body) as Map<String, dynamic>)['code']
+              as String;
       final regBobRes = await _postJson(
         client,
         'localhost',
@@ -74,6 +95,7 @@ void main() {
           deviceId: 'bob_device_1',
           deviceName: 'Bob Phone',
           material: bobMaterial,
+          otpCode: bobOtpCode,
         ),
       );
       expect(regBobRes.statusCode, equals(200));
@@ -367,6 +389,16 @@ void main() {
       deviceId: 'carol_device_1',
       deviceName: 'Carol Phone',
     );
+    final carolOtpRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/phone/otp/request',
+      {'phone_hash': 'carol_user'},
+    );
+    final carolOtpCode =
+        (jsonDecode(carolOtpRes.body) as Map<String, dynamic>)['code']
+            as String;
     final regRes = await _postJson(
       client,
       'localhost',
@@ -378,6 +410,7 @@ void main() {
         deviceId: 'carol_device_1',
         deviceName: 'Carol Phone',
         material: carolMaterial,
+        otpCode: carolOtpCode,
       ),
     );
     expect(regRes.statusCode, equals(200));
@@ -472,6 +505,16 @@ void main() {
       deviceId: 'alice_device_del',
       deviceName: 'Alice Phone',
     );
+    final aliceDelOtpRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/phone/otp/request',
+      {'phone_hash': 'alice_del'},
+    );
+    final aliceDelOtpCode =
+        (jsonDecode(aliceDelOtpRes.body) as Map<String, dynamic>)['code']
+            as String;
     await _postJson(
       client,
       'localhost',
@@ -483,6 +526,7 @@ void main() {
         deviceId: 'alice_device_del',
         deviceName: 'Alice Phone',
         material: aliceDelMaterial,
+        otpCode: aliceDelOtpCode,
       ),
     );
 
@@ -597,6 +641,16 @@ void main() {
       deviceId: 'alice_quota_device',
       deviceName: 'Alice Quota Phone',
     );
+    final aliceQuotaOtpRes = await _postJson(
+      client,
+      'localhost',
+      port,
+      '/api/v1/accounts/phone/otp/request',
+      {'phone_hash': 'alice_quota_user'},
+    );
+    final aliceQuotaOtpCode =
+        (jsonDecode(aliceQuotaOtpRes.body) as Map<String, dynamic>)['code']
+            as String;
     await _postJson(
       client,
       'localhost',
@@ -608,6 +662,7 @@ void main() {
         deviceId: 'alice_quota_device',
         deviceName: 'Alice Quota Phone',
         material: aliceQuotaMaterial,
+        otpCode: aliceQuotaOtpCode,
       ),
     );
 

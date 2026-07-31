@@ -412,6 +412,14 @@ _registerAndLogin(
     deviceName: deviceName,
   );
 
+  final otpResp = await _post(
+    client,
+    port,
+    '/api/v1/accounts/phone/otp/request',
+    {'phone_hash': username},
+  );
+  final otpCode = otpResp.body['code'] as String;
+
   final regResp = await _post(
     client,
     port,
@@ -422,6 +430,7 @@ _registerAndLogin(
       deviceId: deviceId,
       deviceName: deviceName,
       material: regMaterial,
+      otpCode: otpCode,
     ),
   );
   expect(regResp.status, 200, reason: 'Registration failed for $accountId');

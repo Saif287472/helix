@@ -111,7 +111,8 @@ void main() {
     final users = body['users'] as List;
     expect(users, isNotEmpty);
     expect(users[0]['account_id'], equals('user1'));
-    expect(users[0]['username'], equals('user_one'));
+    expect(users[0].containsKey('username'), isFalse);
+    expect(users[0].containsKey('phone_hash'), isFalse);
   });
 
   test('Admin Trigger Backup Endpoint', () async {

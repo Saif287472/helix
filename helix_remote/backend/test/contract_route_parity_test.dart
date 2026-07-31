@@ -95,7 +95,6 @@ final _operations = <_Operation>[
   _Operation('CONTACT_REMOVE', 'POST', 'contacts/remove'),
   _Operation('CONTACT_BLOCK', 'POST', 'contacts/block'),
   _Operation('CONTACT_UNBLOCK', 'POST', 'contacts/unblock'),
-  _Operation('USERNAME_CHANGE', 'POST', 'accounts/username'),
   _Operation('PRIVACY_UPDATE', 'POST', 'contacts/privacy'),
   _Operation('PRESENCE_UPDATE', 'POST', 'contacts/presence'),
   _Operation('PROFILE_UPDATE', 'POST', 'accounts/profile'),

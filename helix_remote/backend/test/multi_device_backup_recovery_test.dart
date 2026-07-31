@@ -60,6 +60,9 @@ void main() {
               deviceId: 'alice_laptop',
               deviceName: 'Alice Laptop',
               material: aliceLaptopMaterial,
+              // 'alice' already exists, so the handler rejects this before
+              // ever checking the OTP - its value doesn't matter here.
+              otpCode: '000000',
             ),
           });
       expect(directRegister.statusCode, equals(403));
@@ -682,6 +685,14 @@ Future<_AuthTokens> _registerAndLogin(
     deviceId: deviceId,
     deviceName: deviceName,
   );
+  final otpResponse = await _postJson(
+    client,
+    port,
+    '/api/v1/accounts/phone/otp/request',
+    {'phone_hash': username},
+  );
+  final otpCode =
+      (jsonDecode(otpResponse.body) as Map<String, dynamic>)['code'] as String;
   final register = await _postJson(client, port, '/api/v1/accounts/register', {
     ...registrationBody(
       accountId: accountId,
@@ -689,6 +700,7 @@ Future<_AuthTokens> _registerAndLogin(
       deviceId: deviceId,
       deviceName: deviceName,
       material: material,
+      otpCode: otpCode,
     ),
   });
   expect(register.statusCode, equals(200));

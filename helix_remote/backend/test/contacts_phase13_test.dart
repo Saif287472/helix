@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:helix_remote_backend/helix_remote_backend.dart';
-import 'package:helix_remote_backend/src/modules/auth.dart';
 import 'package:helix_remote_backend/src/modules/contacts.dart';
 import 'package:helix_remote_backend/src/modules/messaging.dart';
 import 'package:shelf/shelf.dart';
@@ -12,12 +11,10 @@ import 'package:test/test.dart';
 void main() {
   late BackendDatabase db;
   late ContactsModule contacts;
-  late AuthModule auth;
 
   setUp(() {
     db = BackendDatabase(sqlite3.openInMemory());
     contacts = ContactsModule(db);
-    auth = AuthModule(db, JwtHelper('phase13_test_secret'));
 
     _seedAccount(db, 'alice', 'alice', 'alice_device');
     _seedAccount(db, 'bob', 'bob', 'bob_device');
@@ -353,47 +350,7 @@ void main() {
     },
   );
 
-  test('Phase 13 username rules and request quota', () async {
-    final invalidUsername = await _json(
-      auth.router.call(
-        _request(
-          'POST',
-          '/username',
-          authAccount: 'alice',
-          authDevice: 'alice_device',
-          body: {'username': 'Bad Name'},
-        ),
-      ),
-    );
-    expect(invalidUsername.statusCode, 400);
-
-    final validUsername = await _json(
-      auth.router.call(
-        _request(
-          'POST',
-          '/username',
-          authAccount: 'alice',
-          authDevice: 'alice_device',
-          body: {'username': 'alice_new'},
-        ),
-      ),
-    );
-    expect(validUsername.statusCode, 200);
-    expect(db.getAccount('alice')!['username'], 'alice_new');
-
-    final duplicateUsername = await _json(
-      auth.router.call(
-        _request(
-          'POST',
-          '/username',
-          authAccount: 'alice',
-          authDevice: 'alice_device',
-          body: {'username': 'bob'},
-        ),
-      ),
-    );
-    expect(duplicateUsername.statusCode, 403);
-
+  test('Phase 13 contact request quota enforced', () async {
     for (var i = 0; i < ContactsModule.contactRequestDailyLimit; i++) {
       _seedAccount(db, 'quota_$i', 'quota_$i', 'quota_device_$i');
       final response = await _json(

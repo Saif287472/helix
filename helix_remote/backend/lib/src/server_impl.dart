@@ -353,6 +353,8 @@ class BackendServer {
             path.endsWith('/accounts/challenge') ||
             path.endsWith('/accounts/login') ||
             path.endsWith('/accounts/refresh') ||
+            path.endsWith('/accounts/phone/otp/request') ||
+            path.endsWith('/contacts/discovery-salt') ||
             path.endsWith('/devices/link/request-new') ||
             path.endsWith('/devices/link/complete-new') ||
             path.endsWith('/health/live') ||

@@ -9,6 +9,7 @@ import 'package:helix_remote_backend/src/jwt.dart';
 
 part 'auth/challenge_login.dart';
 part 'auth/devices.dart';
+part 'auth/phone_otp.dart';
 part 'auth/profile.dart';
 part 'auth/refresh.dart';
 part 'auth/registration.dart';
@@ -26,7 +27,15 @@ abstract class AuthModuleBase {
   /// precedence over the client-controlled Host header.
   String? get configuredAudience;
 
-  bool _isValidUsername(String username);
+  /// Verifies (without consuming) that `code` matches the latest,
+  /// unexpired, unconsumed OTP challenge for `phoneHash`. Declared here so
+  /// AuthRegistrationHandlers can call into AuthPhoneOtpHandlers' concrete
+  /// implementation, mirroring the cross-mixin pattern already used by
+  /// `_notifySiblingDevices`/`_serverAudience`.
+  ({String? challengeId, String? error}) _verifyPhoneOtp({
+    required String phoneHash,
+    required String code,
+  });
 
   String _serverAudience(Request request);
 
@@ -41,6 +50,7 @@ class AuthModule extends AuthModuleBase
     with
         AuthChallengeLoginHandlers,
         AuthDeviceHandlers,
+        AuthPhoneOtpHandlers,
         AuthProfileHandlers,
         AuthRefreshHandlers,
         AuthRegistrationHandlers {
@@ -73,6 +83,7 @@ class AuthModule extends AuthModuleBase
 
     // Public routes
     router.post('/register', _registerHandler);
+    router.post('/phone/otp/request', _requestPhoneOtpHandler);
     router.get('/challenge', _challengeHandler);
     router.post('/login', _loginHandler);
     router.post('/refresh', _refreshHandler);
@@ -90,7 +101,6 @@ class AuthModule extends AuthModuleBase
     router.post('/devices/revoke', _revokeDeviceHandler);
     router.post('/devices/lost-device', _lostDeviceHandler);
     router.put('/devices/push-token', _updatePushTokenHandler);
-    router.post('/username', _changeUsernameHandler);
     router.post('/profile', _updateProfileHandler);
     router.get('/profile', _getProfileHandler);
 
@@ -98,13 +108,6 @@ class AuthModule extends AuthModuleBase
   }
 
   static String base64UrlEncode(List<int> bytes) => _authBase64UrlEncode(bytes);
-
-  @override
-  bool _isValidUsername(String username) {
-    if (username.length < 3 || username.length > 30) return false;
-    if (username.startsWith('helix_')) return false;
-    return RegExp(r'^[a-z0-9_]+$').hasMatch(username);
-  }
 
   @override
   void _notifySiblingDevices(

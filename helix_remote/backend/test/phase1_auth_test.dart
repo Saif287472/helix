@@ -52,6 +52,15 @@ void main() {
       );
     }
 
+    Future<String> requestOtp(String phoneHash) async {
+      final response = await postJson('/api/v1/accounts/phone/otp/request', {
+        'phone_hash': phoneHash,
+      });
+      expect(response.statusCode, equals(200));
+      return (jsonDecode(response.body) as Map<String, dynamic>)['code']
+          as String;
+    }
+
     Future<TestRegistrationMaterial> register({
       required String accountId,
       required String username,
@@ -64,6 +73,7 @@ void main() {
         deviceId: deviceId,
         deviceName: deviceName,
       );
+      final otpCode = await requestOtp(username);
       final response = await postJson(
         '/api/v1/accounts/register',
         registrationBody(
@@ -72,6 +82,7 @@ void main() {
           deviceId: deviceId,
           deviceName: deviceName,
           material: material,
+          otpCode: otpCode,
         ),
       );
       expect(response.statusCode, equals(200));
@@ -153,6 +164,8 @@ void main() {
           deviceId: 'swap_device',
           deviceName: 'Swap Phone',
           material: material,
+          // Key validation rejects this before the OTP is ever checked.
+          otpCode: '000000',
         );
         final signing = body['device_signing_public_key'];
         body['device_signing_public_key'] = body['device_agreement_public_key'];
@@ -179,9 +192,12 @@ void main() {
           deviceId: 'forged_device',
           deviceName: 'Forged Phone',
           material: material,
+          // Signature validation rejects this before the OTP is checked.
+          otpCode: '000000',
         );
-        tamperedAccountSig['account_registration_signature'] =
-            testBase64Url(List.filled(64, 7));
+        tamperedAccountSig['account_registration_signature'] = testBase64Url(
+          List.filled(64, 7),
+        );
         final accountSigResponse = await postJson(
           '/api/v1/accounts/register',
           tamperedAccountSig,
@@ -194,6 +210,7 @@ void main() {
           deviceId: 'forged_device',
           deviceName: 'Forged Phone',
           material: material,
+          otpCode: '000000',
         );
         tamperedDeviceSig['device_registration_signature'] = testBase64Url(
           List.filled(64, 7),
@@ -206,67 +223,53 @@ void main() {
       },
     );
 
-    test(
-      'registration rejects usernames and display names outside policy',
-      () async {
-        Future<_Response> attempt({
-          required String accountId,
-          required String username,
-          required String displayName,
-        }) async {
-          final material = await createTestRegistrationMaterial(
+    test('registration rejects display names outside policy', () async {
+      // registration_version 3 has no username field to validate at all
+      // (see phone_hash-based registration) - only display_name policy
+      // remains checked here, and that check happens before the OTP is
+      // ever verified, so a dummy otp_code is fine.
+      Future<_Response> attempt({
+        required String accountId,
+        required String username,
+        required String displayName,
+      }) async {
+        final material = await createTestRegistrationMaterial(
+          accountId: accountId,
+          username: username,
+          deviceId: '${accountId}_device',
+          deviceName: 'Policy Phone',
+        );
+        return postJson(
+          '/api/v1/accounts/register',
+          registrationBody(
             accountId: accountId,
             username: username,
+            displayName: displayName,
             deviceId: '${accountId}_device',
             deviceName: 'Policy Phone',
-          );
-          return postJson(
-            '/api/v1/accounts/register',
-            registrationBody(
-              accountId: accountId,
-              username: username,
-              displayName: displayName,
-              deviceId: '${accountId}_device',
-              deviceName: 'Policy Phone',
-              material: material,
-            ),
-          );
-        }
+            material: material,
+            otpCode: '000000',
+          ),
+        );
+      }
 
-        expect(
-          (await attempt(
-            accountId: 'bad_upper',
-            username: 'Bad_User',
-            displayName: 'Bad User',
-          )).statusCode,
-          equals(400),
-        );
-        expect(
-          (await attempt(
-            accountId: 'bad_reserved',
-            username: 'helix_admin',
-            displayName: 'Reserved User',
-          )).statusCode,
-          equals(400),
-        );
-        expect(
-          (await attempt(
-            accountId: 'bad_display',
-            username: 'bad_display',
-            displayName: '',
-          )).statusCode,
-          equals(400),
-        );
-        expect(
-          (await attempt(
-            accountId: 'long_display',
-            username: 'long_display',
-            displayName: List.filled(81, 'a').join(),
-          )).statusCode,
-          equals(400),
-        );
-      },
-    );
+      expect(
+        (await attempt(
+          accountId: 'bad_display',
+          username: 'bad_display',
+          displayName: '',
+        )).statusCode,
+        equals(400),
+      );
+      expect(
+        (await attempt(
+          accountId: 'long_display',
+          username: 'long_display',
+          displayName: List.filled(81, 'a').join(),
+        )).statusCode,
+        equals(400),
+      );
+    });
 
     test(
       'registration exact replay is idempotent only for same device',
@@ -277,12 +280,14 @@ void main() {
           deviceId: 'replay_device',
           deviceName: 'Replay Phone',
         );
+        final replayOtpCode = await requestOtp('replay_user');
         final body = registrationBody(
           accountId: 'replay_account',
           username: 'replay_user',
           deviceId: 'replay_device',
           deviceName: 'Replay Phone',
           material: material,
+          otpCode: replayOtpCode,
         )..['display_name'] = 'Replay User';
 
         final first = await postJson('/api/v1/accounts/register', body);
@@ -306,6 +311,9 @@ void main() {
             deviceId: 'replay_device_2',
             deviceName: 'Replay Tablet',
             material: otherMaterial,
+            // Account already exists, so this hits the device-link-required
+            // rejection before the OTP is ever checked again.
+            otpCode: '000000',
           )..['display_name'] = 'Replay User',
         );
         expect(otherDevice.statusCode, equals(403));

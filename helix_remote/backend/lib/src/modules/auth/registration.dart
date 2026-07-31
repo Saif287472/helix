@@ -6,8 +6,9 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       final body =
           jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final accountId = body['account_id'] as String?;
-      final username = body['username'] as String?;
       final registrationVersion = body['registration_version'];
+      final phoneHash = body['phone_hash'] as String?;
+      final otpCode = body['otp_code'] as String?;
       final identityPublicKey = body['account_identity_public_key'] as String?;
       final deviceId = body['device_id'] as String?;
       final deviceSigningPublicKey =
@@ -20,9 +21,11 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
           body['device_registration_signature'] as String?;
       final deviceName = body['device_name'] as String?;
 
-      if (registrationVersion != 2 ||
+      if (registrationVersion != 3 ||
           accountId == null ||
-          username == null ||
+          phoneHash == null ||
+          phoneHash.isEmpty ||
+          otpCode == null ||
           identityPublicKey == null ||
           deviceId == null ||
           deviceSigningPublicKey == null ||
@@ -35,27 +38,17 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         );
       }
 
-      if (!_isValidUsername(username)) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error':
-                'Username must be 3â€“30 lowercase letters, numbers, or underscores',
-          }),
-          headers: {'Content-Type': 'application/json'},
-        );
-      }
-
       final displayName = (body['display_name'] as String?)?.trim() ?? '';
       if (displayName.isEmpty || displayName.length > 80) {
         return Response.badRequest(
-          body: jsonEncode({'error': 'Display name must be 1â€“80 characters'}),
+          body: jsonEncode({'error': 'Display name must be 1–80 characters'}),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
       final keyValidation = await _validateRegistrationKeys(
         accountId: accountId,
-        username: username,
+        phoneHash: phoneHash,
         accountIdentityPublicKey: identityPublicKey,
         deviceId: deviceId,
         deviceSigningPublicKey: deviceSigningPublicKey,
@@ -68,19 +61,41 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         return Response.badRequest(body: jsonEncode({'error': keyValidation}));
       }
 
-      final usernameOwner = db.getAccountByUsername(username);
-      if (usernameOwner != null && usernameOwner['account_id'] != accountId) {
-        return Response(
-          409,
-          body: jsonEncode({'error': 'Username is not available'}),
-          headers: {'Content-Type': 'application/json'},
-        );
-      }
-
+      final phoneOwner = db.getAccountByPhoneHash(phoneHash);
       final existingAccount = db.getAccount(accountId);
+
       if (existingAccount == null) {
-        db.createAccount(accountId, username, identityPublicKey);
+        // A brand-new account: this phone number must not already belong
+        // to a different account, and the OTP just requested for it must
+        // check out before we create anything.
+        if (phoneOwner != null) {
+          return Response(
+            409,
+            body: jsonEncode({'error': 'Phone number is already registered'}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+
+        final otpResult = _verifyPhoneOtp(phoneHash: phoneHash, code: otpCode);
+        if (otpResult.error != null) {
+          return Response(
+            403,
+            body: jsonEncode({'error': otpResult.error}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+
+        db.createAccount(
+          accountId,
+          _reservedUsername(accountId),
+          identityPublicKey,
+          phoneHash: phoneHash,
+        );
         db.upsertAccountProfile(accountId: accountId, displayName: displayName);
+        db.markOtpConsumed(
+          otpResult.challengeId!,
+          _now().millisecondsSinceEpoch,
+        );
         db.logAudit(
           accountId,
           deviceId,
@@ -91,7 +106,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       } else {
         if (_isRegistrationReplay(
           existingAccount: existingAccount,
-          username: username,
+          phoneHash: phoneHash,
           identityPublicKey: identityPublicKey,
           displayName: displayName,
           deviceId: deviceId,
@@ -145,9 +160,17 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
     }
   }
 
+  /// `accounts.username` remains UNIQUE NOT NULL for schema-compatibility
+  /// reasons (see accounts_devices_repository.dart) but is never shown to
+  /// or settable by users anymore. Phone-based registrations fill it with
+  /// a reserved value that can never collide with a real username, since
+  /// real usernames could never start with `helix_` even when the concept
+  /// existed.
+  String _reservedUsername(String accountId) => 'helix_$accountId';
+
   bool _isRegistrationReplay({
     required Map<String, dynamic> existingAccount,
-    required String username,
+    required String phoneHash,
     required String identityPublicKey,
     required String displayName,
     required String deviceId,
@@ -155,7 +178,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
     required String deviceAgreementPublicKey,
     required String deviceName,
   }) {
-    if (existingAccount['username'] != username ||
+    if (existingAccount['phone_hash'] != phoneHash ||
         existingAccount['identity_public_key'] != identityPublicKey) {
       return false;
     }
@@ -184,7 +207,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
 
   Future<String?> _validateRegistrationKeys({
     required String accountId,
-    required String username,
+    required String phoneHash,
     required String accountIdentityPublicKey,
     required String deviceId,
     required String deviceSigningPublicKey,
@@ -205,7 +228,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
 
     final transcript = _registrationTranscript(
       accountId: accountId,
-      username: username,
+      phoneHash: phoneHash,
       accountIdentityPublicKey: accountIdentityPublicKey,
       deviceId: deviceId,
       deviceSigningPublicKey: deviceSigningPublicKey,
@@ -260,7 +283,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
 
   String _registrationTranscript({
     required String accountId,
-    required String username,
+    required String phoneHash,
     required String accountIdentityPublicKey,
     required String deviceId,
     required String deviceSigningPublicKey,
@@ -268,9 +291,9 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
     required String deviceName,
   }) {
     return [
-      'helix.remote.registration.v2',
+      'helix.remote.registration.v3',
       accountId,
-      username,
+      phoneHash,
       accountIdentityPublicKey,
       deviceId,
       deviceSigningPublicKey,

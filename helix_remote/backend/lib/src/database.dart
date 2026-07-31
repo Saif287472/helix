@@ -15,6 +15,7 @@ part 'database/messaging_repository.dart';
 part 'database/federation_repository.dart';
 part 'database/migrations.dart';
 part 'database/operational_repository.dart';
+part 'database/phone_otp_repository.dart';
 part 'database/server_config_repository.dart';
 
 class BackendDatabase {

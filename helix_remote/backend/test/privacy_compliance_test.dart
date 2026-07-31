@@ -311,6 +311,14 @@ Future<_AuthTokens> _registerAndLogin(
     deviceId: deviceId,
     deviceName: deviceId,
   );
+  final otpResponse = await _postJson(
+    client,
+    port,
+    '/api/v1/accounts/phone/otp/request',
+    {'phone_hash': username},
+  );
+  final otpCode =
+      (jsonDecode(otpResponse.body) as Map<String, dynamic>)['code'] as String;
   final register = await _postJson(client, port, '/api/v1/accounts/register', {
     ...registrationBody(
       accountId: accountId,
@@ -318,6 +326,7 @@ Future<_AuthTokens> _registerAndLogin(
       deviceId: deviceId,
       deviceName: deviceId,
       material: material,
+      otpCode: otpCode,
     ),
   });
   expect(register.statusCode, equals(200));

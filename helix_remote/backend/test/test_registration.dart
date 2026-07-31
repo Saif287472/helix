@@ -26,6 +26,11 @@ class TestRegistrationMaterial {
 String testBase64Url(List<int> bytes) =>
     base64Url.encode(bytes).replaceAll('=', '');
 
+/// Tests don't need real E.164 phone numbers or a real discovery-salt
+/// round trip — the server treats phone_hash as an opaque unique string.
+/// Reusing each test's existing account-scoped `username` value here keeps
+/// every call site below unchanged while still giving each test account a
+/// distinct, stable phone_hash stand-in.
 Future<TestRegistrationMaterial> createTestRegistrationMaterial({
   required String accountId,
   required String username,
@@ -44,7 +49,7 @@ Future<TestRegistrationMaterial> createTestRegistrationMaterial({
   final deviceAgreementPublicKey = testBase64Url(agreementPublicKey.bytes);
   final transcript = registrationTranscript(
     accountId: accountId,
-    username: username,
+    phoneHash: username,
     accountIdentityPublicKey: accountIdentityPublicKey,
     deviceId: deviceId,
     deviceSigningPublicKey: deviceSigningPublicKeyStr,
@@ -70,18 +75,25 @@ Future<TestRegistrationMaterial> createTestRegistrationMaterial({
   );
 }
 
+/// Builds a registration_version=3 request body. `username` is used as the
+/// phone_hash value (see note on `createTestRegistrationMaterial`);
+/// `otpCode` must come from a real `/accounts/phone/otp/request` call
+/// (see `requestTestOtp` below) so the server-side challenge actually
+/// matches.
 Map<String, dynamic> registrationBody({
   required String accountId,
   required String username,
   required String deviceId,
   required String deviceName,
   required TestRegistrationMaterial material,
+  required String otpCode,
   String? displayName,
 }) {
   return {
-    'registration_version': 2,
+    'registration_version': 3,
     'account_id': accountId,
-    'username': username,
+    'phone_hash': username,
+    'otp_code': otpCode,
     'display_name': displayName ?? username,
     'account_identity_public_key': material.accountIdentityPublicKey,
     'device_id': deviceId,
@@ -95,7 +107,7 @@ Map<String, dynamic> registrationBody({
 
 String registrationTranscript({
   required String accountId,
-  required String username,
+  required String phoneHash,
   required String accountIdentityPublicKey,
   required String deviceId,
   required String deviceSigningPublicKey,
@@ -103,15 +115,44 @@ String registrationTranscript({
   required String deviceName,
 }) {
   return [
-    'helix.remote.registration.v2',
+    'helix.remote.registration.v3',
     accountId,
-    username,
+    phoneHash,
     accountIdentityPublicKey,
     deviceId,
     deviceSigningPublicKey,
     deviceAgreementPublicKey,
     deviceName,
   ].join('\n');
+}
+
+/// Calls the real `/accounts/phone/otp/request` endpoint and returns the
+/// code from the response — this is the agreed placeholder delivery
+/// mechanism (no real SMS/push), so the code is simply in the response
+/// body rather than requiring a mocked notification channel in tests.
+Future<String> requestTestOtp({
+  required HttpClient client,
+  required String host,
+  required int port,
+  required String phoneHash,
+}) async {
+  final request = await client.post(
+    host,
+    port,
+    '/api/v1/accounts/phone/otp/request',
+  );
+  request.headers.contentType = ContentType.json;
+  request.write(jsonEncode({'phone_hash': phoneHash}));
+  final response = await request.close();
+  final body =
+      jsonDecode(await response.transform(utf8.decoder).join())
+          as Map<String, dynamic>;
+  if (response.statusCode != 200) {
+    throw StateError(
+      'OTP request failed with HTTP ${response.statusCode}: $body',
+    );
+  }
+  return body['code'] as String;
 }
 
 Future<TestRegistrationMaterial> registerTestAccount({
@@ -129,6 +170,12 @@ Future<TestRegistrationMaterial> registerTestAccount({
     deviceId: deviceId,
     deviceName: deviceName,
   );
+  final otpCode = await requestTestOtp(
+    client: client,
+    host: host,
+    port: port,
+    phoneHash: username,
+  );
   final request = await client.post(host, port, '/api/v1/accounts/register');
   request.headers.contentType = ContentType.json;
   request.write(
@@ -139,6 +186,7 @@ Future<TestRegistrationMaterial> registerTestAccount({
         deviceId: deviceId,
         deviceName: deviceName,
         material: material,
+        otpCode: otpCode,
       ),
     ),
   );

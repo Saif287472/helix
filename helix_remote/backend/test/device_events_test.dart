@@ -70,6 +70,14 @@ Future<String> _registerAndLogin(
     deviceId: deviceId,
     deviceName: '$username phone',
   );
+  final otpResponse = await _postJson(
+    '127.0.0.1',
+    port,
+    '/api/v1/accounts/phone/otp/request',
+    {'phone_hash': username},
+  );
+  final otpCode =
+      (jsonDecode(otpResponse.body) as Map<String, dynamic>)['code'] as String;
   await _postJson('127.0.0.1', port, '/api/v1/accounts/register', {
     ...registrationBody(
       accountId: accountId,
@@ -77,6 +85,7 @@ Future<String> _registerAndLogin(
       deviceId: deviceId,
       deviceName: '$username phone',
       material: material,
+      otpCode: otpCode,
     ),
   });
 
@@ -239,11 +248,7 @@ void main() {
         );
       }
 
-      final page1 = server.db.getDeviceEventsPage(
-        'paged_device',
-        0,
-        limit: 50,
-      );
+      final page1 = server.db.getDeviceEventsPage('paged_device', 0, limit: 50);
       expect(page1, hasLength(50));
       expect(page1.first['device_sequence'], equals(1));
       expect(page1.last['device_sequence'], equals(50));
