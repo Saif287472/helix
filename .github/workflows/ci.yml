@@ -20,8 +20,6 @@ jobs:
       common: ${{ steps.filter.outputs.common }}
       local: ${{ steps.filter.outputs.local }}
       remote: ${{ steps.filter.outputs.remote }}
-      backend: ${{ steps.filter.outputs.backend }}
-      tooling: ${{ steps.filter.outputs.tooling }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -29,35 +27,22 @@ jobs:
         with:
           filters: |
             common:
-              - 'pubspec.yaml'
-              - 'pubspec.lock'
-              - 'analysis_options.yaml'
-              - '.github/workflows/ci.yml'
               - 'docs/**'
-              - 'contracts/**'
+              - '.github/workflows/ci.yml'
             local:
-              - 'apps/helix_local/**'
-              - 'packages/local/**'
+              - 'helix_local/**'
             remote:
-              - 'apps/helix_remote/**'
-              - 'packages/remote/**'
-              - 'contracts/**'
-            backend:
-              - 'services/helix_remote_backend/**'
-              - 'contracts/**'
-            tooling:
-              - 'tool/**'
-              - 'scripts/**'
+              - 'helix_remote/**'
 
   verify-windows:
     needs: changes
     if: >-
       needs.changes.outputs.common == 'true' ||
-      needs.changes.outputs.local == 'true' ||
-      needs.changes.outputs.remote == 'true' ||
-      needs.changes.outputs.backend == 'true' ||
-      needs.changes.outputs.tooling == 'true'
+      needs.changes.outputs.remote == 'true'
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: helix_remote
     env:
       CI: "true"
       HELIX_VERIFY_BUILD: "1"
@@ -76,11 +61,11 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.common == 'true' ||
-      needs.changes.outputs.local == 'true' ||
-      needs.changes.outputs.remote == 'true' ||
-      needs.changes.outputs.backend == 'true' ||
-      needs.changes.outputs.tooling == 'true'
+      needs.changes.outputs.remote == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helix_remote
     env:
       CI: "true"
     steps:
@@ -99,12 +84,10 @@ jobs:
     if: >-
       needs.changes.outputs.common != 'true' &&
       needs.changes.outputs.local != 'true' &&
-      needs.changes.outputs.remote != 'true' &&
-      needs.changes.outputs.backend != 'true' &&
-      needs.changes.outputs.tooling != 'true'
+      needs.changes.outputs.remote != 'true'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "No Helix source, contract, docs, CI, script, or tooling changes detected."
+      - run: echo "No Helix Remote source, docs, or CI changes detected (helix_local changes are not yet wired into this workflow)."
 
   fuzz-seed-corpus:
     if: github.event_name == 'schedule'
