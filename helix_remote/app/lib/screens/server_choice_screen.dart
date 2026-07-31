@@ -3,6 +3,7 @@ import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
+import 'package:helix_remote/widgets/onboarding_security_badges.dart';
 
 /// Returned when the user chooses to continue without connecting to a
 /// server yet.
@@ -114,6 +115,8 @@ class _ServerChoiceScreenState extends State<ServerChoiceScreen> {
                       style: theme.textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
+                    const SizedBox(height: 16),
+                    const OnboardingSecurityBadge(),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       Text(

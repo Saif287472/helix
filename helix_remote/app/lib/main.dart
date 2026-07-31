@@ -16,6 +16,7 @@ import 'package:helix_remote/services/app_logger.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/services/onboarding_state_store.dart';
 import 'package:helix_remote/services/server_url_store.dart';
+import 'package:helix_remote/widgets/onboarding_security_badges.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -903,6 +904,12 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Deep-linked invite signups (widget.initialInviteCode) skip
+        // ServerChoiceScreen entirely and land here directly, so this
+        // onboarding highlight is repeated here rather than relying solely
+        // on the choice screen showing it first.
+        const OnboardingSecurityBadge(),
+        const SizedBox(height: 16),
         TextField(
           controller: _phoneController,
           enabled: !_sendingCode,
@@ -972,6 +979,8 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
           'notifications for it.',
           textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 12),
+        const OtpPlaceholderNotice(),
         const SizedBox(height: 16),
         TextField(
           controller: _otpController,
