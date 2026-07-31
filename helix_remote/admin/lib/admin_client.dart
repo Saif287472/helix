@@ -105,4 +105,32 @@ class AdminClient {
     final logs = body['logs'] as List?;
     return logs?.map((l) => l as String).toList() ?? [];
   }
+
+  /// Issues a new 7-day, single-use invite. The raw code (embedded in
+  /// `shareable_url`) is returned exactly once here and never persisted
+  /// server-side - only its hash is kept.
+  Future<Map<String, dynamic>> createInvite() async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ops/invites'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to create invite: ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> listInvites({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/ops/invites?limit=$limit&offset=$offset'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load invites: ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
 }

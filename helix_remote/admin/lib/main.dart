@@ -5,6 +5,7 @@ import 'screens/config_tab.dart';
 import 'screens/dashboard_tab.dart';
 import 'screens/guide_tab.dart';
 import 'screens/intro_screen.dart';
+import 'screens/invites_tab.dart';
 import 'screens/logs_tab.dart';
 import 'screens/settings_tab.dart';
 import 'services/admin_preferences.dart';
@@ -41,7 +42,7 @@ class HelixAdminApp extends StatelessWidget {
   }
 }
 
-const _serverDependentTabs = {'dashboard', 'config', 'logs', 'backup'};
+const _serverDependentTabs = {'dashboard', 'config', 'logs', 'backup', 'invites'};
 const _defaultServerUrl = 'http://127.0.0.1:8080';
 
 class MainAdminPage extends StatefulWidget {
@@ -275,6 +276,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           _sidebarItem(Icons.settings, 'Configurations', 'config'),
           _sidebarItem(Icons.terminal, 'Log Tailing', 'logs'),
           _sidebarItem(Icons.backup, 'Maintenance & Backups', 'backup'),
+          _sidebarItem(Icons.mail_outline, 'Invites', 'invites'),
           _sidebarItem(Icons.menu_book, 'Self-Hosting Guide', 'guide'),
           _sidebarItem(Icons.tune, 'Settings', 'settings'),
           const Spacer(),
@@ -386,6 +388,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
         return _client == null
             ? _lockedTab()
             : BackupTab(isLoading: _isLoading, onTriggerBackup: _triggerBackup);
+      case 'invites':
+        return _client == null ? _lockedTab() : InvitesTab(client: _client!);
       case 'guide':
         return const GuideTab();
       case 'settings':
