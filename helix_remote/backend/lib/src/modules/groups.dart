@@ -25,7 +25,12 @@ import 'package:helix_remote_backend/src/modules/messaging.dart';
 /// to home via POST /api/v1/s2s/groups/action (see [applyRemoteAction]) and
 /// receive roster/invite pushes via POST /api/v1/s2s/groups/sync.
 class GroupsModule {
-  GroupsModule(this.db, this.wsRelay, {this.federationClient, this.localDomain});
+  GroupsModule(
+    this.db,
+    this.wsRelay, {
+    this.federationClient,
+    this.localDomain,
+  });
 
   final BackendDatabase db;
   final MessageRelay wsRelay;
@@ -256,7 +261,8 @@ class GroupsModule {
       for (final id in db.getConversationMembers(groupId))
         {
           'account_id': _qualify(id),
-          'role': db.getGroupMemberRoleIncludingFederated(groupId, id) ?? 'MEMBER',
+          'role':
+              db.getGroupMemberRoleIncludingFederated(groupId, id) ?? 'MEMBER',
         },
       for (final member in db.getFederatedConversationMembers(groupId))
         {'account_id': member['account_id'], 'role': member['role']},
@@ -270,7 +276,8 @@ class GroupsModule {
       'encryption_key_id': group?['encryption_key_id'] ?? '',
       'status': group?['status'] ?? 'ACTIVE',
       'add_policy': group?['add_policy'] ?? 'EVERYONE',
-      'created_at': group?['created_at'] ?? DateTime.now().millisecondsSinceEpoch,
+      'created_at':
+          group?['created_at'] ?? DateTime.now().millisecondsSinceEpoch,
       'members': members,
       if (event != null) 'event': event,
     };
@@ -716,11 +723,10 @@ class GroupsModule {
           memberPayload,
           excludeAccountId: accountId,
         );
-        await _broadcastGroupSync(
-          groupId,
-          {...domainsBefore, ...db.getParticipatingDomains(groupId)},
-          event: memberPayload,
-        );
+        await _broadcastGroupSync(groupId, {
+          ...domainsBefore,
+          ...db.getParticipatingDomains(groupId),
+        }, event: memberPayload);
       } else {
         db.rejectGroupInvite(inviteId);
       }
@@ -790,7 +796,11 @@ class GroupsModule {
 
       // Relay admin event to all member devices.
       _relayToGroupMembers(groupId, adminEvent);
-      await _broadcastGroupSync(groupId, db.getParticipatingDomains(groupId), event: adminEvent);
+      await _broadcastGroupSync(
+        groupId,
+        db.getParticipatingDomains(groupId),
+        event: adminEvent,
+      );
 
       return Response.ok(
         jsonEncode({'group_id': groupId, 'updated': true}),
@@ -844,7 +854,8 @@ class GroupsModule {
         return Response(
           409,
           body: jsonEncode({
-            'error': 'Cannot demote the original creator; transfer ownership first',
+            'error':
+                'Cannot demote the original creator; transfer ownership first',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -860,7 +871,8 @@ class GroupsModule {
         );
       }
       if (role == 'MEMBER' &&
-          db.getGroupMemberRoleIncludingFederated(groupId, targetId) == 'ADMIN' &&
+          db.getGroupMemberRoleIncludingFederated(groupId, targetId) ==
+              'ADMIN' &&
           db.countGroupAdminsIncludingFederated(groupId) == 1) {
         return Response(
           409,
@@ -881,7 +893,11 @@ class GroupsModule {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
       _relayToGroupMembers(groupId, rolePayload);
-      await _broadcastGroupSync(groupId, db.getParticipatingDomains(groupId), event: rolePayload);
+      await _broadcastGroupSync(
+        groupId,
+        db.getParticipatingDomains(groupId),
+        event: rolePayload,
+      );
 
       return Response.ok(
         jsonEncode({'account_id': targetId, 'role': role}),
@@ -956,11 +972,10 @@ class GroupsModule {
         adminPayload['promoted_admin_id'] = promotedAdmin;
       }
       _relayToGroupAdmins(groupId, adminPayload);
-      await _broadcastGroupSync(
-        groupId,
-        {...domainsBefore, ...db.getParticipatingDomains(groupId)},
-        event: adminPayload,
-      );
+      await _broadcastGroupSync(groupId, {
+        ...domainsBefore,
+        ...db.getParticipatingDomains(groupId),
+      }, event: adminPayload);
 
       if (!db.hasAnyGroupMembersIncludingFederated(groupId)) {
         db.deleteGroup(groupId);
@@ -1022,14 +1037,16 @@ class GroupsModule {
         return Response(
           409,
           body: jsonEncode({
-            'error': 'Cannot remove the original creator; transfer ownership first',
+            'error':
+                'Cannot remove the original creator; transfer ownership first',
           }),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
       final domainsBefore = db.getParticipatingDomains(groupId);
-      final wasAdmin = db.getGroupMemberRoleIncludingFederated(groupId, targetId) == 'ADMIN';
+      final wasAdmin =
+          db.getGroupMemberRoleIncludingFederated(groupId, targetId) == 'ADMIN';
       db.removeGroupMember(groupId, targetId);
       final promotedAdmin = wasAdmin ? _promoteAdminIfNeeded(groupId) : null;
       final nextEpoch = body['epoch'] as int? ?? 0;
@@ -1063,11 +1080,10 @@ class GroupsModule {
         membershipPayload['promoted_admin_id'] = promotedAdmin;
       }
       _relayToGroupMembers(groupId, membershipPayload);
-      await _broadcastGroupSync(
-        groupId,
-        {...domainsBefore, ...db.getParticipatingDomains(groupId)},
-        event: membershipPayload,
-      );
+      await _broadcastGroupSync(groupId, {
+        ...domainsBefore,
+        ...db.getParticipatingDomains(groupId),
+      }, event: membershipPayload);
 
       return Response.ok(
         jsonEncode({'group_id': groupId, 'removed': targetId}),
@@ -1180,7 +1196,13 @@ class GroupsModule {
 
       final authority = db.resolveGroupAuthority(groupId);
       if (authority.isParticipant) {
-        return _proxyToHome(authority, groupId, 'set_add_policy', accountId, body);
+        return _proxyToHome(
+          authority,
+          groupId,
+          'set_add_policy',
+          accountId,
+          body,
+        );
       }
       if (!authority.isHome) {
         return Response.notFound(jsonEncode({'error': 'Group not found'}));
@@ -1200,7 +1222,11 @@ class GroupsModule {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
       _relayToGroupMembers(groupId, policyPayload);
-      await _broadcastGroupSync(groupId, db.getParticipatingDomains(groupId), event: policyPayload);
+      await _broadcastGroupSync(
+        groupId,
+        db.getParticipatingDomains(groupId),
+        event: policyPayload,
+      );
       return Response.ok(
         jsonEncode({'group_id': groupId, 'policy': policy}),
         headers: {'Content-Type': 'application/json'},
@@ -1549,7 +1575,13 @@ class GroupsModule {
 
       final authority = db.resolveGroupAuthority(groupId);
       if (authority.isParticipant) {
-        return _proxyToHome(authority, groupId, 'transfer_ownership', accountId, body);
+        return _proxyToHome(
+          authority,
+          groupId,
+          'transfer_ownership',
+          accountId,
+          body,
+        );
       }
       if (!authority.isHome) {
         return Response.notFound(jsonEncode({'error': 'Group not found'}));
@@ -1557,7 +1589,9 @@ class GroupsModule {
       final group = db.getGroup(groupId)!;
       if (group['creator_id'] != accountId) {
         return Response.forbidden(
-          jsonEncode({'error': 'Only the original creator can transfer ownership'}),
+          jsonEncode({
+            'error': 'Only the original creator can transfer ownership',
+          }),
         );
       }
       if (!db.isGroupMemberIncludingFederated(groupId, newOwnerId)) {
@@ -1579,7 +1613,11 @@ class GroupsModule {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
       _relayToGroupMembers(groupId, transferPayload);
-      await _broadcastGroupSync(groupId, db.getParticipatingDomains(groupId), event: transferPayload);
+      await _broadcastGroupSync(
+        groupId,
+        db.getParticipatingDomains(groupId),
+        event: transferPayload,
+      );
       return Response.ok(
         jsonEncode({
           'group_id': groupId,
@@ -1617,7 +1655,13 @@ class GroupsModule {
 
       final authority = db.resolveGroupAuthority(groupId);
       if (authority.isParticipant) {
-        return _proxyToHome(authority, groupId, 'admin_delete_message', accountId, body);
+        return _proxyToHome(
+          authority,
+          groupId,
+          'admin_delete_message',
+          accountId,
+          body,
+        );
       }
       if (!authority.isHome) {
         return Response.notFound(jsonEncode({'error': 'Group not found'}));
@@ -1645,7 +1689,11 @@ class GroupsModule {
         'timestamp': now,
       };
       _relayToGroupMembers(groupId, moderatePayload);
-      await _broadcastGroupSync(groupId, db.getParticipatingDomains(groupId), event: moderatePayload);
+      await _broadcastGroupSync(
+        groupId,
+        db.getParticipatingDomains(groupId),
+        event: moderatePayload,
+      );
       return Response.ok(
         jsonEncode({'message_id': messageId, 'moderated': true}),
         headers: {'Content-Type': 'application/json'},
@@ -1678,7 +1726,13 @@ class GroupsModule {
 
       final authority = db.resolveGroupAuthority(groupId);
       if (authority.isParticipant) {
-        return _proxyToHome(authority, groupId, 'block_member', accountId, body);
+        return _proxyToHome(
+          authority,
+          groupId,
+          'block_member',
+          accountId,
+          body,
+        );
       }
       if (!authority.isHome) {
         return Response.notFound(jsonEncode({'error': 'Group not found'}));
@@ -1707,11 +1761,10 @@ class GroupsModule {
           'timestamp': DateTime.now().millisecondsSinceEpoch,
         };
         _relayToGroupMembers(groupId, blockPayload);
-        await _broadcastGroupSync(
-          groupId,
-          {...domainsBefore, ...db.getParticipatingDomains(groupId)},
-          event: blockPayload,
-        );
+        await _broadcastGroupSync(groupId, {
+          ...domainsBefore,
+          ...db.getParticipatingDomains(groupId),
+        }, event: blockPayload);
       }
       return Response.ok(
         jsonEncode({'group_id': groupId, 'blocked': targetId}),
@@ -1747,7 +1800,10 @@ class GroupsModule {
       final epoch = body['epoch'] as int?;
       final keyId = body['key_id'] as String?;
       final rawDeliveries = body['deliveries'] as List?;
-      if (groupId == null || epoch == null || keyId == null || rawDeliveries == null) {
+      if (groupId == null ||
+          epoch == null ||
+          keyId == null ||
+          rawDeliveries == null) {
         return Response.badRequest(
           body: jsonEncode({
             'error': 'Missing group_id, epoch, key_id, or deliveries',
@@ -1933,7 +1989,8 @@ class GroupsModule {
     if (federatedMembers.isEmpty) return null;
     final sorted = [...federatedMembers]
       ..sort(
-        (a, b) => (a['account_id'] as String).compareTo(b['account_id'] as String),
+        (a, b) =>
+            (a['account_id'] as String).compareTo(b['account_id'] as String),
       );
     final promoted = sorted.first['account_id'] as String;
     db.changeGroupMemberRole(groupId, promoted, 'ADMIN');

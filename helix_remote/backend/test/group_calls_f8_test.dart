@@ -74,11 +74,21 @@ void main() {
     port = server.httpServer!.port;
 
     server.db.createAccount('alice', 'alice_user', 'alice_identity_key');
-    server.db.registerDevice('alice_dev1', 'alice', 'alice_device_key', 'Alice Phone');
+    server.db.registerDevice(
+      'alice_dev1',
+      'alice',
+      'alice_device_key',
+      'Alice Phone',
+    );
     server.db.createAccount('bob', 'bob_user', 'bob_identity_key');
     server.db.registerDevice('bob_dev1', 'bob', 'bob_device_key', 'Bob Phone');
     server.db.createAccount('carol', 'carol_user', 'carol_identity_key');
-    server.db.registerDevice('carol_dev1', 'carol', 'carol_device_key', 'Carol Phone');
+    server.db.registerDevice(
+      'carol_dev1',
+      'carol',
+      'carol_device_key',
+      'Carol Phone',
+    );
 
     tokenAlice = server.jwt.generateToken({
       'account_id': 'alice',
@@ -103,13 +113,16 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('room lifecycle', () {
-    test('host creates a video room and gets 201-like 200 with room_id', () async {
-      final alice = _Client(base(), tokenAlice);
-      final r = await alice.post('/group-calls/', {'is_video': true});
-      expect(r.status, 200);
-      expect(r.json['room_id'], isA<String>());
-      expect(r.json['is_video'], true);
-    });
+    test(
+      'host creates a video room and gets 201-like 200 with room_id',
+      () async {
+        final alice = _Client(base(), tokenAlice);
+        final r = await alice.post('/group-calls/', {'is_video': true});
+        expect(r.status, 200);
+        expect(r.json['room_id'], isA<String>());
+        expect(r.json['is_video'], true);
+      },
+    );
 
     test('participant can join the room', () async {
       final alice = _Client(base(), tokenAlice);
@@ -144,7 +157,12 @@ void main() {
 
       // Seed dave and eve directly.
       server.db.createAccount('dave', 'dave_user', 'dave_identity_key');
-      server.db.registerDevice('dave_dev1', 'dave', 'dave_device_key', 'Dave Phone');
+      server.db.registerDevice(
+        'dave_dev1',
+        'dave',
+        'dave_device_key',
+        'Dave Phone',
+      );
       final tokenDave = server.jwt.generateToken({
         'account_id': 'dave',
         'device_id': 'dave_dev1',
@@ -152,7 +170,12 @@ void main() {
       final dave = _Client(base(), tokenDave);
 
       server.db.createAccount('eve', 'eve_user', 'eve_identity_key');
-      server.db.registerDevice('eve_dev1', 'eve', 'eve_device_key', 'Eve Phone');
+      server.db.registerDevice(
+        'eve_dev1',
+        'eve',
+        'eve_device_key',
+        'Eve Phone',
+      );
       final tokenEve = server.jwt.generateToken({
         'account_id': 'eve',
         'device_id': 'eve_dev1',
@@ -275,11 +298,15 @@ void main() {
       final create = await alice.post('/group-calls/', {'is_video': true});
       final roomId = create.json['room_id'] as String;
 
-      final on = await alice.post('/group-calls/$roomId/screen-sharing', {'active': true});
+      final on = await alice.post('/group-calls/$roomId/screen-sharing', {
+        'active': true,
+      });
       expect(on.status, 200);
       expect(on.json['active'], true);
 
-      final off = await alice.post('/group-calls/$roomId/screen-sharing', {'active': false});
+      final off = await alice.post('/group-calls/$roomId/screen-sharing', {
+        'active': false,
+      });
       expect(off.status, 200);
       expect(off.json['active'], false);
     });
@@ -302,7 +329,9 @@ void main() {
       final alice = _Client(base(), tokenAlice);
       final bob = _Client(base(), tokenBob);
 
-      final create = await alice.post('/group-calls/links', {'requires_approval': false});
+      final create = await alice.post('/group-calls/links', {
+        'requires_approval': false,
+      });
       final token = create.json['link_token'] as String;
 
       final resolve = await bob.get('/group-calls/links/$token');
@@ -338,7 +367,9 @@ void main() {
 
     test('unknown link returns 404', () async {
       final bob = _Client(base(), tokenBob);
-      final r = await bob.get('/group-calls/links/deadbeef0000000000000000000000000000000000000000000000000000dead');
+      final r = await bob.get(
+        '/group-calls/links/deadbeef0000000000000000000000000000000000000000000000000000dead',
+      );
       expect(r.status, 404);
     });
   });
@@ -348,10 +379,9 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('scheduled calls', () {
-    int _futureMs(int minutesFromNow) =>
-        DateTime.now()
-            .add(Duration(minutes: minutesFromNow))
-            .millisecondsSinceEpoch;
+    int _futureMs(int minutesFromNow) => DateTime.now()
+        .add(Duration(minutes: minutesFromNow))
+        .millisecondsSinceEpoch;
 
     test('creates a scheduled call', () async {
       final alice = _Client(base(), tokenAlice);
@@ -392,7 +422,9 @@ void main() {
       });
       final scId = create.json['scheduled_call_id'] as String;
 
-      final rsvp = await bob.post('/group-calls/scheduled/$scId/rsvp', {'rsvp': 'YES'});
+      final rsvp = await bob.post('/group-calls/scheduled/$scId/rsvp', {
+        'rsvp': 'YES',
+      });
       expect(rsvp.status, 200);
       expect(rsvp.json['rsvp'], 'YES');
     });
@@ -408,7 +440,9 @@ void main() {
       });
       final scId = create.json['scheduled_call_id'] as String;
 
-      final r = await bob.post('/group-calls/scheduled/$scId/rsvp', {'rsvp': 'MAYBE'});
+      final r = await bob.post('/group-calls/scheduled/$scId/rsvp', {
+        'rsvp': 'MAYBE',
+      });
       expect(r.status, 400);
     });
 

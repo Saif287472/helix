@@ -49,9 +49,7 @@ final class FcmPushProvider implements PushProvider {
     required String token,
     required Map<String, dynamic> data,
   }) async {
-    final stringData = {
-      for (final e in data.entries) e.key: '${e.value}',
-    };
+    final stringData = {for (final e in data.entries) e.key: '${e.value}'};
 
     final body = jsonEncode({
       'message': {

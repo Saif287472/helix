@@ -93,58 +93,51 @@ void main() {
 
     tearDown(() => db.close());
 
-    test(
-      'deleteMessagesForDevice removes a mailbox spanning multiple '
-      '500-row chunks in full',
-      () async {
-        const total = 1200; // 2 full chunks + 1 partial
-        for (var i = 0; i < total; i++) {
-          db.saveMessage(
-            messageId: 'bulk_msg_$i',
-            conversationId: 'conv_bulk',
-            senderAccountId: 'bulk_account',
-            senderDeviceId: 'bulk_sender_device',
-            recipientDeviceId: 'bulk_recipient_device',
-            ciphertext: 'ct_$i',
-          );
-        }
-        expect(db.getMessage('bulk_msg_0'), isNotNull);
-        expect(db.getMessage('bulk_msg_${total - 1}'), isNotNull);
-
-        await db.deleteMessagesForDevice('bulk_recipient_device');
-
-        for (final i in [0, 1, 499, 500, 999, 1000, total - 1]) {
-          expect(
-            db.getMessage('bulk_msg_$i'),
-            isNull,
-            reason: 'bulk_msg_$i should have been deleted',
-          );
-        }
-        expect(db.quickCheckOk(), isTrue);
-      },
-      timeout: const Timeout(Duration(seconds: 15)),
-    );
-
-    test(
-      'deleteAccountData cascades message cleanup without an explicit '
-      'per-device delete loop',
-      () async {
+    test('deleteMessagesForDevice removes a mailbox spanning multiple '
+        '500-row chunks in full', () async {
+      const total = 1200; // 2 full chunks + 1 partial
+      for (var i = 0; i < total; i++) {
         db.saveMessage(
-          messageId: 'cascade_msg_1',
+          messageId: 'bulk_msg_$i',
           conversationId: 'conv_bulk',
           senderAccountId: 'bulk_account',
           senderDeviceId: 'bulk_sender_device',
           recipientDeviceId: 'bulk_recipient_device',
-          ciphertext: 'ct',
+          ciphertext: 'ct_$i',
         );
-        expect(db.getMessage('cascade_msg_1'), isNotNull);
+      }
+      expect(db.getMessage('bulk_msg_0'), isNotNull);
+      expect(db.getMessage('bulk_msg_${total - 1}'), isNotNull);
 
-        await db.deleteAccountData('bulk_recipient');
+      await db.deleteMessagesForDevice('bulk_recipient_device');
 
-        expect(db.getMessage('cascade_msg_1'), isNull);
-        expect(db.getAccount('bulk_recipient'), isNull);
-        expect(db.quickCheckOk(), isTrue);
-      },
-    );
+      for (final i in [0, 1, 499, 500, 999, 1000, total - 1]) {
+        expect(
+          db.getMessage('bulk_msg_$i'),
+          isNull,
+          reason: 'bulk_msg_$i should have been deleted',
+        );
+      }
+      expect(db.quickCheckOk(), isTrue);
+    }, timeout: const Timeout(Duration(seconds: 15)));
+
+    test('deleteAccountData cascades message cleanup without an explicit '
+        'per-device delete loop', () async {
+      db.saveMessage(
+        messageId: 'cascade_msg_1',
+        conversationId: 'conv_bulk',
+        senderAccountId: 'bulk_account',
+        senderDeviceId: 'bulk_sender_device',
+        recipientDeviceId: 'bulk_recipient_device',
+        ciphertext: 'ct',
+      );
+      expect(db.getMessage('cascade_msg_1'), isNotNull);
+
+      await db.deleteAccountData('bulk_recipient');
+
+      expect(db.getMessage('cascade_msg_1'), isNull);
+      expect(db.getAccount('bulk_recipient'), isNull);
+      expect(db.quickCheckOk(), isTrue);
+    });
   });
 }

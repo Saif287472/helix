@@ -4,11 +4,7 @@ import 'package:helix_remote_domain/models.dart';
 
 /// Bottom sheet for creating and sharing a call link.
 class CallLinkSheet extends StatelessWidget {
-  const CallLinkSheet({
-    super.key,
-    required this.link,
-    this.onRevoke,
-  });
+  const CallLinkSheet({super.key, required this.link, this.onRevoke});
 
   final CallLink link;
   final VoidCallback? onRevoke;
@@ -88,7 +84,10 @@ class CallLinkSheet extends StatelessWidget {
                 Expanded(
                   child: Text(
                     token,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -140,7 +139,11 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

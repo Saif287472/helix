@@ -128,10 +128,9 @@ RemoteCallService _makeService(
     signalingGateway: _StubGateway(),
     disconnectedGrace: disconnectedGrace,
     terminalStateGrace: Duration.zero,
-    metricsUploader: metricsUploader ??
-        (capturedMetrics != null
-            ? (m) async => capturedMetrics.add(m)
-            : null),
+    metricsUploader:
+        metricsUploader ??
+        (capturedMetrics != null ? (m) async => capturedMetrics.add(m) : null),
   );
   svc.start();
   return svc;
@@ -186,29 +185,32 @@ void main() {
       await svc.dispose();
     });
 
-    test('re-enables video after two consecutive good quality samples', () async {
-      final svc = _makeService(db, engine);
-      await svc.startOutgoingCall(peerId: 'bob', isVideo: true);
-      final callId = svc.activeCall!.callId;
-      engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
-      await Future<void>.delayed(Duration.zero);
+    test(
+      're-enables video after two consecutive good quality samples',
+      () async {
+        final svc = _makeService(db, engine);
+        await svc.startOutgoingCall(peerId: 'bob', isVideo: true);
+        final callId = svc.activeCall!.callId;
+        engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
+        await Future<void>.delayed(Duration.zero);
 
-      // Trigger degraded → video off.
-      engine.emitQuality(callId, loss: 20, rtt: 100);
-      await Future<void>.delayed(Duration.zero);
-      expect(engine.log, contains('setVideo:$callId:false'));
+        // Trigger degraded → video off.
+        engine.emitQuality(callId, loss: 20, rtt: 100);
+        await Future<void>.delayed(Duration.zero);
+        expect(engine.log, contains('setVideo:$callId:false'));
 
-      // One good sample not enough (needs 2).
-      engine.emitQuality(callId, loss: 2, rtt: 50);
-      await Future<void>.delayed(Duration.zero);
-      expect(engine.log, isNot(contains('setVideo:$callId:true')));
+        // One good sample not enough (needs 2).
+        engine.emitQuality(callId, loss: 2, rtt: 50);
+        await Future<void>.delayed(Duration.zero);
+        expect(engine.log, isNot(contains('setVideo:$callId:true')));
 
-      // Second good sample → video re-enabled.
-      engine.emitQuality(callId, loss: 2, rtt: 50);
-      await Future<void>.delayed(Duration.zero);
-      expect(engine.log, contains('setVideo:$callId:true'));
-      await svc.dispose();
-    });
+        // Second good sample → video re-enabled.
+        engine.emitQuality(callId, loss: 2, rtt: 50);
+        await Future<void>.delayed(Duration.zero);
+        expect(engine.log, contains('setVideo:$callId:true'));
+        await svc.dispose();
+      },
+    );
 
     test('does not disable video for audio-only call', () async {
       final svc = _makeService(db, engine);
@@ -268,34 +270,34 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       }
 
-      expect(
-        svc.activeCall?.state,
-        anyOf(isNull, RemoteCallState.failed),
-      );
+      expect(svc.activeCall?.state, anyOf(isNull, RemoteCallState.failed));
       await svc.dispose();
     });
 
-    test('reconnect counter resets when connection returns to active', () async {
-      final svc = _makeService(
-        db,
-        engine,
-        disconnectedGrace: const Duration(milliseconds: 20),
-      );
-      await svc.startOutgoingCall(peerId: 'bob', isVideo: false);
-      final callId = svc.activeCall!.callId;
-      engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
-      await Future<void>.delayed(Duration.zero);
+    test(
+      'reconnect counter resets when connection returns to active',
+      () async {
+        final svc = _makeService(
+          db,
+          engine,
+          disconnectedGrace: const Duration(milliseconds: 20),
+        );
+        await svc.startOutgoingCall(peerId: 'bob', isVideo: false);
+        final callId = svc.activeCall!.callId;
+        engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
+        await Future<void>.delayed(Duration.zero);
 
-      // One disconnect + recovery.
-      engine.emitConn(callId, RemoteCallEngineConnectionState.disconnected);
-      await Future<void>.delayed(const Duration(milliseconds: 60));
-      engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
-      await Future<void>.delayed(Duration.zero);
+        // One disconnect + recovery.
+        engine.emitConn(callId, RemoteCallEngineConnectionState.disconnected);
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+        engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
+        await Future<void>.delayed(Duration.zero);
 
-      // Call should still be active, not failed.
-      expect(svc.activeCall?.state, RemoteCallState.active);
-      await svc.dispose();
-    });
+        // Call should still be active, not failed.
+        expect(svc.activeCall?.state, RemoteCallState.active);
+        await svc.dispose();
+      },
+    );
   });
 
   // -------------------------------------------------------------------------

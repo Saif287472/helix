@@ -18,7 +18,7 @@ class CallRoomParticipant {
 
   final String accountId;
   final String deviceId;
-  final String role;   // HOST | PARTICIPANT
+  final String role; // HOST | PARTICIPANT
   final String status; // INVITED | JOINED | LEFT | KICKED
   final bool isScreenSharing;
   final DateTime? joinedAt;
@@ -87,7 +87,9 @@ class CallRoom {
       startedAt: startMs != null
           ? DateTime.fromMillisecondsSinceEpoch(startMs)
           : null,
-      endedAt: endMs != null ? DateTime.fromMillisecondsSinceEpoch(endMs) : null,
+      endedAt: endMs != null
+          ? DateTime.fromMillisecondsSinceEpoch(endMs)
+          : null,
     );
   }
 }
@@ -185,7 +187,9 @@ class ScheduledCall {
       hostAccountId: j['host_account_id'] as String,
       title: j['title'] as String,
       roomId: j['room_id'] as String?,
-      scheduledAt: DateTime.fromMillisecondsSinceEpoch(j['scheduled_at'] as int),
+      scheduledAt: DateTime.fromMillisecondsSinceEpoch(
+        j['scheduled_at'] as int,
+      ),
       createdAt: DateTime.fromMillisecondsSinceEpoch(j['created_at'] as int),
       attendees: raw
           .whereType<Map<String, dynamic>>()

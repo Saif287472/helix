@@ -14,10 +14,10 @@ class DoubleRatchetHeader {
   final int n;
 
   Map<String, dynamic> toJson() => {
-        'dh': base64Encode(dhPublicBytes),
-        'pn': pn,
-        'n': n,
-      };
+    'dh': base64Encode(dhPublicBytes),
+    'pn': pn,
+    'n': n,
+  };
 
   factory DoubleRatchetHeader.fromJson(Map<String, dynamic> json) {
     return DoubleRatchetHeader(
@@ -56,9 +56,9 @@ class DoubleRatchetSession {
     this.ns = 0,
     this.nr = 0,
     this.pn = 0,
-  })  : rk = rootKey,
-        ckSend = sendingChainKey,
-        ckRecv = receivingChainKey;
+  }) : rk = rootKey,
+       ckSend = sendingChainKey,
+       ckRecv = receivingChainKey;
 
   DoubleRatchetSession._({
     this.dHk,
@@ -116,10 +116,7 @@ class DoubleRatchetSession {
     required crypto.SecretKey sharedKey,
     required crypto.SimpleKeyPair localKeyPair,
   }) async {
-    return DoubleRatchetSession._(
-      dHk: localKeyPair,
-      rk: sharedKey,
-    );
+    return DoubleRatchetSession._(dHk: localKeyPair, rk: sharedKey);
   }
 
   /// Encrypt a payload.
@@ -129,10 +126,7 @@ class DoubleRatchetSession {
       throw StateError('Cannot encrypt: sending chain key is null');
     }
 
-    final derived = await _ratchetSymmetric(
-      ckSend!,
-      'sending-message-key',
-    );
+    final derived = await _ratchetSymmetric(ckSend!, 'sending-message-key');
     ckSend = derived.nextChainKey;
 
     final mkBytes = await derived.messageKey.extractBytes();
@@ -161,7 +155,8 @@ class DoubleRatchetSession {
     final headerJson = jsonEncode(header.toJson());
     final headerBytes = utf8.encode(headerJson);
     final builder = BytesBuilder();
-    final lengthData = ByteData(4)..setUint32(0, headerBytes.length, Endian.big);
+    final lengthData = ByteData(4)
+      ..setUint32(0, headerBytes.length, Endian.big);
 
     builder.add(lengthData.buffer.asUint8List());
     builder.add(headerBytes);
@@ -204,7 +199,9 @@ class DoubleRatchetSession {
     final ciphertext = combinedBytes.sublist(4 + headerLength);
 
     final headerJson = utf8.decode(headerBytes);
-    final header = DoubleRatchetHeader.fromJson(jsonDecode(headerJson) as Map<String, dynamic>);
+    final header = DoubleRatchetHeader.fromJson(
+      jsonDecode(headerJson) as Map<String, dynamic>,
+    );
 
     final peerPublicKey = crypto.SimplePublicKey(
       header.dhPublicBytes,
@@ -237,7 +234,9 @@ class DoubleRatchetSession {
     var candidateNs = ns;
     var candidateNr = nr;
     var candidatePn = pn;
-    final candidateSkippedKeys = Map<String, crypto.SecretKey>.from(skippedMessageKeys);
+    final candidateSkippedKeys = Map<String, crypto.SecretKey>.from(
+      skippedMessageKeys,
+    );
 
     if (isNewDh) {
       final ratchetResult = await _dhRatchetStep(
@@ -273,7 +272,10 @@ class DoubleRatchetSession {
     candidateNr = skipResult.nr;
 
     // Derive message key
-    final derived = await _ratchetSymmetric(candidateCkRecv!, 'sending-message-key');
+    final derived = await _ratchetSymmetric(
+      candidateCkRecv!,
+      'sending-message-key',
+    );
     final candidateNextCkRecv = derived.nextChainKey;
     final mk = derived.messageKey;
 
@@ -326,7 +328,10 @@ class DoubleRatchetSession {
   crypto.SecretKey get receivingChainKey => ckRecv!;
   set receivingChainKey(crypto.SecretKey val) => ckRecv = val;
 
-  static bool _compareKeys(crypto.SimplePublicKey k1, crypto.SimplePublicKey k2) {
+  static bool _compareKeys(
+    crypto.SimplePublicKey k1,
+    crypto.SimplePublicKey k2,
+  ) {
     if (k1.bytes.length != k2.bytes.length) return false;
     for (var i = 0; i < k1.bytes.length; i++) {
       if (k1.bytes[i] != k2.bytes[i]) return false;

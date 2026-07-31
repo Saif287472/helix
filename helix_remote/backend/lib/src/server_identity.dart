@@ -7,12 +7,12 @@ import 'package:helix_remote_backend/src/database.dart';
 String generateUuidV4() {
   final random = Random.secure();
   final bytes = List<int>.generate(16, (i) => random.nextInt(256));
-  
+
   // Set version to 4 (0100)
   bytes[6] = (bytes[6] & 0x0F) | 0x40;
   // Set variant to RFC 4122 (10xx)
   bytes[8] = (bytes[8] & 0x3F) | 0x80;
-  
+
   final buffer = StringBuffer();
   for (var i = 0; i < 16; i++) {
     if (i == 4 || i == 6 || i == 8 || i == 10) {
@@ -41,12 +41,17 @@ class ServerIdentity {
 
     final String resolvedServerId;
     final crypto.SimpleKeyPair keyPair;
-    if (serverId != null && publicKeyBase64 != null && privateKeyBase64 != null) {
+    if (serverId != null &&
+        publicKeyBase64 != null &&
+        privateKeyBase64 != null) {
       final pubBytes = base64Decode(publicKeyBase64);
       final privBytes = base64Decode(privateKeyBase64);
       keyPair = crypto.SimpleKeyPairData(
         privBytes,
-        publicKey: crypto.SimplePublicKey(pubBytes, type: crypto.KeyPairType.ed25519),
+        publicKey: crypto.SimplePublicKey(
+          pubBytes,
+          type: crypto.KeyPairType.ed25519,
+        ),
         type: crypto.KeyPairType.ed25519,
       );
       resolvedServerId = serverId;
@@ -59,7 +64,10 @@ class ServerIdentity {
       final newPrivateKeyBytes = await newKeyPair.extractPrivateKeyBytes();
       db.setServerConfig('server_id', resolvedServerId);
       db.setServerConfig('server_public_key', base64Encode(newPublicKey.bytes));
-      db.setServerConfig('server_private_key', base64Encode(newPrivateKeyBytes));
+      db.setServerConfig(
+        'server_private_key',
+        base64Encode(newPrivateKeyBytes),
+      );
       keyPair = newKeyPair;
     }
 
@@ -75,7 +83,9 @@ class ServerIdentity {
       final random = Random.secure();
       final tokenBytes = List<int>.generate(24, (i) => random.nextInt(256));
       generatedAdminToken = base64UrlEncodeNoPadding(tokenBytes);
-      final hash = crypto_pkg.sha256.convert(utf8.encode(generatedAdminToken)).toString();
+      final hash = crypto_pkg.sha256
+          .convert(utf8.encode(generatedAdminToken))
+          .toString();
       db.setServerConfig('admin_token_hash', hash);
     }
 

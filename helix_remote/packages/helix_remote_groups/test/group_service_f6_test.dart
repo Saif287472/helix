@@ -41,11 +41,7 @@ void main() {
       generateId: nextId,
       encryptionKeyProvider: (groupId, epoch) => 'key_${groupId}_$epoch',
     );
-    service.createGroup(
-      groupId: 'g1',
-      name: 'F6 Group',
-      creatorId: 'alice',
-    );
+    service.createGroup(groupId: 'g1', name: 'F6 Group', creatorId: 'alice');
   });
 
   tearDown(() => db.close());
@@ -67,10 +63,7 @@ void main() {
     test('policy change is idempotent', () {
       service.setGroupAddPolicy(groupId: 'g1', policy: kGroupAddPolicyContacts);
       service.setGroupAddPolicy(groupId: 'g1', policy: kGroupAddPolicyContacts);
-      expect(
-        service.getGroupAddPolicy('g1'),
-        equals(kGroupAddPolicyContacts),
-      );
+      expect(service.getGroupAddPolicy('g1'), equals(kGroupAddPolicyContacts));
     });
 
     test('unknown group returns EVERYONE default', () {
@@ -164,21 +157,23 @@ void main() {
       expect(pending.first['requester_id'], equals('carol'));
     });
 
-    test('approveJoinRequest marks request as approved — removed from pending',
-        () {
-      service.recordJoinRequest(
-        requestId: 'req2',
-        groupId: 'g1',
-        requesterId: 'bob',
-        linkId: 'lnk1',
-      );
-      service.approveJoinRequest(
-        requestId: 'req2',
-        groupId: 'g1',
-        approve: true,
-      );
-      expect(service.getPendingJoinRequests('g1'), isEmpty);
-    });
+    test(
+      'approveJoinRequest marks request as approved — removed from pending',
+      () {
+        service.recordJoinRequest(
+          requestId: 'req2',
+          groupId: 'g1',
+          requesterId: 'bob',
+          linkId: 'lnk1',
+        );
+        service.approveJoinRequest(
+          requestId: 'req2',
+          groupId: 'g1',
+          approve: true,
+        );
+        expect(service.getPendingJoinRequests('g1'), isEmpty);
+      },
+    );
 
     test('rejected request is removed from pending', () {
       service.recordJoinRequest(

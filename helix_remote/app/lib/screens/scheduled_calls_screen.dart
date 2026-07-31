@@ -102,12 +102,18 @@ class _ScheduledCallCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     call.title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 if (isImminent)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.orange.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
@@ -124,7 +130,10 @@ class _ScheduledCallCard extends StatelessWidget {
               children: [
                 const Icon(Icons.schedule, size: 14, color: Colors.grey),
                 const SizedBox(width: 4),
-                Text(timeLabel, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                Text(
+                  timeLabel,
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
                 const SizedBox(width: 12),
                 const Icon(Icons.people, size: 14, color: Colors.grey),
                 const SizedBox(width: 4),

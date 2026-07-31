@@ -15,8 +15,12 @@ void main() async {
   files.addAll(_collect('$repoRoot/admin/lib', exts: ['.dart']));
 
   _addFile(files, repoRoot, 'packages/helix_remote_cli/pubspec.yaml');
-  files.addAll(_collect('$repoRoot/packages/helix_remote_cli/bin', exts: ['.dart']));
-  files.addAll(_collect('$repoRoot/packages/helix_remote_cli/lib', exts: ['.dart']));
+  files.addAll(
+    _collect('$repoRoot/packages/helix_remote_cli/bin', exts: ['.dart']),
+  );
+  files.addAll(
+    _collect('$repoRoot/packages/helix_remote_cli/lib', exts: ['.dart']),
+  );
 
   await _write(
     docsDir: docsDir,

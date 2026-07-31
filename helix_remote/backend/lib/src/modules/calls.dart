@@ -150,7 +150,10 @@ class CallsModule {
       accountId: senderAccountId,
       deviceId: senderDeviceId,
       clientIp: 's2s',
-      message: {if (requestId != null) 'request_id': requestId, 'payload': message},
+      message: {
+        if (requestId != null) 'request_id': requestId,
+        'payload': message,
+      },
       trustedRemote: true,
     );
   }
@@ -749,7 +752,9 @@ class CallsModule {
       now: now,
     );
     db.markPendingCallTerminal(callId: callId, status: 'DECLINED', now: now);
-    stderr.writeln('[CALL] declined call_id=$callId device=${auth['device_id']}');
+    stderr.writeln(
+      '[CALL] declined call_id=$callId device=${auth['device_id']}',
+    );
     return _json(200, {'status': 'declined', 'call_id': callId});
   }
 
@@ -775,7 +780,9 @@ class CallsModule {
       now: now,
     );
     db.markPendingCallTerminal(callId: callId, status: 'CANCELLED', now: now);
-    stderr.writeln('[CALL] cancelled call_id=$callId device=${auth['device_id']}');
+    stderr.writeln(
+      '[CALL] cancelled call_id=$callId device=${auth['device_id']}',
+    );
     return _json(200, {'status': 'cancelled', 'call_id': callId});
   }
 

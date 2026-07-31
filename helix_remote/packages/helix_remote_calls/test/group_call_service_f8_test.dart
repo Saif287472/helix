@@ -17,17 +17,17 @@ class _StubEngine implements RemoteCallEngine {
   @override
   Stream<RemoteCallEngineEvent> get events => _ctrl.stream;
 
-  void emitIce(String callId) => _ctrl.add(RemoteIceCandidateEvent(
-    callId: callId,
-    candidate: 'cand',
-    mlineIndex: 0,
-    sdpMid: '0',
-  ));
+  void emitIce(String callId) => _ctrl.add(
+    RemoteIceCandidateEvent(
+      callId: callId,
+      candidate: 'cand',
+      mlineIndex: 0,
+      sdpMid: '0',
+    ),
+  );
 
-  void emitRemoteStream(String callId) => _ctrl.add(RemoteCallMediaEvent(
-    callId: callId,
-    remoteStream: null,
-  ));
+  void emitRemoteStream(String callId) =>
+      _ctrl.add(RemoteCallMediaEvent(callId: callId, remoteStream: null));
 
   @override
   Future<String> createOffer(String callId, {bool video = false}) async {
@@ -36,8 +36,11 @@ class _StubEngine implements RemoteCallEngine {
   }
 
   @override
-  Future<String> createAnswer(String callId, String offerSdp,
-      {bool video = false}) async {
+  Future<String> createAnswer(
+    String callId,
+    String offerSdp, {
+    bool video = false,
+  }) async {
     log.add('answer:$callId');
     return 'stub_answer';
   }
@@ -49,7 +52,11 @@ class _StubEngine implements RemoteCallEngine {
 
   @override
   Future<void> addIceCandidate(
-      String callId, String c, int m, String mid) async {
+    String callId,
+    String c,
+    int m,
+    String mid,
+  ) async {
     log.add('ice:$callId');
   }
 
@@ -124,44 +131,57 @@ void main() {
       expect(svc.currentState?.status, GroupCallStatus.ended);
     });
 
-    test('processRoomEvent participant_joined triggers offer to new peer', () async {
-      final signals = <Map<String, dynamic>>[];
-      final bobEngine = _StubEngine();
-      final svc = _makeService(outbound: signals, engines: [bobEngine]);
+    test(
+      'processRoomEvent participant_joined triggers offer to new peer',
+      () async {
+        final signals = <Map<String, dynamic>>[];
+        final bobEngine = _StubEngine();
+        final svc = _makeService(outbound: signals, engines: [bobEngine]);
 
-      // Simulate already-active state (skip media acquisition).
-      svc.seedState(GroupCallState(
-        status: GroupCallStatus.active,
-        roomId: 'room_001',
-        isVideo: true,
-        peers: const [],
-      ));
+        // Simulate already-active state (skip media acquisition).
+        svc.seedState(
+          GroupCallState(
+            status: GroupCallStatus.active,
+            roomId: 'room_001',
+            isVideo: true,
+            peers: const [],
+          ),
+        );
 
-      await svc.processRoomEvent('participant_joined', {
-        'room_id': 'room_001',
-        'account_id': 'bob',
-        'device_id': 'bob_dev1',
-        'is_video': true,
-      });
+        await svc.processRoomEvent('participant_joined', {
+          'room_id': 'room_001',
+          'account_id': 'bob',
+          'device_id': 'bob_dev1',
+          'is_video': true,
+        });
 
-      await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
-      expect(bobEngine.log.any((l) => l.startsWith('offer:')), isTrue,
-          reason: 'should have sent an offer to the new participant');
-      expect(signals.any((s) => s['type'] == 'offer' && s['_to'] == 'bob_dev1'), isTrue);
-    });
+        expect(
+          bobEngine.log.any((l) => l.startsWith('offer:')),
+          isTrue,
+          reason: 'should have sent an offer to the new participant',
+        );
+        expect(
+          signals.any((s) => s['type'] == 'offer' && s['_to'] == 'bob_dev1'),
+          isTrue,
+        );
+      },
+    );
 
     test('inbound offer triggers answer', () async {
       final signals = <Map<String, dynamic>>[];
       final bobEngine = _StubEngine();
       final svc = _makeService(outbound: signals, engines: [bobEngine]);
 
-      svc.seedState(GroupCallState(
-        status: GroupCallStatus.active,
-        roomId: 'room_001',
-        isVideo: true,
-        peers: const [],
-      ));
+      svc.seedState(
+        GroupCallState(
+          status: GroupCallStatus.active,
+          roomId: 'room_001',
+          isVideo: true,
+          peers: const [],
+        ),
+      );
 
       await svc.processSignal({
         'type': 'offer',
@@ -173,7 +193,10 @@ void main() {
 
       await Future<void>.delayed(Duration.zero);
 
-      expect(signals.any((s) => s['type'] == 'answer' && s['_to'] == 'bob_dev1'), isTrue);
+      expect(
+        signals.any((s) => s['type'] == 'answer' && s['_to'] == 'bob_dev1'),
+        isTrue,
+      );
       expect(bobEngine.log.any((l) => l.startsWith('answer:')), isTrue);
     });
 
@@ -182,12 +205,14 @@ void main() {
       final bobEngine = _StubEngine();
       final svc = _makeService(outbound: signals, engines: [bobEngine]);
 
-      svc.seedState(GroupCallState(
-        status: GroupCallStatus.active,
-        roomId: 'room_001',
-        isVideo: false,
-        peers: const [],
-      ));
+      svc.seedState(
+        GroupCallState(
+          status: GroupCallStatus.active,
+          roomId: 'room_001',
+          isVideo: false,
+          peers: const [],
+        ),
+      );
 
       // First send an offer so the engine exists.
       await svc.processRoomEvent('participant_joined', {
@@ -214,12 +239,14 @@ void main() {
       final bobEngine = _StubEngine();
       final svc = _makeService(engines: [bobEngine]);
 
-      svc.seedState(GroupCallState(
-        status: GroupCallStatus.active,
-        roomId: 'room_001',
-        isVideo: true,
-        peers: const [],
-      ));
+      svc.seedState(
+        GroupCallState(
+          status: GroupCallStatus.active,
+          roomId: 'room_001',
+          isVideo: true,
+          peers: const [],
+        ),
+      );
 
       await svc.processRoomEvent('participant_joined', {
         'room_id': 'room_001',
@@ -244,12 +271,14 @@ void main() {
     test('room_ended event transitions to ended status', () async {
       final svc = _makeService();
 
-      svc.seedState(GroupCallState(
-        status: GroupCallStatus.active,
-        roomId: 'room_001',
-        isVideo: false,
-        peers: const [],
-      ));
+      svc.seedState(
+        GroupCallState(
+          status: GroupCallStatus.active,
+          roomId: 'room_001',
+          isVideo: false,
+          peers: const [],
+        ),
+      );
 
       await svc.processRoomEvent('room_ended', {'room_id': 'room_001'});
       await Future<void>.delayed(Duration.zero);
@@ -261,12 +290,14 @@ void main() {
       final bobEngine = _StubEngine();
       final svc = _makeService(engines: [bobEngine]);
 
-      svc.seedState(GroupCallState(
-        status: GroupCallStatus.active,
-        roomId: 'room_001',
-        isVideo: false,
-        peers: const [],
-      ));
+      svc.seedState(
+        GroupCallState(
+          status: GroupCallStatus.active,
+          roomId: 'room_001',
+          isVideo: false,
+          peers: const [],
+        ),
+      );
 
       // Join bob so the engine exists.
       await svc.processRoomEvent('participant_joined', {
@@ -294,12 +325,14 @@ void main() {
       final bobEngine = _StubEngine();
       final svc = _makeService(engines: [bobEngine]);
 
-      svc.seedState(GroupCallState(
-        status: GroupCallStatus.active,
-        roomId: 'room_001',
-        isVideo: true,
-        peers: const [],
-      ));
+      svc.seedState(
+        GroupCallState(
+          status: GroupCallStatus.active,
+          roomId: 'room_001',
+          isVideo: true,
+          peers: const [],
+        ),
+      );
 
       await svc.processRoomEvent('participant_joined', {
         'room_id': 'room_001',
@@ -315,8 +348,9 @@ void main() {
         'active': true,
       });
 
-      final bobState = svc.currentState!.peers
-          .firstWhere((p) => p.participant.deviceId == 'bob_dev1');
+      final bobState = svc.currentState!.peers.firstWhere(
+        (p) => p.participant.deviceId == 'bob_dev1',
+      );
       expect(bobState.participant.isScreenSharing, isTrue);
     });
 
@@ -325,12 +359,14 @@ void main() {
       final e2 = _StubEngine();
       final svc = _makeService(engines: [e1, e2]);
 
-      svc.seedState(GroupCallState(
-        status: GroupCallStatus.active,
-        roomId: 'room_001',
-        isVideo: false,
-        peers: const [],
-      ));
+      svc.seedState(
+        GroupCallState(
+          status: GroupCallStatus.active,
+          roomId: 'room_001',
+          isVideo: false,
+          peers: const [],
+        ),
+      );
 
       await svc.processRoomEvent('participant_joined', {
         'room_id': 'room_001',

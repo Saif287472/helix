@@ -310,7 +310,15 @@ extension BackendCallsRepository on BackendDatabase {
         token_type = excluded.token_type,
         updated_at = excluded.updated_at;
     ''');
-    stmt.execute([tokenId, accountId, deviceId, pushToken, tokenType, now, now]);
+    stmt.execute([
+      tokenId,
+      accountId,
+      deviceId,
+      pushToken,
+      tokenType,
+      now,
+      now,
+    ]);
     stmt.close();
   }
 

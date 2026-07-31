@@ -77,8 +77,9 @@ class GroupCallState {
     isVideo: isVideo ?? this.isVideo,
     peers: peers ?? this.peers,
     localStream: localStream ?? this.localStream,
-    activeSpeakerDeviceId:
-        clearActiveSpeaker ? null : (activeSpeakerDeviceId ?? this.activeSpeakerDeviceId),
+    activeSpeakerDeviceId: clearActiveSpeaker
+        ? null
+        : (activeSpeakerDeviceId ?? this.activeSpeakerDeviceId),
     isScreenSharing: isScreenSharing ?? this.isScreenSharing,
     isMuted: isMuted ?? this.isMuted,
     error: error,
@@ -112,12 +113,10 @@ class RemoteGroupCallService {
     String roomId,
     String targetDeviceId,
     Map<String, dynamic> payload,
-  ) signalSender;
-  final Future<void> Function(
-    String roomId,
-    int epoch,
-    String wrappedKey,
-  )? wrappedKeyReceiver;
+  )
+  signalSender;
+  final Future<void> Function(String roomId, int epoch, String wrappedKey)?
+  wrappedKeyReceiver;
 
   final RemoteCallEngine Function(RemoteIceConfig) _engineFactory;
 
@@ -146,27 +145,33 @@ class RemoteGroupCallService {
   /// and sends offers. Local stream is acquired here.
   Future<void> joinRoom(CallRoom room) async {
     if (_state?.status == GroupCallStatus.active) return;
-    _emit(GroupCallState(
-      status: GroupCallStatus.joining,
-      roomId: room.roomId,
-      isVideo: room.isVideo,
-      peers: const [],
-    ));
+    _emit(
+      GroupCallState(
+        status: GroupCallStatus.joining,
+        roomId: room.roomId,
+        isVideo: room.isVideo,
+        peers: const [],
+      ),
+    );
 
     try {
       _localStream = await _acquireLocalStream(room.isVideo);
     } catch (e) {
-      _emit(_state!.copyWith(
-        status: GroupCallStatus.ended,
-        error: 'Media access denied: $e',
-      ));
+      _emit(
+        _state!.copyWith(
+          status: GroupCallStatus.ended,
+          error: 'Media access denied: $e',
+        ),
+      );
       return;
     }
 
-    _emit(_state!.copyWith(
-      status: GroupCallStatus.active,
-      localStream: _localStream,
-    ));
+    _emit(
+      _state!.copyWith(
+        status: GroupCallStatus.active,
+        localStream: _localStream,
+      ),
+    );
 
     // Connect to each currently JOINED peer that isn't us.
     for (final p in room.joinedParticipants) {
@@ -250,7 +255,11 @@ class RemoteGroupCallService {
     switch (type) {
       case 'offer':
         final sdp = signal['sdp'] as String;
-        final answer = await engine.createAnswer(callId, sdp, video: _state?.isVideo ?? false);
+        final answer = await engine.createAnswer(
+          callId,
+          sdp,
+          video: _state?.isVideo ?? false,
+        );
         await signalSender(roomId, senderDeviceId, {
           'type': 'answer',
           'sdp': answer,
@@ -306,12 +315,14 @@ class RemoteGroupCallService {
     }
     _localStream?.getTracks().forEach((t) => t.stop());
     _localStream = null;
-    _emit(GroupCallState(
-      status: GroupCallStatus.ended,
-      roomId: roomId,
-      isVideo: _state?.isVideo ?? false,
-      peers: const [],
-    ));
+    _emit(
+      GroupCallState(
+        status: GroupCallStatus.ended,
+        roomId: roomId,
+        isVideo: _state?.isVideo ?? false,
+        peers: const [],
+      ),
+    );
   }
 
   Future<void> dispose() async {
@@ -325,9 +336,9 @@ class RemoteGroupCallService {
 
   Future<void> _connectToPeer(
     String roomId,
-    CallRoomParticipant p,
-    {required bool sendOffer}
-  ) async {
+    CallRoomParticipant p, {
+    required bool sendOffer,
+  }) async {
     if (_engines.containsKey(p.deviceId)) return;
     final engine = _engineFactory(iceConfig);
     _engines[p.deviceId] = engine;
@@ -342,7 +353,10 @@ class RemoteGroupCallService {
     _emitPeers();
 
     if (sendOffer) {
-      final offerSdp = await engine.createOffer(callId, video: _state?.isVideo ?? false);
+      final offerSdp = await engine.createOffer(
+        callId,
+        video: _state?.isVideo ?? false,
+      );
       await signalSender(roomId, p.deviceId, {
         'type': 'offer',
         'sdp': offerSdp,
@@ -353,7 +367,11 @@ class RemoteGroupCallService {
     }
   }
 
-  void _handleEngineEvent(String roomId, String deviceId, RemoteCallEngineEvent event) {
+  void _handleEngineEvent(
+    String roomId,
+    String deviceId,
+    RemoteCallEngineEvent event,
+  ) {
     if (event is RemoteIceCandidateEvent) {
       signalSender(roomId, deviceId, {
         'type': 'ice',
@@ -410,7 +428,12 @@ class RemoteGroupCallService {
       }
       final changed = loudest != _state?.activeSpeakerDeviceId;
       if (changed) {
-        _emit(_state!.copyWith(activeSpeakerDeviceId: loudest, clearActiveSpeaker: loudest == null));
+        _emit(
+          _state!.copyWith(
+            activeSpeakerDeviceId: loudest,
+            clearActiveSpeaker: loudest == null,
+          ),
+        );
       }
     });
   }

@@ -73,14 +73,18 @@ mixin RemoteGroupCallsRepository on HelixRemoteDatabaseBase {
     final pRows = pStmt.select([roomId]);
     pStmt.close();
 
-    final participants = pRows.map((p) => CallRoomParticipant.fromJson({
-      'account_id': p['account_id'],
-      'device_id': p['device_id'],
-      'role': p['role'],
-      'status': p['status'],
-      'is_screen_sharing': p['is_screen_sharing'],
-      'joined_at': p['joined_at'],
-    })).toList();
+    final participants = pRows
+        .map(
+          (p) => CallRoomParticipant.fromJson({
+            'account_id': p['account_id'],
+            'device_id': p['device_id'],
+            'role': p['role'],
+            'status': p['status'],
+            'is_screen_sharing': p['is_screen_sharing'],
+            'joined_at': p['joined_at'],
+          }),
+        )
+        .toList();
 
     return CallRoom.fromJson({
       'room_id': r['room_id'],
@@ -91,21 +95,23 @@ mixin RemoteGroupCallsRepository on HelixRemoteDatabaseBase {
       'room_key_epoch': r['room_key_epoch'],
       'started_at': r['started_at'],
       'ended_at': r['ended_at'],
-      'participants': participants.map((p) => {
-        'account_id': p.accountId,
-        'device_id': p.deviceId,
-        'role': p.role,
-        'status': p.status,
-        'is_screen_sharing': p.isScreenSharing ? 1 : 0,
-        'joined_at': p.joinedAt?.millisecondsSinceEpoch,
-      }).toList(),
+      'participants': participants
+          .map(
+            (p) => {
+              'account_id': p.accountId,
+              'device_id': p.deviceId,
+              'role': p.role,
+              'status': p.status,
+              'is_screen_sharing': p.isScreenSharing ? 1 : 0,
+              'joined_at': p.joinedAt?.millisecondsSinceEpoch,
+            },
+          )
+          .toList(),
     });
   }
 
   void deleteGroupCallRoom(String roomId) {
-    final stmt = _db.prepare(
-      'DELETE FROM group_call_rooms WHERE room_id = ?;',
-    );
+    final stmt = _db.prepare('DELETE FROM group_call_rooms WHERE room_id = ?;');
     stmt.execute([roomId]);
     stmt.close();
     final pStmt = _db.prepare(
@@ -200,9 +206,7 @@ mixin RemoteGroupCallsRepository on HelixRemoteDatabaseBase {
   }
 
   void deleteCallLink(String linkId) {
-    final stmt = _db.prepare(
-      'DELETE FROM call_links_cache WHERE link_id = ?;',
-    );
+    final stmt = _db.prepare('DELETE FROM call_links_cache WHERE link_id = ?;');
     stmt.execute([linkId]);
     stmt.close();
   }
@@ -225,10 +229,14 @@ mixin RemoteGroupCallsRepository on HelixRemoteDatabaseBase {
   void upsertScheduledCall(ScheduledCall sc, {String myRsvp = 'PENDING'}) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final attendeesJson = jsonEncode(
-      sc.attendees.map((a) => {
-        'account_id': a.accountId,
-        'rsvp_status': a.rsvpStatus.name.toUpperCase(),
-      }).toList(),
+      sc.attendees
+          .map(
+            (a) => {
+              'account_id': a.accountId,
+              'rsvp_status': a.rsvpStatus.name.toUpperCase(),
+            },
+          )
+          .toList(),
     );
     final stmt = _db.prepare('''
       INSERT INTO scheduled_calls_cache
@@ -315,7 +323,9 @@ mixin RemoteGroupCallsRepository on HelixRemoteDatabaseBase {
       hostAccountId: r['host_account_id'] as String,
       title: r['title'] as String,
       roomId: r['room_id'] as String?,
-      scheduledAt: DateTime.fromMillisecondsSinceEpoch(r['scheduled_at'] as int),
+      scheduledAt: DateTime.fromMillisecondsSinceEpoch(
+        r['scheduled_at'] as int,
+      ),
       createdAt: DateTime.fromMillisecondsSinceEpoch(r['created_at'] as int),
       attendees: attendees,
     );

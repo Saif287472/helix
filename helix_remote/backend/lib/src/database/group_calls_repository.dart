@@ -19,7 +19,13 @@ extension BackendGroupCallsRepository on BackendDatabase {
           (room_id, host_account_id, host_device_id, is_video, status, created_at)
         VALUES (?, ?, ?, ?, 'WAITING', ?);
       ''');
-      roomStmt.execute([roomId, hostAccountId, hostDeviceId, isVideo ? 1 : 0, now]);
+      roomStmt.execute([
+        roomId,
+        hostAccountId,
+        hostDeviceId,
+        isVideo ? 1 : 0,
+        now,
+      ]);
       roomStmt.close();
       final partStmt = _db.prepare('''
         INSERT INTO call_room_participants
@@ -36,9 +42,7 @@ extension BackendGroupCallsRepository on BackendDatabase {
   }
 
   Map<String, dynamic>? getCallRoom(String roomId) {
-    final stmt = _db.prepare(
-      'SELECT * FROM call_rooms WHERE room_id = ?;',
-    );
+    final stmt = _db.prepare('SELECT * FROM call_rooms WHERE room_id = ?;');
     final rows = stmt.select([roomId]);
     stmt.close();
     if (rows.isEmpty) return null;
@@ -303,9 +307,7 @@ extension BackendGroupCallsRepository on BackendDatabase {
   }
 
   Map<String, dynamic>? getCallLinkByToken(String token) {
-    final stmt = _db.prepare(
-      'SELECT * FROM call_links WHERE link_token = ?;',
-    );
+    final stmt = _db.prepare('SELECT * FROM call_links WHERE link_token = ?;');
     final rows = stmt.select([token]);
     stmt.close();
     if (rows.isEmpty) return null;
@@ -388,7 +390,13 @@ extension BackendGroupCallsRepository on BackendDatabase {
           (scheduled_call_id, host_account_id, title, scheduled_at, created_at)
         VALUES (?, ?, ?, ?, ?);
       ''');
-      stmt.execute([scheduledCallId, hostAccountId, title, scheduledAt, createdAt]);
+      stmt.execute([
+        scheduledCallId,
+        hostAccountId,
+        title,
+        scheduledAt,
+        createdAt,
+      ]);
       stmt.close();
       final attStmt = _db.prepare('''
         INSERT OR IGNORE INTO scheduled_call_attendees
@@ -456,9 +464,7 @@ extension BackendGroupCallsRepository on BackendDatabase {
         .toList();
   }
 
-  List<Map<String, dynamic>> getScheduledCallAttendees(
-    String scheduledCallId,
-  ) {
+  List<Map<String, dynamic>> getScheduledCallAttendees(String scheduledCallId) {
     final stmt = _db.prepare('''
       SELECT * FROM scheduled_call_attendees
       WHERE scheduled_call_id = ?;

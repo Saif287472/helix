@@ -35,12 +35,15 @@ void main() {
 
     // Initialise identity
     identity = await ServerIdentity.loadOrCreate(server.db);
-    generatedToken = identity.adminToken ?? server.db.getServerConfig('admin_token_hash') ?? '';
+    generatedToken =
+        identity.adminToken ??
+        server.db.getServerConfig('admin_token_hash') ??
+        '';
 
     // Since we're in in-memory DB, adminToken will be returned by loadOrCreate because it is first boot.
     // However, it is a base64 encoded token. If we generate a hash in the database, the raw token is returned by loadOrCreate.
     expect(identity.adminToken, isNotNull);
-    
+
     // Register a dummy user to verify paginated list
     server.db.createAccount('user1', 'user_one', 'user_key');
 
@@ -59,7 +62,12 @@ void main() {
 
   test('Admin Authentication & Config Endpoint', () async {
     // 1. Authorised Request
-    final res = await _getJson(httpClient, port, '/api/v1/ops/config', token: identity.adminToken);
+    final res = await _getJson(
+      httpClient,
+      port,
+      '/api/v1/ops/config',
+      token: identity.adminToken,
+    );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     expect(body['server_id'], equals(identity.serverId));
@@ -71,7 +79,12 @@ void main() {
     expect(resNoToken.statusCode, equals(401));
 
     // 3. Unauthorised Request (bad token)
-    final resBadToken = await _getJson(httpClient, port, '/api/v1/ops/config', token: 'invalid_token');
+    final resBadToken = await _getJson(
+      httpClient,
+      port,
+      '/api/v1/ops/config',
+      token: 'invalid_token',
+    );
     expect(resBadToken.statusCode, equals(403));
   });
 
@@ -86,18 +99,30 @@ void main() {
     );
 
     // Initialise identity
-    final overrideIdentity = await ServerIdentity.loadOrCreate(overrideServer.db);
+    final overrideIdentity = await ServerIdentity.loadOrCreate(
+      overrideServer.db,
+    );
 
     await overrideServer.start('127.0.0.1', 0);
     final overridePort = overrideServer.httpServer!.port;
 
     try {
       // 1. Check override token works
-      final resOverride = await _getJson(httpClient, overridePort, '/api/v1/ops/config', token: 'custom_override_token_123');
+      final resOverride = await _getJson(
+        httpClient,
+        overridePort,
+        '/api/v1/ops/config',
+        token: 'custom_override_token_123',
+      );
       expect(resOverride.statusCode, equals(200));
 
       // 2. Check generated token is rejected
-      final resOld = await _getJson(httpClient, overridePort, '/api/v1/ops/config', token: overrideIdentity.adminToken);
+      final resOld = await _getJson(
+        httpClient,
+        overridePort,
+        '/api/v1/ops/config',
+        token: overrideIdentity.adminToken,
+      );
       expect(resOld.statusCode, equals(403));
     } finally {
       await overrideServer.stop();
@@ -105,7 +130,12 @@ void main() {
   });
 
   test('Admin List Users Endpoint', () async {
-    final res = await _getJson(httpClient, port, '/api/v1/ops/users?limit=10&offset=0', token: identity.adminToken);
+    final res = await _getJson(
+      httpClient,
+      port,
+      '/api/v1/ops/users?limit=10&offset=0',
+      token: identity.adminToken,
+    );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     final users = body['users'] as List;
@@ -116,7 +146,12 @@ void main() {
   });
 
   test('Admin Trigger Backup Endpoint', () async {
-    final res = await _postJson(httpClient, port, '/api/v1/ops/backup', token: identity.adminToken);
+    final res = await _postJson(
+      httpClient,
+      port,
+      '/api/v1/ops/backup',
+      token: identity.adminToken,
+    );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     expect(body['status'], equals('success'));
@@ -133,7 +168,12 @@ void main() {
   });
 
   test('Admin Log Tailing Endpoint', () async {
-    final res = await _getJson(httpClient, port, '/api/v1/ops/logs', token: identity.adminToken);
+    final res = await _getJson(
+      httpClient,
+      port,
+      '/api/v1/ops/logs',
+      token: identity.adminToken,
+    );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     final logs = body['logs'] as List;
@@ -165,7 +205,9 @@ Future<_Response> _postJson(
   String? token,
   Map<String, String>? headers,
 }) async {
-  final request = await client.postUrl(Uri.parse('http://127.0.0.1:$port$path'));
+  final request = await client.postUrl(
+    Uri.parse('http://127.0.0.1:$port$path'),
+  );
   if (token != null) {
     request.headers.set('Authorization', 'Bearer $token');
   }

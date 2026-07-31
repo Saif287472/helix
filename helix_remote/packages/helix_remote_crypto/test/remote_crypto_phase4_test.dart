@@ -606,27 +606,30 @@ void main() {
       );
     });
 
-    test('generateAttachmentKeys produces unique key and IV on each call', () async {
-      final helper = RemoteAttachmentCrypto();
-      const n = 20;
-      final keyStrings = <String>{};
-      final ivStrings = <String>{};
-      for (var i = 0; i < n; i++) {
-        final kv = await helper.generateAttachmentKeys();
-        keyStrings.add(String.fromCharCodes(kv['key']!));
-        ivStrings.add(String.fromCharCodes(kv['iv']!));
-      }
-      expect(
-        keyStrings.length,
-        equals(n),
-        reason: 'All generated keys must be unique',
-      );
-      expect(
-        ivStrings.length,
-        equals(n),
-        reason: 'All generated IVs must be unique',
-      );
-    });
+    test(
+      'generateAttachmentKeys produces unique key and IV on each call',
+      () async {
+        final helper = RemoteAttachmentCrypto();
+        const n = 20;
+        final keyStrings = <String>{};
+        final ivStrings = <String>{};
+        for (var i = 0; i < n; i++) {
+          final kv = await helper.generateAttachmentKeys();
+          keyStrings.add(String.fromCharCodes(kv['key']!));
+          ivStrings.add(String.fromCharCodes(kv['iv']!));
+        }
+        expect(
+          keyStrings.length,
+          equals(n),
+          reason: 'All generated keys must be unique',
+        );
+        expect(
+          ivStrings.length,
+          equals(n),
+          reason: 'All generated IVs must be unique',
+        );
+      },
+    );
 
     test('attachment key is 32 bytes; IV is 12 bytes', () async {
       final helper = RemoteAttachmentCrypto();

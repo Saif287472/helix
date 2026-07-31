@@ -1135,10 +1135,7 @@ class RemoteCallService {
     _emitCallStatus();
   }
 
-  void _adaptMediaQuality(
-    RemoteCallStatus call,
-    CallQualityMetrics metrics,
-  ) {
+  void _adaptMediaQuality(RemoteCallStatus call, CallQualityMetrics metrics) {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     if (nowMs - _lastAdaptMs < _adaptCooldownMs) return;
 
@@ -1197,8 +1194,9 @@ class RemoteCallService {
         _restartInProgress = false;
         // F7: track setup time on first active transition.
         if (call.startedAt == null && _callSetupStart != null) {
-          _lastSetupTimeMs =
-              DateTime.now().difference(_callSetupStart!).inMilliseconds;
+          _lastSetupTimeMs = DateTime.now()
+              .difference(_callSetupStart!)
+              .inMilliseconds;
         }
         // F7: reset backoff; count successful reconnects for metrics.
         if (_reconnectAttempt > 0) _metricsReconnectCount++;
@@ -1220,8 +1218,10 @@ class RemoteCallService {
         // F7: first disconnect uses configured grace; subsequent use backoff table.
         final backoff = _reconnectAttempt == 0
             ? _disconnectedGracePeriod
-            : _reconnectBackoff[
-                (_reconnectAttempt - 1).clamp(0, _reconnectBackoff.length - 1)];
+            : _reconnectBackoff[(_reconnectAttempt - 1).clamp(
+                0,
+                _reconnectBackoff.length - 1,
+              )];
         _disconnectedTimer = Timer(backoff, () {
           unawaited(restartIce());
         });

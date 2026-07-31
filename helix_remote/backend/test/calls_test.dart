@@ -569,22 +569,26 @@ void main() {
   // Push-token endpoint
   test('device can register and update push token', () async {
     final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
-    final res = await client.put(
-      '/api/v1/accounts/devices/push-token',
-      {'push_token': 'fcm_valid_token_abc123'},
-    );
+    final res = await client.put('/api/v1/accounts/devices/push-token', {
+      'push_token': 'fcm_valid_token_abc123',
+    });
     expect(res.status, equals(200));
     expect(
       (jsonDecode(res.body) as Map<String, dynamic>)['status'],
       equals('updated'),
     );
-    expect(server.db.getDevicePushToken('device1'), equals('fcm_valid_token_abc123'));
+    expect(
+      server.db.getDevicePushToken('device1'),
+      equals('fcm_valid_token_abc123'),
+    );
   });
 
   test('push token endpoint rejects empty token', () async {
     final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
     expect(
-      (await client.put('/api/v1/accounts/devices/push-token', {'push_token': ''})).status,
+      (await client.put('/api/v1/accounts/devices/push-token', {
+        'push_token': '',
+      })).status,
       equals(400),
     );
   });
@@ -592,10 +596,9 @@ void main() {
   test('push token endpoint rejects token over 256 chars', () async {
     final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
     expect(
-      (await client.put(
-        '/api/v1/accounts/devices/push-token',
-        {'push_token': 'x' * 257},
-      )).status,
+      (await client.put('/api/v1/accounts/devices/push-token', {
+        'push_token': 'x' * 257,
+      })).status,
       equals(400),
     );
   });
@@ -603,7 +606,9 @@ void main() {
   test('push token endpoint requires authentication', () async {
     final client = TestHttpClient('http://127.0.0.1:$port', '');
     expect(
-      (await client.put('/api/v1/accounts/devices/push-token', {'push_token': 'tok'})).status,
+      (await client.put('/api/v1/accounts/devices/push-token', {
+        'push_token': 'tok',
+      })).status,
       equals(401),
     );
   });

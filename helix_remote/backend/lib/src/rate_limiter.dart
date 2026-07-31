@@ -58,7 +58,9 @@ class InMemoryRateLimitStore implements RateLimitStore {
   // rate-limited endpoint once creates a bucket that otherwise lives
   // forever. Periodically evicting buckets that have sat idle long enough
   // to be fully refilled keeps the map bounded to actually-active keys.
-  InMemoryRateLimitStore({Duration cleanupInterval = const Duration(minutes: 5)}) {
+  InMemoryRateLimitStore({
+    Duration cleanupInterval = const Duration(minutes: 5),
+  }) {
     if (cleanupInterval > Duration.zero) {
       _cleanupTimer = Timer.periodic(
         cleanupInterval,

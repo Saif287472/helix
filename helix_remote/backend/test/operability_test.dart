@@ -22,7 +22,10 @@ void main() {
       turnSecret: 'phase19_turn_secret',
       turnUrl: 'turn:turn.test.example:3478',
       wsReconnectsPerMinute: 2,
-      pushProvider: FcmPushProvider(projectId: 'test-project', accessToken: 'test-token'),
+      pushProvider: FcmPushProvider(
+        projectId: 'test-project',
+        accessToken: 'test-token',
+      ),
     );
 
     server.db.createAccount('admin', 'admin_user', 'admin_key');
@@ -199,33 +202,35 @@ void main() {
     expect(res.body, isNot(contains('candidate:')));
   });
 
-  test('P19 push provider outage retries and dead-letters safe wake hints',
-      () async {
-    // Device must have a push token so the outbox worker reaches the
-    // provider-unavailable path instead of silently completing.
-    server.db.updateDevicePushToken('user1', 'user_device', 'fcm_test_token');
-    server.outboxWorker.pushProviderAvailable = false;
-    server.db.enqueueOutbox(
-      'push_outage',
-      'PUSH_NOTIFICATION',
-      jsonEncode({
-        'notification_type': 'incoming_call',
-        'call_id': 'call-push-outage-test',
-        'target_device_id': 'user_device',
-      }),
-    );
+  test(
+    'P19 push provider outage retries and dead-letters safe wake hints',
+    () async {
+      // Device must have a push token so the outbox worker reaches the
+      // provider-unavailable path instead of silently completing.
+      server.db.updateDevicePushToken('user1', 'user_device', 'fcm_test_token');
+      server.outboxWorker.pushProviderAvailable = false;
+      server.db.enqueueOutbox(
+        'push_outage',
+        'PUSH_NOTIFICATION',
+        jsonEncode({
+          'notification_type': 'incoming_call',
+          'call_id': 'call-push-outage-test',
+          'target_device_id': 'user_device',
+        }),
+      );
 
-    for (var i = 0; i < 4; i++) {
-      final result = await server.outboxWorker.processOnce();
-      expect(result['failed'], equals(1));
-    }
+      for (var i = 0; i < 4; i++) {
+        final result = await server.outboxWorker.processOnce();
+        expect(result['failed'], equals(1));
+      }
 
-    final finalResult = await server.outboxWorker.processOnce();
-    expect(finalResult['dlq'], equals(1));
-    final event = server.db.getOutboxEvent('push_outage')!;
-    expect(event['status'], equals('DLQ'));
-    expect(event['retries'], equals(5));
-  });
+      final finalResult = await server.outboxWorker.processOnce();
+      expect(finalResult['dlq'], equals(1));
+      final event = server.db.getOutboxEvent('push_outage')!;
+      expect(event['status'], equals('DLQ'));
+      expect(event['retries'], equals(5));
+    },
+  );
 
   test('P19 WebSocket reconnect storms are rejected per device', () async {
     final uri = 'ws://127.0.0.1:$port/api/v1/ws';

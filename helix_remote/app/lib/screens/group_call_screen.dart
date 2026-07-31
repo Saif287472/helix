@@ -49,10 +49,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         child: Stack(
           children: [
             // Participant grid
-            _ParticipantGrid(
-              state: state,
-              service: widget.service,
-            ),
+            _ParticipantGrid(state: state, service: widget.service),
             // Control bar at bottom
             Positioned(
               left: 0,
@@ -63,8 +60,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                 onMute: () => widget.service.setMuted(!state.isMuted),
                 onScreenShare: () =>
                     widget.service.toggleScreenShare(!state.isScreenSharing),
-                onVideo: () =>
-                    widget.service.setVideoEnabled(!state.isVideo),
+                onVideo: () => widget.service.setVideoEnabled(!state.isVideo),
                 onLeave: () async {
                   await widget.service.leaveRoom();
                   widget.onLeave();
@@ -99,7 +95,8 @@ class _ParticipantGrid extends StatelessWidget {
           _VideoTile(
             stream: peers[0].remoteStream,
             label: peers[0].participant.accountId,
-            isActive: state.activeSpeakerDeviceId == peers[0].participant.deviceId,
+            isActive:
+                state.activeSpeakerDeviceId == peers[0].participant.deviceId,
             isScreenSharing: peers[0].participant.isScreenSharing,
           ),
           Positioned(
@@ -210,9 +207,15 @@ class _VideoTileState extends State<_VideoTile> {
         fit: StackFit.expand,
         children: [
           if (_initialized && widget.stream != null)
-            webrtc.RTCVideoView(_renderer, objectFit: webrtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+            webrtc.RTCVideoView(
+              _renderer,
+              objectFit:
+                  webrtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            )
           else
-            const Center(child: Icon(Icons.person, color: Colors.white54, size: 48)),
+            const Center(
+              child: Icon(Icons.person, color: Colors.white54, size: 48),
+            ),
           // Active speaker ring
           if (widget.isActive)
             Positioned.fill(
@@ -232,15 +235,26 @@ class _VideoTileState extends State<_VideoTile> {
                 if (widget.isMuted)
                   const Padding(
                     padding: EdgeInsets.only(right: 4),
-                    child: Icon(Icons.mic_off, color: Colors.redAccent, size: 16),
+                    child: Icon(
+                      Icons.mic_off,
+                      color: Colors.redAccent,
+                      size: 16,
+                    ),
                   ),
                 if (widget.isScreenSharing)
                   const Padding(
                     padding: EdgeInsets.only(right: 4),
-                    child: Icon(Icons.screen_share, color: Colors.blueAccent, size: 16),
+                    child: Icon(
+                      Icons.screen_share,
+                      color: Colors.blueAccent,
+                      size: 16,
+                    ),
                   ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(4),
@@ -299,7 +313,9 @@ class _ControlBar extends StatelessWidget {
               onTap: onVideo,
             ),
           _ControlButton(
-            icon: state.isScreenSharing ? Icons.stop_screen_share : Icons.screen_share,
+            icon: state.isScreenSharing
+                ? Icons.stop_screen_share
+                : Icons.screen_share,
             label: state.isScreenSharing ? 'Stop Share' : 'Share',
             onTap: onScreenShare,
             active: state.isScreenSharing,
@@ -342,10 +358,17 @@ class _ControlButton extends StatelessWidget {
           CircleAvatar(
             radius: 28,
             backgroundColor: bg,
-            child: Icon(icon, color: color != null ? Colors.white : Colors.white, size: 24),
+            child: Icon(
+              icon,
+              color: color != null ? Colors.white : Colors.white,
+              size: 24,
+            ),
           ),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
+          ),
         ],
       ),
     );

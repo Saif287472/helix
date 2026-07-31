@@ -85,7 +85,8 @@ class OutboxWorker {
 
       // Purge terminal pending calls older than 10 minutes.
       final tenMinutesAgo =
-          DateTime.now().millisecondsSinceEpoch - const Duration(minutes: 10).inMilliseconds;
+          DateTime.now().millisecondsSinceEpoch -
+          const Duration(minutes: 10).inMilliseconds;
       db.purgeTerminalPendingCalls(tenMinutesAgo);
     } catch (e) {
       stderr.writeln('[OutboxWorker] processOnce error: $e');
@@ -100,8 +101,9 @@ class OutboxWorker {
     required Map<String, int> processed,
   }) async {
     // Key is 'recipient_device_id' (messaging) or 'target_device_id' (calls).
-    final targetDeviceId = (payload['recipient_device_id'] ??
-        payload['target_device_id']) as String?;
+    final targetDeviceId =
+        (payload['recipient_device_id'] ?? payload['target_device_id'])
+            as String?;
 
     if (targetDeviceId == null || targetDeviceId.isEmpty) {
       // No device to deliver to — treat as silently completed.

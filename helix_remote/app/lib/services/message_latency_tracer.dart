@@ -10,9 +10,9 @@ int get _monoMs => _monoEpoch.elapsedMilliseconds;
 
 class _Checkpoint {
   _Checkpoint(this.label)
-      : monoMs = _monoMs,
-        wallMs = DateTime.now().millisecondsSinceEpoch,
-        worker = Isolate.current.debugName ?? 'main';
+    : monoMs = _monoMs,
+      wallMs = DateTime.now().millisecondsSinceEpoch,
+      worker = Isolate.current.debugName ?? 'main';
 
   final String label;
   final int monoMs;
@@ -89,9 +89,7 @@ class MessageLatencyTrace {
     for (var i = 1; i < _pts.length; i++) {
       final delta = _pts[i].monoMs - _pts[i - 1].monoMs;
       final flag = delta > 500 ? '  ← ROOT-CAUSE AREA' : '';
-      buf.writeln(
-        '  ${_pts[i - 1].label} → ${_pts[i].label}: ${delta}ms$flag',
-      );
+      buf.writeln('  ${_pts[i - 1].label} → ${_pts[i].label}: ${delta}ms$flag');
     }
 
     await AppLogger.instance.info('MsgLatency', buf.toString());
@@ -120,8 +118,7 @@ class MessageLatencyRegistry {
   MessageLatencyTrace beginSend(String messageId) {
     final t = MessageLatencyTrace._(
       messageId: messageId,
-      correlationId:
-          'c${(_monoMs % 1000000).toString().padLeft(6, '0')}',
+      correlationId: 'c${(_monoMs % 1000000).toString().padLeft(6, '0')}',
       role: 'sender',
     );
     _traces[messageId] = t;

@@ -263,7 +263,9 @@ class S2SModule {
         final eventKey = event['event_key'] as String?;
         final payload = event['payload'] as Map<String, dynamic>?;
         final persist = event['persist'] as bool? ?? true;
-        if (recipientAccountId == null || eventType == null || payload == null) {
+        if (recipientAccountId == null ||
+            eventType == null ||
+            payload == null) {
           continue;
         }
         for (final dev in db.getDevices(recipientAccountId)) {
@@ -482,7 +484,11 @@ class S2SModule {
     }
     final members = <Map<String, dynamic>>[
       for (final id in db.getConversationMembers(groupId))
-        {'account_id': _qualifyLocal(id), 'role': db.getGroupMemberRoleIncludingFederated(groupId, id) ?? 'MEMBER'},
+        {
+          'account_id': _qualifyLocal(id),
+          'role':
+              db.getGroupMemberRoleIncludingFederated(groupId, id) ?? 'MEMBER',
+        },
       for (final m in db.getFederatedConversationMembers(groupId))
         {'account_id': m['account_id'], 'role': m['role']},
     ];

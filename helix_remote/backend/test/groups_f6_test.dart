@@ -48,7 +48,7 @@ void main() {
   late BackendServer server;
   late int port;
   late String tokenAlice; // creator / admin
-  late String tokenBob;   // member
+  late String tokenBob; // member
   late String tokenCarol; // second admin (promoted in tests that need it)
 
   setUp(() async {
@@ -66,12 +66,12 @@ void main() {
     server.db.createAccount('carol', 'carol_user', 'carol_pk');
     server.db.registerDevice('dev_carol', 'carol', 'carol_dk', 'Carol Phone');
 
-    String tok(String accountId, String deviceId) => server.jwt.generateToken(
-          {'account_id': accountId, 'device_id': deviceId},
-          const Duration(hours: 1),
-        );
+    String tok(String accountId, String deviceId) => server.jwt.generateToken({
+      'account_id': accountId,
+      'device_id': deviceId,
+    }, const Duration(hours: 1));
     tokenAlice = tok('alice', 'dev_alice');
-    tokenBob   = tok('bob', 'dev_bob');
+    tokenBob = tok('bob', 'dev_bob');
     tokenCarol = tok('carol', 'dev_carol');
 
     await server.start('127.0.0.1', 0);
@@ -230,15 +230,13 @@ void main() {
   group('F6-004 join link lifecycle', () {
     test('admin can create and revoke a join link', () async {
       await seedGroup();
-      final createRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/create-join-link',
-        {
-          'group_id': 'g1',
-          'link_id': 'link_lifecycle',
-          'token': 'token_lifecycle',
-          'requires_approval': false,
-        },
-      );
+      final createRes = await _Client(base(), tokenAlice)
+          .post('/api/v1/groups/create-join-link', {
+            'group_id': 'g1',
+            'link_id': 'link_lifecycle',
+            'token': 'token_lifecycle',
+            'requires_approval': false,
+          });
       expect(createRes.status, equals(200));
       final token = createRes.json['token'] as String;
       expect(token, isNotEmpty);
@@ -253,10 +251,10 @@ void main() {
 
       // Revoke the link.
       final linkId = createRes.json['link_id'] as String;
-      final revokeRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/revoke-join-link',
-        {'link_id': linkId},
-      );
+      final revokeRes = await _Client(
+        base(),
+        tokenAlice,
+      ).post('/api/v1/groups/revoke-join-link', {'link_id': linkId});
       expect(revokeRes.status, equals(200));
 
       // Using revoked token is rejected.
@@ -269,29 +267,25 @@ void main() {
 
     test('non-admin cannot create join link', () async {
       await seedGroup();
-      final res = await _Client(base(), tokenBob).post(
-        '/api/v1/groups/create-join-link',
-        {
-          'group_id': 'g1',
-          'link_id': 'link_non_admin',
-          'token': 'token_non_admin',
-          'requires_approval': false,
-        },
-      );
+      final res = await _Client(base(), tokenBob)
+          .post('/api/v1/groups/create-join-link', {
+            'group_id': 'g1',
+            'link_id': 'link_non_admin',
+            'token': 'token_non_admin',
+            'requires_approval': false,
+          });
       expect(res.status, equals(403));
     });
 
     test('join via link with approval creates pending request', () async {
       await seedGroup();
-      final createRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/create-join-link',
-        {
-          'group_id': 'g1',
-          'link_id': 'link_approval',
-          'token': 'token_approval',
-          'requires_approval': true,
-        },
-      );
+      final createRes = await _Client(base(), tokenAlice)
+          .post('/api/v1/groups/create-join-link', {
+            'group_id': 'g1',
+            'link_id': 'link_approval',
+            'token': 'token_approval',
+            'requires_approval': true,
+          });
       expect(createRes.status, equals(200));
       final token = createRes.json['token'] as String;
 
@@ -299,7 +293,10 @@ void main() {
         '/api/v1/groups/join-via-link',
         {'token': token, 'request_id': 'req_approval'},
       );
-      expect(joinRes.status, anyOf(equals(200), equals(202))); // accepted, pending approval
+      expect(
+        joinRes.status,
+        anyOf(equals(200), equals(202)),
+      ); // accepted, pending approval
 
       // Carol should NOT be a member yet.
       expect(server.db.getGroupMemberRole('g1', 'carol'), isNull);
@@ -324,31 +321,29 @@ void main() {
 
     setUp(() async {
       await seedGroup();
-      final createRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/create-join-link',
-        {
-          'group_id': 'g1',
-          'link_id': 'link_approval_flow',
-          'token': 'token_approval_flow',
-          'requires_approval': true,
-        },
-      );
+      final createRes = await _Client(base(), tokenAlice)
+          .post('/api/v1/groups/create-join-link', {
+            'group_id': 'g1',
+            'link_id': 'link_approval_flow',
+            'token': 'token_approval_flow',
+            'requires_approval': true,
+          });
       linkToken = createRes.json['token'] as String;
     });
 
     test('admin can approve join request', () async {
-      await _Client(base(), tokenCarol).post(
-        '/api/v1/groups/join-via-link',
-        {'token': linkToken, 'request_id': 'req_approve_1'},
-      );
-      final listRes = await _Client(base(), tokenAlice).get(
-        '/api/v1/groups/join-requests?group_id=g1',
-      );
+      await _Client(base(), tokenCarol).post('/api/v1/groups/join-via-link', {
+        'token': linkToken,
+        'request_id': 'req_approve_1',
+      });
+      final listRes = await _Client(
+        base(),
+        tokenAlice,
+      ).get('/api/v1/groups/join-requests?group_id=g1');
       expect(listRes.status, equals(200));
       final requests = listRes.json['requests'] as List;
       expect(requests, isNotEmpty);
-      final requestId =
-          (requests.first as Map<String, dynamic>)['request_id'];
+      final requestId = (requests.first as Map<String, dynamic>)['request_id'];
 
       final approveRes = await _Client(base(), tokenAlice).post(
         '/api/v1/groups/approve-join-request',
@@ -359,16 +354,16 @@ void main() {
     });
 
     test('admin can reject join request', () async {
-      await _Client(base(), tokenCarol).post(
-        '/api/v1/groups/join-via-link',
-        {'token': linkToken, 'request_id': 'req_reject_1'},
-      );
-      final listRes = await _Client(base(), tokenAlice).get(
-        '/api/v1/groups/join-requests?group_id=g1',
-      );
+      await _Client(base(), tokenCarol).post('/api/v1/groups/join-via-link', {
+        'token': linkToken,
+        'request_id': 'req_reject_1',
+      });
+      final listRes = await _Client(
+        base(),
+        tokenAlice,
+      ).get('/api/v1/groups/join-requests?group_id=g1');
       final requests = listRes.json['requests'] as List;
-      final requestId =
-          (requests.first as Map<String, dynamic>)['request_id'];
+      final requestId = (requests.first as Map<String, dynamic>)['request_id'];
 
       final rejectRes = await _Client(base(), tokenAlice).post(
         '/api/v1/groups/approve-join-request',
@@ -379,9 +374,10 @@ void main() {
     });
 
     test('non-admin cannot list join requests', () async {
-      final listRes = await _Client(base(), tokenBob).get(
-        '/api/v1/groups/join-requests?group_id=g1',
-      );
+      final listRes = await _Client(
+        base(),
+        tokenBob,
+      ).get('/api/v1/groups/join-requests?group_id=g1');
       expect(listRes.status, equals(403));
     });
   });
@@ -402,32 +398,28 @@ void main() {
 
       // Attempt to re-invite bob.
       final inviteRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/invite', {
-        'group_id': 'g1',
-        'invite_id': 'inv_blocked',
-        'invitee_id': 'bob',
-      });
+        '/api/v1/groups/invite',
+        {'group_id': 'g1', 'invite_id': 'inv_blocked', 'invitee_id': 'bob'},
+      );
       expect(inviteRes.status, anyOf(equals(400), equals(403), equals(409)));
     });
 
     test('blocked member cannot join via link', () async {
       await seedGroup();
-      final createRes = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/create-join-link',
-        {
-          'group_id': 'g1',
-          'link_id': 'link_block_test',
-          'token': 'token_block_test',
-          'requires_approval': false,
-        },
-      );
+      final createRes = await _Client(base(), tokenAlice)
+          .post('/api/v1/groups/create-join-link', {
+            'group_id': 'g1',
+            'link_id': 'link_block_test',
+            'token': 'token_block_test',
+            'requires_approval': false,
+          });
       final token = createRes.json['token'] as String;
 
       // Block bob.
-      await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/block-member',
-        {'group_id': 'g1', 'account_id': 'bob'},
-      );
+      await _Client(base(), tokenAlice).post('/api/v1/groups/block-member', {
+        'group_id': 'g1',
+        'account_id': 'bob',
+      });
 
       // Bob attempts to join via link.
       final joinRes = await _Client(base(), tokenBob).post(
@@ -482,20 +474,20 @@ void main() {
   group('F6-008 silent leave', () {
     test('member leave returns 200 and removes membership', () async {
       await seedGroup();
-      final res = await _Client(base(), tokenBob).post(
-        '/api/v1/groups/leave',
-        {'group_id': 'g1'},
-      );
+      final res = await _Client(
+        base(),
+        tokenBob,
+      ).post('/api/v1/groups/leave', {'group_id': 'g1'});
       expect(res.status, equals(200));
       expect(server.db.getGroupMemberRole('g1', 'bob'), isNull);
     });
 
     test('admin leave returns 200', () async {
       await seedGroup();
-      final res = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/leave',
-        {'group_id': 'g1'},
-      );
+      final res = await _Client(
+        base(),
+        tokenAlice,
+      ).post('/api/v1/groups/leave', {'group_id': 'g1'});
       expect(res.status, equals(200));
     });
   });
@@ -509,27 +501,23 @@ void main() {
       await seedGroup();
       // Create 10 links successfully.
       for (var i = 0; i < 10; i++) {
-        final r = await _Client(base(), tokenAlice).post(
-          '/api/v1/groups/create-join-link',
-          {
-            'group_id': 'g1',
-            'link_id': 'link_rate_$i',
-            'token': 'token_rate_$i',
-            'requires_approval': false,
-          },
-        );
+        final r = await _Client(base(), tokenAlice)
+            .post('/api/v1/groups/create-join-link', {
+              'group_id': 'g1',
+              'link_id': 'link_rate_$i',
+              'token': 'token_rate_$i',
+              'requires_approval': false,
+            });
         expect(r.status, equals(200), reason: 'link $i should succeed');
       }
       // 11th should be rate-limited.
-      final last = await _Client(base(), tokenAlice).post(
-        '/api/v1/groups/create-join-link',
-        {
-          'group_id': 'g1',
-          'link_id': 'link_rate_11',
-          'token': 'token_rate_11',
-          'requires_approval': false,
-        },
-      );
+      final last = await _Client(base(), tokenAlice)
+          .post('/api/v1/groups/create-join-link', {
+            'group_id': 'g1',
+            'link_id': 'link_rate_11',
+            'token': 'token_rate_11',
+            'requires_approval': false,
+          });
       expect(last.status, anyOf(equals(429), equals(400)));
     });
   });

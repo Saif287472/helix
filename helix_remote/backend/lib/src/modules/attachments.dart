@@ -329,9 +329,7 @@ class AttachmentsModule {
 
       if (finalSize == expectedSize) {
         // Verify hash
-        final actualHash = (await sha256
-                .bind(file.openRead())
-                .first)
+        final actualHash = (await sha256.bind(file.openRead()).first)
             .toString();
         final expectedHash = attachment['file_hash'] as String;
 

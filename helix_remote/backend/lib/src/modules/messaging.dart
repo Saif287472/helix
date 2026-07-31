@@ -841,9 +841,7 @@ class MessagingModule {
     // Milestone 4.3: also relay to federated members of this conversation
     // (fixes the same gap for existing federated DIRECT conversations,
     // which never received edits/reactions/receipts/typing before this).
-    final federatedMembers = db.getFederatedConversationMembers(
-      conversationId,
-    );
+    final federatedMembers = db.getFederatedConversationMembers(conversationId);
     if (federatedMembers.isEmpty || federationClient == null) return;
     final eventsByDomain = <String, List<Map<String, dynamic>>>{};
     for (final member in federatedMembers) {

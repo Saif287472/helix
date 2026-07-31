@@ -425,9 +425,7 @@ extension BackendGroupsRepository on BackendDatabase {
   }
 
   Map<String, dynamic>? getGroupJoinLinkByToken(String token) {
-    final stmt = _db.prepare(
-      'SELECT * FROM group_join_links WHERE token = ?;',
-    );
+    final stmt = _db.prepare('SELECT * FROM group_join_links WHERE token = ?;');
     final res = stmt.select([token]);
     stmt.close();
     if (res.isEmpty) return null;
@@ -558,7 +556,12 @@ extension BackendGroupsRepository on BackendDatabase {
         (group_id, account_id, created_by, created_at)
       VALUES (?, ?, ?, ?);
     ''');
-    stmt.execute([groupId, accountId, createdBy, DateTime.now().millisecondsSinceEpoch]);
+    stmt.execute([
+      groupId,
+      accountId,
+      createdBy,
+      DateTime.now().millisecondsSinceEpoch,
+    ]);
     stmt.close();
   }
 

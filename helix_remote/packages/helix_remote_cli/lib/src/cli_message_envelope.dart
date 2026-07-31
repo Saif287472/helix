@@ -10,7 +10,8 @@ class CliMessageEnvelope {
 
   final bool isInit;
   final String ciphertext; // base64-encoded DoubleRatchet ciphertext bytes
-  final String? ephemeralKey; // base64url-encoded Ephemeral Public Key (for X3DH init)
+  final String?
+  ephemeralKey; // base64url-encoded Ephemeral Public Key (for X3DH init)
   final int? oneTimePrekeyId;
 
   Map<String, dynamic> toJson() => {
@@ -30,11 +31,17 @@ class CliMessageEnvelope {
   }
 
   String pack() {
-    return base64Url.encode(utf8.encode(jsonEncode(toJson()))).replaceAll('=', '');
+    return base64Url
+        .encode(utf8.encode(jsonEncode(toJson())))
+        .replaceAll('=', '');
   }
 
   static CliMessageEnvelope unpack(String packed) {
-    final decodedJson = utf8.decode(base64Url.decode(base64Url.normalize(packed)));
-    return CliMessageEnvelope.fromJson(jsonDecode(decodedJson) as Map<String, dynamic>);
+    final decodedJson = utf8.decode(
+      base64Url.decode(base64Url.normalize(packed)),
+    );
+    return CliMessageEnvelope.fromJson(
+      jsonDecode(decodedJson) as Map<String, dynamic>,
+    );
   }
 }

@@ -38,59 +38,50 @@ void main() {
     );
   }
 
-  test(
-    'proxyCallSignal drops the request without connecting when the peer '
-    'address resolves to the cloud metadata (link-local) range',
-    () async {
-      await seedFederatedServer(
-        domain: 'evil.test',
-        address: 'http://169.254.169.254:1234',
-      );
+  test('proxyCallSignal drops the request without connecting when the peer '
+      'address resolves to the cloud metadata (link-local) range', () async {
+    await seedFederatedServer(
+      domain: 'evil.test',
+      address: 'http://169.254.169.254:1234',
+    );
 
-      await expectLater(
-        client
-            .proxyCallSignal(
-              domain: 'evil.test',
-              senderAccountId: 'alice@a.test',
-              senderDeviceId: 'alice_device',
-              signal: {'signal_type': 'offer', 'call_id': 'call_1'},
-            )
-            .timeout(const Duration(seconds: 2)),
-        throwsA(
-          isA<FederationHttpException>().having(
-            (e) => e.statusCode,
-            'statusCode',
-            equals(403),
-          ),
+    await expectLater(
+      client
+          .proxyCallSignal(
+            domain: 'evil.test',
+            senderAccountId: 'alice@a.test',
+            senderDeviceId: 'alice_device',
+            signal: {'signal_type': 'offer', 'call_id': 'call_1'},
+          )
+          .timeout(const Duration(seconds: 2)),
+      throwsA(
+        isA<FederationHttpException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          equals(403),
         ),
-      );
-    },
-  );
+      ),
+    );
+  });
 
-  test(
-    'proxyMessage drops the request when the peer address resolves to a '
-    'link-local address',
-    () async {
-      await seedFederatedServer(
-        domain: 'evil2.test',
-        address: 'http://169.254.169.254:1234',
-      );
+  test('proxyMessage drops the request when the peer address resolves to a '
+      'link-local address', () async {
+    await seedFederatedServer(
+      domain: 'evil2.test',
+      address: 'http://169.254.169.254:1234',
+    );
 
-      await expectLater(
-        client
-            .proxyMessage(
-              remoteAccountId: 'bob@evil2.test',
-              body: {'foo': 'bar'},
-            )
-            .timeout(const Duration(seconds: 2)),
-        throwsA(
-          isA<FederationHttpException>().having(
-            (e) => e.statusCode,
-            'statusCode',
-            equals(403),
-          ),
+    await expectLater(
+      client
+          .proxyMessage(remoteAccountId: 'bob@evil2.test', body: {'foo': 'bar'})
+          .timeout(const Duration(seconds: 2)),
+      throwsA(
+        isA<FederationHttpException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          equals(403),
         ),
-      );
-    },
-  );
+      ),
+    );
+  });
 }

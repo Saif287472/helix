@@ -13,9 +13,10 @@ class _Client {
   final String token;
   final _http = HttpClient();
 
-  Future<({int status, Map<String, dynamic> json, Map<String, List<String>> headers})> get(
-    String path,
-  ) async {
+  Future<
+    ({int status, Map<String, dynamic> json, Map<String, List<String>> headers})
+  >
+  get(String path) async {
     final req = await _http.getUrl(Uri.parse('$baseUrl$path'));
     if (token.isNotEmpty) req.headers.set('Authorization', 'Bearer $token');
     final res = await req.close();
@@ -47,9 +48,7 @@ class _Client {
     );
   }
 
-  Future<({int status, Map<String, dynamic> json})> delete(
-    String path,
-  ) async {
+  Future<({int status, Map<String, dynamic> json})> delete(String path) async {
     final req = await _http.deleteUrl(Uri.parse('$baseUrl$path'));
     if (token.isNotEmpty) req.headers.set('Authorization', 'Bearer $token');
     final res = await req.close();
@@ -81,9 +80,19 @@ void main() {
     port = server.httpServer!.port;
 
     server.db.createAccount('alice', 'alice_user', 'alice_identity_key');
-    server.db.registerDevice('alice_device1', 'alice', 'alice_device_key', 'Alice Phone');
+    server.db.registerDevice(
+      'alice_device1',
+      'alice',
+      'alice_device_key',
+      'Alice Phone',
+    );
     server.db.createAccount('bob', 'bob_user', 'bob_identity_key');
-    server.db.registerDevice('bob_device1', 'bob', 'bob_device_key', 'Bob Phone');
+    server.db.registerDevice(
+      'bob_device1',
+      'bob',
+      'bob_device_key',
+      'Bob Phone',
+    );
     server.db.addContact('alice', 'bob', null);
     server.db.addContact('bob', 'alice', null);
 
@@ -194,7 +203,12 @@ void main() {
   group('multi-device ring', () {
     setUp(() async {
       // Register a second device for Alice (token not needed by these tests).
-      server.db.registerDevice('alice_device2', 'alice', 'alice_device_key2', 'Tablet');
+      server.db.registerDevice(
+        'alice_device2',
+        'alice',
+        'alice_device_key2',
+        'Tablet',
+      );
     });
 
     test('offer reaches all callee devices', () async {

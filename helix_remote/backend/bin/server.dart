@@ -104,7 +104,9 @@ void main() async {
   print('==================================================');
   print('Helix Server ID: ${identity.serverId}');
   if (adminTokenOverride != null && adminTokenOverride.isNotEmpty) {
-    print('Helix Admin Token: using HELIX_REMOTE_ADMIN_TOKEN from environment.');
+    print(
+      'Helix Admin Token: using HELIX_REMOTE_ADMIN_TOKEN from environment.',
+    );
   } else if (identity.adminToken != null) {
     final adminTokenFile = writeAdminTokenFile(
       dbPath: dbPath,

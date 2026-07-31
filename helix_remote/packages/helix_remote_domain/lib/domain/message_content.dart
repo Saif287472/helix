@@ -28,7 +28,9 @@ class RemoteMessageContentEnvelope {
     });
   }
 
-  static Future<RemoteMessageContentEnvelope?> tryDecode(String plaintext) async {
+  static Future<RemoteMessageContentEnvelope?> tryDecode(
+    String plaintext,
+  ) async {
     try {
       final decoded = await Isolate.run(() => jsonDecode(plaintext));
       if (decoded is! Map<String, dynamic>) return null;
