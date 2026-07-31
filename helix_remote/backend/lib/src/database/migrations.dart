@@ -1094,5 +1094,36 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 28;');
     }
+
+    if (version < 29) {
+      _db.execute('ALTER TABLE accounts ADD COLUMN phone_hash TEXT;');
+      _db.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_phone_hash
+          ON accounts(phone_hash) WHERE phone_hash IS NOT NULL;
+      ''');
+
+      _db.execute('PRAGMA user_version = 29;');
+    }
+
+    if (version < 30) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS phone_otp_challenges (
+          challenge_id TEXT PRIMARY KEY,
+          phone_hash   TEXT NOT NULL,
+          code_hash    TEXT NOT NULL,
+          purpose      TEXT NOT NULL,
+          attempts     INTEGER NOT NULL DEFAULT 0,
+          created_at   INTEGER NOT NULL,
+          expires_at   INTEGER NOT NULL,
+          consumed_at  INTEGER
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_phone_otp_challenges_phone_hash
+          ON phone_otp_challenges(phone_hash);
+      ''');
+
+      _db.execute('PRAGMA user_version = 30;');
+    }
   }
 }

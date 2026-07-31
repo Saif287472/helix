@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/phone_hash.dart';
 
 class ContactsModule {
   final BackendDatabase db;
@@ -11,12 +12,14 @@ class ContactsModule {
   final Map<String, List<int>> _searchAttempts = {};
   static const int contactRequestDailyLimit = 20;
   static const int accountSearchMinuteLimit = 30;
+  static const String _discoverySaltConfigKey = 'contacts_discovery_salt';
 
   ContactsModule(this.db, {Set<String>? adminAccountIds, this.notifyDevice})
     : adminAccountIds = adminAccountIds ?? const {'admin'};
 
   Router get router {
     final router = Router();
+    router.get('/discovery-salt', _discoverySaltHandler);
     router.get('/', _listHandler);
     router.get('/requests', _requestsHandler);
     router.post('/requests', _createRequestHandler);
@@ -35,6 +38,20 @@ class ContactsModule {
     router.post('/report', _reportHandler);
     router.post('/reports/action', _safetyActionHandler);
     return router;
+  }
+
+  /// Returns the per-deployment, non-secret discovery salt used to hash
+  /// phone numbers for privacy-preserving contact matching. Unauthenticated
+  /// on purpose: it's needed before an account exists (signup) and by the
+  /// contacts-sync flow. Self-heals on first call; never rotated afterward,
+  /// since that would silently invalidate every existing phone-hash match.
+  Future<Response> _discoverySaltHandler(Request request) async {
+    var salt = db.getServerConfig(_discoverySaltConfigKey);
+    if (salt == null) {
+      salt = generateDiscoverySalt();
+      db.setServerConfig(_discoverySaltConfigKey, salt);
+    }
+    return Response.ok(jsonEncode({'salt': salt}));
   }
 
   Future<Response> _listHandler(Request request) async {
