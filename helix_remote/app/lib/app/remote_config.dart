@@ -2,6 +2,11 @@ import 'dart:io';
 
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 
+/// The free, shared Helix Remote server offered as a first-launch option.
+/// Auto-issues its own invites (server-side gated by `global_instance_mode`)
+/// so users don't need an admin-issued invite to join it.
+const kHelixGlobalServerUrl = 'https://hr.agiletechbd.com';
+
 enum RemoteRuntimeProfile {
   production,
   localWindows,
@@ -458,6 +463,18 @@ class RemoteDevelopmentConfig {
         );
     }
   }
+
+  /// Build a config pointed at Helix Global. Routes through the same
+  /// validated [fromServerUrl] path as any other server - Helix Global gets
+  /// no special bypass of the TLS/localhost checks.
+  static RemoteDevelopmentConfig helixGlobal({
+    required String databaseDirectory,
+    required String attachmentCacheDir,
+  }) => fromServerUrl(
+    kHelixGlobalServerUrl,
+    databaseDirectory: databaseDirectory,
+    attachmentCacheDir: attachmentCacheDir,
+  );
 
   /// Build a config from a user-supplied URL (e.g. ngrok, LAN IP, localhost).
   ///

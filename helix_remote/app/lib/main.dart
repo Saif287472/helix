@@ -9,9 +9,12 @@ import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_error_copy.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/screens/home_screen.dart';
+import 'package:helix_remote/screens/invite_entry_screen.dart';
+import 'package:helix_remote/screens/server_choice_screen.dart';
 import 'package:helix_remote/services/android_call_runtime_service.dart';
 import 'package:helix_remote/services/app_logger.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
+import 'package:helix_remote/services/onboarding_state_store.dart';
 import 'package:helix_remote/services/server_url_store.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:path/path.dart' as p;
@@ -43,9 +46,7 @@ void main() {
 // Bootstrap — owns URL setup and root lifecycle
 // ---------------------------------------------------------------------------
 
-enum _BootState { loading, needsUrl, running }
-
-const _kDefaultServerUrl = 'https://hr.agiletechbd.com';
+enum _BootState { loading, needsServerChoice, needsUrl, offline, running }
 
 class HelixRemoteBootstrap extends StatefulWidget {
   const HelixRemoteBootstrap({super.key});
@@ -60,7 +61,8 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
   String? _initialUrlError;
   String _dbDir = '';
   String _cacheDir = '';
-  String _currentServerUrl = _kDefaultServerUrl;
+  String _currentServerUrl = kHelixGlobalServerUrl;
+  String? _pendingInviteCode;
 
   @override
   void initState() {
@@ -77,6 +79,10 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
       // Prefer URL saved at runtime (entered by the user)
       final savedUrl = await ServerUrlStore.instance.load();
       if (savedUrl != null && savedUrl.isNotEmpty) {
+        // Back-compat: any install that ever saved a server URL already
+        // completed setup under the pre-first-launch-screen flow, so it
+        // must never see the new choice screen retroactively.
+        await OnboardingStateStore.instance.markFirstLaunchCompleted();
         await _buildAndApplyRoot(savedUrl);
         return;
       }
@@ -87,6 +93,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
           databaseDirectory: _dbDir,
           attachmentCacheDir: _cacheDir,
         );
+        await OnboardingStateStore.instance.markFirstLaunchCompleted();
         final root = RemoteCompositionRoot.production(
           databaseDirectory: _dbDir,
           devConfig: dartConfig,
@@ -99,16 +106,24 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         }
         return;
       } catch (_) {
-        // No dart-define config — fall through to URL entry
+        // No dart-define config — fall through to the first-launch flow
       }
 
-      if (mounted) setState(() => _bootState = _BootState.needsUrl);
+      final firstLaunchDone = await OnboardingStateStore.instance
+          .isFirstLaunchCompleted();
+      if (mounted) {
+        setState(() {
+          _bootState = firstLaunchDone
+              ? _BootState.offline
+              : _BootState.needsServerChoice;
+        });
+      }
     } catch (e, st) {
       AppLogger.instance.error('bootstrap', '$e', st);
       if (mounted) {
         setState(() {
           _initialUrlError = e.toString();
-          _bootState = _BootState.needsUrl;
+          _bootState = _BootState.needsServerChoice;
         });
       }
     }
@@ -143,6 +158,30 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
     }
   }
 
+  /// Handles the result popped from [ServerChoiceScreen]: either a chosen
+  /// server + invite (Global or personal), or the user continuing offline
+  /// (including simply backing out without choosing anything).
+  Future<void> _onServerChoiceMade(Object? choice) async {
+    await OnboardingStateStore.instance.markFirstLaunchCompleted();
+    _initialUrlError = null;
+    if (choice is ServerInviteChoice) {
+      _pendingInviteCode = choice.inviteCode;
+      try {
+        await _onConnectUrl(choice.serverUrl);
+      } catch (e) {
+        _pendingInviteCode = null;
+        if (mounted) {
+          setState(() {
+            _initialUrlError = e.toString();
+            _bootState = _BootState.offline;
+          });
+        }
+      }
+      return;
+    }
+    if (mounted) setState(() => _bootState = _BootState.offline);
+  }
+
   Future<void> _onChangeServerUrl() async {
     final oldRoot = _root;
     setState(() {
@@ -167,6 +206,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
       return HelixRemoteApp(
         root: _root!,
         onChangeServerUrl: _onChangeServerUrl,
+        initialInviteCode: _pendingInviteCode,
       );
     }
     return MaterialApp(
@@ -190,19 +230,161 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         ),
       ),
       themeMode: ThemeMode.system,
-      home: _bootState == _BootState.loading
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : _ServerUrlEntryScreen(
-              onConnect: _onConnectUrl,
-              initialError: _initialUrlError,
-              initialUrl: _currentServerUrl,
+      home: _buildBootHome(),
+    );
+  }
+
+  Widget _buildBootHome() {
+    switch (_bootState) {
+      case _BootState.loading:
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      case _BootState.needsServerChoice:
+        return _ServerChoiceHost(onChoice: _onServerChoiceMade);
+      case _BootState.offline:
+        return _OfflineShellScreen(
+          onServerChoiceMade: _onServerChoiceMade,
+          connectError: _initialUrlError,
+        );
+      case _BootState.needsUrl:
+        return _ServerUrlEntryScreen(
+          onConnect: _onConnectUrl,
+          initialError: _initialUrlError,
+          initialUrl: _currentServerUrl,
+        );
+      case _BootState.running:
+        // Handled above before reaching this switch.
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// First-launch server choice — shown once, replaced by _BootState.offline or
+// _BootState.running after a choice is made.
+// ---------------------------------------------------------------------------
+
+/// Hosts [ServerChoiceScreen] as the very first route so it can rely on its
+/// normal push/pop-based result flow even when nothing else has been pushed
+/// yet. Uses `pushReplacement` so there is no route left underneath it to
+/// accidentally navigate back to.
+class _ServerChoiceHost extends StatefulWidget {
+  const _ServerChoiceHost({required this.onChoice});
+
+  final void Function(Object? choice) onChoice;
+
+  @override
+  State<_ServerChoiceHost> createState() => _ServerChoiceHostState();
+}
+
+class _ServerChoiceHostState extends State<_ServerChoiceHost> {
+  bool _pushed = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_pushed) return;
+    _pushed = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final result = await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ServerChoiceScreen()),
+      );
+      widget.onChoice(result);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Offline shell — shown when the user chose (or previously chose) to
+// continue without a server connected.
+// ---------------------------------------------------------------------------
+
+class _OfflineShellScreen extends StatelessWidget {
+  const _OfflineShellScreen({
+    required this.onServerChoiceMade,
+    this.connectError,
+  });
+
+  final void Function(Object? choice) onServerChoiceMade;
+  final String? connectError;
+
+  Future<void> _connect(BuildContext context) async {
+    final result = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute(builder: (_) => const ServerChoiceScreen()),
+    );
+    onServerChoiceMade(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Helix Remote')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.cloud_off_outlined,
+                      size: 64,
+                      color: theme.colorScheme.outline,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'You\'re browsing offline',
+                      style: theme.textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No server is connected, so messaging, calls, and '
+                      'contacts aren\'t available yet. Connect a server '
+                      'anytime to get started.',
+                      style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    if (connectError != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        connectError!,
+                        style: TextStyle(color: theme.colorScheme.error),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () => _connect(context),
+                        icon: const Icon(Icons.link),
+                        label: const Text('Connect a server'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Server URL entry screen
+// Server URL entry screen (manual "change server" path for already-onboarded
+// installs; the first-launch flow uses ServerChoiceScreen instead)
 // ---------------------------------------------------------------------------
 
 class _ServerUrlEntryScreen extends StatefulWidget {
@@ -329,10 +511,20 @@ class _ServerUrlEntryScreenState extends State<_ServerUrlEntryScreen> {
 // ---------------------------------------------------------------------------
 
 class HelixRemoteApp extends StatefulWidget {
-  const HelixRemoteApp({super.key, required this.root, this.onChangeServerUrl});
+  const HelixRemoteApp({
+    super.key,
+    required this.root,
+    this.onChangeServerUrl,
+    this.initialInviteCode,
+  });
 
   final RemoteCompositionRoot root;
   final Future<void> Function()? onChangeServerUrl;
+
+  /// Invite code carried over from the first-launch server-choice screen
+  /// (Helix Global or a personal server), so the create-account form is
+  /// pre-filled and the user doesn't have to re-enter or re-paste it.
+  final String? initialInviteCode;
 
   @override
   State<HelixRemoteApp> createState() => _HelixRemoteAppState();
@@ -372,6 +564,11 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final initialInvite = widget.initialInviteCode;
+    if (initialInvite != null && initialInvite.isNotEmpty) {
+      _inviteController.text = initialInvite;
+      _setupPath = _SetupPath.createAccount;
+    }
     _stateSub = widget.root.startupStateChanges.listen((state) {
       if (!mounted) return;
       setState(() {
