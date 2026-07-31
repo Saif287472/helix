@@ -29,6 +29,14 @@
 ## Milestone 2: Helix Admin v1 (Management Dashboard)
 *Goal: Build a minimalist, secure server management panel focused solely on administration, avoiding wizard scope creep.*
 
+> **Update (Phase 11 of the phone/invite/contacts-sync overhaul):** the "avoid
+> wizard scope creep" line above is intentionally reversed. The static
+> 4-step guide from Phase 2.4 was rewritten into a navigable 8-page wizard
+> (`admin/lib/screens/guide/*.dart`) at the user's explicit request, also
+> removing the login gate around the rest of the app (Phase 9) so the guide
+> - and now the wizard - stay reachable before any server is connected.
+> Documented here so this isn't mistaken for scope creep nobody asked for.
+
 *   **Phase 2.1: Admin App Bootstrap**
     *   Initialize the Helix Admin Flutter Web/Desktop application in the monorepo workspace.
     *   Implement secure login/session management using the backend admin API key.

@@ -3,7 +3,7 @@ import 'admin_client.dart';
 import 'screens/backup_tab.dart';
 import 'screens/config_tab.dart';
 import 'screens/dashboard_tab.dart';
-import 'screens/guide_tab.dart';
+import 'screens/guide/guide_wizard.dart';
 import 'screens/intro_screen.dart';
 import 'screens/invites_tab.dart';
 import 'screens/logs_tab.dart';
@@ -391,7 +391,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
       case 'invites':
         return _client == null ? _lockedTab() : InvitesTab(client: _client!);
       case 'guide':
-        return const GuideTab();
+        return const GuideWizard();
       case 'settings':
         return SettingsTab(
           isDarkMode: _isDarkMode,

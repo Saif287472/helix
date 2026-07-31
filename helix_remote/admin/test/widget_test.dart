@@ -51,8 +51,8 @@ void main() {
     await tester.tap(find.text('Self-Hosting Guide'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Self-Hosting Guide'), findsWidgets);
-    expect(find.textContaining('Provision VPS Server'), findsOneWidget);
+    expect(find.text('Self-Hosting Guide'), findsOneWidget);
+    expect(find.textContaining('Welcome to self-hosting Helix'), findsOneWidget);
     expect(find.text('Connect a server first'), findsNothing);
   });
 
