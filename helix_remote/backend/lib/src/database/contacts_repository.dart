@@ -292,6 +292,7 @@ extension BackendContactsRepository on BackendDatabase {
       'search_discoverable': row['search_discoverable'] == 1,
       'presence_visibility': row['presence_visibility'],
       'last_seen_visibility': row['last_seen_visibility'],
+      'phone_discoverable': row['phone_discoverable'] == 1,
       'profile_version': row['profile_version'],
     };
   }
@@ -301,6 +302,7 @@ extension BackendContactsRepository on BackendDatabase {
     required bool searchDiscoverable,
     required String presenceVisibility,
     required String lastSeenVisibility,
+    bool? phoneDiscoverable,
   }) {
     final current = getPrivacy(accountId);
     final stmt = _db.prepare('''
@@ -309,15 +311,20 @@ extension BackendContactsRepository on BackendDatabase {
         search_discoverable,
         presence_visibility,
         last_seen_visibility,
+        phone_discoverable,
         profile_version
       )
-      VALUES (?, ?, ?, ?, ?);
+      VALUES (?, ?, ?, ?, ?, ?);
     ''');
     stmt.execute([
       accountId,
       searchDiscoverable ? 1 : 0,
       presenceVisibility,
       lastSeenVisibility,
+      // INSERT OR REPLACE rewrites the whole row, so an omitted toggle must
+      // explicitly carry forward its current value rather than silently
+      // reset to the column default.
+      (phoneDiscoverable ?? current['phone_discoverable'] as bool) ? 1 : 0,
       (current['profile_version'] as int) + 1,
     ]);
     stmt.close();
@@ -369,6 +376,36 @@ extension BackendContactsRepository on BackendDatabase {
       );
     });
     return matches.take(limit).toList();
+  }
+
+  /// Batch phone-contact discovery: given a set of salted phone hashes (see
+  /// `phone_hash.dart`), returns the account_id/display_name for every one
+  /// that belongs to a registered, phone-discoverable account. Never
+  /// returns anything for a hash with no match, so this can't be used to
+  /// enumerate accounts beyond confirming ones the caller already had the
+  /// real phone number for.
+  List<Map<String, dynamic>> matchPhoneHashes(List<String> phoneHashes) {
+    if (phoneHashes.isEmpty) return const [];
+    final placeholders = List.filled(phoneHashes.length, '?').join(', ');
+    final stmt = _db.prepare('''
+      SELECT a.phone_hash, a.account_id, ap.display_name
+      FROM accounts a
+      JOIN account_profiles ap ON ap.account_id = a.account_id
+      LEFT JOIN account_privacy p ON p.account_id = a.account_id
+      WHERE a.phone_hash IN ($placeholders)
+        AND (p.phone_discoverable IS NULL OR p.phone_discoverable = 1);
+    ''');
+    final res = stmt.select(phoneHashes);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'phone_hash': row['phone_hash'] as String,
+            'account_id': row['account_id'] as String,
+            'display_name': (row['display_name'] as String?) ?? '',
+          },
+        )
+        .toList();
   }
 
   double _displayNameSimilarity(String normalizedQuery, String displayName) {

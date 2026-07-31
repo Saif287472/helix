@@ -12,7 +12,10 @@ class ContactsModule {
   final Map<String, List<int>> _searchAttempts = {};
   static const int contactRequestDailyLimit = 20;
   static const int accountSearchMinuteLimit = 30;
+  static const int contactsMatchDailyLimit = 5;
+  static const int contactsMatchBatchLimit = 500;
   static const String _discoverySaltConfigKey = 'contacts_discovery_salt';
+  final Map<String, List<int>> _matchAttempts = {};
 
   ContactsModule(this.db, {Set<String>? adminAccountIds, this.notifyDevice})
     : adminAccountIds = adminAccountIds ?? const {'admin'};
@@ -31,6 +34,7 @@ class ContactsModule {
     router.post('/block', _blockHandler);
     router.post('/unblock', _unblockHandler);
     router.get('/search', _searchHandler);
+    router.post('/match', _matchPhoneHashesHandler);
     router.get('/privacy', _getPrivacyHandler);
     router.post('/privacy', _setPrivacyHandler);
     router.post('/presence', _presenceHeartbeatHandler);
@@ -386,6 +390,79 @@ class ContactsModule {
     return true;
   }
 
+  /// Batch phone-contact discovery for the "sync phone contacts" flow.
+  /// Authenticated and rate-limited (unlike /discovery-salt) since, even
+  /// hashed, this is an oracle for "is phone number X a Helix user" to
+  /// anyone who can call it - auth + a hard per-account daily cap + a
+  /// batch-size cap are the required mitigations, not optional hardening.
+  Future<Response> _matchPhoneHashesHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+    }
+    final accountId = auth['account_id'] as String;
+
+    if (!_allowContactsMatch(accountId)) {
+      return Response(
+        429,
+        body: jsonEncode({'error': 'Contacts match quota exceeded'}),
+      );
+    }
+
+    try {
+      final body =
+          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+      final phoneHashes = (body['phone_hashes'] as List<dynamic>?)
+          ?.cast<String>();
+      if (phoneHashes == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing phone_hashes'}),
+        );
+      }
+      if (phoneHashes.length > contactsMatchBatchLimit) {
+        return Response.badRequest(
+          body: jsonEncode({
+            'error': 'phone_hashes exceeds the $contactsMatchBatchLimit limit',
+          }),
+        );
+      }
+
+      // Only the request's volume is logged here, never the hashes/numbers
+      // themselves.
+      db.logAudit(
+        accountId,
+        auth['device_id'] as String?,
+        'CONTACTS_MATCH_REQUESTED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+
+      final rows = db.matchPhoneHashes(phoneHashes);
+      final matches = <String, dynamic>{
+        for (final row in rows)
+          row['phone_hash'] as String: {
+            'account_id': row['account_id'],
+            'display_name': row['display_name'],
+          },
+      };
+      return Response.ok(jsonEncode({'matches': matches}));
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Internal server error'}),
+      );
+    }
+  }
+
+  bool _allowContactsMatch(String accountId) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cutoff = now - const Duration(days: 1).inMilliseconds;
+    final attempts = _matchAttempts.putIfAbsent(accountId, () => <int>[]);
+    attempts.removeWhere((timestamp) => timestamp < cutoff);
+    if (attempts.length >= contactsMatchDailyLimit) return false;
+    attempts.add(now);
+    return true;
+  }
+
   Future<Response> _getPrivacyHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
@@ -413,12 +490,14 @@ class ContactsModule {
       final lastSeenVisibility = _visibility(
         body['last_seen_visibility'] as String?,
       );
+      final phoneDiscoverable = body['phone_discoverable'] as bool?;
 
       db.setPrivacy(
         accountId: auth['account_id'] as String,
         searchDiscoverable: searchDiscoverable,
         presenceVisibility: presenceVisibility,
         lastSeenVisibility: lastSeenVisibility,
+        phoneDiscoverable: phoneDiscoverable,
       );
 
       return Response.ok(

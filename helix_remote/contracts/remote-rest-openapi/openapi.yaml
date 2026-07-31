@@ -978,6 +978,58 @@ paths:
         '401':
           description: Unauthorized
 
+  /contacts/match:
+    post:
+      summary: >-
+        Batch phone-contact discovery: given a set of salted phone hashes
+        (see GET /contacts/discovery-salt), returns which belong to
+        registered, phone-discoverable accounts. Authenticated and
+        rate-limited - even hashed, this is an oracle for "is phone number X
+        a Helix user" to anyone who can call it.
+      operationId: matchContactPhoneHashes
+      tags: [Contacts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone_hashes]
+              properties:
+                phone_hashes:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: >-
+            Matches keyed by phone hash - hashes with no match, or that
+            belong to a non-discoverable account, are simply absent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [matches]
+                properties:
+                  matches:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        account_id:
+                          type: string
+                        display_name:
+                          type: string
+        '400':
+          description: Missing phone_hashes, or batch exceeds the size limit
+        '401':
+          description: Unauthorized
+        '429':
+          description: Contacts match quota exceeded
+
   /contacts/privacy:
     get:
       summary: Get privacy settings
@@ -999,6 +1051,11 @@ paths:
                     type: string
                   last_seen_visibility:
                     type: string
+                  phone_discoverable:
+                    type: boolean
+                    description: >-
+                      Whether this account can be found via the
+                      /contacts/match phone-contacts-sync flow.
         '401':
           description: Unauthorized
     post:
@@ -1020,6 +1077,9 @@ paths:
                   type: string
                 last_seen_visibility:
                   type: string
+                phone_discoverable:
+                  type: boolean
+                  description: Omit to leave the current value unchanged.
       responses:
         '200':
           description: Settings updated

@@ -1158,5 +1158,14 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 31;');
     }
+
+    if (version < 32) {
+      _db.execute('''
+        ALTER TABLE account_privacy
+          ADD COLUMN phone_discoverable INTEGER NOT NULL DEFAULT 1;
+      ''');
+
+      _db.execute('PRAGMA user_version = 32;');
+    }
   }
 }
