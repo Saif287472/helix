@@ -37,16 +37,12 @@ class DevicePhoneContactsService implements PhoneContactsService {
 
   @override
   Future<List<PhoneBookContact>> loadContacts() async {
-    final contacts = await fc.FlutterContacts.getContacts(
-      withProperties: true,
-    );
+    final contacts = await fc.FlutterContacts.getContacts(withProperties: true);
     return contacts
         .map(
           (c) => PhoneBookContact(
             displayName: c.displayName,
-            phoneNumbers: c.phones
-                .map((p) => p.number)
-                .toList(growable: false),
+            phoneNumbers: c.phones.map((p) => p.number).toList(growable: false),
           ),
         )
         .where((c) => c.displayName.isNotEmpty && c.phoneNumbers.isNotEmpty)

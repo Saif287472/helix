@@ -22,7 +22,10 @@ class LogsTab extends StatelessWidget {
                   'Live Server Console Logs (Last 100)',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                IconButton(icon: const Icon(Icons.refresh), onPressed: onRefresh),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: onRefresh,
+                ),
               ],
             ),
             const Divider(),

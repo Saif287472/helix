@@ -105,28 +105,25 @@ void main() {
     expect(db.getContact('bob_id'), isNull);
   });
 
-  test(
-    'Phone-book name overrides are independent of the contacts table',
-    () {
-      // Matches an account that isn't a Helix contact yet - the override
-      // must still be readable, since it feeds contacts-sync suggestions.
-      db.savePhoneContactName(
-        peerAccountId: 'carol_id',
-        phoneBookName: 'Carol (Work)',
-        updatedAt: 1000,
-      );
-      expect(db.phoneContactName('carol_id'), equals('Carol (Work)'));
-      expect(db.phoneContactName('unknown_id'), isNull);
+  test('Phone-book name overrides are independent of the contacts table', () {
+    // Matches an account that isn't a Helix contact yet - the override
+    // must still be readable, since it feeds contacts-sync suggestions.
+    db.savePhoneContactName(
+      peerAccountId: 'carol_id',
+      phoneBookName: 'Carol (Work)',
+      updatedAt: 1000,
+    );
+    expect(db.phoneContactName('carol_id'), equals('Carol (Work)'));
+    expect(db.phoneContactName('unknown_id'), isNull);
 
-      // Re-syncing overwrites the previous label for the same account.
-      db.savePhoneContactName(
-        peerAccountId: 'carol_id',
-        phoneBookName: 'Carol Smith',
-        updatedAt: 2000,
-      );
-      expect(db.phoneContactName('carol_id'), equals('Carol Smith'));
-    },
-  );
+    // Re-syncing overwrites the previous label for the same account.
+    db.savePhoneContactName(
+      peerAccountId: 'carol_id',
+      phoneBookName: 'Carol Smith',
+      updatedAt: 2000,
+    );
+    expect(db.phoneContactName('carol_id'), equals('Carol Smith'));
+  });
 
   test('F3 app lock, locked chat vault, and secret attempt policy persist', () {
     db.setAppLockSettings(

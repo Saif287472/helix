@@ -9,12 +9,16 @@ jurisdiction-specific legal review before public launch.
 
 ## Data We Process
 
-- Account identifiers: account ID, username, account status, and public identity
-  key.
+- Account identifiers: account ID, a salted hash of your phone number
+  (`phone_hash` - we never store or see your phone number itself), account
+  status, and public identity key.
 - Device identifiers: device ID, device name, public device key, active/revoked
   state, push-token field when configured, and last-seen timestamp.
 - Contacts and safety state: contact requests, accepted contacts, block state,
-  privacy settings, abuse reports, and safety/admin actions.
+  privacy settings, abuse reports, and safety/admin actions. If you opt into
+  contacts sync, salted hashes of your phone-book numbers are checked against
+  the server to find people already on Helix - your phone-book names and any
+  unmatched numbers never leave your device.
 - Messaging metadata: conversation IDs, membership rows, message IDs,
   per-device recipient IDs, server sequence numbers, timestamps, and encrypted
   message envelopes.

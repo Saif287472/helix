@@ -67,7 +67,8 @@ class ConfigTab extends StatelessWidget {
   }
 
   Widget _buildFederationControls(Map<String, dynamic> config) {
-    final federation = (config['federation'] as Map<String, dynamic>?) ?? const {};
+    final federation =
+        (config['federation'] as Map<String, dynamic>?) ?? const {};
     final enabled = federation['worldwide_mode'] == true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

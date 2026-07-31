@@ -9,7 +9,7 @@ sequenceDiagram
     participant Server (REST)
     participant DB (SQLite)
 
-    Client->>Server: POST /auth/register (username, identity keys)
+    Client->>Server: POST /auth/register (phone_hash, otp_code, invite_code, identity keys)
     Server->>DB: Store credentials & public prekeys
     Server-->>Client: Auth token (JWT)
 ```

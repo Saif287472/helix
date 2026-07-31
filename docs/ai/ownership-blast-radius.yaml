@@ -1,3 +1,14 @@
+# NOTE (documented during the helix_remote phone/invite/contacts-sync
+# overhaul's Phase 12, not fixed here - out of that phase's scope): every
+# `areas` path below is a helix_local path. helix_remote (app/, backend/,
+# admin/, packages/helix_remote_*) is not classified anywhere in this file,
+# so none of its changes get a classification-driven minimum_verification
+# from this mechanism. This does not exempt helix_remote work from
+# AI_GUARDRAILS' non-negotiable protections, which apply repo-wide per their
+# own header - every phase of that overhaul still produced its own explicit
+# risk note (behavior changed / verification performed / manual review
+# remaining) in its commit message regardless of this gap. Classifying
+# helix_remote here properly is follow-up work, not part of that overhaul.
 version: 1
 default_verification: "scripts/verify.ps1"
 

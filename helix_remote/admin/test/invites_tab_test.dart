@@ -108,7 +108,9 @@ void main() {
   testWidgets('loads and displays existing invites', (tester) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
+      MaterialApp(
+        home: Scaffold(body: InvitesTab(client: client)),
+      ),
     );
     await _settleWithRealIO(tester);
 
@@ -121,7 +123,9 @@ void main() {
   ) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
+      MaterialApp(
+        home: Scaffold(body: InvitesTab(client: client)),
+      ),
     );
     await _settleWithRealIO(tester);
 
@@ -137,7 +141,9 @@ void main() {
   testWidgets('pagination controls disable at the edges', (tester) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
+      MaterialApp(
+        home: Scaffold(body: InvitesTab(client: client)),
+      ),
     );
     await _settleWithRealIO(tester);
 
@@ -158,7 +164,9 @@ void main() {
     failListRequests = true;
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
+      MaterialApp(
+        home: Scaffold(body: InvitesTab(client: client)),
+      ),
     );
     await _settleWithRealIO(tester);
 

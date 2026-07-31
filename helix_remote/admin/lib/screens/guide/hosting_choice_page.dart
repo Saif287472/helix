@@ -11,8 +11,7 @@ class GuideHostingChoicePage extends StatefulWidget {
   const GuideHostingChoicePage({super.key});
 
   @override
-  State<GuideHostingChoicePage> createState() =>
-      _GuideHostingChoicePageState();
+  State<GuideHostingChoicePage> createState() => _GuideHostingChoicePageState();
 }
 
 class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {

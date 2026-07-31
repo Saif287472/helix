@@ -93,7 +93,8 @@ class SettingsTab extends StatelessWidget {
                   labelText: 'Admin API Token',
                   prefixIcon: Icon(Icons.lock),
                   border: OutlineInputBorder(),
-                  helperText: 'Not saved between sessions - re-enter each time.',
+                  helperText:
+                      'Not saved between sessions - re-enter each time.',
                 ),
               ),
               const SizedBox(height: 16),

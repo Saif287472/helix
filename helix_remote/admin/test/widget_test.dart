@@ -40,21 +40,25 @@ void main() {
     },
   );
 
-  testWidgets('the Self-Hosting Guide stays reachable with no server connected', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const HelixAdminApp());
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('GET STARTED'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'the Self-Hosting Guide stays reachable with no server connected',
+    (tester) async {
+      await tester.pumpWidget(const HelixAdminApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('GET STARTED'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Self-Hosting Guide'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Self-Hosting Guide'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Self-Hosting Guide'), findsOneWidget);
-    expect(find.textContaining('Welcome to self-hosting Helix'), findsOneWidget);
-    expect(find.text('Connect a server first'), findsNothing);
-  });
+      expect(find.text('Self-Hosting Guide'), findsOneWidget);
+      expect(
+        find.textContaining('Welcome to self-hosting Helix'),
+        findsOneWidget,
+      );
+      expect(find.text('Connect a server first'), findsNothing);
+    },
+  );
 
   testWidgets('Settings hosts the connect form and is reachable unconnected', (
     tester,
@@ -73,25 +77,22 @@ void main() {
     expect(find.text('Not connected'), findsOneWidget);
   });
 
-  testWidgets(
-    'the locked dashboard\'s button jumps straight to Settings',
-    (tester) async {
-      await tester.pumpWidget(const HelixAdminApp());
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('GET STARTED'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Connect a server first'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('SETTINGS'), findsOneWidget);
-      expect(find.byKey(const Key('settings_url_field')), findsOneWidget);
-    },
-  );
-
-  testWidgets('relaunching after the intro was shown skips it', (
+  testWidgets('the locked dashboard\'s button jumps straight to Settings', (
     tester,
   ) async {
+    await tester.pumpWidget(const HelixAdminApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('GET STARTED'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Connect a server first'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('SETTINGS'), findsOneWidget);
+    expect(find.byKey(const Key('settings_url_field')), findsOneWidget);
+  });
+
+  testWidgets('relaunching after the intro was shown skips it', (tester) async {
     SharedPreferences.setMockInitialValues({'intro_shown': true});
 
     await tester.pumpWidget(const HelixAdminApp());

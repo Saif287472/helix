@@ -19,10 +19,8 @@ class AdminPreferences {
 
   bool get introShown => _prefs.getBool(_introShownKey) ?? false;
 
-  Future<void> setIntroShown(bool value) => _prefs.setBool(
-    _introShownKey,
-    value,
-  );
+  Future<void> setIntroShown(bool value) =>
+      _prefs.setBool(_introShownKey, value);
 
   String? get serverUrl => _prefs.getString(_serverUrlKey);
 

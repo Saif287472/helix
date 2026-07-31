@@ -126,3 +126,51 @@ To scale E2EE groups efficiently without expensive direct fanned-out pairwise me
 *   **Cryptographic Version Negotiation (P9-016)**: The X3DH header contains a protocol version byte. If the recipient does not support the version, it rejects the session setup with a `version_mismatch` error signal.
 *   **Key Rotation (P9-017)**: Signed Prekeys are automatically rotated and re-signed every 14 days by a client background job.
 *   **Lost Device Response (P9-018)**: If a device is lost, the user logs into another active device (or uses the offline recovery phrase) to push a revocation signature, invalidating the lost device's access tokens and session states.
+
+---
+
+## 10. Phone Discovery Hashing (Contacts Sync)
+
+Added with the phone identity/invite/contacts-sync overhaul. This is a
+**separate primitive with a separate purpose** from everything above - it
+exists to let the server answer "is this phone number a registered account?"
+without ever learning the plaintext number, not to protect message content.
+It must not be conflated with the E2EE session cryptography in sections 1-9,
+and does not itself provide forward secrecy, deniability, or any Double
+Ratchet property; it is a keyed lookup hash, nothing more.
+
+*   **Primitive**: `HMAC-SHA256`, keyed by a per-deployment 32-byte random
+    salt (`crypto.Hmac(crypto.sha256, saltBytes)` from the already-imported
+    `crypto` package - no new cryptographic primitive was introduced for
+    this, per the project's existing preference against adding cryptographic
+    surface area unnecessarily).
+*   **Discovery salt generation and distribution**: Each server self-heals
+    its salt on first request to `GET /contacts/discovery-salt` (CSPRNG,
+    32 bytes, persisted via the existing `server_configuration` key-value
+    store) and never rotates it afterward - rotating would silently
+    invalidate every phone-hash match already made by every client. The
+    endpoint is intentionally unauthenticated: signup itself needs the salt
+    before an account or session exists.
+*   **Computation**: `phoneHash(saltBase64, e164Number) = hex(HMAC-SHA256(salt, utf8(e164Number)))`,
+    implemented identically in `backend/lib/src/phone_hash.dart` and
+    `app/lib/app/phone_hashing.dart`. Byte-for-byte parity between the two is
+    load-bearing - a divergence would silently break every phone-hash
+    comparison (signup, login, and contacts matching alike) - and is pinned
+    by a shared known-answer test vector.
+*   **Where it is used**: phone-number-based account identity at
+    registration (`phone_hash` is the account's permanent identifier - there
+    is no plaintext username, and no change-number flow), and the contacts-
+    sync matching lookup (`POST /contacts/match`).
+*   **Accepted, documented limitation**: a per-server salt does not stop an
+    attacker who can call the salt endpoint from precomputing a table against
+    the roughly 10^10 E.164 keyspace for a given country code and then
+    querying `/contacts/match` (authenticated, rate-limited, batch-capped) to
+    test candidates. This is the same limitation pre-enclave Signal had. It
+    is tracked as an accepted risk, not a defect - see
+    `docs/product/THREAT_MODEL.md` T-5, and note this is explicitly a
+    property of hash-based contact discovery in general, not something a
+    different HMAC construction would fix.
+*   **Federation note**: cross-server contact matching between two federated
+    Helix Remote servers is out of scope by construction - each server has an
+    independent salt, so a hash computed for one server is meaningless on
+    another.

@@ -4,8 +4,8 @@ Status: F11 account/platform expansion baseline.
 
 F0 freezes the Remote baseline around:
 
-- App/local storage schema: `helix.remote.local-storage-schema.v23`
-- Backend schema: `helix.remote.backend-schema.v21`
+- App/local storage schema: `helix.remote.local-storage-schema.v26`
+- Backend schema: `helix.remote.backend-schema.v32`
 - Realtime envelope: `helix.remote.realtime-envelope.v1`
 - Encrypted content envelope: `helix.remote.content-envelope.v1`
 - Text content: `helix.remote.content.text.v1`
@@ -138,6 +138,33 @@ multiple accounts in one process. Clients without
 `helix.remote.proxy-diagnostics.v1` may connect directly but must not log proxy
 credentials. Clients without `helix.remote.platform-expansion.v1` should hide
 unsupported desktop/tablet controls rather than rendering broken UI.
+
+## Phone Identity, OTP, and Invite Compatibility
+
+Registration is **v3-only**; v2 (username-based) was hard-removed, not kept
+alongside as a legacy path. `POST /accounts/register` rejects any request
+where `registration_version` is not exactly `3` - there is no negotiation or
+fallback. Clients older than this overhaul cannot register against a current
+backend at all; this is an intentional hard cut (see the overhaul's Phase 5
+decision), not an oversight, since there were no real users on v2 at the time
+of the cut.
+
+v3 registration requires `phone_hash`, `otp_code`, and `invite_code` in place
+of v2's `username`, and the registration transcript
+(`helix.remote.registration.v3` in the signed payload) binds all three plus
+the account/device key material together, so a signature cannot be replayed
+against a swapped invite or OTP. There is no v2 compatibility shim on the
+local storage side either - schema v25 drops the local `accounts.username`
+mirror column outright, since it never had a uniqueness constraint locally
+and no meaningful data could exist there pre-launch.
+
+Contacts phone-hash matching (`POST /contacts/match`, `GET
+/contacts/discovery-salt`) and invite-credential issuance/lookup
+(`POST/GET /ops/invites`, `GET /accounts/invite/lookup`, `POST
+/accounts/invite/auto-issue`) are new REST surfaces, not realtime-envelope
+capabilities - they are not gated by `RemoteCapability` negotiation the way
+message content types are, since they sit outside the messaging protocol
+proper.
 
 ## F0 Content Compatibility
 

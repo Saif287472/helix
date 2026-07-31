@@ -66,16 +66,20 @@ void main() {
       // The notice is boxed with a visible border (a warning card); the
       // badge is a borderless pill - distinct container treatments too.
       final badgeContainer = tester.widget<Container>(
-        find.ancestor(
-          of: find.text(_securityClaim),
-          matching: find.byType(Container),
-        ).first,
+        find
+            .ancestor(
+              of: find.text(_securityClaim),
+              matching: find.byType(Container),
+            )
+            .first,
       );
       final noticeContainer = tester.widget<Container>(
-        find.ancestor(
-          of: find.text(_otpCaution),
-          matching: find.byType(Container),
-        ).first,
+        find
+            .ancestor(
+              of: find.text(_otpCaution),
+              matching: find.byType(Container),
+            )
+            .first,
       );
       final badgeDecoration = badgeContainer.decoration as BoxDecoration?;
       final noticeDecoration = noticeContainer.decoration as BoxDecoration?;

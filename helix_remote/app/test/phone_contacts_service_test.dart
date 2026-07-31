@@ -63,10 +63,7 @@ void main() {
       final result = hashPhoneBookContacts(
         contacts: const [
           PhoneBookContact(displayName: 'First', phoneNumbers: [_testNumber]),
-          PhoneBookContact(
-            displayName: 'Second',
-            phoneNumbers: [_testNumber],
-          ),
+          PhoneBookContact(displayName: 'Second', phoneNumbers: [_testNumber]),
         ],
         discoverySaltBase64: _testSaltBase64,
       );

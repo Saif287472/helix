@@ -300,11 +300,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
 
   @override
   Future<Map<String, dynamic>> matchPhoneHashes(List<String> phoneHashes) =>
-      _request(
-        'POST',
-        'contacts/match',
-        body: {'phone_hashes': phoneHashes},
-      );
+      _request('POST', 'contacts/match', body: {'phone_hashes': phoneHashes});
 
   @override
   Future<Map<String, dynamic>> getChallenge({

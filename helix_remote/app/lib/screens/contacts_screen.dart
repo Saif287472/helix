@@ -117,9 +117,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   /// app restarts rather than only lasting until the next sync.
   List<_PhoneBookSuggestion> get _phoneBookSuggestions {
     if (_searchQuery.isNotEmpty) return const [];
-    final knownPeerIds = _contacts
-        .map((e) => e.contact.peerAccountId)
-        .toSet();
+    final knownPeerIds = _contacts.map((e) => e.contact.peerAccountId).toSet();
     final overrides = widget.messagingService.phoneContactOverrides();
     return overrides.entries
         .where((e) => !knownPeerIds.contains(e.key))
@@ -429,8 +427,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () =>
-                      setState(() => _syncBannerDismissed = true),
+                  onPressed: () => setState(() => _syncBannerDismissed = true),
                   child: const Text('Not now'),
                 ),
                 FilledButton(
@@ -554,15 +551,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
       contact: displayContact,
       request: request,
       onTap: () => _startConversation(contact),
-      onAccept: request != null
-          ? () => _acceptRequest(contact, request)
-          : null,
-      onReject: request != null
-          ? () => _rejectRequest(contact, request)
-          : null,
-      onCancel: request != null
-          ? () => _cancelRequest(contact, request)
-          : null,
+      onAccept: request != null ? () => _acceptRequest(contact, request) : null,
+      onReject: request != null ? () => _rejectRequest(contact, request) : null,
+      onCancel: request != null ? () => _cancelRequest(contact, request) : null,
       onRemove: () => _removeContact(contact),
     );
   }

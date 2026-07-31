@@ -124,7 +124,9 @@ class _InvitesTabState extends State<InvitesTab> {
                             ),
                           )
                         : const Icon(Icons.add_link),
-                    label: Text(_generating ? 'Generating…' : 'Generate Invite'),
+                    label: Text(
+                      _generating ? 'Generating…' : 'Generate Invite',
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF8A2BE2),
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -155,7 +157,8 @@ class _InvitesTabState extends State<InvitesTab> {
                           IconButton(
                             icon: const Icon(Icons.copy),
                             tooltip: 'Copy link',
-                            onPressed: () => _copyToClipboard(_lastShareableUrl!),
+                            onPressed: () =>
+                                _copyToClipboard(_lastShareableUrl!),
                           ),
                         ],
                       ),
@@ -226,7 +229,10 @@ class _InvitesTabState extends State<InvitesTab> {
                           key: const Key('invites_previous_page'),
                           onPressed: _offset > 0
                               ? () => _loadInvites(
-                                  offset: (_offset - _pageSize).clamp(0, 1 << 30),
+                                  offset: (_offset - _pageSize).clamp(
+                                    0,
+                                    1 << 30,
+                                  ),
                                 )
                               : null,
                           child: const Text('Previous'),

@@ -64,7 +64,11 @@ class OtpPlaceholderNotice extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.shade800),
+          Icon(
+            Icons.warning_amber_rounded,
+            size: 18,
+            color: Colors.amber.shade800,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

@@ -42,7 +42,13 @@ class HelixAdminApp extends StatelessWidget {
   }
 }
 
-const _serverDependentTabs = {'dashboard', 'config', 'logs', 'backup', 'invites'};
+const _serverDependentTabs = {
+  'dashboard',
+  'config',
+  'logs',
+  'backup',
+  'invites',
+};
 const _defaultServerUrl = 'http://127.0.0.1:8080';
 
 class MainAdminPage extends StatefulWidget {
@@ -112,7 +118,10 @@ class _MainAdminPageState extends State<MainAdminPage> {
     });
 
     final url = _urlController.text.trim();
-    final client = AdminClient(baseUrl: url, token: _tokenController.text.trim());
+    final client = AdminClient(
+      baseUrl: url,
+      token: _tokenController.text.trim(),
+    );
 
     final ok = await client.verifyLogin();
     if (!mounted) return;
@@ -152,7 +161,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
         _metrics = metrics;
         _config = config;
         final federation = config['federation'] as Map<String, dynamic>?;
-        _federationDomainController.text = federation?['domain'] as String? ?? '';
+        _federationDomainController.text =
+            federation?['domain'] as String? ?? '';
         _federationAddressController.text =
             federation?['public_base_url'] as String? ?? '';
         _federationDirectoryController.text =
@@ -187,9 +197,12 @@ class _MainAdminPageState extends State<MainAdminPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Backup failed: $e'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Backup failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -314,7 +327,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: isSelected
-              ? Border.all(color: const Color(0xFF8A2BE2).withValues(alpha: 0.4))
+              ? Border.all(
+                  color: const Color(0xFF8A2BE2).withValues(alpha: 0.4),
+                )
               : null,
         ),
         child: Row(
@@ -342,7 +357,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   Widget _buildMainContent() {
     final showFullPageSpinner =
-        _isLoading && _metrics == null && _serverDependentTabs.contains(_selectedTab);
+        _isLoading &&
+        _metrics == null &&
+        _serverDependentTabs.contains(_selectedTab);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F0F16),
@@ -356,13 +373,19 @@ class _MainAdminPageState extends State<MainAdminPage> {
         ),
         actions: [
           if (_serverDependentTabs.contains(_selectedTab))
-            IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _refreshData,
+            ),
           const SizedBox(width: 16),
         ],
       ),
       body: showFullPageSpinner
           ? const Center(child: CircularProgressIndicator())
-          : Padding(padding: const EdgeInsets.all(24.0), child: _getTabWidget()),
+          : Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: _getTabWidget(),
+            ),
     );
   }
 
