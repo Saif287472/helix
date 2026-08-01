@@ -17,12 +17,26 @@ class GuideConnectAdminPage extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         const GuideDetailExpansion(
-          title: 'Finding your admin token',
+          title: 'Easiest: get a pairing code (works any time)',
           detail:
-              'The server prints its admin token once, the first time it '
-              'boots, and saves it to ADMIN_TOKEN.txt next to the '
-              'database. Lost it? Run bin/reset_admin_token.dart on the '
-              'server (with the server stopped) to mint a new one.',
+              'In Settings, tap "Get a Pairing Code from the Server", then '
+              'run the curl command it shows over SSH/Termius on the '
+              'server - while it\'s already running, no restart needed. '
+              'It prints a 16-digit code, valid for 10 minutes and usable '
+              'once; entering it in the app exchanges it for a fresh '
+              'admin token automatically.',
+        ),
+        const GuideDetailExpansion(
+          title: 'On first boot: scan the QR code or read ADMIN_TOKEN.txt',
+          detail:
+              'The server also prints its admin token - and a QR code '
+              'encoding it - once, the first time it boots, and saves the '
+              'token to ADMIN_TOKEN.txt next to the database. "Scan Token '
+              'from Server Terminal" in Settings reads that QR code '
+              'directly. Missed both and the server won\'t restart '
+              'fresh? Run bin/reset_admin_token.dart on the server (with '
+              'the server stopped) to mint a new one - or use the pairing '
+              'code above instead, which needs no downtime.',
         ),
         const SizedBox(height: 8),
         const Text(

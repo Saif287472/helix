@@ -134,3 +134,23 @@ class AdminClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 }
+
+/// Exchanges a short-lived pairing code (see the backend's
+/// AdminPairingModule) for a freshly-rotated admin token. Unlike [AdminClient]
+/// this needs no token itself - the code is the credential, and the server
+/// only accepts each one once.
+Future<String> redeemPairingCode({
+  required String baseUrl,
+  required String code,
+}) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/api/v1/admin-pairing/redeem'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'code': code}),
+  );
+  if (response.statusCode != 200) {
+    throw Exception('Invalid or expired code.');
+  }
+  final body = jsonDecode(response.body) as Map<String, dynamic>;
+  return body['admin_token'] as String;
+}

@@ -13,7 +13,11 @@ import 'welcome_page.dart';
 /// connected - callers must never wrap this in a LockedTabPlaceholder
 /// guard, and it must not gate progress on anything actually connecting.
 class GuideWizard extends StatefulWidget {
-  const GuideWizard({super.key});
+  const GuideWizard({super.key, this.initialPage = 0});
+
+  /// Page to open on first build, e.g. jumping straight to "Connect Admin"
+  /// from Settings' "Where do I find this?" link.
+  final int initialPage;
 
   @override
   State<GuideWizard> createState() => _GuideWizardState();
@@ -42,7 +46,7 @@ class _GuideWizardState extends State<GuideWizard> {
     GuideBackupsPage(),
   ];
 
-  int _pageIndex = 0;
+  late int _pageIndex = widget.initialPage.clamp(0, _pages.length - 1);
 
   void _goTo(int index) {
     setState(() => _pageIndex = index.clamp(0, _pages.length - 1));
@@ -135,29 +139,52 @@ class _GuideWizardState extends State<GuideWizard> {
   Widget _buildNavRow() {
     final isFirst = _pageIndex == 0;
     final isLast = _pageIndex == _pages.length - 1;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        OutlinedButton.icon(
-          key: const Key('guide_back_button'),
-          onPressed: isFirst ? null : () => _goTo(_pageIndex - 1),
-          icon: const Icon(Icons.arrow_back),
-          label: const Text('Back'),
-        ),
-        Text(
-          'Step ${_pageIndex + 1} of ${_pages.length}',
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-        ElevatedButton.icon(
-          key: const Key('guide_next_button'),
-          onPressed: isLast ? null : () => _goTo(_pageIndex + 1),
-          icon: const Icon(Icons.arrow_forward),
-          label: const Text('Next'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF8A2BE2),
-          ),
-        ),
-      ],
+    final backButton = OutlinedButton.icon(
+      key: const Key('guide_back_button'),
+      onPressed: isFirst ? null : () => _goTo(_pageIndex - 1),
+      icon: const Icon(Icons.arrow_back),
+      label: const Text('Back'),
+    );
+    final stepText = Text(
+      'Step ${_pageIndex + 1} of ${_pages.length}',
+      style: const TextStyle(color: Colors.white54, fontSize: 12),
+    );
+    final nextButton = ElevatedButton.icon(
+      key: const Key('guide_next_button'),
+      onPressed: isLast ? null : () => _goTo(_pageIndex + 1),
+      icon: const Icon(Icons.arrow_forward),
+      label: const Text('Next'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF8A2BE2),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Back + Step X of Y + Next don't fit on one line on narrow phones -
+        // stack the buttons on their own row with the step label centered
+        // below instead of letting the row overflow off-screen.
+        if (constraints.maxWidth < 420) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: backButton),
+                  const SizedBox(width: 12),
+                  Expanded(child: nextButton),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Center(child: stepText),
+            ],
+          );
+        }
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [backButton, stepText, nextButton],
+        );
+      },
     );
   }
 }

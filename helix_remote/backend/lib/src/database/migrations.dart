@@ -1167,5 +1167,23 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 32;');
     }
+
+    if (version < 33) {
+      // Short-lived, single-use codes an operator mints via a loopback-only
+      // call on a running server and redeems from the admin app for a
+      // freshly-rotated admin token - see AdminPairingModule. Only the hash
+      // is stored, same as admin_token_hash; redeemed_at IS NULL means the
+      // code is still live (until expires_at).
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS admin_pairing_codes (
+          code_hash   TEXT PRIMARY KEY,
+          created_at  INTEGER NOT NULL,
+          expires_at  INTEGER NOT NULL,
+          redeemed_at INTEGER
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 33;');
+    }
   }
 }

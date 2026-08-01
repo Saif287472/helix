@@ -12,47 +12,52 @@ class BackupTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        width: 500,
-        child: Card(
-          color: const Color(0xFF161624),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(
-                  Icons.settings_backup_restore,
-                  size: 64,
-                  color: Color(0xFF8A2BE2),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Automated Maintenance & Snapshot Backups',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Creates a clean snapshot of the server database using '
-                  'SQLite "VACUUM INTO". File is saved in the backups '
-                  'directory.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton.icon(
-                  onPressed: isLoading ? null : onTriggerBackup,
-                  icon: const Icon(Icons.backup),
-                  label: const Text('TRIGGER SNAPSHOT BACKUP'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8A2BE2),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+    return SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: Card(
+            color: const Color(0xFF161624),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.settings_backup_restore,
+                    size: 64,
+                    color: Color(0xFF8A2BE2),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Automated Maintenance & Snapshot Backups',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Creates a clean snapshot of the server database using '
+                    'SQLite "VACUUM INTO". File is saved in the backups '
+                    'directory.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton.icon(
+                    onPressed: isLoading ? null : onTriggerBackup,
+                    icon: const Icon(Icons.backup),
+                    label: const Text('TRIGGER SNAPSHOT BACKUP'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8A2BE2),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

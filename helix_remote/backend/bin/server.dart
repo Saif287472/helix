@@ -6,6 +6,7 @@ import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 import 'src/admin_token_file.dart';
+import 'src/terminal_qr.dart';
 
 void main() async {
   // On Windows without cmake/MSVC, native assets can't compile sqlite3 from
@@ -115,6 +116,13 @@ void main() async {
     print('  ${identity.adminToken}');
     print('Also saved to: ${adminTokenFile.path}');
     print('Save this token! It is required to log into Helix Admin.');
+    try {
+      print('');
+      print('Scan with the Helix Admin app to fill in the token:');
+      print(renderTerminalQr(identity.adminToken!));
+    } catch (_) {
+      // Cosmetic only - never let QR rendering block server startup.
+    }
   } else {
     print(
       'Helix Admin Token: already configured from a previous boot. Check '

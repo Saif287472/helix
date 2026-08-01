@@ -21,6 +21,10 @@ Widget _wrap(Widget child) => MaterialApp(
   home: Scaffold(body: SizedBox(height: 900, child: child)),
 );
 
+Widget _wrapNarrow(Widget child) => MaterialApp(
+  home: Scaffold(body: SizedBox(width: 320, height: 700, child: child)),
+);
+
 double? _progressValue(WidgetTester tester) => tester
     .widget<LinearProgressIndicator>(
       find.byKey(const Key('guide_progress_bar')),
@@ -176,4 +180,24 @@ void main() {
     expect(find.text('Welcome to self-hosting Helix'), findsOneWidget);
     expect(find.textContaining('Connect a server'), findsNothing);
   });
+
+  testWidgets(
+    'the Back/Step/Next nav row stacks instead of overflowing on a narrow '
+    'phone width',
+    (tester) async {
+      await tester.pumpWidget(_wrapNarrow(const GuideWizard()));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Step 1 of 8'), findsOneWidget);
+      expect(find.byKey(const Key('guide_back_button')), findsOneWidget);
+      expect(find.byKey(const Key('guide_next_button')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('guide_next_button')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Step 2 of 8'), findsOneWidget);
+    },
+  );
 }

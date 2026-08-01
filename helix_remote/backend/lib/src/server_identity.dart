@@ -100,3 +100,14 @@ class ServerIdentity {
     return base64Url.encode(bytes).replaceAll('=', '');
   }
 }
+
+/// Invalidates the current admin token and mints a fresh one. Safe to call
+/// on a live, running server - it's a single DB write, no restart needed -
+/// as well as offline (bin/reset_admin_token.dart uses this too). The
+/// server's federation identity/keypair is untouched either way. The
+/// returned identity's `adminToken` is always non-null (the token hash was
+/// just cleared above, so loadOrCreate always regenerates one).
+Future<ServerIdentity> rotateAdminToken(BackendDatabase db) async {
+  db.deleteServerConfig('admin_token_hash');
+  return ServerIdentity.loadOrCreate(db);
+}

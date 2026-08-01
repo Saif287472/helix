@@ -65,6 +65,13 @@ class _MainAdminPageState extends State<MainAdminPage> {
   bool _isConnecting = false;
   bool _isDarkMode = true;
 
+  /// Guide page to open next time the 'guide' tab is built. Reset to 0
+  /// (Welcome) on every normal sidebar navigation; only the "Where do I
+  /// find this?" link in Settings sets it to the Connect Admin page.
+  int _guideInitialPage = 0;
+
+  static const _guideConnectAdminPageIndex = 6;
+
   AdminPreferences? _prefs;
   bool _introShown = false;
 
@@ -117,7 +124,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
       _errorMessage = null;
     });
 
-    final url = _urlController.text.trim();
+    final url = _normalizeServerUrl(_urlController.text);
+    _urlController.text = url;
     final client = AdminClient(
       baseUrl: url,
       token: _tokenController.text.trim(),
@@ -147,6 +155,27 @@ class _MainAdminPageState extends State<MainAdminPage> {
       _config = null;
       _logs = [];
       _errorMessage = null;
+    });
+  }
+
+  /// Tolerates the common paste mistakes new users make with a server URL:
+  /// stray whitespace, a missing scheme, and a trailing slash.
+  String _normalizeServerUrl(String raw) {
+    var url = raw.trim();
+    if (url.isEmpty) return url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'http://$url';
+    }
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    return url;
+  }
+
+  void _openConnectGuide() {
+    setState(() {
+      _selectedTab = 'guide';
+      _guideInitialPage = _guideConnectAdminPageIndex;
     });
   }
 
@@ -235,6 +264,12 @@ class _MainAdminPageState extends State<MainAdminPage> {
     }
   }
 
+  /// Below this width there's no room for a fixed 260px sidebar next to
+  /// content, so the shell switches to an AppBar hamburger + Drawer.
+  static const double _mobileBreakpoint = 700;
+
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   @override
   Widget build(BuildContext context) {
     if (_prefs == null) {
@@ -245,79 +280,143 @@ class _MainAdminPageState extends State<MainAdminPage> {
     }
     return Theme(
       data: _isDarkMode ? ThemeData.dark() : ThemeData.light(),
-      child: Scaffold(
-        body: Row(
-          children: [
-            _buildSidebar(),
-            Expanded(child: _buildMainContent()),
-          ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < _mobileBreakpoint;
+          return Scaffold(
+            key: _scaffoldKey,
+            appBar: _buildAppBar(),
+            drawer: isMobile
+                ? Drawer(
+                    backgroundColor: const Color(0xFF0B0B12),
+                    child: SafeArea(
+                      child: _buildSidebarContent(inDrawer: true),
+                    ),
+                  )
+                : null,
+            body: isMobile
+                ? _buildBody(isMobile: true)
+                : Row(
+                    children: [
+                      Container(
+                        width: 260,
+                        color: const Color(0xFF0B0B12),
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: _buildSidebarContent(inDrawer: false),
+                      ),
+                      Expanded(child: _buildBody(isMobile: false)),
+                    ],
+                  ),
+          );
+        },
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: const Color(0xFF0F0F16),
+      title: Text(
+        _selectedTab.toUpperCase(),
+        style: const TextStyle(
+          letterSpacing: 1.5,
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
         ),
       ),
+      actions: [
+        if (_serverDependentTabs.contains(_selectedTab))
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
+        const SizedBox(width: 16),
+      ],
     );
   }
 
-  Widget _buildSidebar() {
-    return Container(
-      width: 260,
-      color: const Color(0xFF0B0B12),
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                const Icon(Icons.radar, color: Color(0xFF00E5FF)),
-                const SizedBox(width: 12),
-                const Flexible(
-                  child: Text(
-                    'Helix Panel',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
+  Widget _buildSidebarContent({required bool inDrawer}) {
+    void selectTab(String tabId) {
+      setState(() {
+        _selectedTab = tabId;
+        _guideInitialPage = 0;
+      });
+      if (_client != null && _serverDependentTabs.contains(tabId)) {
+        _refreshData();
+      }
+      if (inDrawer) {
+        _scaffoldKey.currentState?.closeDrawer();
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              const Icon(Icons.radar, color: Color(0xFF00E5FF)),
+              const SizedBox(width: 12),
+              const Flexible(
+                child: Text(
+                  'Helix Panel',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
-          _sidebarItem(Icons.dashboard, 'Dashboard', 'dashboard'),
-          _sidebarItem(Icons.settings, 'Configurations', 'config'),
-          _sidebarItem(Icons.terminal, 'Log Tailing', 'logs'),
-          _sidebarItem(Icons.backup, 'Maintenance & Backups', 'backup'),
-          _sidebarItem(Icons.mail_outline, 'Invites', 'invites'),
-          _sidebarItem(Icons.menu_book, 'Self-Hosting Guide', 'guide'),
-          _sidebarItem(Icons.tune, 'Settings', 'settings'),
-          const Spacer(),
-          if (_client != null) ...[
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.link_off, color: Colors.white60),
-              title: const Text(
-                'Disconnect',
-                style: TextStyle(color: Colors.white60),
               ),
-              onTap: _disconnect,
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+        _sidebarItem(Icons.dashboard, 'Dashboard', 'dashboard', selectTab),
+        _sidebarItem(Icons.settings, 'Configurations', 'config', selectTab),
+        _sidebarItem(Icons.terminal, 'Log Tailing', 'logs', selectTab),
+        _sidebarItem(
+          Icons.backup,
+          'Maintenance & Backups',
+          'backup',
+          selectTab,
+        ),
+        _sidebarItem(Icons.mail_outline, 'Invites', 'invites', selectTab),
+        _sidebarItem(
+          Icons.menu_book,
+          'Self-Hosting Guide',
+          'guide',
+          selectTab,
+        ),
+        _sidebarItem(Icons.tune, 'Settings', 'settings', selectTab),
+        const Spacer(),
+        if (_client != null) ...[
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.link_off, color: Colors.white60),
+            title: const Text(
+              'Disconnect',
+              style: TextStyle(color: Colors.white60),
             ),
-          ],
+            onTap: () {
+              _disconnect();
+              if (inDrawer) {
+                _scaffoldKey.currentState?.closeDrawer();
+              }
+            },
+          ),
         ],
-      ),
+      ],
     );
   }
 
-  Widget _sidebarItem(IconData icon, String title, String tabId) {
+  Widget _sidebarItem(
+    IconData icon,
+    String title,
+    String tabId,
+    ValueChanged<String> onSelect,
+  ) {
     final isSelected = _selectedTab == tabId;
     return InkWell(
-      onTap: () {
-        setState(() => _selectedTab = tabId);
-        if (_client != null && _serverDependentTabs.contains(tabId)) {
-          _refreshData();
-        }
-      },
+      onTap: () => onSelect(tabId),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -355,37 +454,17 @@ class _MainAdminPageState extends State<MainAdminPage> {
     );
   }
 
-  Widget _buildMainContent() {
+  Widget _buildBody({required bool isMobile}) {
     final showFullPageSpinner =
         _isLoading &&
         _metrics == null &&
         _serverDependentTabs.contains(_selectedTab);
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0F0F16),
-        title: Text(
-          _selectedTab.toUpperCase(),
-          style: const TextStyle(
-            letterSpacing: 1.5,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          if (_serverDependentTabs.contains(_selectedTab))
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _refreshData,
-            ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      body: showFullPageSpinner
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: _getTabWidget(),
-            ),
+    if (showFullPageSpinner) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return Padding(
+      padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
+      child: _getTabWidget(),
     );
   }
 
@@ -414,7 +493,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
       case 'invites':
         return _client == null ? _lockedTab() : InvitesTab(client: _client!);
       case 'guide':
-        return const GuideWizard();
+        return GuideWizard(initialPage: _guideInitialPage);
       case 'settings':
         return SettingsTab(
           isDarkMode: _isDarkMode,
@@ -426,6 +505,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           errorMessage: _errorMessage,
           onConnect: _connect,
           onDisconnect: _disconnect,
+          onOpenConnectGuide: _openConnectGuide,
         );
       default:
         return const Center(child: Text('Tab not found'));

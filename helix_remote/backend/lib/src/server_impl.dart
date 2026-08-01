@@ -22,6 +22,7 @@ import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/modules/groups.dart';
 import 'package:helix_remote_backend/src/modules/group_calls.dart';
+import 'package:helix_remote_backend/src/modules/admin_pairing.dart';
 import 'package:helix_remote_backend/src/modules/operability.dart';
 import 'package:helix_remote_backend/src/modules/privacy_compliance.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
@@ -223,6 +224,7 @@ class BackendServer {
       db,
       adminAccountIds: adminAccountIds,
     );
+    final adminPairingModule = AdminPairingModule(db: db, now: now);
     final operabilityModule = OperabilityModule(
       db: db,
       rateLimiter: rateLimiter,
@@ -244,6 +246,7 @@ class BackendServer {
     // Map modules
     router.mount('/api/v1/health', operabilityModule.healthRouter.call);
     router.mount('/api/v1/ops', operabilityModule.opsRouter.call);
+    router.mount('/api/v1/admin-pairing', adminPairingModule.router.call);
     router.mount('/api/v1/accounts', authModule.router.call);
     router.mount('/api/v1/devices', authModule.router.call);
     router.mount('/api/v1/prekeys', prekeysModule.router.call);
@@ -371,6 +374,7 @@ class BackendServer {
             path.endsWith('/health/live') ||
             path.endsWith('/health/ready') ||
             path.contains('/s2s/') ||
+            path.contains('/admin-pairing/') ||
             path.endsWith('/ws')) {
           return innerHandler(request);
         }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'pairing_code_screen.dart';
+import 'scan_token_screen.dart';
 
 /// Hosts the server-connection form (formerly a standalone login screen)
 /// plus app-level preferences. Always reachable, even with no server
@@ -16,6 +18,7 @@ class SettingsTab extends StatelessWidget {
     required this.errorMessage,
     required this.onConnect,
     required this.onDisconnect,
+    required this.onOpenConnectGuide,
   });
 
   final bool isDarkMode;
@@ -27,6 +30,44 @@ class SettingsTab extends StatelessWidget {
   final String? errorMessage;
   final VoidCallback onConnect;
   final VoidCallback onDisconnect;
+  final VoidCallback onOpenConnectGuide;
+
+  Future<void> _scanToken(BuildContext context) async {
+    final scanned = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const ScanTokenScreen()));
+    if (scanned == null || scanned.isEmpty) return;
+    final cleaned = scanned.trim();
+    tokenController.value = TextEditingValue(
+      text: cleaned,
+      selection: TextSelection.collapsed(offset: cleaned.length),
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Token scanned. Enter your server URL below, then tap Connect.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _redeemViaPairingCode(BuildContext context) async {
+    final token = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => PairingCodeScreen(baseUrl: urlController.text.trim()),
+      ),
+    );
+    if (token == null || token.isEmpty) return;
+    tokenController.value = TextEditingValue(
+      text: token,
+      selection: TextSelection.collapsed(offset: token.length),
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Token filled in. Tap Connect below.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +115,55 @@ class SettingsTab extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                key: const Key('settings_scan_token_button'),
+                onPressed: () => _scanToken(context),
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Scan Token from Server Terminal'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Your server prints a QR code in its terminal the moment '
+                'the admin token is generated - scanning it fills the '
+                'field below automatically, no typing required.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const Key('settings_pairing_code_button'),
+                onPressed: () => _redeemViaPairingCode(context),
+                icon: const Icon(Icons.terminal),
+                label: const Text('Get a Pairing Code from the Server'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Need a token without the original QR (e.g. the server is '
+                'already running)? Run a command on the server to get a '
+                'short one-time code instead, no restart required.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: const [
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'OR ENTER MANUALLY',
+                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                    ),
+                  ),
+                  Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 20),
               TextField(
                 key: const Key('settings_url_field'),
                 controller: urlController,
@@ -89,10 +178,15 @@ class SettingsTab extends StatelessWidget {
                 key: const Key('settings_token_field'),
                 controller: tokenController,
                 obscureText: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Admin API Token',
-                  prefixIcon: Icon(Icons.lock),
-                  border: OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.lock),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.help_outline),
+                    tooltip: 'Where do I find this?',
+                    onPressed: onOpenConnectGuide,
+                  ),
+                  border: const OutlineInputBorder(),
                   helperText:
                       'Not saved between sessions - re-enter each time.',
                 ),

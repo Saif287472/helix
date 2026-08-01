@@ -92,6 +92,36 @@ void main() {
     expect(find.byKey(const Key('settings_url_field')), findsOneWidget);
   });
 
+  testWidgets(
+    'Settings\' "Where do I find this?" link jumps straight to the guide\'s '
+    'Connect Admin page, and a normal sidebar visit still starts at Welcome',
+    (tester) async {
+      await tester.pumpWidget(const HelixAdminApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('GET STARTED'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byIcon(Icons.help_outline));
+      await tester.tap(find.byIcon(Icons.help_outline));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Connect Helix Admin'), findsOneWidget);
+      expect(find.text('Welcome to self-hosting Helix'), findsNothing);
+
+      // A normal sidebar visit to the guide afterwards still starts fresh,
+      // rather than being stuck on Connect Admin from the earlier jump.
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Self-Hosting Guide'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Welcome to self-hosting Helix'), findsOneWidget);
+    },
+  );
+
   testWidgets('relaunching after the intro was shown skips it', (tester) async {
     SharedPreferences.setMockInitialValues({'intro_shown': true});
 
@@ -121,6 +151,52 @@ void main() {
       );
       expect(urlField.controller?.text, equals('https://saved.example.com'));
       expect(find.text('Not connected'), findsOneWidget);
+    },
+  );
+
+  testWidgets('a wide viewport keeps the fixed sidebar, no hamburger menu', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const HelixAdminApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('GET STARTED'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Helix Panel'), findsOneWidget);
+    expect(find.byIcon(Icons.menu), findsNothing);
+  });
+
+  testWidgets(
+    'a narrow phone viewport moves navigation into a Drawer behind a '
+    'hamburger menu, with no overflow and working tab navigation',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(const HelixAdminApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('GET STARTED'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // Sidebar nav is now behind a hamburger, not laid out beside content.
+      expect(find.byIcon(Icons.menu), findsOneWidget);
+      expect(find.text('Connect a server first'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      expect(find.text('Helix Panel'), findsOneWidget);
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // Selecting a tab both navigates and closes the drawer.
+      expect(find.byKey(const Key('settings_url_field')), findsOneWidget);
+      expect(find.byIcon(Icons.menu), findsOneWidget);
     },
   );
 }

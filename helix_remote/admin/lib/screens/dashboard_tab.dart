@@ -14,49 +14,57 @@ class DashboardTab extends StatelessWidget {
     final tblCounts = metrics['table_counts'] as Map? ?? {};
     final ws = metrics['websocket'] as Map? ?? {};
 
-    return GridView.count(
-      crossAxisCount: MediaQuery.of(context).size.width > 1200 ? 3 : 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 1.6,
-      children: [
-        _metricCard(
-          'Active Devices Connections',
-          '${ws['connected_devices'] ?? 0}',
-          Icons.wifi,
-          Colors.green,
-        ),
-        _metricCard(
-          'Registered User Accounts',
-          '${tblCounts['accounts'] ?? 0}',
-          Icons.people,
-          const Color(0xFF00E5FF),
-        ),
-        _metricCard(
-          'Mailbox Encrypted Messages',
-          '${tblCounts['messages'] ?? 0}',
-          Icons.mail,
-          const Color(0xFF8A2BE2),
-        ),
-        _metricCard(
-          'Quarantined Security Events',
-          '${tblCounts['quarantine_events'] ?? 0}',
-          Icons.security,
-          Colors.orange,
-        ),
-        _metricCard(
-          'Outbox Delivery Retry Queue',
-          '${tblCounts['outbox'] ?? 0}',
-          Icons.sync_problem,
-          const Color(0xFFFF3366),
-        ),
-        _metricCard(
-          'Database Status Check',
-          metrics['database_quick_check_ok'] == true ? 'HEALTHY' : 'UNHEALTHY',
-          Icons.offline_bolt,
-          Colors.green,
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = width > 1200 ? 3 : (width > 600 ? 2 : 1);
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: crossAxisCount == 1 ? 2.4 : 1.6,
+          children: [
+            _metricCard(
+              'Active Devices Connections',
+              '${ws['connected_devices'] ?? 0}',
+              Icons.wifi,
+              Colors.green,
+            ),
+            _metricCard(
+              'Registered User Accounts',
+              '${tblCounts['accounts'] ?? 0}',
+              Icons.people,
+              const Color(0xFF00E5FF),
+            ),
+            _metricCard(
+              'Mailbox Encrypted Messages',
+              '${tblCounts['messages'] ?? 0}',
+              Icons.mail,
+              const Color(0xFF8A2BE2),
+            ),
+            _metricCard(
+              'Quarantined Security Events',
+              '${tblCounts['quarantine_events'] ?? 0}',
+              Icons.security,
+              Colors.orange,
+            ),
+            _metricCard(
+              'Outbox Delivery Retry Queue',
+              '${tblCounts['outbox'] ?? 0}',
+              Icons.sync_problem,
+              const Color(0xFFFF3366),
+            ),
+            _metricCard(
+              'Database Status Check',
+              metrics['database_quick_check_ok'] == true
+                  ? 'HEALTHY'
+                  : 'UNHEALTHY',
+              Icons.offline_bolt,
+              Colors.green,
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -72,12 +80,17 @@ class DashboardTab extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontSize: 14, color: Colors.white70),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, color: Colors.white70),
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Icon(icon, color: accent),
               ],
             ),

@@ -1,9 +1,14 @@
 // ignore_for_file: avoid_print
 //
-// Recovery tool for a lost Helix Admin token. The token is only ever shown
-// once, the moment the server first generates it (see server.dart) -- if
-// you missed it, run this to mint a new one without touching accounts,
-// messages, or the server's federation identity.
+// Offline recovery tool for a lost Helix Admin token. If the server is
+// currently RUNNING, prefer the live pairing flow instead -- it needs no
+// downtime:
+//
+//   curl -s -X POST http://127.0.0.1:8080/api/v1/admin-pairing/generate
+//
+// then enter the printed code in the Helix Admin app's "Enter Pairing
+// Code" option. This script is for when the server won't start at all, or
+// you have no network access to it but do have a shell.
 //
 // The server MUST be stopped first: this opens the same database file
 // server.dart does, and SQLite only allows one writer at a time.
@@ -17,6 +22,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 import 'src/admin_token_file.dart';
+import 'src/terminal_qr.dart';
 
 void main() async {
   if (Platform.isWindows) {
@@ -59,14 +65,8 @@ void main() async {
       exit(1);
     }
 
-    db.deleteServerConfig('admin_token_hash');
-    final identity = await ServerIdentity.loadOrCreate(db);
-    final newToken = identity.adminToken;
-    if (newToken == null) {
-      // Should not happen: we just cleared the hash above.
-      stderr.writeln('Failed to generate a new admin token.');
-      exit(1);
-    }
+    final identity = await rotateAdminToken(db);
+    final newToken = identity.adminToken!;
 
     final tokenFile = writeAdminTokenFile(
       dbPath: dbPath,
@@ -80,6 +80,13 @@ void main() async {
     print('Token: $newToken');
     print('Also saved to: ${tokenFile.path}');
     print('The old admin token, if any, no longer works.');
+    try {
+      print('');
+      print('Scan with the Helix Admin app to fill in the token:');
+      print(renderTerminalQr(newToken));
+    } catch (_) {
+      // Cosmetic only - never let QR rendering block token reset.
+    }
     final envOverride = Platform.environment['HELIX_REMOTE_ADMIN_TOKEN'];
     if (envOverride != null && envOverride.isNotEmpty) {
       print('');

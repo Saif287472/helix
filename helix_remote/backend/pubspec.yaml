@@ -18,6 +18,7 @@ dependencies:
   web_socket_channel: ^3.0.3
   meta: ^1.18.0
   path: ^1.9.0
+  qr: ^3.0.2
   helix_remote_domain:
     path: ../packages/helix_remote_domain
 

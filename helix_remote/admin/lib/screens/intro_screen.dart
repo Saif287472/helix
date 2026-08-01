@@ -22,63 +22,66 @@ class IntroScreen extends StatelessWidget {
         ),
         child: Center(
           child: SingleChildScrollView(
-            child: Card(
-              elevation: 12,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              color: const Color(0xFF161624).withValues(alpha: 0.9),
-              child: Container(
-                width: 420,
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Icon(
-                      Icons.admin_panel_settings,
-                      size: 64,
-                      color: Color(0xFF00E5FF),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'HELIX SERVER ADMIN',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                        color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Card(
+                elevation: 12,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                color: const Color(0xFF161624).withValues(alpha: 0.9),
+                child: Container(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Icon(
+                        Icons.admin_panel_settings,
+                        size: 64,
+                        color: Color(0xFF00E5FF),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Manage a self-hosted Helix Remote server, or read the '
-                      'Self-Hosting Guide to set one up first. You can '
-                      'connect a server at any time from Settings.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      onPressed: onGetStarted,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8A2BE2),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        'GET STARTED',
+                      const SizedBox(height: 16),
+                      const Text(
+                        'HELIX SERVER ADMIN',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
+                          letterSpacing: 2,
                           color: Colors.white,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Manage a self-hosted Helix Remote server, or read '
+                        'the Self-Hosting Guide to set one up first. You can '
+                        'connect a server at any time from Settings.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 32),
+                      ElevatedButton(
+                        onPressed: onGetStarted,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF8A2BE2),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'GET STARTED',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
