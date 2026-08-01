@@ -112,6 +112,45 @@ void main() {
       expect(RegExp(r'^[0-9]{16}$').hasMatch(code), isTrue);
     });
 
+    test(
+      'generate accepts the Docker bridge gateway address, mirroring how a '
+      'host-loopback caller appears from inside a container behind a '
+      'published port',
+      () async {
+        final module = AdminPairingModule(
+          db: db,
+          dockerHostGateway: () => '172.18.0.1',
+        );
+        final response = await module.router.call(
+          _request(
+            'POST',
+            '/generate',
+            peer: InternetAddress('172.18.0.1'),
+          ),
+        );
+        expect(response.statusCode, equals(200));
+      },
+    );
+
+    test(
+      'generate still rejects another address on the same bridge network '
+      "that isn't the gateway itself (e.g. a sibling container)",
+      () async {
+        final module = AdminPairingModule(
+          db: db,
+          dockerHostGateway: () => '172.18.0.1',
+        );
+        final response = await module.router.call(
+          _request(
+            'POST',
+            '/generate',
+            peer: InternetAddress('172.18.0.3'),
+          ),
+        );
+        expect(response.statusCode, equals(403));
+      },
+    );
+
     test('redeem is single-use: a second redemption of the same code fails', () async {
       final module = AdminPairingModule(db: db);
       final genResponse = await module.router.call(

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/docker_host.dart';
 import 'package:helix_remote_backend/src/pairing_codes.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
@@ -12,30 +13,37 @@ import 'package:shelf_router/shelf_router.dart';
 /// token while the server keeps running, instead of stopping it to run
 /// bin/reset_admin_token.dart.
 ///
-/// `/generate` is gated on the raw TCP peer being loopback - unspoofable,
+/// `/generate` is gated on the raw TCP peer being loopback, or - when the
+/// server runs in a container behind a published, host-loopback-bound port
+/// (e.g. `-p 127.0.0.1:8080:8080`, this deployment's setup) - the Docker
+/// bridge gateway address a host-loopback connection is NATed to appear as
+/// (see docker_host.dart). Both are unspoofable by a real network client,
 /// unlike the X-Forwarded-For handling BackendServer._resolveClientIp does
-/// for trusted reverse proxies, which is deliberately NOT reused here since
-/// that header can be set by anyone. `/redeem` is reachable over the
-/// network (the admin app calls it directly, not from the server itself),
-/// but only accepts a single-use code that expires after [codeValidity]
-/// and is rate-limited per caller, which is what makes its short 16-digit
-/// space safe despite being far smaller than the admin token itself.
+/// for trusted reverse proxies, which is deliberately NOT reused here.
+/// `/redeem` is reachable over the network (the admin app calls it
+/// directly, not from the server itself), but only accepts a single-use
+/// code that expires after [codeValidity] and is rate-limited per caller,
+/// which is what makes its short 16-digit space safe despite being far
+/// smaller than the admin token itself.
 class AdminPairingModule {
   AdminPairingModule({
     required this.db,
     DateTime Function()? now,
     Duration? codeValidity,
     RateLimiter? redeemRateLimiter,
+    String? Function()? dockerHostGateway,
   }) : _now = now ?? DateTime.now,
        _codeValidity = codeValidity ?? const Duration(minutes: 10),
        _redeemRateLimiter =
            redeemRateLimiter ??
-           RateLimiter(maxTokens: 10, refillRatePerSecond: 10 / 600);
+           RateLimiter(maxTokens: 10, refillRatePerSecond: 10 / 600),
+       _dockerHostGateway = dockerHostGateway ?? dockerHostGatewayAddress;
 
   final BackendDatabase db;
   final DateTime Function() _now;
   final Duration _codeValidity;
   final RateLimiter _redeemRateLimiter;
+  final String? Function() _dockerHostGateway;
 
   static final _codePattern = RegExp(r'^[0-9]{16}$');
 
@@ -48,8 +56,12 @@ class AdminPairingModule {
 
   Response _generate(Request request) {
     final connInfo = request.context['shelf.io.connection_info'];
+    final peer = connInfo is HttpConnectionInfo
+        ? connInfo.remoteAddress
+        : null;
     final isLoopback =
-        connInfo is HttpConnectionInfo && connInfo.remoteAddress.isLoopback;
+        peer != null &&
+        (peer.isLoopback || peer.address == _dockerHostGateway());
     if (!isLoopback) {
       return _json({
         'error':
