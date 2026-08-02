@@ -476,15 +476,13 @@ class RemoteDevelopmentConfig {
     attachmentCacheDir: attachmentCacheDir,
   );
 
-  /// Build a config from a user-supplied URL (e.g. ngrok, LAN IP, localhost).
-  ///
-  /// HTTPS non-local URLs → production profile (strict TLS).
-  /// HTTP local URLs → localWindows profile (dev plaintext, allowInsecure).
-  static RemoteDevelopmentConfig fromServerUrl(
-    String url, {
-    required String databaseDirectory,
-    required String attachmentCacheDir,
-  }) {
+  /// Validates and normalizes a user-supplied server URL (e.g. ngrok, LAN
+  /// IP, localhost) into its REST base [Uri], with none of
+  /// [RemoteDevelopmentConfig]'s other requirements (device storage
+  /// directories, WebSocket path, etc.) - for callers that only need to
+  /// know where to send a request, such as validating an invite link
+  /// before any device directories are known.
+  static Uri restBaseUriFromServerUrl(String url) {
     var trimmed = url.trim().replaceAll(RegExp(r'/+$'), '');
     if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
       trimmed = 'https://$trimmed';
@@ -498,14 +496,29 @@ class RemoteDevelopmentConfig {
     final scheme = uri.scheme.toLowerCase();
     final host = uri.host;
     final port = uri.port == 0 ? (scheme == 'https' ? 443 : 8080) : uri.port;
-    final isLocal = _isLocalAddress(host);
 
-    if (scheme == 'http' && !isLocal) {
+    if (scheme == 'http' && !_isLocalAddress(host)) {
       throw const RemoteConfigurationException(
         'HTTP is only allowed for local addresses. '
         'Use https:// for internet servers.',
       );
     }
+    return Uri(scheme: scheme, host: host, port: port);
+  }
+
+  /// Build a config from a user-supplied URL (e.g. ngrok, LAN IP, localhost).
+  ///
+  /// HTTPS non-local URLs → production profile (strict TLS).
+  /// HTTP local URLs → localWindows profile (dev plaintext, allowInsecure).
+  static RemoteDevelopmentConfig fromServerUrl(
+    String url, {
+    required String databaseDirectory,
+    required String attachmentCacheDir,
+  }) {
+    final restBaseUri = restBaseUriFromServerUrl(url);
+    final scheme = restBaseUri.scheme;
+    final host = restBaseUri.host;
+    final port = restBaseUri.port;
 
     final wsScheme = scheme == 'https' ? 'wss' : 'ws';
     final profile = scheme == 'https'
@@ -514,7 +527,7 @@ class RemoteDevelopmentConfig {
 
     return RemoteDevelopmentConfig(
       profile: profile,
-      restBaseUri: Uri(scheme: scheme, host: host, port: port),
+      restBaseUri: restBaseUri,
       webSocketUri: Uri(
         scheme: wsScheme,
         host: host,

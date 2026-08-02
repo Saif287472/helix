@@ -293,4 +293,55 @@ void main() {
     expect(networkSecurity, contains('<domain>127.0.0.1</domain>'));
     expect(networkSecurity, isNot(contains('<base-config')));
   });
+
+  group('restBaseUriFromServerUrl', () {
+    test('normalizes a bare host into an https REST base URI', () {
+      final uri = RemoteDevelopmentConfig.restBaseUriFromServerUrl(
+        'their-server.example',
+      );
+
+      expect(uri.scheme, equals('https'));
+      expect(uri.host, equals('their-server.example'));
+      expect(uri.port, equals(443));
+    });
+
+    test('does not require device storage directories, unlike fromServerUrl', () {
+      // This is the exact bug an invite-link entry screen hit: it only
+      // needs a REST base URI to probe an invite code, not a full
+      // RemoteDevelopmentConfig, so it must not be forced to supply
+      // directories that don't exist yet at that point in the app's
+      // lifecycle.
+      expect(
+        () => RemoteDevelopmentConfig.restBaseUriFromServerUrl(
+          'https://remote.example',
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('rejects a malformed URL', () {
+      expect(
+        () => RemoteDevelopmentConfig.restBaseUriFromServerUrl('http://'),
+        throwsA(isA<RemoteConfigurationException>()),
+      );
+    });
+
+    test('rejects HTTP for a non-local address', () {
+      expect(
+        () => RemoteDevelopmentConfig.restBaseUriFromServerUrl(
+          'http://remote.example',
+        ),
+        throwsA(isA<RemoteConfigurationException>()),
+      );
+    });
+
+    test('allows HTTP for a local address', () {
+      final uri = RemoteDevelopmentConfig.restBaseUriFromServerUrl(
+        'http://127.0.0.1:8080',
+      );
+
+      expect(uri.scheme, equals('http'));
+      expect(uri.port, equals(8080));
+    });
+  });
 }
