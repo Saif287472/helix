@@ -146,8 +146,8 @@ void main() {
 
       expect(find.text('Connect Helix Admin'), findsOneWidget);
       expect(find.text('Welcome to self-hosting Helix'), findsNothing);
-      // The pushed connection screen should have popped itself out of the
-      // way so the guide page is actually visible, not hidden behind it.
+      // The connection screen should have gotten out of the way so the
+      // guide page is actually visible, not hidden behind it.
       expect(find.byKey(const Key('settings_url_field')), findsNothing);
 
       // A normal sidebar visit to the guide afterwards still starts fresh,

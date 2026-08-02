@@ -166,6 +166,7 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
               label: Text(_isRedeeming ? 'Redeeming…' : 'Redeem Code'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF8A2BE2),
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),

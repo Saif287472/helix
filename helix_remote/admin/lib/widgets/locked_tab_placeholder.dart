@@ -38,6 +38,7 @@ class LockedTabPlaceholder extends StatelessWidget {
                 label: const Text('Connect a server first'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8A2BE2),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 14,

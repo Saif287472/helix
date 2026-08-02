@@ -1,23 +1,30 @@
 import 'package:flutter/material.dart';
-import 'connect_server_screen.dart';
 import '../widgets/settings_group_card.dart';
 
-/// App-level preferences plus a status card that hands off to
-/// [ConnectServerScreen] for the actual connection flow. Kept deliberately
-/// short and grouped - the connection mechanics (scan/pairing/manual entry,
-/// URL, token) live on their own screen so a first-time self-hoster isn't
-/// handed a wall of buttons and fields the moment they open Settings.
+/// App-level preferences plus a status card that hands off to the
+/// connection screen (owned by the caller - see [onOpenConnectServer]).
+/// Kept deliberately short and grouped - the connection mechanics (scan/
+/// pairing/manual entry, URL, token) live on their own screen so a
+/// first-time self-hoster isn't handed a wall of buttons and fields the
+/// moment they open Settings.
+///
+/// [onOpenConnectServer] is a plain callback rather than this widget
+/// pushing a route itself: the connect screen needs to keep reflecting
+/// live isConnected/isConnecting/errorMessage as they change (e.g. right
+/// after Connect succeeds), and a route pushed via Navigator.push captures
+/// whatever values were passed in at push time - it does not get rebuilt
+/// just because this widget's parent rebuilds with new ones. The caller
+/// (MainAdminPage) instead shows the connect screen as part of its own
+/// build(), the same way it already does for the lock screen and intro
+/// screen, so it always renders current state.
 class SettingsTab extends StatelessWidget {
   const SettingsTab({
     super.key,
     required this.isDarkMode,
     required this.onDarkModeChanged,
     required this.urlController,
-    required this.tokenController,
     required this.isConnected,
-    required this.isConnecting,
-    required this.errorMessage,
-    required this.onConnect,
+    required this.onOpenConnectServer,
     required this.onDisconnect,
     required this.onOpenConnectGuide,
     this.appLockEnabled = false,
@@ -27,11 +34,8 @@ class SettingsTab extends StatelessWidget {
   final bool isDarkMode;
   final ValueChanged<bool> onDarkModeChanged;
   final TextEditingController urlController;
-  final TextEditingController tokenController;
   final bool isConnected;
-  final bool isConnecting;
-  final String? errorMessage;
-  final VoidCallback onConnect;
+  final VoidCallback onOpenConnectServer;
   final VoidCallback onDisconnect;
   final VoidCallback onOpenConnectGuide;
 
@@ -39,29 +43,6 @@ class SettingsTab extends StatelessWidget {
   /// required to open the app. Optional toggle, defaults off.
   final bool appLockEnabled;
   final ValueChanged<bool>? onAppLockChanged;
-
-  void _openConnectServer(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (routeContext) => ConnectServerScreen(
-          urlController: urlController,
-          tokenController: tokenController,
-          isConnected: isConnected,
-          isConnecting: isConnecting,
-          errorMessage: errorMessage,
-          onConnect: onConnect,
-          onDisconnect: onDisconnect,
-          // Pop this pushed screen first so the guide tab it switches to
-          // underneath is actually visible, instead of staying hidden
-          // behind this route.
-          onOpenConnectGuide: () {
-            Navigator.of(routeContext).pop();
-            onOpenConnectGuide();
-          },
-        ),
-      ),
-    );
-  }
 
   String get _connectedHost {
     final url = urlController.text.trim();
@@ -85,7 +66,7 @@ class SettingsTab extends StatelessWidget {
             key: const Key('settings_connection_status_card'),
             isConnected: isConnected,
             host: _connectedHost,
-            onTap: () => _openConnectServer(context),
+            onTap: onOpenConnectServer,
             onDisconnect: onDisconnect,
           ),
           const SizedBox(height: 20),

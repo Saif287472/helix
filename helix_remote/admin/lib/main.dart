@@ -5,6 +5,7 @@ import 'package:local_auth/local_auth.dart';
 import 'admin_client.dart';
 import 'screens/backup_tab.dart';
 import 'screens/config_tab.dart';
+import 'screens/connect_server_screen.dart';
 import 'screens/dashboard_tab.dart';
 import 'screens/guide/guide_wizard.dart';
 import 'screens/intro_screen.dart';
@@ -80,6 +81,13 @@ class _MainAdminPageState extends State<MainAdminPage> {
   bool _introShown = false;
   bool _appLockEnabled = false;
   bool _isUnlocked = false;
+
+  /// Whether the connect-server screen is showing over the shell. Shown as
+  /// part of this widget's own build() (like the lock/intro screens) rather
+  /// than pushed via Navigator, so it always reflects the current
+  /// _client/_isConnecting/_errorMessage instead of a stale snapshot
+  /// frozen at whatever they were the moment it was opened.
+  bool _showConnectServer = false;
 
   final _urlController = TextEditingController(text: _defaultServerUrl);
   final _tokenController = TextEditingController();
@@ -373,6 +381,22 @@ class _MainAdminPageState extends State<MainAdminPage> {
     if (!_introShown) {
       return IntroScreen(onGetStarted: _completeIntro);
     }
+    if (_showConnectServer) {
+      return ConnectServerScreen(
+        urlController: _urlController,
+        tokenController: _tokenController,
+        isConnected: _client != null,
+        isConnecting: _isConnecting,
+        errorMessage: _errorMessage,
+        onConnect: _connect,
+        onDisconnect: _disconnect,
+        onBack: () => setState(() => _showConnectServer = false),
+        onOpenConnectGuide: () {
+          setState(() => _showConnectServer = false);
+          _openConnectGuide();
+        },
+      );
+    }
     return Theme(
       data: _isDarkMode ? ThemeData.dark() : ThemeData.light(),
       child: LayoutBuilder(
@@ -594,11 +618,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
           isDarkMode: _isDarkMode,
           onDarkModeChanged: (v) => setState(() => _isDarkMode = v),
           urlController: _urlController,
-          tokenController: _tokenController,
           isConnected: _client != null,
-          isConnecting: _isConnecting,
-          errorMessage: _errorMessage,
-          onConnect: _connect,
+          onOpenConnectServer: () =>
+              setState(() => _showConnectServer = true),
           onDisconnect: _disconnect,
           onOpenConnectGuide: _openConnectGuide,
           appLockEnabled: _appLockEnabled,

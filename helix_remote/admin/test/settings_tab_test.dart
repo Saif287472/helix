@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_admin/screens/connect_server_screen.dart';
 import 'package:helix_admin/screens/settings_tab.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 SettingsTab _settingsTab({
-  TextEditingController? tokenController,
   TextEditingController? urlController,
   VoidCallback? onOpenConnectGuide,
-  VoidCallback? onConnect,
+  VoidCallback? onOpenConnectServer,
   VoidCallback? onDisconnect,
   bool isConnected = false,
   bool appLockEnabled = false,
@@ -19,11 +17,8 @@ SettingsTab _settingsTab({
     isDarkMode: true,
     onDarkModeChanged: (_) {},
     urlController: urlController ?? TextEditingController(),
-    tokenController: tokenController ?? TextEditingController(),
     isConnected: isConnected,
-    isConnecting: false,
-    errorMessage: null,
-    onConnect: onConnect ?? () {},
+    onOpenConnectServer: onOpenConnectServer ?? () {},
     onDisconnect: onDisconnect ?? () {},
     onOpenConnectGuide: onOpenConnectGuide ?? () {},
     appLockEnabled: appLockEnabled,
@@ -33,20 +28,21 @@ SettingsTab _settingsTab({
 
 void main() {
   testWidgets(
-    'the connection status card shows "Not connected" and opens the '
-    'connect screen when unconnected',
+    'the connection status card shows "Not connected" and reports a tap',
     (tester) async {
-      await tester.pumpWidget(_wrap(_settingsTab()));
+      var opened = false;
+      await tester.pumpWidget(
+        _wrap(_settingsTab(onOpenConnectServer: () => opened = true)),
+      );
 
       expect(find.text('Not connected'), findsOneWidget);
-      expect(find.byType(ConnectServerScreen), findsNothing);
 
       await tester.tap(
         find.byKey(const Key('settings_connection_status_card')),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
 
-      expect(find.byType(ConnectServerScreen), findsOneWidget);
+      expect(opened, isTrue);
     },
   );
 
@@ -87,11 +83,8 @@ void main() {
           isDarkMode: true,
           onDarkModeChanged: (v) => toggledTo = v,
           urlController: TextEditingController(),
-          tokenController: TextEditingController(),
           isConnected: false,
-          isConnecting: false,
-          errorMessage: null,
-          onConnect: () {},
+          onOpenConnectServer: () {},
           onDisconnect: () {},
           onOpenConnectGuide: () {},
         ),

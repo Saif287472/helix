@@ -18,6 +18,7 @@ class ConnectServerScreen extends StatelessWidget {
     required this.onConnect,
     required this.onDisconnect,
     required this.onOpenConnectGuide,
+    required this.onBack,
   });
 
   final TextEditingController urlController;
@@ -28,6 +29,12 @@ class ConnectServerScreen extends StatelessWidget {
   final VoidCallback onConnect;
   final VoidCallback onDisconnect;
   final VoidCallback onOpenConnectGuide;
+
+  /// Shown as-is by the caller (not pushed via Navigator, so there's no
+  /// automatic back button) rather than as a route, so the caller's other
+  /// live state changes are reflected here as they happen. See
+  /// SettingsTab's doc comment on onOpenConnectServer for why.
+  final VoidCallback onBack;
 
   Future<void> _scanToken(BuildContext context) async {
     final scanned = await Navigator.of(
@@ -69,7 +76,14 @@ class ConnectServerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('SERVER CONNECTION')),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: onBack,
+        ),
+        title: const Text('SERVER CONNECTION'),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -201,6 +215,7 @@ class ConnectServerScreen extends StatelessWidget {
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF8A2BE2),
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
