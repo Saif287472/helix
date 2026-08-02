@@ -423,6 +423,13 @@ class BackendServer {
             headers: {'Content-Type': 'application/json'},
           );
         }
+        if (db.isAccountSuspended(accountId)) {
+          return Response(
+            403,
+            body: jsonEncode({'error': 'Forbidden: Account suspended'}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
 
         final updatedRequest = request.change(context: {'auth': claims});
         return innerHandler(updatedRequest);

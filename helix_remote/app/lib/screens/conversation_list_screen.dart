@@ -127,10 +127,26 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       builder: (ctx) => _ContactPickerSheet(contacts: contacts),
     );
     if (peerAccountId == null || !mounted) return;
-    final conversationId = widget.messagingService.conversationIdForPeer(
+    final derivedId = widget.messagingService.conversationIdForPeer(
       peerAccountId,
     );
-    if (conversationId == null) return;
+    if (derivedId == null) return;
+    // conversationIdForPeer only derives the ID string - it never creates
+    // the conversation row/membership. Without this, picking a contact
+    // here who has no prior chat opened a ConversationScreen for a
+    // conversation that doesn't exist in the database at all. Guarded by
+    // an existence check because createDirectConversation's upsert resets
+    // last_sequence to 0, which would corrupt an already-existing
+    // conversation's unread/sort state if called again for someone
+    // already chatted with.
+    final alreadyExists = widget.messagingService
+        .conversationMemberIds(derivedId)
+        .isNotEmpty;
+    final conversationId = alreadyExists
+        ? derivedId
+        : widget.messagingService.createDirectConversation(
+            peerAccountId: peerAccountId,
+          );
     _openConversation(conversationId);
   }
 

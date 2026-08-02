@@ -107,6 +107,53 @@ class AdminClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// Temporary revoke: the user is rejected on their next login/refresh
+  /// and every authenticated request in between, but can be restored with
+  /// [unsuspendUser] - no re-registration needed.
+  Future<void> suspendUser(String accountId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/suspend'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to suspend user: ${response.body}');
+    }
+  }
+
+  Future<void> unsuspendUser(String accountId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/unsuspend'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to unsuspend user: ${response.body}');
+    }
+  }
+
+  /// Permanent revoke: irreversibly deletes the account and all of its
+  /// data (messages, devices, contacts referencing it, etc.).
+  Future<void> deleteUser(String accountId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/delete'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete user: ${response.body}');
+    }
+  }
+
+  /// Cancels an invite that hasn't been redeemed yet. Fails (409) if it's
+  /// already been used or cancelled.
+  Future<void> cancelInvite(String inviteId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ops/invites/$inviteId/cancel'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to cancel invite: ${response.body}');
+    }
+  }
+
   Future<List<String>> getLogs() async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/v1/ops/logs'),

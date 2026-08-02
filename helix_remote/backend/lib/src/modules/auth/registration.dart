@@ -49,6 +49,19 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         );
       }
 
+      // Optional, display-only hint for the admin console's Users screen -
+      // never the full number, never used for identity/lookup (phone_hash
+      // is what does that). Not part of the signed registration transcript
+      // below for the same reason display_name isn't: it's not
+      // security-relevant, just cosmetic. Silently dropped rather than
+      // rejecting registration if malformed, and left empty for older
+      // clients that don't send it yet.
+      final rawPhoneLast4 = body['phone_last4'] as String?;
+      final phoneLast4 =
+          rawPhoneLast4 != null && RegExp(r'^\d{2,4}$').hasMatch(rawPhoneLast4)
+          ? rawPhoneLast4
+          : '';
+
       final keyValidation = await _validateRegistrationKeys(
         accountId: accountId,
         phoneHash: phoneHash,
@@ -119,6 +132,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
           _reservedUsername(accountId),
           identityPublicKey,
           phoneHash: phoneHash,
+          phoneLast4: phoneLast4,
         );
         db.upsertAccountProfile(accountId: accountId, displayName: displayName);
         db.markOtpConsumed(otpResult.challengeId!, now);

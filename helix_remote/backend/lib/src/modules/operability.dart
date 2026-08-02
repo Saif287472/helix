@@ -84,9 +84,13 @@ class OperabilityModule {
     router.get('/config', _config);
     router.post('/backup', _backup);
     router.get('/users', _users);
+    router.post('/users/<accountId>/suspend', _suspendUser);
+    router.post('/users/<accountId>/unsuspend', _unsuspendUser);
+    router.post('/users/<accountId>/delete', _deleteUser);
     router.get('/logs', _logs);
     router.post('/invites', _createInvite);
     router.get('/invites', _listInvites);
+    router.post('/invites/<inviteId>/cancel', _cancelInvite);
     router.get('/federation', _federationStatus);
     router.post('/federation/worldwide', _setWorldwideMode);
     return router;
@@ -413,8 +417,96 @@ class OperabilityModule {
       );
     }
 
-    final users = db.getAllUsersPaginated(limit: limit, offset: offset);
+    final users = db.getAllUsersDetailedPaginated(limit: limit, offset: offset);
     return _json({'users': users, 'limit': limit, 'offset': offset});
+  }
+
+  Future<Response> _suspendUser(Request request, String accountId) async {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    if (!db.accountExists(accountId)) {
+      return _json({'error': 'Account not found'}, status: 404);
+    }
+    db.setAccountStatus(accountId, 'SUSPENDED');
+    db.logAudit(
+      (request.context['auth'] as Map<String, dynamic>?)?['account_id']
+          as String?,
+      (request.context['auth'] as Map<String, dynamic>?)?['device_id']
+          as String?,
+      'ADMIN_USER_SUSPENDED',
+      request.context['client_ip'] as String?,
+      request.headers['user-agent'],
+    );
+    return _json({'account_id': accountId, 'status': 'SUSPENDED'});
+  }
+
+  Future<Response> _unsuspendUser(Request request, String accountId) async {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    if (!db.accountExists(accountId)) {
+      return _json({'error': 'Account not found'}, status: 404);
+    }
+    db.setAccountStatus(accountId, 'ACTIVE');
+    db.logAudit(
+      (request.context['auth'] as Map<String, dynamic>?)?['account_id']
+          as String?,
+      (request.context['auth'] as Map<String, dynamic>?)?['device_id']
+          as String?,
+      'ADMIN_USER_UNSUSPENDED',
+      request.context['client_ip'] as String?,
+      request.headers['user-agent'],
+    );
+    return _json({'account_id': accountId, 'status': 'ACTIVE'});
+  }
+
+  /// Permanently and irreversibly deletes an account and all of its data
+  /// (messages, devices, prekeys, contacts referencing it, etc. - see
+  /// BackendDatabase.deleteAccountData). Unlike the self-service
+  /// `/accounts/delete` endpoint, this is admin-triggered: no confirmation
+  /// phrase from the account's own token, since the admin isn't the
+  /// account owner and can't produce one.
+  Future<Response> _deleteUser(Request request, String accountId) async {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    if (!db.accountExists(accountId)) {
+      return _json({'error': 'Account not found'}, status: 404);
+    }
+    await db.deleteAccountData(accountId);
+    db.logAudit(
+      (request.context['auth'] as Map<String, dynamic>?)?['account_id']
+          as String?,
+      (request.context['auth'] as Map<String, dynamic>?)?['device_id']
+          as String?,
+      'ADMIN_USER_DELETED',
+      request.context['client_ip'] as String?,
+      request.headers['user-agent'],
+    );
+    return _json({'account_id': accountId, 'deleted': true});
+  }
+
+  Future<Response> _cancelInvite(Request request, String inviteId) async {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    final cancelled = db.cancelInviteCredential(inviteId: inviteId);
+    if (!cancelled) {
+      return _json({
+        'error': 'Invite not found, already redeemed, or already cancelled',
+      }, status: 409);
+    }
+    db.logAudit(
+      (request.context['auth'] as Map<String, dynamic>?)?['account_id']
+          as String?,
+      (request.context['auth'] as Map<String, dynamic>?)?['device_id']
+          as String?,
+      'ADMIN_INVITE_CANCELLED',
+      request.context['client_ip'] as String?,
+      request.headers['user-agent'],
+    );
+    return _json({'invite_id': inviteId, 'status': 'CANCELLED'});
   }
 
   static const _inviteValidity = Duration(days: 7);
@@ -484,9 +576,9 @@ class OperabilityModule {
     return _json({'invites': invites, 'limit': limit, 'offset': offset});
   }
 
-  /// `invite_credentials.status` only ever stores 'PENDING'/'REDEEMED' -
-  /// expiry is derived at read time rather than written back, so there's no
-  /// sweep job needed to keep it accurate.
+  /// `invite_credentials.status` only ever stores 'PENDING'/'REDEEMED'/
+  /// 'CANCELLED' - expiry is derived at read time rather than written back,
+  /// so there's no sweep job needed to keep it accurate.
   String _displayInviteStatus(Map<String, dynamic> invite, int now) {
     if (invite['status'] == 'PENDING' && (invite['expires_at'] as int) < now) {
       return 'EXPIRED';

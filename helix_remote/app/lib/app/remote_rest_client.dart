@@ -253,6 +253,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required String accountRegistrationSignature,
     required String deviceRegistrationSignature,
     required String deviceName,
+    String phoneLast4 = '',
   }) => _request(
     'POST',
     'accounts/register',
@@ -270,6 +271,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       'account_registration_signature': accountRegistrationSignature,
       'device_registration_signature': deviceRegistrationSignature,
       'device_name': deviceName,
+      if (phoneLast4.isNotEmpty) 'phone_last4': phoneLast4,
     },
     idempotencyKey: 'register:$accountId:$deviceId',
   );

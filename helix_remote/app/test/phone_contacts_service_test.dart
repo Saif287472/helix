@@ -71,6 +71,69 @@ void main() {
     });
   });
 
+  group('groupPhoneBookHashesByName', () {
+    const secondNumber = '+15559876543';
+
+    test('groups every valid number a contact has under their name', () {
+      final result = groupPhoneBookHashesByName(
+        contacts: const [
+          PhoneBookContact(
+            displayName: 'Alice',
+            phoneNumbers: [_testNumber, secondNumber],
+          ),
+        ],
+        discoverySaltBase64: _testSaltBase64,
+      );
+
+      expect(result, hasLength(1));
+      expect(result['Alice'], hasLength(2));
+      expect(result['Alice'], contains(_expectedHash));
+    });
+
+    test('lets a caller tell whether any of a person\'s numbers matched', () {
+      // The scenario this exists for: Alice has two numbers, only one of
+      // which is registered on Helix. A caller checking "did any of
+      // Alice's hashes match" against a matched-hash set containing only
+      // the second number's hash must still find her matched, not report
+      // her as unmatched just because the first number didn't hit.
+      final result = groupPhoneBookHashesByName(
+        contacts: const [
+          PhoneBookContact(
+            displayName: 'Alice',
+            phoneNumbers: [_testNumber, secondNumber],
+          ),
+        ],
+        discoverySaltBase64: _testSaltBase64,
+      );
+      final matchedHashes = {result['Alice']!.last};
+
+      expect(result['Alice']!.any(matchedHashes.contains), isTrue);
+    });
+
+    test('skips invalid numbers and contacts with no valid numbers', () {
+      final result = groupPhoneBookHashesByName(
+        contacts: const [
+          PhoneBookContact(displayName: 'NoNumber', phoneNumbers: []),
+          PhoneBookContact(displayName: 'BadNumber', phoneNumbers: ['123']),
+        ],
+        discoverySaltBase64: _testSaltBase64,
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test('skips contacts with an empty display name', () {
+      final result = groupPhoneBookHashesByName(
+        contacts: const [
+          PhoneBookContact(displayName: '  ', phoneNumbers: [_testNumber]),
+        ],
+        discoverySaltBase64: _testSaltBase64,
+      );
+
+      expect(result, isEmpty);
+    });
+  });
+
   group('PhoneContactsService permission handling', () {
     test(
       'a denied fake surfaces PhoneContactsPermissionResult.denied',

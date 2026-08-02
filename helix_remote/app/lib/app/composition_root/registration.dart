@@ -124,6 +124,13 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
       deviceRegistrationSignature:
           pendingRegistration.deviceRegistrationSignature,
       deviceName: deviceName,
+      // Display-only hint for the admin console - never the full number.
+      // normalizedPhone is always '+' followed only by digits (see
+      // RemoteAccountValidation.normalizePhoneNumber), so its last 4
+      // characters are always digits.
+      phoneLast4: normalizedPhone.length >= 4
+          ? normalizedPhone.substring(normalizedPhone.length - 4)
+          : '',
     );
 
     final challengeResp = await rest.getChallenge(

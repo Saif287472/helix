@@ -170,11 +170,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
       return;
     }
     if (!change.affectsConversation(widget.conversationId)) return;
-    if (!change.affects(RemoteSyncChangeArea.messages) &&
-        !change.affects(RemoteSyncChangeArea.conversations)) {
+    if (change.affects(RemoteSyncChangeArea.messages)) {
+      unawaited(_refreshVisibleMessages());
       return;
     }
-    unawaited(_refreshVisibleMessages());
+    if (change.affects(RemoteSyncChangeArea.conversations)) {
+      // A conversations-area-only change (title/pin/mute, or this screen's
+      // own markConversationRead call at the end of _loadMessages) never
+      // alters message content, so a cheap rebuild is enough - it must not
+      // also re-fetch and re-decrypt messages. That used to happen
+      // unconditionally here, and _loadMessages() itself calls
+      // markConversationRead() at the end of every load, which re-emits
+      // this exact conversations-area change: reload -> markConversationRead
+      // -> emit -> reload -> ... an unbounded self-triggering loop with no
+      // base case, fast enough on an empty/new conversation to peg the CPU
+      // and produce an ANR.
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _loadMessages({int? limit}) async {

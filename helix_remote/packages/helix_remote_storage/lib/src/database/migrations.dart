@@ -535,6 +535,21 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       _createPhoneContactNamesTable();
       _db.execute('PRAGMA user_version = 26;');
     }
+    if (version < 27) {
+      // MARK_CONVERSATION_READ was never added to the client's outbound
+      // operation registry, so every enqueued instance has always failed
+      // permanently - there's no server endpoint for it to reach yet.
+      // Opening a conversation used to also be able to re-trigger this
+      // call in an unbounded loop (since fixed), so on an affected device
+      // this could pile up into hundreds or thousands of rows that would
+      // otherwise sit "failed" forever. markConversationRead() no longer
+      // enqueues this operation at all; clear out whatever already
+      // accumulated rather than leaving it stuck.
+      _db.execute(
+        "DELETE FROM pending_operations WHERE type = 'MARK_CONVERSATION_READ';",
+      );
+      _db.execute('PRAGMA user_version = 27;');
+    }
   }
 
   void _createPhoneContactNamesTable() {

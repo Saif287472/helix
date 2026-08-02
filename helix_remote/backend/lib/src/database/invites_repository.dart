@@ -99,4 +99,21 @@ extension BackendInvitesRepository on BackendDatabase {
     stmt.close();
     return result.map((row) => _rowToInvite(row)!).toList();
   }
+
+  /// Atomically cancels an invite, but only if it's still `PENDING` -
+  /// mirrors redeemInviteCredential's guard above. Once redeemed, the
+  /// account already exists and cancelling would do nothing; once expired
+  /// it's already effectively dead. Returns false on any mismatch,
+  /// including an invite_id that doesn't exist.
+  bool cancelInviteCredential({required String inviteId}) {
+    final stmt = _db.prepare('''
+      UPDATE invite_credentials
+      SET status = 'CANCELLED'
+      WHERE invite_id = ? AND status = 'PENDING';
+    ''');
+    stmt.execute([inviteId]);
+    final changed = _db.updatedRows;
+    stmt.close();
+    return changed == 1;
+  }
 }

@@ -76,6 +76,7 @@ class _FakeRestClient implements HelixRemoteRestClient {
     required String accountRegistrationSignature,
     required String deviceRegistrationSignature,
     required String deviceName,
+    String phoneLast4 = '',
   }) async => {};
   @override
   Future<Map<String, dynamic>> fetchDiscoverySalt() async => {};

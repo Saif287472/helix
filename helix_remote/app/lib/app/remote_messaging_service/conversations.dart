@@ -154,22 +154,18 @@ mixin RemoteConversationManagement on RemoteMessagingServiceBase {
       lastReadSequence: lastSequence,
       updatedAt: _clock().millisecondsSinceEpoch,
     );
-    db.enqueueOperation(
-      'mark_read_${conversationId}_${_clock().microsecondsSinceEpoch}',
-      'MARK_CONVERSATION_READ',
-      jsonEncode({
-        'conversation_id': conversationId,
-        'device_id': deviceId,
-        'last_read_sequence': lastSequence,
-      }),
-      idempotencyKey: 'conversation_read:$conversationId:$deviceId',
-    );
+    // Deliberately not enqueued to the outbox: 'MARK_CONVERSATION_READ' was
+    // never added to RemoteOutboundOperation.values (remote_sync_gateway.dart),
+    // so RemoteOutboundOperationRegistry.require() throws for it every
+    // single time - there is no server endpoint for cross-device read-state
+    // sync yet. Every call to this method therefore added a permanently
+    // failed outbox row (see migration 27, which clears out whatever
+    // already piled up from this). The local read-state write above already
+    // covers this device's own unread badges/counts, which is all that
+    // currently reads it.
     _emitChange(
       RemoteSyncChange(
-        areas: const {
-          RemoteSyncChangeArea.conversations,
-          RemoteSyncChangeArea.outbox,
-        },
+        areas: const {RemoteSyncChangeArea.conversations},
         conversationId: conversationId,
       ),
     );

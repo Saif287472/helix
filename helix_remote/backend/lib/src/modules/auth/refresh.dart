@@ -32,6 +32,10 @@ mixin AuthRefreshHandlers on AuthModuleBase {
         return Response.forbidden(jsonEncode({'error': 'Device revoked'}));
       }
 
+      if (db.isAccountSuspended(accountId)) {
+        return Response.forbidden(jsonEncode({'error': 'Account suspended'}));
+      }
+
       final tokenHash = crypto_pkg.sha256
           .convert(utf8.encode(refreshToken))
           .toString();
