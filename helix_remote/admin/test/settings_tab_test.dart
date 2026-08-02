@@ -10,6 +10,8 @@ SettingsTab _settingsTab({
   required TextEditingController tokenController,
   TextEditingController? urlController,
   VoidCallback? onOpenConnectGuide,
+  bool appLockEnabled = false,
+  ValueChanged<bool>? onAppLockChanged,
 }) {
   return SettingsTab(
     isDarkMode: true,
@@ -22,6 +24,8 @@ SettingsTab _settingsTab({
     onConnect: () {},
     onDisconnect: () {},
     onOpenConnectGuide: onOpenConnectGuide ?? () {},
+    appLockEnabled: appLockEnabled,
+    onAppLockChanged: onAppLockChanged,
   );
 }
 
@@ -125,5 +129,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tokenController.text, equals('freshly-rotated-admin-token'));
+  });
+
+  testWidgets('the App Lock switch reflects its value and reports toggles', (
+    tester,
+  ) async {
+    bool? toggledTo;
+    await tester.pumpWidget(
+      _wrap(
+        _settingsTab(
+          tokenController: TextEditingController(),
+          onAppLockChanged: (value) => toggledTo = value,
+        ),
+      ),
+    );
+
+    final switchTile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('settings_app_lock_switch')),
+    );
+    expect(switchTile.value, isFalse);
+
+    await tester.tap(find.byKey(const Key('settings_app_lock_switch')));
+    await tester.pump();
+
+    expect(toggledTo, isTrue);
   });
 }

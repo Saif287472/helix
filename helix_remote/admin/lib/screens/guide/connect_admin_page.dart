@@ -41,8 +41,10 @@ class GuideConnectAdminPage extends StatelessWidget {
         const SizedBox(height: 8),
         const Text(
           'Go to Settings in the sidebar, enter your server\'s URL and '
-          'admin token, and tap Connect. The token isn\'t saved between '
-          'sessions - you\'ll re-enter it each time you reopen this app.',
+          'admin token, and tap Connect. Once connected, the token is '
+          'saved securely on this device so you won\'t need to re-enter it '
+          'next time - optionally turn on App Lock in Settings to require '
+          'your device unlock before it\'s used.',
           style: TextStyle(fontSize: 13, color: Colors.white54, height: 1.5),
         ),
       ],

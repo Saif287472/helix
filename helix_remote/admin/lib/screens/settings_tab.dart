@@ -19,6 +19,8 @@ class SettingsTab extends StatelessWidget {
     required this.onConnect,
     required this.onDisconnect,
     required this.onOpenConnectGuide,
+    this.appLockEnabled = false,
+    this.onAppLockChanged,
   });
 
   final bool isDarkMode;
@@ -31,6 +33,11 @@ class SettingsTab extends StatelessWidget {
   final VoidCallback onConnect;
   final VoidCallback onDisconnect;
   final VoidCallback onOpenConnectGuide;
+
+  /// Whether a device unlock (biometrics or PIN/pattern/password) is
+  /// required to open the app. Optional toggle, defaults off.
+  final bool appLockEnabled;
+  final ValueChanged<bool>? onAppLockChanged;
 
   Future<void> _scanToken(BuildContext context) async {
     final scanned = await Navigator.of(
@@ -188,7 +195,8 @@ class SettingsTab extends StatelessWidget {
                   ),
                   border: const OutlineInputBorder(),
                   helperText:
-                      'Not saved between sessions - re-enter each time.',
+                      'Saved securely on this device once connected - no '
+                      'need to re-enter it next time.',
                 ),
               ),
               const SizedBox(height: 16),
@@ -231,7 +239,33 @@ class SettingsTab extends StatelessWidget {
                   icon: const Icon(Icons.link_off),
                   label: const Text('Disconnect'),
                 ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Disconnecting forgets the saved token on this device too.',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
               ],
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 16),
+              const Text(
+                'Security',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              SwitchListTile(
+                key: const Key('settings_app_lock_switch'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('App Lock'),
+                subtitle: const Text(
+                  'Require your device unlock (biometrics or PIN/pattern) to '
+                  'open Helix Admin. Optional - recommended if this device '
+                  'is shared.',
+                ),
+                value: appLockEnabled,
+                onChanged: onAppLockChanged,
+                secondary: const Icon(Icons.fingerprint),
+              ),
             ],
           ),
         ),
