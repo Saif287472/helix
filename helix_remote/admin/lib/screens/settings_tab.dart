@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'pairing_code_screen.dart';
-import 'scan_token_screen.dart';
+import 'connect_server_screen.dart';
+import '../widgets/settings_group_card.dart';
 
-/// Hosts the server-connection form (formerly a standalone login screen)
-/// plus app-level preferences. Always reachable, even with no server
-/// connected - this is where a connection is established or changed, wired
-/// to update the shell's state in place rather than navigating away.
+/// App-level preferences plus a status card that hands off to
+/// [ConnectServerScreen] for the actual connection flow. Kept deliberately
+/// short and grouped - the connection mechanics (scan/pairing/manual entry,
+/// URL, token) live on their own screen so a first-time self-hoster isn't
+/// handed a wall of buttons and fields the moment they open Settings.
 class SettingsTab extends StatelessWidget {
   const SettingsTab({
     super.key,
@@ -19,6 +20,8 @@ class SettingsTab extends StatelessWidget {
     required this.onConnect,
     required this.onDisconnect,
     required this.onOpenConnectGuide,
+    this.appLockEnabled = false,
+    this.onAppLockChanged,
   });
 
   final bool isDarkMode;
@@ -32,209 +35,216 @@ class SettingsTab extends StatelessWidget {
   final VoidCallback onDisconnect;
   final VoidCallback onOpenConnectGuide;
 
-  Future<void> _scanToken(BuildContext context) async {
-    final scanned = await Navigator.of(
-      context,
-    ).push<String>(MaterialPageRoute(builder: (_) => const ScanTokenScreen()));
-    if (scanned == null || scanned.isEmpty) return;
-    final cleaned = scanned.trim();
-    tokenController.value = TextEditingValue(
-      text: cleaned,
-      selection: TextSelection.collapsed(offset: cleaned.length),
-    );
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Token scanned. Enter your server URL below, then tap Connect.',
+  /// Whether a device unlock (biometrics or PIN/pattern/password) is
+  /// required to open the app. Optional toggle, defaults off.
+  final bool appLockEnabled;
+  final ValueChanged<bool>? onAppLockChanged;
+
+  void _openConnectServer(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (routeContext) => ConnectServerScreen(
+          urlController: urlController,
+          tokenController: tokenController,
+          isConnected: isConnected,
+          isConnecting: isConnecting,
+          errorMessage: errorMessage,
+          onConnect: onConnect,
+          onDisconnect: onDisconnect,
+          // Pop this pushed screen first so the guide tab it switches to
+          // underneath is actually visible, instead of staying hidden
+          // behind this route.
+          onOpenConnectGuide: () {
+            Navigator.of(routeContext).pop();
+            onOpenConnectGuide();
+          },
         ),
       ),
     );
   }
 
-  Future<void> _redeemViaPairingCode(BuildContext context) async {
-    final token = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => PairingCodeScreen(baseUrl: urlController.text.trim()),
-      ),
-    );
-    if (token == null || token.isEmpty) return;
-    tokenController.value = TextEditingValue(
-      text: token,
-      selection: TextSelection.collapsed(offset: token.length),
-    );
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Token filled in. Tap Connect below.')),
-    );
+  String get _connectedHost {
+    final url = urlController.text.trim();
+    if (url.isEmpty) return '';
+    return Uri.tryParse(url)?.host ?? url;
   }
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Card(
-        color: const Color(0xFF161624),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'App Settings',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 24),
-              SwitchListTile(
-                title: const Text('Dark Mode'),
-                subtitle: const Text('Toggle between dark and light theme'),
-                value: isDarkMode,
-                onChanged: onDarkModeChanged,
-                secondary: const Icon(Icons.dark_mode),
-              ),
-              const Divider(),
-              const SizedBox(height: 16),
-              const Text(
-                'Server Connection',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(
-                    isConnected ? Icons.check_circle : Icons.cloud_off,
-                    color: isConnected ? Colors.green : Colors.white38,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isConnected ? 'Connected' : 'Not connected',
-                    style: TextStyle(
-                      color: isConnected ? Colors.green : Colors.white70,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                key: const Key('settings_scan_token_button'),
-                onPressed: () => _scanToken(context),
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Scan Token from Server Terminal'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Settings',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          _ConnectionStatusCard(
+            key: const Key('settings_connection_status_card'),
+            isConnected: isConnected,
+            host: _connectedHost,
+            onTap: () => _openConnectServer(context),
+            onDisconnect: onDisconnect,
+          ),
+          const SizedBox(height: 20),
+          SettingsSectionCard(
+            title: 'Preferences',
+            rows: [
+              SettingsRow(
+                icon: Icons.dark_mode,
+                iconColor: const Color(0xFF6D6AAE),
+                title: 'Dark Mode',
+                subtitle: 'Toggle between dark and light theme',
+                onTap: () => onDarkModeChanged(!isDarkMode),
+                trailing: Switch(
+                  value: isDarkMode,
+                  onChanged: onDarkModeChanged,
                 ),
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'Your server prints a QR code in its terminal the moment '
-                'the admin token is generated - scanning it fills the '
-                'field below automatically, no typing required.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                key: const Key('settings_pairing_code_button'),
-                onPressed: () => _redeemViaPairingCode(context),
-                icon: const Icon(Icons.terminal),
-                label: const Text('Get a Pairing Code from the Server'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Need a token without the original QR (e.g. the server is '
-                'already running)? Run a command on the server to get a '
-                'short one-time code instead, no restart required.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: const [
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'OR ENTER MANUALLY',
-                      style: TextStyle(color: Colors.white38, fontSize: 11),
-                    ),
-                  ),
-                  Expanded(child: Divider()),
-                ],
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                key: const Key('settings_url_field'),
-                controller: urlController,
-                decoration: const InputDecoration(
-                  labelText: 'Backend Server URL',
-                  prefixIcon: Icon(Icons.dns),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const Key('settings_token_field'),
-                controller: tokenController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Admin API Token',
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.help_outline),
-                    tooltip: 'Where do I find this?',
-                    onPressed: onOpenConnectGuide,
-                  ),
-                  border: const OutlineInputBorder(),
-                  helperText:
-                      'Not saved between sessions - re-enter each time.',
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (errorMessage != null) ...[
-                Text(
-                  errorMessage!,
-                  style: const TextStyle(
-                    color: Color(0xFFFF3366),
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              ElevatedButton.icon(
-                onPressed: isConnecting ? null : onConnect,
-                icon: isConnecting
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.link),
-                label: Text(
-                  isConnecting
-                      ? 'Connecting…'
-                      : (isConnected ? 'Reconnect' : 'Connect'),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8A2BE2),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-              if (isConnected) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: onDisconnect,
-                  icon: const Icon(Icons.link_off),
-                  label: const Text('Disconnect'),
-                ),
-              ],
             ],
           ),
-        ),
+          const SizedBox(height: 20),
+          SettingsSectionCard(
+            title: 'Security',
+            rows: [
+              SettingsRow(
+                key: const Key('settings_app_lock_row'),
+                icon: Icons.fingerprint,
+                iconColor: const Color(0xFF11A37F),
+                title: 'App Lock',
+                subtitle:
+                    'Require your device unlock to open Helix Admin. '
+                    'Optional - recommended if this device is shared.',
+                onTap: onAppLockChanged == null
+                    ? null
+                    : () => onAppLockChanged!(!appLockEnabled),
+                trailing: Switch(
+                  key: const Key('settings_app_lock_switch'),
+                  value: appLockEnabled,
+                  onChanged: onAppLockChanged,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SettingsSectionCard(
+            title: 'Help',
+            rows: [
+              SettingsRow(
+                icon: Icons.menu_book,
+                iconColor: const Color(0xFF4F46E5),
+                title: 'Self-Hosting Guide',
+                subtitle: 'Setup walkthrough and connection help',
+                onTap: onOpenConnectGuide,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionStatusCard extends StatelessWidget {
+  const _ConnectionStatusCard({
+    super.key,
+    required this.isConnected,
+    required this.host,
+    required this.onTap,
+    required this.onDisconnect,
+  });
+
+  final bool isConnected;
+  final String host;
+  final VoidCallback onTap;
+  final VoidCallback onDisconnect;
+
+  @override
+  Widget build(BuildContext context) {
+    // The Disconnect button is a sibling of the navigate-to-connect-screen
+    // InkWell below, not nested inside it - nesting two tappables invites
+    // ambiguous gesture-arena resolution where a tap on the inner button
+    // could also fire the outer card's onTap.
+    return Material(
+      color: const Color(0xFF161624),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isConnected
+                            ? const Color(0xFF2FA84F)
+                            : const Color(0xFF3A3A46),
+                      ),
+                      child: Icon(
+                        isConnected ? Icons.cloud_done : Icons.cloud_off,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isConnected ? 'Connected' : 'Not connected',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            isConnected
+                                ? host.isEmpty
+                                      ? 'Tap to manage this connection'
+                                      : host
+                                : 'Connect your self-hosted Helix server to '
+                                      'get started',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right, color: Colors.white38),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (isConnected)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                tooltip: 'Disconnect',
+                onPressed: onDisconnect,
+                icon: const Icon(Icons.link_off, color: Colors.white54),
+              ),
+            ),
+        ],
       ),
     );
   }

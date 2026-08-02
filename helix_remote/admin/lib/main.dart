@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 import 'admin_client.dart';
 import 'screens/backup_tab.dart';
 import 'screens/config_tab.dart';
@@ -6,6 +9,7 @@ import 'screens/dashboard_tab.dart';
 import 'screens/guide/guide_wizard.dart';
 import 'screens/intro_screen.dart';
 import 'screens/invites_tab.dart';
+import 'screens/lock_screen.dart';
 import 'screens/logs_tab.dart';
 import 'screens/settings_tab.dart';
 import 'services/admin_preferences.dart';
@@ -74,6 +78,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   AdminPreferences? _prefs;
   bool _introShown = false;
+  bool _appLockEnabled = false;
+  bool _isUnlocked = false;
 
   final _urlController = TextEditingController(text: _defaultServerUrl);
   final _tokenController = TextEditingController();
@@ -95,11 +101,76 @@ class _MainAdminPageState extends State<MainAdminPage> {
   Future<void> _loadPreferences() async {
     final prefs = await AdminPreferences.load();
     if (!mounted) return;
+    final appLockEnabled = prefs.appLockEnabled;
     setState(() {
       _prefs = prefs;
       _introShown = prefs.introShown;
+      _appLockEnabled = appLockEnabled;
+      _isUnlocked = !appLockEnabled;
       _urlController.text = prefs.serverUrl ?? _defaultServerUrl;
     });
+    if (!appLockEnabled) {
+      _attemptAutoConnect();
+    }
+  }
+
+  /// Reconnects with the token saved from a previous successful connect, so
+  /// operators don't have to re-pair or retype the admin token every launch.
+  /// A no-op if nothing (or an unusable URL) was saved yet.
+  Future<void> _attemptAutoConnect() async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    final url = prefs.serverUrl;
+    final token = await prefs.loadAdminToken();
+    if (url == null || url.isEmpty || token == null || token.isEmpty) return;
+
+    setState(() => _isConnecting = true);
+    final client = AdminClient(baseUrl: url, token: token);
+    final ok = await client.verifyLogin();
+    if (!mounted) return;
+    if (ok) {
+      _tokenController.text = token;
+      setState(() {
+        _client = client;
+        _isConnecting = false;
+      });
+      _refreshData();
+    } else {
+      await prefs.clearAdminToken();
+      if (!mounted) return;
+      setState(() {
+        _isConnecting = false;
+        _errorMessage =
+            'Saved session expired or was revoked on the server. Please '
+            'reconnect.';
+      });
+    }
+  }
+
+  void _handleUnlocked() {
+    setState(() => _isUnlocked = true);
+    _attemptAutoConnect();
+  }
+
+  Future<void> _setAppLockEnabled(bool value) async {
+    if (value) {
+      final supported = await LocalAuthentication().isDeviceSupported();
+      if (!supported) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No biometric or device PIN/pattern/password is set up. Set '
+              'one up in your device settings first, then try again.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    await _prefs?.setAppLockEnabled(value);
+    if (!mounted) return;
+    setState(() => _appLockEnabled = value);
   }
 
   @override
@@ -135,6 +206,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
     if (!mounted) return;
     if (ok) {
       await _prefs?.setServerUrl(url);
+      await _prefs?.saveAdminToken(_tokenController.text.trim());
       setState(() {
         _client = client;
         _isConnecting = false;
@@ -149,6 +221,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
   }
 
   void _disconnect() {
+    unawaited(_prefs?.clearAdminToken());
     setState(() {
       _client = null;
       _metrics = null;
@@ -274,6 +347,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
   Widget build(BuildContext context) {
     if (_prefs == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_appLockEnabled && !_isUnlocked) {
+      return LockScreen(onUnlocked: _handleUnlocked);
     }
     if (!_introShown) {
       return IntroScreen(onGetStarted: _completeIntro);
@@ -506,6 +582,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
           onConnect: _connect,
           onDisconnect: _disconnect,
           onOpenConnectGuide: _openConnectGuide,
+          appLockEnabled: _appLockEnabled,
+          onAppLockChanged: (value) => _setAppLockEnabled(value),
         );
       default:
         return const Center(child: Text('Tab not found'));
