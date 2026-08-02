@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_admin/screens/pairing_code_screen.dart';
-import 'package:helix_admin/screens/scan_token_screen.dart';
+import 'package:helix_admin/screens/connect_server_screen.dart';
 import 'package:helix_admin/screens/settings_tab.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 SettingsTab _settingsTab({
-  required TextEditingController tokenController,
+  TextEditingController? tokenController,
   TextEditingController? urlController,
   VoidCallback? onOpenConnectGuide,
+  VoidCallback? onConnect,
+  VoidCallback? onDisconnect,
+  bool isConnected = false,
   bool appLockEnabled = false,
   ValueChanged<bool>? onAppLockChanged,
 }) {
@@ -17,12 +19,12 @@ SettingsTab _settingsTab({
     isDarkMode: true,
     onDarkModeChanged: (_) {},
     urlController: urlController ?? TextEditingController(),
-    tokenController: tokenController,
-    isConnected: false,
+    tokenController: tokenController ?? TextEditingController(),
+    isConnected: isConnected,
     isConnecting: false,
     errorMessage: null,
-    onConnect: () {},
-    onDisconnect: () {},
+    onConnect: onConnect ?? () {},
+    onDisconnect: onDisconnect ?? () {},
     onOpenConnectGuide: onOpenConnectGuide ?? () {},
     appLockEnabled: appLockEnabled,
     onAppLockChanged: onAppLockChanged,
@@ -30,105 +32,77 @@ SettingsTab _settingsTab({
 }
 
 void main() {
-  testWidgets('the help icon on the token field opens the connect guide', (
-    tester,
-  ) async {
-    var opened = false;
-    await tester.pumpWidget(
-      _wrap(
-        _settingsTab(
-          tokenController: TextEditingController(),
-          onOpenConnectGuide: () => opened = true,
-        ),
-      ),
-    );
+  testWidgets(
+    'the connection status card shows "Not connected" and opens the '
+    'connect screen when unconnected',
+    (tester) async {
+      await tester.pumpWidget(_wrap(_settingsTab()));
 
-    await tester.ensureVisible(find.byIcon(Icons.help_outline));
-    await tester.tap(find.byIcon(Icons.help_outline));
-    await tester.pump();
+      expect(find.text('Not connected'), findsOneWidget);
+      expect(find.byType(ConnectServerScreen), findsNothing);
 
-    expect(opened, isTrue);
-  });
+      await tester.tap(
+        find.byKey(const Key('settings_connection_status_card')),
+      );
+      await tester.pumpAndSettle();
 
-  testWidgets('the scan button opens the camera scan screen', (tester) async {
-    await tester.pumpWidget(
-      _wrap(_settingsTab(tokenController: TextEditingController())),
-    );
-
-    await tester.tap(find.byKey(const Key('settings_scan_token_button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ScanTokenScreen), findsOneWidget);
-  });
-
-  testWidgets('a scanned token result is trimmed into the token field', (
-    tester,
-  ) async {
-    final tokenController = TextEditingController();
-    await tester.pumpWidget(
-      _wrap(_settingsTab(tokenController: tokenController)),
-    );
-
-    await tester.tap(find.byKey(const Key('settings_scan_token_button')));
-    await tester.pumpAndSettle();
-
-    // Simulate a successful scan by popping the scan route with a result,
-    // the way ScanTokenScreen does on barcode detection.
-    Navigator.of(
-      tester.element(find.byType(ScanTokenScreen)),
-    ).pop('  AbCdEfGhIjKlMnOpQrStUvWxYz012345  ');
-    await tester.pumpAndSettle();
-
-    expect(tokenController.text, equals('AbCdEfGhIjKlMnOpQrStUvWxYz012345'));
-  });
+      expect(find.byType(ConnectServerScreen), findsOneWidget);
+    },
+  );
 
   testWidgets(
-    'the pairing code button opens the pairing code screen with the '
-    'current URL field value',
+    'the connection status card shows the connected host, with a quick '
+    'disconnect action',
     (tester) async {
-      final urlController = TextEditingController(
-        text: 'https://helix.example.com',
-      );
+      var disconnected = false;
       await tester.pumpWidget(
         _wrap(
           _settingsTab(
-            tokenController: TextEditingController(),
-            urlController: urlController,
+            isConnected: true,
+            urlController: TextEditingController(
+              text: 'https://helix.example.com',
+            ),
+            onDisconnect: () => disconnected = true,
           ),
         ),
       );
 
-      await tester.tap(
-        find.byKey(const Key('settings_pairing_code_button')),
-      );
-      await tester.pumpAndSettle();
+      expect(find.text('Connected'), findsOneWidget);
+      expect(find.text('helix.example.com'), findsOneWidget);
 
-      final screen = tester.widget<PairingCodeScreen>(
-        find.byType(PairingCodeScreen),
-      );
-      expect(screen.baseUrl, equals('https://helix.example.com'));
+      await tester.tap(find.byTooltip('Disconnect'));
+      await tester.pump();
+
+      expect(disconnected, isTrue);
     },
   );
 
-  testWidgets('a redeemed pairing code result fills the token field', (
+  testWidgets('the Dark Mode switch reflects its value and reports toggles', (
     tester,
   ) async {
-    final tokenController = TextEditingController();
+    bool? toggledTo;
     await tester.pumpWidget(
-      _wrap(_settingsTab(tokenController: tokenController)),
+      _wrap(
+        SettingsTab(
+          isDarkMode: true,
+          onDarkModeChanged: (v) => toggledTo = v,
+          urlController: TextEditingController(),
+          tokenController: TextEditingController(),
+          isConnected: false,
+          isConnecting: false,
+          errorMessage: null,
+          onConnect: () {},
+          onDisconnect: () {},
+          onOpenConnectGuide: () {},
+        ),
+      ),
     );
 
-    await tester.tap(find.byKey(const Key('settings_pairing_code_button')));
-    await tester.pumpAndSettle();
+    expect(find.text('Dark Mode'), findsOneWidget);
+    await tester.tap(find.text('Dark Mode'));
+    await tester.pump();
 
-    // Simulate a successful redemption by popping the pairing route with a
-    // result, the way PairingCodeScreen does after a successful exchange.
-    Navigator.of(
-      tester.element(find.byType(PairingCodeScreen)),
-    ).pop('freshly-rotated-admin-token');
-    await tester.pumpAndSettle();
-
-    expect(tokenController.text, equals('freshly-rotated-admin-token'));
+    expect(toggledTo, isFalse);
   });
 
   testWidgets('the App Lock switch reflects its value and reports toggles', (
@@ -136,22 +110,31 @@ void main() {
   ) async {
     bool? toggledTo;
     await tester.pumpWidget(
-      _wrap(
-        _settingsTab(
-          tokenController: TextEditingController(),
-          onAppLockChanged: (value) => toggledTo = value,
-        ),
-      ),
+      _wrap(_settingsTab(onAppLockChanged: (value) => toggledTo = value)),
     );
 
-    final switchTile = tester.widget<SwitchListTile>(
+    final switchWidget = tester.widget<Switch>(
       find.byKey(const Key('settings_app_lock_switch')),
     );
-    expect(switchTile.value, isFalse);
+    expect(switchWidget.value, isFalse);
 
-    await tester.tap(find.byKey(const Key('settings_app_lock_switch')));
+    await tester.tap(find.byKey(const Key('settings_app_lock_row')));
     await tester.pump();
 
     expect(toggledTo, isTrue);
+  });
+
+  testWidgets('the Self-Hosting Guide row opens the connect guide', (
+    tester,
+  ) async {
+    var opened = false;
+    await tester.pumpWidget(
+      _wrap(_settingsTab(onOpenConnectGuide: () => opened = true)),
+    );
+
+    await tester.tap(find.text('Self-Hosting Guide'));
+    await tester.pump();
+
+    expect(opened, isTrue);
   });
 }

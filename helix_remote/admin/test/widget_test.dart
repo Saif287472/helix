@@ -62,22 +62,31 @@ void main() {
     },
   );
 
-  testWidgets('Settings hosts the connect form and is reachable unconnected', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const HelixAdminApp());
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('GET STARTED'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'Settings shows a status card that opens the connect form, reachable '
+    'unconnected',
+    (tester) async {
+      await tester.pumpWidget(const HelixAdminApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('GET STARTED'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('settings_url_field')), findsOneWidget);
-    expect(find.byKey(const Key('settings_token_field')), findsOneWidget);
-    expect(find.text('Connect'), findsOneWidget);
-    expect(find.text('Not connected'), findsOneWidget);
-  });
+      expect(find.text('Not connected'), findsOneWidget);
+      expect(find.byKey(const Key('settings_url_field')), findsNothing);
+
+      await tester.tap(
+        find.byKey(const Key('settings_connection_status_card')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('settings_url_field')), findsOneWidget);
+      expect(find.byKey(const Key('settings_token_field')), findsOneWidget);
+      expect(find.text('Connect'), findsOneWidget);
+    },
+  );
 
   testWidgets('the locked dashboard\'s button jumps straight to Settings', (
     tester,
@@ -91,7 +100,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('SETTINGS'), findsOneWidget);
-    expect(find.byKey(const Key('settings_url_field')), findsOneWidget);
+    expect(
+      find.byKey(const Key('settings_connection_status_card')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -105,6 +117,10 @@ void main() {
 
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('settings_connection_status_card')),
+      );
+      await tester.pumpAndSettle();
 
       await tester.ensureVisible(find.byIcon(Icons.help_outline));
       await tester.tap(find.byIcon(Icons.help_outline));
@@ -112,6 +128,9 @@ void main() {
 
       expect(find.text('Connect Helix Admin'), findsOneWidget);
       expect(find.text('Welcome to self-hosting Helix'), findsNothing);
+      // The pushed connection screen should have popped itself out of the
+      // way so the guide page is actually visible, not hidden behind it.
+      expect(find.byKey(const Key('settings_url_field')), findsNothing);
 
       // A normal sidebar visit to the guide afterwards still starts fresh,
       // rather than being stuck on Connect Admin from the earlier jump.
@@ -148,11 +167,17 @@ void main() {
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
 
+      expect(find.text('Not connected'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const Key('settings_connection_status_card')),
+      );
+      await tester.pumpAndSettle();
+
       final urlField = tester.widget<TextField>(
         find.byKey(const Key('settings_url_field')),
       );
       expect(urlField.controller?.text, equals('https://saved.example.com'));
-      expect(find.text('Not connected'), findsOneWidget);
     },
   );
 
@@ -197,7 +222,10 @@ void main() {
       expect(tester.takeException(), isNull);
 
       // Selecting a tab both navigates and closes the drawer.
-      expect(find.byKey(const Key('settings_url_field')), findsOneWidget);
+      expect(
+        find.byKey(const Key('settings_connection_status_card')),
+        findsOneWidget,
+      );
       expect(find.byIcon(Icons.menu), findsOneWidget);
     },
   );
