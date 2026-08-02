@@ -117,6 +117,11 @@ class _MainAdminPageState extends State<MainAdminPage> {
   /// Reconnects with the token saved from a previous successful connect, so
   /// operators don't have to re-pair or retype the admin token every launch.
   /// A no-op if nothing (or an unusable URL) was saved yet.
+  ///
+  /// Only an explicit unauthorized response from the server counts as the
+  /// token actually being dead - a network hiccup (weak signal, DNS blip,
+  /// server briefly unreachable) must not delete a perfectly good saved
+  /// token, or every flaky-connection launch would force a full re-pair.
   Future<void> _attemptAutoConnect() async {
     final prefs = _prefs;
     if (prefs == null) return;
@@ -124,26 +129,37 @@ class _MainAdminPageState extends State<MainAdminPage> {
     final token = await prefs.loadAdminToken();
     if (url == null || url.isEmpty || token == null || token.isEmpty) return;
 
+    // Fill the field up front so that even on a network failure below, the
+    // saved token is right there ready for the user to just tap Reconnect.
+    _tokenController.text = token;
     setState(() => _isConnecting = true);
     final client = AdminClient(baseUrl: url, token: token);
-    final ok = await client.verifyLogin();
+    final status = await client.verifyLoginDetailed();
     if (!mounted) return;
-    if (ok) {
-      _tokenController.text = token;
-      setState(() {
-        _client = client;
-        _isConnecting = false;
-      });
-      _refreshData();
-    } else {
-      await prefs.clearAdminToken();
-      if (!mounted) return;
-      setState(() {
-        _isConnecting = false;
-        _errorMessage =
-            'Saved session expired or was revoked on the server. Please '
-            'reconnect.';
-      });
+    switch (status) {
+      case AdminLoginStatus.ok:
+        setState(() {
+          _client = client;
+          _isConnecting = false;
+        });
+        _refreshData();
+      case AdminLoginStatus.unauthorized:
+        await prefs.clearAdminToken();
+        if (!mounted) return;
+        _tokenController.clear();
+        setState(() {
+          _isConnecting = false;
+          _errorMessage =
+              'Saved session expired or was revoked on the server. Please '
+              'reconnect.';
+        });
+      case AdminLoginStatus.unreachable:
+        setState(() {
+          _isConnecting = false;
+          _errorMessage =
+              "Couldn't reach the saved server to restore your session. "
+              'Check your connection, then tap Reconnect.';
+        });
     }
   }
 
@@ -202,9 +218,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
       token: _tokenController.text.trim(),
     );
 
-    final ok = await client.verifyLogin();
+    final status = await client.verifyLoginDetailed();
     if (!mounted) return;
-    if (ok) {
+    if (status == AdminLoginStatus.ok) {
       await _prefs?.setServerUrl(url);
       await _prefs?.saveAdminToken(_tokenController.text.trim());
       setState(() {
@@ -215,7 +231,10 @@ class _MainAdminPageState extends State<MainAdminPage> {
     } else {
       setState(() {
         _isConnecting = false;
-        _errorMessage = 'Invalid backend URL or admin token.';
+        _errorMessage = status == AdminLoginStatus.unauthorized
+            ? 'Invalid backend URL or admin token.'
+            : "Couldn't reach that server. Check the URL and your "
+                  'connection, then try again.';
       });
     }
   }

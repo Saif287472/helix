@@ -1,6 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+/// Outcome of checking whether a token is still good against a server.
+/// Kept distinct from a plain bool so callers can tell "the server said no"
+/// (the token is actually dead - safe to discard) apart from "couldn't tell"
+/// (offline, DNS hiccup, server briefly down - the token might still be
+/// fine, so it must not be discarded on this alone).
+enum AdminLoginStatus { ok, unauthorized, unreachable }
+
 class AdminClient {
   AdminClient({required this.baseUrl, required this.token});
 
@@ -12,17 +19,24 @@ class AdminClient {
     'Content-Type': 'application/json',
   };
 
-  Future<bool> verifyLogin() async {
+  Future<AdminLoginStatus> verifyLoginDetailed() async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/api/v1/ops/config'),
         headers: _headers,
       );
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return AdminLoginStatus.ok;
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        return AdminLoginStatus.unauthorized;
+      }
+      return AdminLoginStatus.unreachable;
     } catch (_) {
-      return false;
+      return AdminLoginStatus.unreachable;
     }
   }
+
+  Future<bool> verifyLogin() async =>
+      (await verifyLoginDetailed()) == AdminLoginStatus.ok;
 
   Future<Map<String, dynamic>> getMetrics() async {
     final response = await http.get(
