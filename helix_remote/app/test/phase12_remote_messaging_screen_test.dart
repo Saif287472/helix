@@ -428,16 +428,16 @@ void main() {
   });
 
   testWidgets(
-    'opening a conversation marks it read exactly once, not in an '
-    'unbounded self-triggering loop',
+    'opening a conversation does not spiral into an unbounded '
+    'self-triggering reload loop',
     (tester) async {
       // _loadMessages() calls markConversationRead() at the end of every
-      // load, which emits a conversations-area change for this
+      // load, which used to emit a conversations-area change for this
       // conversation. If _onRemoteChange treated that as a reason to
       // reload messages too, it would call _loadMessages() again -> mark
       // read again -> emit again -> forever, spinning as fast as the event
       // loop allows (an ANR on-device; here it would show up as
-      // pumpAndSettle() failing to settle, or a runaway op count).
+      // pumpAndSettle() failing to settle).
       await tester.pumpWidget(
         MaterialApp(
           home: ConversationScreen(
@@ -448,11 +448,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // markConversationRead() no longer enqueues an outbox operation at
+      // all: 'MARK_CONVERSATION_READ' was never in
+      // RemoteOutboundOperation.values, so every instance of it failed
+      // permanently - there's no server endpoint for it. Asserting zero
+      // here (not "exactly one") covers both bugs: the reload loop, and
+      // this dead-end outbox entry it kept multiplying.
       final markReadOps = db
           .getPendingOperations()
           .where((op) => op['type'] == 'MARK_CONVERSATION_READ')
           .toList();
-      expect(markReadOps, hasLength(1));
+      expect(markReadOps, isEmpty);
     },
   );
 
