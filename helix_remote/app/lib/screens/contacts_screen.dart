@@ -11,6 +11,7 @@ import 'package:helix_remote/services/phone_contacts_service.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({
@@ -40,6 +41,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
   bool _syncBannerDismissed = false;
   String _searchQuery = '';
   String? _statusText;
+
+  /// Phone-book contacts from the most recent sync that had a valid number
+  /// but matched no Helix account - i.e. not registered on this server
+  /// (yet). Unlike matched suggestions, this isn't persisted: it's a
+  /// snapshot of the last sync, not a standing invite list, so it clears on
+  /// the next sync rather than accumulating names that may since have
+  /// joined.
+  List<String> _unmatchedPhoneBookNames = [];
   final TextEditingController _searchController = TextEditingController();
   StreamSubscription<RemoteSyncChange>? _changeSub;
 
@@ -145,21 +154,40 @@ class _ContactsScreenState extends State<ContactsScreen> {
         return;
       }
       final phoneBook = await _phoneContactsService.loadContacts();
-      final matches = await widget.root.syncPhoneContacts(phoneBook);
+      final result = await widget.root.syncPhoneContacts(phoneBook);
       if (!mounted) return;
+      setState(() => _unmatchedPhoneBookNames = result.unmatchedNames);
+      final matchCount = result.matches.length;
+      final unmatchedCount = result.unmatchedNames.length;
       // recordPhoneContactMatches() (called inside syncPhoneContacts) emits
       // a contacts-area change, which _onRemoteChange picks up and reloads -
       // this just adds the status message on top of that reload.
       _reload(
-        statusText: matches.isEmpty
+        statusText: matchCount == 0 && unmatchedCount == 0
             ? 'No phone contacts found on Helix'
-            : '${matches.length} phone contact${matches.length == 1 ? '' : 's'} found on Helix',
+            : '$matchCount on Helix, $unmatchedCount not yet',
       );
     } catch (e) {
       if (mounted) setState(() => _statusText = 'Contacts sync failed: $e');
     } finally {
       if (mounted) setState(() => _syncingContacts = false);
     }
+  }
+
+  /// Shares a generic invite message via the OS share sheet (SMS, WhatsApp,
+  /// email, etc. - whatever the user picks). It deliberately doesn't embed
+  /// a working invite link or code: this server is invite-gated and only an
+  /// admin can mint invite codes (via the admin console's Invites tab) -
+  /// a regular account has no API access to generate one itself.
+  Future<void> _inviteContact(String name) async {
+    await SharePlus.instance.share(
+      ShareParams(
+        text:
+            "Hey $name, I'm using Helix Remote - it's private, "
+            'self-hosted messaging. Ask me for an invite and download the '
+            'app to join!',
+      ),
+    );
   }
 
   Future<void> _addFromPhoneBook(_PhoneBookSuggestion suggestion) async {
@@ -467,10 +495,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 
+  /// Unmatched phone-book names, hidden while searching (same as
+  /// [_phoneBookSuggestions]) since they're not part of what's being
+  /// searched for - they're not Helix contacts at all yet.
+  List<String> get _unmatchedForDisplay =>
+      _searchQuery.isEmpty ? _unmatchedPhoneBookNames : const [];
+
   Widget _buildList() {
     final list = _filteredContacts;
     final suggestions = _phoneBookSuggestions;
-    if (list.isEmpty && suggestions.isEmpty) {
+    final unmatched = _unmatchedForDisplay;
+    if (list.isEmpty && suggestions.isEmpty && unmatched.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -510,6 +545,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
     for (final entry in list) {
       items.add(_buildContactTile(entry));
+    }
+    if (unmatched.isNotEmpty) {
+      items.add(_buildSectionHeader('Not on Helix yet'));
+      for (final name in unmatched) {
+        items.add(
+          _NotOnHelixTile(name: name, onInvite: () => _inviteContact(name)),
+        );
+      }
     }
 
     return ListView.separated(
@@ -604,6 +647,41 @@ class _PhoneBookSuggestionTile extends StatelessWidget {
       ),
       subtitle: const Text('Found via phone contacts'),
       trailing: FilledButton(onPressed: onAdd, child: const Text('Add')),
+    );
+  }
+}
+
+/// A phone-book contact not (yet) registered on this Helix server, with an
+/// action to invite them - the same "who's on Helix, who isn't" split
+/// WhatsApp and the phone dialer app already show for their own contacts.
+class _NotOnHelixTile extends StatelessWidget {
+  const _NotOnHelixTile({required this.name, required this.onInvite});
+
+  final String name;
+  final VoidCallback onInvite;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final initial = name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: cs.surfaceContainerHighest,
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      title: Text(name, style: theme.textTheme.titleMedium),
+      subtitle: const Text('Not on Helix'),
+      trailing: OutlinedButton(
+        onPressed: onInvite,
+        child: const Text('Invite'),
+      ),
     );
   }
 }

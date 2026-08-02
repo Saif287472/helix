@@ -16,6 +16,20 @@ class PhoneContactMatch {
   final String displayName;
 }
 
+/// Outcome of a single [RemoteCompositionContactsSync.syncPhoneContacts]
+/// pass: phone-book contacts matched to a Helix account, and phone-book
+/// contacts that had at least one valid, hashable number but matched none -
+/// i.e. not (yet) registered on this server.
+class PhoneContactsSyncResult {
+  const PhoneContactsSyncResult({
+    required this.matches,
+    required this.unmatchedNames,
+  });
+
+  final Map<String, PhoneContactMatch> matches;
+  final List<String> unmatchedNames;
+}
+
 mixin RemoteCompositionContactsSync
     on RemoteCompositionRootBase, RemoteCompositionRegistration {
   /// Matches the device's phone book against the backend's phone-hash
@@ -23,7 +37,7 @@ mixin RemoteCompositionContactsSync
   /// overrides (see RemoteMessagingService.recordPhoneContactMatches).
   /// Only salted hashes are ever sent to the server - raw numbers and
   /// phone-book names never leave the device.
-  Future<Map<String, PhoneContactMatch>> syncPhoneContacts(
+  Future<PhoneContactsSyncResult> syncPhoneContacts(
     List<PhoneBookContact> phoneBookContacts,
   ) async {
     final rest = _requireReady(_restClient, 'restClient');
@@ -35,7 +49,9 @@ mixin RemoteCompositionContactsSync
       contacts: phoneBookContacts,
       discoverySaltBase64: salt,
     );
-    if (hashToName.isEmpty) return const {};
+    if (hashToName.isEmpty) {
+      return const PhoneContactsSyncResult(matches: {}, unmatchedNames: []);
+    }
 
     final response = await rest.matchPhoneHashes(hashToName.keys.toList());
     final matchesJson =
@@ -57,6 +73,22 @@ mixin RemoteCompositionContactsSync
       );
     }
     ms.recordPhoneContactMatches(overrides);
-    return results;
+
+    final hashesByName = groupPhoneBookHashesByName(
+      contacts: phoneBookContacts,
+      discoverySaltBase64: salt,
+    );
+    final matchedHashes = matchesJson.keys.toSet();
+    final unmatchedNames =
+        hashesByName.entries
+            .where((entry) => !entry.value.any(matchedHashes.contains))
+            .map((entry) => entry.key)
+            .toList()
+          ..sort();
+
+    return PhoneContactsSyncResult(
+      matches: results,
+      unmatchedNames: unmatchedNames,
+    );
   }
 }

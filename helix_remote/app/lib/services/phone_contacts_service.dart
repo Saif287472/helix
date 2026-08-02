@@ -76,3 +76,30 @@ Map<String, String> hashPhoneBookContacts({
   }
   return hashToName;
 }
+
+/// Groups every valid, hashed phone number on each phone-book contact by
+/// that contact's display name. [hashPhoneBookContacts] collapses to one
+/// name per hash for the match request, which loses which hashes belong to
+/// the same person; this keeps that grouping so a caller can tell whether
+/// *any* of a person's numbers matched, not just a single one - someone
+/// with two numbers where only one is registered on Helix must not also
+/// show up as "not on Helix" for the other.
+Map<String, Set<String>> groupPhoneBookHashesByName({
+  required List<PhoneBookContact> contacts,
+  required String discoverySaltBase64,
+}) {
+  final hashesByName = <String, Set<String>>{};
+  for (final contact in contacts) {
+    final name = contact.displayName.trim();
+    if (name.isEmpty) continue;
+    for (final rawNumber in contact.phoneNumbers) {
+      final normalized = RemoteAccountValidation.normalizePhoneNumber(
+        rawNumber,
+      );
+      if (!RemoteAccountValidation.isValidPhoneNumber(normalized)) continue;
+      final hash = phoneHash(discoverySaltBase64, normalized);
+      (hashesByName[name] ??= <String>{}).add(hash);
+    }
+  }
+  return hashesByName;
+}
