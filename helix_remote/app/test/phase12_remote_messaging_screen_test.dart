@@ -427,6 +427,35 @@ void main() {
     expect(find.text('plain hello'), findsNothing);
   });
 
+  testWidgets(
+    'opening a conversation marks it read exactly once, not in an '
+    'unbounded self-triggering loop',
+    (tester) async {
+      // _loadMessages() calls markConversationRead() at the end of every
+      // load, which emits a conversations-area change for this
+      // conversation. If _onRemoteChange treated that as a reason to
+      // reload messages too, it would call _loadMessages() again -> mark
+      // read again -> emit again -> forever, spinning as fast as the event
+      // loop allows (an ANR on-device; here it would show up as
+      // pumpAndSettle() failing to settle, or a runaway op count).
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ConversationScreen(
+            conversationId: 'dm_alice_bob',
+            messagingService: service,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final markReadOps = db
+          .getPendingOperations()
+          .where((op) => op['type'] == 'MARK_CONVERSATION_READ')
+          .toList();
+      expect(markReadOps, hasLength(1));
+    },
+  );
+
   testWidgets('P09 open conversation reacts to inbound sync messages', (
     tester,
   ) async {
@@ -880,6 +909,79 @@ void main() {
 
       expect(find.text('No conversations yet'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'starting a new chat from the New Chat picker actually creates the '
+    'conversation, not just a screen for one that does not exist yet',
+    (tester) async {
+      // conversationIdForPeer only derives an ID string - it never writes a
+      // conversation/membership row. Without _showNewChatPicker also
+      // calling createDirectConversation for a contact with no prior chat,
+      // picking them here opened ConversationScreen for a conversation
+      // absent from the database entirely.
+      service.addContact(peerAccountId: 'carol', nickname: 'Carol');
+
+      final dir = Directory.systemTemp.createTempSync('new_chat_widget_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final root = RemoteCompositionRoot.production(
+        databaseDirectory: dir.path,
+        devConfig: _devConfig(dir.path),
+      );
+      addTearDown(root.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ConversationListScreen(messagingService: service, root: root),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('New chat'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Carol'));
+      await tester.pumpAndSettle();
+
+      final conversationId = service.conversationIdForPeer('carol');
+      expect(conversationId, isNotNull);
+      expect(
+        service.conversationMemberIds(conversationId!),
+        containsAll(['alice', 'carol']),
+      );
+    },
+  );
+
+  testWidgets(
+    'starting a new chat with a contact already chatted with reuses the '
+    'existing conversation instead of resetting its state',
+    (tester) async {
+      // createDirectConversation's upsert always resets last_sequence to
+      // 0 - calling it again for bob (who already has dm_alice_bob with
+      // message history from setUp) would corrupt that conversation's
+      // sort/unread state, so the picker must detect it already exists
+      // and reuse it rather than recreating it.
+      final dir = Directory.systemTemp.createTempSync('new_chat_existing_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final root = RemoteCompositionRoot.production(
+        databaseDirectory: dir.path,
+        devConfig: _devConfig(dir.path),
+      );
+      addTearDown(root.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ConversationListScreen(messagingService: service, root: root),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('New chat'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bob'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('budget marker from bob'), findsOneWidget);
     },
   );
 }
