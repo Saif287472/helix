@@ -26,6 +26,7 @@ void main() {
   late List<Map<String, dynamic>> invites;
   late int createCalls;
   late bool failListRequests;
+  late bool serverOmitsShareableUrlHost;
 
   String baseUrl() => 'http://${server.address.address}:${server.port}';
 
@@ -50,6 +51,7 @@ void main() {
     ];
     createCalls = 0;
     failListRequests = false;
+    serverOmitsShareableUrlHost = false;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
       if (request.method == 'GET' &&
@@ -89,7 +91,9 @@ void main() {
           jsonEncode({
             'invite_id': 'inv_new_$createCalls',
             'invite_code': code,
-            'shareable_url': 'https://example.com/join?invite=$code',
+            'shareable_url': serverOmitsShareableUrlHost
+                ? '/join?invite=$code'
+                : 'https://example.com/join?invite=$code',
             'expires_at': 4000,
           }),
         );
@@ -137,6 +141,31 @@ void main() {
     // The new invite is reflected in the refreshed history table too.
     expect(find.text('PENDING'), findsNWidgets(2));
   });
+
+  testWidgets(
+    'a schemeless shareable_url from the server (missing '
+    'HELIX_REMOTE_PUBLIC_BASE_URL) is repaired using the connected base URL',
+    (tester) async {
+      serverOmitsShareableUrlHost = true;
+      final client = AdminClient(baseUrl: baseUrl(), token: 't');
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
+      );
+      await _settleWithRealIO(tester);
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Generate Invite'));
+      await _settleWithRealIO(tester);
+
+      expect(
+        find.text('${baseUrl()}/join?invite=code_1'),
+        findsOneWidget,
+        reason:
+            'a bare /join?invite=CODE link is useless once pasted '
+            'elsewhere - it must be completed with the server address the '
+            'admin console is already connected to',
+      );
+    },
+  );
 
   testWidgets('pagination controls disable at the edges', (tester) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');

@@ -19,6 +19,11 @@ services:
       - HELIX_REMOTE_DB_PATH=/app/data/remote_backend.db
       - HELIX_REMOTE_ATTACHMENTS_DIR=/app/data/attachments
       - HELIX_REMOTE_LOG_FILE=/app/data/server.log
+      # Set this to your server's public URL (the one behind your reverse
+      # proxy, e.g. https://your-domain.example) - without it, admin-issued
+      # invite links come back without a scheme/host (just /join?invite=...)
+      # and are unusable once shared.
+      - HELIX_REMOTE_PUBLIC_BASE_URL=https://your-domain.example
       # Configure TURN if needed
       # - HELIX_REMOTE_TURN_URL=turn:your-turn-host:port
       # - HELIX_REMOTE_TURN_SECRET=your-turn-secret

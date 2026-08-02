@@ -68,7 +68,7 @@ class _InvitesTabState extends State<InvitesTab> {
       final result = await widget.client.createInvite();
       if (!mounted) return;
       setState(() {
-        _lastShareableUrl = result['shareable_url'] as String;
+        _lastShareableUrl = _resolveShareableUrl(result);
         _generating = false;
       });
       await _loadInvites(offset: 0);
@@ -79,6 +79,24 @@ class _InvitesTabState extends State<InvitesTab> {
         _error = e.toString();
       });
     }
+  }
+
+  /// The server includes `shareable_url`, but it's only a full link when
+  /// HELIX_REMOTE_PUBLIC_BASE_URL was set at deploy time - a step many
+  /// self-hosters miss, which otherwise leaves it schemeless/host-less
+  /// (e.g. `/join?invite=CODE`, unusable when pasted elsewhere). Fall back
+  /// to building the link from the address this admin console is already
+  /// connected to, which is always a real, reachable URL.
+  String _resolveShareableUrl(Map<String, dynamic> result) {
+    final serverUrl = result['shareable_url'] as String?;
+    if (serverUrl != null &&
+        (serverUrl.startsWith('http://') ||
+            serverUrl.startsWith('https://'))) {
+      return serverUrl;
+    }
+    final inviteCode = result['invite_code'] as String;
+    final base = widget.client.baseUrl.replaceAll(RegExp(r'/+$'), '');
+    return '$base/join?invite=$inviteCode';
   }
 
   void _copyToClipboard(String value) {

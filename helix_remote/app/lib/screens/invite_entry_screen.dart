@@ -66,13 +66,11 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
 
     HelixRemoteRestClientImpl? client;
     try {
-      final config = RemoteDevelopmentConfig.fromServerUrl(
+      final restBaseUri = RemoteDevelopmentConfig.restBaseUriFromServerUrl(
         parsed.serverUrl,
-        databaseDirectory: '',
-        attachmentCacheDir: '',
       );
       client = HelixRemoteRestClientImpl(
-        baseUri: config.restBaseUri,
+        baseUri: restBaseUri,
         timeoutMs: 15000,
       );
       final lookup = await client.lookupInvite(inviteCode: parsed.inviteCode);
