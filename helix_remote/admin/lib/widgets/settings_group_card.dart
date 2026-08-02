@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 /// A titled, rounded card grouping related settings rows - the same
-/// group-of-rows language the main Helix Remote app's settings screen uses,
-/// adapted to Helix Admin's dark palette. Keeps a settings surface scannable
-/// instead of one long form, which matters most for the server-connection
-/// controls: they're the part most likely to overwhelm a first-time
-/// self-hoster if dumped onto one screen.
+/// group-of-rows language the main Helix Remote app's settings screen uses.
+/// Keeps a settings surface scannable instead of one long form, which
+/// matters most for the server-connection controls: they're the part most
+/// likely to overwhelm a first-time self-hoster if dumped onto one screen.
 class SettingsSectionCard extends StatelessWidget {
   const SettingsSectionCard({super.key, this.title, required this.rows});
 
@@ -22,8 +22,8 @@ class SettingsSectionCard extends StatelessWidget {
             padding: const EdgeInsets.only(left: 4, bottom: 8),
             child: Text(
               title!.toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white38,
+              style: TextStyle(
+                color: context.textFaint,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1,
@@ -32,19 +32,19 @@ class SettingsSectionCard extends StatelessWidget {
           ),
         ],
         Material(
-          color: const Color(0xFF161624),
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
               for (var i = 0; i < rows.length; i++) ...[
                 if (i > 0)
-                  const Divider(
+                  Divider(
                     height: 1,
                     thickness: 1,
                     indent: 68,
                     endIndent: 16,
-                    color: Colors.white12,
+                    color: Theme.of(context).dividerColor,
                   ),
                 rows[i],
               ],
@@ -81,7 +81,9 @@ class SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleColor = isDestructive ? const Color(0xFFFF3366) : Colors.white;
+    final titleColor = isDestructive
+        ? Theme.of(context).colorScheme.error
+        : context.textPrimary;
     // trailing (typically a Switch) sits as a sibling of the tappable
     // InkWell, not nested inside it - a Switch nested inside another
     // tappable region would leave a tap on its thumb ambiguous between the
@@ -124,9 +126,9 @@ class SettingsRow extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                             subtitle!,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12.5,
-                              color: Colors.white54,
+                              color: context.textTertiary,
                             ),
                           ),
                         ],
@@ -135,9 +137,9 @@ class SettingsRow extends StatelessWidget {
                   ),
                   if (trailing == null && onTap != null) ...[
                     const SizedBox(width: 4),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right,
-                      color: Colors.white38,
+                      color: context.textFaint,
                       size: 22,
                     ),
                   ],

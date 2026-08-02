@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import 'guide_widgets.dart';
 
 class GuideBackupsPage extends StatelessWidget {
@@ -10,11 +11,15 @@ class GuideBackupsPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const GuidePageTitle('Backups and maintenance'),
-        const Text(
+        Text(
           'The Maintenance & Backups tab triggers a clean database '
           'snapshot on demand (SQLite "VACUUM INTO"), saved next to the '
           'main database file.',
-          style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.6),
+          style: TextStyle(
+            fontSize: 14,
+            color: context.textSecondary,
+            height: 1.6,
+          ),
         ),
         const SizedBox(height: 16),
         const GuideDetailExpansion(
@@ -40,11 +45,15 @@ class GuideBackupsPage extends StatelessWidget {
               '[off-server location]."',
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'That\'s the whole path from nothing to a self-hosted, '
           'connected server. Jump back to any page any time from the '
           'progress bar.',
-          style: TextStyle(fontSize: 13, color: Colors.white54, height: 1.5),
+          style: TextStyle(
+            fontSize: 13,
+            color: context.textTertiary,
+            height: 1.5,
+          ),
         ),
       ],
     );

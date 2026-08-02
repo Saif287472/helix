@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../admin_client.dart';
+import '../theme/app_theme.dart';
 
 /// Invite-credential issuance and audit history. Locked like Dashboard/
 /// Config until a server is connected. Generated codes are clipboard-only
@@ -127,7 +128,6 @@ class _InvitesTabState extends State<InvitesTab> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Card(
-            color: const Color(0xFF161624),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -138,10 +138,10 @@ class _InvitesTabState extends State<InvitesTab> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Single-use, expires in 7 days. The code is shown once '
                     '- copy it now.',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: context.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
@@ -170,10 +170,10 @@ class _InvitesTabState extends State<InvitesTab> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0B0B12),
+                        color: context.sunkenSurface,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: const Color(0xFF00E5FF).withValues(alpha: 0.4),
+                          color: context.accentColor.withValues(alpha: 0.4),
                         ),
                       ),
                       child: Row(
@@ -181,9 +181,9 @@ class _InvitesTabState extends State<InvitesTab> {
                           Expanded(
                             child: SelectableText(
                               _lastShareableUrl!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'monospace',
-                                color: Color(0xFF00E5FF),
+                                color: context.accentColor,
                               ),
                             ),
                           ),
@@ -201,8 +201,8 @@ class _InvitesTabState extends State<InvitesTab> {
                     const SizedBox(height: 16),
                     Text(
                       _error!,
-                      style: const TextStyle(
-                        color: Color(0xFFFF3366),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
                         fontSize: 13,
                       ),
                     ),
@@ -213,7 +213,6 @@ class _InvitesTabState extends State<InvitesTab> {
           ),
           const SizedBox(height: 24),
           Card(
-            color: const Color(0xFF161624),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -246,11 +245,11 @@ class _InvitesTabState extends State<InvitesTab> {
                       ),
                     )
                   else if (_invites.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(24),
+                    Padding(
+                      padding: const EdgeInsets.all(24),
                       child: Text(
                         'No invites issued yet.',
-                        style: TextStyle(color: Colors.white38),
+                        style: TextStyle(color: context.textFaint),
                       ),
                     )
                   else
@@ -326,9 +325,9 @@ class _InvitesTabState extends State<InvitesTab> {
                       )
                     : isPending
                     ? IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.cancel_outlined,
-                          color: Color(0xFFFF3366),
+                          color: Theme.of(context).colorScheme.error,
                         ),
                         tooltip: 'Cancel invite',
                         onPressed: () => _cancelInvite(inviteId),
@@ -350,7 +349,7 @@ class _InvitesTabState extends State<InvitesTab> {
       case 'EXPIRED':
         color = Colors.orange;
       default:
-        color = const Color(0xFF00E5FF);
+        color = context.accentColor;
     }
     return Chip(
       label: Text(status, style: const TextStyle(fontSize: 12)),

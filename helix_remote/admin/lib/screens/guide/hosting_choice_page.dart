@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../theme/app_theme.dart';
 import 'guide_widgets.dart';
 
 enum _HostingMode { vps, homePc }
@@ -34,7 +35,7 @@ class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B0B12),
+        color: context.sunkenSurface,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
@@ -62,7 +63,7 @@ class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : Colors.white54,
+            color: selected ? context.textPrimary : context.textTertiary,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
@@ -74,10 +75,14 @@ class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Rent a small Virtual Private Server and run Helix there. '
           'Providers below, in no particular order:',
-          style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.6),
+          style: TextStyle(
+            fontSize: 14,
+            color: context.textSecondary,
+            height: 1.6,
+          ),
         ),
         const SizedBox(height: 16),
         const _ProviderLink(
@@ -99,7 +104,7 @@ class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {
   }
 
   Widget _homePcView() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
@@ -107,13 +112,21 @@ class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {
           'Raspberry Pi 4/5 at home. You\'ll need to keep it powered on '
           'and forward a port on your router (or use a tunnel service) so '
           'people outside your network can reach it.',
-          style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.6),
+          style: TextStyle(
+            fontSize: 14,
+            color: context.textSecondary,
+            height: 1.6,
+          ),
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         Text(
           'Trade-off versus a VPS: no monthly fee, but your home IP '
           'address, uptime, and bandwidth become part of the equation.',
-          style: TextStyle(fontSize: 13, color: Colors.white54, height: 1.5),
+          style: TextStyle(
+            fontSize: 13,
+            color: context.textTertiary,
+            height: 1.5,
+          ),
         ),
       ],
     );
@@ -136,11 +149,11 @@ class _ProviderLink extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.open_in_new, size: 16, color: Color(0xFF00E5FF)),
+            Icon(Icons.open_in_new, size: 16, color: context.accentColor),
             const SizedBox(width: 8),
             Text(
               name,
-              style: const TextStyle(fontSize: 14, color: Color(0xFF00E5FF)),
+              style: TextStyle(fontSize: 14, color: context.accentColor),
             ),
           ],
         ),

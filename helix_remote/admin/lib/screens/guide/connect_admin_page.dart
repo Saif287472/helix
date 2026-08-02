@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import 'guide_widgets.dart';
 
 class GuideConnectAdminPage extends StatelessWidget {
@@ -10,10 +11,14 @@ class GuideConnectAdminPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const GuidePageTitle('Connect Helix Admin'),
-        const Text(
+        Text(
           'Once the server is up, this app can manage it directly - no '
           'separate install needed on the server side.',
-          style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.6),
+          style: TextStyle(
+            fontSize: 14,
+            color: context.textSecondary,
+            height: 1.6,
+          ),
         ),
         const SizedBox(height: 16),
         const GuideDetailExpansion(
@@ -40,14 +45,18 @@ class GuideConnectAdminPage extends StatelessWidget {
               'downtime.',
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Go to Settings in the sidebar and tap the connection card at '
           'the top, then enter your server\'s URL and admin token and tap '
           'Connect. Once connected, the token is saved securely on this '
           'device so you won\'t need to re-enter it next time - '
           'optionally turn on App Lock in Settings to require your '
           'device unlock before it\'s used.',
-          style: TextStyle(fontSize: 13, color: Colors.white54, height: 1.5),
+          style: TextStyle(
+            fontSize: 13,
+            color: context.textTertiary,
+            height: 1.5,
+          ),
         ),
       ],
     );

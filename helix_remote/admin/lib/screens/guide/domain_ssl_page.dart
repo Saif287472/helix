@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import 'guide_widgets.dart';
 
 class GuideDomainSslPage extends StatelessWidget {
@@ -10,11 +11,15 @@ class GuideDomainSslPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const GuidePageTitle('Domain and SSL'),
-        const Text(
+        Text(
           'Clients connect over HTTPS, so you\'ll want a domain (or '
           'subdomain) pointed at your server and a TLS certificate. A '
           'reverse proxy in front of the backend handles both cleanly.',
-          style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.6),
+          style: TextStyle(
+            fontSize: 14,
+            color: context.textSecondary,
+            height: 1.6,
+          ),
         ),
         const SizedBox(height: 16),
         const GuideDetailExpansion(

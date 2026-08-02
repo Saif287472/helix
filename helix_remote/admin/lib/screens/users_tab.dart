@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../admin_client.dart';
+import '../theme/app_theme.dart';
 
 /// Registered-user directory and per-user access controls. Locked like
 /// Dashboard/Config/Invites until a server is connected.
@@ -97,7 +98,7 @@ class _UsersTabState extends State<UsersTab> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFFF3366),
+              backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete permanently'),
@@ -123,7 +124,6 @@ class _UsersTabState extends State<UsersTab> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Card(
-        color: const Color(0xFF161624),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -144,9 +144,9 @@ class _UsersTabState extends State<UsersTab> {
                 ],
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Everyone registered on this server, and who invited them.',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: context.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 16),
               if (_loading)
@@ -157,11 +157,11 @@ class _UsersTabState extends State<UsersTab> {
                   ),
                 )
               else if (_users.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(24),
+                Padding(
+                  padding: const EdgeInsets.all(24),
                   child: Text(
                     'No users registered yet.',
-                    style: TextStyle(color: Colors.white38),
+                    style: TextStyle(color: context.textFaint),
                   ),
                 )
               else
@@ -170,8 +170,8 @@ class _UsersTabState extends State<UsersTab> {
                 const SizedBox(height: 16),
                 Text(
                   _error!,
-                  style: const TextStyle(
-                    color: Color(0xFFFF3366),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
                     fontSize: 13,
                   ),
                 ),
@@ -260,9 +260,9 @@ class _UsersTabState extends State<UsersTab> {
                                 : _suspend(accountId),
                           ),
                           IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.delete_forever_outlined,
-                              color: Color(0xFFFF3366),
+                              color: Theme.of(context).colorScheme.error,
                             ),
                             tooltip: 'Delete permanently',
                             onPressed: () => _confirmDelete(
