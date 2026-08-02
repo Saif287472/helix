@@ -1185,5 +1185,32 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 33;');
     }
+
+    if (version < 34) {
+      // Last few digits of the phone number used at registration, sent by
+      // the client alongside (never instead of) phone_hash - deliberately
+      // NOT the full number or anything reversible to it, just enough for
+      // an admin to tell accounts apart on the Users screen. Optional: an
+      // older client that doesn't send it yet leaves this empty, and
+      // nothing server-side treats it as an identity/lookup key the way
+      // phone_hash is - it is display-only.
+      _db.execute(
+        "ALTER TABLE accounts ADD COLUMN phone_last4 TEXT NOT NULL DEFAULT '';",
+      );
+
+      _db.execute('PRAGMA user_version = 34;');
+    }
+
+    if (version < 35) {
+      // Supports the admin Users screen's reverse lookup (given a user,
+      // which invite did they redeem) - without this, that join is a full
+      // table scan of invite_credentials per user rendered.
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_invite_credentials_redeemed_by
+          ON invite_credentials(redeemed_by_account_id);
+      ''');
+
+      _db.execute('PRAGMA user_version = 35;');
+    }
   }
 }

@@ -15,13 +15,21 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     String username,
     String identityPublicKey, {
     String? phoneHash,
+    String phoneLast4 = '',
   }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
-      INSERT INTO accounts (account_id, username, identity_public_key, phone_hash, created_at, status)
-      VALUES (?, ?, ?, ?, ?, 'ACTIVE');
+      INSERT INTO accounts (account_id, username, identity_public_key, phone_hash, phone_last4, created_at, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE');
     ''');
-    stmt.execute([accountId, username, identityPublicKey, phoneHash, now]);
+    stmt.execute([
+      accountId,
+      username,
+      identityPublicKey,
+      phoneHash,
+      phoneLast4,
+      now,
+    ]);
     stmt.close();
   }
 
@@ -35,6 +43,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       'account_id': row['account_id'],
       'username': row['username'],
       'phone_hash': row['phone_hash'],
+      'phone_last4': row['phone_last4'],
       'identity_public_key': row['identity_public_key'],
       'created_at': row['created_at'],
       'status': row['status'],
@@ -42,6 +51,28 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
   }
 
   bool accountExists(String accountId) => getAccount(accountId) != null;
+
+  /// Admin-triggered temporary revoke: an account with status SUSPENDED is
+  /// rejected by every authenticated request (see BackendServer's auth
+  /// middleware), the same way a revoked device already is - but unlike
+  /// device revocation this is reversible by setting status back to
+  /// ACTIVE, with no re-registration needed.
+  void setAccountStatus(String accountId, String status) {
+    final stmt = _db.prepare(
+      'UPDATE accounts SET status = ? WHERE account_id = ?;',
+    );
+    stmt.execute([status, accountId]);
+    stmt.close();
+  }
+
+  bool isAccountSuspended(String accountId) {
+    final stmt = _db.prepare('''
+      SELECT 1 FROM accounts WHERE account_id = ? AND status = 'SUSPENDED';
+    ''');
+    final res = stmt.select([accountId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
 
   /// Looks up an account by its salted phone-number hash (see
   /// `phone_hash.dart`). This is the identity lookup used by phone-based

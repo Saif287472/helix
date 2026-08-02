@@ -14,6 +14,10 @@ abstract class HelixRemoteRestClient {
     required String accountRegistrationSignature,
     required String deviceRegistrationSignature,
     required String deviceName,
+    // Last few digits of the phone number, display-only, never anything
+    // that could be used to recover the full number. Optional so callers
+    // that don't have it (or don't want to send it) need no changes.
+    String phoneLast4 = '',
   });
 
   Future<Map<String, dynamic>> fetchDiscoverySalt();

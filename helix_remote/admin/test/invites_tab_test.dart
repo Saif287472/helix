@@ -27,6 +27,7 @@ void main() {
   late int createCalls;
   late bool failListRequests;
   late bool serverOmitsShareableUrlHost;
+  late List<String> requestedPaths;
 
   String baseUrl() => 'http://${server.address.address}:${server.port}';
 
@@ -52,8 +53,29 @@ void main() {
     createCalls = 0;
     failListRequests = false;
     serverOmitsShareableUrlHost = false;
+    requestedPaths = [];
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
+      requestedPaths.add('${request.method} ${request.uri.path}');
+      final cancelMatch = RegExp(
+        r'^/api/v1/ops/invites/([^/]+)/cancel$',
+      ).firstMatch(request.uri.path);
+      if (request.method == 'POST' && cancelMatch != null) {
+        final inviteId = cancelMatch.group(1)!;
+        invites = invites
+            .map(
+              (i) => i['invite_id'] == inviteId
+                  ? {...i, 'status': 'CANCELLED'}
+                  : i,
+            )
+            .toList();
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({'invite_id': inviteId, 'status': 'CANCELLED'}),
+        );
+        await request.response.close();
+        return;
+      }
       if (request.method == 'GET' &&
           request.uri.path == '/api/v1/ops/invites') {
         if (failListRequests) {
@@ -201,4 +223,45 @@ void main() {
 
     expect(find.textContaining('Failed to load invites'), findsOneWidget);
   });
+
+  testWidgets('a pending invite can be cancelled', (tester) async {
+    final client = AdminClient(baseUrl: baseUrl(), token: 't');
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
+    );
+    await _settleWithRealIO(tester);
+
+    expect(find.text('PENDING'), findsOneWidget);
+    await tester.tap(find.byTooltip('Cancel invite'));
+    await _settleWithRealIO(tester);
+
+    expect(find.text('CANCELLED'), findsOneWidget);
+    expect(find.text('PENDING'), findsNothing);
+    expect(requestedPaths, contains('POST /api/v1/ops/invites/inv_1/cancel'));
+  });
+
+  testWidgets(
+    'a redeemed invite has no cancel action',
+    (tester) async {
+      invites = [
+        {
+          'invite_id': 'inv_redeemed',
+          'issuer_type': 'ADMIN',
+          'issuer_label': 'admin',
+          'status': 'REDEEMED',
+          'created_at': 1000,
+          'expires_at': 2000,
+          'redeemed_at': 1500,
+          'redeemed_by_account_id': 'some_user',
+        },
+      ];
+      final client = AdminClient(baseUrl: baseUrl(), token: 't');
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
+      );
+      await _settleWithRealIO(tester);
+
+      expect(find.byTooltip('Cancel invite'), findsNothing);
+    },
+  );
 }

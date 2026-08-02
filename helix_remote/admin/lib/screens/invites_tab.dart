@@ -25,6 +25,7 @@ class _InvitesTabState extends State<InvitesTab> {
   bool _generating = false;
   String? _error;
   String? _lastShareableUrl;
+  String? _busyInviteId;
 
   @override
   void initState() {
@@ -97,6 +98,19 @@ class _InvitesTabState extends State<InvitesTab> {
     final inviteCode = result['invite_code'] as String;
     final base = widget.client.baseUrl.replaceAll(RegExp(r'/+$'), '');
     return '$base/join?invite=$inviteCode';
+  }
+
+  Future<void> _cancelInvite(String inviteId) async {
+    setState(() => _busyInviteId = inviteId);
+    try {
+      await widget.client.cancelInvite(inviteId);
+      await _loadInvites(offset: _offset);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyInviteId = null);
+    }
   }
 
   void _copyToClipboard(String value) {
@@ -287,16 +301,39 @@ class _InvitesTabState extends State<InvitesTab> {
           DataColumn(label: Text('Issued')),
           DataColumn(label: Text('Expires')),
           DataColumn(label: Text('Redeemed By')),
+          DataColumn(label: Text('Actions')),
         ],
         rows: _invites.map((invite) {
+          final inviteId = invite['invite_id'] as String? ?? '';
+          final status = invite['status'] as String? ?? 'unknown';
+          final isPending = status == 'PENDING';
+          final isBusy = _busyInviteId == inviteId;
           return DataRow(
             cells: [
               DataCell(Text(invite['issuer_type'] as String? ?? 'unknown')),
-              DataCell(_statusChip(invite['status'] as String? ?? 'unknown')),
+              DataCell(_statusChip(status)),
               DataCell(Text(_formatTimestamp(invite['created_at']))),
               DataCell(Text(_formatTimestamp(invite['expires_at']))),
               DataCell(
                 Text(invite['redeemed_by_account_id'] as String? ?? '—'),
+              ),
+              DataCell(
+                isBusy
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : isPending
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.cancel_outlined,
+                          color: Color(0xFFFF3366),
+                        ),
+                        tooltip: 'Cancel invite',
+                        onPressed: () => _cancelInvite(inviteId),
+                      )
+                    : const SizedBox.shrink(),
               ),
             ],
           );

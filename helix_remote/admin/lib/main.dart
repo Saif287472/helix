@@ -10,6 +10,7 @@ import 'screens/dashboard_tab.dart';
 import 'screens/guide/guide_wizard.dart';
 import 'screens/intro_screen.dart';
 import 'screens/invites_tab.dart';
+import 'screens/users_tab.dart';
 import 'screens/lock_screen.dart';
 import 'screens/logs_tab.dart';
 import 'screens/settings_tab.dart';
@@ -53,6 +54,7 @@ const _serverDependentTabs = {
   'logs',
   'backup',
   'invites',
+  'users',
 };
 const _defaultServerUrl = 'http://127.0.0.1:8080';
 
@@ -499,6 +501,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           selectTab,
         ),
         _sidebarItem(Icons.mail_outline, 'Invites', 'invites', selectTab),
+        _sidebarItem(Icons.people_outline, 'Users', 'users', selectTab),
         _sidebarItem(
           Icons.menu_book,
           'Self-Hosting Guide',
@@ -611,6 +614,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
             : BackupTab(isLoading: _isLoading, onTriggerBackup: _triggerBackup);
       case 'invites':
         return _client == null ? _lockedTab() : InvitesTab(client: _client!);
+      case 'users':
+        return _client == null ? _lockedTab() : UsersTab(client: _client!);
       case 'guide':
         return GuideWizard(initialPage: _guideInitialPage);
       case 'settings':

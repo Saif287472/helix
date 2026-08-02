@@ -1,0 +1,311 @@
+import 'package:flutter/material.dart';
+import '../admin_client.dart';
+
+/// Registered-user directory and per-user access controls. Locked like
+/// Dashboard/Config/Invites until a server is connected.
+class UsersTab extends StatefulWidget {
+  const UsersTab({super.key, required this.client});
+
+  final AdminClient client;
+
+  @override
+  State<UsersTab> createState() => _UsersTabState();
+}
+
+class _UsersTabState extends State<UsersTab> {
+  static const _pageSize = 20;
+
+  List<Map<String, dynamic>> _users = [];
+  int _offset = 0;
+  bool _hasMore = false;
+  bool _loading = false;
+  String? _error;
+  String? _busyAccountId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers({int offset = 0}) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.client.getUsers(
+        limit: _pageSize,
+        offset: offset,
+      );
+      final users = (result['users'] as List).cast<Map<String, dynamic>>();
+      if (!mounted) return;
+      setState(() {
+        _users = users;
+        _offset = offset;
+        _hasMore = users.length == _pageSize;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _suspend(String accountId) async {
+    setState(() => _busyAccountId = accountId);
+    try {
+      await widget.client.suspendUser(accountId);
+      await _loadUsers(offset: _offset);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyAccountId = null);
+    }
+  }
+
+  Future<void> _unsuspend(String accountId) async {
+    setState(() => _busyAccountId = accountId);
+    try {
+      await widget.client.unsuspendUser(accountId);
+      await _loadUsers(offset: _offset);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyAccountId = null);
+    }
+  }
+
+  Future<void> _confirmDelete(String accountId, String displayLabel) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this user?'),
+        content: Text(
+          'This permanently deletes $displayLabel\'s account and all of '
+          'their messages, devices, and contacts. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFFF3366),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete permanently'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busyAccountId = accountId);
+    try {
+      await widget.client.deleteUser(accountId);
+      await _loadUsers(offset: _offset);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyAccountId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Card(
+        color: const Color(0xFF161624),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Users',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () => _loadUsers(offset: _offset),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Everyone registered on this server, and who invited them.',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              if (_loading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_users.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'No users registered yet.',
+                    style: TextStyle(color: Colors.white38),
+                  ),
+                )
+              else
+                _buildTable(),
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: Color(0xFFFF3366),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+              if (!_loading && (_users.isNotEmpty || _offset > 0)) ...[
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      key: const Key('users_previous_page'),
+                      onPressed: _offset > 0
+                          ? () => _loadUsers(
+                              offset: (_offset - _pageSize).clamp(0, 1 << 30),
+                            )
+                          : null,
+                      child: const Text('Previous'),
+                    ),
+                    TextButton(
+                      key: const Key('users_next_page'),
+                      onPressed: _hasMore
+                          ? () => _loadUsers(offset: _offset + _pageSize)
+                          : null,
+                      child: const Text('Next'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTable() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: const [
+          DataColumn(label: Text('Display Name')),
+          DataColumn(label: Text('Account ID')),
+          DataColumn(label: Text('Phone')),
+          DataColumn(label: Text('Invite Used')),
+          DataColumn(label: Text('Joined')),
+          DataColumn(label: Text('Status')),
+          DataColumn(label: Text('Actions')),
+        ],
+        rows: _users.map((user) {
+          final accountId = user['account_id'] as String? ?? '';
+          final status = user['status'] as String? ?? 'ACTIVE';
+          final isSuspended = status == 'SUSPENDED';
+          final isBusy = _busyAccountId == accountId;
+          final displayName = user['display_name'] as String? ?? '';
+          return DataRow(
+            cells: [
+              DataCell(
+                Text(displayName.isEmpty ? '—' : displayName),
+              ),
+              DataCell(Text(accountId)),
+              DataCell(Text(_maskedPhone(user['phone_last4'] as String?))),
+              DataCell(Text(user['invite_id'] as String? ?? '—')),
+              DataCell(Text(_formatTimestamp(user['created_at']))),
+              DataCell(_statusChip(isSuspended)),
+              DataCell(
+                isBusy
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              isSuspended
+                                  ? Icons.play_circle_outline
+                                  : Icons.pause_circle_outline,
+                            ),
+                            tooltip: isSuspended
+                                ? 'Restore access'
+                                : 'Suspend access (temporary)',
+                            onPressed: () => isSuspended
+                                ? _unsuspend(accountId)
+                                : _suspend(accountId),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_forever_outlined,
+                              color: Color(0xFFFF3366),
+                            ),
+                            tooltip: 'Delete permanently',
+                            onPressed: () => _confirmDelete(
+                              accountId,
+                              displayName.isEmpty ? accountId : displayName,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _statusChip(bool isSuspended) {
+    final color = isSuspended ? Colors.orange : Colors.green;
+    return Chip(
+      label: Text(
+        isSuspended ? 'SUSPENDED' : 'ACTIVE',
+        style: const TextStyle(fontSize: 12),
+      ),
+      backgroundColor: color.withValues(alpha: 0.15),
+      side: BorderSide(color: color.withValues(alpha: 0.4)),
+      labelStyle: TextStyle(color: color),
+    );
+  }
+
+  /// The server only ever stores the last 2-4 digits (see
+  /// AuthRegistrationHandlers) - there's no full phone number to unmask,
+  /// this is simply how that hint is displayed.
+  String _maskedPhone(String? last4) {
+    if (last4 == null || last4.isEmpty) return '—';
+    return '•••• $last4';
+  }
+
+  String _formatTimestamp(dynamic value) {
+    if (value is! int || value == 0) return '—';
+    final dt = DateTime.fromMillisecondsSinceEpoch(value);
+    return '${dt.year}-${_pad2(dt.month)}-${_pad2(dt.day)}';
+  }
+
+  String _pad2(int n) => n.toString().padLeft(2, '0');
+}
