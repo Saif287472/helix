@@ -1,13 +1,31 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// AdminClient's auto-connect makes a real socket connection, which doesn't
+/// interleave with pumpAndSettle()'s frame-pumping the way fake timers do.
+/// tester.runAsync() steps outside the fake-async test zone so the real
+/// Future actually resolves, then a couple of pumps flush the resulting
+/// setState into the widget tree.
+Future<void> _settleWithRealIO(WidgetTester tester) async {
+  for (var i = 0; i < 20; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump();
+    if (find.byType(CircularProgressIndicator).evaluate().isEmpty) return;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    HttpOverrides.global = null;
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
   });
@@ -128,8 +146,8 @@ void main() {
 
       expect(find.text('Connect Helix Admin'), findsOneWidget);
       expect(find.text('Welcome to self-hosting Helix'), findsNothing);
-      // The pushed connection screen should have popped itself out of the
-      // way so the guide page is actually visible, not hidden behind it.
+      // The connection screen should have gotten out of the way so the
+      // guide page is actually visible, not hidden behind it.
       expect(find.byKey(const Key('settings_url_field')), findsNothing);
 
       // A normal sidebar visit to the guide afterwards still starts fresh,
@@ -227,6 +245,87 @@ void main() {
         findsOneWidget,
       );
       expect(find.byIcon(Icons.menu), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'an unauthorized saved token is cleared and reported on launch, not '
+    'silently kept',
+    (tester) async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((request) async {
+        request.response.statusCode = 401;
+        await request.response.close();
+      });
+      final serverUrl = 'http://${server.address.address}:${server.port}';
+
+      SharedPreferences.setMockInitialValues({
+        'intro_shown': true,
+        'server_url': serverUrl,
+      });
+      FlutterSecureStorage.setMockInitialValues({'admin_token': 'dead-token'});
+
+      await tester.pumpWidget(const HelixAdminApp());
+      await _settleWithRealIO(tester);
+      await _settleWithRealIO(tester);
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Not connected'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const Key('settings_connection_status_card')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('expired or was revoked'), findsOneWidget);
+      final tokenField = tester.widget<TextField>(
+        find.byKey(const Key('settings_token_field')),
+      );
+      expect(tokenField.controller?.text, isEmpty);
+      expect(
+        await const FlutterSecureStorage().read(key: 'admin_token'),
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'an unreachable saved server keeps the token and reports connectivity, '
+    'not "revoked" - a network blip must not force a full re-pair',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'intro_shown': true,
+        // Nothing listens here - a fast, real connection-refused error.
+        'server_url': 'http://127.0.0.1:1',
+      });
+      FlutterSecureStorage.setMockInitialValues({
+        'admin_token': 'still-good-token',
+      });
+
+      await tester.pumpWidget(const HelixAdminApp());
+      await _settleWithRealIO(tester);
+      await _settleWithRealIO(tester);
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Not connected'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const Key('settings_connection_status_card')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining("Couldn't reach"), findsOneWidget);
+      final tokenField = tester.widget<TextField>(
+        find.byKey(const Key('settings_token_field')),
+      );
+      expect(tokenField.controller?.text, equals('still-good-token'));
+      expect(
+        await const FlutterSecureStorage().read(key: 'admin_token'),
+        equals('still-good-token'),
+      );
     },
   );
 }

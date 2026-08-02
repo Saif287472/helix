@@ -66,6 +66,7 @@ class IntroScreen extends StatelessWidget {
                         onPressed: onGetStarted,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF8A2BE2),
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),

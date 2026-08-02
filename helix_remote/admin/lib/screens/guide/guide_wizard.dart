@@ -156,6 +156,7 @@ class _GuideWizardState extends State<GuideWizard> {
       label: const Text('Next'),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF8A2BE2),
+        foregroundColor: Colors.white,
       ),
     );
 

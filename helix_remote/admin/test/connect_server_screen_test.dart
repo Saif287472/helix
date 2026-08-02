@@ -12,6 +12,7 @@ ConnectServerScreen _connectScreen({
   VoidCallback? onOpenConnectGuide,
   VoidCallback? onConnect,
   VoidCallback? onDisconnect,
+  VoidCallback? onBack,
   bool isConnected = false,
   bool isConnecting = false,
   String? errorMessage,
@@ -25,6 +26,7 @@ ConnectServerScreen _connectScreen({
     onConnect: onConnect ?? () {},
     onDisconnect: onDisconnect ?? () {},
     onOpenConnectGuide: onOpenConnectGuide ?? () {},
+    onBack: onBack ?? () {},
   );
 }
 
@@ -186,5 +188,29 @@ void main() {
     await tester.tap(find.text('Disconnect'));
     await tester.pump();
     expect(disconnected, isTrue);
+  });
+
+  testWidgets('the back button reports a tap instead of trying to pop', (
+    tester,
+  ) async {
+    // This screen isn't pushed via Navigator (see SettingsTab's doc
+    // comment on onOpenConnectServer for why) - it needs its own back
+    // action rather than relying on an automatic one, since a bare
+    // Navigator.pop() here would have nothing to pop and either no-op or
+    // throw.
+    var wentBack = false;
+    await tester.pumpWidget(
+      _wrap(
+        _connectScreen(
+          tokenController: TextEditingController(),
+          onBack: () => wentBack = true,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pump();
+
+    expect(wentBack, isTrue);
   });
 }
