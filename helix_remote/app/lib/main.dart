@@ -21,6 +21,23 @@ import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+/// Caps how far the device's system font-size/accessibility setting can
+/// scale text, via the recommended `MaterialApp.builder` hook. Several
+/// fixed-size layout elements (nav bar height, filter chip height, quick
+/// action bubbles) don't grow with text scale, so leaving it unbounded
+/// clips or overflows them once the system setting goes much past 1x - a
+/// max around 1.3x still gives real accessibility benefit without that.
+/// Never clamps below 1x, so a user who prefers smaller text still gets it.
+Widget _clampTextScale(BuildContext context, Widget? child) {
+  final mediaQuery = MediaQuery.of(context);
+  return MediaQuery(
+    data: mediaQuery.copyWith(
+      textScaler: mediaQuery.textScaler.clamp(maxScaleFactor: 1.3),
+    ),
+    child: child!,
+  );
+}
+
 void main() {
   FlutterError.onError = (details) {
     debugPrint('[Helix ERROR] ${details.exception}');
@@ -231,6 +248,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         ),
       ),
       themeMode: ThemeMode.system,
+      builder: _clampTextScale,
       home: _buildBootHome(),
     );
   }
@@ -713,6 +731,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
         ),
       ),
       themeMode: ThemeMode.system,
+      builder: _clampTextScale,
       home: _buildBaseScreen(),
     );
   }
