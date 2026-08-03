@@ -10,6 +10,10 @@
 //   P05-W03  a pasted full join link in the invite field is reduced to the
 //            bare code, since admins hand out links but this field expects
 //            only the code.
+//   P05-W04  the phone field's error text isn't limited to one line -
+//            server-provided errors (e.g. an SMS gateway's rejection
+//            reason) are longer than a plain validation label and must not
+//            be truncated with an ellipsis.
 
 import 'dart:io';
 
@@ -255,6 +259,43 @@ void main() {
 
       expect(find.text('UiFzSP3Vgp6XA7fEby6-IPb5i'), findsOneWidget);
       expect(find.textContaining('hr.agiletechbd.com'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'P05-W04: the phone field allows multi-line error text instead of '
+    'truncating it',
+    (tester) async {
+      final dir = Directory.systemTemp.createTempSync('p05_w04_');
+      addTearDown(() {
+        if (dir.existsSync()) {
+          try {
+            dir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final root = RemoteCompositionRoot.withConfig(
+        _productConfig(dir.path),
+        devConfig: _devConfig(dir.path),
+        keyValueStore: _InMemoryKeyValueStore(),
+      );
+
+      await tester.pumpWidget(HelixRemoteApp(root: root));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
+      }
+
+      final phoneField = tester.widget<TextField>(find.byType(TextField).last);
+      // InputDecoration.errorMaxLines defaults to null, which truncates
+      // errorText to a single line with an ellipsis - a long server error
+      // (e.g. "Failed to send verification SMS: ...") would be cut off.
+      expect(phoneField.decoration?.errorMaxLines, isNotNull);
+      expect(phoneField.decoration!.errorMaxLines! > 1, isTrue);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
