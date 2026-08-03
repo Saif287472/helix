@@ -8,6 +8,9 @@ mixin AuthInviteHandlers on AuthModuleBase {
 
   /// Validates an invite code without consuming it, so the client can fail
   /// fast on a bad/expired code before starting the phone+OTP signup flow.
+  /// On failure, `reason` distinguishes *why* (not_found / already_used /
+  /// cancelled / expired) so the client can show a specific explanation
+  /// instead of a generic "invalid" message.
   Future<Response> _lookupInviteHandler(Request request) async {
     final code = request.url.queryParameters['invite_code'];
     if (code == null || code.isEmpty) {
@@ -17,15 +20,28 @@ mixin AuthInviteHandlers on AuthModuleBase {
     }
 
     final invite = db.getInviteByCodeHash(hashInviteCode(code));
-    final now = _now().millisecondsSinceEpoch;
-    final valid =
-        invite != null &&
-        invite['status'] == 'PENDING' &&
-        (invite['expires_at'] as int) > now;
-
-    if (!valid) {
+    if (invite == null) {
       return Response.ok(
-        jsonEncode({'valid': false}),
+        jsonEncode({'valid': false, 'reason': 'not_found'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    if (invite['status'] == 'REDEEMED') {
+      return Response.ok(
+        jsonEncode({'valid': false, 'reason': 'already_used'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    if (invite['status'] == 'CANCELLED') {
+      return Response.ok(
+        jsonEncode({'valid': false, 'reason': 'cancelled'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    final now = _now().millisecondsSinceEpoch;
+    if ((invite['expires_at'] as int) <= now) {
+      return Response.ok(
+        jsonEncode({'valid': false, 'reason': 'expired'}),
         headers: {'Content-Type': 'application/json'},
       );
     }
