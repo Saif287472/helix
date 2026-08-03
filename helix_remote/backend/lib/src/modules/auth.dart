@@ -7,6 +7,8 @@ import 'package:crypto/crypto.dart' as crypto_pkg;
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
+import 'package:helix_remote_backend/src/phone_hash.dart' as phone_hash;
+import 'package:helix_remote_backend/src/sms_provider.dart';
 
 part 'auth/challenge_login.dart';
 part 'auth/devices.dart';
@@ -38,6 +40,12 @@ abstract class AuthModuleBase {
   /// HTTP endpoint - a self-hosted admin token must never be able to flip
   /// this and bypass their own invite-only registration requirement.
   bool get globalInstanceMode;
+
+  /// Delivers OTP codes by real SMS when configured. When
+  /// [SmsProvider.isConfigured] is false (no deployment credentials set),
+  /// `_requestPhoneOtpHandler` falls back to returning the code directly in
+  /// the response instead of calling this - see that handler's doc comment.
+  SmsProvider get smsProvider;
 
   /// Verifies (without consuming) that `code` matches the latest,
   /// unexpired, unconsumed OTP challenge for `phoneHash`. Declared here so
@@ -86,6 +94,8 @@ class AuthModule extends AuthModuleBase
   final String publicBaseUrl;
   @override
   final bool globalInstanceMode;
+  @override
+  final SmsProvider smsProvider;
 
   AuthModule(
     this.db,
@@ -95,6 +105,7 @@ class AuthModule extends AuthModuleBase
     this.configuredAudience,
     this.publicBaseUrl = '',
     this.globalInstanceMode = false,
+    this.smsProvider = const NoopSmsProvider(),
   }) : _now = now ?? DateTime.now;
 
   Router get router {

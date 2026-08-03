@@ -565,6 +565,11 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   bool _initializing = false;
   bool _registering = false;
   bool _sendingCode = false;
+  /// Whether the last OTP request came back as a placeholder code (shown
+  /// via local notification) rather than a real SMS - see
+  /// `RemoteCompositionRegistration.requestOtp`. Defaults to true so the
+  /// placeholder notice stays visible until a request actually completes.
+  bool _otpIsPlaceholder = true;
   _SetupPath _setupPath = _SetupPath.choose;
   _CreateAccountStep _createAccountStep = _CreateAccountStep.enterDetails;
   RemoteCallStatus? _activeCallStatus;
@@ -989,17 +994,24 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   }
 
   Widget _buildOtpStep() {
+    final phoneNumber = RemoteAccountValidation.normalizePhoneNumber(
+      _phoneController.text,
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'We sent a code to ${RemoteAccountValidation.normalizePhoneNumber(_phoneController.text)}. '
-          'Since real SMS delivery isn\'t available yet, check your '
-          'notifications for it.',
+          _otpIsPlaceholder
+              ? 'We sent a code to $phoneNumber. Since real SMS delivery '
+                    'isn\'t available yet, check your notifications for it.'
+              : 'We texted a verification code to $phoneNumber. It may '
+                    'take a moment to arrive.',
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 12),
-        const OtpPlaceholderNotice(),
+        if (_otpIsPlaceholder) ...[
+          const SizedBox(height: 12),
+          const OtpPlaceholderNotice(),
+        ],
         const SizedBox(height: 16),
         TextField(
           controller: _otpController,
@@ -1066,9 +1078,12 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     });
 
     try {
-      await widget.root.requestOtp(phoneNumber);
+      final isPlaceholder = await widget.root.requestOtp(phoneNumber);
       if (mounted) {
-        setState(() => _createAccountStep = _CreateAccountStep.enterOtp);
+        setState(() {
+          _otpIsPlaceholder = isPlaceholder;
+          _createAccountStep = _CreateAccountStep.enterOtp;
+        });
       }
     } catch (e, st) {
       AppLogger.instance.warn('auth', 'OTP request failed: $e', st);

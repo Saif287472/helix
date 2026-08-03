@@ -22,7 +22,10 @@ abstract class HelixRemoteRestClient {
 
   Future<Map<String, dynamic>> fetchDiscoverySalt();
 
-  Future<Map<String, dynamic>> requestPhoneOtp({required String phoneHash});
+  Future<Map<String, dynamic>> requestPhoneOtp({
+    required String phoneHash,
+    required String phoneNumber,
+  });
 
   Future<Map<String, dynamic>> lookupInvite({required String inviteCode});
 

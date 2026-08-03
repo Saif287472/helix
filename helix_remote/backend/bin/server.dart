@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
+import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 import 'src/admin_token_file.dart';
 import 'src/terminal_qr.dart';
@@ -84,6 +85,27 @@ void main() async {
     }
   }
 
+  // Bulk SMS (BulkSMSBD) — optional but required for real OTP delivery.
+  // Without it, phone verification falls back to returning the code
+  // directly in the API response (see AuthPhoneOtpHandlers) - fine for
+  // local dev, not for a real deployment.
+  final smsApiKey = Platform.environment['HELIX_REMOTE_SMS_API_KEY'] ?? '';
+  final smsSenderId = Platform.environment['HELIX_REMOTE_SMS_SENDER_ID'] ?? '';
+  final SmsProvider smsProvider;
+  if (smsApiKey.isNotEmpty && smsSenderId.isNotEmpty) {
+    smsProvider = BulkSmsBdProvider(apiKey: smsApiKey, senderId: smsSenderId);
+    print('SMS delivery configured via BulkSMSBD, sender ID: $smsSenderId');
+  } else {
+    smsProvider = const NoopSmsProvider();
+    if (!devMode) {
+      stderr.writeln(
+        'WARNING: HELIX_REMOTE_SMS_API_KEY or HELIX_REMOTE_SMS_SENDER_ID is '
+        'not set. Phone verification codes will be returned directly in '
+        'the API response instead of sent by SMS.',
+      );
+    }
+  }
+
   print('Starting Helix Remote backend database at: $dbPath');
   final sqliteDb = sqlite3.open(dbPath);
 
@@ -95,6 +117,7 @@ void main() async {
     turnUrl: turnUrl,
     turnSecret: turnSecret,
     pushProvider: pushProvider,
+    smsProvider: smsProvider,
   );
 
   final identity = await ServerIdentity.loadOrCreate(server.db);

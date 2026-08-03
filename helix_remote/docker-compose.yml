@@ -30,6 +30,11 @@ services:
       # Configure FCM if needed
       # - HELIX_REMOTE_FCM_PROJECT_ID=your-project-id
       # - HELIX_REMOTE_FCM_ACCESS_TOKEN=your-access-token
+      # Configure BulkSMSBD for real OTP delivery. Without these, phone
+      # verification codes come back directly in the API response instead
+      # of being texted (fine for local dev, not for a real deployment).
+      # - HELIX_REMOTE_SMS_API_KEY=your-bulksmsbd-api-key
+      # - HELIX_REMOTE_SMS_SENDER_ID=your-approved-sender-id
     restart: unless-stopped
 
 volumes:
