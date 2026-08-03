@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   helix-backend:
     build:
@@ -10,31 +8,8 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - helix-data:/app/data
-    environment:
-      - HELIX_REMOTE_PORT=8080
-      - HELIX_REMOTE_HOST=0.0.0.0
-      - HELIX_REMOTE_DEV_MODE=0
-      - HELIX_REMOTE_JWT_SECRET=production_jwt_secret_please_change_me_to_something_secure
-      - HELIX_REMOTE_ADMIN_TOKEN=production_admin_token_please_change_me_to_something_secure
-      - HELIX_REMOTE_DB_PATH=/app/data/remote_backend.db
-      - HELIX_REMOTE_ATTACHMENTS_DIR=/app/data/attachments
-      - HELIX_REMOTE_LOG_FILE=/app/data/server.log
-      # Set this to your server's public URL (the one behind your reverse
-      # proxy, e.g. https://your-domain.example) - without it, admin-issued
-      # invite links come back without a scheme/host (just /join?invite=...)
-      # and are unusable once shared.
-      - HELIX_REMOTE_PUBLIC_BASE_URL=https://your-domain.example
-      # Configure TURN if needed
-      # - HELIX_REMOTE_TURN_URL=turn:your-turn-host:port
-      # - HELIX_REMOTE_TURN_SECRET=your-turn-secret
-      # Configure FCM if needed
-      # - HELIX_REMOTE_FCM_PROJECT_ID=your-project-id
-      # - HELIX_REMOTE_FCM_ACCESS_TOKEN=your-access-token
-      # Configure BulkSMSBD for real OTP delivery. Without these, phone
-      # verification codes come back directly in the API response instead
-      # of being texted (fine for local dev, not for a real deployment).
-      # - HELIX_REMOTE_SMS_API_KEY=your-bulksmsbd-api-key
-      # - HELIX_REMOTE_SMS_SENDER_ID=your-approved-sender-id
+    env_file:
+      - .env
     restart: unless-stopped
 
 volumes:

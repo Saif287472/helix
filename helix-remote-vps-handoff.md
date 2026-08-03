@@ -56,12 +56,17 @@ why, so you don't re-break things that were already debugged.
   the expected 401 JSON body from the Dart backend.
 
 ## Secrets currently in place (already generated, don't regenerate unless rotating)
-Both live inside `docker-compose.yml` on the server as env vars for the `helix-backend`
-service — read them from there rather than asking the user to remember them:
+As of the `.env`-file split (see "Deployment workflow" below), these live in
+`/opt/helix-remote/helix_remote/.env` on the server — a gitignored file, never
+committed, never touched by `git pull` — rather than inline in `docker-compose.yml`.
+Read them from there rather than asking the user to remember them:
 - `HELIX_REMOTE_JWT_SECRET` — random 32-byte hex, replaced the repo's unsafe
   placeholder default.
 - `HELIX_REMOTE_ADMIN_TOKEN` — random 24-byte hex, added (wasn't in the original
   compose file at all). Needed for the admin console / operability endpoints later.
+- `HELIX_REMOTE_SMS_API_KEY` / `HELIX_REMOTE_SMS_SENDER_ID` — BulkSMSBD credentials
+  for real OTP delivery, if configured. See `.env.example` in the repo root for the
+  full list of what goes in `.env`.
 
 ## Deviations from repo defaults (important — read before editing Dockerfile/compose)
 The repo's checked-in `backend/Dockerfile` does **not** work as-is in this environment.
@@ -144,6 +149,16 @@ nginx config (now tracked at `helix_remote/deploy/nginx/hr.agiletechbd.com.conf`
 4. If the nginx config changed: copy `deploy/nginx/hr.agiletechbd.com.conf` to
    `/etc/nginx/sites-available/hr.agiletechbd.com`, then `nginx -t && systemctl
    reload nginx`.
+
+**`.env` split (2026-08-03):** `docker-compose.yml` used to have real secrets
+(JWT secret, admin token) hand-edited directly into it on the server, which
+permanently diverged it from the repo's placeholder-only version and made
+every `git pull` that touched the file conflict (had to `git stash`/`pull`/
+`stash pop` around it). Fixed: secrets now live in a separate `.env` file next
+to `docker-compose.yml`, gitignored, created once and never touched by git
+again — see `.env.example` in the repo root for the full list of keys.
+`docker-compose.yml` itself is now identical between the repo and the VPS, so
+step 2 above is a plain fast-forward from here on, no stashing needed.
 
 **Known-fixed incident (2026-07-26):** the nginx config unconditionally sent
 `Connection: upgrade` on every proxied request (not just `/api/v1/ws`), which
