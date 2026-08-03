@@ -4,6 +4,12 @@
 //   P03-W01  resetRequired state renders the Reset button (no dead-end screen).
 //   P03-W02  authenticatedAndSyncing renders the Syncing screen, not the ready screen.
 //   P05-W01  fresh-device recovery is visibly disabled and accepts no code.
+//   P05-W02  tapping the invalid-invite icon shows the reason (not a silent
+//            no-op - ScaffoldMessenger.of needs a context from inside the
+//            MaterialApp this State builds, not the State's own context).
+//   P05-W03  a pasted full join link in the invite field is reduced to the
+//            bare code, since admins hand out links but this field expects
+//            only the code.
 
 import 'dart:io';
 
@@ -164,6 +170,91 @@ void main() {
       );
       expect(requestOtpButton.onPressed, isNull);
       expect(root.startupState, RemoteStartupState.unauthenticated);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'P05-W02: tapping the invalid invite icon shows a snackbar with the '
+    'reason',
+    (tester) async {
+      final dir = Directory.systemTemp.createTempSync('p05_w02_');
+      addTearDown(() {
+        if (dir.existsSync()) {
+          try {
+            dir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final root = RemoteCompositionRoot.withConfig(
+        _productConfig(dir.path),
+        devConfig: _devConfig(dir.path),
+        keyValueStore: _InMemoryKeyValueStore(),
+      );
+
+      await tester.pumpWidget(HelixRemoteApp(root: root));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
+      }
+
+      await tester.enterText(find.byType(TextField).first, 'BADCODE123');
+      // Move focus to the phone field to trigger blur-validation, same as a
+      // real device.
+      await tester.tap(find.byType(TextField).last);
+      await tester.pump();
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.byIcon(Icons.error).evaluate().isNotEmpty) break;
+      }
+      expect(find.byIcon(Icons.error), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.error));
+      await tester.pump();
+      expect(find.byType(SnackBar), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'P05-W03: pasting a full join link into the invite field extracts the '
+    'bare code',
+    (tester) async {
+      final dir = Directory.systemTemp.createTempSync('p05_w03_');
+      addTearDown(() {
+        if (dir.existsSync()) {
+          try {
+            dir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final root = RemoteCompositionRoot.withConfig(
+        _productConfig(dir.path),
+        devConfig: _devConfig(dir.path),
+        keyValueStore: _InMemoryKeyValueStore(),
+      );
+
+      await tester.pumpWidget(HelixRemoteApp(root: root));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
+      }
+
+      await tester.enterText(
+        find.byType(TextField).first,
+        'https://hr.agiletechbd.com/join?invite=UiFzSP3Vgp6XA7fEby6-IPb5i',
+      );
+      await tester.tap(find.byType(TextField).last);
+      await tester.pump();
+
+      expect(find.text('UiFzSP3Vgp6XA7fEby6-IPb5i'), findsOneWidget);
+      expect(find.textContaining('hr.agiletechbd.com'), findsNothing);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();

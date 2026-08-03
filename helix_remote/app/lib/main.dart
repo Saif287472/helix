@@ -1014,16 +1014,26 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
       case _InviteCheckState.valid:
         return const Icon(Icons.check_circle, color: Colors.green);
       case _InviteCheckState.invalid:
-        return IconButton(
-          icon: Icon(Icons.error, color: Theme.of(context).colorScheme.error),
-          tooltip: _inviteCheckReason ?? 'Invalid invitation',
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(_inviteCheckReason ?? 'Invalid invitation.'),
-              ),
-            );
-          },
+        // Builder gives the onPressed callback a context from *inside* the
+        // MaterialApp this State builds - `this.context` (the State's own
+        // context) sits above that MaterialApp, so ScaffoldMessenger.of
+        // would never find the ScaffoldMessenger the MaterialApp provides,
+        // silently no-opping the tap instead of showing the reason.
+        return Builder(
+          builder: (context) => IconButton(
+            icon: Icon(
+              Icons.error,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            tooltip: _inviteCheckReason ?? 'Invalid invitation',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_inviteCheckReason ?? 'Invalid invitation.'),
+                ),
+              );
+            },
+          ),
         );
     }
   }
@@ -1042,12 +1052,32 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     _phoneController.text = '${_selectedCountry.dialCode}$national';
   }
 
+  /// Pulls the bare code out of a pasted `.../join?invite=CODE` link - this
+  /// field is labeled the same as the one on the personal-server entry
+  /// screen, which *does* expect a full link, so admins share (and users
+  /// paste) full links here too even though only the bare code is normally
+  /// expected. Returns [raw] unchanged if it doesn't look like a link.
+  String _extractInviteCode(String raw) {
+    if (!raw.contains('invite=')) return raw;
+    final withScheme = raw.startsWith('http://') || raw.startsWith('https://')
+        ? raw
+        : 'https://$raw';
+    final code = Uri.tryParse(withScheme)?.queryParameters['invite'];
+    return (code != null && code.isNotEmpty) ? code : raw;
+  }
+
   /// Auto-validates the invite code against the server on focus loss (see
   /// the `_inviteFocusNode` listener in `initState`) - validates the
   /// invitation before sending the OTP, to avoid unnecessary verification
   /// attempts against an invite that was never going to work.
   Future<void> _validateInviteCode() async {
-    final code = _inviteController.text.trim();
+    final code = _extractInviteCode(_inviteController.text.trim());
+    if (code != _inviteController.text) {
+      _inviteController.value = TextEditingValue(
+        text: code,
+        selection: TextSelection.collapsed(offset: code.length),
+      );
+    }
     if (code.isEmpty) {
       if (mounted) {
         setState(() {
