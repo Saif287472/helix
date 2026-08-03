@@ -7,7 +7,7 @@
 
 import 'dart:io';
 
-import 'package:flutter/widgets.dart' hide DiagnosticLevel;
+import 'package:flutter/material.dart' hide DiagnosticLevel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
@@ -101,7 +101,7 @@ void main() {
       // widget assertion does not depend on live runtime I/O.
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Create new account').evaluate().isNotEmpty) break;
+        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
       }
       root.setAuthenticated('tok-w02');
       await tester.pump();
@@ -113,7 +113,7 @@ void main() {
 
       // authenticatedAndSyncing now shows HomeScreen immediately (offline-first
       // design, _buildSyncingScreen removed). The setup screen must be gone.
-      expect(find.text('Create new account'), findsNothing);
+      expect(find.text('Server invitation code'), findsNothing);
       // HomeScreen bottom nav is visible with its tab labels.
       expect(find.text('Chats'), findsOneWidget);
 
@@ -123,7 +123,8 @@ void main() {
   );
 
   testWidgets(
-    'P05-W01: setup recovery is disabled instead of accepting restore codes',
+    'P05-W01: no restore-account UI exists, and Request OTP starts disabled '
+    'until an invite is entered',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p05_w01_');
       addTearDown(() {
@@ -143,21 +144,25 @@ void main() {
       await tester.pumpWidget(HelixRemoteApp(root: root));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Create new account').evaluate().isNotEmpty) break;
+        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
       }
 
-      expect(find.text('Create new account'), findsOneWidget);
-      expect(find.text('Restore existing account unavailable'), findsOneWidget);
-      expect(find.text('Unavailable'), findsOneWidget);
+      // The old "Create new account / Restore existing account" chooser is
+      // gone entirely - onboarding is a single, deterministic flow now, not
+      // a disabled-but-visible restore option.
+      expect(find.text('Server invitation code'), findsOneWidget);
+      expect(find.text('Restore existing account'), findsNothing);
       expect(find.text('Restore account'), findsNothing);
       expect(find.text('Restore code'), findsNothing);
       expect(find.text('Enter your restore code'), findsNothing);
+      expect(find.text('Unavailable'), findsNothing);
 
-      await tester.tap(find.text('Restore existing account unavailable'));
-      await tester.pump();
-
-      expect(find.text('Restore account'), findsNothing);
-      expect(find.text('Restore code'), findsNothing);
+      // No invite code entered yet - Request OTP must stay disabled so an
+      // unvalidated invitation can never reach the OTP request.
+      final requestOtpButton = tester.widget<FilledButton>(
+        find.byType(FilledButton),
+      );
+      expect(requestOtpButton.onPressed, isNull);
       expect(root.startupState, RemoteStartupState.unauthenticated);
 
       await tester.pumpWidget(const SizedBox.shrink());
