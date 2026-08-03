@@ -82,6 +82,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
   String _cacheDir = '';
   String _currentServerUrl = kHelixGlobalServerUrl;
   String? _pendingInviteCode;
+  String? _pendingPhoneNumber;
 
   @override
   void initState() {
@@ -185,10 +186,12 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
     _initialUrlError = null;
     if (choice is ServerInviteChoice) {
       _pendingInviteCode = choice.inviteCode;
+      _pendingPhoneNumber = choice.phoneNumber;
       try {
         await _onConnectUrl(choice.serverUrl);
       } catch (e) {
         _pendingInviteCode = null;
+        _pendingPhoneNumber = null;
         if (mounted) {
           setState(() {
             _initialUrlError = e.toString();
@@ -226,6 +229,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         root: _root!,
         onChangeServerUrl: _onChangeServerUrl,
         initialInviteCode: _pendingInviteCode,
+        initialPhoneNumber: _pendingPhoneNumber,
       );
     }
     return MaterialApp(
@@ -536,6 +540,7 @@ class HelixRemoteApp extends StatefulWidget {
     required this.root,
     this.onChangeServerUrl,
     this.initialInviteCode,
+    this.initialPhoneNumber,
   });
 
   final RemoteCompositionRoot root;
@@ -545,6 +550,11 @@ class HelixRemoteApp extends StatefulWidget {
   /// (Helix Global or a personal server), so the create-account form is
   /// pre-filled and the user doesn't have to re-enter or re-paste it.
   final String? initialInviteCode;
+
+  /// E.164 phone number carried over from the personal-server invite entry
+  /// screen (the only place it's collected before this point), so the
+  /// create-account form doesn't ask for it a second time.
+  final String? initialPhoneNumber;
 
   @override
   State<HelixRemoteApp> createState() => _HelixRemoteAppState();
@@ -581,6 +591,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   _InviteCheckState? _inviteCheckState;
   String? _inviteCheckReason;
   Country _selectedCountry = kDefaultCountry;
+  bool _prefilledInviteChecked = false;
   RemoteCallStatus? _activeCallStatus;
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _nationalNumberController =
@@ -605,30 +616,22 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     if (initialInvite != null && initialInvite.isNotEmpty) {
       _inviteController.text = initialInvite;
     }
+    final initialPhoneNumber = widget.initialPhoneNumber;
+    if (initialPhoneNumber != null && initialPhoneNumber.isNotEmpty) {
+      final split = splitE164PhoneNumber(initialPhoneNumber);
+      _selectedCountry = split.country;
+      _nationalNumberController.text = split.nationalNumber;
+      _syncPhoneController();
+    }
     _inviteFocusNode.addListener(() {
       if (!_inviteFocusNode.hasFocus) _validateInviteCode();
     });
-    var prefilledInviteChecked = false;
     _stateSub = widget.root.startupStateChanges.listen((state) {
       if (!mounted) return;
       setState(() {
         _startupState = state;
         _errorMessage = widget.root.lastError;
       });
-      // Deep-linked/auto-issued invites (Helix Global, or a personal-server
-      // link already validated on the choice screen) are pre-filled - check
-      // it as soon as the setup screen is actually reachable (restClient
-      // ready) so the checkmark shows immediately instead of waiting for
-      // the user to focus and blur a field they never touched. Guarded to
-      // fire once: startupStateChanges can re-emit `unauthenticated` later
-      // (e.g. after a session reset) and re-checking then would stomp on
-      // whatever the user has since typed.
-      if (!prefilledInviteChecked &&
-          state == RemoteStartupState.unauthenticated &&
-          _inviteController.text.isNotEmpty) {
-        prefilledInviteChecked = true;
-        _validateInviteCode();
-      }
     });
     _callSub = widget.root.callStatusChanges.listen((status) {
       if (!mounted) return;
@@ -843,12 +846,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
               constraints: const BoxConstraints(maxWidth: 440),
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: switch (_createAccountStep) {
-                  _CreateAccountStep.enterDetails => _buildAccountDetailsStep(),
-                  _CreateAccountStep.enterOtp => _buildOtpStep(),
-                  _CreateAccountStep.enterDisplayName =>
-                    _buildDisplayNameStep(),
-                },
+                child: _buildCreateAccountStepSafely(),
               ),
             ),
           ),
@@ -857,8 +855,55 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     );
   }
 
+  /// Wraps step construction in a try/catch so a bug in one of these steps
+  /// shows an actual (if ugly) error on screen instead of a silent blank
+  /// page - release builds strip the framework's own red error screen, so
+  /// without this a thrown exception here is otherwise invisible.
+  Widget _buildCreateAccountStepSafely() {
+    try {
+      return switch (_createAccountStep) {
+        _CreateAccountStep.enterDetails => _buildAccountDetailsStep(),
+        _CreateAccountStep.enterOtp => _buildOtpStep(),
+        _CreateAccountStep.enterDisplayName => _buildDisplayNameStep(),
+      };
+    } catch (e, st) {
+      AppLogger.instance.error('registration_ui', '$e', st);
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Something went wrong loading this screen.',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          SelectableText('$e'),
+          const SizedBox(height: 16),
+          OutlinedButton(
+            onPressed: () =>
+                setState(() => _createAccountStep = _createAccountStep),
+            child: const Text('Retry'),
+          ),
+        ],
+      );
+    }
+  }
+
   Widget _buildAccountDetailsStep() {
     final theme = Theme.of(context);
+    // Deep-linked/auto-issued invites (Helix Global, or a personal-server
+    // link already validated on the choice screen) are pre-filled - check
+    // it as soon as this step is actually on screen (which only happens
+    // once _startupState reaches unauthenticated, so the composition
+    // root's restClient is guaranteed ready) rather than waiting for the
+    // user to focus and blur a field they never touched. Deferred a frame
+    // so it never calls setState synchronously from within build().
+    if (!_prefilledInviteChecked && _inviteController.text.isNotEmpty) {
+      _prefilledInviteChecked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _validateInviteCode();
+      });
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

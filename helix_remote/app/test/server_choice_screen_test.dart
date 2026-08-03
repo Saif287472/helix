@@ -89,7 +89,7 @@ void main() {
         await tester.pumpWidget(const MaterialApp(home: InviteEntryScreen()));
 
         await tester.enterText(
-          find.byType(TextField),
+          find.byType(TextField).first,
           'https://server.example/join',
         );
         await tester.tap(find.text('Continue'));

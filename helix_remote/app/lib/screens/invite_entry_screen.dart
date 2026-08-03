@@ -1,19 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
+import 'package:helix_remote/widgets/country_code_picker.dart';
 
-/// Result of successfully validating a personal server + invite combo.
+/// Result of successfully validating a personal server + invite combo, with
+/// the phone number collected alongside it on the same screen.
 class ServerInviteChoice {
-  const ServerInviteChoice({required this.serverUrl, required this.inviteCode});
+  const ServerInviteChoice({
+    required this.serverUrl,
+    required this.inviteCode,
+    this.phoneNumber,
+  });
 
   final String serverUrl;
   final String inviteCode;
+
+  /// E.164 phone number, or null for the Helix Global path (which doesn't
+  /// collect one here - there's no "which server" step to attach it to).
+  final String? phoneNumber;
 }
 
 /// "Personal server" first-launch path: the admin who invited you shares a
-/// single combined `<server_address>/join?invite=<code>` link. This screen
-/// parses it, validates the server address, and confirms the invite is
-/// still redeemable before handing control back to the caller.
+/// single combined `<server_address>/join?invite=<code>` link, and this is
+/// also the only screen that ever needs to ask "which server" - so the
+/// phone number is collected here too, rather than asking for the invite
+/// code a second time on a later screen.
 class InviteEntryScreen extends StatefulWidget {
   const InviteEntryScreen({super.key});
 
@@ -23,12 +35,16 @@ class InviteEntryScreen extends StatefulWidget {
 
 class _InviteEntryScreenState extends State<InviteEntryScreen> {
   final _linkController = TextEditingController();
+  final _nationalNumberController = TextEditingController();
+  Country _selectedCountry = kDefaultCountry;
   bool _checking = false;
   String? _error;
+  String? _phoneError;
 
   @override
   void dispose() {
     _linkController.dispose();
+    _nationalNumberController.dispose();
     super.dispose();
   }
 
@@ -47,14 +63,31 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
     return (serverUrl: serverUrl, inviteCode: inviteCode);
   }
 
+  /// Combines [_selectedCountry]'s dial code with the entered national
+  /// digits into an E.164 number, stripping a leading `0` (the common
+  /// local-dialing prefix, e.g. "01712345678") that must not appear after
+  /// the country code.
+  String get _phoneNumber {
+    final digits = _nationalNumberController.text.replaceAll(
+      RegExp(r'[^\d]'),
+      '',
+    );
+    final national = digits.startsWith('0') ? digits.substring(1) : digits;
+    return '${_selectedCountry.dialCode}$national';
+  }
+
   Future<void> _continue() async {
     if (_checking) return;
     final parsed = _parse(_linkController.text);
-    if (parsed == null) {
+    final phoneNumber = _phoneNumber;
+    final phoneError = RemoteAccountValidation.phoneNumberError(phoneNumber);
+    if (parsed == null || phoneError != null) {
       setState(() {
-        _error =
-            'Paste the full link your admin shared, e.g. '
-            'https://your-server.example/join?invite=CODE.';
+        _error = parsed == null
+            ? 'Paste the full link your admin shared, e.g. '
+                  'https://your-server.example/join?invite=CODE.'
+            : null;
+        _phoneError = phoneError;
       });
       return;
     }
@@ -62,6 +95,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
     setState(() {
       _checking = true;
       _error = null;
+      _phoneError = null;
     });
 
     HelixRemoteRestClientImpl? client;
@@ -89,6 +123,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
           ServerInviteChoice(
             serverUrl: parsed.serverUrl,
             inviteCode: parsed.inviteCode,
+            phoneNumber: phoneNumber,
           ),
         );
       }
@@ -134,7 +169,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
                       controller: _linkController,
                       enabled: !_checking,
                       decoration: InputDecoration(
-                        labelText: 'Server address & invite link',
+                        labelText: 'Server invitation code',
                         hintText:
                             'https://your-server.example/join?invite=CODE',
                         border: const OutlineInputBorder(),
@@ -142,6 +177,16 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
                         errorMaxLines: 4,
                       ),
                       keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 16),
+                    PhoneNumberInput(
+                      country: _selectedCountry,
+                      onCountryChanged: (country) =>
+                          setState(() => _selectedCountry = country),
+                      numberController: _nationalNumberController,
+                      enabled: !_checking,
+                      errorText: _phoneError,
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) => _continue(),
                     ),
