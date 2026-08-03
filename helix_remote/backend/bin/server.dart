@@ -2,6 +2,7 @@
 import 'dart:ffi';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:helix_remote_backend/src/env_sanitize.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
@@ -89,8 +90,12 @@ void main() async {
   // Without it, phone verification falls back to returning the code
   // directly in the API response (see AuthPhoneOtpHandlers) - fine for
   // local dev, not for a real deployment.
-  final smsApiKey = Platform.environment['HELIX_REMOTE_SMS_API_KEY'] ?? '';
-  final smsSenderId = Platform.environment['HELIX_REMOTE_SMS_SENDER_ID'] ?? '';
+  final smsApiKey = sanitizeEnvValue(
+    Platform.environment['HELIX_REMOTE_SMS_API_KEY'],
+  );
+  final smsSenderId = sanitizeEnvValue(
+    Platform.environment['HELIX_REMOTE_SMS_SENDER_ID'],
+  );
   final SmsProvider smsProvider;
   if (smsApiKey.isNotEmpty && smsSenderId.isNotEmpty) {
     smsProvider = BulkSmsBdProvider(apiKey: smsApiKey, senderId: smsSenderId);
