@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class DashboardTab extends StatelessWidget {
   const DashboardTab({super.key, required this.metrics});
@@ -25,36 +26,42 @@ class DashboardTab extends StatelessWidget {
           childAspectRatio: crossAxisCount == 1 ? 2.4 : 1.6,
           children: [
             _metricCard(
+              context,
               'Active Devices Connections',
               '${ws['connected_devices'] ?? 0}',
               Icons.wifi,
               Colors.green,
             ),
             _metricCard(
+              context,
               'Registered User Accounts',
               '${tblCounts['accounts'] ?? 0}',
               Icons.people,
-              const Color(0xFF00E5FF),
+              context.accentColor,
             ),
             _metricCard(
+              context,
               'Mailbox Encrypted Messages',
               '${tblCounts['messages'] ?? 0}',
               Icons.mail,
               const Color(0xFF8A2BE2),
             ),
             _metricCard(
+              context,
               'Quarantined Security Events',
               '${tblCounts['quarantine_events'] ?? 0}',
               Icons.security,
               Colors.orange,
             ),
             _metricCard(
+              context,
               'Outbox Delivery Retry Queue',
               '${tblCounts['outbox'] ?? 0}',
               Icons.sync_problem,
-              const Color(0xFFFF3366),
+              Theme.of(context).colorScheme.error,
             ),
             _metricCard(
+              context,
               'Database Status Check',
               metrics['database_quick_check_ok'] == true
                   ? 'HEALTHY'
@@ -68,11 +75,16 @@ class DashboardTab extends StatelessWidget {
     );
   }
 
-  Widget _metricCard(String title, String val, IconData icon, Color accent) {
+  Widget _metricCard(
+    BuildContext context,
+    String title,
+    String val,
+    IconData icon,
+    Color accent,
+  ) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: const Color(0xFF161624),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -87,7 +99,7 @@ class DashboardTab extends StatelessWidget {
                     title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14, color: Colors.white70),
+                    style: TextStyle(fontSize: 14, color: context.textSecondary),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -96,10 +108,10 @@ class DashboardTab extends StatelessWidget {
             ),
             Text(
               val,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: context.textPrimary,
               ),
             ),
           ],

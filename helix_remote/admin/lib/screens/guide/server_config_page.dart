@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import 'guide_widgets.dart';
 
 class GuideServerConfigPage extends StatelessWidget {
@@ -10,11 +11,15 @@ class GuideServerConfigPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const GuidePageTitle('Configure the server'),
-        const Text(
+        Text(
           'The backend reads its settings from environment variables, '
           'usually set in a docker-compose.yml file alongside a '
           'persistent volume for the database and attachments.',
-          style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.6),
+          style: TextStyle(
+            fontSize: 14,
+            color: context.textSecondary,
+            height: 1.6,
+          ),
         ),
         const SizedBox(height: 16),
         const GuideDetailExpansion(
@@ -38,10 +43,14 @@ class GuideServerConfigPage extends StatelessWidget {
               'those features disabled.',
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Mount the database and attachments paths as Docker volumes so '
           'data survives container restarts and image updates.',
-          style: TextStyle(fontSize: 13, color: Colors.white54, height: 1.5),
+          style: TextStyle(
+            fontSize: 13,
+            color: context.textTertiary,
+            height: 1.5,
+          ),
         ),
         const AiAssistantTip(
           suggestion:

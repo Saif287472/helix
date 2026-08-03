@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import 'pairing_code_screen.dart';
 import 'scan_token_screen.dart';
 
@@ -93,14 +94,14 @@ class ConnectServerScreen extends StatelessWidget {
               children: [
                 Icon(
                   isConnected ? Icons.check_circle : Icons.cloud_off,
-                  color: isConnected ? Colors.green : Colors.white38,
+                  color: isConnected ? Colors.green : context.textFaint,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   isConnected ? 'Connected' : 'Not connected',
                   style: TextStyle(
-                    color: isConnected ? Colors.green : Colors.white70,
+                    color: isConnected ? Colors.green : context.textSecondary,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -122,11 +123,11 @@ class ConnectServerScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Your server prints a QR code in its terminal the moment '
               'the admin token is generated - scanning it fills the '
               'field below automatically, no typing required.',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: context.textTertiary, fontSize: 12),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -139,24 +140,24 @@ class ConnectServerScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Need a token without the original QR (e.g. the server is '
               'already running)? Run a command on the server to get a '
               'short one-time code instead, no restart required.',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: context.textTertiary, fontSize: 12),
             ),
             const SizedBox(height: 24),
             Row(
-              children: const [
-                Expanded(child: Divider()),
+              children: [
+                const Expanded(child: Divider()),
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
                     'OR ENTER MANUALLY',
-                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                    style: TextStyle(color: context.textFaint, fontSize: 11),
                   ),
                 ),
-                Expanded(child: Divider()),
+                const Expanded(child: Divider()),
               ],
             ),
             const SizedBox(height: 20),
@@ -192,7 +193,10 @@ class ConnectServerScreen extends StatelessWidget {
             if (errorMessage != null) ...[
               Text(
                 errorMessage!,
-                style: const TextStyle(color: Color(0xFFFF3366), fontSize: 13),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 16),
             ],
@@ -227,9 +231,9 @@ class ConnectServerScreen extends StatelessWidget {
                 label: const Text('Disconnect'),
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'Disconnecting forgets the saved token on this device too.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: context.textTertiary, fontSize: 12),
               ),
             ],
           ],

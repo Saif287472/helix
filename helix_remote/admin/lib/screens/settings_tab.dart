@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import '../widgets/settings_group_card.dart';
 
 /// App-level preferences plus a status card that hands off to the
@@ -149,7 +150,7 @@ class _ConnectionStatusCard extends StatelessWidget {
     // ambiguous gesture-arena resolution where a tap on the inner button
     // could also fire the outer card's onTap.
     return Material(
-      color: const Color(0xFF161624),
+      color: Theme.of(context).cardColor,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: Row(
@@ -201,8 +202,8 @@ class _ConnectionStatusCard extends StatelessWidget {
                                       'get started',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white54,
+                            style: TextStyle(
+                              color: context.textTertiary,
                               fontSize: 13,
                             ),
                           ),
@@ -210,7 +211,7 @@ class _ConnectionStatusCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right, color: Colors.white38),
+                    Icon(Icons.chevron_right, color: context.textFaint),
                   ],
                 ),
               ),
@@ -222,7 +223,7 @@ class _ConnectionStatusCard extends StatelessWidget {
               child: IconButton(
                 tooltip: 'Disconnect',
                 onPressed: onDisconnect,
-                icon: const Icon(Icons.link_off, color: Colors.white54),
+                icon: Icon(Icons.link_off, color: context.textTertiary),
               ),
             ),
         ],

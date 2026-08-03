@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class ConfigTab extends StatelessWidget {
   const ConfigTab({
@@ -24,7 +25,6 @@ class ConfigTab extends StatelessWidget {
     }
     return SingleChildScrollView(
       child: Card(
-        color: const Color(0xFF161624),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -35,23 +35,43 @@ class ConfigTab extends StatelessWidget {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 24),
-              _configField('Server ID', config['server_id'] ?? 'unknown'),
               _configField(
+                context,
+                'Server ID',
+                config['server_id'] ?? 'unknown',
+              ),
+              _configField(
+                context,
                 'Server Public Key',
                 config['server_public_key'] ?? 'unknown',
               ),
-              _configField('Server Running Port', config['port'] ?? 'unknown'),
-              _configField('Host Address Bound', config['host'] ?? 'unknown'),
-              _configField('Database Path', config['db_path'] ?? 'unknown'),
               _configField(
+                context,
+                'Server Running Port',
+                config['port'] ?? 'unknown',
+              ),
+              _configField(
+                context,
+                'Host Address Bound',
+                config['host'] ?? 'unknown',
+              ),
+              _configField(
+                context,
+                'Database Path',
+                config['db_path'] ?? 'unknown',
+              ),
+              _configField(
+                context,
                 'Attachments Path',
                 config['attachments_dir'] ?? 'unknown',
               ),
               _configField(
+                context,
                 'Push Notifications Configured',
                 config['push_configured'] == true ? 'ENABLED' : 'DISABLED',
               ),
               _configField(
+                context,
                 'TURN Server Configured',
                 config['turn_configured'] == true ? 'ENABLED' : 'DISABLED',
               ),
@@ -103,7 +123,7 @@ class ConfigTab extends StatelessWidget {
     );
   }
 
-  Widget _configField(String label, String val) {
+  Widget _configField(BuildContext context, String label, String val) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -113,7 +133,7 @@ class ConfigTab extends StatelessWidget {
             flex: 2,
             child: Text(
               label,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: TextStyle(color: context.textSecondary, fontSize: 14),
             ),
           ),
           const SizedBox(width: 12),
@@ -122,11 +142,11 @@ class ConfigTab extends StatelessWidget {
             child: SelectableText(
               val,
               textAlign: TextAlign.right,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
                 fontFamily: 'monospace',
-                color: Color(0xFF00E5FF),
+                color: context.accentColor,
               ),
             ),
           ),

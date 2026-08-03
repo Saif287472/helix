@@ -15,35 +15,35 @@ import 'screens/lock_screen.dart';
 import 'screens/logs_tab.dart';
 import 'screens/settings_tab.dart';
 import 'services/admin_preferences.dart';
+import 'theme/app_theme.dart';
 import 'widgets/locked_tab_placeholder.dart';
 
 void main() {
   runApp(const HelixAdminApp());
 }
 
-class HelixAdminApp extends StatelessWidget {
+class HelixAdminApp extends StatefulWidget {
   const HelixAdminApp({super.key});
+
+  @override
+  State<HelixAdminApp> createState() => _HelixAdminAppState();
+}
+
+class _HelixAdminAppState extends State<HelixAdminApp> {
+  bool _isDarkMode = true;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Helix Admin',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F0F16),
-        cardColor: const Color(0xFF161624),
-        primaryColor: const Color(0xFF8A2BE2),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF8A2BE2),
-          secondary: Color(0xFF00E5FF),
-          surface: Color(0xFF161624),
-          error: Color(0xFFFF3366),
-        ),
-        useMaterial3: true,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      home: MainAdminPage(
+        isDarkMode: _isDarkMode,
+        onDarkModeChanged: (v) => setState(() => _isDarkMode = v),
       ),
-      home: const MainAdminPage(),
     );
   }
 }
@@ -59,7 +59,14 @@ const _serverDependentTabs = {
 const _defaultServerUrl = 'http://127.0.0.1:8080';
 
 class MainAdminPage extends StatefulWidget {
-  const MainAdminPage({super.key});
+  const MainAdminPage({
+    super.key,
+    required this.isDarkMode,
+    required this.onDarkModeChanged,
+  });
+
+  final bool isDarkMode;
+  final ValueChanged<bool> onDarkModeChanged;
 
   @override
   State<MainAdminPage> createState() => _MainAdminPageState();
@@ -70,7 +77,6 @@ class _MainAdminPageState extends State<MainAdminPage> {
   String _selectedTab = 'dashboard';
   bool _isLoading = false;
   bool _isConnecting = false;
-  bool _isDarkMode = true;
 
   /// Guide page to open next time the 'guide' tab is built. Reset to 0
   /// (Welcome) on every normal sidebar navigation; only the "Where do I
@@ -399,44 +405,38 @@ class _MainAdminPageState extends State<MainAdminPage> {
         },
       );
     }
-    return Theme(
-      data: _isDarkMode ? ThemeData.dark() : ThemeData.light(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isMobile = constraints.maxWidth < _mobileBreakpoint;
-          return Scaffold(
-            key: _scaffoldKey,
-            appBar: _buildAppBar(),
-            drawer: isMobile
-                ? Drawer(
-                    backgroundColor: const Color(0xFF0B0B12),
-                    child: SafeArea(
-                      child: _buildSidebarContent(inDrawer: true),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < _mobileBreakpoint;
+        return Scaffold(
+          key: _scaffoldKey,
+          appBar: _buildAppBar(),
+          drawer: isMobile
+              ? Drawer(
+                  backgroundColor: context.sunkenSurface,
+                  child: SafeArea(child: _buildSidebarContent(inDrawer: true)),
+                )
+              : null,
+          body: isMobile
+              ? _buildBody(isMobile: true)
+              : Row(
+                  children: [
+                    Container(
+                      width: 260,
+                      color: context.sunkenSurface,
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: _buildSidebarContent(inDrawer: false),
                     ),
-                  )
-                : null,
-            body: isMobile
-                ? _buildBody(isMobile: true)
-                : Row(
-                    children: [
-                      Container(
-                        width: 260,
-                        color: const Color(0xFF0B0B12),
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: _buildSidebarContent(inDrawer: false),
-                      ),
-                      Expanded(child: _buildBody(isMobile: false)),
-                    ],
-                  ),
-          );
-        },
-      ),
+                    Expanded(child: _buildBody(isMobile: false)),
+                  ],
+                ),
+        );
+      },
     );
   }
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: const Color(0xFF0F0F16),
       title: Text(
         _selectedTab.toUpperCase(),
         style: const TextStyle(
@@ -474,7 +474,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Row(
             children: [
-              const Icon(Icons.radar, color: Color(0xFF00E5FF)),
+              Icon(Icons.radar, color: context.accentColor),
               const SizedBox(width: 12),
               const Flexible(
                 child: Text(
@@ -513,10 +513,10 @@ class _MainAdminPageState extends State<MainAdminPage> {
         if (_client != null) ...[
           const Divider(),
           ListTile(
-            leading: const Icon(Icons.link_off, color: Colors.white60),
-            title: const Text(
+            leading: Icon(Icons.link_off, color: context.textSecondary),
+            title: Text(
               'Disconnect',
-              style: TextStyle(color: Colors.white60),
+              style: TextStyle(color: context.textSecondary),
             ),
             onTap: () {
               _disconnect();
@@ -557,7 +557,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           children: [
             Icon(
               icon,
-              color: isSelected ? const Color(0xFF00E5FF) : Colors.white70,
+              color: isSelected ? context.accentColor : context.textSecondary,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -565,7 +565,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
                 title,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white70,
+                  color: isSelected ? context.textPrimary : context.textSecondary,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
@@ -620,8 +620,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
         return GuideWizard(initialPage: _guideInitialPage);
       case 'settings':
         return SettingsTab(
-          isDarkMode: _isDarkMode,
-          onDarkModeChanged: (v) => setState(() => _isDarkMode = v),
+          isDarkMode: widget.isDarkMode,
+          onDarkModeChanged: widget.onDarkModeChanged,
           urlController: _urlController,
           isConnected: _client != null,
           onOpenConnectServer: () =>

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class BackupTab extends StatelessWidget {
   const BackupTab({
@@ -17,7 +18,6 @@ class BackupTab extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 500),
           child: Card(
-            color: const Color(0xFF161624),
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(
@@ -39,12 +39,12 @@ class BackupTab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Creates a clean snapshot of the server database using '
                     'SQLite "VACUUM INTO". File is saved in the backups '
                     'directory.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: context.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 32),
                   ElevatedButton.icon(

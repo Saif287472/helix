@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import 'guide_widgets.dart';
 
 class GuideDockerInstallPage extends StatelessWidget {
@@ -10,11 +11,15 @@ class GuideDockerInstallPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const GuidePageTitle('Install Docker'),
-        const Text(
+        Text(
           'Helix ships as a Docker image, so the fastest path to a '
           'running server is installing Docker Engine and Docker Compose '
           'on your VPS or home machine.',
-          style: TextStyle(fontSize: 14, color: Colors.white70, height: 1.6),
+          style: TextStyle(
+            fontSize: 14,
+            color: context.textSecondary,
+            height: 1.6,
+          ),
         ),
         const SizedBox(height: 16),
         const GuideDetailExpansion(

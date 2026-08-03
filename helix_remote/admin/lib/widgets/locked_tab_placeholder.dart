@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 /// Shown in place of a server-dependent tab (Dashboard, Configurations, Log
 /// Tailing, Maintenance & Backups) when no server is connected yet. The
@@ -24,12 +25,12 @@ class LockedTabPlaceholder extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.lock_outline, size: 48, color: Colors.white38),
+              Icon(Icons.lock_outline, size: 48, color: context.textFaint),
               const SizedBox(height: 16),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 15),
+                style: TextStyle(color: context.textSecondary, fontSize: 15),
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(

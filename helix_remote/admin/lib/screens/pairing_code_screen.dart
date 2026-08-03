@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../admin_client.dart';
+import '../theme/app_theme.dart';
 
 /// Redeems a short-lived pairing code (see the backend's
 /// AdminPairingModule) for a freshly-rotated admin token, as an alternative
@@ -87,21 +88,21 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0B0B12),
+                color: context.sunkenSurface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: const Color(0xFF00E5FF).withValues(alpha: 0.4),
+                  color: context.accentColor.withValues(alpha: 0.4),
                 ),
               ),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: SelectableText(
                       _command,
                       style: TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 13,
-                        color: Color(0xFF00E5FF),
+                        color: context.accentColor,
                       ),
                     ),
                   ),
@@ -121,10 +122,10 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Replace 8080 if you customized HELIX_REMOTE_PORT. It prints '
               'a 16-digit code, valid for 10 minutes and usable once.',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: context.textTertiary, fontSize: 12),
             ),
             const SizedBox(height: 32),
             TextField(
@@ -143,8 +144,8 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
               const SizedBox(height: 12),
               Text(
                 _error!,
-                style: const TextStyle(
-                  color: Color(0xFFFF3366),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
                   fontSize: 13,
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import 'backups_page.dart';
 import 'connect_admin_page.dart';
 import 'docker_install_page.dart';
@@ -62,7 +63,6 @@ class _GuideWizardState extends State<GuideWizard> {
         Expanded(
           child: SingleChildScrollView(
             child: Card(
-              color: const Color(0xFF161624),
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: IndexedStack(index: _pageIndex, children: _pages),
@@ -86,7 +86,7 @@ class _GuideWizardState extends State<GuideWizard> {
             key: const Key('guide_progress_bar'),
             value: (_pageIndex + 1) / _pages.length,
             minHeight: 6,
-            backgroundColor: const Color(0xFF0B0B12),
+            backgroundColor: context.sunkenSurface,
             valueColor: const AlwaysStoppedAnimation(Color(0xFF8A2BE2)),
           ),
         ),
@@ -121,14 +121,16 @@ class _GuideWizardState extends State<GuideWizard> {
               : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? const Color(0xFF8A2BE2) : Colors.white24,
+            color: selected
+                ? const Color(0xFF8A2BE2)
+                : context.textPrimary.withValues(alpha: 0.24),
           ),
         ),
         child: Text(
           '${index + 1}. ${_pageTitles[index]}',
           style: TextStyle(
             fontSize: 12,
-            color: selected ? Colors.white : Colors.white54,
+            color: selected ? context.textPrimary : context.textTertiary,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
@@ -147,7 +149,7 @@ class _GuideWizardState extends State<GuideWizard> {
     );
     final stepText = Text(
       'Step ${_pageIndex + 1} of ${_pages.length}',
-      style: const TextStyle(color: Colors.white54, fontSize: 12),
+      style: TextStyle(color: context.textTertiary, fontSize: 12),
     );
     final nextButton = ElevatedButton.icon(
       key: const Key('guide_next_button'),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 /// Consistent page heading used across every wizard page.
 class GuidePageTitle extends StatelessWidget {
@@ -12,10 +13,10 @@ class GuidePageTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 16),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          color: Color(0xFF00E5FF),
+          color: context.accentColor,
         ),
       ),
     );
@@ -42,14 +43,14 @@ class GuideDetailExpansion extends StatelessWidget {
         tilePadding: EdgeInsets.zero,
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-            color: Color(0xFF00E5FF),
+            color: context.accentColor,
             fontWeight: FontWeight.w600,
           ),
         ),
-        iconColor: const Color(0xFF00E5FF),
-        collapsedIconColor: Colors.white54,
+        iconColor: context.accentColor,
+        collapsedIconColor: context.textTertiary,
         children: [
           Align(
             alignment: Alignment.centerLeft,
@@ -57,9 +58,9 @@ class GuideDetailExpansion extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
                 detail,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: Colors.white70,
+                  color: context.textSecondary,
                   height: 1.5,
                 ),
               ),
@@ -84,20 +85,14 @@ class AiAssistantTip extends StatelessWidget {
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF00E5FF).withValues(alpha: 0.08),
+        color: context.accentColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: const Color(0xFF00E5FF).withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: context.accentColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.smart_toy_outlined,
-            size: 18,
-            color: Color(0xFF00E5FF),
-          ),
+          Icon(Icons.smart_toy_outlined, size: 18, color: context.accentColor),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -105,9 +100,9 @@ class AiAssistantTip extends StatelessWidget {
                   'Stuck on this step? Paste it into an AI assistant '
                       '(Claude, Gemini, ChatGPT) and ask it to walk you '
                       'through it on your specific machine.',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: Colors.white70,
+                color: context.textSecondary,
                 fontStyle: FontStyle.italic,
               ),
             ),
