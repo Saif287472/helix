@@ -281,12 +281,14 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       _request('GET', 'contacts/discovery-salt');
 
   @override
-  Future<Map<String, dynamic>> requestPhoneOtp({required String phoneHash}) =>
-      _request(
-        'POST',
-        'accounts/phone/otp/request',
-        body: {'phone_hash': phoneHash},
-      );
+  Future<Map<String, dynamic>> requestPhoneOtp({
+    required String phoneHash,
+    required String phoneNumber,
+  }) => _request(
+    'POST',
+    'accounts/phone/otp/request',
+    body: {'phone_hash': phoneHash, 'phone_number': phoneNumber},
+  );
 
   @override
   Future<Map<String, dynamic>> lookupInvite({required String inviteCode}) =>

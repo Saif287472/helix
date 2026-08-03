@@ -83,6 +83,7 @@ class _FakeRestClient implements HelixRemoteRestClient {
   @override
   Future<Map<String, dynamic>> requestPhoneOtp({
     required String phoneHash,
+    required String phoneNumber,
   }) async => {};
   @override
   Future<Map<String, dynamic>> lookupInvite({

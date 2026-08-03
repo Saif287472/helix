@@ -7,12 +7,17 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
 
   final Map<String, List<int>> _otpRequestAttempts = {};
 
-  /// Issues a short-lived one-time code for a phone number, identified only
-  /// by its salted hash (see `phone_hash.dart`) — the server never sees a
-  /// raw phone number. There is no real SMS/push delivery yet, so the code
-  /// is returned directly in the response; the client is expected to
-  /// self-fire a local notification with it. This is an explicit,
-  /// documented placeholder, not a secure out-of-band channel.
+  /// Issues a short-lived one-time code for a phone number, identified in
+  /// the OTP challenge only by its salted hash (see `phone_hash.dart`) — the
+  /// server never *stores* a raw phone number. When [smsProvider] is
+  /// configured, the raw `phone_number` the client also sends is used
+  /// transiently to deliver the code by real SMS and is never persisted;
+  /// the response then omits the code. When no SMS provider is configured
+  /// (e.g. local dev, or a self-host without SMS credentials set), this
+  /// falls back to the original placeholder behavior: the code is returned
+  /// directly in the response and the client self-fires a local
+  /// notification with it - an explicit, documented placeholder, not a
+  /// secure out-of-band channel.
   Future<Response> _requestPhoneOtpHandler(Request request) async {
     try {
       final body =
@@ -22,6 +27,23 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
         return Response.badRequest(
           body: jsonEncode({'error': 'Missing phone_hash'}),
         );
+      }
+
+      String? phoneNumber;
+      if (smsProvider.isConfigured) {
+        phoneNumber = body['phone_number'] as String?;
+        if (phoneNumber == null || phoneNumber.isEmpty) {
+          return Response.badRequest(
+            body: jsonEncode({'error': 'Missing phone_number'}),
+          );
+        }
+        final salt = db.getServerConfig(phone_hash.discoverySaltConfigKey);
+        if (salt == null ||
+            phone_hash.phoneHash(salt, phoneNumber) != phoneHash) {
+          return Response.badRequest(
+            body: jsonEncode({'error': 'phone_number does not match phone_hash'}),
+          );
+        }
       }
 
       if (!_allowOtpRequest(phoneHash)) {
@@ -42,6 +64,31 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
         createdAt: now,
         expiresAt: now + _otpTtl.inMilliseconds,
       );
+
+      if (phoneNumber != null) {
+        try {
+          await smsProvider.send(
+            phoneNumber: phoneNumber,
+            message: 'Your Helix verification code is $code. It expires in '
+                '${_otpTtl.inMinutes} minutes.',
+          );
+        } on Object catch (_) {
+          return Response(
+            502,
+            body: jsonEncode({
+              'error':
+                  'Failed to send verification SMS. Please try again.',
+            }),
+          );
+        }
+        return Response.ok(
+          jsonEncode({
+            'challenge_id': challengeId,
+            'expires_at': now + _otpTtl.inMilliseconds,
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
       return Response.ok(
         jsonEncode({

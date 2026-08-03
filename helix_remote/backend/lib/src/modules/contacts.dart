@@ -14,7 +14,6 @@ class ContactsModule {
   static const int accountSearchMinuteLimit = 30;
   static const int contactsMatchDailyLimit = 5;
   static const int contactsMatchBatchLimit = 500;
-  static const String _discoverySaltConfigKey = 'contacts_discovery_salt';
   final Map<String, List<int>> _matchAttempts = {};
 
   ContactsModule(this.db, {Set<String>? adminAccountIds, this.notifyDevice})
@@ -50,10 +49,10 @@ class ContactsModule {
   /// contacts-sync flow. Self-heals on first call; never rotated afterward,
   /// since that would silently invalidate every existing phone-hash match.
   Future<Response> _discoverySaltHandler(Request request) async {
-    var salt = db.getServerConfig(_discoverySaltConfigKey);
+    var salt = db.getServerConfig(discoverySaltConfigKey);
     if (salt == null) {
       salt = generateDiscoverySalt();
-      db.setServerConfig(_discoverySaltConfigKey, salt);
+      db.setServerConfig(discoverySaltConfigKey, salt);
     }
     return Response.ok(jsonEncode({'salt': salt}));
   }

@@ -10,6 +10,7 @@ import 'package:helix_remote_backend/src/jwt.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
+import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
@@ -37,6 +38,7 @@ class BackendServer {
   final Directory? attachmentsStorageDir;
   final String turnSecret;
   final String turnUrl;
+  final SmsProvider smsProvider;
   final Set<String> adminAccountIds;
   final Set<String> trustedProxyAddresses;
   final DateTime Function() now;
@@ -60,6 +62,7 @@ class BackendServer {
     this.attachmentsStorageDir,
     this.turnSecret = '',
     this.turnUrl = '',
+    this.smsProvider = const NoopSmsProvider(),
     this.adminAccountIds = const {'admin'},
     this.trustedProxyAddresses = const {'127.0.0.1', '::1'},
     required this.now,
@@ -81,6 +84,7 @@ class BackendServer {
     Directory? attachmentsStorageDir,
     String turnSecret = '',
     String turnUrl = '',
+    SmsProvider? smsProvider,
     Set<String> adminAccountIds = const {'admin'},
     Set<String> trustedProxyAddresses = const {'127.0.0.1', '::1'},
     PushProvider? pushProvider,
@@ -122,6 +126,7 @@ class BackendServer {
       attachmentsStorageDir: attachmentsStorageDir,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
+      smsProvider: smsProvider ?? const NoopSmsProvider(),
       adminAccountIds: adminAccountIds,
       trustedProxyAddresses: trustedProxyAddresses,
       now: now ?? DateTime.now,
@@ -175,6 +180,7 @@ class BackendServer {
       configuredAudience: serverAudience.isEmpty ? null : serverAudience,
       publicBaseUrl: publicBaseUrl,
       globalInstanceMode: globalInstanceMode,
+      smsProvider: smsProvider,
     );
     final federationClient = serverIdentity == null
         ? null

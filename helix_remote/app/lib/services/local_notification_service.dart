@@ -102,10 +102,12 @@ class LocalNotificationService {
     );
   }
 
-  /// Self-fired the moment the app receives a phone-verification code from
-  /// the server - there is no real SMS/push delivery yet (see the backend's
-  /// phone OTP module), so this simulates "you got a text" rather than
-  /// being a genuine out-of-band channel.
+  /// Self-fired the moment the app receives a phone-verification code
+  /// directly in the OTP-request response, which only happens when the
+  /// server has no real SMS provider configured (see the backend's phone
+  /// OTP module) - this simulates "you got a text" rather than being a
+  /// genuine out-of-band channel. Not called when the server did send a
+  /// real SMS (see `RemoteCompositionRegistration.requestOtp`).
   static Future<void> showVerificationCode({required String code}) async {
     if (!_ready) return;
     final androidDetails = AndroidNotificationDetails(

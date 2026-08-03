@@ -3,6 +3,12 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart' as crypto_pkg;
 
+/// Server-config key the per-deployment discovery salt is stored under
+/// (see `ContactsModule._discoverySaltHandler`). Shared with the phone-OTP
+/// handler, which needs the same salt to verify a client-supplied
+/// `phone_number` actually matches its `phone_hash` before sending SMS to it.
+const discoverySaltConfigKey = 'contacts_discovery_salt';
+
 /// Computes a salted HMAC-SHA256 hash of an E.164 phone number.
 ///
 /// This is the only form in which a phone number should ever be sent to,

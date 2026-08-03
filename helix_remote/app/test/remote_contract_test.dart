@@ -110,7 +110,10 @@ Future<_RegistrationMaterial> _register(
     deviceId: deviceId,
     deviceName: deviceName,
   );
-  final otpResult = await client.requestPhoneOtp(phoneHash: phoneHash);
+  final otpResult = await client.requestPhoneOtp(
+    phoneHash: phoneHash,
+    phoneNumber: '+8801000000000',
+  );
   final otpCode = otpResult['code'] as String;
   final inviteCode = _seedInvite(db);
   await client.registerAccount(
@@ -175,6 +178,7 @@ void main() {
         );
         final otpResult = await client.requestPhoneOtp(
           phoneHash: 'test_user_phone_hash',
+          phoneNumber: '+8801000000000',
         );
         final regResult = await client.registerAccount(
           accountId: 'test_account',

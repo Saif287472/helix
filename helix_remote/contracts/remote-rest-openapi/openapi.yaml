@@ -478,10 +478,12 @@ paths:
     post:
       summary: >-
         Request a one-time verification code for a phone number, identified
-        only by its salted hash. There is no real SMS/push delivery yet, so
-        the code is returned directly in the response; the client is
-        expected to self-fire a local notification with it. This is an
-        explicit placeholder, not a secure out-of-band channel.
+        in the challenge only by its salted hash. When the server has a real
+        SMS provider configured, `phone_number` is used transiently to
+        deliver the code by SMS (never persisted) and the response omits
+        `code`. Otherwise the code is returned directly in the response and
+        the client is expected to self-fire a local notification with it -
+        an explicit placeholder, not a secure out-of-band channel.
       operationId: requestPhoneOtp
       tags: [Auth]
       requestBody:
@@ -494,25 +496,34 @@ paths:
               properties:
                 phone_hash:
                   type: string
+                phone_number:
+                  type: string
+                  description: >-
+                    E.164 phone number. Required only when the server has an
+                    SMS provider configured; must hash (with the deployment's
+                    discovery salt) to phone_hash.
       responses:
         '200':
-          description: Verification code issued
+          description: Verification code issued (by SMS if configured, otherwise in-body)
           content:
             application/json:
               schema:
                 type: object
-                required: [challenge_id, code, expires_at]
+                required: [challenge_id, expires_at]
                 properties:
                   challenge_id:
                     type: string
                   code:
                     type: string
+                    description: Only present when no SMS provider is configured.
                   expires_at:
                     type: integer
         '400':
-          description: Missing phone_hash
+          description: Missing phone_hash, missing/mismatched phone_number
         '429':
           description: Too many verification code requests
+        '502':
+          description: SMS provider configured but delivery failed
 
   /accounts/invite/lookup:
     get:
