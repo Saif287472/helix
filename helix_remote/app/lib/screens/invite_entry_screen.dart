@@ -187,6 +187,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
                       numberController: _nationalNumberController,
                       enabled: !_checking,
                       errorText: _phoneError,
+                      errorMaxLines: 3,
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) => _continue(),
                     ),

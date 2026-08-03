@@ -936,6 +936,12 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
           numberController: _nationalNumberController,
           enabled: !_sendingCode,
           errorText: _phoneError,
+          // _phoneError can be a server-provided message (e.g. the SMS
+          // gateway's own rejection reason via _formatRegistrationError),
+          // which is longer than a plain "Invalid number" label - without
+          // this it truncates to one line with an ellipsis, hiding exactly
+          // the detail needed to diagnose a delivery failure.
+          errorMaxLines: 5,
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _sendVerificationCode(),
         ),

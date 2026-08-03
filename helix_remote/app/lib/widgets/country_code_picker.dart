@@ -284,6 +284,7 @@ class PhoneNumberInput extends StatelessWidget {
     required this.numberController,
     this.enabled = true,
     this.errorText,
+    this.errorMaxLines,
     this.onChanged,
     this.onSubmitted,
     this.textInputAction = TextInputAction.next,
@@ -294,6 +295,12 @@ class PhoneNumberInput extends StatelessWidget {
   final TextEditingController numberController;
   final bool enabled;
   final String? errorText;
+  /// Defaults to null, which - per [InputDecoration.errorMaxLines] -
+  /// truncates [errorText] to a single line with an ellipsis instead of
+  /// wrapping it. Server-provided error text (e.g. an SMS gateway's own
+  /// rejection reason) can be longer than a label like "Invalid number",
+  /// so callers showing that kind of text should set this explicitly.
+  final int? errorMaxLines;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
   final TextInputAction textInputAction;
@@ -318,6 +325,7 @@ class PhoneNumberInput extends StatelessWidget {
               hintText: 'e.g. 1712345678',
               border: const OutlineInputBorder(),
               errorText: errorText,
+              errorMaxLines: errorMaxLines,
             ),
             keyboardType: TextInputType.phone,
             textInputAction: textInputAction,
