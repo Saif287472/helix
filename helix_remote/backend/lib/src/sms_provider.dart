@@ -33,10 +33,20 @@ final class NoopSmsProvider implements SmsProvider {
 /// signalled by a `response_code` in the body (202 = submitted), not the
 /// HTTP status, so a 200 alone doesn't mean the SMS actually went out.
 final class BulkSmsBdProvider implements SmsProvider {
-  BulkSmsBdProvider({required this.apiKey, required this.senderId});
+  BulkSmsBdProvider({
+    required this.apiKey,
+    required this.senderId,
+    Uri? apiBaseUri,
+  }) : apiBaseUri = apiBaseUri ?? Uri.https('bulksmsbd.net', '/api/smsapi');
 
   final String apiKey;
   final String senderId;
+
+  /// The gateway endpoint, overridable so tests can point this at a local
+  /// HttpServer instead of the real bulksmsbd.net - everything else about
+  /// [send] (request construction, response parsing, stream handling) runs
+  /// unmodified against whatever this points to.
+  final Uri apiBaseUri;
 
   static const _submittedResponseCode = 202;
 
@@ -51,20 +61,25 @@ final class BulkSmsBdProvider implements SmsProvider {
     final number = phoneNumber.startsWith('+')
         ? phoneNumber.substring(1)
         : phoneNumber;
-    final url = Uri.https('bulksmsbd.net', '/api/smsapi', {
-      'api_key': apiKey,
-      'type': 'text',
-      'number': number,
-      'senderid': senderId,
-      'message': message,
-    });
+    final url = apiBaseUri.replace(
+      queryParameters: {
+        'api_key': apiKey,
+        'type': 'text',
+        'number': number,
+        'senderid': senderId,
+        'message': message,
+      },
+    );
 
     final http = HttpClient();
     try {
       final req = await http.getUrl(url);
       final res = await req.close();
+      // HttpClientResponse is a single-subscription stream - it's already
+      // fully consumed by .join() below, so draining it afterward throws
+      // "Bad state: Stream has already been listened to." instead of doing
+      // anything useful.
       final body = await res.transform(utf8.decoder).join();
-      await res.drain<void>();
 
       if (res.statusCode != 200) {
         throw SmsDeliveryException(res.statusCode, body);
