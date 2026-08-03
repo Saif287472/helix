@@ -1525,9 +1525,9 @@ class _FilterChipsRow extends StatelessWidget {
                 onTap: () => onSelect(filter),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 120),
-                  height: 42,
+                  height: 34,
                   padding: EdgeInsets.symmetric(
-                    horizontal: label == '+' ? 16 : 20,
+                    horizontal: label == '+' ? 12 : 16,
                   ),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
@@ -1547,7 +1547,7 @@ class _FilterChipsRow extends StatelessWidget {
                       color: selected
                           ? cs.onPrimaryContainer
                           : cs.onSurfaceVariant,
-                      fontSize: 17,
+                      fontSize: 13,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                     ),
                   ),

@@ -350,25 +350,25 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
         onRefresh: () async => _load(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(top: 80),
+          padding: const EdgeInsets.only(top: 56),
           children: [
-            Icon(Icons.call_outlined, size: 72, color: cs.outline),
+            Icon(Icons.call_outlined, size: 64, color: cs.outline),
             const SizedBox(height: 16),
             Text(
               _history.isEmpty ? 'No calls yet' : 'No matching calls',
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurface,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               _history.isEmpty
                   ? 'Start your first call from Helix contacts.'
                   : 'Try a different search.',
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(color: cs.outline),
+              style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
             ),
           ],
         ),
@@ -751,27 +751,27 @@ class _QuickActionBubble extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(right: 44),
+      padding: const EdgeInsets.only(right: 32),
       child: InkWell(
-        borderRadius: BorderRadius.circular(40),
+        borderRadius: BorderRadius.circular(28),
         onTap: onTap,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: cs.surfaceContainerHighest.withAlpha(
                   theme.brightness == Brightness.dark ? 120 : 95,
                 ),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: cs.onSurface, size: 34),
+              child: Icon(icon, color: cs.onSurface, size: 26),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             SizedBox(
-              width: 86,
+              width: 72,
               child: Text(
                 label,
                 maxLines: 1,
@@ -779,7 +779,7 @@ class _QuickActionBubble extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: cs.onSurfaceVariant,
-                  fontSize: 17,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
