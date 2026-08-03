@@ -1,7 +1,25 @@
+import 'dart:convert';
+
 import 'package:helix_remote/app/remote_rest_client.dart';
 
 class RemoteUserErrorCopy {
   const RemoteUserErrorCopy._();
+
+  /// Pulls the `error` field out of a JSON error body, when there is one -
+  /// the server includes specific, actionable detail here (e.g. why an SMS
+  /// delivery attempt failed) that a generic "HTTP 502" message would hide.
+  static String? _serverErrorMessage(RemoteRestException error) {
+    try {
+      final decoded = jsonDecode(error.message);
+      if (decoded is Map<String, dynamic>) {
+        final value = decoded['error'];
+        if (value is String && value.isNotEmpty) return value;
+      }
+    } catch (_) {
+      // Not JSON (e.g. a proxy error page) - fall through to generic copy.
+    }
+    return null;
+  }
 
   static String refreshFailure(RemoteRestException error, Uri backend) {
     switch (error.failureKind) {
@@ -57,9 +75,14 @@ class RemoteUserErrorCopy {
           case 429:
             return 'Too many registration attempts. Wait a moment, then try '
                 'again.';
+          case 502:
+            return _serverErrorMessage(error) ??
+                'Failed to send the verification code. Try again in a '
+                    'moment.';
           default:
-            return 'Registration failed because the server returned HTTP '
-                '${error.statusCode ?? 'unknown'}. Try again later.';
+            return _serverErrorMessage(error) ??
+                'Registration failed because the server returned HTTP '
+                    '${error.statusCode ?? 'unknown'}. Try again later.';
         }
       case RemoteRestFailureKind.unknown:
         return unknownRegistration();

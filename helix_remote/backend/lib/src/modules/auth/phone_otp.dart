@@ -82,12 +82,17 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
             message: 'Your Helix verification code is $code. It expires in '
                 '${_otpTtl.inMinutes} minutes.',
           );
-        } on Object catch (_) {
+        } on Object catch (e) {
+          // ignore: avoid_print
+          print('OTP SMS delivery failed: $e');
           return Response(
             502,
             body: jsonEncode({
-              'error':
-                  'Failed to send verification SMS. Please try again.',
+              // Surfaced to the client so it can show the actual gateway
+              // rejection reason (e.g. bad API key, unapproved sender ID,
+              // insufficient balance) instead of a generic message - the
+              // provider's error text has never included the API key.
+              'error': 'Failed to send verification SMS: $e',
             }),
           );
         }
