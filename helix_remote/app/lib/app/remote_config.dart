@@ -483,10 +483,19 @@ class RemoteDevelopmentConfig {
   /// know where to send a request, such as validating an invite link
   /// before any device directories are known.
   static Uri restBaseUriFromServerUrl(String url) {
-    var trimmed = url.trim().replaceAll(RegExp(r'/+$'), '');
+    var trimmed = url.trim();
     if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
       trimmed = 'https://$trimmed';
     }
+    // Strips a trailing path slash (e.g. "https://example.com/" ->
+    // "https://example.com"), but must not eat into "scheme://" itself -
+    // done after the scheme is already in place, and the lookbehind skips
+    // straight past a run of slashes immediately after the scheme's ':',
+    // rather than stripping it down to a bare "https:" that Uri.tryParse
+    // would then happily parse with the *next* segment as the host (e.g.
+    // "http://" collapsing to "http:", then re-prefixed into the nonsense
+    // "https://http" instead of being rejected as malformed).
+    trimmed = trimmed.replaceAll(RegExp(r'(?<=[^:])/+$'), '');
     final uri = Uri.tryParse(trimmed);
     if (uri == null || uri.host.isEmpty) {
       throw const RemoteConfigurationException(

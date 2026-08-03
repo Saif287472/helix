@@ -9,6 +9,16 @@
 //   P03-A06  performReset() clears all secure storage keys.
 //   P03-A07  startupStateChanges supports multiple concurrent listeners.
 //   P03-A08  purgeAfterAccountDeletion() transitions to unauthenticated via stream.
+//
+// startupStateChanges is a plain (non-sync) broadcast StreamController, so
+// its listener callback is delivered through the microtask queue rather than
+// synchronously with _setState. Several of these tests emit many transitions
+// back-to-back with few/no `await`s between them, so by the time
+// `await root.initialize()` (etc.) itself resolves, the *last* couple of
+// deliveries can still be sitting in the queue - `root.startupState` (a
+// plain field read) is always current, but `emitted`/`contains(...)`
+// assertions against the stream need a `pumpEventQueue()` first to observe
+// the same state.
 
 import 'dart:convert';
 import 'dart:io';
@@ -92,6 +102,7 @@ void main() {
         root.startupStateChanges.listen(emitted.add);
 
         await root.initialize();
+        await pumpEventQueue();
 
         expect(emitted, contains(RemoteStartupState.loadingConfiguration));
         expect(emitted, contains(RemoteStartupState.openingSecureStorage));
@@ -130,6 +141,7 @@ void main() {
         } catch (e) {
           caught = e;
         }
+        await pumpEventQueue();
 
         expect(caught, isA<StateError>());
         expect(root.startupState, RemoteStartupState.resetRequired);
@@ -171,6 +183,7 @@ void main() {
 
         await root.initialize();
         final restored = await root.tryRestoreSession();
+        await pumpEventQueue();
 
         expect(restored, isTrue);
         expect(root.startupState, RemoteStartupState.authenticatedAndSyncing);
@@ -318,6 +331,7 @@ void main() {
         expect(root.startupState, RemoteStartupState.authenticatedAndSyncing);
 
         await root.purgeAfterAccountDeletion();
+        await pumpEventQueue();
 
         expect(root.startupState, RemoteStartupState.unauthenticated);
         expect(emitted.last, RemoteStartupState.unauthenticated);

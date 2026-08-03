@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/screens/guide/guide_wizard.dart';
+import 'package:helix_admin/theme/app_theme.dart';
 import 'package:url_launcher_platform_interface/link.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
@@ -17,11 +18,17 @@ class _FakeUrlLauncher extends UrlLauncherPlatform {
   }
 }
 
+// A bare MaterialApp() has no AppSurfaces ThemeExtension registered, so
+// anything in GuideWizard that reads context.sunkenSurface (or the other
+// AppColorsX getters) null-crashes - the real app always supplies
+// AppTheme.light/dark (see main.dart), so the tests must too.
 Widget _wrap(Widget child) => MaterialApp(
+  theme: AppTheme.light,
   home: Scaffold(body: SizedBox(height: 900, child: child)),
 );
 
 Widget _wrapNarrow(Widget child) => MaterialApp(
+  theme: AppTheme.light,
   home: Scaffold(body: SizedBox(width: 320, height: 700, child: child)),
 );
 

@@ -427,10 +427,9 @@ class _AttachmentCard extends StatelessWidget {
                           color: cs.onSurfaceVariant,
                         ),
                       ),
-                      if (attachment.localStatus != null &&
-                          attachment.localStatus != 'DOWNLOADED')
+                      if (attachment.localStatus != 'DOWNLOADED')
                         Text(
-                          attachment.localStatus!,
+                          attachment.localStatus ?? 'Not downloaded',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: cs.onSurfaceVariant,
                           ),

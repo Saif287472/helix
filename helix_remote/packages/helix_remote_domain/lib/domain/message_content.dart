@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:isolate';
 
 import 'package:helix_remote_domain/domain/attachment.dart';
 import 'package:helix_remote_domain/domain/capabilities.dart';
@@ -32,7 +31,14 @@ class RemoteMessageContentEnvelope {
     String plaintext,
   ) async {
     try {
-      final decoded = await Isolate.run(() => jsonDecode(plaintext));
+      // Callers that need off-isolate decoding for large payloads (e.g.
+      // RemoteHistoryReceipts._decodeEnvelope) already wrap the whole call
+      // to tryDecode in Isolate.run themselves - decoding here too spawned a
+      // second, nested isolate on every single call (including the many
+      // small-payload legacy tryParse() fallbacks below that never opted
+      // into isolate offloading at all), which is needless overhead for a
+      // few-hundred-byte JSON parse.
+      final decoded = jsonDecode(plaintext);
       if (decoded is! Map<String, dynamic>) return null;
       if (decoded['type'] != envelopeType || decoded['version'] != 1) {
         return null;
@@ -199,7 +205,7 @@ class RemoteTextContent {
     }
 
     try {
-      final decoded = await Isolate.run(() => jsonDecode(plaintext));
+      final decoded = jsonDecode(plaintext);
       if (decoded is! Map<String, dynamic>) {
         return RemoteTextContent(text: plaintext);
       }
@@ -327,7 +333,7 @@ class RemoteAttachmentContent {
     }
 
     try {
-      final decoded = await Isolate.run(() => jsonDecode(plaintext));
+      final decoded = jsonDecode(plaintext);
       if (decoded is! Map<String, dynamic>) return null;
       if (decoded['type'] != legacyMessageType &&
           decoded['type'] != messageType) {

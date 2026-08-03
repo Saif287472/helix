@@ -160,7 +160,13 @@ void main() {
       );
       await tester.pump();
 
-      // Screen opens and shows the send field.
+      // The composer's action button starts as a voice-message mic (no
+      // text yet) and only becomes the send icon once there's something to
+      // send - type first, matching how a user would actually reach it.
+      expect(find.byIcon(Icons.mic), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'hello');
+      await tester.pump();
+
       expect(find.byIcon(Icons.send), findsOneWidget);
     });
 
@@ -184,11 +190,10 @@ void main() {
       );
       await tester.pump();
 
-      // Call button is a PopupMenuButton (not a disabled IconButton).
-      // The menu is always openable; selecting the audio item shows a SnackBar.
-      await tester.tap(find.byTooltip('Call'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Voice call'));
+      // Voice/video call are direct app bar buttons (not gated by being
+      // disabled) - tapping always works, but without TURN configured it
+      // shows a SnackBar instead of actually starting a call.
+      await tester.tap(find.byTooltip('Voice call'));
       await tester.pumpAndSettle();
       expect(
         find.text('Calls require TURN relay configuration'),
@@ -217,10 +222,8 @@ void main() {
         );
         await tester.pump();
 
-        // Open the call dropdown and select Voice call.
-        await tester.tap(find.byTooltip('Call'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Voice call'));
+        // Voice call is a direct app bar button now, not a dropdown item.
+        await tester.tap(find.byTooltip('Voice call'));
         await tester.pumpAndSettle();
         expect(audioCallInvoked, isTrue);
       },
@@ -249,11 +252,19 @@ void main() {
 
       final tf = find.byType(TextField).last;
       await tester.enterText(tf, 'Hello from journey test');
+      // The composer's action button only switches from the mic (voice
+      // message) to the send icon once the text change has been rebuilt -
+      // enterText() alone doesn't guarantee that frame has happened yet.
+      await tester.pump();
       await tester.tap(find.byIcon(Icons.send));
       await tester.pump();
 
-      // Outbox or message should be reflected
-      expect(find.byIcon(Icons.send), findsOneWidget);
+      // The sent message's own text is what "appears in conversation list"
+      // actually means - not just that the composer icon reverted to mic
+      // (which it always does immediately after sending, since the
+      // composer clears; asserting on that icon alone would pass even if
+      // the message were silently dropped).
+      expect(find.text('Hello from journey test'), findsOneWidget);
     });
   });
 

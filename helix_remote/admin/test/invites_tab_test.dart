@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/admin_client.dart';
 import 'package:helix_admin/screens/invites_tab.dart';
+import 'package:helix_admin/theme/app_theme.dart';
 
 /// AdminClient makes real socket I/O (even against the loopback fake
 /// server below), which doesn't interleave with pumpAndSettle()'s
@@ -19,6 +20,27 @@ Future<void> _settleWithRealIO(WidgetTester tester) async {
     await tester.pump();
     if (find.byType(CircularProgressIndicator).evaluate().isEmpty) return;
   }
+}
+
+/// The Invites table's columns plus per-row action icons don't fit the
+/// default 800x600 test surface - past it, tester.tap on a tooltip/icon
+/// there fails hit-testing since that part of the row is laid out beyond
+/// the root render tree's bounds (see the identical fix in
+/// users_tab_test.dart). Also needs AppTheme.light, not a bare MaterialApp -
+/// InvitesTab reads context.sunkenSurface, which null-crashes without the
+/// AppSurfaces ThemeExtension the real app always supplies (see the same
+/// fix in guide_wizard_test.dart).
+Future<void> _pumpInvitesTab(WidgetTester tester, AdminClient client) async {
+  tester.view.physicalSize = const Size(1600, 900);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.light,
+      home: Scaffold(body: InvitesTab(client: client)),
+    ),
+  );
 }
 
 void main() {
@@ -133,11 +155,7 @@ void main() {
 
   testWidgets('loads and displays existing invites', (tester) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: InvitesTab(client: client)),
-      ),
-    );
+    await _pumpInvitesTab(tester, client);
     await _settleWithRealIO(tester);
 
     expect(find.text('PENDING'), findsOneWidget);
@@ -148,11 +166,7 @@ void main() {
     tester,
   ) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: InvitesTab(client: client)),
-      ),
-    );
+    await _pumpInvitesTab(tester, client);
     await _settleWithRealIO(tester);
 
     await tester.tap(find.widgetWithText(ElevatedButton, 'Generate Invite'));
@@ -170,9 +184,7 @@ void main() {
     (tester) async {
       serverOmitsShareableUrlHost = true;
       final client = AdminClient(baseUrl: baseUrl(), token: 't');
-      await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
-      );
+      await _pumpInvitesTab(tester, client);
       await _settleWithRealIO(tester);
 
       await tester.tap(find.widgetWithText(ElevatedButton, 'Generate Invite'));
@@ -191,11 +203,7 @@ void main() {
 
   testWidgets('pagination controls disable at the edges', (tester) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: InvitesTab(client: client)),
-      ),
-    );
+    await _pumpInvitesTab(tester, client);
     await _settleWithRealIO(tester);
 
     final previous = tester.widget<TextButton>(
@@ -214,11 +222,7 @@ void main() {
   ) async {
     failListRequests = true;
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: InvitesTab(client: client)),
-      ),
-    );
+    await _pumpInvitesTab(tester, client);
     await _settleWithRealIO(tester);
 
     expect(find.textContaining('Failed to load invites'), findsOneWidget);
@@ -226,9 +230,7 @@ void main() {
 
   testWidgets('a pending invite can be cancelled', (tester) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
-    );
+    await _pumpInvitesTab(tester, client);
     await _settleWithRealIO(tester);
 
     expect(find.text('PENDING'), findsOneWidget);
@@ -240,28 +242,23 @@ void main() {
     expect(requestedPaths, contains('POST /api/v1/ops/invites/inv_1/cancel'));
   });
 
-  testWidgets(
-    'a redeemed invite has no cancel action',
-    (tester) async {
-      invites = [
-        {
-          'invite_id': 'inv_redeemed',
-          'issuer_type': 'ADMIN',
-          'issuer_label': 'admin',
-          'status': 'REDEEMED',
-          'created_at': 1000,
-          'expires_at': 2000,
-          'redeemed_at': 1500,
-          'redeemed_by_account_id': 'some_user',
-        },
-      ];
-      final client = AdminClient(baseUrl: baseUrl(), token: 't');
-      await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: InvitesTab(client: client))),
-      );
-      await _settleWithRealIO(tester);
+  testWidgets('a redeemed invite has no cancel action', (tester) async {
+    invites = [
+      {
+        'invite_id': 'inv_redeemed',
+        'issuer_type': 'ADMIN',
+        'issuer_label': 'admin',
+        'status': 'REDEEMED',
+        'created_at': 1000,
+        'expires_at': 2000,
+        'redeemed_at': 1500,
+        'redeemed_by_account_id': 'some_user',
+      },
+    ];
+    final client = AdminClient(baseUrl: baseUrl(), token: 't');
+    await _pumpInvitesTab(tester, client);
+    await _settleWithRealIO(tester);
 
-      expect(find.byTooltip('Cancel invite'), findsNothing);
-    },
-  );
+    expect(find.byTooltip('Cancel invite'), findsNothing);
+  });
 }
