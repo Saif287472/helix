@@ -33,13 +33,23 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
       if (smsProvider.isConfigured) {
         phoneNumber = body['phone_number'] as String?;
         if (phoneNumber == null || phoneNumber.isEmpty) {
+          // ignore: avoid_print
+          print('OTP request rejected: missing phone_number in body');
           return Response.badRequest(
             body: jsonEncode({'error': 'Missing phone_number'}),
           );
         }
         final salt = db.getServerConfig(phone_hash.discoverySaltConfigKey);
-        if (salt == null ||
-            phone_hash.phoneHash(salt, phoneNumber) != phoneHash) {
+        final computedHash = salt == null
+            ? null
+            : phone_hash.phoneHash(salt, phoneNumber);
+        if (salt == null || computedHash != phoneHash) {
+          // ignore: avoid_print
+          print(
+            'OTP request rejected: salt_present=${salt != null} '
+            'client_hash_prefix=${phoneHash.substring(0, phoneHash.length.clamp(0, 8))} '
+            'server_hash_prefix=${computedHash == null ? 'n/a' : computedHash.substring(0, computedHash.length.clamp(0, 8))}',
+          );
           return Response.badRequest(
             body: jsonEncode({'error': 'phone_number does not match phone_hash'}),
           );
