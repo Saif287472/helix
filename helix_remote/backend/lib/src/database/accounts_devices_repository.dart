@@ -93,29 +93,48 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     };
   }
 
+  /// [recordDisplayNameChange] stamps `display_name_changed_at` to now -
+  /// only pass true for a user's own explicit change (see
+  /// AuthProfileHandlers._updateProfileHandler), which is what the monthly
+  /// rate limit is measured from. Registration's initial profile write
+  /// (whatever name it's given, including the phone-number default from
+  /// skipping) must never pass true here, or a user would start their
+  /// cooldown before ever making a real change.
+  ///
+  /// [now] defaults to the real clock, but callers that already have an
+  /// injectable clock (see AuthModuleBase._now, used for testability) must
+  /// pass it explicitly - otherwise this timestamp and the rate-limit
+  /// check comparing against it can disagree under a mocked clock.
   Map<String, dynamic> upsertAccountProfile({
     required String accountId,
     required String displayName,
+    bool recordDisplayNameChange = false,
+    DateTime? now,
   }) {
     final current = getAccountProfile(accountId);
     final nextVersion = ((current?['profile_version'] as int?) ?? 0) + 1;
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowMs = (now ?? DateTime.now()).millisecondsSinceEpoch;
+    final changedAt = recordDisplayNameChange
+        ? nowMs
+        : current?['display_name_changed_at'] as int?;
     final stmt = _db.prepare('''
       INSERT OR REPLACE INTO account_profiles (
         account_id,
         display_name,
         updated_at,
-        profile_version
+        profile_version,
+        display_name_changed_at
       )
-      VALUES (?, ?, ?, ?);
+      VALUES (?, ?, ?, ?, ?);
     ''');
-    stmt.execute([accountId, displayName, now, nextVersion]);
+    stmt.execute([accountId, displayName, nowMs, nextVersion, changedAt]);
     stmt.close();
     return {
       'account_id': accountId,
       'display_name': displayName,
-      'updated_at': now,
+      'updated_at': nowMs,
       'profile_version': nextVersion,
+      'display_name_changed_at': changedAt,
     };
   }
 
@@ -132,6 +151,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       'display_name': row['display_name'],
       'updated_at': row['updated_at'],
       'profile_version': row['profile_version'],
+      'display_name_changed_at': row['display_name_changed_at'],
     };
   }
 

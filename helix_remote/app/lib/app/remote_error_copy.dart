@@ -126,4 +126,33 @@ class RemoteUserErrorCopy {
   static String unknownRegistration() =>
       'Registration failed because of an unexpected error. Try again, or '
       'change the server URL if it keeps happening.';
+
+  static String profileUpdateFailure(RemoteRestException error) {
+    switch (error.failureKind) {
+      case RemoteRestFailureKind.serverDown:
+        return 'Could not reach the server. Check your connection and try '
+            'again.';
+      case RemoteRestFailureKind.noInternet:
+        return networkUnavailable().replaceFirst('tap Retry', 'try again');
+      case RemoteRestFailureKind.timeout:
+        return 'The server did not respond in time. Check your connection '
+            'and try again.';
+      case RemoteRestFailureKind.http:
+        switch (error.statusCode) {
+          case 429:
+            // The server's own message already states exactly when the
+            // next change is allowed - nothing generic would say it better.
+            return _serverErrorMessage(error) ??
+                'You can only change your display name once every 30 days.';
+          case 400:
+            return _serverErrorMessage(error) ??
+                'That display name was not accepted.';
+          default:
+            return _serverErrorMessage(error) ??
+                'Could not save. Check your connection and try again.';
+        }
+      case RemoteRestFailureKind.unknown:
+        return 'Could not save because of an unexpected error. Try again.';
+    }
+  }
 }

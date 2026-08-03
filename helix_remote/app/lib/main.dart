@@ -1258,15 +1258,24 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
           ),
         ),
         const SizedBox(height: 8),
-        TextButton(
-          onPressed: _registering ? null : _confirmSkipDisplayName,
-          child: const Text('Skip'),
+        // Builder gives onPressed a context from *inside* the MaterialApp
+        // this State builds - `this.context` (the State's own context)
+        // sits above that MaterialApp, so showDialog would never find a
+        // Navigator, silently no-opping the tap instead of showing the
+        // confirmation (see the invite-icon fix for the same bug).
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: _registering
+                ? null
+                : () => _confirmSkipDisplayName(context),
+            child: const Text('Skip'),
+          ),
         ),
       ],
     );
   }
 
-  Future<void> _confirmSkipDisplayName() async {
+  Future<void> _confirmSkipDisplayName(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1480,15 +1489,20 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
+                // Builder gives onPressed a context from *inside* the
+                // MaterialApp this State builds - see the matching comment
+                // on the Skip button in _buildDisplayNameStep.
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.error,
+                  child: Builder(
+                    builder: (context) => FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                      ),
+                      onPressed: () => _confirmedReset(context),
+                      icon: const Icon(Icons.delete_forever_outlined),
+                      label: const Text('Reset Helix Remote'),
                     ),
-                    onPressed: _confirmedReset,
-                    icon: const Icon(Icons.delete_forever_outlined),
-                    label: const Text('Reset Helix Remote'),
                   ),
                 ),
               ],
@@ -1499,7 +1513,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     );
   }
 
-  Future<void> _confirmedReset() async {
+  Future<void> _confirmedReset(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

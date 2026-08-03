@@ -100,5 +100,45 @@ void main() {
         allOf(contains('Network unavailable'), contains('try again')),
       );
     });
+
+    test(
+      'profile update copy surfaces the server\'s own rate-limit message',
+      () {
+        final rateLimited = RemoteRestException(
+          message:
+              '{"error":"You can only change your display name once every '
+              '30 days. Try again on 2026-09-02.","next_allowed_at":123}',
+          uri: emulatorBackend,
+          statusCode: 429,
+          failureKind: RemoteRestFailureKind.http,
+        );
+        expect(
+          RemoteUserErrorCopy.profileUpdateFailure(rateLimited),
+          equals(
+            'You can only change your display name once every 30 days. '
+            'Try again on 2026-09-02.',
+          ),
+        );
+      },
+    );
+
+    test(
+      'profile update copy falls back to generic text when the body is not '
+      'JSON',
+      () {
+        expect(
+          RemoteUserErrorCopy.profileUpdateFailure(
+            failure(RemoteRestFailureKind.http, statusCode: 429),
+          ),
+          contains('once every 30 days'),
+        );
+        expect(
+          RemoteUserErrorCopy.profileUpdateFailure(
+            failure(RemoteRestFailureKind.noInternet),
+          ),
+          allOf(contains('Network unavailable'), contains('try again')),
+        );
+      },
+    );
   });
 }

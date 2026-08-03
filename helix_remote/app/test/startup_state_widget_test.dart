@@ -86,6 +86,33 @@ void main() {
   });
 
   testWidgets(
+    'P03-W03: tapping Reset Helix Remote actually shows the confirmation '
+    'dialog',
+    (tester) async {
+      final dir = Directory.systemTemp.createTempSync('p03_w03_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+
+      File('${dir.path}${Platform.pathSeparator}helix_remote.db').createSync();
+
+      final root = RemoteCompositionRoot.withConfig(
+        _productConfig(dir.path),
+        devConfig: _devConfig(dir.path),
+        keyValueStore: _InMemoryKeyValueStore(),
+      );
+
+      await tester.pumpWidget(HelixRemoteApp(root: root));
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+
+      await tester.tap(find.text('Reset Helix Remote'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirm destructive reset'), findsOneWidget);
+
+      await root.dispose();
+    },
+  );
+
+  testWidgets(
     'P03-W02: authenticatedAndSyncing renders HomeScreen (offline-first; no separate syncing screen)',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p03_w02_');
