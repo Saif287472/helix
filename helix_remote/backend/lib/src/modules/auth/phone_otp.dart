@@ -56,6 +56,13 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
         }
       }
 
+      if (db.isPhoneHashBlocked(phoneHash)) {
+        return Response(
+          403,
+          body: jsonEncode({'error': 'This phone number is blocked'}),
+        );
+      }
+
       if (!_allowOtpRequest(phoneHash)) {
         return Response(
           429,

@@ -87,6 +87,7 @@ class OperabilityModule {
     router.post('/users/<accountId>/suspend', _suspendUser);
     router.post('/users/<accountId>/unsuspend', _unsuspendUser);
     router.post('/users/<accountId>/delete', _deleteUser);
+    router.post('/users/<accountId>/block', _blockUser);
     router.get('/logs', _logs);
     router.post('/invites', _createInvite);
     router.get('/invites', _listInvites);
@@ -485,6 +486,39 @@ class OperabilityModule {
       request.headers['user-agent'],
     );
     return _json({'account_id': accountId, 'deleted': true});
+  }
+
+  /// Permanently bans this account's phone number from ever registering
+  /// again, then deletes the account the same way `_deleteUser` does -
+  /// unlike a plain delete, re-registering that number afterward is
+  /// refused (see AuthRegistrationHandlers._registerHandler). Distinct
+  /// action from delete: a plain delete leaves the phone number free to
+  /// register a fresh account.
+  Future<Response> _blockUser(Request request, String accountId) async {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+    final account = db.getAccount(accountId);
+    if (account == null) {
+      return _json({'error': 'Account not found'}, status: 404);
+    }
+    final adminAccountId =
+        (request.context['auth'] as Map<String, dynamic>?)?['account_id']
+            as String?;
+    final phoneHash = account['phone_hash'] as String?;
+    if (phoneHash != null && phoneHash.isNotEmpty) {
+      db.blockPhoneHash(phoneHash, blockedByAccountId: adminAccountId);
+    }
+    await db.deleteAccountData(accountId);
+    db.logAudit(
+      adminAccountId,
+      (request.context['auth'] as Map<String, dynamic>?)?['device_id']
+          as String?,
+      'ADMIN_USER_BLOCKED',
+      request.context['client_ip'] as String?,
+      request.headers['user-agent'],
+    );
+    return _json({'account_id': accountId, 'blocked': true, 'deleted': true});
   }
 
   Future<Response> _cancelInvite(Request request, String inviteId) async {

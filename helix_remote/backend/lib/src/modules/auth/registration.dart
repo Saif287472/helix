@@ -81,9 +81,20 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       final existingAccount = db.getAccount(accountId);
 
       if (existingAccount == null) {
-        // A brand-new account: this phone number must not already belong
-        // to a different account, and both the invite and the OTP just
-        // requested for it must check out before we create anything.
+        // A brand-new account: refuse a permanently blocked number outright
+        // (see OperabilityModule._blockUser) - checked before the invite/OTP
+        // work below since no amount of a valid invite or OTP should let a
+        // blocked number back in.
+        if (db.isPhoneHashBlocked(phoneHash)) {
+          return Response(
+            403,
+            body: jsonEncode({'error': 'This phone number is blocked'}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+        // This phone number must not already belong to a different
+        // account, and both the invite and the OTP just requested for it
+        // must check out before we create anything.
         if (phoneOwner != null) {
           return Response(
             409,

@@ -1212,5 +1212,25 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 35;');
     }
+
+    if (version < 36) {
+      // Permanently bans a phone number from ever registering again -
+      // distinct from deleting an account, which only removes that
+      // account's data and leaves the phone number free to register a new
+      // one. Keyed by phone_hash (never a raw phone number), same privacy
+      // posture as everything else phone-identity-related. Outlives the
+      // account it was created from: blocking then deleting an account
+      // must still refuse that number afterward, so this cannot live on
+      // the accounts row itself.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS blocked_phone_hashes (
+          phone_hash TEXT PRIMARY KEY,
+          blocked_at INTEGER NOT NULL,
+          blocked_by_account_id TEXT
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 36;');
+    }
   }
 }

@@ -131,7 +131,9 @@ class AdminClient {
   }
 
   /// Permanent revoke: irreversibly deletes the account and all of its
-  /// data (messages, devices, contacts referencing it, etc.).
+  /// data (messages, devices, contacts referencing it, etc.). The phone
+  /// number itself is left free - a new account can register it again.
+  /// Use [blockUser] instead to also refuse that.
   Future<void> deleteUser(String accountId) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/v1/ops/users/$accountId/delete'),
@@ -139,6 +141,18 @@ class AdminClient {
     );
     if (response.statusCode != 200) {
       throw Exception('Failed to delete user: ${response.body}');
+    }
+  }
+
+  /// Deletes the account like [deleteUser], and additionally bans its
+  /// phone number from ever registering again on this server.
+  Future<void> blockUser(String accountId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/block'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to block user: ${response.body}');
     }
   }
 

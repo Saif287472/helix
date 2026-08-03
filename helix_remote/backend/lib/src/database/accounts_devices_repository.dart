@@ -241,6 +241,38 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     }
   }
 
+  // Phone-number blocking - permanently bans a phone_hash from ever
+  // registering again, independent of whether any account currently exists
+  // for it. Distinct from deleteAccountData: deleting alone frees a phone
+  // number for reuse, blocking alone does not touch any existing account.
+  // Admin-facing "Block" combines both (see OperabilityModule._blockUser).
+
+  void blockPhoneHash(String phoneHash, {String? blockedByAccountId}) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO blocked_phone_hashes (phone_hash, blocked_at, blocked_by_account_id)
+      VALUES (?, ?, ?);
+    ''');
+    stmt.execute([
+      phoneHash,
+      DateTime.now().millisecondsSinceEpoch,
+      blockedByAccountId,
+    ]);
+    stmt.close();
+  }
+
+  void unblockPhoneHash(String phoneHash) {
+    _deleteWhere('blocked_phone_hashes', 'phone_hash = ?', [phoneHash]);
+  }
+
+  bool isPhoneHashBlocked(String phoneHash) {
+    final stmt = _db.prepare(
+      'SELECT 1 FROM blocked_phone_hashes WHERE phone_hash = ?;',
+    );
+    final res = stmt.select([phoneHash]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
   // Device operations
   void registerDevice(
     String deviceId,
