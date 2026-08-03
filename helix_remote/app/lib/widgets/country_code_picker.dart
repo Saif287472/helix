@@ -186,6 +186,34 @@ const Country kDefaultCountry = Country(
   dialCode: '+880',
 );
 
+/// Finds the [Country] whose dial code is the longest matching prefix of
+/// [e164] (longest, since dial codes overlap - e.g. `+1` vs `+91`), and
+/// returns it along with the remaining national digits. Falls back to
+/// [kDefaultCountry] with the input taken as-is if nothing matches (e.g.
+/// malformed input) - used to pre-fill the country selector from a phone
+/// number collected earlier in the flow.
+({Country country, String nationalNumber}) splitE164PhoneNumber(
+  String e164,
+) {
+  final digits = e164.startsWith('+') ? e164.substring(1) : e164;
+  Country? bestMatch;
+  for (final country in kCountries) {
+    final code = country.dialCode.substring(1);
+    if (digits.startsWith(code)) {
+      if (bestMatch == null || code.length > bestMatch.dialCode.length - 1) {
+        bestMatch = country;
+      }
+    }
+  }
+  if (bestMatch == null) {
+    return (country: kDefaultCountry, nationalNumber: digits);
+  }
+  return (
+    country: bestMatch,
+    nationalNumber: digits.substring(bestMatch.dialCode.length - 1),
+  );
+}
+
 /// Button showing the selected country's flag and dial code, styled to
 /// match an adjacent `OutlineInputBorder` [TextField]. Tapping opens a
 /// searchable bottom sheet to change it.

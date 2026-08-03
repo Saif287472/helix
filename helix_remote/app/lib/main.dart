@@ -82,6 +82,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
   String _cacheDir = '';
   String _currentServerUrl = kHelixGlobalServerUrl;
   String? _pendingInviteCode;
+  String? _pendingPhoneNumber;
 
   @override
   void initState() {
@@ -185,10 +186,12 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
     _initialUrlError = null;
     if (choice is ServerInviteChoice) {
       _pendingInviteCode = choice.inviteCode;
+      _pendingPhoneNumber = choice.phoneNumber;
       try {
         await _onConnectUrl(choice.serverUrl);
       } catch (e) {
         _pendingInviteCode = null;
+        _pendingPhoneNumber = null;
         if (mounted) {
           setState(() {
             _initialUrlError = e.toString();
@@ -226,6 +229,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         root: _root!,
         onChangeServerUrl: _onChangeServerUrl,
         initialInviteCode: _pendingInviteCode,
+        initialPhoneNumber: _pendingPhoneNumber,
       );
     }
     return MaterialApp(
@@ -536,6 +540,7 @@ class HelixRemoteApp extends StatefulWidget {
     required this.root,
     this.onChangeServerUrl,
     this.initialInviteCode,
+    this.initialPhoneNumber,
   });
 
   final RemoteCompositionRoot root;
@@ -545,6 +550,11 @@ class HelixRemoteApp extends StatefulWidget {
   /// (Helix Global or a personal server), so the create-account form is
   /// pre-filled and the user doesn't have to re-enter or re-paste it.
   final String? initialInviteCode;
+
+  /// E.164 phone number carried over from the personal-server invite entry
+  /// screen (the only place it's collected before this point), so the
+  /// create-account form doesn't ask for it a second time.
+  final String? initialPhoneNumber;
 
   @override
   State<HelixRemoteApp> createState() => _HelixRemoteAppState();
@@ -605,6 +615,13 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     final initialInvite = widget.initialInviteCode;
     if (initialInvite != null && initialInvite.isNotEmpty) {
       _inviteController.text = initialInvite;
+    }
+    final initialPhoneNumber = widget.initialPhoneNumber;
+    if (initialPhoneNumber != null && initialPhoneNumber.isNotEmpty) {
+      final split = splitE164PhoneNumber(initialPhoneNumber);
+      _selectedCountry = split.country;
+      _nationalNumberController.text = split.nationalNumber;
+      _syncPhoneController();
     }
     _inviteFocusNode.addListener(() {
       if (!_inviteFocusNode.hasFocus) _validateInviteCode();
