@@ -240,23 +240,30 @@ class CountryCodeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: enabled ? () => _openPicker(context) : null,
-      borderRadius: BorderRadius.circular(4),
-      child: InputDecorator(
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 18),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(selected.flagEmoji, style: const TextStyle(fontSize: 20)),
-            const SizedBox(width: 6),
-            Text(selected.dialCode),
-            const SizedBox(width: 2),
-            const Icon(Icons.arrow_drop_down),
-          ],
+    // IntrinsicWidth gives the InputDecorator a bounded width equal to its
+    // content's natural size - without it, sitting as a non-Expanded child
+    // of PhoneNumberInput's Row hands it an unbounded width constraint,
+    // which InputDecorator explicitly asserts against (it's normally only
+    // ever used inside a already-constrained TextField).
+    return IntrinsicWidth(
+      child: InkWell(
+        onTap: enabled ? () => _openPicker(context) : null,
+        borderRadius: BorderRadius.circular(4),
+        child: InputDecorator(
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(selected.flagEmoji, style: const TextStyle(fontSize: 20)),
+              const SizedBox(width: 6),
+              Text(selected.dialCode),
+              const SizedBox(width: 2),
+              const Icon(Icons.arrow_drop_down),
+            ],
+          ),
         ),
       ),
     );
