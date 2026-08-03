@@ -827,15 +827,20 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
           // of being conflated with the back gesture (see below).
           _CreateAccountStep.enterDetails => null,
           _CreateAccountStep.enterOtp => BackButton(
-            onPressed: () => setState(() {
-              _createAccountStep = _CreateAccountStep.enterDetails;
-              _otpController.clear();
-              _otpError = null;
-            }),
+            onPressed: () {
+              _unfocusForStepChange();
+              setState(() {
+                _createAccountStep = _CreateAccountStep.enterDetails;
+                _otpController.clear();
+                _otpError = null;
+              });
+            },
           ),
           _CreateAccountStep.enterDisplayName => BackButton(
-            onPressed: () =>
-                setState(() => _createAccountStep = _CreateAccountStep.enterOtp),
+            onPressed: () {
+              _unfocusForStepChange();
+              setState(() => _createAccountStep = _CreateAccountStep.enterOtp);
+            },
           ),
         },
       ),
@@ -1195,10 +1200,21 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
       setState(() => _otpError = 'Verification code cannot be empty.');
       return;
     }
+    _unfocusForStepChange();
     setState(() {
       _otpError = null;
       _createAccountStep = _CreateAccountStep.enterDisplayName;
     });
+  }
+
+  /// Closes the keyboard before swapping `_createAccountStep`'s TextField
+  /// out from under it. Without this, Android's on-screen keyboard can get
+  /// stuck showing the outgoing field's layout (e.g. the OTP step's numeric
+  /// pad) instead of picking up the next field's - typing still lands in
+  /// the right place, but the wrong keys are on screen until the keyboard
+  /// is dismissed and reopened some other way.
+  void _unfocusForStepChange() {
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   Widget _buildDisplayNameStep() {
@@ -1304,6 +1320,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     try {
       final isPlaceholder = await widget.root.requestOtp(phoneNumber);
       if (mounted) {
+        _unfocusForStepChange();
         setState(() {
           _otpIsPlaceholder = isPlaceholder;
           _createAccountStep = _CreateAccountStep.enterOtp;
@@ -1364,6 +1381,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     } catch (e, st) {
       AppLogger.instance.warn('auth', 'Registration failed: $e', st);
       if (mounted) {
+        _unfocusForStepChange();
         setState(() {
           _registrationError = _formatRegistrationError(e);
           _errorMessage = _registrationError;
