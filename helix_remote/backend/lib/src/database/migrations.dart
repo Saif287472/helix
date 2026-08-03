@@ -1232,5 +1232,21 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 36;');
     }
+
+    if (version < 37) {
+      // Tracks when a display name was last changed *by the user's own
+      // request* (see AuthProfileHandlers._updateProfileHandler), separate
+      // from account_profiles.updated_at - which registration also writes,
+      // for the name given (or defaulted from the phone number) at signup.
+      // Left NULL until the first explicit change so a user who skipped
+      // setting a name at registration, or who hasn't touched it since, is
+      // never blocked from their first real change by a cooldown they
+      // never used.
+      _db.execute(
+        'ALTER TABLE account_profiles ADD COLUMN display_name_changed_at INTEGER;',
+      );
+
+      _db.execute('PRAGMA user_version = 37;');
+    }
   }
 }

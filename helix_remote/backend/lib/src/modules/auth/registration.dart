@@ -145,7 +145,11 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
           phoneHash: phoneHash,
           phoneLast4: phoneLast4,
         );
-        db.upsertAccountProfile(accountId: accountId, displayName: displayName);
+        db.upsertAccountProfile(
+          accountId: accountId,
+          displayName: displayName,
+          now: _now(),
+        );
         db.markOtpConsumed(otpResult.challengeId!, now);
         db.logAudit(
           accountId,

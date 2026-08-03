@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_account_validation.dart';
+import 'package:helix_remote/app/remote_error_copy.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/app/remote_rest_client.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -58,11 +60,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           context,
         ).showSnackBar(const SnackBar(content: Text('Display name updated')));
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(
-          () => _nameError =
-              'Could not save. Check your connection and try again.',
+          () => _nameError = e is RemoteRestException
+              ? RemoteUserErrorCopy.profileUpdateFailure(e)
+              : 'Could not save. Check your connection and try again.',
         );
       }
     } finally {
@@ -121,6 +124,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     hintText: 'Your name shown to contacts',
                     border: const OutlineInputBorder(),
                     errorText: _nameError,
+                    // The rate-limit message ("...once every 30 days. Try
+                    // again on <date>.") is longer than a plain validation
+                    // label - errorMaxLines defaults to null, which
+                    // truncates to one line with an ellipsis instead of
+                    // wrapping (see the phone field's identical fix).
+                    errorMaxLines: 3,
                   ),
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _saveDisplayName(),
