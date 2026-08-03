@@ -18,6 +18,26 @@ Future<void> _settleWithRealIO(WidgetTester tester) async {
   }
 }
 
+/// The Users table's seven columns (plus three per-row action icons) don't
+/// fit the default 800x600 test surface - past it, `tester.tap` on a
+/// tooltip/icon there fails hit-testing since that part of the row is laid
+/// out beyond the root render tree's bounds, not merely scrolled out of
+/// view. Widened for every test here rather than only the ones that
+/// currently tap into the Actions column, so a future column/action
+/// addition doesn't silently reintroduce this for tests that happen not to
+/// interact with it yet.
+Future<void> _pumpUsersTab(WidgetTester tester, AdminClient client) async {
+  tester.view.physicalSize = const Size(1600, 900);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(body: UsersTab(client: client)),
+    ),
+  );
+}
+
 void main() {
   late HttpServer server;
   late List<Map<String, dynamic>> users;
@@ -99,9 +119,8 @@ void main() {
         final accountId = unsuspendMatch.group(1)!;
         users = users
             .map(
-              (u) => u['account_id'] == accountId
-                  ? {...u, 'status': 'ACTIVE'}
-                  : u,
+              (u) =>
+                  u['account_id'] == accountId ? {...u, 'status': 'ACTIVE'} : u,
             )
             .toList();
         request.response.headers.contentType = ContentType.json;
@@ -124,6 +143,23 @@ void main() {
         await request.response.close();
         return;
       }
+      final blockMatch = RegExp(
+        r'^/api/v1/ops/users/([^/]+)/block$',
+      ).firstMatch(request.uri.path);
+      if (request.method == 'POST' && blockMatch != null) {
+        final accountId = blockMatch.group(1)!;
+        users = users.where((u) => u['account_id'] != accountId).toList();
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'account_id': accountId,
+            'blocked': true,
+            'deleted': true,
+          }),
+        );
+        await request.response.close();
+        return;
+      }
       request.response.statusCode = 404;
       await request.response.close();
     });
@@ -137,9 +173,7 @@ void main() {
     tester,
   ) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: UsersTab(client: client))),
-    );
+    await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
 
     expect(find.text('Alice'), findsOneWidget);
@@ -155,21 +189,15 @@ void main() {
   ) async {
     users = [user(accountId: 'user_2')];
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: UsersTab(client: client))),
-    );
+    await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
 
     expect(find.text('—'), findsNWidgets(3)); // name, phone, invite
   });
 
-  testWidgets('suspending a user toggles its status and icon', (
-    tester,
-  ) async {
+  testWidgets('suspending a user toggles its status and icon', (tester) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: UsersTab(client: client))),
-    );
+    await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
 
     expect(find.text('ACTIVE'), findsOneWidget);
@@ -177,28 +205,20 @@ void main() {
     await _settleWithRealIO(tester);
 
     expect(find.text('SUSPENDED'), findsOneWidget);
-    expect(
-      requestedPaths,
-      contains('POST /api/v1/ops/users/user_1/suspend'),
-    );
+    expect(requestedPaths, contains('POST /api/v1/ops/users/user_1/suspend'));
 
     await tester.tap(find.byTooltip('Restore access'));
     await _settleWithRealIO(tester);
 
     expect(find.text('ACTIVE'), findsOneWidget);
-    expect(
-      requestedPaths,
-      contains('POST /api/v1/ops/users/user_1/unsuspend'),
-    );
+    expect(requestedPaths, contains('POST /api/v1/ops/users/user_1/unsuspend'));
   });
 
   testWidgets('deleting a user requires confirmation and removes the row', (
     tester,
   ) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: UsersTab(client: client))),
-    );
+    await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
 
     await tester.tap(find.byTooltip('Delete permanently'));
@@ -218,22 +238,53 @@ void main() {
     await tester.tap(find.byTooltip('Delete permanently'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Delete permanently'));
-    await tester.pumpAndSettle();
+    // Not pumpAndSettle(): confirming starts a real network call and shows
+    // an indeterminate CircularProgressIndicator while busy, which never
+    // "settles" - see _settleWithRealIO's doc comment above.
+    await tester.pump();
     await _settleWithRealIO(tester);
 
     expect(find.text('Alice'), findsNothing);
     expect(find.text('No users registered yet.'), findsOneWidget);
+    expect(requestedPaths, contains('POST /api/v1/ops/users/user_1/delete'));
+  });
+
+  testWidgets('blocking a user requires confirmation and removes the row', (
+    tester,
+  ) async {
+    final client = AdminClient(baseUrl: baseUrl(), token: 't');
+    await _pumpUsersTab(tester, client);
+    await _settleWithRealIO(tester);
+
+    await tester.tap(find.byTooltip('Block (delete + ban phone number)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Block this user?'), findsOneWidget);
+
+    // Cancelling the dialog must not call the block endpoint.
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alice'), findsOneWidget);
     expect(
       requestedPaths,
-      contains('POST /api/v1/ops/users/user_1/delete'),
+      isNot(contains('POST /api/v1/ops/users/user_1/block')),
     );
+
+    await tester.tap(find.byTooltip('Block (delete + ban phone number)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Block permanently'));
+    // Not pumpAndSettle(): see the matching comment in the delete test above.
+    await tester.pump();
+    await _settleWithRealIO(tester);
+
+    expect(find.text('Alice'), findsNothing);
+    expect(find.text('No users registered yet.'), findsOneWidget);
+    expect(requestedPaths, contains('POST /api/v1/ops/users/user_1/block'));
   });
 
   testWidgets('pagination controls disable at the edges', (tester) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: UsersTab(client: client))),
-    );
+    await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
 
     final previous = tester.widget<TextButton>(
@@ -252,9 +303,7 @@ void main() {
   ) async {
     failListRequests = true;
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: UsersTab(client: client))),
-    );
+    await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
 
     expect(find.textContaining('Failed to load users'), findsOneWidget);

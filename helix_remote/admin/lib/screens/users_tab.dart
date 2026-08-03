@@ -89,7 +89,9 @@ class _UsersTabState extends State<UsersTab> {
         title: const Text('Delete this user?'),
         content: Text(
           'This permanently deletes $displayLabel\'s account and all of '
-          'their messages, devices, and contacts. This cannot be undone.',
+          'their messages, devices, and contacts. Their phone number is '
+          'left free - it can register a brand-new account here again. '
+          'This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -111,6 +113,50 @@ class _UsersTabState extends State<UsersTab> {
     setState(() => _busyAccountId = accountId);
     try {
       await widget.client.deleteUser(accountId);
+      await _loadUsers(offset: _offset);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyAccountId = null);
+    }
+  }
+
+  /// Deletes the account like [_confirmDelete], and additionally bans its
+  /// phone number so it can never register again on this server - distinct
+  /// from a plain delete, which leaves the number free for a fresh account.
+  Future<void> _confirmBlock(String accountId, String displayLabel) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block this user?'),
+        content: Text(
+          'This permanently deletes $displayLabel\'s account and all of '
+          'their messages, devices, and contacts, and also bans their '
+          'phone number from ever registering here again. Use "Delete '
+          'permanently" instead if you only want to remove the account. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Block permanently'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busyAccountId = accountId);
+    try {
+      await widget.client.blockUser(accountId);
       await _loadUsers(offset: _offset);
     } catch (e) {
       if (!mounted) return;
@@ -266,6 +312,17 @@ class _UsersTabState extends State<UsersTab> {
                             ),
                             tooltip: 'Delete permanently',
                             onPressed: () => _confirmDelete(
+                              accountId,
+                              displayName.isEmpty ? accountId : displayName,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              Icons.block,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            tooltip: 'Block (delete + ban phone number)',
+                            onPressed: () => _confirmBlock(
                               accountId,
                               displayName.isEmpty ? accountId : displayName,
                             ),
