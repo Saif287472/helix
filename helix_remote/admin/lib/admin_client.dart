@@ -8,6 +8,41 @@ import 'package:http/http.dart' as http;
 /// fine, so it must not be discarded on this alone).
 enum AdminLoginStatus { ok, unauthorized, unreachable }
 
+/// A page of server console output, plus the server's own explanation for
+/// why it might be empty.
+///
+/// The explanation matters: an empty list on its own is ambiguous between
+/// "nothing has happened yet" and "this server cannot write its log file",
+/// and the Logs screen used to render both as a bare "No logs available."
+class ServerLogs {
+  const ServerLogs({
+    required this.lines,
+    required this.source,
+    this.message,
+    this.filePath,
+  });
+
+  const ServerLogs.empty()
+    : lines = const [],
+      source = 'unknown',
+      message = null,
+      filePath = null;
+
+  final List<String> lines;
+
+  /// Where the server read these from: `file`, `memory`, or `none`.
+  final String source;
+
+  /// Set when the server has something to say - always set when [lines] is
+  /// empty, and also when logs are being served despite a file problem.
+  final String? message;
+
+  /// Path being tailed, when [source] is `file`.
+  final String? filePath;
+
+  bool get isEmpty => lines.isEmpty;
+}
+
 class AdminClient {
   AdminClient({required this.baseUrl, required this.token});
 
@@ -168,9 +203,9 @@ class AdminClient {
     }
   }
 
-  Future<List<String>> getLogs() async {
+  Future<ServerLogs> getLogs({int limit = 200}) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/ops/logs'),
+      Uri.parse('$baseUrl/api/v1/ops/logs?limit=$limit'),
       headers: _headers,
     );
     if (response.statusCode != 200) {
@@ -178,7 +213,12 @@ class AdminClient {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final logs = body['logs'] as List?;
-    return logs?.map((l) => l as String).toList() ?? [];
+    return ServerLogs(
+      lines: logs?.map((l) => l as String).toList() ?? const [],
+      message: body['message'] as String?,
+      source: body['source'] as String? ?? 'unknown',
+      filePath: body['file_path'] as String?,
+    );
   }
 
   /// Issues a new 7-day, single-use invite. The raw code (embedded in

@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show stderr;
 
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 
 class OutboxWorker {
   OutboxWorker(
@@ -33,7 +33,7 @@ class OutboxWorker {
   void start() {
     _timer = Timer.periodic(interval, (_) {
       processOnce().catchError((Object e) {
-        stderr.writeln('[OutboxWorker] timer error: $e');
+        logServerError('[OutboxWorker] timer error: $e');
         return <String, int>{'completed': 0, 'failed': 0, 'dlq': 0};
       });
     });
@@ -89,7 +89,7 @@ class OutboxWorker {
           const Duration(minutes: 10).inMilliseconds;
       db.purgeTerminalPendingCalls(tenMinutesAgo);
     } catch (e) {
-      stderr.writeln('[OutboxWorker] processOnce error: $e');
+      logServerError('[OutboxWorker] processOnce error: $e');
     }
     return processed;
   }
@@ -144,7 +144,7 @@ class OutboxWorker {
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);
       processed['completed'] = processed['completed']! + 1;
     } catch (e) {
-      stderr.writeln('[OutboxWorker] FCM delivery error event=$eventId: $e');
+      logServerError('[OutboxWorker] FCM delivery error event=$eventId: $e');
       _failOrDlq(eventId, retries, processed);
     }
   }
@@ -202,7 +202,7 @@ class OutboxWorker {
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);
       processed['completed'] = processed['completed']! + 1;
     } catch (e) {
-      stderr.writeln('[OutboxWorker] S2S retry error event=$eventId: $e');
+      logServerError('[OutboxWorker] S2S retry error event=$eventId: $e');
       _failOrDlq(eventId, retries, processed);
     }
   }

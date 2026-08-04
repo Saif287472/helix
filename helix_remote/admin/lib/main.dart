@@ -105,8 +105,13 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   Map<String, dynamic>? _metrics;
   Map<String, dynamic>? _config;
-  List<String> _logs = [];
+  ServerLogs _logs = const ServerLogs.empty();
   String? _errorMessage;
+
+  /// Polls the Logs screen while it's live. Lives here rather than in
+  /// LogsTab so toggling it survives navigating between tabs.
+  Timer? _logPollTimer;
+  bool _logAutoRefresh = false;
 
   @override
   void initState() {
@@ -207,12 +212,43 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   @override
   void dispose() {
+    _logPollTimer?.cancel();
     _urlController.dispose();
     _tokenController.dispose();
     _federationDomainController.dispose();
     _federationAddressController.dispose();
     _federationDirectoryController.dispose();
     super.dispose();
+  }
+
+  /// How often the Logs screen pulls new lines while "Live" is on. Slow
+  /// enough to be cheap on a small VPS, quick enough to feel live.
+  static const _logPollInterval = Duration(seconds: 3);
+
+  void _setLogAutoRefresh(bool enabled) {
+    setState(() => _logAutoRefresh = enabled);
+    _logPollTimer?.cancel();
+    if (!enabled) return;
+    _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
+    _refreshLogs();
+  }
+
+  /// Refreshes only the log lines. Deliberately separate from
+  /// [_refreshData]: the poll shouldn't drag metrics, config and the
+  /// federation controllers along with it every few seconds, and it must
+  /// not flip the shell into its full-page loading state.
+  Future<void> _refreshLogs() async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final logs = await client.getLogs();
+      if (!mounted) return;
+      setState(() => _logs = logs);
+    } catch (_) {
+      // A failed poll is not worth interrupting the screen for - the next
+      // tick will pick it up, and a hard failure still surfaces through
+      // the manual refresh path.
+    }
   }
 
   Future<void> _completeIntro() async {
@@ -257,11 +293,15 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   void _disconnect() {
     unawaited(_prefs?.clearAdminToken());
+    // Stop polling immediately - the timer would otherwise keep firing
+    // against a server this app is no longer authenticated to.
+    _logPollTimer?.cancel();
+    _logAutoRefresh = false;
     setState(() {
       _client = null;
       _metrics = null;
       _config = null;
-      _logs = [];
+      _logs = const ServerLogs.empty();
       _errorMessage = null;
     });
   }
@@ -607,7 +647,12 @@ class _MainAdminPageState extends State<MainAdminPage> {
       case 'logs':
         return _client == null
             ? _lockedTab()
-            : LogsTab(logs: _logs, onRefresh: _refreshData);
+            : LogsTab(
+                logs: _logs,
+                onRefresh: _refreshLogs,
+                autoRefreshEnabled: _logAutoRefresh,
+                onAutoRefreshChanged: _setLogAutoRefresh,
+              );
       case 'backup':
         return _client == null
             ? _lockedTab()

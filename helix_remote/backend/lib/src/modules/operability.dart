@@ -9,6 +9,7 @@ import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -24,6 +25,7 @@ class OperabilityModule {
     required this.turnSecret,
     required this.turnUrl,
     this.logFilePath,
+    this.logSink,
     this.serverIdentity,
     this.federationClient,
     this.federationDomain,
@@ -41,6 +43,11 @@ class OperabilityModule {
   final String turnSecret;
   final String turnUrl;
   final String? logFilePath;
+
+  /// In-process capture of the server's console output. Null when the
+  /// server was constructed without one (most tests, and the CLI tools),
+  /// in which case `/logs` falls back to the configured file alone.
+  final ServerLogSink? logSink;
   final ServerIdentity? serverIdentity;
   final FederationClient? federationClient;
   final String? federationDomain;
@@ -620,36 +627,134 @@ class OperabilityModule {
     return invite['status'] as String;
   }
 
+  /// Largest number of lines a single `/logs` call will return. The admin
+  /// console asks for 100 by default; the ceiling just stops a hand-crafted
+  /// `?limit=` from trying to serialize an entire log file into one JSON
+  /// response.
+  static const _maxLogLines = 1000;
+
+  /// How much of the tail of the log file to read. Only the last chunk is
+  /// pulled off disk rather than the whole file - a long-running server's
+  /// log grows without bound, and reading all of it to keep 100 lines
+  /// blocked the isolate for as long as the read took.
+  static const _logTailBytes = 256 * 1024;
+
+  /// Serves recent server console output for the admin console's Logs
+  /// screen.
+  ///
+  /// Sources, in order of preference:
+  ///  1. the on-disk log file, when [ServerLogSink] is actively writing it -
+  ///     it holds history from before the current process started;
+  ///  2. the sink's in-memory ring buffer, which always exists and needs no
+  ///     configuration at all;
+  ///  3. the configured file on its own, for deployments that point
+  ///     HELIX_REMOTE_LOG_FILE at a log another process writes.
+  ///
+  /// Anything that leaves the list empty is explained in `message` rather
+  /// than returned as a bare empty array - the admin console shows that
+  /// text, so an operator can tell "nothing has been logged yet" apart from
+  /// "this server can't write its log file".
   Response _logs(Request request) {
     if (!_isAdmin(request)) {
       return _json({'error': 'Admin privileges required'}, status: 403);
     }
     _auditAdminRead(request, 'ADMIN_LOGS_READ');
 
-    if (logFilePath == null || logFilePath!.isEmpty) {
+    final requestedLimit =
+        int.tryParse(request.url.queryParameters['limit'] ?? '') ?? 100;
+    if (requestedLimit <= 0) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Invalid limit'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    final limit = requestedLimit.clamp(1, _maxLogLines);
+
+    final sink = logSink;
+    final path = logFilePath;
+    final hasFile = path != null && path.isNotEmpty && File(path).existsSync();
+
+    if (sink != null && sink.fileActive && hasFile) {
+      try {
+        return _json({
+          'logs': _readFileTail(path, limit),
+          'source': 'file',
+          'file_path': path,
+        });
+      } catch (e) {
+        // Fall through to the in-memory buffer: it holds this process's
+        // output regardless of what went wrong on disk.
+      }
+    }
+
+    if (sink != null && sink.bufferedLineCount > 0) {
       return _json({
-        'message':
-            'Log file not configured. Please set HELIX_REMOTE_LOG_FILE to enable log tailing.',
-        'logs': [],
+        'logs': sink.tail(limit),
+        'source': 'memory',
+        if (sink.fileError != null) 'message': sink.fileError,
       });
     }
 
-    final file = File(logFilePath!);
-    if (!file.existsSync()) {
-      return _json({
-        'message': 'Log file configured but does not exist at: $logFilePath',
-        'logs': [],
-      });
+    if (hasFile) {
+      try {
+        return _json({
+          'logs': _readFileTail(path, limit),
+          'source': 'file',
+          'file_path': path,
+        });
+      } catch (e) {
+        return _json({'error': 'Failed to read logs: $e'}, status: 500);
+      }
     }
 
+    return _json({
+      'logs': <String>[],
+      'source': 'none',
+      'message': _emptyLogExplanation(sink, path),
+    });
+  }
+
+  String _emptyLogExplanation(ServerLogSink? sink, String? path) {
+    if (sink == null) {
+      return 'This server was started without a log sink, so console output '
+          'is not being captured. Restart it using bin/server.dart to enable '
+          'the Logs screen.';
+    }
+    if (sink.fileError != null) return sink.fileError!;
+    if (path != null && path.isNotEmpty) {
+      return 'No output has been logged yet. Lines will appear here as the '
+          'server handles requests, and are also being written to $path.';
+    }
+    return 'No output has been logged yet. Lines will appear here as the '
+        'server handles requests. Set HELIX_REMOTE_LOG_FILE to also keep '
+        'them across restarts.';
+  }
+
+  /// Reads at most the last [_logTailBytes] of [path] and returns its final
+  /// [limit] lines.
+  List<String> _readFileTail(String path, int limit) {
+    final file = File(path);
+    final handle = file.openSync();
     try {
-      final lines = file.readAsLinesSync();
-      final tail = lines.length > 100
-          ? lines.sublist(lines.length - 100)
-          : lines;
-      return _json({'logs': tail});
-    } catch (e) {
-      return _json({'error': 'Failed to read logs: $e'}, status: 500);
+      final length = handle.lengthSync();
+      final start = length > _logTailBytes ? length - _logTailBytes : 0;
+      handle.setPositionSync(start);
+      final bytes = handle.readSync(length - start);
+      var text = utf8.decode(bytes, allowMalformed: true);
+      // A non-zero start almost certainly lands mid-line; drop that
+      // fragment so the first row isn't a truncated half-message.
+      if (start > 0) {
+        final newline = text.indexOf('\n');
+        text = newline == -1 ? '' : text.substring(newline + 1);
+      }
+      final lines = const LineSplitter()
+          .convert(text)
+          .where((line) => line.trim().isNotEmpty)
+          .toList();
+      if (lines.length <= limit) return lines;
+      return lines.sublist(lines.length - limit);
+    } finally {
+      handle.closeSync();
     }
   }
 

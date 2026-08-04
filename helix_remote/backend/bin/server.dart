@@ -1,16 +1,42 @@
 // ignore_for_file: avoid_print
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_backend/src/env_sanitize.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 import 'src/admin_token_file.dart';
 import 'src/terminal_qr.dart';
 
 void main() async {
+  // Everything the server prints is captured here so the admin console's
+  // Logs screen has a source. The sink still forwards each line to
+  // stdout/stderr, so `docker compose logs` is unaffected.
+  final logSink = ServerLogSink(
+    filePath: Platform.environment['HELIX_REMOTE_LOG_FILE'],
+  );
+  installServerLog(logSink);
+
+  // Zone-overriding `print` is what catches the ~30 existing print() calls
+  // (startup banner, admin token, shutdown notices) without rewriting every
+  // one of them. stderr has no equivalent hook, which is why library code
+  // calls logServerError() directly instead.
+  await runZonedGuarded(
+    () => _run(logSink),
+    (error, stack) {
+      logSink.error('Unhandled error: $error\n$stack');
+    },
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) => logSink.info(line),
+    ),
+  );
+}
+
+Future<void> _run(ServerLogSink logSink) async {
   // On Windows without cmake/MSVC, native assets can't compile sqlite3 from
   // source. Pre-loading the DLL puts its symbols into the process so the
   // @Native fallback resolver finds them via DynamicLibrary.process().
@@ -23,11 +49,11 @@ void main() async {
   final devMode = Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1';
   final jwtSecret = Platform.environment['HELIX_REMOTE_JWT_SECRET'];
   if (jwtSecret == null || jwtSecret.isEmpty) {
-    stderr.writeln('FATAL: HELIX_REMOTE_JWT_SECRET required');
+    logServerError('FATAL: HELIX_REMOTE_JWT_SECRET required');
     exit(1);
   }
   if (!devMode && jwtSecret.length < 32) {
-    stderr.writeln(
+    logServerWarning(
       'HELIX_REMOTE_JWT_SECRET must be set to at least 32 bytes outside explicit HELIX_REMOTE_DEV_MODE=1.',
     );
     exit(78);
@@ -48,7 +74,7 @@ void main() async {
     attachmentsStorageDir = dir;
     print('Attachment storage: $attachmentsDirPath');
   } else if (!devMode) {
-    stderr.writeln(
+    logServerWarning(
       'WARNING: HELIX_REMOTE_ATTACHMENTS_DIR is not set. '
       'File attachment upload and download will be unavailable.',
     );
@@ -58,7 +84,7 @@ void main() async {
   final turnUrl = Platform.environment['HELIX_REMOTE_TURN_URL'] ?? '';
   final turnSecret = Platform.environment['HELIX_REMOTE_TURN_SECRET'] ?? '';
   if (!devMode && (turnUrl.isEmpty || turnSecret.isEmpty)) {
-    stderr.writeln(
+    logServerWarning(
       'WARNING: HELIX_REMOTE_TURN_URL or HELIX_REMOTE_TURN_SECRET is not set. '
       'WebRTC calls in relay-only mode will fail to connect.',
     );
@@ -79,7 +105,7 @@ void main() async {
   } else {
     pushProvider = const NoopPushProvider();
     if (!devMode) {
-      stderr.writeln(
+      logServerWarning(
         'WARNING: HELIX_REMOTE_FCM_PROJECT_ID or HELIX_REMOTE_FCM_ACCESS_TOKEN '
         'not set. Push wake notifications are disabled.',
       );
@@ -103,7 +129,7 @@ void main() async {
   } else {
     smsProvider = const NoopSmsProvider();
     if (!devMode) {
-      stderr.writeln(
+      logServerWarning(
         'WARNING: HELIX_REMOTE_SMS_API_KEY or HELIX_REMOTE_SMS_SENDER_ID is '
         'not set. Phone verification codes will be returned directly in '
         'the API response instead of sent by SMS.',
@@ -140,14 +166,21 @@ void main() async {
       serverId: identity.serverId,
       adminToken: identity.adminToken!,
     );
-    print('Helix Admin Token (Generated on first boot):');
-    print('  ${identity.adminToken}');
+    // Deliberately stdout.writeln and not print: print() is captured by
+    // the zone into the log sink, which both keeps a copy in memory for the
+    // admin console and appends it to HELIX_REMOTE_LOG_FILE. The admin
+    // token must not end up in either - it already has a properly
+    // permissioned home in ADMIN_TOKEN.txt. stdout has no zone hook, so
+    // writing there puts it on the console (and in `docker compose logs`)
+    // exactly as before without it being captured.
+    stdout.writeln('Helix Admin Token (Generated on first boot):');
+    stdout.writeln('  ${identity.adminToken}');
     print('Also saved to: ${adminTokenFile.path}');
     print('Save this token! It is required to log into Helix Admin.');
     try {
-      print('');
-      print('Scan with the Helix Admin app to fill in the token:');
-      print(renderTerminalQr(identity.adminToken!));
+      stdout.writeln('');
+      stdout.writeln('Scan with the Helix Admin app to fill in the token:');
+      stdout.writeln(renderTerminalQr(identity.adminToken!));
     } catch (_) {
       // Cosmetic only - never let QR rendering block server startup.
     }
@@ -172,6 +205,9 @@ void main() async {
     print('Shutdown signal ($name) received. Disposing services...');
     await server.stop();
     print('Server cleanly shutdown.');
+    // Flush buffered log lines before the process goes away, or the last
+    // few writes (including this shutdown notice) never reach the file.
+    await logSink.dispose();
     exit(0);
   }
 

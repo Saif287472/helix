@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io' show stderr;
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
@@ -7,6 +6,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 
 /// Milestone 5.1: federated call signaling has no home-server-authority
@@ -254,7 +254,7 @@ class CallsModule {
       );
       return _json(_httpStatusFor(result), result);
     } catch (e, st) {
-      stderr.writeln('[CALL_SIGNAL_ERROR] $e\n$st');
+      logServerError('[CALL_SIGNAL_ERROR] $e\n$st');
       return _json(500, {'status': 'error', 'reason': 'signal handler: $e'});
     }
   }
@@ -464,7 +464,7 @@ class CallsModule {
       expiresAt: expiresAt,
       targetDeviceIds: targetDeviceIds,
     );
-    stderr.writeln(
+    logServerError(
       '[CALL] offer_received call_id=${signal.callId} '
       'caller=$accountId callee=$calleeAccountId '
       'devices=${targetDeviceIds.length} video=${signal.isVideo}',
@@ -681,7 +681,7 @@ class CallsModule {
           .toList(growable: false);
       return _json(200, {'calls': calls});
     } catch (e, st) {
-      stderr.writeln('[CALL_PENDING_ERROR] $e\n$st');
+      logServerError('[CALL_PENDING_ERROR] $e\n$st');
       return _json(500, {'status': 'error', 'reason': 'pending handler: $e'});
     }
   }
@@ -749,7 +749,7 @@ class CallsModule {
       now: now,
     );
     db.markPendingCallTerminal(callId: callId, status: 'DECLINED', now: now);
-    stderr.writeln(
+    logServerError(
       '[CALL] declined call_id=$callId device=${auth['device_id']}',
     );
     return _json(200, {'status': 'declined', 'call_id': callId});
@@ -777,7 +777,7 @@ class CallsModule {
       now: now,
     );
     db.markPendingCallTerminal(callId: callId, status: 'CANCELLED', now: now);
-    stderr.writeln(
+    logServerError(
       '[CALL] cancelled call_id=$callId device=${auth['device_id']}',
     );
     return _json(200, {'status': 'cancelled', 'call_id': callId});
@@ -1112,7 +1112,7 @@ class CallsModule {
         'target_device_id': targetDeviceId,
       }),
     );
-    stderr.writeln(
+    logServerError(
       '[CALL] push_wake_enqueued call_id=$callId device=$targetDeviceId',
     );
     // F7: attempt immediate push delivery via stored token when configured.
@@ -1130,7 +1130,7 @@ class CallsModule {
               },
             )
             .then((_) {
-              stderr.writeln(
+              logServerError(
                 '[CALL] push_delivered call_id=$callId device=$targetDeviceId',
               );
             })
@@ -1138,11 +1138,11 @@ class CallsModule {
               if (e is FcmTokenNotFoundException) {
                 // Token is stale — prune it so we stop wasting FCM quota.
                 db.deletePushToken(deviceId: targetDeviceId);
-                stderr.writeln(
+                logServerError(
                   '[CALL] push_token_pruned device=$targetDeviceId reason=expired',
                 );
               } else {
-                stderr.writeln(
+                logServerError(
                   '[CALL] push_failed device=$targetDeviceId error=$e',
                 );
               }
