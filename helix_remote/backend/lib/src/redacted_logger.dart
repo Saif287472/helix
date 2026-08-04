@@ -69,13 +69,7 @@ final class RedactedLogger {
     return value;
   }
 
-  String _redactText(String value) {
-    var redacted = value;
-    for (final pattern in _secretPatterns) {
-      redacted = redacted.replaceAll(pattern, '[redacted]');
-    }
-    return redacted;
-  }
+  String _redactText(String value) => redactSecrets(value);
 
   bool _sensitiveKey(String key) {
     final lower = key.toLowerCase();
@@ -96,6 +90,21 @@ final class RedactedLogger {
       'recovery_phrase',
     }.any(lower.contains);
   }
+}
+
+/// Strips bearer tokens and JWTs out of free-form text.
+///
+/// Shared with [ServerLogSink] so that console output captured for the admin
+/// console's Logs screen gets the same treatment as structured log records -
+/// those lines are served over the admin API and written to disk, so a
+/// stray `Authorization:` header echoed into an error message must not
+/// survive into either.
+String redactSecrets(String value) {
+  var redacted = value;
+  for (final pattern in _secretPatterns) {
+    redacted = redacted.replaceAll(pattern, '[redacted]');
+  }
+  return redacted;
 }
 
 final _secretPatterns = <RegExp>[

@@ -12,5 +12,37 @@ services:
       - .env
     restart: unless-stopped
 
+  # TURN relay for WebRTC calls, co-hosted with the backend. Without it,
+  # a call between two clients that are both behind symmetric NAT (most
+  # mobile networks) never connects - which is what "TURN Server
+  # Configured: DISABLED" on the admin Config screen is warning about.
+  #
+  # network_mode: host rather than published ports: TURN hands out a range
+  # of relay ports, and publishing a range that size through Docker's
+  # userland proxy spawns one docker-proxy process per port. Host
+  # networking also lets coturn see real client source addresses, which it
+  # needs in order to allocate relays correctly.
+  #
+  # This listens on the public internet on 3478/5349 - open those and the
+  # relay range in ufw. See deploy/coturn/README.md.
+  helix-turn:
+    image: coturn/coturn:4.7-alpine
+    container_name: helix-turn
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    entrypoint: ["/usr/local/bin/helix-turn-entrypoint.sh"]
+    volumes:
+      - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf.template:ro
+      - ./deploy/coturn/entrypoint.sh:/usr/local/bin/helix-turn-entrypoint.sh:ro
+      # Populated by deploy/coturn/certbot-deploy-hook.sh. Until it is,
+      # coturn serves plain turn: on 3478 and skips TLS.
+      - ./turn-certs:/etc/coturn/certs:ro
+    # The rendered config holds the shared secret, so it is written to
+    # memory rather than to the container's writable layer.
+    tmpfs:
+      - /tmp
+
 volumes:
   helix-data:

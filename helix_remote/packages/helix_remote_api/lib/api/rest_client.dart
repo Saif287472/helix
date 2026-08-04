@@ -31,6 +31,10 @@ abstract class HelixRemoteRestClient {
 
   Future<Map<String, dynamic>> autoIssueGlobalInvite();
 
+  /// Server facts the signed-in user may be shown, currently just the
+  /// admin-chosen `server_name` (empty when unnamed).
+  Future<Map<String, dynamic>> getServerInfo();
+
   Future<Map<String, dynamic>> matchPhoneHashes(List<String> phoneHashes);
 
   Future<Map<String, dynamic>> getChallenge({

@@ -10,6 +10,7 @@ import 'package:helix_remote_backend/src/jwt.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 import 'package:helix_remote_backend/src/federation.dart';
@@ -241,6 +242,7 @@ class BackendServer {
       turnSecret: turnSecret,
       turnUrl: turnUrl,
       logFilePath: logFilePath,
+      logSink: activeServerLog,
       serverIdentity: serverIdentity,
       federationClient: federationClient,
       federationDomain: federationDomain,
@@ -252,6 +254,7 @@ class BackendServer {
     // Map modules
     router.mount('/api/v1/health', operabilityModule.healthRouter.call);
     router.mount('/api/v1/ops', operabilityModule.opsRouter.call);
+    router.mount('/api/v1/server', operabilityModule.serverRouter.call);
     router.mount('/api/v1/admin-pairing', adminPairingModule.router.call);
     router.mount('/api/v1/accounts', authModule.router.call);
     router.mount('/api/v1/devices', authModule.router.call);
@@ -280,6 +283,7 @@ class BackendServer {
     router.get('/api/v1/ws', wsRelay.handleUpgrade);
 
     final pipeline = const Pipeline()
+        .addMiddleware(_requestLogMiddleware())
         .addMiddleware(_rateLimitMiddleware())
         .addMiddleware(_s2sAuthMiddleware())
         .addMiddleware(_authMiddleware())
@@ -299,6 +303,45 @@ class BackendServer {
     rateLimiter.dispose();
     await _httpServer?.close(force: true);
     db.close();
+  }
+
+  /// Records one line per request into the log sink, so the admin console's
+  /// Logs screen shows live server activity rather than only the startup
+  /// banner.
+  ///
+  /// Deliberately logs the path and not the query string: invite codes and
+  /// pairing codes travel as query parameters, and those lines are both
+  /// served over the admin API and written to disk.
+  Middleware _requestLogMiddleware() {
+    return (Handler innerHandler) {
+      return (Request request) async {
+        final sink = activeServerLog;
+        if (sink == null) return innerHandler(request);
+        final watch = Stopwatch()..start();
+        try {
+          final response = await innerHandler(request);
+          watch.stop();
+          final line =
+              '${request.method} /${request.url.path} '
+              '${response.statusCode} ${watch.elapsedMilliseconds}ms';
+          if (response.statusCode >= 500) {
+            sink.error(line);
+          } else if (response.statusCode >= 400) {
+            sink.warn(line);
+          } else {
+            sink.info(line);
+          }
+          return response;
+        } catch (e) {
+          watch.stop();
+          sink.error(
+            '${request.method} /${request.url.path} threw after '
+            '${watch.elapsedMilliseconds}ms: $e',
+          );
+          rethrow;
+        }
+      };
+    };
   }
 
   Middleware _rateLimitMiddleware() {

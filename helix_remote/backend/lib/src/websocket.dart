@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show stderr;
 import 'package:shelf/shelf.dart';
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
 import 'package:helix_remote_backend/src/modules/messaging.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 
 class WebSocketRelay implements MessageRelay {
   final BackendDatabase db;
@@ -35,7 +35,7 @@ class WebSocketRelay implements MessageRelay {
       try {
         socket.sink.add(jsonEncode(payload));
       } catch (e) {
-        stderr.writeln('WebSocket sendToDevice error for $deviceId: $e');
+        logServerError('WebSocket sendToDevice error for $deviceId: $e');
         _connections.remove(deviceId);
       }
     }
@@ -48,7 +48,7 @@ class WebSocketRelay implements MessageRelay {
       socket.sink.add(jsonEncode(payload));
       return true;
     } catch (e) {
-      stderr.writeln('WebSocket sendToDevice error for $deviceId: $e');
+      logServerError('WebSocket sendToDevice error for $deviceId: $e');
       _connections.remove(deviceId);
       return false;
     }
@@ -170,7 +170,7 @@ class WebSocketRelay implements MessageRelay {
             } catch (_) {}
           }
         } catch (e) {
-          stderr.writeln('Malformed WebSocket client message: $e');
+          logServerError('Malformed WebSocket client message: $e');
         }
       },
       onDone: () {
@@ -255,7 +255,7 @@ class WebSocketRelay implements MessageRelay {
         }
       }
     } catch (e) {
-      stderr.writeln('Offline event replay error for $deviceId: $e');
+      logServerError('Offline event replay error for $deviceId: $e');
     } finally {
       _replayWaiters.remove(deviceId);
     }

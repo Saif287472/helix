@@ -108,10 +108,56 @@ The current full `backend/Dockerfile` on the server (18 lines) implements all fo
 fixes together — read it directly from the server rather than assuming, in case it's
 changed since this handoff was written.
 
+## TURN relay (coturn) — ready to deploy, co-hosted on this same VPS
+As of 2026-08-04 the repo ships a coturn service in `docker-compose.yml` that runs
+alongside the backend on this box. It is **not started yet** — it needs `.env` values
+and firewall rules first. Full instructions live in
+`helix_remote/deploy/coturn/README.md`; the short version:
+
+1. Add to `/opt/helix-remote/helix_remote/.env`:
+   ```ini
+   HELIX_REMOTE_TURN_URL=turn:hr.agiletechbd.com:3478,turns:hr.agiletechbd.com:5349
+   HELIX_REMOTE_TURN_SECRET=<openssl rand -hex 32>
+   TURN_REALM=hr.agiletechbd.com
+   TURN_EXTERNAL_IP=157.250.207.166
+   ```
+2. `ufw allow` 3478/tcp+udp, 5349/tcp+udp, and 49160:49200/udp. These are the first
+   ports besides 22/80/443 to be opened on this box — TURN cannot work behind the
+   reverse proxy, it has to be reachable directly.
+3. `docker compose up -d helix-turn && docker compose up -d helix-backend`.
+4. Optional but recommended, for `turns:` on 5349:
+   `sudo deploy/coturn/certbot-deploy-hook.sh`, then install it into
+   `/etc/letsencrypt/renewal-hooks/deploy/` so renewals keep working. It reuses the
+   existing `hr.agiletechbd.com` certificate — do not issue a second one.
+
+Notes for whoever runs this:
+- `helix-turn` uses `network_mode: host` on purpose (relay port range + real client
+  source addresses). It is the only container on this box not behind nginx.
+- `HELIX_REMOTE_TURN_SECRET` is shared: the backend signs credentials with it and
+  coturn verifies them. If they ever drift, calls fail with a 401 from the relay that
+  does not appear in the backend's logs at all. Restart `helix-turn` after changing it.
+- `turnserver.conf` denies relaying to private/loopback ranges. That is load-bearing
+  here: with host networking, an unrestricted relay could reach the backend on
+  `127.0.0.1:8080` directly, bypassing nginx and TLS. Don't remove those lines to
+  debug a connectivity problem.
+- Verified working before shipping: coturn 4.6.1 accepted a credential in the exact
+  format the backend issues and relayed traffic end to end (0 packet loss). The
+  format is now pinned by `backend/test/turn_rest_credential_test.dart`.
+
+## Admin console Logs screen (fixed 2026-08-04)
+It used to be permanently empty. `/api/v1/ops/logs` tailed `HELIX_REMOTE_LOG_FILE`,
+but nothing in the server ever wrote that file — output went to stdout/stderr for
+Docker to collect — so the endpoint always found a missing file. The server now
+captures its own console output (in memory, plus to the file when
+`HELIX_REMOTE_LOG_FILE` is set, rotating at 5MB) and logs one line per request.
+
+Deployment impact: none beyond a `git pull` and rebuild. `.env` already sets
+`HELIX_REMOTE_LOG_FILE=/app/data/server.log`, which lands on the `helix-data` volume
+and now actually gets written, so logs survive restarts. `docker compose logs` is
+unchanged — the capture is additive. The admin token is deliberately excluded from
+the captured stream, as are request query strings (they carry invite codes).
+
 ## Optional/unconfigured (mentioned in server logs as warnings, not errors)
-- `HELIX_REMOTE_TURN_URL` / `HELIX_REMOTE_TURN_SECRET` — not set. WebRTC calls will
-  fail to connect (relay-only mode broken without a TURN server). Not needed for basic
-  messaging; only relevant if/when voice/video calls are wanted.
 - `HELIX_REMOTE_FCM_PROJECT_ID` / `HELIX_REMOTE_FCM_ACCESS_TOKEN` — not set. Push wake
   notifications disabled; app presumably still works via direct WebSocket while open/
   backgrounded per its own logic.

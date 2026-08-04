@@ -38,6 +38,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
+  /// Display name the server's admin chose, once fetched. Null until then,
+  /// or when the server has no name - either way the screen shows the host,
+  /// so nothing waits on this.
+  String? _serverName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServerName();
+  }
+
+  Future<void> _loadServerName() async {
+    try {
+      final info = await widget.root.restClient.getServerInfo();
+      final name = (info['server_name'] as String? ?? '').trim();
+      if (!mounted || name.isEmpty) return;
+      setState(() => _serverName = name);
+    } catch (_) {
+      // Cosmetic: an older server without the endpoint, or a offline
+      // launch, just leaves the host showing.
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -386,7 +409,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Server connection'),
-        content: Text('${serverUri.scheme}://${serverUri.host}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_serverName != null) ...[
+              Text(
+                _serverName!,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+            ],
+            Text('${serverUri.scheme}://${serverUri.host}'),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -764,7 +800,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.dns_outlined,
             color: const Color(0xFF4F46E5),
             title: 'Server connection',
-            subtitle: host,
+            // The admin's name for the server when they set one, with the
+            // host kept alongside it - the name is friendlier, but the
+            // address is what actually identifies where data goes.
+            subtitle: _serverName == null ? host : '$_serverName  ·  $host',
             onTap: widget.onChangeServerUrl == null
                 ? _showServerInfo
                 : _confirmChangeServer,

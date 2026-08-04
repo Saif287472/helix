@@ -8,6 +8,52 @@ import 'package:http/http.dart' as http;
 /// fine, so it must not be discarded on this alone).
 enum AdminLoginStatus { ok, unauthorized, unreachable }
 
+/// A request the server rejected with an explanation worth showing the
+/// operator verbatim, rather than a transport failure.
+class AdminRequestException implements Exception {
+  const AdminRequestException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// A page of server console output, plus the server's own explanation for
+/// why it might be empty.
+///
+/// The explanation matters: an empty list on its own is ambiguous between
+/// "nothing has happened yet" and "this server cannot write its log file",
+/// and the Logs screen used to render both as a bare "No logs available."
+class ServerLogs {
+  const ServerLogs({
+    required this.lines,
+    required this.source,
+    this.message,
+    this.filePath,
+  });
+
+  const ServerLogs.empty()
+    : lines = const [],
+      source = 'unknown',
+      message = null,
+      filePath = null;
+
+  final List<String> lines;
+
+  /// Where the server read these from: `file`, `memory`, or `none`.
+  final String source;
+
+  /// Set when the server has something to say - always set when [lines] is
+  /// empty, and also when logs are being served despite a file problem.
+  final String? message;
+
+  /// Path being tailed, when [source] is `file`.
+  final String? filePath;
+
+  bool get isEmpty => lines.isEmpty;
+}
+
 class AdminClient {
   AdminClient({required this.baseUrl, required this.token});
 
@@ -58,6 +104,38 @@ class AdminClient {
       throw Exception('Failed to load config: ${response.body}');
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Sets the server's display name, or clears it when [name] is empty.
+  /// Returns the normalized name the server stored, which may differ from
+  /// what was sent (surrounding whitespace trimmed, internal runs
+  /// collapsed).
+  ///
+  /// Throws [AdminRequestException] carrying the server's own message on a
+  /// validation failure, so the field can show why rather than a generic
+  /// error.
+  Future<String> setServerName(String name) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ops/config/server-name'),
+      headers: _headers,
+      body: jsonEncode({'server_name': name}),
+    );
+    final body = _decodeOrNull(response.body);
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        body?['error'] as String? ?? 'Failed to save the server name.',
+      );
+    }
+    return body?['server_name'] as String? ?? '';
+  }
+
+  Map<String, dynamic>? _decodeOrNull(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> setWorldwideMode({
@@ -168,9 +246,9 @@ class AdminClient {
     }
   }
 
-  Future<List<String>> getLogs() async {
+  Future<ServerLogs> getLogs({int limit = 200}) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/ops/logs'),
+      Uri.parse('$baseUrl/api/v1/ops/logs?limit=$limit'),
       headers: _headers,
     );
     if (response.statusCode != 200) {
@@ -178,7 +256,12 @@ class AdminClient {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final logs = body['logs'] as List?;
-    return logs?.map((l) => l as String).toList() ?? [];
+    return ServerLogs(
+      lines: logs?.map((l) => l as String).toList() ?? const [],
+      message: body['message'] as String?,
+      source: body['source'] as String? ?? 'unknown',
+      filePath: body['file_path'] as String?,
+    );
   }
 
   /// Issues a new 7-day, single-use invite. The raw code (embedded in
