@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/server_name_card.dart';
 
 class ConfigTab extends StatelessWidget {
   const ConfigTab({
@@ -9,6 +10,8 @@ class ConfigTab extends StatelessWidget {
     required this.federationAddressController,
     required this.federationDirectoryController,
     required this.onSetWorldwideMode,
+    required this.onSaveServerName,
+    this.serverHost,
   });
 
   final Map<String, dynamic>? config;
@@ -17,6 +20,13 @@ class ConfigTab extends StatelessWidget {
   final TextEditingController federationDirectoryController;
   final ValueChanged<bool> onSetWorldwideMode;
 
+  /// Persists the server's display name and returns the normalized value
+  /// the server stored.
+  final Future<String> Function(String name) onSaveServerName;
+
+  /// Host users connect to, shown as the fallback when no name is set.
+  final String? serverHost;
+
   @override
   Widget build(BuildContext context) {
     final config = this.config;
@@ -24,7 +34,17 @@ class ConfigTab extends StatelessWidget {
       return const Center(child: Text('No configuration available.'));
     }
     return SingleChildScrollView(
-      child: Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ServerNameCard(
+            initialName: config['server_name'] as String? ?? '',
+            maxLength: config['max_server_name_length'] as int? ?? 60,
+            onSave: onSaveServerName,
+            serverHost: serverHost,
+          ),
+          const SizedBox(height: 16),
+          Card(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -80,8 +100,10 @@ class ConfigTab extends StatelessWidget {
               const SizedBox(height: 16),
               _buildFederationControls(config),
             ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

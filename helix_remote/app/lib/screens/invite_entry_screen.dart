@@ -11,10 +11,15 @@ class ServerInviteChoice {
     required this.serverUrl,
     required this.inviteCode,
     this.phoneNumber,
+    this.serverName,
   });
 
   final String serverUrl;
   final String inviteCode;
+
+  /// Display name the server's admin chose, when they set one. Null means
+  /// unnamed, and the server is identified by its address instead.
+  final String? serverName;
 
   /// E.164 phone number, or null for the Helix Global path (which doesn't
   /// collect one here - there's no "which server" step to attach it to).
@@ -118,12 +123,26 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
         }
         return;
       }
+      if (!mounted) return;
+
+      // When the admin has named their server, confirm which one this
+      // invite is for before joining - the name is the whole reason they
+      // set one, and a link pasted from a chat is worth double-checking.
+      // Servers with no name behave exactly as before and join straight
+      // through.
+      final serverName = (lookup['server_name'] as String? ?? '').trim();
+      if (serverName.isNotEmpty) {
+        final confirmed = await _confirmJoin(serverName, parsed.serverUrl);
+        if (!confirmed || !mounted) return;
+      }
+
       if (mounted) {
         Navigator.of(context).pop(
           ServerInviteChoice(
             serverUrl: parsed.serverUrl,
             inviteCode: parsed.inviteCode,
             phoneNumber: phoneNumber,
+            serverName: serverName.isEmpty ? null : serverName,
           ),
         );
       }
@@ -133,6 +152,54 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
       client?.close();
       if (mounted) setState(() => _checking = false);
     }
+  }
+
+  /// Names the server the invite belongs to and asks the user to confirm.
+  Future<bool> _confirmJoin(String serverName, String serverUrl) async {
+    final host = Uri.tryParse(serverUrl)?.host ?? serverUrl;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Join this server?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              serverName,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              host,
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(dialogContext).hintColor,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Your invite is for this server. Only continue if you '
+              'recognise it.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   @override

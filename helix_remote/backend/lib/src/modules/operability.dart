@@ -10,6 +10,7 @@ import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 import 'package:helix_remote_backend/src/server_log.dart';
+import 'package:helix_remote_backend/src/server_name.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -84,11 +85,32 @@ class OperabilityModule {
     return router;
   }
 
+  /// Server-level facts a logged-in client may show its user.
+  ///
+  /// Deliberately authenticated, unlike the health probes: it adds no new
+  /// unauthenticated surface, and every caller that needs it already has a
+  /// session. Someone still joining gets the same name from
+  /// `/accounts/invite/lookup`, which is gated by holding a valid invite.
+  Router get serverRouter {
+    final router = Router();
+    router.get('/info', _serverInfo);
+    return router;
+  }
+
+  Response _serverInfo(Request request) {
+    return _json({
+      // Empty means the admin never named this server; clients fall back
+      // to showing the hostname they connected to.
+      'server_name': db.getServerConfig(serverNameConfigKey) ?? '',
+    });
+  }
+
   Router get opsRouter {
     final router = Router();
     router.get('/metrics', _metrics);
     router.get('/support-diagnostic', _supportDiagnostic);
     router.get('/config', _config);
+    router.post('/config/server-name', _setServerName);
     router.post('/backup', _backup);
     router.get('/users', _users);
     router.post('/users/<accountId>/suspend', _suspendUser);
@@ -278,6 +300,10 @@ class OperabilityModule {
     return _json({
       'server_id': serverId,
       'server_public_key': serverPubKey,
+      // Empty when the admin has not named the server; the admin console
+      // shows the placeholder and clients fall back to the hostname.
+      'server_name': db.getServerConfig(serverNameConfigKey) ?? '',
+      'max_server_name_length': maxServerNameLength,
       'port': Platform.environment['HELIX_REMOTE_PORT'] ?? '8080',
       'host': Platform.environment['HELIX_REMOTE_HOST'] ?? '127.0.0.1',
       'dev_mode': Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1',
@@ -291,6 +317,54 @@ class OperabilityModule {
           CallsModule.resolveTurnUrls(turnUrl).isNotEmpty,
       'federation': _federationConfig(),
     });
+  }
+
+  /// Sets (or clears) the server's display name.
+  ///
+  /// Takes effect immediately for everyone: the name is read per-request
+  /// by the join-time invite lookup and the public server-info endpoint,
+  /// so there is nothing to restart and no cache to invalidate.
+  Future<Response> _setServerName(Request request) async {
+    if (!_isAdmin(request)) {
+      return _json({'error': 'Admin privileges required'}, status: 403);
+    }
+
+    final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      return _json({'error': 'Invalid JSON body'}, status: 400);
+    }
+
+    final raw = body['server_name'];
+    if (raw != null && raw is! String) {
+      return _json({'error': 'server_name must be a string'}, status: 400);
+    }
+
+    final result = validateServerName(raw as String?);
+    switch (result) {
+      case ServerNameInvalid(:final error):
+        return _json({'error': error}, status: 400);
+      case ServerNameCleared():
+        db.deleteServerConfig(serverNameConfigKey);
+        _auditAdminWrite(request, 'ADMIN_SERVER_NAME_CLEARED');
+        return _json({'server_name': ''});
+      case ServerNameValid(:final value):
+        db.setServerConfig(serverNameConfigKey, value);
+        _auditAdminWrite(request, 'ADMIN_SERVER_NAME_SET');
+        return _json({'server_name': value});
+    }
+  }
+
+  void _auditAdminWrite(Request request, String action) {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    db.logAudit(
+      auth?['account_id'] as String?,
+      auth?['device_id'] as String?,
+      action,
+      request.context['client_ip'] as String?,
+      request.headers['user-agent'],
+    );
   }
 
   Response _federationStatus(Request request) {

@@ -554,6 +554,13 @@ paths:
                   issuer_type:
                     type: string
                     enum: [ADMIN, SYSTEM_GLOBAL]
+                  server_name:
+                    type: string
+                    description: >-
+                      Admin-chosen display name for the server this invite
+                      is for, so the join screen can name it. Empty when
+                      the admin has not set one; clients fall back to the
+                      hostname.
         '400':
           description: Missing invite_code
 
@@ -2274,6 +2281,72 @@ paths:
           description: Metrics payload
         '403':
           description: Admin privileges required
+
+  /ops/config/server-name:
+    post:
+      summary: >-
+        Set or clear this server's display name (admin). The name is shown
+        to the server's own users, on the join screen and in app settings.
+      operationId: setServerName
+      tags: [Ops]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server_name]
+              properties:
+                server_name:
+                  type: string
+                  maxLength: 60
+                  description: >-
+                    Empty or whitespace-only clears the name, after which
+                    clients fall back to the hostname.
+      responses:
+        '200':
+          description: Stored name, normalized
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [server_name]
+                properties:
+                  server_name:
+                    type: string
+        '400':
+          description: >-
+            Name too long, or contains control or text-direction override
+            characters
+        '403':
+          description: Admin privileges required
+
+  /server/info:
+    get:
+      summary: >-
+        Server facts a signed-in client may display to its user. Requires a
+        session; people still joining read the same name from
+        /accounts/invite/lookup instead.
+      operationId: getServerInfo
+      tags: [Server]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Server info
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [server_name]
+                properties:
+                  server_name:
+                    type: string
+                    description: Empty when the admin has not set a name.
+        '401':
+          description: Unauthorized
 
   # ─── Privacy & Account ────────────────────────────────────────
   /privacy/export:

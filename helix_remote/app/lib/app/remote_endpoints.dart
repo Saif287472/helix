@@ -10,6 +10,7 @@ class RemoteApiEndpoints {
     queryParameters: {'invite_code': inviteCode},
   );
   Uri get accountsInviteAutoIssue => api('accounts/invite/auto-issue');
+  Uri get serverInfo => api('server/info');
   Uri get contactsDiscoverySalt => api('contacts/discovery-salt');
   Uri get contactsMatch => api('contacts/match');
   Uri accountsChallenge({

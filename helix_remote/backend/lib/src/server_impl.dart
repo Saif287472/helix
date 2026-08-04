@@ -254,6 +254,7 @@ class BackendServer {
     // Map modules
     router.mount('/api/v1/health', operabilityModule.healthRouter.call);
     router.mount('/api/v1/ops', operabilityModule.opsRouter.call);
+    router.mount('/api/v1/server', operabilityModule.serverRouter.call);
     router.mount('/api/v1/admin-pairing', adminPairingModule.router.call);
     router.mount('/api/v1/accounts', authModule.router.call);
     router.mount('/api/v1/devices', authModule.router.call);

@@ -383,6 +383,25 @@ class _MainAdminPageState extends State<MainAdminPage> {
     }
   }
 
+  /// Saves the server's display name and folds the stored value back into
+  /// the cached config, so the Config screen reflects it without a full
+  /// refresh. Errors propagate to the field, which shows the server's own
+  /// explanation.
+  Future<String> _saveServerName(String name) async {
+    final client = _client;
+    if (client == null) {
+      throw const AdminRequestException('Not connected to a server.');
+    }
+    final stored = await client.setServerName(name);
+    if (mounted) {
+      setState(() {
+        final config = _config;
+        if (config != null) config['server_name'] = stored;
+      });
+    }
+    return stored;
+  }
+
   Future<void> _setWorldwideMode(bool enabled) async {
     if (_client == null) return;
     setState(() => _isLoading = true);
@@ -643,6 +662,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
                 federationAddressController: _federationAddressController,
                 federationDirectoryController: _federationDirectoryController,
                 onSetWorldwideMode: _setWorldwideMode,
+                onSaveServerName: _saveServerName,
+                serverHost: Uri.tryParse(_urlController.text)?.host,
               );
       case 'logs':
         return _client == null

@@ -303,6 +303,10 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       _request('POST', 'accounts/invite/auto-issue');
 
   @override
+  Future<Map<String, dynamic>> getServerInfo() =>
+      _request('GET', 'server/info');
+
+  @override
   Future<Map<String, dynamic>> matchPhoneHashes(List<String> phoneHashes) =>
       _request('POST', 'contacts/match', body: {'phone_hashes': phoneHashes});
 
