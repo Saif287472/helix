@@ -58,6 +58,11 @@ app.*.map.json
 *.cer
 *.csr
 service-account*.json
+
+# TLS material copied out of /etc/letsencrypt for the coturn container by
+# deploy/coturn/certbot-deploy-hook.sh. Covered by *.pem above already;
+# named explicitly so the directory itself is never added either.
+turn-certs/
 google-services.json
 GoogleService-Info.plist
 firebase_options.dart

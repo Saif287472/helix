@@ -10,8 +10,8 @@ import 'package:test/test.dart';
 /// Swallows the console copy so a test run isn't flooded with the lines
 /// each case records.
 IOSink _nullSink() => File(
-  Directory.systemTemp.createTempSync('helix_log_console').path +
-      '/console.txt',
+  '${Directory.systemTemp.createTempSync('helix_log_console').path}'
+  '/console.txt',
 ).openWrite();
 
 void main() {
