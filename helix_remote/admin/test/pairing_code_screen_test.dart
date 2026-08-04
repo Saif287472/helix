@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/screens/pairing_code_screen.dart';
+import 'package:helix_admin/theme/app_theme.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: child);
+// A bare MaterialApp() has no AppSurfaces ThemeExtension registered, so
+// context.sunkenSurface (read by PairingCodeScreen) null-crashes - see the
+// same fix in guide_wizard_test.dart.
+Widget _wrap(Widget child) => MaterialApp(theme: AppTheme.light, home: child);
 
 void main() {
   testWidgets('shows the command to run on the server', (tester) async {

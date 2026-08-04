@@ -3,8 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/screens/connect_server_screen.dart';
 import 'package:helix_admin/screens/pairing_code_screen.dart';
 import 'package:helix_admin/screens/scan_token_screen.dart';
+import 'package:helix_admin/theme/app_theme.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: child);
+// A bare MaterialApp() has no AppSurfaces ThemeExtension registered, so
+// anything reading context.sunkenSurface (e.g. PairingCodeScreen, reached
+// by tapping the pairing code button) null-crashes - see the same fix in
+// guide_wizard_test.dart.
+Widget _wrap(Widget child) => MaterialApp(theme: AppTheme.light, home: child);
 
 ConnectServerScreen _connectScreen({
   required TextEditingController tokenController,
@@ -35,6 +40,8 @@ void main() {
     tester,
   ) async {
     var opened = false;
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _wrap(
         _connectScreen(
@@ -52,6 +59,8 @@ void main() {
   });
 
   testWidgets('the scan button opens the camera scan screen', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _wrap(_connectScreen(tokenController: TextEditingController())),
     );
@@ -66,6 +75,8 @@ void main() {
     tester,
   ) async {
     final tokenController = TextEditingController();
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _wrap(_connectScreen(tokenController: tokenController)),
     );
@@ -83,38 +94,35 @@ void main() {
     expect(tokenController.text, equals('AbCdEfGhIjKlMnOpQrStUvWxYz012345'));
   });
 
-  testWidgets(
-    'the pairing code button opens the pairing code screen with the '
-    'current URL field value',
-    (tester) async {
-      final urlController = TextEditingController(
-        text: 'https://helix.example.com',
-      );
-      await tester.pumpWidget(
-        _wrap(
-          _connectScreen(
-            tokenController: TextEditingController(),
-            urlController: urlController,
-          ),
+  testWidgets('the pairing code button opens the pairing code screen with the '
+      'current URL field value', (tester) async {
+    final urlController = TextEditingController(
+      text: 'https://helix.example.com',
+    );
+    await tester.pumpWidget(
+      _wrap(
+        _connectScreen(
+          tokenController: TextEditingController(),
+          urlController: urlController,
         ),
-      );
+      ),
+    );
 
-      await tester.tap(
-        find.byKey(const Key('settings_pairing_code_button')),
-      );
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings_pairing_code_button')));
+    await tester.pumpAndSettle();
 
-      final screen = tester.widget<PairingCodeScreen>(
-        find.byType(PairingCodeScreen),
-      );
-      expect(screen.baseUrl, equals('https://helix.example.com'));
-    },
-  );
+    final screen = tester.widget<PairingCodeScreen>(
+      find.byType(PairingCodeScreen),
+    );
+    expect(screen.baseUrl, equals('https://helix.example.com'));
+  });
 
   testWidgets('a redeemed pairing code result fills the token field', (
     tester,
   ) async {
     final tokenController = TextEditingController();
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _wrap(_connectScreen(tokenController: tokenController)),
     );
@@ -138,6 +146,8 @@ void main() {
     final urlController = TextEditingController(
       text: 'https://saved.example.com',
     );
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _wrap(
         _connectScreen(
@@ -158,6 +168,8 @@ void main() {
     tester,
   ) async {
     var connected = false;
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _wrap(
         _connectScreen(
@@ -173,6 +185,8 @@ void main() {
     expect(connected, isTrue);
 
     var disconnected = false;
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _wrap(
         _connectScreen(
@@ -199,6 +213,8 @@ void main() {
     // Navigator.pop() here would have nothing to pop and either no-op or
     // throw.
     var wentBack = false;
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _wrap(
         _connectScreen(

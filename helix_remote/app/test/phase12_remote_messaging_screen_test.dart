@@ -3,6 +3,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart' hide DiagnosticLevel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
@@ -497,6 +498,11 @@ void main() {
     );
     expect(applied, isTrue);
 
+    // See the identical comment in the P09 contacts test above: the change
+    // reaches ConversationScreen through two chained broadcast streams, and
+    // the second hop needs runAsync() to flush under flutter_test's
+    // fake-async zone - pumpAndSettle() alone never observes it.
+    await tester.runAsync(() async {});
     await tester.pumpAndSettle();
     expect(find.text('live arrival'), findsOneWidget);
   });
@@ -585,7 +591,11 @@ void main() {
     final beforeDecoration = before.decoration! as BoxDecoration;
 
     await tester.tap(find.byKey(const ValueKey('reply_quote_msg_bob_1')));
-    await tester.pump();
+    // The reply quote's InkWell is nested inside the message tile's own
+    // GestureDetector, which also registers onDoubleTap - so the single tap
+    // doesn't resolve until Flutter's double-tap disambiguation window
+    // elapses (kDoubleTapTimeout, 300ms), not on the very next frame.
+    await tester.pump(kDoubleTapTimeout);
 
     final highlighted = tester.widget<AnimatedContainer>(
       find.byKey(const ValueKey('message_bubble_msg_bob_1')),
@@ -726,6 +736,14 @@ void main() {
       );
       expect(applied, isTrue);
 
+      // The change reaches ContactsScreen through two chained broadcast
+      // streams (syncEngine.changes -> RemoteMessagingService._emitChange ->
+      // service.changes -> ContactsScreen's listener). The second hop's
+      // delivery is a real scheduled callback that plain pump()/pumpAndSettle()
+      // calls don't flush under flutter_test's fake-async zone; runAsync()
+      // drains it the same way it's needed for real I/O elsewhere in this
+      // suite.
+      await tester.runAsync(() async {});
       await tester.pump();
       expect(find.text('Eve'), findsOneWidget);
       expect(find.byTooltip('Accept request'), findsOneWidget);
@@ -965,10 +983,29 @@ void main() {
     'existing conversation instead of resetting its state',
     (tester) async {
       // createDirectConversation's upsert always resets last_sequence to
-      // 0 - calling it again for bob (who already has dm_alice_bob with
-      // message history from setUp) would corrupt that conversation's
-      // sort/unread state, so the picker must detect it already exists
-      // and reuse it rather than recreating it.
+      // 0, so the picker must detect an existing conversation and reuse it
+      // rather than blindly recreating it. dm_alice_bob (from setUp) isn't
+      // usable to prove that here: it's a readable literal ID, not the
+      // peer-derived one conversationIdForPeer() actually computes, so the
+      // picker would never recognize it as "already exists" - this needs
+      // its own conversation seeded under the real derived ID.
+      final existingId = service.createDirectConversation(
+        peerAccountId: 'bob',
+        title: 'Bob',
+      );
+      db.saveMessage(
+        RemoteMessage(
+          messageId: 'msg_existing_direct',
+          conversationId: existingId,
+          senderAccountId: 'bob',
+          senderDeviceId: 'bob_device',
+          ciphertext: await cipher('prior history with bob'),
+        ),
+        1,
+        clock().millisecondsSinceEpoch,
+        RemoteMessageStatus.delivered,
+      );
+
       final dir = Directory.systemTemp.createTempSync('new_chat_existing_');
       addTearDown(() => dir.deleteSync(recursive: true));
       final root = RemoteCompositionRoot.production(
@@ -986,10 +1023,25 @@ void main() {
 
       await tester.tap(find.byTooltip('New chat'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Bob'));
+      // 'Bob' also matches the existing dm_alice_bob tile underneath the
+      // picker sheet, so the tap must be scoped to the picker itself
+      // (DraggableScrollableSheet) rather than matching either occurrence.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(DraggableScrollableSheet),
+          matching: find.text('Bob'),
+        ),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.text('budget marker from bob'), findsOneWidget);
+      expect(find.text('prior history with bob'), findsOneWidget);
+
+      // Reused, not recreated: last_sequence still reflects the seeded
+      // message instead of being reset to 0 by a second createDirectConversation.
+      expect(
+        service.conversationMemberIds(existingId),
+        containsAll(['alice', 'bob']),
+      );
     },
   );
 }

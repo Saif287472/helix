@@ -655,6 +655,20 @@ void main() {
       ciphertextPath: cipherPath,
     );
 
+    // The server now requires message_id to reference a real message sent
+    // by the caller (registerAttachmentReference's whole point is granting
+    // the conversation's other members access via that message) - a
+    // fabricated id used to 400 with "Referenced message not found".
+    server.db.createConversation('conv_ref_p5_001', 'dm', null, ['user1']);
+    server.db.saveMessage(
+      messageId: 'msg_ref_p5_001',
+      conversationId: 'conv_ref_p5_001',
+      senderAccountId: 'user1',
+      senderDeviceId: 'device1',
+      recipientDeviceId: 'device1',
+      ciphertext: 'irrelevant-for-this-test',
+    );
+
     // Registering a reference must succeed for the authenticated owner
     // (simply await — any unexpected throw will fail the test)
     await service.registerReference(

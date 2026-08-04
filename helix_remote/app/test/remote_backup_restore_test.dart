@@ -43,10 +43,10 @@ void main() {
   // RP5-010 — Schema version gate
   // -------------------------------------------------------------------------
 
-  test('RP5-010: fresh in-memory database has schema version 23', () {
+  test('RP5-010: fresh in-memory database has schema version 27', () {
     final db = _freshDb();
     addTearDown(db.close);
-    expect(db.schemaVersion, equals(23));
+    expect(db.schemaVersion, equals(27));
   });
 
   // -------------------------------------------------------------------------

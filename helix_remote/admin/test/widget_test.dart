@@ -21,6 +21,19 @@ Future<void> _settleWithRealIO(WidgetTester tester) async {
   }
 }
 
+/// The default 800x600 test surface is too narrow for the Settings status
+/// card column (260px wide) plus its siblings, causing a RenderFlex
+/// overflow - 1000x800 matches the width already proven to keep the fixed
+/// sidebar (see "a wide viewport keeps the fixed sidebar" below) rather
+/// than switching to the narrow/hamburger layout these tests don't expect.
+/// Tests that deliberately exercise a specific width set their own size
+/// after this and are unaffected.
+Future<void> _pumpAdminApp(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(1000, 800));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(const HelixAdminApp());
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -33,7 +46,7 @@ void main() {
   testWidgets('first launch shows the intro screen, not a login gate', (
     tester,
   ) async {
-    await tester.pumpWidget(const HelixAdminApp());
+    await _pumpAdminApp(tester);
     await tester.pumpAndSettle();
 
     expect(find.text('HELIX SERVER ADMIN'), findsOneWidget);
@@ -46,7 +59,7 @@ void main() {
   testWidgets(
     'Get Started reaches the shell with locked server-dependent tabs',
     (tester) async {
-      await tester.pumpWidget(const HelixAdminApp());
+      await _pumpAdminApp(tester);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('GET STARTED'));
@@ -63,7 +76,7 @@ void main() {
   testWidgets(
     'the Self-Hosting Guide stays reachable with no server connected',
     (tester) async {
-      await tester.pumpWidget(const HelixAdminApp());
+      await _pumpAdminApp(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.text('GET STARTED'));
       await tester.pumpAndSettle();
@@ -84,7 +97,7 @@ void main() {
     'Settings shows a status card that opens the connect form, reachable '
     'unconnected',
     (tester) async {
-      await tester.pumpWidget(const HelixAdminApp());
+      await _pumpAdminApp(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.text('GET STARTED'));
       await tester.pumpAndSettle();
@@ -109,7 +122,7 @@ void main() {
   testWidgets('the locked dashboard\'s button jumps straight to Settings', (
     tester,
   ) async {
-    await tester.pumpWidget(const HelixAdminApp());
+    await _pumpAdminApp(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.text('GET STARTED'));
     await tester.pumpAndSettle();
@@ -128,7 +141,7 @@ void main() {
     'Settings\' "Where do I find this?" link jumps straight to the guide\'s '
     'Connect Admin page, and a normal sidebar visit still starts at Welcome',
     (tester) async {
-      await tester.pumpWidget(const HelixAdminApp());
+      await _pumpAdminApp(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.text('GET STARTED'));
       await tester.pumpAndSettle();
@@ -154,7 +167,12 @@ void main() {
       // rather than being stuck on Connect Admin from the earlier jump.
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Self-Hosting Guide'));
+      // The Settings tab's own "Self-Hosting Guide" help row has the same
+      // text as the sidebar nav item - both are visible at once on a wide
+      // viewport. The sidebar's is built first (unselected style: dimmer,
+      // regular weight), so .first is it; this test wants specifically the
+      // sidebar entry, not the Settings-tab shortcut to the same page.
+      await tester.tap(find.text('Self-Hosting Guide').first);
       await tester.pumpAndSettle();
 
       expect(find.text('Welcome to self-hosting Helix'), findsOneWidget);
@@ -164,7 +182,7 @@ void main() {
   testWidgets('relaunching after the intro was shown skips it', (tester) async {
     SharedPreferences.setMockInitialValues({'intro_shown': true});
 
-    await tester.pumpWidget(const HelixAdminApp());
+    await _pumpAdminApp(tester);
     await tester.pumpAndSettle();
 
     expect(find.text('HELIX SERVER ADMIN'), findsNothing);
@@ -180,7 +198,7 @@ void main() {
         'server_url': 'https://saved.example.com',
       });
 
-      await tester.pumpWidget(const HelixAdminApp());
+      await _pumpAdminApp(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
@@ -252,12 +270,20 @@ void main() {
     'an unauthorized saved token is cleared and reported on launch, not '
     'silently kept',
     (tester) async {
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      addTearDown(() => server.close(force: true));
-      server.listen((request) async {
-        request.response.statusCode = 401;
-        await request.response.close();
+      // Bound/closed via runAsync, outside testWidgets' FakeAsync zone -
+      // HttpServer.bind schedules a real internal idle-timeout Timer that,
+      // created inside the fake zone, registers as a FakeTimer and trips
+      // "A Timer is still pending" once the widget tree is disposed, since
+      // close() doesn't necessarily cancel it before that check runs.
+      late HttpServer server;
+      await tester.runAsync(() async {
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          request.response.statusCode = 401;
+          await request.response.close();
+        });
       });
+      addTearDown(() => tester.runAsync(() => server.close(force: true)));
       final serverUrl = 'http://${server.address.address}:${server.port}';
 
       SharedPreferences.setMockInitialValues({
@@ -266,7 +292,7 @@ void main() {
       });
       FlutterSecureStorage.setMockInitialValues({'admin_token': 'dead-token'});
 
-      await tester.pumpWidget(const HelixAdminApp());
+      await _pumpAdminApp(tester);
       await _settleWithRealIO(tester);
       await _settleWithRealIO(tester);
 
@@ -277,7 +303,10 @@ void main() {
       await tester.tap(
         find.byKey(const Key('settings_connection_status_card')),
       );
-      await tester.pumpAndSettle();
+      // Not pumpAndSettle(): this triggers a real network call behind an
+      // indeterminate spinner, which never "settles" - see
+      // _settleWithRealIO's doc comment above.
+      await _settleWithRealIO(tester);
 
       expect(find.textContaining('expired or was revoked'), findsOneWidget);
       final tokenField = tester.widget<TextField>(
@@ -304,7 +333,7 @@ void main() {
         'admin_token': 'still-good-token',
       });
 
-      await tester.pumpWidget(const HelixAdminApp());
+      await _pumpAdminApp(tester);
       await _settleWithRealIO(tester);
       await _settleWithRealIO(tester);
 
@@ -315,7 +344,10 @@ void main() {
       await tester.tap(
         find.byKey(const Key('settings_connection_status_card')),
       );
-      await tester.pumpAndSettle();
+      // Not pumpAndSettle(): same reasoning as the matching comment in the
+      // test above - this test happened to pass without it (connection
+      // refused resolves almost instantly), but it's the same latent race.
+      await _settleWithRealIO(tester);
 
       expect(find.textContaining("Couldn't reach"), findsOneWidget);
       final tokenField = tester.widget<TextField>(
