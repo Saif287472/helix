@@ -5,6 +5,7 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:crypto/crypto.dart' as crypto_pkg;
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
@@ -284,6 +285,7 @@ class BackendServer {
 
     final pipeline = const Pipeline()
         .addMiddleware(_requestLogMiddleware())
+        .addMiddleware(_errorHandlingMiddleware())
         .addMiddleware(_rateLimitMiddleware())
         .addMiddleware(_s2sAuthMiddleware())
         .addMiddleware(_authMiddleware())
@@ -342,6 +344,20 @@ class BackendServer {
         }
       };
     };
+  }
+
+  /// Converts a thrown [AppError] (or any other uncaught exception) into a
+  /// normalized JSON response, once, instead of every route handler
+  /// building its own `Response(..., jsonEncode({'error': ...}))`.
+  ///
+  /// Placed *inside* [_requestLogMiddleware] deliberately: that middleware
+  /// only logs a normal status-coded request line when it sees a returned
+  /// [Response], and logs a noisier "threw after Xms" error line when it
+  /// sees an exception. Converting here means a routine 403/404 AppError
+  /// still shows up in logs as a plain request line instead of manufacturing
+  /// an alarming "threw" entry for an expected client error.
+  Middleware _errorHandlingMiddleware() {
+    return (Handler innerHandler) => withAppErrorHandling(innerHandler);
   }
 
   Middleware _rateLimitMiddleware() {

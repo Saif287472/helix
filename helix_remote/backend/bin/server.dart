@@ -9,6 +9,7 @@ import 'package:helix_remote_backend/src/server_impl.dart';
 import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
+import 'package:helix_remote_backend/src/startup_env.dart';
 import 'src/admin_token_file.dart';
 import 'src/terminal_qr.dart';
 
@@ -47,18 +48,30 @@ Future<void> _run(ServerLogSink logSink) async {
       int.tryParse(Platform.environment['HELIX_REMOTE_PORT'] ?? '') ?? 8080;
   final host = Platform.environment['HELIX_REMOTE_HOST'] ?? '127.0.0.1';
   final devMode = Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1';
-  final jwtSecret = Platform.environment['HELIX_REMOTE_JWT_SECRET'];
-  if (jwtSecret == null || jwtSecret.isEmpty) {
-    logServerError('FATAL: HELIX_REMOTE_JWT_SECRET required');
+
+  // One aggregated pass over every required/conditional env var, so a
+  // misconfigured deploy sees every problem at once instead of restarting
+  // once per fixed variable. See startup_env.dart for the requirement list.
+  final envResult = validateStartupEnv(Platform.environment, devMode: devMode);
+  for (final warning in envResult.warnings) {
+    logServerWarning('WARNING: $warning');
+  }
+  if (envResult.isFatal) {
+    logServerError('FATAL: invalid startup environment configuration:');
+    for (final error in envResult.fatalErrors) {
+      logServerError('  - $error');
+    }
     exit(1);
   }
-  if (!devMode && jwtSecret.length < 32) {
-    logServerWarning(
-      'HELIX_REMOTE_JWT_SECRET must be set to at least 32 bytes outside explicit HELIX_REMOTE_DEV_MODE=1.',
-    );
-    exit(78);
-  }
-  final resolvedJwtSecret = jwtSecret;
+
+  // Deliberately not sanitized like the SMS vars below: this value is only
+  // ever compared against itself (sign then verify), never against an
+  // external system, so quotes/CRLF artifacts can't cause a mismatch bug -
+  // and trimming them here would flip the effective signing key on any
+  // existing deployment whose .env happens to quote it, invalidating every
+  // live session on deploy. validateStartupEnv sanitizes only to decide
+  // whether the value is present/long enough, not to change what's used.
+  final resolvedJwtSecret = Platform.environment['HELIX_REMOTE_JWT_SECRET']!;
   final dbPath =
       Platform.environment['HELIX_REMOTE_DB_PATH'] ?? 'remote_backend.db';
 
@@ -80,17 +93,12 @@ Future<void> _run(ServerLogSink logSink) async {
     );
   }
 
-  // TURN credentials — optional but required for relay-only WebRTC calls.
+  // TURN credentials — validated as a pair by validateStartupEnv above;
+  // both empty here just means the feature is off.
   final turnUrl = Platform.environment['HELIX_REMOTE_TURN_URL'] ?? '';
   final turnSecret = Platform.environment['HELIX_REMOTE_TURN_SECRET'] ?? '';
-  if (!devMode && (turnUrl.isEmpty || turnSecret.isEmpty)) {
-    logServerWarning(
-      'WARNING: HELIX_REMOTE_TURN_URL or HELIX_REMOTE_TURN_SECRET is not set. '
-      'WebRTC calls in relay-only mode will fail to connect.',
-    );
-  }
 
-  // FCM push provider — optional but required for push wake notifications.
+  // FCM push provider — validated as a pair by validateStartupEnv above.
   final fcmProjectId =
       Platform.environment['HELIX_REMOTE_FCM_PROJECT_ID'] ?? '';
   final fcmAccessToken =
@@ -104,15 +112,9 @@ Future<void> _run(ServerLogSink logSink) async {
     print('FCM push configured for project: $fcmProjectId');
   } else {
     pushProvider = const NoopPushProvider();
-    if (!devMode) {
-      logServerWarning(
-        'WARNING: HELIX_REMOTE_FCM_PROJECT_ID or HELIX_REMOTE_FCM_ACCESS_TOKEN '
-        'not set. Push wake notifications are disabled.',
-      );
-    }
   }
 
-  // Bulk SMS (BulkSMSBD) — optional but required for real OTP delivery.
+  // Bulk SMS (BulkSMSBD) — validated as a pair by validateStartupEnv above.
   // Without it, phone verification falls back to returning the code
   // directly in the API response (see AuthPhoneOtpHandlers) - fine for
   // local dev, not for a real deployment.
@@ -128,13 +130,6 @@ Future<void> _run(ServerLogSink logSink) async {
     print('SMS delivery configured via BulkSMSBD, sender ID: $smsSenderId');
   } else {
     smsProvider = const NoopSmsProvider();
-    if (!devMode) {
-      logServerWarning(
-        'WARNING: HELIX_REMOTE_SMS_API_KEY or HELIX_REMOTE_SMS_SENDER_ID is '
-        'not set. Phone verification codes will be returned directly in '
-        'the API response instead of sent by SMS.',
-      );
-    }
   }
 
   print('Starting Helix Remote backend database at: $dbPath');

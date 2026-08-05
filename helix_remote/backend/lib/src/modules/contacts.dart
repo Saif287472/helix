@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/phone_hash.dart';
 
@@ -19,7 +20,7 @@ class ContactsModule {
   ContactsModule(this.db, {Set<String>? adminAccountIds, this.notifyDevice})
     : adminAccountIds = adminAccountIds ?? const {'admin'};
 
-  Router get router {
+  Handler get router {
     final router = Router();
     router.get('/discovery-salt', _discoverySaltHandler);
     router.get('/', _listHandler);
@@ -40,7 +41,7 @@ class ContactsModule {
     router.get('/presence/<accountId>', _presenceHandler);
     router.post('/report', _reportHandler);
     router.post('/reports/action', _safetyActionHandler);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   /// Returns the per-deployment, non-secret discovery salt used to hash
@@ -60,7 +61,10 @@ class ContactsModule {
   Future<Response> _listHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     final accountId = auth['account_id'] as String;
@@ -72,7 +76,10 @@ class ContactsModule {
   Future<Response> _requestsHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     final accountId = auth['account_id'] as String;
@@ -84,90 +91,81 @@ class ContactsModule {
   Future<Response> _createRequestHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final peerAccountId = await _resolvePeerAccountId(body);
-      if (peerAccountId == null) {
-        return Response.notFound(
-          jsonEncode({'error': 'Peer account not found'}),
-        );
-      }
-
-      final accountId = auth['account_id'] as String;
-      if (peerAccountId == accountId) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Cannot contact yourself'}),
-        );
-      }
-      if (db.isBlocked(peerAccountId, accountId) ||
-          db.isBlocked(accountId, peerAccountId)) {
-        return Response.forbidden(jsonEncode({'error': 'Contact unavailable'}));
-      }
-      if (db.hasOpenContactRequest(accountId, peerAccountId)) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Contact request already pending'}),
-        );
-      }
-
-      final since = DateTime.now()
-          .subtract(const Duration(days: 1))
-          .millisecondsSinceEpoch;
-      if (db.countContactRequestsSince(accountId, since) >=
-          contactRequestDailyLimit) {
-        return Response(
-          429,
-          body: jsonEncode({'error': 'Request quota exceeded'}),
-        );
-      }
-
-      final requestId =
-          body['request_id'] as String? ??
-          'cr_${DateTime.now().microsecondsSinceEpoch}';
-      db.createContactRequest(
-        requestId: requestId,
-        requesterAccountId: accountId,
-        targetAccountId: peerAccountId,
-      );
-      final updatedAt = DateTime.now().millisecondsSinceEpoch;
-      final senderProfile = db.getAccountProfile(accountId);
-      final senderDisplayName = senderProfile?['display_name'] as String? ?? '';
-      _publishContactUpdate(
-        accountId: accountId,
-        peerAccountId: peerAccountId,
-        requestId: requestId,
-        direction: 'sent',
-        status: 'PendingSent',
-        updatedAt: updatedAt,
-      );
-      _publishContactUpdate(
-        accountId: peerAccountId,
-        peerAccountId: accountId,
-        requestId: requestId,
-        direction: 'received',
-        status: 'PendingReceived',
-        updatedAt: updatedAt,
-        peerDisplayName: senderDisplayName,
-      );
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'CONTACT_REQUEST_CREATED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(
-        jsonEncode({'request_id': requestId, 'peer_account_id': peerAccountId}),
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final peerAccountId = await _resolvePeerAccountId(body);
+    if (peerAccountId == null) {
+      throw AppError.notFound('Peer account not found');
+    }
+
+    final accountId = auth['account_id'] as String;
+    if (peerAccountId == accountId) {
+      throw AppError.badRequest('Cannot contact yourself');
+    }
+    if (db.isBlocked(peerAccountId, accountId) ||
+        db.isBlocked(accountId, peerAccountId)) {
+      throw AppError.forbidden('Contact unavailable');
+    }
+    if (db.hasOpenContactRequest(accountId, peerAccountId)) {
+      throw AppError.forbidden(
+        'Contact request already pending',
+        code: RemoteErrorCode.conflict,
+      );
+    }
+
+    final since = DateTime.now()
+        .subtract(const Duration(days: 1))
+        .millisecondsSinceEpoch;
+    if (db.countContactRequestsSince(accountId, since) >=
+        contactRequestDailyLimit) {
+      throw AppError.tooManyRequests('Request quota exceeded');
+    }
+
+    final requestId =
+        body['request_id'] as String? ??
+        'cr_${DateTime.now().microsecondsSinceEpoch}';
+    db.createContactRequest(
+      requestId: requestId,
+      requesterAccountId: accountId,
+      targetAccountId: peerAccountId,
+    );
+    final updatedAt = DateTime.now().millisecondsSinceEpoch;
+    final senderProfile = db.getAccountProfile(accountId);
+    final senderDisplayName = senderProfile?['display_name'] as String? ?? '';
+    _publishContactUpdate(
+      accountId: accountId,
+      peerAccountId: peerAccountId,
+      requestId: requestId,
+      direction: 'sent',
+      status: 'PendingSent',
+      updatedAt: updatedAt,
+    );
+    _publishContactUpdate(
+      accountId: peerAccountId,
+      peerAccountId: accountId,
+      requestId: requestId,
+      direction: 'received',
+      status: 'PendingReceived',
+      updatedAt: updatedAt,
+      peerDisplayName: senderDisplayName,
+    );
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'CONTACT_REQUEST_CREATED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(
+      jsonEncode({'request_id': requestId, 'peer_account_id': peerAccountId}),
+    );
   }
 
   Future<Response> _acceptRequestHandler(Request request) {
@@ -200,167 +198,146 @@ class ContactsModule {
   Future<Response> _addHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final peerAccountId = body['peer_account_id'] as String?;
-      final nickname = body['nickname'] as String?;
-
-      if (peerAccountId == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing peer_account_id'}),
-        );
-      }
-
-      final accountId = auth['account_id'] as String;
-      final targetId = peerAccountId;
-
-      // Check if target exists
-      final targetAcc = db.getAccount(targetId);
-      if (targetAcc == null) {
-        return Response.notFound(
-          jsonEncode({'error': 'Peer account not found'}),
-        );
-      }
-
-      db.addContact(accountId, targetId, nickname);
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'CONTACT_ADDED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(
-        jsonEncode({
-          'message': 'Contact added successfully',
-          'peer_account_id': targetId,
-          'nickname': nickname,
-        }),
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final peerAccountId = body['peer_account_id'] as String?;
+    final nickname = body['nickname'] as String?;
+
+    if (peerAccountId == null) {
+      throw AppError.badRequest('Missing peer_account_id');
+    }
+
+    final accountId = auth['account_id'] as String;
+    final targetId = peerAccountId;
+
+    // Check if target exists
+    final targetAcc = db.getAccount(targetId);
+    if (targetAcc == null) {
+      throw AppError.notFound('Peer account not found');
+    }
+
+    db.addContact(accountId, targetId, nickname);
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'CONTACT_ADDED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(
+      jsonEncode({
+        'message': 'Contact added successfully',
+        'peer_account_id': targetId,
+        'nickname': nickname,
+      }),
+    );
   }
 
   Future<Response> _removeHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final peerAccountId = body['peer_account_id'] as String?;
-      if (peerAccountId == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing peer_account_id'}),
-        );
-      }
-
-      final accountId = auth['account_id'] as String;
-      db.removeContact(accountId, peerAccountId);
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'CONTACT_REMOVED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(jsonEncode({'message': 'Contact removed'}));
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final peerAccountId = body['peer_account_id'] as String?;
+    if (peerAccountId == null) {
+      throw AppError.badRequest('Missing peer_account_id');
+    }
+
+    final accountId = auth['account_id'] as String;
+    db.removeContact(accountId, peerAccountId);
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'CONTACT_REMOVED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(jsonEncode({'message': 'Contact removed'}));
   }
 
   Future<Response> _blockHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final peerAccountId = body['peer_account_id'] as String?;
-
-      if (peerAccountId == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing peer_account_id'}),
-        );
-      }
-
-      final accountId = auth['account_id'] as String;
-      db.blockContact(accountId, peerAccountId);
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'CONTACT_BLOCKED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(
-        jsonEncode({'message': 'Contact blocked successfully'}),
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final peerAccountId = body['peer_account_id'] as String?;
+
+    if (peerAccountId == null) {
+      throw AppError.badRequest('Missing peer_account_id');
+    }
+
+    final accountId = auth['account_id'] as String;
+    db.blockContact(accountId, peerAccountId);
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'CONTACT_BLOCKED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(jsonEncode({'message': 'Contact blocked successfully'}));
   }
 
   Future<Response> _unblockHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final peerAccountId = body['peer_account_id'] as String?;
-
-      if (peerAccountId == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing peer_account_id'}),
-        );
-      }
-
-      final accountId = auth['account_id'] as String;
-      db.unblockContact(accountId, peerAccountId);
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'CONTACT_UNBLOCKED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(
-        jsonEncode({'message': 'Contact unblocked successfully'}),
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final peerAccountId = body['peer_account_id'] as String?;
+
+    if (peerAccountId == null) {
+      throw AppError.badRequest('Missing peer_account_id');
+    }
+
+    final accountId = auth['account_id'] as String;
+    db.unblockContact(accountId, peerAccountId);
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'CONTACT_UNBLOCKED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(
+      jsonEncode({'message': 'Contact unblocked successfully'}),
+    );
   }
 
   Future<Response> _searchHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final query = request.url.queryParameters['q'] ?? '';
     if (query.trim().length < 3) {
@@ -369,10 +346,7 @@ class ContactsModule {
 
     final accountId = auth['account_id'] as String;
     if (!_allowAccountSearch(accountId)) {
-      return Response(
-        429,
-        body: jsonEncode({'error': 'Search quota exceeded'}),
-      );
+      throw AppError.tooManyRequests('Search quota exceeded');
     }
     return Response.ok(
       jsonEncode({'accounts': db.searchAccounts(accountId, query)}),
@@ -397,59 +371,49 @@ class ContactsModule {
   Future<Response> _matchPhoneHashesHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final accountId = auth['account_id'] as String;
 
     if (!_allowContactsMatch(accountId)) {
-      return Response(
-        429,
-        body: jsonEncode({'error': 'Contacts match quota exceeded'}),
+      throw AppError.tooManyRequests('Contacts match quota exceeded');
+    }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final phoneHashes = (body['phone_hashes'] as List<dynamic>?)
+        ?.cast<String>();
+    if (phoneHashes == null) {
+      throw AppError.badRequest('Missing phone_hashes');
+    }
+    if (phoneHashes.length > contactsMatchBatchLimit) {
+      throw AppError.badRequest(
+        'phone_hashes exceeds the $contactsMatchBatchLimit limit',
       );
     }
 
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final phoneHashes = (body['phone_hashes'] as List<dynamic>?)
-          ?.cast<String>();
-      if (phoneHashes == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing phone_hashes'}),
-        );
-      }
-      if (phoneHashes.length > contactsMatchBatchLimit) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error': 'phone_hashes exceeds the $contactsMatchBatchLimit limit',
-          }),
-        );
-      }
+    // Only the request's volume is logged here, never the hashes/numbers
+    // themselves.
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'CONTACTS_MATCH_REQUESTED',
+      request.context['client_ip'] as String?,
+      null,
+    );
 
-      // Only the request's volume is logged here, never the hashes/numbers
-      // themselves.
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'CONTACTS_MATCH_REQUESTED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      final rows = db.matchPhoneHashes(phoneHashes);
-      final matches = <String, dynamic>{
-        for (final row in rows)
-          row['phone_hash'] as String: {
-            'account_id': row['account_id'],
-            'display_name': row['display_name'],
-          },
-      };
-      return Response.ok(jsonEncode({'matches': matches}));
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
-      );
-    }
+    final rows = db.matchPhoneHashes(phoneHashes);
+    final matches = <String, dynamic>{
+      for (final row in rows)
+        row['phone_hash'] as String: {
+          'account_id': row['account_id'],
+          'display_name': row['display_name'],
+        },
+    };
+    return Response.ok(jsonEncode({'matches': matches}));
   }
 
   bool _allowContactsMatch(String accountId) {
@@ -465,7 +429,10 @@ class ContactsModule {
   Future<Response> _getPrivacyHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     return Response.ok(
@@ -476,43 +443,43 @@ class ContactsModule {
   Future<Response> _setPrivacyHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final searchDiscoverable = body['search_discoverable'] as bool? ?? true;
-      final presenceVisibility = _visibility(
-        body['presence_visibility'] as String?,
-      );
-      final lastSeenVisibility = _visibility(
-        body['last_seen_visibility'] as String?,
-      );
-      final phoneDiscoverable = body['phone_discoverable'] as bool?;
-
-      db.setPrivacy(
-        accountId: auth['account_id'] as String,
-        searchDiscoverable: searchDiscoverable,
-        presenceVisibility: presenceVisibility,
-        lastSeenVisibility: lastSeenVisibility,
-        phoneDiscoverable: phoneDiscoverable,
-      );
-
-      return Response.ok(
-        jsonEncode({'privacy': db.getPrivacy(auth['account_id'] as String)}),
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final searchDiscoverable = body['search_discoverable'] as bool? ?? true;
+    final presenceVisibility = _visibility(
+      body['presence_visibility'] as String?,
+    );
+    final lastSeenVisibility = _visibility(
+      body['last_seen_visibility'] as String?,
+    );
+    final phoneDiscoverable = body['phone_discoverable'] as bool?;
+
+    db.setPrivacy(
+      accountId: auth['account_id'] as String,
+      searchDiscoverable: searchDiscoverable,
+      presenceVisibility: presenceVisibility,
+      lastSeenVisibility: lastSeenVisibility,
+      phoneDiscoverable: phoneDiscoverable,
+    );
+
+    return Response.ok(
+      jsonEncode({'privacy': db.getPrivacy(auth['account_id'] as String)}),
+    );
   }
 
   Future<Response> _presenceHeartbeatHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     db.updateDeviceLastSeen(
@@ -526,7 +493,10 @@ class ContactsModule {
   Future<Response> _presenceHandler(Request request, String accountId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     final presence = db.getPresenceForViewer(
@@ -539,101 +509,87 @@ class ContactsModule {
   Future<Response> _reportHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final subjectAccountId = body['subject_account_id'] as String?;
-      final category = body['category'] as String?;
-      final reasonCode = body['reason_code'] as String?;
-      final contextHash = body['context_hash'] as String?;
-      if (subjectAccountId == null || category == null || reasonCode == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing report fields'}),
-        );
-      }
-      if (body.containsKey('message_text') || body.containsKey('plaintext')) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Reports must not include plaintext'}),
-        );
-      }
-
-      final reportId =
-          body['report_id'] as String? ??
-          'r_${DateTime.now().microsecondsSinceEpoch}';
-      db.createReport(
-        reportId: reportId,
-        reporterAccountId: auth['account_id'] as String,
-        subjectAccountId: subjectAccountId,
-        category: category,
-        reasonCode: reasonCode,
-        contextHash: contextHash,
-      );
-
-      return Response.ok(jsonEncode({'report_id': reportId}));
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final subjectAccountId = body['subject_account_id'] as String?;
+    final category = body['category'] as String?;
+    final reasonCode = body['reason_code'] as String?;
+    final contextHash = body['context_hash'] as String?;
+    if (subjectAccountId == null || category == null || reasonCode == null) {
+      throw AppError.badRequest('Missing report fields');
+    }
+    if (body.containsKey('message_text') || body.containsKey('plaintext')) {
+      throw AppError.badRequest('Reports must not include plaintext');
+    }
+
+    final reportId =
+        body['report_id'] as String? ??
+        'r_${DateTime.now().microsecondsSinceEpoch}';
+    db.createReport(
+      reportId: reportId,
+      reporterAccountId: auth['account_id'] as String,
+      subjectAccountId: subjectAccountId,
+      category: category,
+      reasonCode: reasonCode,
+      contextHash: contextHash,
+    );
+
+    return Response.ok(jsonEncode({'report_id': reportId}));
   }
 
   Future<Response> _safetyActionHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final reportId = body['report_id'] as String?;
-      final action = body['action'] as String?;
-      if (reportId == null || action == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing safety action fields'}),
-        );
-      }
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final reportId = body['report_id'] as String?;
+    final action = body['action'] as String?;
+    if (reportId == null || action == null) {
+      throw AppError.badRequest('Missing safety action fields');
+    }
 
-      final actorAccountId = auth['account_id'] as String;
-      if (!adminAccountIds.contains(actorAccountId)) {
-        db.logAudit(
-          actorAccountId,
-          auth['device_id'] as String?,
-          'ADMIN_ACCESS_DENIED',
-          request.context['client_ip'] as String?,
-          null,
-        );
-        return Response.forbidden(
-          jsonEncode({'error': 'Admin privileges required'}),
-        );
-      }
-
-      final actionId =
-          body['action_id'] as String? ??
-          'sa_${DateTime.now().microsecondsSinceEpoch}';
-      db.addSafetyAction(
-        actionId: actionId,
-        reportId: reportId,
-        actorAccountId: actorAccountId,
-        action: action,
-      );
+    final actorAccountId = auth['account_id'] as String;
+    if (!adminAccountIds.contains(actorAccountId)) {
       db.logAudit(
         actorAccountId,
         auth['device_id'] as String?,
-        'ADMIN_SAFETY_ACTION',
+        'ADMIN_ACCESS_DENIED',
         request.context['client_ip'] as String?,
         null,
       );
-
-      return Response.ok(jsonEncode({'action_id': actionId}));
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
-      );
+      throw AppError.forbidden('Admin privileges required');
     }
+
+    final actionId =
+        body['action_id'] as String? ??
+        'sa_${DateTime.now().microsecondsSinceEpoch}';
+    db.addSafetyAction(
+      actionId: actionId,
+      reportId: reportId,
+      actorAccountId: actorAccountId,
+      action: action,
+    );
+    db.logAudit(
+      actorAccountId,
+      auth['device_id'] as String?,
+      'ADMIN_SAFETY_ACTION',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(jsonEncode({'action_id': actionId}));
   }
 
   Future<Response> _closeRequest(
@@ -644,94 +600,88 @@ class ContactsModule {
   }) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final requestId = body['request_id'] as String?;
-      if (requestId == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing request_id'}),
-        );
-      }
-
-      final contactRequest = db.getContactRequest(requestId);
-      if (contactRequest == null) {
-        return Response.notFound(jsonEncode({'error': 'Request not found'}));
-      }
-
-      final accountId = auth['account_id'] as String;
-      final allowedAccountId = expectedActor == 'target'
-          ? contactRequest['target_account_id']
-          : contactRequest['requester_account_id'];
-      if (allowedAccountId != accountId) {
-        return Response.forbidden(jsonEncode({'error': 'Forbidden'}));
-      }
-
-      close(requestId);
-      final requester = contactRequest['requester_account_id'] as String;
-      final target = contactRequest['target_account_id'] as String;
-      final updatedAt = DateTime.now().millisecondsSinceEpoch;
-      if (action == 'ACCEPT') {
-        final requesterProfile = db.getAccountProfile(requester);
-        final requesterDisplayName =
-            requesterProfile?['display_name'] as String? ?? '';
-        final targetProfile = db.getAccountProfile(target);
-        final targetDisplayName =
-            targetProfile?['display_name'] as String? ?? '';
-        // Notify the original sender: their request was accepted by `target`
-        _publishContactUpdate(
-          accountId: requester,
-          peerAccountId: target,
-          requestId: requestId,
-          direction: 'sent',
-          status: 'Accepted',
-          updatedAt: updatedAt,
-          peerDisplayName: targetDisplayName,
-        );
-        // Notify the accepter: the contact is `requester`
-        _publishContactUpdate(
-          accountId: target,
-          peerAccountId: requester,
-          requestId: requestId,
-          direction: 'received',
-          status: 'Accepted',
-          updatedAt: updatedAt,
-          peerDisplayName: requesterDisplayName,
-        );
-      } else {
-        final status = action == 'REJECT' ? 'Rejected' : 'Cancelled';
-        _publishContactRemoved(
-          accountId: requester,
-          peerAccountId: target,
-          requestId: requestId,
-          status: status,
-          updatedAt: updatedAt,
-        );
-        _publishContactRemoved(
-          accountId: target,
-          peerAccountId: requester,
-          requestId: requestId,
-          status: status,
-          updatedAt: updatedAt,
-        );
-      }
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'CONTACT_REQUEST_$action',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(jsonEncode({'message': 'Contact request $action'}));
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final requestId = body['request_id'] as String?;
+    if (requestId == null) {
+      throw AppError.badRequest('Missing request_id');
+    }
+
+    final contactRequest = db.getContactRequest(requestId);
+    if (contactRequest == null) {
+      throw AppError.notFound('Request not found');
+    }
+
+    final accountId = auth['account_id'] as String;
+    final allowedAccountId = expectedActor == 'target'
+        ? contactRequest['target_account_id']
+        : contactRequest['requester_account_id'];
+    if (allowedAccountId != accountId) {
+      throw AppError.forbidden('Forbidden');
+    }
+
+    close(requestId);
+    final requester = contactRequest['requester_account_id'] as String;
+    final target = contactRequest['target_account_id'] as String;
+    final updatedAt = DateTime.now().millisecondsSinceEpoch;
+    if (action == 'ACCEPT') {
+      final requesterProfile = db.getAccountProfile(requester);
+      final requesterDisplayName =
+          requesterProfile?['display_name'] as String? ?? '';
+      final targetProfile = db.getAccountProfile(target);
+      final targetDisplayName = targetProfile?['display_name'] as String? ?? '';
+      // Notify the original sender: their request was accepted by `target`
+      _publishContactUpdate(
+        accountId: requester,
+        peerAccountId: target,
+        requestId: requestId,
+        direction: 'sent',
+        status: 'Accepted',
+        updatedAt: updatedAt,
+        peerDisplayName: targetDisplayName,
+      );
+      // Notify the accepter: the contact is `requester`
+      _publishContactUpdate(
+        accountId: target,
+        peerAccountId: requester,
+        requestId: requestId,
+        direction: 'received',
+        status: 'Accepted',
+        updatedAt: updatedAt,
+        peerDisplayName: requesterDisplayName,
+      );
+    } else {
+      final status = action == 'REJECT' ? 'Rejected' : 'Cancelled';
+      _publishContactRemoved(
+        accountId: requester,
+        peerAccountId: target,
+        requestId: requestId,
+        status: status,
+        updatedAt: updatedAt,
+      );
+      _publishContactRemoved(
+        accountId: target,
+        peerAccountId: requester,
+        requestId: requestId,
+        status: status,
+        updatedAt: updatedAt,
+      );
+    }
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'CONTACT_REQUEST_$action',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(jsonEncode({'message': 'Contact request $action'}));
   }
 
   Future<String?> _resolvePeerAccountId(Map<String, dynamic> body) async {
