@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:helix_remote_domain/models.dart';
 import 'package:shelf/shelf.dart';
 
 /// Wraps [inner] so a thrown [AppError] (or any other exception) becomes a
@@ -18,6 +19,15 @@ Handler withAppErrorHandling(Handler inner) {
       return await inner(request);
     } on AppError catch (e) {
       return e.toResponse();
+    } on RemoteIllegalStatusTransitionException catch (e) {
+      // A lifecycle validator refusing a move is a client problem, not a
+      // server fault: it means the request asked for something the entity's
+      // current state doesn't allow (joining an ended room, answering a
+      // call that was already declined). 409 says exactly that, where the
+      // catch-all below would report a misleading 500.
+      return AppError.conflict(
+        e.message,
+      ).withDetails({'from': e.from, 'to': e.to}).toResponse();
     } on HijackException {
       // A WebSocket upgrade handler signals "I took over the socket" by
       // throwing this, not by returning a Response - it must propagate

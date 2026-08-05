@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:helix_remote_domain/models.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 part 'database/accounts_devices_repository.dart';

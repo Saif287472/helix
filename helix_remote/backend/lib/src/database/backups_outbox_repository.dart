@@ -214,10 +214,26 @@ extension BackendBackupsOutboxRepository on BackendDatabase {
   }
 
   void updateOutboxStatus(String eventId, String status, int retries) {
+    // Guards the two transitions that would be silently destructive: moving
+    // a COMPLETED event back into the queue (delivering it twice) or pulling
+    // one out of DLQ (resurrecting an event that was deliberately parked).
+    // A row that has vanished is not an error - the retention sweep can
+    // remove one between the worker reading it and writing the result.
+    final current = _outboxStatus(eventId);
+    if (current != null && current != status) {
+      RemoteOutboxStatus.validateTransition(current, status);
+    }
     final stmt = _db.prepare(
       'UPDATE outbox SET status = ?, retries = ? WHERE event_id = ?;',
     );
     stmt.execute([status, retries, eventId]);
     stmt.close();
+  }
+
+  String? _outboxStatus(String eventId) {
+    final stmt = _db.prepare('SELECT status FROM outbox WHERE event_id = ?;');
+    final rows = stmt.select([eventId]);
+    stmt.close();
+    return rows.isEmpty ? null : rows.first['status'] as String?;
   }
 }
