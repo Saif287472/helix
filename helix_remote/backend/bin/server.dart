@@ -75,6 +75,27 @@ Future<void> _run(ServerLogSink logSink) async {
   final dbPath =
       Platform.environment['HELIX_REMOTE_DB_PATH'] ?? 'remote_backend.db';
 
+  // Attachment limits. Optional: both fall back to AttachmentsModule's
+  // defaults. Configurable so an operator can change what this deployment
+  // accepts by editing .env, rather than needing an app release - the
+  // client reads the effective values from /api/v1/server/info.
+  final maxAttachmentBytes = int.tryParse(
+    sanitizeEnvValue(Platform.environment['HELIX_REMOTE_MAX_ATTACHMENT_BYTES']),
+  );
+  final accountQuotaBytes = int.tryParse(
+    sanitizeEnvValue(Platform.environment['HELIX_REMOTE_ACCOUNT_QUOTA_BYTES']),
+  );
+
+  // How long a completed attachment nothing references is kept before the
+  // storage sweep reclaims it. Exposed because the right answer depends on
+  // the volume the deployment sits on, and a small VPS holding 100 MB files
+  // may want far less than the 30-day default.
+  final attachmentRetentionDays = int.tryParse(
+    sanitizeEnvValue(
+      Platform.environment['HELIX_REMOTE_ATTACHMENT_RETENTION_DAYS'],
+    ),
+  );
+
   // Attachment storage directory — optional but required for file transfers.
   final attachmentsDirPath =
       Platform.environment['HELIX_REMOTE_ATTACHMENTS_DIR'];
@@ -140,6 +161,11 @@ Future<void> _run(ServerLogSink logSink) async {
     sqliteDb: sqliteDb,
     jwtSecret: resolvedJwtSecret,
     attachmentsStorageDir: attachmentsStorageDir,
+    maxAttachmentBytes: maxAttachmentBytes,
+    accountQuotaBytes: accountQuotaBytes,
+    attachmentRetention: attachmentRetentionDays == null
+        ? null
+        : Duration(days: attachmentRetentionDays),
     turnUrl: turnUrl,
     turnSecret: turnSecret,
     pushProvider: pushProvider,

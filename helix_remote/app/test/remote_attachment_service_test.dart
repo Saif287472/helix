@@ -14,6 +14,49 @@ import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 
 void main() {
+  group('size limit is compared like with like', () {
+    // The live bug this fixes: the client checked the *plaintext* length
+    // against a limit the server applies to *ciphertext*. Encryption adds a
+    // frame header plus a nonce, tag and three length fields per 64KB
+    // chunk, so a file in the top ~6KB band passed here and was then
+    // rejected by the backend.
+    test('ciphertext is larger than plaintext by the framing overhead', () {
+      const tenMb = 10 * 1024 * 1024;
+      final cipher = RemoteAttachmentService.ciphertextLengthFor(tenMb);
+      expect(cipher, greaterThan(tenMb));
+      // 160 chunks x 40 bytes + an 18-byte header.
+      expect(cipher - tenMb, equals(160 * 40 + 18));
+    });
+
+    test('an empty file still carries the frame header', () {
+      expect(RemoteAttachmentService.ciphertextLengthFor(0), equals(18));
+    });
+
+    test('a partial trailing chunk is counted once', () {
+      const oneChunkPlusOne = 64 * 1024 + 1;
+      expect(
+        RemoteAttachmentService.ciphertextLengthFor(oneChunkPlusOne),
+        equals(18 + oneChunkPlusOne + 2 * 40),
+      );
+    });
+
+    test('a file whose ciphertext just exceeds the limit is refused', () async {
+      // Plaintext under the limit, ciphertext over it - exactly the band
+      // that used to pass the client and fail the server.
+      final dir = Directory.systemTemp.createTempSync('helix_attach_limit');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final file = File(p.join(dir.path, 'big.bin'));
+      const limit = 1024 * 1024;
+      final plaintext = limit - 100;
+      file.writeAsBytesSync(Uint8List(plaintext));
+      expect(
+        RemoteAttachmentService.ciphertextLengthFor(plaintext),
+        greaterThan(limit),
+        reason: 'the test file must land in the overhead band',
+      );
+    });
+  });
+
   setUpAll(() {
     if (Platform.isWindows) {
       var dir = Directory.current;
@@ -270,24 +313,49 @@ void main() {
   );
 
   test('Client-side size limit validation throws ArgumentError', () async {
+    // The limit is injected rather than relying on the built-in default:
+    // the default is an operator choice now (settable per deployment and
+    // read from /server/info), so pinning a test to it would break every
+    // time someone tuned it. This asserts the check, not the number.
+    const limit = 2 * 1024 * 1024;
     final service = RemoteAttachmentService(
       baseUrl: 'http://127.0.0.1:$port',
       authToken: token,
       db: db,
       tempDir: clientTempDir,
       wrappingKey: wrappingKey,
+      maxAttachmentBytes: limit,
     );
 
-    // Create a mock File that claims to be 11MB
     final largeFile = File(p.join(clientTempDir.path, 'large.txt'));
-    await largeFile.writeAsBytes(Uint8List(10)); // just small actual write
-    // To mock the lengthSync without writing 11MB, we will write a file and mock length check if needed.
-    // Wait! lengthSync reads length from filesystem, so we must write a large file or use custom mocking.
-    // Since writing 11MB on local disk takes less than 10 milliseconds, we can write it!
-    final largeBytes = Uint8List(11 * 1024 * 1024);
-    await largeFile.writeAsBytes(largeBytes);
+    await largeFile.writeAsBytes(Uint8List(limit + 1024));
 
     expect(() => service.prepareAttachment(largeFile), throwsArgumentError);
+  });
+
+  test('a file whose ciphertext alone exceeds the limit is refused', () async {
+    // The band that used to slip through: plaintext under the limit,
+    // ciphertext over it once framing is added.
+    const limit = 1024 * 1024;
+    final service = RemoteAttachmentService(
+      baseUrl: 'http://127.0.0.1:$port',
+      authToken: token,
+      db: db,
+      tempDir: clientTempDir,
+      wrappingKey: wrappingKey,
+      maxAttachmentBytes: limit,
+    );
+
+    final plaintext = limit - 100;
+    expect(
+      RemoteAttachmentService.ciphertextLengthFor(plaintext),
+      greaterThan(limit),
+      reason: 'the fixture must land in the overhead band',
+    );
+
+    final file = File(p.join(clientTempDir.path, 'edge.bin'));
+    await file.writeAsBytes(Uint8List(plaintext));
+    expect(() => service.prepareAttachment(file), throwsArgumentError);
   });
 
   test(

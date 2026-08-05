@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
@@ -13,9 +14,25 @@ class ContactsModule {
   final Map<String, List<int>> _searchAttempts = {};
   static const int contactRequestDailyLimit = 20;
   static const int accountSearchMinuteLimit = 30;
-  static const int contactsMatchDailyLimit = 5;
-  static const int contactsMatchBatchLimit = 500;
-  final Map<String, List<int>> _matchAttempts = {};
+
+  /// Distinct phone hashes an account may look up per rolling 24h.
+  ///
+  /// Replaces the old "5 requests/day" cap, which metered the wrong thing:
+  /// with a 500-hash batch limit it allowed 2,500 hashes/day anyway, but
+  /// spent the entire allowance on a single 2,100-contact phone book -
+  /// leaving nothing for a retry, a second device, or the next day. Metering
+  /// hashes makes chunk size irrelevant to the budget while bounding the
+  /// actual enumeration exposure, which is what the cap exists for.
+  static const int contactsMatchDailyHashLimit = 5000;
+
+  /// Per-request size guard only. The daily budget above is what bounds
+  /// enumeration; this just stops one request being unboundedly large.
+  static const int contactsMatchBatchLimit = 1000;
+
+  static const int contactsMatchWindowMs = 24 * 60 * 60 * 1000;
+
+  /// Budget rows are swept once their window is a week stale.
+  static const int contactsMatchBudgetRetentionMs = 7 * 24 * 60 * 60 * 1000;
 
   ContactsModule(this.db, {Set<String>? adminAccountIds, this.notifyDevice})
     : adminAccountIds = adminAccountIds ?? const {'admin'};
@@ -378,22 +395,86 @@ class ContactsModule {
     }
     final accountId = auth['account_id'] as String;
 
-    if (!_allowContactsMatch(accountId)) {
-      throw AppError.tooManyRequests('Contacts match quota exceeded');
-    }
-
     final body =
         jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-    final phoneHashes = (body['phone_hashes'] as List<dynamic>?)
-        ?.cast<String>();
-    if (phoneHashes == null) {
+    final rawHashes = (body['phone_hashes'] as List<dynamic>?)?.cast<String>();
+    if (rawHashes == null) {
       throw AppError.badRequest('Missing phone_hashes');
     }
-    if (phoneHashes.length > contactsMatchBatchLimit) {
+    if (rawHashes.length > contactsMatchBatchLimit) {
       throw AppError.badRequest(
         'phone_hashes exceeds the $contactsMatchBatchLimit limit',
       );
     }
+
+    // Duplicates cost the caller nothing and must not cost budget either -
+    // a phone book routinely holds one number under several labels.
+    final phoneHashes = rawHashes.toSet().toList(growable: false);
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    db.purgeExpiredContactsMatchBudgets(now, contactsMatchBudgetRetentionMs);
+
+    // An unchanged phone book asks the same questions and gets the same
+    // answers, so re-syncing one is free. `full_sync` marks the request as
+    // the complete set rather than a chunk; caching a single chunk would
+    // wrongly answer a later full sync from partial data.
+    final isFullSync = body['full_sync'] == true;
+    final fingerprint = _fingerprintOf(phoneHashes);
+    if (isFullSync) {
+      final cached = db.getContactsMatchCache(
+        accountId: accountId,
+        fingerprint: fingerprint,
+      );
+      if (cached != null) {
+        final budget = db.getContactsMatchBudget(
+          accountId: accountId,
+          limit: contactsMatchDailyHashLimit,
+          now: now,
+          windowMs: contactsMatchWindowMs,
+        );
+        return Response.ok(
+          jsonEncode({
+            'matches': cached,
+            'hashes_charged': 0,
+            'hashes_remaining_today': budget.hashesRemaining,
+            'unchanged': true,
+          }),
+        );
+      }
+    }
+
+    final budget = db.getContactsMatchBudget(
+      accountId: accountId,
+      limit: contactsMatchDailyHashLimit,
+      now: now,
+      windowMs: contactsMatchWindowMs,
+    );
+    if (budget.hashesRemaining <= 0) {
+      throw AppError.tooManyRequests(
+        'Contact discovery budget exhausted for today',
+      ).withDetails({
+        'hashes_remaining_today': 0,
+        'retry_after_seconds': ((budget.windowResetsAt - now) / 1000)
+            .ceil()
+            .clamp(0, 86400),
+      });
+    }
+
+    // A request larger than what is left is answered partially rather than
+    // rejected: the client keeps what it got and resumes tomorrow, instead
+    // of a whole sync failing on its last chunk.
+    final charged = phoneHashes.length <= budget.hashesRemaining
+        ? phoneHashes.length
+        : budget.hashesRemaining;
+    final lookedUp = phoneHashes.take(charged).toList(growable: false);
+    final partial = charged < phoneHashes.length;
+
+    db.chargeContactsMatchBudget(
+      accountId: accountId,
+      hashes: charged,
+      now: now,
+      windowMs: contactsMatchWindowMs,
+    );
 
     // Only the request's volume is logged here, never the hashes/numbers
     // themselves.
@@ -405,7 +486,7 @@ class ContactsModule {
       null,
     );
 
-    final rows = db.matchPhoneHashes(phoneHashes);
+    final rows = db.matchPhoneHashes(lookedUp);
     final matches = <String, dynamic>{
       for (final row in rows)
         row['phone_hash'] as String: {
@@ -413,17 +494,42 @@ class ContactsModule {
           'display_name': row['display_name'],
         },
     };
-    return Response.ok(jsonEncode({'matches': matches}));
+
+    if (isFullSync && !partial) {
+      db.setContactsMatchCache(
+        accountId: accountId,
+        fingerprint: fingerprint,
+        matched: matches,
+        now: now,
+      );
+    }
+
+    final after = db.getContactsMatchBudget(
+      accountId: accountId,
+      limit: contactsMatchDailyHashLimit,
+      now: now,
+      windowMs: contactsMatchWindowMs,
+    );
+    return Response.ok(
+      jsonEncode({
+        'matches': matches,
+        'hashes_charged': charged,
+        'hashes_remaining_today': after.hashesRemaining,
+        'partial': partial,
+        if (partial)
+          'retry_after_seconds': ((after.windowResetsAt - now) / 1000)
+              .ceil()
+              .clamp(0, 86400),
+      }),
+    );
   }
 
-  bool _allowContactsMatch(String accountId) {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final cutoff = now - const Duration(days: 1).inMilliseconds;
-    final attempts = _matchAttempts.putIfAbsent(accountId, () => <int>[]);
-    attempts.removeWhere((timestamp) => timestamp < cutoff);
-    if (attempts.length >= contactsMatchDailyLimit) return false;
-    attempts.add(now);
-    return true;
+  /// Order-independent fingerprint of a hash set, so the same phone book
+  /// produces the same value regardless of the order the device enumerated
+  /// it in.
+  String _fingerprintOf(List<String> phoneHashes) {
+    final sorted = [...phoneHashes]..sort();
+    return sha256.convert(utf8.encode(sorted.join(','))).toString();
   }
 
   Future<Response> _getPrivacyHandler(Request request) async {

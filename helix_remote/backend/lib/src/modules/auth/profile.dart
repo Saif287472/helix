@@ -6,88 +6,83 @@ mixin AuthProfileHandlers on AuthModuleBase {
   Future<Response> _updateProfileHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final displayName = (body['display_name'] as String?)?.trim();
-      if (displayName == null ||
-          displayName.isEmpty ||
-          displayName.length > 80) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Invalid display_name'}),
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final displayName = (body['display_name'] as String?)?.trim();
+    if (displayName == null || displayName.isEmpty || displayName.length > 80) {
+      throw AppError.badRequest('Invalid display_name');
+    }
+
+    final accountId = auth['account_id'] as String;
+    final now = _now();
+
+    // Rate-limited to once every 30 days, but only counted from the
+    // user's own explicit change - never from whatever name (including
+    // the phone-number default from skipping) registration set, so a
+    // first-ever change is always allowed regardless of when the account
+    // was created.
+    final existingProfile = db.getAccountProfile(accountId);
+    final lastChangedAt = existingProfile?['display_name_changed_at'] as int?;
+    if (lastChangedAt != null) {
+      final nextAllowedAt = DateTime.fromMillisecondsSinceEpoch(
+        lastChangedAt,
+      ).add(_displayNameChangeCooldown);
+      if (now.isBefore(nextAllowedAt)) {
+        return Response(
+          429,
+          body: jsonEncode({
+            'error':
+                'You can only change your display name once every '
+                '${_displayNameChangeCooldown.inDays} days. Try again on '
+                '${_formatDate(nextAllowedAt)}.',
+            'next_allowed_at': nextAllowedAt.millisecondsSinceEpoch,
+          }),
         );
       }
-
-      final accountId = auth['account_id'] as String;
-      final now = _now();
-
-      // Rate-limited to once every 30 days, but only counted from the
-      // user's own explicit change - never from whatever name (including
-      // the phone-number default from skipping) registration set, so a
-      // first-ever change is always allowed regardless of when the account
-      // was created.
-      final existingProfile = db.getAccountProfile(accountId);
-      final lastChangedAt =
-          existingProfile?['display_name_changed_at'] as int?;
-      if (lastChangedAt != null) {
-        final nextAllowedAt = DateTime.fromMillisecondsSinceEpoch(
-          lastChangedAt,
-        ).add(_displayNameChangeCooldown);
-        if (now.isBefore(nextAllowedAt)) {
-          return Response(
-            429,
-            body: jsonEncode({
-              'error':
-                  'You can only change your display name once every '
-                  '${_displayNameChangeCooldown.inDays} days. Try again on '
-                  '${_formatDate(nextAllowedAt)}.',
-              'next_allowed_at': nextAllowedAt.millisecondsSinceEpoch,
-            }),
-          );
-        }
-      }
-
-      final profile = db.upsertAccountProfile(
-        accountId: accountId,
-        displayName: displayName,
-        recordDisplayNameChange: true,
-        now: now,
-      );
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'PROFILE_UPDATED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      _notifySiblingDevices(
-        accountId,
-        exceptDeviceId: auth['device_id'] as String,
-        payload: {
-          'type': 'profile_updated',
-          'account_id': accountId,
-          'display_name': displayName,
-          'profile_version': profile['profile_version'],
-          'updated_at': profile['updated_at'],
-        },
-      );
-
-      return Response.ok(jsonEncode({'profile': profile}));
-    } catch (_) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
-      );
     }
+
+    final profile = db.upsertAccountProfile(
+      accountId: accountId,
+      displayName: displayName,
+      recordDisplayNameChange: true,
+      now: now,
+    );
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'PROFILE_UPDATED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    _notifySiblingDevices(
+      accountId,
+      exceptDeviceId: auth['device_id'] as String,
+      payload: {
+        'type': 'profile_updated',
+        'account_id': accountId,
+        'display_name': displayName,
+        'profile_version': profile['profile_version'],
+        'updated_at': profile['updated_at'],
+      },
+    );
+
+    return Response.ok(jsonEncode({'profile': profile}));
   }
 
   Future<Response> _getProfileHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final accountId = auth['account_id'] as String;
     final profile = db.getAccountProfile(accountId);

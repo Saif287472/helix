@@ -94,10 +94,7 @@ class SettingsRow extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
                   Container(
@@ -150,10 +147,7 @@ class SettingsRow extends StatelessWidget {
         ),
         if (trailing != null) ...[
           const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: trailing!,
-          ),
+          Padding(padding: const EdgeInsets.only(right: 16), child: trailing!),
         ],
       ],
     );

@@ -45,8 +45,7 @@ class AdminPreferences {
   Future<void> setAppLockEnabled(bool value) =>
       _prefs.setBool(_appLockEnabledKey, value);
 
-  Future<String?> loadAdminToken() =>
-      _secureStorage.read(key: _adminTokenKey);
+  Future<String?> loadAdminToken() => _secureStorage.read(key: _adminTokenKey);
 
   Future<void> saveAdminToken(String value) =>
       _secureStorage.write(key: _adminTokenKey, value: value);

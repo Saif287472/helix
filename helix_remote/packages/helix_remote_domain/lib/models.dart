@@ -12,3 +12,4 @@ export 'domain/call.dart';
 export 'domain/group_call.dart';
 export 'domain/sync.dart';
 export 'domain/remote_status.dart';
+export 'domain/call_room_transitions.dart';

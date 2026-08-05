@@ -14,9 +14,7 @@ mixin AuthInviteHandlers on AuthModuleBase {
   Future<Response> _lookupInviteHandler(Request request) async {
     final code = request.url.queryParameters['invite_code'];
     if (code == null || code.isEmpty) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Missing invite_code'}),
-      );
+      throw AppError.badRequest('Missing invite_code');
     }
 
     final invite = db.getInviteByCodeHash(hashInviteCode(code));
@@ -77,10 +75,7 @@ mixin AuthInviteHandlers on AuthModuleBase {
 
     final clientIp = request.context['client_ip'] as String? ?? 'unknown';
     if (!_allowGlobalAutoIssue(clientIp)) {
-      return Response(
-        429,
-        body: jsonEncode({'error': 'Too many invite requests'}),
-      );
+      throw AppError.tooManyRequests('Too many invite requests');
     }
 
     final now = _now().millisecondsSinceEpoch;

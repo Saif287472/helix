@@ -55,7 +55,16 @@ class ServerLogSink {
   /// can explain itself instead of silently showing nothing, and latched so
   /// one bad path doesn't produce a write attempt per log line forever.
   String? _fileError;
-  IOSink? _fileSink;
+
+  /// A [RandomAccessFile] rather than an [IOSink] on purpose. `IOSink.close()`
+  /// returns a Future, so the OS handle is still open when it returns - and
+  /// rotation has to rename the file it is holding. POSIX allows renaming an
+  /// open file, so this worked on Linux; Windows refuses with errno 32, the
+  /// rename threw, and `_writeToFile`'s catch latched `_fileError` - which
+  /// permanently disabled file logging the first time the log reached
+  /// `maxFileBytes`. `closeSync()` releases the handle before it returns, so
+  /// rotation is deterministic on both platforms.
+  RandomAccessFile? _fileHandle;
   int _fileBytes = 0;
   bool _fileReady = false;
 
@@ -118,13 +127,12 @@ class ServerLogSink {
     if (path == null || path.isEmpty || _fileError != null) return;
     try {
       if (!_fileReady) _openFile(path);
-      final sink = _fileSink;
-      if (sink == null) return;
+      if (_fileHandle == null) return;
       final bytes = line.length + 1;
       if (_fileBytes + bytes > maxFileBytes) {
         _rotate(path);
       }
-      _fileSink!.writeln(line);
+      _fileHandle!.writeStringSync('$line\n');
       _fileBytes += bytes;
     } catch (e) {
       // Latch the failure rather than retrying per line - a read-only
@@ -141,7 +149,7 @@ class ServerLogSink {
       parent.createSync(recursive: true);
     }
     _fileBytes = file.existsSync() ? file.lengthSync() : 0;
-    _fileSink = file.openWrite(mode: FileMode.append);
+    _fileHandle = file.openSync(mode: FileMode.append);
     _fileReady = true;
   }
 
@@ -154,28 +162,28 @@ class ServerLogSink {
       file.renameSync('$path.1');
     }
     _fileBytes = 0;
-    _fileSink = File(path).openWrite(mode: FileMode.append);
+    _fileHandle = File(path).openSync(mode: FileMode.append);
     _fileReady = true;
   }
 
   void _closeFileQuietly() {
     try {
-      _fileSink?.close();
+      _fileHandle?.closeSync();
     } catch (_) {
       // Nothing useful to do - we're already on an error path.
     }
-    _fileSink = null;
+    _fileHandle = null;
     _fileReady = false;
   }
 
   Future<void> dispose() async {
-    final sink = _fileSink;
-    _fileSink = null;
+    final handle = _fileHandle;
+    _fileHandle = null;
     _fileReady = false;
-    if (sink == null) return;
+    if (handle == null) return;
     try {
-      await sink.flush();
-      await sink.close();
+      await handle.flush();
+      await handle.close();
     } catch (_) {
       // Best effort - shutdown must not fail on a log flush.
     }
@@ -195,7 +203,15 @@ ServerLogSink? get activeServerLog => _activeServerLog;
 void installServerLog(ServerLogSink sink) => _activeServerLog = sink;
 
 /// Only used by tests, to keep a sink from leaking between cases.
-void resetServerLogForTesting() => _activeServerLog = null;
+void resetServerLogForTesting() {
+  // Releases the file handle, not just the reference. A test's tearDown
+  // deletes the temp directory it logged into, and Windows refuses to
+  // remove a directory containing an open file - so a leaked handle here
+  // failed cleanup with errno 32 rather than anything to do with the test
+  // that leaked it.
+  _activeServerLog?._closeFileQuietly();
+  _activeServerLog = null;
+}
 
 /// Logs an error from library code: captured for the admin console when a
 /// sink is installed, and written to stderr either way.

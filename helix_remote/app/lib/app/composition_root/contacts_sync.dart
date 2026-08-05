@@ -24,10 +24,30 @@ class PhoneContactsSyncResult {
   const PhoneContactsSyncResult({
     required this.matches,
     required this.unmatchedNames,
+    this.complete = true,
+    this.hashesRemainingToday,
+    this.retryAfter,
   });
 
   final Map<String, PhoneContactMatch> matches;
   final List<String> unmatchedNames;
+
+  /// False when the server's daily discovery budget ran out part-way. The
+  /// matches found so far are still valid and have been applied - a large
+  /// phone book that cannot finish today is a partial success, not a
+  /// failure, and the UI should say so rather than discarding the work.
+  final bool complete;
+
+  /// What the server says is left of today's budget, when it told us.
+  final int? hashesRemainingToday;
+
+  /// How long until the budget window rolls over, when the sync was cut
+  /// short. Lets the caller schedule the remainder instead of retrying into
+  /// a wall.
+  final Duration? retryAfter;
+
+  /// Names whose lookup never happened because the budget ran out.
+  bool get isPartial => !complete;
 }
 
 mixin RemoteCompositionContactsSync
@@ -53,10 +73,56 @@ mixin RemoteCompositionContactsSync
       return const PhoneContactsSyncResult(matches: {}, unmatchedNames: []);
     }
 
-    final response = await rest.matchPhoneHashes(hashToName.keys.toList());
-    final matchesJson =
-        response['matches'] as Map<String, dynamic>? ?? const {};
+    // Chunked, and sequentially rather than with Future.wait: parallel
+    // bursts would spike memory on a large phone book and hit the server's
+    // discovery budget all at once, losing the ability to stop cleanly at
+    // the point the budget runs out.
+    final allHashes = hashToName.keys.toList(growable: false);
+    final matchesJson = <String, dynamic>{};
+    var complete = true;
+    int? hashesRemaining;
+    Duration? retryAfter;
 
+    for (var start = 0; start < allHashes.length; start += _matchChunkSize) {
+      final end = (start + _matchChunkSize).clamp(0, allHashes.length);
+      final chunk = allHashes.sublist(start, end);
+
+      final Map<String, dynamic> response;
+      try {
+        response = await rest.matchPhoneHashes(
+          chunk,
+          // Only a single-chunk sync is the complete set; telling the server
+          // otherwise would let it cache one chunk as the whole phone book.
+          fullSync: allHashes.length <= _matchChunkSize,
+        );
+      } on RemoteRestException catch (e) {
+        if (e.statusCode == 429) {
+          // Budget exhausted. Keep everything matched so far rather than
+          // discarding the whole sync over its last chunk.
+          complete = false;
+          retryAfter = _retryAfterFrom(e);
+          break;
+        }
+        rethrow;
+      }
+
+      final chunkMatches =
+          response['matches'] as Map<String, dynamic>? ?? const {};
+      matchesJson.addAll(chunkMatches);
+      hashesRemaining =
+          response['hashes_remaining_today'] as int? ?? hashesRemaining;
+
+      if (response['partial'] == true) {
+        // The server answered as much of this chunk as the budget allowed.
+        complete = false;
+        final seconds = response['retry_after_seconds'] as int?;
+        if (seconds != null) retryAfter = Duration(seconds: seconds);
+        break;
+      }
+    }
+
+    // Applied incrementally rather than only on a clean finish: a sync that
+    // stops at chunk 3 of 5 should keep chunks 1-2, not throw them away.
     final overrides = <String, String>{};
     final results = <String, PhoneContactMatch>{};
     for (final entry in matchesJson.entries) {
@@ -88,7 +154,34 @@ mixin RemoteCompositionContactsSync
 
     return PhoneContactsSyncResult(
       matches: results,
-      unmatchedNames: unmatchedNames,
+      // Only meaningful for the hashes actually looked up: a contact whose
+      // chunk was never sent is "not yet checked", not "not on Helix".
+      unmatchedNames: complete ? unmatchedNames : const [],
+      complete: complete,
+      hashesRemainingToday: hashesRemaining,
+      retryAfter: retryAfter,
     );
+  }
+
+  /// Chunk size for contact discovery. Matches the server's per-request cap
+  /// (`ContactsModule.contactsMatchBatchLimit`); the daily budget is metered
+  /// per hash, so this affects only request size, never the cost of a sync.
+  static const int _matchChunkSize = 1000;
+
+  Duration? _retryAfterFrom(RemoteRestException error) {
+    if (error.retryAfter != null) return error.retryAfter;
+    try {
+      final decoded = jsonDecode(error.message);
+      if (decoded is Map<String, dynamic>) {
+        final details = decoded['details'];
+        if (details is Map<String, dynamic>) {
+          final seconds = details['retry_after_seconds'];
+          if (seconds is int) return Duration(seconds: seconds);
+        }
+      }
+    } catch (_) {
+      // Not JSON - no hint available, caller just retries later.
+    }
+    return null;
   }
 }

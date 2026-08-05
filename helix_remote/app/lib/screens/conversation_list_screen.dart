@@ -174,7 +174,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     }
   }
 
-  void _initiateCall(String conversationId, {required bool isVideo}) {
+  Future<void> _initiateCall(
+    String conversationId, {
+    required bool isVideo,
+  }) async {
     final accountId = widget.messagingService.currentAccountId;
     final members = widget.messagingService.conversationMemberIds(
       conversationId,
@@ -189,7 +192,12 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         ? peer
         : contact.nickname;
     try {
-      widget.root.callService.startOutgoingCall(
+      // Awaited on purpose. `startOutgoingCall` is async and rethrows after
+      // it has cleaned up, so without the await its error bypassed this
+      // catch entirely and surfaced as an uncaught zone error seconds after
+      // the UI had already given up - which is how a plain "TURN is not
+      // configured" 503 ended up in the logs as a crash report.
+      await widget.root.callService.startOutgoingCall(
         peerId: peer,
         isVideo: isVideo,
         peerDisplayName: displayName,

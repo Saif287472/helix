@@ -561,12 +561,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
         ),
         _sidebarItem(Icons.mail_outline, 'Invites', 'invites', selectTab),
         _sidebarItem(Icons.people_outline, 'Users', 'users', selectTab),
-        _sidebarItem(
-          Icons.menu_book,
-          'Self-Hosting Guide',
-          'guide',
-          selectTab,
-        ),
+        _sidebarItem(Icons.menu_book, 'Self-Hosting Guide', 'guide', selectTab),
         _sidebarItem(Icons.tune, 'Settings', 'settings', selectTab),
         const Spacer(),
         if (_client != null) ...[
@@ -624,7 +619,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
                 title,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: isSelected ? context.textPrimary : context.textSecondary,
+                  color: isSelected
+                      ? context.textPrimary
+                      : context.textSecondary,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
@@ -690,8 +687,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           onDarkModeChanged: widget.onDarkModeChanged,
           urlController: _urlController,
           isConnected: _client != null,
-          onOpenConnectServer: () =>
-              setState(() => _showConnectServer = true),
+          onOpenConnectServer: () => setState(() => _showConnectServer = true),
           onDisconnect: _disconnect,
           onOpenConnectGuide: _openConnectGuide,
           appLockEnabled: _appLockEnabled,

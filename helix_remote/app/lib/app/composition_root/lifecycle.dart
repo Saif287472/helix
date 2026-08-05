@@ -1,6 +1,20 @@
 part of '../composition_root.dart';
 
 mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
+  Future<void> _refreshAttachmentLimits(
+    HelixRemoteRestClient restClient,
+  ) async {
+    try {
+      final info = await restClient.getServerInfo();
+      final limit = info['max_attachment_bytes'];
+      if (limit is int && limit > 0) {
+        _attachmentService?.maxAttachmentBytes = limit;
+      }
+    } catch (_) {
+      // Non-fatal: the default stands until the next successful fetch.
+    }
+  }
+
   @override
   void _setState(RemoteStartupState state) {
     _state = state;
@@ -113,6 +127,15 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
       );
 
       final restClient = _restClient!;
+
+      // The server is the source of truth for attachment limits, so an
+      // operator can change them in .env without an app release and the
+      // client's error message can never disagree with what the upload
+      // endpoint will accept. Best-effort: a server that doesn't report
+      // them (or is briefly unreachable) leaves the built-in default in
+      // place rather than blocking startup on a non-essential fetch.
+      unawaited(_refreshAttachmentLimits(restClient));
+
       final iceConfigProvider = RemoteIceConfigProvider(
         restClient: restClient,
         baseConfig: devConfig.callIceConfig,

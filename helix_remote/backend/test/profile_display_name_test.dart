@@ -127,93 +127,73 @@ void main() {
     return login['token'] as String;
   }
 
-  test(
-    'the first explicit display name change is always allowed, even right '
-    'after registering',
-    () async {
-      final token = await registerAndLogin(
-        accountId: 'first_change_user',
-        phoneHash: 'first_change_phone',
-      );
+  test('the first explicit display name change is always allowed, even right '
+      'after registering', () async {
+    final token = await registerAndLogin(
+      accountId: 'first_change_user',
+      phoneHash: 'first_change_phone',
+    );
 
-      final update = await postJson(
-        '/api/v1/accounts/profile',
-        {'display_name': 'Chosen Name'},
-        token: token,
-      );
-      expect(update.statusCode, equals(200), reason: update.body);
-      final profile =
-          (jsonDecode(update.body) as Map<String, dynamic>)['profile']
-              as Map<String, dynamic>;
-      expect(profile['display_name'], equals('Chosen Name'));
-      expect(profile['display_name_changed_at'], isNotNull);
-    },
-  );
+    final update = await postJson('/api/v1/accounts/profile', {
+      'display_name': 'Chosen Name',
+    }, token: token);
+    expect(update.statusCode, equals(200), reason: update.body);
+    final profile =
+        (jsonDecode(update.body) as Map<String, dynamic>)['profile']
+            as Map<String, dynamic>;
+    expect(profile['display_name'], equals('Chosen Name'));
+    expect(profile['display_name_changed_at'], isNotNull);
+  });
 
-  test(
-    'skipping the display name at registration does not start the cooldown '
-    '- the first real change afterward is still unrestricted',
-    () async {
-      final token = await registerAndLogin(
-        accountId: 'skip_then_set_user',
-        phoneHash: 'skip_then_set_phone',
-        // Mirrors what the client sends when the user taps Skip: the
-        // phone number itself, not a real chosen name.
-        displayName: 'skip_then_set_phone',
-      );
+  test('skipping the display name at registration does not start the cooldown '
+      '- the first real change afterward is still unrestricted', () async {
+    final token = await registerAndLogin(
+      accountId: 'skip_then_set_user',
+      phoneHash: 'skip_then_set_phone',
+      // Mirrors what the client sends when the user taps Skip: the
+      // phone number itself, not a real chosen name.
+      displayName: 'skip_then_set_phone',
+    );
 
-      // Advance time by only a day - if skipping counted as a change,
-      // this would still be inside the 30-day cooldown and get rejected.
-      now = now.add(const Duration(days: 1));
+    // Advance time by only a day - if skipping counted as a change,
+    // this would still be inside the 30-day cooldown and get rejected.
+    now = now.add(const Duration(days: 1));
 
-      final update = await postJson(
-        '/api/v1/accounts/profile',
-        {'display_name': 'Real Name Now'},
-        token: token,
-      );
-      expect(update.statusCode, equals(200), reason: update.body);
-    },
-  );
+    final update = await postJson('/api/v1/accounts/profile', {
+      'display_name': 'Real Name Now',
+    }, token: token);
+    expect(update.statusCode, equals(200), reason: update.body);
+  });
 
-  test(
-    'a second change inside 30 days is rejected with a clear reason and '
-    'next_allowed_at',
-    () async {
-      final token = await registerAndLogin(
-        accountId: 'second_change_user',
-        phoneHash: 'second_change_phone',
-      );
+  test('a second change inside 30 days is rejected with a clear reason and '
+      'next_allowed_at', () async {
+    final token = await registerAndLogin(
+      accountId: 'second_change_user',
+      phoneHash: 'second_change_phone',
+    );
 
-      final first = await postJson(
-        '/api/v1/accounts/profile',
-        {'display_name': 'First Name'},
-        token: token,
-      );
-      expect(first.statusCode, equals(200));
+    final first = await postJson('/api/v1/accounts/profile', {
+      'display_name': 'First Name',
+    }, token: token);
+    expect(first.statusCode, equals(200));
 
-      now = now.add(const Duration(days: 10));
+    now = now.add(const Duration(days: 10));
 
-      final second = await postJson(
-        '/api/v1/accounts/profile',
-        {'display_name': 'Second Name'},
-        token: token,
-      );
-      expect(second.statusCode, equals(429));
-      final body = jsonDecode(second.body) as Map<String, dynamic>;
-      expect(body['error'], contains('30 days'));
-      expect(body['next_allowed_at'], isNotNull);
+    final second = await postJson('/api/v1/accounts/profile', {
+      'display_name': 'Second Name',
+    }, token: token);
+    expect(second.statusCode, equals(429));
+    final body = jsonDecode(second.body) as Map<String, dynamic>;
+    expect(body['error'], contains('30 days'));
+    expect(body['next_allowed_at'], isNotNull);
 
-      // The rejected attempt must not have taken effect.
-      final profile = await getJson(
-        '/api/v1/accounts/profile',
-        token: token,
-      );
-      expect(
-        (jsonDecode(profile.body) as Map<String, dynamic>)['display_name'],
-        equals('First Name'),
-      );
-    },
-  );
+    // The rejected attempt must not have taken effect.
+    final profile = await getJson('/api/v1/accounts/profile', token: token);
+    expect(
+      (jsonDecode(profile.body) as Map<String, dynamic>)['display_name'],
+      equals('First Name'),
+    );
+  });
 
   test(
     'a change is allowed again once 30 days have passed since the last one',
@@ -223,20 +203,16 @@ void main() {
         phoneHash: 'cooldown_elapsed_phone',
       );
 
-      final first = await postJson(
-        '/api/v1/accounts/profile',
-        {'display_name': 'First Name'},
-        token: token,
-      );
+      final first = await postJson('/api/v1/accounts/profile', {
+        'display_name': 'First Name',
+      }, token: token);
       expect(first.statusCode, equals(200));
 
       now = now.add(const Duration(days: 30, minutes: 1));
 
-      final second = await postJson(
-        '/api/v1/accounts/profile',
-        {'display_name': 'Second Name'},
-        token: token,
-      );
+      final second = await postJson('/api/v1/accounts/profile', {
+        'display_name': 'Second Name',
+      }, token: token);
       expect(second.statusCode, equals(200), reason: second.body);
       final profile =
           (jsonDecode(second.body) as Map<String, dynamic>)['profile']
@@ -245,41 +221,33 @@ void main() {
     },
   );
 
-  test(
-    'GET profile reports when the next change will be allowed',
-    () async {
-      final token = await registerAndLogin(
-        accountId: 'next_allowed_user',
-        phoneHash: 'next_allowed_phone',
-      );
+  test('GET profile reports when the next change will be allowed', () async {
+    final token = await registerAndLogin(
+      accountId: 'next_allowed_user',
+      phoneHash: 'next_allowed_phone',
+    );
 
-      final beforeAnyChange = await getJson(
-        '/api/v1/accounts/profile',
-        token: token,
-      );
-      expect(
-        (jsonDecode(beforeAnyChange.body)
-            as Map<String, dynamic>)['next_display_name_change_allowed_at'],
-        isNull,
-      );
+    final beforeAnyChange = await getJson(
+      '/api/v1/accounts/profile',
+      token: token,
+    );
+    expect(
+      (jsonDecode(beforeAnyChange.body)
+          as Map<String, dynamic>)['next_display_name_change_allowed_at'],
+      isNull,
+    );
 
-      await postJson(
-        '/api/v1/accounts/profile',
-        {'display_name': 'First Name'},
-        token: token,
-      );
+    await postJson('/api/v1/accounts/profile', {
+      'display_name': 'First Name',
+    }, token: token);
 
-      final afterChange = await getJson(
-        '/api/v1/accounts/profile',
-        token: token,
-      );
-      expect(
-        (jsonDecode(afterChange.body)
-            as Map<String, dynamic>)['next_display_name_change_allowed_at'],
-        isNotNull,
-      );
-    },
-  );
+    final afterChange = await getJson('/api/v1/accounts/profile', token: token);
+    expect(
+      (jsonDecode(afterChange.body)
+          as Map<String, dynamic>)['next_display_name_change_allowed_at'],
+      isNotNull,
+    );
+  });
 }
 
 class _Response {

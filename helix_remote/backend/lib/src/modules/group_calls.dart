@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 
@@ -33,7 +34,7 @@ class GroupCallsModule {
   static const int _maxTitleLength = 200;
   static const int _maxWrappedKeyLength = 2048;
 
-  Router get router {
+  Handler get router {
     final r = Router();
     r.post('/', _handleCreateRoom);
     r.post('/links', _handleCreateLink);
@@ -50,7 +51,7 @@ class GroupCallsModule {
     r.post('/<roomId>/kick', _handleKickParticipant);
     r.post('/<roomId>/key', _handleDeliverRoomKey);
     r.post('/<roomId>/screen-sharing', _handleScreenSharing);
-    return r;
+    return withAppErrorHandling(r.call);
   }
 
   // ---------------------------------------------------------------------------
@@ -59,9 +60,9 @@ class GroupCallsModule {
 
   Future<Response> _handleCreateRoom(Request request) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final body = await _readJson(request);
-    if (body == null) return _badRequest('Invalid JSON');
+    if (body == null) throw _badRequest('Invalid JSON');
     final isVideo = body['is_video'] == true;
     final scheduledCallId = body['scheduled_call_id'] as String?;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -89,24 +90,30 @@ class GroupCallsModule {
 
   Future<Response> _handleGetRoom(Request request, String roomId) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final room = db.getCallRoom(roomId);
-    if (room == null) return _notFound('room not found');
+    if (room == null) throw _notFound('room not found');
     final participants = db.getCallRoomParticipants(roomId);
     return _ok({...room, 'participants': participants});
   }
 
   Future<Response> _handleJoinRoom(Request request, String roomId) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final room = db.getCallRoom(roomId);
-    if (room == null) return _notFound('room not found');
+    if (room == null) throw _notFound('room not found');
     if (room['status'] == 'ENDED') {
-      return _json(410, {'error': 'room has ended'});
+      throw AppError(
+        'room has ended',
+        statusCode: 410,
+        code: RemoteErrorCode.conflict,
+      );
     }
     final active = db.countActiveParticipants(roomId);
     if (active >= _maxParticipants) {
-      return _json(409, {'error': 'room_full', 'max': _maxParticipants});
+      throw AppError.conflict(
+        'room_full',
+      ).withDetails({'max': _maxParticipants});
     }
     final accountId = auth['account_id'] as String;
     final deviceId = auth['device_id'] as String;
@@ -132,7 +139,7 @@ class GroupCallsModule {
 
   Future<Response> _handleLeaveRoom(Request request, String roomId) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final deviceId = auth['device_id'] as String;
     final now = DateTime.now().millisecondsSinceEpoch;
     db.leaveCallRoom(roomId: roomId, deviceId: deviceId, now: now);
@@ -147,11 +154,11 @@ class GroupCallsModule {
 
   Future<Response> _handleEndRoom(Request request, String roomId) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final room = db.getCallRoom(roomId);
-    if (room == null) return _notFound('room not found');
+    if (room == null) throw _notFound('room not found');
     if (room['host_account_id'] != auth['account_id']) {
-      return _json(403, {'error': 'only the host can end the room'});
+      throw AppError.forbidden('only the host can end the room');
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     db.endCallRoom(roomId, now);
@@ -168,17 +175,17 @@ class GroupCallsModule {
     String roomId,
   ) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final room = db.getCallRoom(roomId);
-    if (room == null) return _notFound('room not found');
+    if (room == null) throw _notFound('room not found');
     if (room['host_account_id'] != auth['account_id']) {
-      return _json(403, {'error': 'only the host can kick participants'});
+      throw AppError.forbidden('only the host can kick participants');
     }
     final body = await _readJson(request);
-    if (body == null) return _badRequest('Invalid JSON');
+    if (body == null) throw _badRequest('Invalid JSON');
     final targetDeviceId = body['device_id'] as String?;
     if (targetDeviceId == null || targetDeviceId.isEmpty) {
-      return _badRequest('device_id is required');
+      throw _badRequest('device_id is required');
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     db.kickFromRoom(roomId: roomId, deviceId: targetDeviceId, now: now);
@@ -192,20 +199,20 @@ class GroupCallsModule {
 
   Future<Response> _handleDeliverRoomKey(Request request, String roomId) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final room = db.getCallRoom(roomId);
-    if (room == null) return _notFound('room not found');
+    if (room == null) throw _notFound('room not found');
     if (room['host_account_id'] != auth['account_id']) {
-      return _json(403, {'error': 'only the host can deliver room keys'});
+      throw AppError.forbidden('only the host can deliver room keys');
     }
     final body = await _readJson(request);
-    if (body == null) return _badRequest('Invalid JSON');
+    if (body == null) throw _badRequest('Invalid JSON');
     final keyId = body['key_id'] as String?;
     final epoch = body['epoch'] as int?;
     final keys = body['keys'] as List<dynamic>?;
-    if (keyId == null || keyId.isEmpty) return _badRequest('key_id required');
-    if (epoch == null || epoch < 0) return _badRequest('epoch required');
-    if (keys == null || keys.isEmpty) return _badRequest('keys required');
+    if (keyId == null || keyId.isEmpty) throw _badRequest('key_id required');
+    if (epoch == null || epoch < 0) throw _badRequest('epoch required');
+    if (keys == null || keys.isEmpty) throw _badRequest('keys required');
     db.upsertRoomKeyId(roomId: roomId, keyId: keyId, epoch: epoch);
     var saved = 0;
     for (final entry in keys) {
@@ -233,9 +240,9 @@ class GroupCallsModule {
 
   Future<Response> _handleScreenSharing(Request request, String roomId) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final body = await _readJson(request);
-    if (body == null) return _badRequest('Invalid JSON');
+    if (body == null) throw _badRequest('Invalid JSON');
     final active = body['active'] == true;
     final deviceId = auth['device_id'] as String;
     db.setScreenSharing(roomId: roomId, deviceId: deviceId, active: active);
@@ -254,9 +261,9 @@ class GroupCallsModule {
 
   Future<Response> _handleCreateLink(Request request) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final body = await _readJson(request);
-    if (body == null) return _badRequest('Invalid JSON');
+    if (body == null) throw _badRequest('Invalid JSON');
     final requiresApproval = body['requires_approval'] == true;
     final maxUses = (body['max_uses'] as int?) ?? 0;
     final roomId = body['room_id'] as String?;
@@ -284,19 +291,27 @@ class GroupCallsModule {
 
   Future<Response> _handleResolveLink(Request request, String token) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final link = db.getCallLinkByToken(token);
-    if (link == null) return _notFound('call link not found');
+    if (link == null) throw _notFound('call link not found');
     if (link['revoked_at'] != null) {
-      return _json(410, {'error': 'call link has been revoked'});
+      throw AppError(
+        'call link has been revoked',
+        statusCode: 410,
+        code: RemoteErrorCode.conflict,
+      );
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     if ((link['expires_at'] as int) <= now) {
-      return _json(410, {'error': 'call link has expired'});
+      throw AppError(
+        'call link has expired',
+        statusCode: 410,
+        code: RemoteErrorCode.conflict,
+      );
     }
     final maxUses = link['max_uses'] as int;
     if (maxUses > 0 && (link['use_count'] as int) >= maxUses) {
-      return _json(409, {'error': 'call link use limit reached'});
+      throw AppError.conflict('call link use limit reached');
     }
     final roomId = link['room_id'] as String?;
     Map<String, dynamic>? roomInfo;
@@ -320,14 +335,14 @@ class GroupCallsModule {
 
   Future<Response> _handleRevokeLink(Request request, String token) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final link = db.getCallLinkByToken(token);
-    if (link == null) return _notFound('call link not found');
+    if (link == null) throw _notFound('call link not found');
     if (link['created_by'] != auth['account_id']) {
-      return _json(403, {'error': 'only the link creator can revoke it'});
+      throw AppError.forbidden('only the link creator can revoke it');
     }
     final linkId = link['link_id'];
-    if (linkId is! String) return _badRequest('invalid link');
+    if (linkId is! String) throw _badRequest('invalid link');
     db.revokeCallLink(linkId, DateTime.now().millisecondsSinceEpoch);
     return _ok({'status': 'revoked', 'link_token': token});
   }
@@ -338,17 +353,17 @@ class GroupCallsModule {
 
   Future<Response> _handleCreateScheduled(Request request) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final body = await _readJson(request);
-    if (body == null) return _badRequest('Invalid JSON');
+    if (body == null) throw _badRequest('Invalid JSON');
     final title = (body['title'] as String?) ?? '';
     if (title.isEmpty || title.length > _maxTitleLength) {
-      return _badRequest('title required (max $_maxTitleLength chars)');
+      throw _badRequest('title required (max $_maxTitleLength chars)');
     }
     final scheduledAt = body['scheduled_at'] as int?;
     if (scheduledAt == null ||
         scheduledAt <= DateTime.now().millisecondsSinceEpoch) {
-      return _badRequest('scheduled_at must be a future timestamp (ms)');
+      throw _badRequest('scheduled_at must be a future timestamp (ms)');
     }
     final rawAttendees = (body['attendee_ids'] as List<dynamic>?) ?? [];
     final attendeeIds = rawAttendees.whereType<String>().toList();
@@ -390,7 +405,7 @@ class GroupCallsModule {
 
   Future<Response> _handleListScheduled(Request request) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final afterMs = DateTime.now().millisecondsSinceEpoch;
     final calls = db.getScheduledCallsForAccount(
       auth['account_id'] as String,
@@ -401,17 +416,21 @@ class GroupCallsModule {
 
   Future<Response> _handleRsvp(Request request, String id) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final body = await _readJson(request);
-    if (body == null) return _badRequest('Invalid JSON');
+    if (body == null) throw _badRequest('Invalid JSON');
     final sc = db.getScheduledCall(id);
-    if (sc == null) return _notFound('scheduled call not found');
+    if (sc == null) throw _notFound('scheduled call not found');
     if (sc['cancelled_at'] != null) {
-      return _json(410, {'error': 'scheduled call was cancelled'});
+      throw AppError(
+        'scheduled call was cancelled',
+        statusCode: 410,
+        code: RemoteErrorCode.conflict,
+      );
     }
     final rsvp = body['rsvp'] as String?;
     if (rsvp != 'YES' && rsvp != 'NO') {
-      return _badRequest('rsvp must be YES or NO');
+      throw _badRequest('rsvp must be YES or NO');
     }
     db.rsvpScheduledCall(
       scheduledCallId: id,
@@ -423,14 +442,14 @@ class GroupCallsModule {
 
   Future<Response> _handleCancelScheduled(Request request, String id) async {
     final auth = _auth(request);
-    if (auth == null) return _unauthorized();
+    if (auth == null) throw _unauthorized();
     final sc = db.getScheduledCall(id);
-    if (sc == null) return _notFound('scheduled call not found');
+    if (sc == null) throw _notFound('scheduled call not found');
     if (sc['host_account_id'] != auth['account_id']) {
-      return _json(403, {'error': 'only the host can cancel'});
+      throw AppError.forbidden('only the host can cancel');
     }
     if (sc['cancelled_at'] != null) {
-      return _json(409, {'error': 'already cancelled'});
+      throw AppError.conflict('already cancelled');
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     db.cancelScheduledCall(id, now);
@@ -481,9 +500,9 @@ class GroupCallsModule {
   Map<String, dynamic>? _auth(Request request) =>
       request.context['auth'] as Map<String, dynamic>?;
 
-  Response _unauthorized() => _json(401, {'error': 'Unauthorized'});
-  Response _badRequest(String msg) => _json(400, {'error': msg});
-  Response _notFound(String msg) => _json(404, {'error': msg});
+  AppError _unauthorized() => AppError.unauthorized('Unauthorized');
+  AppError _badRequest(String msg) => AppError.badRequest(msg);
+  AppError _notFound(String msg) => AppError.notFound(msg);
   Response _ok(Map<String, dynamic> body) => _json(200, body);
 
   Response _json(int status, Map<String, dynamic> body) {

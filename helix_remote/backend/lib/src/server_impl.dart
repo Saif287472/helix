@@ -38,6 +38,12 @@ class BackendServer {
   final WebSocketRelay wsRelay;
   final OutboxWorker outboxWorker;
   final Directory? attachmentsStorageDir;
+  final int? maxAttachmentBytes;
+  final int? accountQuotaBytes;
+
+  /// How long a completed attachment with no message references is kept
+  /// before the storage sweep removes it. Null uses the module default.
+  final Duration? attachmentRetention;
   final String turnSecret;
   final String turnUrl;
   final SmsProvider smsProvider;
@@ -55,6 +61,10 @@ class BackendServer {
   HttpServer? _httpServer;
   HttpServer? get httpServer => _httpServer;
 
+  /// Held so [start]/[stop] can run its storage sweep. Built in
+  /// [getHandler]; null until then.
+  AttachmentsModule? _attachmentsModule;
+
   BackendServer._({
     required this.db,
     required this.jwt,
@@ -62,6 +72,9 @@ class BackendServer {
     required this.wsRelay,
     required this.outboxWorker,
     this.attachmentsStorageDir,
+    this.maxAttachmentBytes,
+    this.accountQuotaBytes,
+    this.attachmentRetention,
     this.turnSecret = '',
     this.turnUrl = '',
     this.smsProvider = const NoopSmsProvider(),
@@ -84,6 +97,9 @@ class BackendServer {
     double rateLimitMaxTokens = 100.0,
     double rateLimitRefillRate = 10.0,
     Directory? attachmentsStorageDir,
+    int? maxAttachmentBytes,
+    int? accountQuotaBytes,
+    Duration? attachmentRetention,
     String turnSecret = '',
     String turnUrl = '',
     SmsProvider? smsProvider,
@@ -126,6 +142,9 @@ class BackendServer {
       wsRelay: wsRelay,
       outboxWorker: outboxWorker,
       attachmentsStorageDir: attachmentsStorageDir,
+      maxAttachmentBytes: maxAttachmentBytes,
+      accountQuotaBytes: accountQuotaBytes,
+      attachmentRetention: attachmentRetention,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
       smsProvider: smsProvider ?? const NoopSmsProvider(),
@@ -205,7 +224,11 @@ class BackendServer {
     final attachmentsModule = AttachmentsModule(
       db,
       storageDir: attachmentsStorageDir,
+      maxFileSize: maxAttachmentBytes,
+      maxQuota: accountQuotaBytes,
+      unreferencedRetention: attachmentRetention,
     );
+    _attachmentsModule = attachmentsModule;
     final messagingModule = MessagingModule(
       db,
       wsRelay,
@@ -239,6 +262,7 @@ class BackendServer {
       wsRelay: wsRelay,
       outboxWorker: outboxWorker,
       callsModule: callsModule,
+      attachmentsModule: attachmentsModule,
       adminAccountIds: adminAccountIds,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
@@ -298,10 +322,15 @@ class BackendServer {
     final handler = getHandler();
     _httpServer = await shelf_io.serve(handler, host, port);
     outboxWorker.start();
+    // Reclaims abandoned uploads and attachments nothing references any
+    // more. Started here rather than in getHandler() so tests that only
+    // build a handler do not get a live timer.
+    _attachmentsModule?.startMaintenance();
   }
 
   Future<void> stop() async {
     outboxWorker.stop();
+    _attachmentsModule?.stopMaintenance();
     rateLimiter.dispose();
     await _httpServer?.close(force: true);
     db.close();

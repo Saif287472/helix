@@ -1,7 +1,8 @@
 # Module: contacts
 
-Status: second module migrated to the [error-format upgrade](../../../../../docs/architecture/EARNMINUTE_STRUCTURAL_UPGRADE_PLAN.md)
-(item A1). See `messaging.module.md` for the template this follows.
+Status: current. See `messaging.module.md` for the template this follows,
+and the [structural upgrade plan](../../../../../docs/architecture/EARNMINUTE_STRUCTURAL_UPGRADE_PLAN.md)
+for why these exist.
 
 ## Purpose
 
@@ -13,7 +14,8 @@ account search, presence, per-account privacy settings, and abuse reporting
 ## Owned files
 
 - `contacts.dart` - `ContactsModule`, its Shelf router, and every handler.
-  Not split into routes/service/validation layers yet (see plan item A3).
+  Still one file: at ~775 lines it is under the threshold that made
+  splitting `groups` and `calls` worthwhile (plan item A3).
 
 ## Route table
 
@@ -44,10 +46,10 @@ Same [`AppError`](../app_error.dart) shape as `messaging.dart`. Notable
 choices here: `Contact request already pending` and `Admin privileges
 required` both keep their original HTTP status (403) even though the
 `conflict` code is used for the former - **the `code` field and the HTTP
-status are independent**; don't assume one implies the other. The two
-`_json(429, ...)` quota responses (`_createRequestHandler`,
-`_searchHandler`, `_matchPhoneHashesHandler`) use `AppError.tooManyRequests`
-with `RemoteErrorCode.quotaExceeded`.
+status are independent**; don't assume one implies the other. The quota
+responses (`_createRequestHandler`, `_searchHandler`,
+`_matchPhoneHashesHandler`) use `AppError.tooManyRequests` with
+`RemoteErrorCode.quotaExceeded`.
 
 ## Dependencies
 

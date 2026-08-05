@@ -92,7 +92,9 @@ void main() {
     final unhealthy = Map<String, dynamic>.from(_metrics);
     unhealthy['database_quick_check_ok'] = false;
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: DashboardTab(metrics: unhealthy))),
+      MaterialApp(
+        home: Scaffold(body: DashboardTab(metrics: unhealthy)),
+      ),
     );
 
     expect(find.text('UNHEALTHY'), findsOneWidget);

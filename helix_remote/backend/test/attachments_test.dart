@@ -25,6 +25,12 @@ void main() {
       rateLimitMaxTokens: 100.0,
       rateLimitRefillRate: 10.0,
       attachmentsStorageDir: tempStorageDir,
+      // Explicit rather than relying on the defaults: those are an operator
+      // choice now (settable per deployment via .env and reported to the
+      // client through /server/info), so a test pinned to them would break
+      // whenever someone tuned a limit. These assert the mechanism.
+      maxAttachmentBytes: 10 * 1024 * 1024,
+      accountQuotaBytes: 50 * 1024 * 1024,
     );
 
     // Register a mock user and device in the backend DB to perform auth
@@ -251,7 +257,7 @@ void main() {
     var respBody =
         jsonDecode(await resp.transform(utf8.decoder).join())
             as Map<String, dynamic>;
-    expect(respBody['error'], contains('exceeds maximum limit of 10MB'));
+    expect(respBody['error'], contains('exceeds the maximum of 10MB'));
 
     // 2. User storage quota limit check
     // Simulate current storage use of 48MB by inserting directly into database
@@ -290,7 +296,7 @@ void main() {
             as Map<String, dynamic>;
     expect(
       respBody['error'],
-      contains('exceeds account storage quota of 50MB'),
+      contains('exceeds the account storage quota of 50MB'),
     );
 
     client.close();

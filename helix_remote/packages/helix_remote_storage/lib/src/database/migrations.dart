@@ -1,6 +1,12 @@
 part of '../database.dart';
 
 mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
+  /// The version `_applyMigrations` brings a database up to. Named so tests
+  /// assert against one source of truth instead of a literal that silently
+  /// goes stale every time a migration is added - which is exactly what had
+  /// happened: two tests still expected 18 after the schema reached 27.
+  static const int latestSchemaVersion = 27;
+
   int get schemaVersion =>
       _db.select('PRAGMA user_version').first['user_version'] as int;
 
@@ -105,10 +111,15 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       CREATE INDEX IF NOT EXISTS idx_messages_timestamp
       ON messages(timestamp DESC);
     ''');
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_messages_expiry
-      ON messages(expires_at, view_once_opened_at);
-    ''');
+    // `idx_messages_expiry` is deliberately NOT created here. It indexes
+    // `expires_at` and `view_once_opened_at`, which the v16 migration adds -
+    // and `_onCreate` runs *before* `_applyMigrations`. On an existing
+    // pre-v16 database the CREATE TABLE above is a no-op (the table already
+    // exists, without those columns), so creating the index here threw
+    // "no such column: expires_at" and the app failed to open its own
+    // database on upgrade. The v16 migration creates the index right after
+    // adding the columns, which covers fresh databases too since they run
+    // the full migration chain from user_version 0.
 
     _db.execute('''
       CREATE TABLE IF NOT EXISTS revisions (
@@ -548,7 +559,7 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       _db.execute(
         "DELETE FROM pending_operations WHERE type = 'MARK_CONVERSATION_READ';",
       );
-      _db.execute('PRAGMA user_version = 27;');
+      _db.execute('PRAGMA user_version = $latestSchemaVersion;');
     }
   }
 

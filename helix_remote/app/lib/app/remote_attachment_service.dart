@@ -17,7 +17,9 @@ class RemoteAttachmentService {
     required this.wrappingKey,
     RemoteAttachmentCrypto? crypto,
     HttpClient? httpClient,
-  }) : _crypto = crypto ?? RemoteAttachmentCrypto(),
+    int? maxAttachmentBytes,
+  }) : maxAttachmentBytes = maxAttachmentBytes ?? defaultMaxAttachmentBytes,
+       _crypto = crypto ?? RemoteAttachmentCrypto(),
        _endpoints = RemoteApiEndpoints(Uri.parse(baseUrl)),
        _httpClient = httpClient ?? HttpClient();
 
@@ -29,7 +31,39 @@ class RemoteAttachmentService {
   final RemoteAttachmentCrypto _crypto;
   final RemoteApiEndpoints _endpoints;
   final HttpClient _httpClient;
+
+  /// Effective ciphertext limit for one attachment. Set from the server's
+  /// `/api/v1/server/info` at composition time so the client and server
+  /// never disagree about what will be accepted.
+  int maxAttachmentBytes;
+
   static const int _chunkSize = 64 * 1024;
+
+  /// Fallback when the server has not been asked yet. Kept equal to
+  /// `AttachmentsModule.defaultMaxFileSize`; the effective value comes from
+  /// `/api/v1/server/info` so an operator can change it without an app
+  /// release, and so this message can never disagree with what the server
+  /// will accept.
+  static const int defaultMaxAttachmentBytes = 100 * 1024 * 1024;
+
+  /// Bytes the frame header costs: magic + chunk size + original length.
+  static const int _frameHeaderBytes = 6 + 4 + 8;
+
+  /// Per-chunk overhead: three uint32 length fields, plus the AES-GCM nonce
+  /// and tag carried in the concatenated box.
+  static const int _perChunkOverheadBytes = 12 + 12 + 16;
+
+  /// Exact ciphertext size [plaintextBytes] will encrypt to. Deterministic
+  /// from the framing in [_encryptFileToCache], so the size check can happen
+  /// before doing the work of encrypting.
+  static int ciphertextLengthFor(int plaintextBytes) {
+    if (plaintextBytes <= 0) return _frameHeaderBytes;
+    final chunks = (plaintextBytes + _chunkSize - 1) ~/ _chunkSize;
+    return _frameHeaderBytes +
+        plaintextBytes +
+        (chunks * _perChunkOverheadBytes);
+  }
+
   static final Uint8List _frameMagic = Uint8List.fromList([
     0x48,
     0x4c,
@@ -48,8 +82,17 @@ class RemoteAttachmentService {
     File? thumbnailFile,
   }) async {
     final originalLength = plaintextFile.lengthSync();
-    if (originalLength > 10 * 1024 * 1024) {
-      throw ArgumentError('File size exceeds the 10MB limit');
+    // Compared as *ciphertext*, because that is what the server measures.
+    // The old check compared the plaintext length against the server's
+    // ciphertext limit, so a file in the top ~6KB band passed here and was
+    // then rejected by the backend - the encrypted form is larger by the
+    // frame header plus per-chunk nonce, tag and length fields.
+    final cipherLength = ciphertextLengthFor(originalLength);
+    final limit = maxAttachmentBytes;
+    if (cipherLength > limit) {
+      throw ArgumentError(
+        'File size exceeds the ${limit ~/ (1024 * 1024)}MB limit',
+      );
     }
 
     final keys = await _crypto.generateAttachmentKeys();

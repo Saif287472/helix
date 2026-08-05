@@ -4,6 +4,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:crypto/crypto.dart' as crypto_pkg;
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
@@ -109,7 +110,7 @@ class AuthModule extends AuthModuleBase
     this.smsProvider = const NoopSmsProvider(),
   }) : _now = now ?? DateTime.now;
 
-  Router get router {
+  Handler get router {
     final router = Router();
 
     // Public routes
@@ -137,7 +138,7 @@ class AuthModule extends AuthModuleBase
     router.post('/profile', _updateProfileHandler);
     router.get('/profile', _getProfileHandler);
 
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   static String base64UrlEncode(List<int> bytes) => _authBase64UrlEncode(bytes);

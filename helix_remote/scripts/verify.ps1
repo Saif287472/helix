@@ -82,12 +82,19 @@ if (-not (Test-BuildOnlyEnabled)) {
         Invoke-Step "Tests: packages/$($pkg.Name)" {
             Push-Location $pkg.FullName
             try {
-                $pubspec = Get-Content (Join-Path $pkg.FullName "pubspec.yaml") -Raw
-                if ($pubspec -match 'sdk:\s*flutter') {
-                    flutter test @FlutterPubArgs
-                } else {
-                    dart test
-                }
+                # Always `flutter test`, even for packages whose own
+                # pubspec.yaml has no `sdk: flutter` line - matching
+                # verify.sh. A package can still transitively depend on a
+                # Flutter-based one (helix_remote_cli -> helix_remote_crypto),
+                # and plain `dart test` then fails to resolve `dart:ui`,
+                # surfacing as compile errors inside Flutter's own sources
+                # (velocity_tracker.dart: "'Offset' isn't a type"). This
+                # script used to branch on the pubspec and so hit exactly
+                # that on helix_remote_cli, while the bash script - which
+                # carries the same fix and a comment explaining it - passed.
+                # `flutter test` runs pure-Dart package tests correctly too,
+                # so there is no downside to using it unconditionally.
+                flutter test @FlutterPubArgs
             } finally {
                 Pop-Location
             }

@@ -50,7 +50,8 @@ void main() {
             logs: const ServerLogs(
               lines: [],
               source: 'none',
-              message: 'Could not write log file at /app/data/server.log: '
+              message:
+                  'Could not write log file at /app/data/server.log: '
                   'read-only file system',
             ),
           ),
@@ -66,7 +67,11 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _wrap(_logsTab(logs: const ServerLogs(lines: [], source: 'none'))),
+      _wrap(
+        _logsTab(
+          logs: const ServerLogs(lines: [], source: 'none'),
+        ),
+      ),
     );
 
     expect(find.text('No logs available.'), findsOneWidget);
@@ -157,7 +162,11 @@ void main() {
 
   testWidgets('copy is disabled when there is nothing to copy', (tester) async {
     await tester.pumpWidget(
-      _wrap(_logsTab(logs: const ServerLogs(lines: [], source: 'none'))),
+      _wrap(
+        _logsTab(
+          logs: const ServerLogs(lines: [], source: 'none'),
+        ),
+      ),
     );
 
     final button = tester.widget<IconButton>(

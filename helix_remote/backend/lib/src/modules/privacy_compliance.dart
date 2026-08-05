@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -11,23 +12,26 @@ class PrivacyComplianceModule {
   final BackendDatabase db;
   final Set<String> adminAccountIds;
 
-  Router get privacyRouter {
+  Handler get privacyRouter {
     final router = Router();
     router.get('/export', _exportHandler);
     router.get('/admin/audit', _adminAuditHandler);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
-  Router get accountRouter {
+  Handler get accountRouter {
     final router = Router();
     router.delete('/delete', _deleteAccountHandler);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   Future<Response> _exportHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     final accountId = auth['account_id'] as String;
@@ -48,7 +52,10 @@ class PrivacyComplianceModule {
   Future<Response> _deleteAccountHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     final accountId = auth['account_id'] as String;
@@ -56,10 +63,7 @@ class PrivacyComplianceModule {
         jsonDecode(await request.readAsString()) as Map<String, dynamic>;
     final confirmation = body['confirmation'] as String?;
     if (confirmation != 'DELETE' && confirmation != 'DELETE $accountId') {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Invalid account deletion confirmation'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.badRequest('Invalid account deletion confirmation');
     }
 
     db.logAudit(
@@ -80,7 +84,10 @@ class PrivacyComplianceModule {
   Future<Response> _adminAuditHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     final accountId = auth['account_id'] as String;
@@ -92,9 +99,7 @@ class PrivacyComplianceModule {
         request.context['client_ip'] as String?,
         null,
       );
-      return Response.forbidden(
-        jsonEncode({'error': 'Admin privileges required'}),
-      );
+      throw AppError.forbidden('Admin privileges required');
     }
 
     db.logAudit(

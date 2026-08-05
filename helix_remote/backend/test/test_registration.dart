@@ -100,7 +100,7 @@ Map<String, dynamic> registrationBody({
     'otp_code': otpCode,
     'invite_code': inviteCode,
     'display_name': displayName ?? username,
-    if (phoneLast4 != null) 'phone_last4': phoneLast4,
+    'phone_last4': ?phoneLast4,
     'account_identity_public_key': material.accountIdentityPublicKey,
     'device_id': deviceId,
     'device_signing_public_key': material.deviceSigningPublicKey,

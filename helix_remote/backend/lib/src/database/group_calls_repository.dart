@@ -112,6 +112,25 @@ extension BackendGroupCallsRepository on BackendDatabase {
     required String deviceId,
     required int now,
   }) {
+    // A join is only legal against a room that has not ended. The SQL below
+    // would silently update zero rows for an ended room and still report
+    // success, which is the exact failure mode the transition tables exist
+    // to stop.
+    final roomStatus = getCallRoom(roomId)?['status'] as String?;
+    if (roomStatus == null) return false;
+    if (roomStatus == RemoteCallRoomStatus.waiting) {
+      RemoteCallRoomStatus.validateTransition(
+        roomStatus,
+        RemoteCallRoomStatus.active,
+      );
+    } else if (roomStatus != RemoteCallRoomStatus.active) {
+      throw RemoteIllegalStatusTransitionException(
+        'Cannot join a call room in status $roomStatus',
+        from: roomStatus,
+        to: RemoteCallRoomStatus.active,
+      );
+    }
+
     _db.execute('BEGIN;');
     try {
       final upsert = _db.prepare('''
@@ -183,6 +202,16 @@ extension BackendGroupCallsRepository on BackendDatabase {
   }
 
   void endCallRoom(String roomId, int now) {
+    final current = getCallRoom(roomId)?['status'] as String?;
+    // Ending an already-ended room is idempotent by design: both the host's
+    // explicit end and the last participant leaving can land here, and
+    // whichever arrives second must not fail. That is a no-op, not an
+    // illegal transition, so it is checked before validating.
+    if (current == null || RemoteCallRoomStatus.isTerminal(current)) return;
+    RemoteCallRoomStatus.validateTransition(
+      current,
+      RemoteCallRoomStatus.ended,
+    );
     final stmt = _db.prepare('''
       UPDATE call_rooms SET status = 'ENDED', ended_at = ?
       WHERE room_id = ? AND status != 'ENDED';

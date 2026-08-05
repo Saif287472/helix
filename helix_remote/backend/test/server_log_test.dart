@@ -24,22 +24,25 @@ void main() {
       if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
     });
 
-    test('buffers recorded lines and returns the most recent first-in order', () {
-      final sink = ServerLogSink(
-        stdoutSink: _nullSink(),
-        stderrSink: _nullSink(),
-      );
+    test(
+      'buffers recorded lines and returns the most recent first-in order',
+      () {
+        final sink = ServerLogSink(
+          stdoutSink: _nullSink(),
+          stderrSink: _nullSink(),
+        );
 
-      sink.info('one');
-      sink.warn('two');
-      sink.error('three');
+        sink.info('one');
+        sink.warn('two');
+        sink.error('three');
 
-      final lines = sink.tail(10);
-      expect(lines, hasLength(3));
-      expect(lines[0], contains('[INFO] one'));
-      expect(lines[1], contains('[WARN] two'));
-      expect(lines[2], contains('[ERROR] three'));
-    });
+        final lines = sink.tail(10);
+        expect(lines, hasLength(3));
+        expect(lines[0], contains('[INFO] one'));
+        expect(lines[1], contains('[WARN] two'));
+        expect(lines[2], contains('[ERROR] three'));
+      },
+    );
 
     test('drops the oldest lines once capacity is reached', () {
       final sink = ServerLogSink(
@@ -149,23 +152,27 @@ void main() {
       expect(File(path).lengthSync(), lessThan(400));
     });
 
-    test('records a file error instead of throwing when the path is unusable', () {
-      // A path whose "directory" is actually an existing file can never be
-      // created, which is the shape of a misconfigured HELIX_REMOTE_LOG_FILE.
-      final blocker = File('${tempDir.path}/not-a-dir')..writeAsStringSync('x');
-      final sink = ServerLogSink(
-        filePath: '${blocker.path}/server.log',
-        stdoutSink: _nullSink(),
-        stderrSink: _nullSink(),
-      );
+    test(
+      'records a file error instead of throwing when the path is unusable',
+      () {
+        // A path whose "directory" is actually an existing file can never be
+        // created, which is the shape of a misconfigured HELIX_REMOTE_LOG_FILE.
+        final blocker = File('${tempDir.path}/not-a-dir')
+          ..writeAsStringSync('x');
+        final sink = ServerLogSink(
+          filePath: '${blocker.path}/server.log',
+          stdoutSink: _nullSink(),
+          stderrSink: _nullSink(),
+        );
 
-      expect(() => sink.info('still fine'), returnsNormally);
-      expect(sink.fileError, isNotNull);
-      expect(sink.fileActive, isFalse);
-      // The line is still buffered - a broken file must not cost the
-      // operator their in-memory logs too.
-      expect(sink.tail(1).single, contains('still fine'));
-    });
+        expect(() => sink.info('still fine'), returnsNormally);
+        expect(sink.fileError, isNotNull);
+        expect(sink.fileActive, isFalse);
+        // The line is still buffered - a broken file must not cost the
+        // operator their in-memory logs too.
+        expect(sink.tail(1).single, contains('still fine'));
+      },
+    );
 
     test('logServerError falls back to stderr when no sink is installed', () {
       resetServerLogForTesting();
@@ -258,8 +265,10 @@ void main() {
       await getLogs();
       final logs = ((await getLogs())['logs'] as List).cast<String>();
 
-      expect(logs.any((line) => line.contains('GET /api/v1/ops/logs 200')),
-          isTrue);
+      expect(
+        logs.any((line) => line.contains('GET /api/v1/ops/logs 200')),
+        isTrue,
+      );
     });
 
     test('never writes query strings into log lines', () async {
@@ -309,7 +318,10 @@ void main() {
         sink.info('filler line $i');
       }
 
-      expect(((await getLogs(query: '?limit=5'))['logs'] as List), hasLength(5));
+      expect(
+        ((await getLogs(query: '?limit=5'))['logs'] as List),
+        hasLength(5),
+      );
       expect(
         ((await getLogs(query: '?limit=99999'))['logs'] as List),
         hasLength(1000),

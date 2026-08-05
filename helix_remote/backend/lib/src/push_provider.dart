@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:helix_remote_backend/src/app_error.dart';
+
 abstract interface class PushProvider {
   bool get isConfigured;
 
@@ -91,18 +93,39 @@ final class FcmPushProvider implements PushProvider {
 }
 
 /// FCM returned 404: the device token is no longer registered.
-class FcmTokenNotFoundException implements Exception {
-  const FcmTokenNotFoundException(this.body);
+///
+/// Extends [AppError] so the one exit shape holds even if a push failure
+/// escapes to the HTTP boundary; callers that can do better still catch it
+/// by type (the outbox worker completes the event, the call path prunes the
+/// stale token). 502 rather than FCM's own status: the caller's request was
+/// fine, our upstream was not.
+class FcmTokenNotFoundException extends AppError {
+  FcmTokenNotFoundException(this.body)
+    : super(
+        'Push token is no longer registered',
+        statusCode: 502,
+        code: RemoteErrorCode.pushTokenNotFound,
+      );
+
   final String body;
+
   @override
   String toString() => 'FcmTokenNotFoundException: $body';
 }
 
 /// FCM returned a non-200 status that is not a missing-token error.
-class FcmDeliveryException implements Exception {
-  const FcmDeliveryException(this.statusCode, this.body);
-  final int statusCode;
+class FcmDeliveryException extends AppError {
+  FcmDeliveryException(this.upstreamStatusCode, this.body)
+    : super(
+        'Push delivery failed',
+        statusCode: 502,
+        code: RemoteErrorCode.pushDeliveryFailed,
+      );
+
+  /// FCM's status, not ours - see [statusCode] for what a client would see.
+  final int upstreamStatusCode;
   final String body;
+
   @override
-  String toString() => 'FcmDeliveryException($statusCode): $body';
+  String toString() => 'FcmDeliveryException($upstreamStatusCode): $body';
 }

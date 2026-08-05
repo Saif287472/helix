@@ -1,8 +1,29 @@
 # Structural Upgrade Plan — Lessons from EarnMinute
 
-Status: Planning only. No code changed by this document.
+Status: **Implemented.** All six adopted items (A1–A6) have landed. The
+per-item plans below are kept as written for the record; each now opens
+with what was actually built, including where the implementation departed
+from the plan and why.
 Source: [`docs/architecture/external-references/EarnMinute_PROJECT_ARCHITECTURE.md`](external-references/EarnMinute_PROJECT_ARCHITECTURE.md)
-Date: 2026-08-04
+Date: 2026-08-04 (planned) · 2026-08-05 (implemented)
+
+## What landed
+
+| Item | Status | Where |
+|---|---|---|
+| A1 Centralized error format | Done | `backend/lib/src/app_error.dart`, every module |
+| A2 Fail-fast env validation | Done | `backend/lib/src/startup_env.dart` |
+| A3 Split the god modules | Done | `backend/lib/src/modules/{groups,calls}/` |
+| A4 Per-module contracts | Done | 21 docs: 13 modules + 8 packages |
+| A5 Per-module extractor | Done | `tool/extract_module.dart` |
+| A6 Transition validators | Done | `packages/helix_remote_domain/lib/domain/call_room_transitions.dart` |
+
+Backend test suite: 368 passing (from 345 before this work). `dart analyze`
+clean. Sequencing followed the plan's own recommendation, except that
+groups and calls were **split before** their error migration rather than
+after — migrating a 2005-line file and then cutting it up would have
+touched the same lines twice, and splitting first keeps the code-motion
+commit reviewable on its own.
 
 ## Method
 
@@ -29,6 +50,30 @@ Verdicts:
 ## A. Adopt
 
 ### A1. Centralized error format for the Remote backend
+
+> **Implemented.** `AppError` + `RemoteErrorCode` + one Shelf middleware;
+> all 350 hand-built error responses are gone and every module's router is
+> wrapped. Three things went beyond the plan as written:
+>
+> - `AppError` gained `headers` (a 416 is only correct with a
+>   `Content-Range`) and `withDetails` (structured context belongs under
+>   `details`, not beside `error`).
+> - The blanket `try { … } catch { return 500 }` wrappers had to be
+>   *removed*, not just left alone. Once a handler body throws, those
+>   catches would have caught a deliberate 400 or 403 and downgraded it to
+>   a 500. Where a catch does real work (closing an upload sink, enqueuing
+>   an outbox retry) it stays, guarded by `on AppError { rethrow; }`.
+> - Several handlers were interpolating the caught exception into the
+>   response body — including the S2S ones, which handed a federated peer
+>   our internal failure detail. That detail now goes to the log.
+>
+> The four one-off exception types became `AppError` subclasses rather than
+> being translated by the middleware, because callers genuinely branch on
+> their types (prune a stale push token, forward a peer's status) and
+> subclassing keeps that working. Their status codes are chosen per type:
+> `FederationHttpException` reports the peer's status as its own; the FCM
+> and SMS ones are 502s with the provider's status kept separately as
+> `upstreamStatusCode`.
 
 **Evidence of the gap:** `helix_remote/backend/lib/src/modules/*.dart`
 constructs ad-hoc `Response(...)` / `jsonEncode({'error': ...})` bodies
@@ -80,6 +125,18 @@ externally-documented success responses.
 
 ### A2. Fail-fast startup environment validation
 
+> **Implemented** in `backend/lib/src/startup_env.dart`, called at the top
+> of `_run()` in `bin/server.dart`. Aggregates every problem into one
+> report before `exit(1)`, and runs values through `sanitizeEnvValue` so a
+> quoting or CRLF artifact is caught at boot.
+>
+> One deliberate departure: the plan listed `HELIX_REMOTE_DB_PATH` under
+> `alwaysRequired`. It is not, because it has a working default
+> (`remote_backend.db`) and making it mandatory would break every existing
+> deployment that relies on that default for no safety gain. The
+> conditional groups (SMS, FCM, TURN) are the part that matters and are
+> implemented as specified: fully unset is a warning, half-set is fatal.
+
 **Evidence of the gap:** `helix_remote/backend/bin/server.dart` only
 hard-fails on one variable (`HELIX_REMOTE_JWT_SECRET` — line 50-53, `exit(1)`
 with a single-line message). Every other credential (SMS API key/sender ID,
@@ -124,6 +181,29 @@ behavior for a correctly-configured deployment.
 ---
 
 ### A3. Split the largest backend "god" modules into layers
+
+> **Implemented** for `groups.dart` (2005 → 8 files) and `calls.dart`
+> (1403 → 8 files), using the `part`-file-plus-mixin mechanism `auth/`
+> already used rather than inventing a second pattern.
+>
+> The split is by sub-feature rather than the literal
+> routes/service/validation triple the plan named — the plan anticipated
+> this ("further split by sub-feature if the service file is still large").
+> A single `service.dart` for groups would have been ~1500 lines, which is
+> the problem this item exists to solve. `calls/validation.dart` does exist
+> as its own layer, because every bound in it is an abuse limit and those
+> are easier to audit as a set.
+>
+> Both splits were pure code motion, verified line-for-line against the
+> original afterwards: the only source lines that differ are the class
+> declaration and the statics, which had to become top-level because a
+> mixin's statics are not inherited by the class that mixes it in.
+>
+> The remaining three (`operability` 860, `contacts` 775, `s2s_module` 712)
+> were re-evaluated as the plan asked and left alone. They are each a
+> single coherent concern at a size the split was not solving for; a
+> `MODULE.md` (A4) closes the "what does this file do" gap for them at no
+> risk.
 
 **Evidence of the gap:** line counts in `helix_remote/backend/lib/src/modules/`:
 
@@ -178,6 +258,17 @@ verification pipeline (`scripts/verify.ps1`) per-file, not in bulk.
 
 ### A4. Per-module `MODULE.md` contracts
 
+> **Implemented** — 21 docs, one per backend module (13) and one per
+> internal package (8). Route tables were generated from the actual router
+> registrations and the auth column from `_authMiddleware`'s real
+> public-path list, so they describe the server rather than the intent.
+>
+> The plan suggested writing these only for modules touched by A1–A3, to
+> avoid drift. That constraint stopped applying once A1 touched every
+> module and A3 settled the file layout, so the full set was written at
+> the end instead — after the layout stopped moving, which achieves the
+> same goal.
+
 **Evidence of the gap:** no `MODULE.md` (or equivalent) exists anywhere in
 the repo. Helix documents architecture extremely well at the *macro* level
 (ADRs, `CURRENT_STATE` evidence ledger, `docs/ai/AI_GUARDRAILS.md`,
@@ -219,6 +310,14 @@ source.
 
 ### A5. Make the AI-context extraction tool per-module, not per-bundle
 
+> **Implemented** as `tool/extract_module.dart <name>` (plus `--list`),
+> sequenced after A3 as the plan asked. A single-feature bundle is 46 KB
+> for `messaging` against 355 KB for the whole-subsystem `extract_02`.
+> It resolves both module shapes — a folder of part files and a single flat
+> file — so callers don't need to know which one a module currently is, and
+> it leads with the module's `MODULE.md` when one exists. `extract_01..06`
+> are untouched.
+
 **Evidence of the gap:** `helix_remote/tool/extract_02_backend_modules.dart`
 (and siblings `extract_01`…`extract_06`, plus `extract_all.dart`) already
 implements EarnMinute's "extract a scoped context bundle" idea — this is
@@ -254,6 +353,30 @@ its current bundle granularity.
 ---
 
 ### A6. State + transition + validator triads for the riskiest lifecycles
+
+> **Implemented** in
+> `packages/helix_remote_domain/lib/domain/call_room_transitions.dart`,
+> following the shape `remote_status.dart` already used rather than
+> EarnMinute's three-files-per-entity layout — one file of tables matches
+> how this repo already does it, and splitting five lifecycles into fifteen
+> files would have been ceremony.
+>
+> Five lifecycles are covered: call rooms, room participants, 1:1 call
+> sessions, client-side group-call status, and outbox delivery. The plan
+> said to start with the group-call lifecycle and expand once proven; the
+> tables are pure data and the enforcement points turned out to be few
+> enough that doing them together was lower risk than five separate passes
+> at the same files.
+>
+> The concrete bug class this closes: the room rules previously lived only
+> in SQL `WHERE` clauses, which fail *silently* — an update violating the
+> lifecycle matches zero rows and still reports success, so `joinCallRoom`
+> on an ended room returned true and did nothing. It now throws.
+>
+> Composed with A1 as specified: the error middleware maps
+> `RemoteIllegalStatusTransitionException` to a 409 carrying the attempted
+> from/to, since an illegal transition is a client ordering mistake rather
+> than a server fault.
 
 **Evidence of the gap:** state enums exist but are scattered and
 un-validated centrally: `CallRoomStatus`, `RsvpStatus`
@@ -355,3 +478,14 @@ test coverage, per lifecycle, not a blanket sweep.
 Each step should go through `scripts/verify.ps1` individually per the
 existing required-checks convention in `docs/ai/AI_GUARDRAILS.md`, not as one
 combined change.
+
+**What actually happened:** this sequence was followed, with one change —
+A3's splits ran *before* their A1 migrations, so that the code-motion diff
+and the behaviour diff stayed separate and reviewable. Each item landed as
+its own commit with `dart analyze` and the backend suite green.
+
+One thing outside the plan was fixed first: CI's `dart format` gate had
+been failing on every commit to main for two days. Nothing was wrong with
+the code — the newer stable Dart formatter drops trailing commas that fit
+on one line, and 37 files predated it. That is its own commit, so the
+structural work is not tangled with a repo-wide reformat.

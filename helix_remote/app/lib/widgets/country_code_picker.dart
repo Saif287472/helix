@@ -54,11 +54,7 @@ const List<Country> kCountries = [
   Country(name: 'Belgium', isoCode: 'BE', dialCode: '+32'),
   Country(name: 'Bhutan', isoCode: 'BT', dialCode: '+975'),
   Country(name: 'Bolivia', isoCode: 'BO', dialCode: '+591'),
-  Country(
-    name: 'Bosnia and Herzegovina',
-    isoCode: 'BA',
-    dialCode: '+387',
-  ),
+  Country(name: 'Bosnia and Herzegovina', isoCode: 'BA', dialCode: '+387'),
   Country(name: 'Brazil', isoCode: 'BR', dialCode: '+55'),
   Country(name: 'Brunei', isoCode: 'BN', dialCode: '+673'),
   Country(name: 'Bulgaria', isoCode: 'BG', dialCode: '+359'),
@@ -164,11 +160,7 @@ const List<Country> kCountries = [
   Country(name: 'Turkmenistan', isoCode: 'TM', dialCode: '+993'),
   Country(name: 'Uganda', isoCode: 'UG', dialCode: '+256'),
   Country(name: 'Ukraine', isoCode: 'UA', dialCode: '+380'),
-  Country(
-    name: 'United Arab Emirates',
-    isoCode: 'AE',
-    dialCode: '+971',
-  ),
+  Country(name: 'United Arab Emirates', isoCode: 'AE', dialCode: '+971'),
   Country(name: 'United Kingdom', isoCode: 'GB', dialCode: '+44'),
   Country(name: 'United States', isoCode: 'US', dialCode: '+1'),
   Country(name: 'Uruguay', isoCode: 'UY', dialCode: '+598'),
@@ -192,9 +184,7 @@ const Country kDefaultCountry = Country(
 /// [kDefaultCountry] with the input taken as-is if nothing matches (e.g.
 /// malformed input) - used to pre-fill the country selector from a phone
 /// number collected earlier in the flow.
-({Country country, String nationalNumber}) splitE164PhoneNumber(
-  String e164,
-) {
+({Country country, String nationalNumber}) splitE164PhoneNumber(String e164) {
   final digits = e164.startsWith('+') ? e164.substring(1) : e164;
   Country? bestMatch;
   for (final country in kCountries) {
@@ -295,6 +285,7 @@ class PhoneNumberInput extends StatelessWidget {
   final TextEditingController numberController;
   final bool enabled;
   final String? errorText;
+
   /// Defaults to null, which - per [InputDecoration.errorMaxLines] -
   /// truncates [errorText] to a single line with an ellipsis instead of
   /// wrapping it. Server-provided error text (e.g. an SMS gateway's own

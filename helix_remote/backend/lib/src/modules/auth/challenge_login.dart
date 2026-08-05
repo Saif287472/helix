@@ -8,15 +8,11 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
     final purpose = params['purpose'] ?? 'login';
 
     if (accountId == null || deviceId == null) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Missing account_id or device_id'}),
-      );
+      throw AppError.badRequest('Missing account_id or device_id');
     }
 
     if (purpose.isEmpty) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Missing purpose'}),
-      );
+      throw AppError.badRequest('Missing purpose');
     }
 
     final key = '$accountId:$deviceId';
@@ -47,140 +43,117 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
   }
 
   Future<Response> _loginHandler(Request request) async {
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final accountId = body['account_id'] as String?;
-      final deviceId = body['device_id'] as String?;
-      final signatureBase64 = body['signature'] as String?;
-      final purpose = body['purpose'] as String? ?? 'login';
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final accountId = body['account_id'] as String?;
+    final deviceId = body['device_id'] as String?;
+    final signatureBase64 = body['signature'] as String?;
+    final purpose = body['purpose'] as String? ?? 'login';
 
-      if (accountId == null || deviceId == null || signatureBase64 == null) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error': 'Missing account_id, device_id, or signature',
-          }),
-        );
-      }
-
-      final key = '$accountId:$deviceId';
-      final challenge = _challenges.remove(key);
-      if (challenge == null) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Challenge not found or expired'}),
-        );
-      }
-      if (challenge.accountId != accountId ||
-          challenge.deviceId != deviceId ||
-          challenge.purpose != purpose ||
-          challenge.purpose != 'login' ||
-          !_now().isBefore(challenge.expiresAt)) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Challenge not valid for this login'}),
-        );
-      }
-
-      // Fetch device public key
-      final devices = db.getDevices(accountId);
-      final device = devices.firstWhere(
-        (d) => d['device_id'] == deviceId,
-        orElse: () => <String, dynamic>{},
-      );
-
-      if (device.isEmpty) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Device not registered or inactive'}),
-        );
-      }
-
-      if (db.isAccountSuspended(accountId)) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Account suspended'}),
-        );
-      }
-
-      final devicePubKeyStr = device['device_signing_public_key'] as String;
-
-      // Verify signature
-      try {
-        final publicKeyBytes = base64Url.decode(
-          base64Url.normalize(devicePubKeyStr),
-        );
-        final publicKey = crypto.SimplePublicKey(
-          publicKeyBytes,
-          type: crypto.KeyPairType.ed25519,
-        );
-
-        final signatureBytes = base64Url.decode(
-          base64Url.normalize(signatureBase64),
-        );
-        final signature = crypto.Signature(
-          signatureBytes,
-          publicKey: publicKey,
-        );
-
-        final isValid = await _ed25519.verify(
-          utf8.encode(challenge.signedPayload),
-          signature: signature,
-        );
-
-        if (!isValid) {
-          return Response.forbidden(jsonEncode({'error': 'Invalid signature'}));
-        }
-      } catch (e) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Signature verification failed'}),
-        );
-      }
-
-      // Generate Access Token (1 hour expiry)
-      final accessToken = jwt.generateToken({
-        'account_id': accountId,
-        'device_id': deviceId,
-      }, const Duration(hours: 1));
-
-      // Generate Refresh Token (7 days expiry)
-      final refreshToken = jwt.generateToken({
-        'account_id': accountId,
-        'device_id': deviceId,
-        'refresh': true,
-        'jti': Random.secure().nextInt(1000000000).toString(),
-      }, const Duration(days: 7));
-
-      // Hash refresh token and save in database
-      final tokenHash = crypto_pkg.sha256
-          .convert(utf8.encode(refreshToken))
-          .toString();
-      final expiresAt = DateTime.now()
-          .add(const Duration(days: 7))
-          .millisecondsSinceEpoch;
-      db.saveRefreshToken(
-        tokenHash: tokenHash,
-        accountId: accountId,
-        deviceId: deviceId,
-        expiresAt: expiresAt,
-      );
-
-      db.logAudit(
-        accountId,
-        deviceId,
-        'DEVICE_LOGIN',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(
-        jsonEncode({
-          'token': accessToken,
-          'refresh_token': refreshToken,
-          'message': 'Login successful',
-        }),
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
-      );
+    if (accountId == null || deviceId == null || signatureBase64 == null) {
+      throw AppError.badRequest('Missing account_id, device_id, or signature');
     }
+
+    final key = '$accountId:$deviceId';
+    final challenge = _challenges.remove(key);
+    if (challenge == null) {
+      throw AppError.forbidden('Challenge not found or expired');
+    }
+    if (challenge.accountId != accountId ||
+        challenge.deviceId != deviceId ||
+        challenge.purpose != purpose ||
+        challenge.purpose != 'login' ||
+        !_now().isBefore(challenge.expiresAt)) {
+      throw AppError.forbidden('Challenge not valid for this login');
+    }
+
+    // Fetch device public key
+    final devices = db.getDevices(accountId);
+    final device = devices.firstWhere(
+      (d) => d['device_id'] == deviceId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    if (device.isEmpty) {
+      throw AppError.forbidden('Device not registered or inactive');
+    }
+
+    if (db.isAccountSuspended(accountId)) {
+      throw AppError.forbidden('Account suspended');
+    }
+
+    final devicePubKeyStr = device['device_signing_public_key'] as String;
+
+    // Verify signature
+    try {
+      final publicKeyBytes = base64Url.decode(
+        base64Url.normalize(devicePubKeyStr),
+      );
+      final publicKey = crypto.SimplePublicKey(
+        publicKeyBytes,
+        type: crypto.KeyPairType.ed25519,
+      );
+
+      final signatureBytes = base64Url.decode(
+        base64Url.normalize(signatureBase64),
+      );
+      final signature = crypto.Signature(signatureBytes, publicKey: publicKey);
+
+      final isValid = await _ed25519.verify(
+        utf8.encode(challenge.signedPayload),
+        signature: signature,
+      );
+
+      if (!isValid) {
+        throw AppError.forbidden('Invalid signature');
+      }
+    } catch (e) {
+      throw AppError.forbidden('Signature verification failed');
+    }
+
+    // Generate Access Token (1 hour expiry)
+    final accessToken = jwt.generateToken({
+      'account_id': accountId,
+      'device_id': deviceId,
+    }, const Duration(hours: 1));
+
+    // Generate Refresh Token (7 days expiry)
+    final refreshToken = jwt.generateToken({
+      'account_id': accountId,
+      'device_id': deviceId,
+      'refresh': true,
+      'jti': Random.secure().nextInt(1000000000).toString(),
+    }, const Duration(days: 7));
+
+    // Hash refresh token and save in database
+    final tokenHash = crypto_pkg.sha256
+        .convert(utf8.encode(refreshToken))
+        .toString();
+    final expiresAt = DateTime.now()
+        .add(const Duration(days: 7))
+        .millisecondsSinceEpoch;
+    db.saveRefreshToken(
+      tokenHash: tokenHash,
+      accountId: accountId,
+      deviceId: deviceId,
+      expiresAt: expiresAt,
+    );
+
+    db.logAudit(
+      accountId,
+      deviceId,
+      'DEVICE_LOGIN',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(
+      jsonEncode({
+        'token': accessToken,
+        'refresh_token': refreshToken,
+        'message': 'Login successful',
+      }),
+    );
   }
 
   @override

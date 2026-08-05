@@ -23,11 +23,7 @@ String renderTerminalQr(String data) {
 
   const quietZone = 2;
   final buffer = StringBuffer();
-  for (
-    var row = -quietZone;
-    row < moduleCount + quietZone;
-    row += 2
-  ) {
+  for (var row = -quietZone; row < moduleCount + quietZone; row += 2) {
     for (var col = -quietZone; col < moduleCount + quietZone; col++) {
       final top = isDark(row, col);
       final bottom = isDark(row + 1, col);

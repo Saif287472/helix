@@ -17,6 +17,10 @@ class StubCallEngine implements RemoteCallEngine {
   bool _disposed = false;
   bool throwOnEndCall = false;
 
+  /// Set to simulate the engine failing to obtain ICE config - which is what
+  /// a server with no TURN relay produces in production.
+  Object? createOfferError;
+
   @override
   Stream<RemoteCallEngineEvent> get events => _ctrl.stream;
 
@@ -42,6 +46,8 @@ class StubCallEngine implements RemoteCallEngine {
   @override
   Future<String> createOffer(String callId, {bool video = false}) async {
     log.add('createOffer:$callId:video=$video');
+    final error = createOfferError;
+    if (error != null) throw error;
     return 'stub_offer_sdp';
   }
 
@@ -307,6 +313,49 @@ void main() {
     expect(svc.activeCall, isNull);
     expect(db.getActiveCallMarker(), isNull);
     expect(engine.log, contains(startsWith('endCall:')));
+  });
+
+  test('a missing TURN relay is reported as such, not as "check your '
+      'connectivity"', () async {
+    // The whole point of RemoteCallSetupException: a server-side
+    // configuration problem used to reach the user as advice to check their
+    // own connection, which they cannot act on.
+    final svc = makeService();
+    final statuses = <RemoteCallStatus?>[];
+    final sub = svc.callStatusChanges.listen(statuses.add);
+    engine.createOfferError = const RemoteCallSetupException(
+      RemoteCallSetupFailure.turnNotConfigured,
+    );
+
+    await expectLater(
+      svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false),
+      throwsA(isA<RemoteCallSetupException>()),
+    );
+
+    final failed = statuses.firstWhere(
+      (s) => s?.state == RemoteCallState.failed,
+    )!;
+    expect(failed.errorMessage, contains('no call relay configured'));
+    expect(failed.errorMessage, contains('server admin'));
+    await sub.cancel();
+  });
+
+  test('an unclassified setup error keeps the generic message', () async {
+    final svc = makeService();
+    final statuses = <RemoteCallStatus?>[];
+    final sub = svc.callStatusChanges.listen(statuses.add);
+    engine.createOfferError = StateError('something else broke');
+
+    await expectLater(
+      svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false),
+      throwsStateError,
+    );
+
+    final failed = statuses.firstWhere(
+      (s) => s?.state == RemoteCallState.failed,
+    )!;
+    expect(failed.errorMessage, contains('could not be started'));
+    await sub.cancel();
   });
 
   test('engine end failure still clears active call state', () async {

@@ -305,19 +305,22 @@ void main() {
       expect(uri.port, equals(443));
     });
 
-    test('does not require device storage directories, unlike fromServerUrl', () {
-      // This is the exact bug an invite-link entry screen hit: it only
-      // needs a REST base URI to probe an invite code, not a full
-      // RemoteDevelopmentConfig, so it must not be forced to supply
-      // directories that don't exist yet at that point in the app's
-      // lifecycle.
-      expect(
-        () => RemoteDevelopmentConfig.restBaseUriFromServerUrl(
-          'https://remote.example',
-        ),
-        returnsNormally,
-      );
-    });
+    test(
+      'does not require device storage directories, unlike fromServerUrl',
+      () {
+        // This is the exact bug an invite-link entry screen hit: it only
+        // needs a REST base URI to probe an invite code, not a full
+        // RemoteDevelopmentConfig, so it must not be forced to supply
+        // directories that don't exist yet at that point in the app's
+        // lifecycle.
+        expect(
+          () => RemoteDevelopmentConfig.restBaseUriFromServerUrl(
+            'https://remote.example',
+          ),
+          returnsNormally,
+        );
+      },
+    );
 
     test('rejects a malformed URL', () {
       expect(

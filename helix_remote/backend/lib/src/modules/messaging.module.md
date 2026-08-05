@@ -1,9 +1,8 @@
 # Module: messaging
 
-Status: reference implementation for the [error-format migration](../../../../../docs/architecture/EARNMINUTE_STRUCTURAL_UPGRADE_PLAN.md)
-(item A1) and for this per-module doc convention (item A4). Other backend
-modules under `lib/src/modules/` don't have one of these yet — this is the
-template to copy when they do.
+Status: the template the other module docs follow, from the
+[structural upgrade plan](../../../../../docs/architecture/EARNMINUTE_STRUCTURAL_UPGRADE_PLAN.md)
+(items A1 and A4). Every backend module now has one of these.
 
 ## Purpose
 
@@ -17,8 +16,8 @@ GROUP conversations are explicitly out of scope here - see Gotchas.
 ## Owned files
 
 - `messaging.dart` - `MessagingModule`, its Shelf router, and every handler.
-  Not yet split into routes/service/validation layers (see plan item A3 -
-  `auth/` is the only module currently split that way).
+  Still one file: at ~850 lines it is well under the threshold that made
+  splitting `groups` and `calls` worthwhile (plan item A3).
 
 ## Route table
 

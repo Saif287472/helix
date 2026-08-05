@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:helix_remote_domain/models.dart';
 import 'package:shelf/shelf.dart';
 
 /// Wraps [inner] so a thrown [AppError] (or any other exception) becomes a
@@ -18,6 +19,15 @@ Handler withAppErrorHandling(Handler inner) {
       return await inner(request);
     } on AppError catch (e) {
       return e.toResponse();
+    } on RemoteIllegalStatusTransitionException catch (e) {
+      // A lifecycle validator refusing a move is a client problem, not a
+      // server fault: it means the request asked for something the entity's
+      // current state doesn't allow (joining an ended room, answering a
+      // call that was already declined). 409 says exactly that, where the
+      // catch-all below would report a misleading 500.
+      return AppError.conflict(
+        e.message,
+      ).withDetails({'from': e.from, 'to': e.to}).toResponse();
     } on HijackException {
       // A WebSocket upgrade handler signals "I took over the socket" by
       // throwing this, not by returning a Response - it must propagate
@@ -43,6 +53,19 @@ enum RemoteErrorCode {
   conflict('conflict'),
   quotaExceeded('quota_exceeded'),
   serviceUnavailable('service_unavailable'),
+
+  /// A signed server-to-server request to a peer failed. Distinct from
+  /// [internalError]: nothing is wrong with *this* server.
+  federationError('federation_error'),
+
+  /// FCM rejected a push. [pushTokenNotFound] is split out because callers
+  /// act on it differently - it means "prune this token", not "retry".
+  pushDeliveryFailed('push_delivery_failed'),
+  pushTokenNotFound('push_token_not_found'),
+
+  /// The SMS gateway rejected or failed to submit a message.
+  smsDeliveryFailed('sms_delivery_failed'),
+
   internalError('internal_error');
 
   const RemoteErrorCode(this.wire);
@@ -58,7 +81,13 @@ enum RemoteErrorCode {
 /// this gets the same body shape for free instead of inventing one per call
 /// site.
 class AppError implements Exception {
-  AppError(this.message, {required this.statusCode, this.code, this.details});
+  AppError(
+    this.message, {
+    required this.statusCode,
+    this.code,
+    this.details,
+    this.headers,
+  });
 
   factory AppError.unauthorized(
     String message, {
@@ -112,6 +141,28 @@ class AppError implements Exception {
   final RemoteErrorCode? code;
   final Map<String, Object?>? details;
 
+  /// Extra response headers this error must carry beyond `Content-Type`.
+  /// A few HTTP errors are only correct with one - a 416 has to report
+  /// `Content-Range: bytes * /<length>` so the client learns the real size -
+  /// which is why those call sites can throw instead of hand-building a
+  /// [Response] just to attach a header.
+  final Map<String, String>? headers;
+
+  /// A copy carrying [extra] as its [details].
+  ///
+  /// The named constructors above cover status and code but not details,
+  /// and adding a `details` parameter to each one would repeat it six
+  /// times. This keeps the common case (`AppError.tooManyRequests(msg)`)
+  /// short while letting the handful of call sites that have structured
+  /// context attach it: `AppError.tooManyRequests(msg).withDetails({...})`.
+  AppError withDetails(Map<String, Object?> extra) => AppError(
+    message,
+    statusCode: statusCode,
+    code: code,
+    details: {...?details, ...extra},
+    headers: headers,
+  );
+
   Map<String, Object?> toJson() => {
     'error': message,
     if (code != null) 'code': code!.wire,
@@ -121,7 +172,7 @@ class AppError implements Exception {
   Response toResponse() => Response(
     statusCode,
     body: jsonEncode(toJson()),
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...?headers},
   );
 
   @override

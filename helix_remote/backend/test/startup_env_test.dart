@@ -64,10 +64,7 @@ void main() {
     test('all vars in a group unset is a warning, not fatal', () {
       final result = validateStartupEnv(baseEnv(), devMode: false);
       expect(result.isFatal, isFalse);
-      expect(
-        result.warnings.any((w) => w.contains('SMS delivery')),
-        isTrue,
-      );
+      expect(result.warnings.any((w) => w.contains('SMS delivery')), isTrue);
     });
 
     test('warnings are suppressed in dev mode', () {
@@ -101,8 +98,7 @@ void main() {
     });
 
     test('a partial pair is fatal even in dev mode', () {
-      final env = baseEnv()
-        ..addAll({'HELIX_REMOTE_FCM_PROJECT_ID': 'project'});
+      final env = baseEnv()..addAll({'HELIX_REMOTE_FCM_PROJECT_ID': 'project'});
       final result = validateStartupEnv(env, devMode: true);
       expect(result.isFatal, isTrue);
     });

@@ -1248,5 +1248,45 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 37;');
     }
+
+    if (version < 38) {
+      // Contact-discovery budget, moved out of an in-memory Map.
+      //
+      // Two problems with the old `_matchAttempts` map: it reset on every
+      // deploy, so a "daily" cap was not actually enforced across restarts,
+      // and it grew one entry per account forever. Both matter here more
+      // than for an ordinary rate limit, because this cap is the mitigation
+      // for a real privacy risk - the endpoint is an oracle for "is phone
+      // number X a Helix user".
+      //
+      // Meters *distinct hashes*, not requests. Metering requests made a
+      // 2,100-contact phone book cost the entire daily budget in one sync
+      // (5 requests x 500 hashes), leaving nothing for a retry, a second
+      // device, or the next day - so chunking a large phone book could not
+      // work at all. Charging per hash makes chunk size irrelevant to the
+      // budget and bounds the actual enumeration exposure.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS contacts_match_budget (
+          account_id TEXT PRIMARY KEY,
+          window_started_at INTEGER NOT NULL,
+          hashes_used INTEGER NOT NULL DEFAULT 0,
+          last_request_at INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+
+      // Lets an unchanged phone book re-sync for free. A phone book changes
+      // slowly, so without this the budget is spent re-asking the same
+      // questions - and the answers are already on the device.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS contacts_match_fingerprints (
+          account_id TEXT PRIMARY KEY,
+          fingerprint TEXT NOT NULL,
+          matched_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+
+      _db.execute('PRAGMA user_version = 38;');
+    }
   }
 }

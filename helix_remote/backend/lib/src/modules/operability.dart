@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
+import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
@@ -22,6 +24,7 @@ class OperabilityModule {
     required this.wsRelay,
     required this.outboxWorker,
     required this.callsModule,
+    this.attachmentsModule,
     required this.adminAccountIds,
     required this.turnSecret,
     required this.turnUrl,
@@ -40,6 +43,10 @@ class OperabilityModule {
   final WebSocketRelay wsRelay;
   final OutboxWorker outboxWorker;
   final CallsModule callsModule;
+
+  /// Optional so tests that only exercise health/ops routes need not build
+  /// an attachments module; `/server/info` omits the limits when absent.
+  final AttachmentsModule? attachmentsModule;
   final Set<String> adminAccountIds;
   final String turnSecret;
   final String turnUrl;
@@ -78,11 +85,11 @@ class OperabilityModule {
     'monthly_cost_budget_percent': 80,
   };
 
-  Router get healthRouter {
+  Handler get healthRouter {
     final router = Router();
     router.get('/live', _live);
     router.get('/ready', _ready);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   /// Server-level facts a logged-in client may show its user.
@@ -91,10 +98,10 @@ class OperabilityModule {
   /// unauthenticated surface, and every caller that needs it already has a
   /// session. Someone still joining gets the same name from
   /// `/accounts/invite/lookup`, which is gated by holding a valid invite.
-  Router get serverRouter {
+  Handler get serverRouter {
     final router = Router();
     router.get('/info', _serverInfo);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   Response _serverInfo(Request request) {
@@ -102,10 +109,17 @@ class OperabilityModule {
       // Empty means the admin never named this server; clients fall back
       // to showing the hostname they connected to.
       'server_name': db.getServerConfig(serverNameConfigKey) ?? '',
+      // Attachment limits live here so an operator can change them in .env
+      // without an app release, and so the client's error message can never
+      // disagree with what this server will actually accept. Both are
+      // ciphertext byte counts - the same thing the upload endpoint
+      // measures.
+      'max_attachment_bytes': attachmentsModule?.maxFileSize,
+      'account_quota_bytes': attachmentsModule?.maxQuota,
     });
   }
 
-  Router get opsRouter {
+  Handler get opsRouter {
     final router = Router();
     router.get('/metrics', _metrics);
     router.get('/support-diagnostic', _supportDiagnostic);
@@ -123,7 +137,7 @@ class OperabilityModule {
     router.post('/invites/<inviteId>/cancel', _cancelInvite);
     router.get('/federation', _federationStatus);
     router.post('/federation/worldwide', _setWorldwideMode);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   Response _live(Request request) {
@@ -181,7 +195,7 @@ class OperabilityModule {
 
   Response _metrics(Request request) {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_OPERABILITY_METRICS_READ');
 
@@ -209,7 +223,7 @@ class OperabilityModule {
 
   Response _supportDiagnostic(Request request) {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_SUPPORT_DIAGNOSTIC_EXPORT');
 
@@ -290,7 +304,7 @@ class OperabilityModule {
 
   Response _config(Request request) {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_CONFIG_READ');
 
@@ -326,25 +340,25 @@ class OperabilityModule {
   /// so there is nothing to restart and no cache to invalidate.
   Future<Response> _setServerName(Request request) async {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
 
     final Map<String, dynamic> body;
     try {
       body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
     } catch (_) {
-      return _json({'error': 'Invalid JSON body'}, status: 400);
+      throw AppError.badRequest('Invalid JSON body');
     }
 
     final raw = body['server_name'];
     if (raw != null && raw is! String) {
-      return _json({'error': 'server_name must be a string'}, status: 400);
+      throw AppError.badRequest('server_name must be a string');
     }
 
     final result = validateServerName(raw as String?);
     switch (result) {
       case ServerNameInvalid(:final error):
-        return _json({'error': error}, status: 400);
+        throw AppError.badRequest(error);
       case ServerNameCleared():
         db.deleteServerConfig(serverNameConfigKey);
         _auditAdminWrite(request, 'ADMIN_SERVER_NAME_CLEARED');
@@ -369,7 +383,7 @@ class OperabilityModule {
 
   Response _federationStatus(Request request) {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_FEDERATION_STATUS_READ');
     return _json(_federationConfig());
@@ -377,16 +391,13 @@ class OperabilityModule {
 
   Future<Response> _setWorldwideMode(Request request) async {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     final body =
         jsonDecode(await request.readAsString()) as Map<String, dynamic>;
     final enabled = body['enabled'] as bool?;
     if (enabled == null) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Missing enabled flag'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.badRequest('Missing enabled flag');
     }
 
     if (!enabled) {
@@ -408,17 +419,12 @@ class OperabilityModule {
     final directory =
         (body['directory_url'] as String? ?? federationDirectoryUrl).trim();
     if (domain.isEmpty || address.isEmpty || directory.isEmpty) {
-      return Response.badRequest(
-        body: jsonEncode({
-          'error': 'domain, address, and directory_url are required',
-        }),
-        headers: {'Content-Type': 'application/json'},
+      throw AppError.badRequest(
+        'domain, address, and directory_url are required',
       );
     }
     if (serverIdentity == null || federationClient == null) {
-      return _json({
-        'error': 'Server identity is not initialized',
-      }, status: 503);
+      throw AppError.serviceUnavailable('Server identity is not initialized');
     }
 
     db.setServerConfig('federation_worldwide_mode', 'true');
@@ -459,7 +465,7 @@ class OperabilityModule {
 
   Response _backup(Request request) {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_BACKUP_TRIGGER');
 
@@ -479,13 +485,17 @@ class OperabilityModule {
         'timestamp': timestamp,
       });
     } catch (e) {
-      return _json({'error': 'Failed to create backup: $e'}, status: 500);
+      throw AppError(
+        'Failed to create backup: $e',
+        statusCode: 500,
+        code: RemoteErrorCode.internalError,
+      );
     }
   }
 
   Response _users(Request request) {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_USERS_LIST_READ');
 
@@ -494,9 +504,7 @@ class OperabilityModule {
     final offset = int.tryParse(params['offset'] ?? '') ?? 0;
 
     if (limit <= 0 || offset < 0) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Invalid limit or offset'}),
-      );
+      throw AppError.badRequest('Invalid limit or offset');
     }
 
     final users = db.getAllUsersDetailedPaginated(limit: limit, offset: offset);
@@ -505,10 +513,10 @@ class OperabilityModule {
 
   Future<Response> _suspendUser(Request request, String accountId) async {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     if (!db.accountExists(accountId)) {
-      return _json({'error': 'Account not found'}, status: 404);
+      throw AppError.notFound('Account not found');
     }
     db.setAccountStatus(accountId, 'SUSPENDED');
     db.logAudit(
@@ -525,10 +533,10 @@ class OperabilityModule {
 
   Future<Response> _unsuspendUser(Request request, String accountId) async {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     if (!db.accountExists(accountId)) {
-      return _json({'error': 'Account not found'}, status: 404);
+      throw AppError.notFound('Account not found');
     }
     db.setAccountStatus(accountId, 'ACTIVE');
     db.logAudit(
@@ -551,10 +559,10 @@ class OperabilityModule {
   /// account owner and can't produce one.
   Future<Response> _deleteUser(Request request, String accountId) async {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     if (!db.accountExists(accountId)) {
-      return _json({'error': 'Account not found'}, status: 404);
+      throw AppError.notFound('Account not found');
     }
     await db.deleteAccountData(accountId);
     db.logAudit(
@@ -577,11 +585,11 @@ class OperabilityModule {
   /// register a fresh account.
   Future<Response> _blockUser(Request request, String accountId) async {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     final account = db.getAccount(accountId);
     if (account == null) {
-      return _json({'error': 'Account not found'}, status: 404);
+      throw AppError.notFound('Account not found');
     }
     final adminAccountId =
         (request.context['auth'] as Map<String, dynamic>?)?['account_id']
@@ -604,13 +612,13 @@ class OperabilityModule {
 
   Future<Response> _cancelInvite(Request request, String inviteId) async {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     final cancelled = db.cancelInviteCredential(inviteId: inviteId);
     if (!cancelled) {
-      return _json({
-        'error': 'Invite not found, already redeemed, or already cancelled',
-      }, status: 409);
+      throw AppError.conflict(
+        'Invite not found, already redeemed, or already cancelled',
+      );
     }
     db.logAudit(
       (request.context['auth'] as Map<String, dynamic>?)?['account_id']
@@ -628,7 +636,7 @@ class OperabilityModule {
 
   Future<Response> _createInvite(Request request) async {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_INVITE_CREATED');
 
@@ -657,7 +665,7 @@ class OperabilityModule {
 
   Response _listInvites(Request request) {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_INVITES_LIST_READ');
 
@@ -665,9 +673,7 @@ class OperabilityModule {
     final limit = int.tryParse(params['limit'] ?? '') ?? 50;
     final offset = int.tryParse(params['offset'] ?? '') ?? 0;
     if (limit <= 0 || offset < 0) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Invalid limit or offset'}),
-      );
+      throw AppError.badRequest('Invalid limit or offset');
     }
 
     final now = _now().millisecondsSinceEpoch;
@@ -730,17 +736,14 @@ class OperabilityModule {
   /// "this server can't write its log file".
   Response _logs(Request request) {
     if (!_isAdmin(request)) {
-      return _json({'error': 'Admin privileges required'}, status: 403);
+      throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_LOGS_READ');
 
     final requestedLimit =
         int.tryParse(request.url.queryParameters['limit'] ?? '') ?? 100;
     if (requestedLimit <= 0) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Invalid limit'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.badRequest('Invalid limit');
     }
     final limit = requestedLimit.clamp(1, _maxLogLines);
 
@@ -777,7 +780,11 @@ class OperabilityModule {
           'file_path': path,
         });
       } catch (e) {
-        return _json({'error': 'Failed to read logs: $e'}, status: 500);
+        throw AppError(
+          'Failed to read logs: $e',
+          statusCode: 500,
+          code: RemoteErrorCode.internalError,
+        );
       }
     }
 

@@ -45,61 +45,61 @@ class ConfigTab extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Server Configuration Properties',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 24),
-              _configField(
-                context,
-                'Server ID',
-                config['server_id'] ?? 'unknown',
-              ),
-              _configField(
-                context,
-                'Server Public Key',
-                config['server_public_key'] ?? 'unknown',
-              ),
-              _configField(
-                context,
-                'Server Running Port',
-                config['port'] ?? 'unknown',
-              ),
-              _configField(
-                context,
-                'Host Address Bound',
-                config['host'] ?? 'unknown',
-              ),
-              _configField(
-                context,
-                'Database Path',
-                config['db_path'] ?? 'unknown',
-              ),
-              _configField(
-                context,
-                'Attachments Path',
-                config['attachments_dir'] ?? 'unknown',
-              ),
-              _configField(
-                context,
-                'Push Notifications Configured',
-                config['push_configured'] == true ? 'ENABLED' : 'DISABLED',
-              ),
-              _configField(
-                context,
-                'TURN Server Configured',
-                config['turn_configured'] == true ? 'ENABLED' : 'DISABLED',
-              ),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 16),
-              _buildFederationControls(config),
-            ],
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Server Configuration Properties',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 24),
+                  _configField(
+                    context,
+                    'Server ID',
+                    config['server_id'] ?? 'unknown',
+                  ),
+                  _configField(
+                    context,
+                    'Server Public Key',
+                    config['server_public_key'] ?? 'unknown',
+                  ),
+                  _configField(
+                    context,
+                    'Server Running Port',
+                    config['port'] ?? 'unknown',
+                  ),
+                  _configField(
+                    context,
+                    'Host Address Bound',
+                    config['host'] ?? 'unknown',
+                  ),
+                  _configField(
+                    context,
+                    'Database Path',
+                    config['db_path'] ?? 'unknown',
+                  ),
+                  _configField(
+                    context,
+                    'Attachments Path',
+                    config['attachments_dir'] ?? 'unknown',
+                  ),
+                  _configField(
+                    context,
+                    'Push Notifications Configured',
+                    config['push_configured'] == true ? 'ENABLED' : 'DISABLED',
+                  ),
+                  _configField(
+                    context,
+                    'TURN Server Configured',
+                    config['turn_configured'] == true ? 'ENABLED' : 'DISABLED',
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  _buildFederationControls(config),
+                ],
               ),
             ),
           ),

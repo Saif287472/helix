@@ -131,8 +131,14 @@ void main() {
       expect(svc.currentState?.status, GroupCallStatus.ended);
     });
 
+    // Glare avoidance: exactly one side of a new mesh edge may offer, and the
+    // convention here is that the *joiner* does - `joinRoom` offers to every
+    // peer already in the room. An existing member therefore prepares the
+    // peer connection and waits for that offer. This test previously asserted
+    // the opposite (that the existing member offers), which would have both
+    // sides offering at once.
     test(
-      'processRoomEvent participant_joined triggers offer to new peer',
+      'processRoomEvent participant_joined prepares the peer without offering',
       () async {
         final signals = <Map<String, dynamic>>[];
         final bobEngine = _StubEngine();
@@ -159,12 +165,20 @@ void main() {
 
         expect(
           bobEngine.log.any((l) => l.startsWith('offer:')),
-          isTrue,
-          reason: 'should have sent an offer to the new participant',
+          isFalse,
+          reason: 'the joiner offers to us, not the other way round',
         );
         expect(
           signals.any((s) => s['type'] == 'offer' && s['_to'] == 'bob_dev1'),
+          isFalse,
+          reason: 'offering here would collide with the joiner\'s own offer',
+        );
+        expect(
+          svc.currentState?.peers.any(
+            (p) => p.participant.deviceId == 'bob_dev1',
+          ),
           isTrue,
+          reason: 'the peer connection should still be prepared for the answer',
         );
       },
     );
