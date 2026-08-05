@@ -438,17 +438,17 @@ class RemoteDevelopmentConfig {
   }
 
   static IpPrivacyMode _ipPrivacyModeFor(String value) {
-    switch (value) {
-      case '':
-      case 'relay_only':
-        return IpPrivacyMode.relayOnly;
-      case 'direct_and_relay':
-        return IpPrivacyMode.directAndRelay;
-      default:
-        throw RemoteConfigurationException(
-          'Unknown HELIX_REMOTE_IP_PRIVACY "$value".',
-        );
+    // Empty means unset, which is relay-only: the safe default has to be
+    // what you get for doing nothing.
+    if (value.isEmpty) return IpPrivacyMode.relayOnly;
+    final mode = IpPrivacyMode.fromWire(value);
+    if (mode == null) {
+      throw RemoteConfigurationException(
+        'Unknown HELIX_REMOTE_IP_PRIVACY "$value". Expected one of: '
+        '${IpPrivacyMode.values.map((m) => m.wireName).join(', ')}.',
+      );
     }
+    return mode;
   }
 
   static String _webSocketSchemeFor(String restScheme) {
