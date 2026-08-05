@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:helix_remote_backend/src/app_error.dart';
+
 abstract interface class SmsProvider {
   bool get isConfigured;
 
@@ -113,10 +115,19 @@ final class BulkSmsBdProvider implements SmsProvider {
 /// The SMS provider rejected the request or failed to submit it - the
 /// caller should surface a delivery-failed error rather than pretending
 /// the code went out.
-class SmsDeliveryException implements Exception {
-  const SmsDeliveryException(this.statusCode, this.body);
-  final int statusCode;
+class SmsDeliveryException extends AppError {
+  SmsDeliveryException(this.upstreamStatusCode, this.body)
+    : super(
+        'Failed to send verification SMS',
+        statusCode: 502,
+        code: RemoteErrorCode.smsDeliveryFailed,
+      );
+
+  /// The gateway's status, not ours - see [statusCode] for what a client
+  /// would see if this ever escaped unhandled.
+  final int upstreamStatusCode;
   final String body;
+
   @override
-  String toString() => 'SmsDeliveryException($statusCode): $body';
+  String toString() => 'SmsDeliveryException($upstreamStatusCode): $body';
 }

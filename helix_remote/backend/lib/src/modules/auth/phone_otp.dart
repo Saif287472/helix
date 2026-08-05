@@ -86,15 +86,16 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
       } on Object catch (e) {
         // ignore: avoid_print
         print('OTP SMS delivery failed: $e');
-        return Response(
-          502,
-          body: jsonEncode({
-            // Surfaced to the client so it can show the actual gateway
-            // rejection reason (e.g. bad API key, unapproved sender ID,
-            // insufficient balance) instead of a generic message - the
-            // provider's error text has never included the API key.
-            'error': 'Failed to send verification SMS: $e',
-          }),
+        // The gateway's own rejection reason is surfaced to the client on
+        // purpose (bad API key, unapproved sender ID, insufficient balance)
+        // rather than a generic message - the provider's error text has
+        // never included the API key. Thrown rather than returned so it
+        // leaves through the same middleware as every other error, and so
+        // it carries a code the client can branch on.
+        throw AppError(
+          'Failed to send verification SMS: $e',
+          statusCode: 502,
+          code: RemoteErrorCode.smsDeliveryFailed,
         );
       }
       return Response.ok(

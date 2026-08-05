@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart' as crypto_pkg;
 import 'package:cryptography/cryptography.dart' as crypto;
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 
@@ -376,10 +377,23 @@ class FederationClient {
 /// Thrown when a signed S2S HTTP request receives a non-2xx response.
 /// Carries the remote status code so callers can map it back to an
 /// appropriate local response instead of always surfacing a generic error.
-class FederationHttpException implements Exception {
-  FederationHttpException(this.statusCode, this.body, this.uri);
+///
+/// Extends [AppError] so that one of these reaching the HTTP boundary
+/// unhandled still leaves as the normalized error shape rather than a bare
+/// 500. Callers that want to do something smarter still catch it by type -
+/// see `GroupsModule`, which forwards the peer's own response body.
+///
+/// [statusCode] is deliberately both the remote status and the status this
+/// error would return: a peer's 404 means the thing really isn't there, and
+/// a 403 raised locally by the SSRF guard means we refused to make the call.
+class FederationHttpException extends AppError {
+  FederationHttpException(int statusCode, this.body, this.uri)
+    : super(
+        'Federated request failed',
+        statusCode: statusCode,
+        code: RemoteErrorCode.federationError,
+      );
 
-  final int statusCode;
   final String body;
   final Uri uri;
 

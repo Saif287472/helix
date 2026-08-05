@@ -43,6 +43,19 @@ enum RemoteErrorCode {
   conflict('conflict'),
   quotaExceeded('quota_exceeded'),
   serviceUnavailable('service_unavailable'),
+
+  /// A signed server-to-server request to a peer failed. Distinct from
+  /// [internalError]: nothing is wrong with *this* server.
+  federationError('federation_error'),
+
+  /// FCM rejected a push. [pushTokenNotFound] is split out because callers
+  /// act on it differently - it means "prune this token", not "retry".
+  pushDeliveryFailed('push_delivery_failed'),
+  pushTokenNotFound('push_token_not_found'),
+
+  /// The SMS gateway rejected or failed to submit a message.
+  smsDeliveryFailed('sms_delivery_failed'),
+
   internalError('internal_error');
 
   const RemoteErrorCode(this.wire);
