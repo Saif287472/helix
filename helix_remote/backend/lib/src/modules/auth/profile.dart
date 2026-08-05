@@ -30,8 +30,7 @@ mixin AuthProfileHandlers on AuthModuleBase {
       // first-ever change is always allowed regardless of when the account
       // was created.
       final existingProfile = db.getAccountProfile(accountId);
-      final lastChangedAt =
-          existingProfile?['display_name_changed_at'] as int?;
+      final lastChangedAt = existingProfile?['display_name_changed_at'] as int?;
       if (lastChangedAt != null) {
         final nextAllowedAt = DateTime.fromMillisecondsSinceEpoch(
           lastChangedAt,

@@ -37,10 +37,7 @@ void main() {
 
     test('a 200 response is ok', () async {
       final client = AdminClient(baseUrl: baseUrl(), token: 't');
-      expect(
-        await client.verifyLoginDetailed(),
-        equals(AdminLoginStatus.ok),
-      );
+      expect(await client.verifyLoginDetailed(), equals(AdminLoginStatus.ok));
       expect(await client.verifyLogin(), isTrue);
     });
 
@@ -72,22 +69,16 @@ void main() {
       );
     });
 
-    test(
-      'a connection failure (e.g. offline, weak signal) is unreachable, '
-      'never unauthorized - the caller must not treat this as proof the '
-      'token is bad',
-      () async {
-        // Nothing listens here - a real socket-level connection failure.
-        final client = AdminClient(
-          baseUrl: 'http://127.0.0.1:1',
-          token: 't',
-        );
-        expect(
-          await client.verifyLoginDetailed(),
-          equals(AdminLoginStatus.unreachable),
-        );
-        expect(await client.verifyLogin(), isFalse);
-      },
-    );
+    test('a connection failure (e.g. offline, weak signal) is unreachable, '
+        'never unauthorized - the caller must not treat this as proof the '
+        'token is bad', () async {
+      // Nothing listens here - a real socket-level connection failure.
+      final client = AdminClient(baseUrl: 'http://127.0.0.1:1', token: 't');
+      expect(
+        await client.verifyLoginDetailed(),
+        equals(AdminLoginStatus.unreachable),
+      );
+      expect(await client.verifyLogin(), isFalse);
+    });
   });
 }

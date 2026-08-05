@@ -73,9 +73,7 @@ class DashboardTab extends StatelessWidget {
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           childAspectRatio: 1.6,
-          children: [
-            for (final tile in tiles) _metricCard(context, tile),
-          ],
+          children: [for (final tile in tiles) _metricCard(context, tile)],
         );
       },
     );
@@ -154,7 +152,10 @@ class DashboardTab extends StatelessWidget {
                     metric.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, color: context.textSecondary),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: context.textSecondary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),

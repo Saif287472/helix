@@ -40,14 +40,17 @@ void main() {
     });
   });
 
-  test('notFound, conflict, and serviceUnavailable map to their status codes', () {
-    expect(AppError.notFound('gone').statusCode, equals(404));
-    expect(AppError.conflict('taken').statusCode, equals(409));
-    expect(
-      AppError.serviceUnavailable('federation off').statusCode,
-      equals(503),
-    );
-  });
+  test(
+    'notFound, conflict, and serviceUnavailable map to their status codes',
+    () {
+      expect(AppError.notFound('gone').statusCode, equals(404));
+      expect(AppError.conflict('taken').statusCode, equals(409));
+      expect(
+        AppError.serviceUnavailable('federation off').statusCode,
+        equals(503),
+      );
+    },
+  );
 
   test(
     'internal() never leaks the underlying message to the response body',
@@ -61,10 +64,13 @@ void main() {
     },
   );
 
-  test('toResponse body round-trips through JSON exactly like toJson', () async {
-    final error = AppError.forbidden('nope');
-    final response = error.toResponse();
-    final body = await response.readAsString();
-    expect(jsonDecode(body), equals(error.toJson()));
-  });
+  test(
+    'toResponse body round-trips through JSON exactly like toJson',
+    () async {
+      final error = AppError.forbidden('nope');
+      final response = error.toResponse();
+      final body = await response.readAsString();
+      expect(jsonDecode(body), equals(error.toJson()));
+    },
+  );
 }

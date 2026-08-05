@@ -25,10 +25,7 @@ void main() {
       _wrap(const PairingCodeScreen(baseUrl: 'https://helix.example.com')),
     );
 
-    await tester.enterText(
-      find.byKey(const Key('pairing_code_field')),
-      '123',
-    );
+    await tester.enterText(find.byKey(const Key('pairing_code_field')), '123');
     await tester.tap(find.byKey(const Key('pairing_code_redeem_button')));
     await tester.pump();
 

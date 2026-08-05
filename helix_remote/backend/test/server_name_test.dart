@@ -13,15 +13,19 @@ void main() {
         result is ServerNameValid ? result.value : null;
 
     test('accepts an ordinary name unchanged', () {
-      expect(valueOf(validateServerName("Rahman Family Server")),
-          "Rahman Family Server");
+      expect(
+        valueOf(validateServerName("Rahman Family Server")),
+        "Rahman Family Server",
+      );
     });
 
     test('trims surrounding whitespace and collapses internal runs', () {
       // Padding is how you'd try to shove a name around in someone else's
       // layout, so it is normalized rather than stored verbatim.
-      expect(valueOf(validateServerName('   Home    Server   ')),
-          'Home Server');
+      expect(
+        valueOf(validateServerName('   Home    Server   ')),
+        'Home Server',
+      );
     });
 
     test('treats an empty or whitespace-only name as clearing it', () {
@@ -245,15 +249,21 @@ void main() {
     test('a name change is visible immediately, with no restart', () async {
       await setName('First Name');
       expect(
-        (await send('GET', '/api/v1/server/info', token: userToken))
-            .json['server_name'],
+        (await send(
+          'GET',
+          '/api/v1/server/info',
+          token: userToken,
+        )).json['server_name'],
         'First Name',
       );
 
       await setName('Second Name');
       expect(
-        (await send('GET', '/api/v1/server/info', token: userToken))
-            .json['server_name'],
+        (await send(
+          'GET',
+          '/api/v1/server/info',
+          token: userToken,
+        )).json['server_name'],
         'Second Name',
       );
     });

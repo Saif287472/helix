@@ -31,50 +31,56 @@ void main() {
     await server.close(force: true);
   });
 
-  test('send() succeeds on a submitted (202) response without throwing', () async {
-    server.listen((request) async {
-      request.response.statusCode = 200;
-      request.response.write(jsonEncode({'response_code': 202}));
-      await request.response.close();
-    });
+  test(
+    'send() succeeds on a submitted (202) response without throwing',
+    () async {
+      server.listen((request) async {
+        request.response.statusCode = 200;
+        request.response.write(jsonEncode({'response_code': 202}));
+        await request.response.close();
+      });
 
-    final provider = BulkSmsBdProvider(
-      apiKey: 'key',
-      senderId: 'sender',
-      apiBaseUri: apiBaseUri,
-    );
-
-    // Must not throw - in particular, must not throw
-    // "Bad state: Stream has already been listened to.".
-    await provider.send(phoneNumber: '+8801712345678', message: 'test');
-  });
-
-  test('send() throws SmsDeliveryException on a rejected (non-202) response', () async {
-    server.listen((request) async {
-      request.response.statusCode = 200;
-      request.response.write(
-        jsonEncode({'response_code': 1006, 'error_message': 'Bad sender id'}),
+      final provider = BulkSmsBdProvider(
+        apiKey: 'key',
+        senderId: 'sender',
+        apiBaseUri: apiBaseUri,
       );
-      await request.response.close();
-    });
 
-    final provider = BulkSmsBdProvider(
-      apiKey: 'key',
-      senderId: 'sender',
-      apiBaseUri: apiBaseUri,
-    );
+      // Must not throw - in particular, must not throw
+      // "Bad state: Stream has already been listened to.".
+      await provider.send(phoneNumber: '+8801712345678', message: 'test');
+    },
+  );
 
-    await expectLater(
-      provider.send(phoneNumber: '+8801712345678', message: 'test'),
-      throwsA(
-        isA<SmsDeliveryException>().having(
-          (e) => e.body,
-          'body',
-          contains('Bad sender id'),
+  test(
+    'send() throws SmsDeliveryException on a rejected (non-202) response',
+    () async {
+      server.listen((request) async {
+        request.response.statusCode = 200;
+        request.response.write(
+          jsonEncode({'response_code': 1006, 'error_message': 'Bad sender id'}),
+        );
+        await request.response.close();
+      });
+
+      final provider = BulkSmsBdProvider(
+        apiKey: 'key',
+        senderId: 'sender',
+        apiBaseUri: apiBaseUri,
+      );
+
+      await expectLater(
+        provider.send(phoneNumber: '+8801712345678', message: 'test'),
+        throwsA(
+          isA<SmsDeliveryException>().having(
+            (e) => e.body,
+            'body',
+            contains('Bad sender id'),
+          ),
         ),
-      ),
-    );
-  });
+      );
+    },
+  );
 
   test('send() throws SmsDeliveryException on a non-200 HTTP status', () async {
     server.listen((request) async {

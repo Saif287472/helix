@@ -580,12 +580,14 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   bool _initializing = false;
   bool _registering = false;
   bool _sendingCode = false;
+
   /// Whether the last OTP request came back as a placeholder code (shown
   /// via local notification) rather than a real SMS - see
   /// `RemoteCompositionRegistration.requestOtp`. Defaults to true so the
   /// placeholder notice stays visible until a request actually completes.
   bool _otpIsPlaceholder = true;
   _CreateAccountStep _createAccountStep = _CreateAccountStep.enterDetails;
+
   /// Result of the last invite-code auto-validation, or null if the field
   /// hasn't been checked yet (e.g. still empty, or never blurred).
   _InviteCheckState? _inviteCheckState;
@@ -1032,10 +1034,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
         // silently no-opping the tap instead of showing the reason.
         return Builder(
           builder: (context) => IconButton(
-            icon: Icon(
-              Icons.error,
-              color: Theme.of(context).colorScheme.error,
-            ),
+            icon: Icon(Icons.error, color: Theme.of(context).colorScheme.error),
             tooltip: _inviteCheckReason ?? 'Invalid invitation',
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1587,4 +1586,3 @@ class HelixRemoteConfigurationErrorApp extends StatelessWidget {
     );
   }
 }
-

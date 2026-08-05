@@ -51,7 +51,9 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
             'server_hash_prefix=${computedHash == null ? 'n/a' : computedHash.substring(0, computedHash.length.clamp(0, 8))}',
           );
           return Response.badRequest(
-            body: jsonEncode({'error': 'phone_number does not match phone_hash'}),
+            body: jsonEncode({
+              'error': 'phone_number does not match phone_hash',
+            }),
           );
         }
       }
@@ -86,7 +88,8 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
         try {
           await smsProvider.send(
             phoneNumber: phoneNumber,
-            message: 'Your Helix verification code is $code. It expires in '
+            message:
+                'Your Helix verification code is $code. It expires in '
                 '${_otpTtl.inMinutes} minutes.',
           );
         } on Object catch (e) {

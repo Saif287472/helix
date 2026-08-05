@@ -3,8 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/admin_client.dart';
 import 'package:helix_admin/widgets/server_name_card.dart';
 
-Widget _wrap(Widget child) =>
-    MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child)));
+Widget _wrap(Widget child) => MaterialApp(
+  home: Scaffold(body: SingleChildScrollView(child: child)),
+);
 
 Finder get _saveButton => find.widgetWithText(FilledButton, 'Save name');
 
@@ -111,8 +112,10 @@ void main() {
     await tester.tap(_saveButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('server_name must be 60 characters or fewer'),
-        findsOneWidget);
+    expect(
+      find.text('server_name must be 60 characters or fewer'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a transport failure reports plainly, not as a raw exception', (

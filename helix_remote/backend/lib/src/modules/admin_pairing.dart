@@ -56,9 +56,7 @@ class AdminPairingModule {
 
   Response _generate(Request request) {
     final connInfo = request.context['shelf.io.connection_info'];
-    final peer = connInfo is HttpConnectionInfo
-        ? connInfo.remoteAddress
-        : null;
+    final peer = connInfo is HttpConnectionInfo ? connInfo.remoteAddress : null;
     final isLoopback =
         peer != null &&
         (peer.isLoopback || peer.address == _dockerHostGateway());

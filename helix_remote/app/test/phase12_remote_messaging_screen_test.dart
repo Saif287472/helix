@@ -433,40 +433,37 @@ void main() {
     expect(find.text('plain hello'), findsNothing);
   });
 
-  testWidgets(
-    'opening a conversation does not spiral into an unbounded '
-    'self-triggering reload loop',
-    (tester) async {
-      // _loadMessages() calls markConversationRead() at the end of every
-      // load, which used to emit a conversations-area change for this
-      // conversation. If _onRemoteChange treated that as a reason to
-      // reload messages too, it would call _loadMessages() again -> mark
-      // read again -> emit again -> forever, spinning as fast as the event
-      // loop allows (an ANR on-device; here it would show up as
-      // pumpAndSettle() failing to settle).
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ConversationScreen(
-            conversationId: 'dm_alice_bob',
-            messagingService: service,
-          ),
+  testWidgets('opening a conversation does not spiral into an unbounded '
+      'self-triggering reload loop', (tester) async {
+    // _loadMessages() calls markConversationRead() at the end of every
+    // load, which used to emit a conversations-area change for this
+    // conversation. If _onRemoteChange treated that as a reason to
+    // reload messages too, it would call _loadMessages() again -> mark
+    // read again -> emit again -> forever, spinning as fast as the event
+    // loop allows (an ANR on-device; here it would show up as
+    // pumpAndSettle() failing to settle).
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConversationScreen(
+          conversationId: 'dm_alice_bob',
+          messagingService: service,
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      // markConversationRead() no longer enqueues an outbox operation at
-      // all: 'MARK_CONVERSATION_READ' was never in
-      // RemoteOutboundOperation.values, so every instance of it failed
-      // permanently - there's no server endpoint for it. Asserting zero
-      // here (not "exactly one") covers both bugs: the reload loop, and
-      // this dead-end outbox entry it kept multiplying.
-      final markReadOps = db
-          .getPendingOperations()
-          .where((op) => op['type'] == 'MARK_CONVERSATION_READ')
-          .toList();
-      expect(markReadOps, isEmpty);
-    },
-  );
+    // markConversationRead() no longer enqueues an outbox operation at
+    // all: 'MARK_CONVERSATION_READ' was never in
+    // RemoteOutboundOperation.values, so every instance of it failed
+    // permanently - there's no server endpoint for it. Asserting zero
+    // here (not "exactly one") covers both bugs: the reload loop, and
+    // this dead-end outbox entry it kept multiplying.
+    final markReadOps = db
+        .getPendingOperations()
+        .where((op) => op['type'] == 'MARK_CONVERSATION_READ')
+        .toList();
+    expect(markReadOps, isEmpty);
+  });
 
   testWidgets('P09 open conversation reacts to inbound sync messages', (
     tester,

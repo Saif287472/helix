@@ -94,9 +94,7 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
       }
 
       if (db.isAccountSuspended(accountId)) {
-        return Response.forbidden(
-          jsonEncode({'error': 'Account suspended'}),
-        );
+        return Response.forbidden(jsonEncode({'error': 'Account suspended'}));
       }
 
       final devicePubKeyStr = device['device_signing_public_key'] as String;

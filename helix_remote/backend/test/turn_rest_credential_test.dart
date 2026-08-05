@@ -24,8 +24,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 const _turnSecret = 'test_shared_secret_for_turn_rest_api';
-const _turnUrls =
-    'turn:hr.example.com:3478,turns:hr.example.com:5349';
+const _turnUrls = 'turn:hr.example.com:3478,turns:hr.example.com:5349';
 
 void main() {
   late BackendServer server;
@@ -111,71 +110,76 @@ void main() {
     expect(body['username'], matches(RegExp(r'^\d+:alice:alice_device1$')));
   });
 
-  test('serves every configured URL so clients can fall back to turns:', () async {
-    final body = await fetchCredentials();
+  test(
+    'serves every configured URL so clients can fall back to turns:',
+    () async {
+      final body = await fetchCredentials();
 
-    final urls = (body['urls'] as List).cast<String>();
-    expect(urls, [
-      'turn:hr.example.com:3478',
-      'turns:hr.example.com:5349',
-    ]);
-    // Older clients read the singular field.
-    expect(body['url'], 'turn:hr.example.com:3478');
-  });
+      final urls = (body['urls'] as List).cast<String>();
+      expect(urls, ['turn:hr.example.com:3478', 'turns:hr.example.com:5349']);
+      // Older clients read the singular field.
+      expect(body['url'], 'turn:hr.example.com:3478');
+    },
+  );
 
-  test('reports 503 rather than issuing unusable credentials when TURN is off',
-      () async {
-    final unconfigured = BackendServer.create(
-      sqliteDb: sqlite3.openInMemory(),
-      jwtSecret: 'test_jwt_secret_min_32_bytes_turn_off',
-      rateLimitMaxTokens: 500,
-      rateLimitRefillRate: 100,
-    );
-    await unconfigured.start('127.0.0.1', 0);
-    unconfigured.db.createAccount('bob', 'bob_user', 'bob_identity_key');
-    unconfigured.db.registerDevice(
-      'bob_device1',
-      'bob',
-      'bob_device_key',
-      'Bob Phone',
-    );
-    final bobToken = unconfigured.jwt.generateToken({
-      'account_id': 'bob',
-      'device_id': 'bob_device1',
-    }, const Duration(hours: 1));
-
-    final http = HttpClient();
-    try {
-      final request = await http.getUrl(
-        Uri.parse(
-          'http://127.0.0.1:${unconfigured.httpServer!.port}'
-          '/api/v1/calls/turn-credentials',
-        ),
+  test(
+    'reports 503 rather than issuing unusable credentials when TURN is off',
+    () async {
+      final unconfigured = BackendServer.create(
+        sqliteDb: sqlite3.openInMemory(),
+        jwtSecret: 'test_jwt_secret_min_32_bytes_turn_off',
+        rateLimitMaxTokens: 500,
+        rateLimitRefillRate: 100,
       );
-      request.headers.set('Authorization', 'Bearer $bobToken');
-      final response = await request.close();
-      final body =
-          jsonDecode(await response.transform(utf8.decoder).join())
-              as Map<String, dynamic>;
+      await unconfigured.start('127.0.0.1', 0);
+      unconfigured.db.createAccount('bob', 'bob_user', 'bob_identity_key');
+      unconfigured.db.registerDevice(
+        'bob_device1',
+        'bob',
+        'bob_device_key',
+        'Bob Phone',
+      );
+      final bobToken = unconfigured.jwt.generateToken({
+        'account_id': 'bob',
+        'device_id': 'bob_device1',
+      }, const Duration(hours: 1));
 
-      expect(response.statusCode, 503);
-      expect(body['turn_configured'], isFalse);
-    } finally {
-      http.close(force: true);
-      await unconfigured.stop();
-    }
-  });
+      final http = HttpClient();
+      try {
+        final request = await http.getUrl(
+          Uri.parse(
+            'http://127.0.0.1:${unconfigured.httpServer!.port}'
+            '/api/v1/calls/turn-credentials',
+          ),
+        );
+        request.headers.set('Authorization', 'Bearer $bobToken');
+        final response = await request.close();
+        final body =
+            jsonDecode(await response.transform(utf8.decoder).join())
+                as Map<String, dynamic>;
 
-  test('a malformed TURN URL is dropped rather than served to clients', () async {
-    // resolveTurnUrls only accepts turn:/turns: schemes - a typo'd entry
-    // in .env must not reach clients as an ICE server they will fail on.
-    expect(
-      CallsModule.resolveTurnUrls('https://hr.example.com:3478'),
-      isEmpty,
-    );
-    expect(
-      CallsModule.resolveTurnUrls('turn:a:3478, ,turns:b:5349'),
-      ['turn:a:3478', 'turns:b:5349'],
-    );
-  });
+        expect(response.statusCode, 503);
+        expect(body['turn_configured'], isFalse);
+      } finally {
+        http.close(force: true);
+        await unconfigured.stop();
+      }
+    },
+  );
+
+  test(
+    'a malformed TURN URL is dropped rather than served to clients',
+    () async {
+      // resolveTurnUrls only accepts turn:/turns: schemes - a typo'd entry
+      // in .env must not reach clients as an ICE server they will fail on.
+      expect(
+        CallsModule.resolveTurnUrls('https://hr.example.com:3478'),
+        isEmpty,
+      );
+      expect(CallsModule.resolveTurnUrls('turn:a:3478, ,turns:b:5349'), [
+        'turn:a:3478',
+        'turns:b:5349',
+      ]);
+    },
+  );
 }

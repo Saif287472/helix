@@ -89,8 +89,7 @@ ServerNameResult validateServerName(String? raw) {
   return ServerNameValid(normalized);
 }
 
-bool _isControl(int rune) =>
-    rune < 0x20 || (rune >= 0x7f && rune <= 0x9f);
+bool _isControl(int rune) => rune < 0x20 || (rune >= 0x7f && rune <= 0x9f);
 
 /// LRE/RLE/PDF/LRO/RLO, LRI/RLI/FSI/PDI, and the deprecated LRM/RLM/ALM
 /// marks - all of which reorder how following text is displayed.

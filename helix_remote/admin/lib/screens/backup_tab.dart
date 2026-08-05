@@ -33,10 +33,7 @@ class BackupTab extends StatelessWidget {
                   const Text(
                     'Automated Maintenance & Snapshot Backups',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -44,7 +41,10 @@ class BackupTab extends StatelessWidget {
                     'SQLite "VACUUM INTO". File is saved in the backups '
                     'directory.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: context.textSecondary, fontSize: 13),
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(height: 32),
                   ElevatedButton.icon(

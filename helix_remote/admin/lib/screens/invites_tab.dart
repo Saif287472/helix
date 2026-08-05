@@ -92,8 +92,7 @@ class _InvitesTabState extends State<InvitesTab> {
   String _resolveShareableUrl(Map<String, dynamic> result) {
     final serverUrl = result['shareable_url'] as String?;
     if (serverUrl != null &&
-        (serverUrl.startsWith('http://') ||
-            serverUrl.startsWith('https://'))) {
+        (serverUrl.startsWith('http://') || serverUrl.startsWith('https://'))) {
       return serverUrl;
     }
     final inviteCode = result['invite_code'] as String;
@@ -141,7 +140,10 @@ class _InvitesTabState extends State<InvitesTab> {
                   Text(
                     'Single-use, expires in 7 days. The code is shown once '
                     '- copy it now.',
-                    style: TextStyle(color: context.textSecondary, fontSize: 13),
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(

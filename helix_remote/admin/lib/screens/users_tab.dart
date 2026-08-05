@@ -180,7 +180,10 @@ class _UsersTabState extends State<UsersTab> {
                   const Expanded(
                     child: Text(
                       'Users',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -274,9 +277,7 @@ class _UsersTabState extends State<UsersTab> {
           final displayName = user['display_name'] as String? ?? '';
           return DataRow(
             cells: [
-              DataCell(
-                Text(displayName.isEmpty ? '—' : displayName),
-              ),
+              DataCell(Text(displayName.isEmpty ? '—' : displayName)),
               DataCell(Text(accountId)),
               DataCell(Text(_maskedPhone(user['phone_last4'] as String?))),
               DataCell(Text(user['invite_id'] as String? ?? '—')),

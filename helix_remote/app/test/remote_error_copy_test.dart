@@ -122,23 +122,20 @@ void main() {
       },
     );
 
-    test(
-      'profile update copy falls back to generic text when the body is not '
-      'JSON',
-      () {
-        expect(
-          RemoteUserErrorCopy.profileUpdateFailure(
-            failure(RemoteRestFailureKind.http, statusCode: 429),
-          ),
-          contains('once every 30 days'),
-        );
-        expect(
-          RemoteUserErrorCopy.profileUpdateFailure(
-            failure(RemoteRestFailureKind.noInternet),
-          ),
-          allOf(contains('Network unavailable'), contains('try again')),
-        );
-      },
-    );
+    test('profile update copy falls back to generic text when the body is not '
+        'JSON', () {
+      expect(
+        RemoteUserErrorCopy.profileUpdateFailure(
+          failure(RemoteRestFailureKind.http, statusCode: 429),
+        ),
+        contains('once every 30 days'),
+      );
+      expect(
+        RemoteUserErrorCopy.profileUpdateFailure(
+          failure(RemoteRestFailureKind.noInternet),
+        ),
+        allOf(contains('Network unavailable'), contains('try again')),
+      );
+    });
   });
 }

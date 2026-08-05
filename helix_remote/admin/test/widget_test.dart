@@ -232,39 +232,38 @@ void main() {
     expect(find.byIcon(Icons.menu), findsNothing);
   });
 
-  testWidgets(
-    'a narrow phone viewport moves navigation into a Drawer behind a '
-    'hamburger menu, with no overflow and working tab navigation',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(360, 800));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('a narrow phone viewport moves navigation into a Drawer behind a '
+      'hamburger menu, with no overflow and working tab navigation', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(const HelixAdminApp());
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('GET STARTED'));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const HelixAdminApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('GET STARTED'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
 
-      // Sidebar nav is now behind a hamburger, not laid out beside content.
-      expect(find.byIcon(Icons.menu), findsOneWidget);
-      expect(find.text('Connect a server first'), findsOneWidget);
+    // Sidebar nav is now behind a hamburger, not laid out beside content.
+    expect(find.byIcon(Icons.menu), findsOneWidget);
+    expect(find.text('Connect a server first'), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pumpAndSettle();
-      expect(find.text('Helix Panel'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    expect(find.text('Helix Panel'), findsOneWidget);
 
-      await tester.tap(find.text('Settings'));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
 
-      // Selecting a tab both navigates and closes the drawer.
-      expect(
-        find.byKey(const Key('settings_connection_status_card')),
-        findsOneWidget,
-      );
-      expect(find.byIcon(Icons.menu), findsOneWidget);
-    },
-  );
+    // Selecting a tab both navigates and closes the drawer.
+    expect(
+      find.byKey(const Key('settings_connection_status_card')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.menu), findsOneWidget);
+  });
 
   testWidgets(
     'an unauthorized saved token is cleared and reported on launch, not '
