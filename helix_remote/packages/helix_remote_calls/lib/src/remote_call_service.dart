@@ -3,6 +3,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
 import 'package:uuid/uuid.dart';
 import 'package:helix_remote_calls/src/call_engine.dart';
 import 'package:helix_remote_calls/src/call_quality.dart';
+import 'package:helix_remote_calls/src/call_setup_failure.dart';
 import 'package:helix_remote_calls/src/ice_config.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 
@@ -651,7 +652,7 @@ class RemoteCallService {
         ),
       );
       _startOutgoingTimers(callId);
-    } catch (_) {
+    } catch (error) {
       await _safeEndCall(callId);
       _activeCall = RemoteCallStatus(
         callId: callId,
@@ -660,8 +661,15 @@ class RemoteCallService {
         direction: kCallDirectionOutgoing,
         state: RemoteCallState.failed,
         peerDisplayName: peerDisplayName,
-        errorMessage:
-            'The call could not be started. Check server and call connectivity.',
+        // A setup failure that knows what went wrong says so. The generic
+        // sentence remains only for genuinely unclassified errors - it used
+        // to be shown even when the server had told us plainly that it has
+        // no TURN relay, which sent users looking at their own connection
+        // for a server-side configuration problem.
+        errorMessage: error is RemoteCallSetupException
+            ? error.userMessage
+            : 'The call could not be started. '
+                  'Check server and call connectivity.',
       );
       _emitCallStatus();
       _persistCallHistory(

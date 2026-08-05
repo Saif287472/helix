@@ -407,13 +407,18 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
     );
   }
 
-  void _callBack(
+  Future<void> _callBack(
     String peerId, {
     bool isVideo = false,
     String? peerDisplayName,
-  }) {
+  }) async {
     try {
-      widget.root.callService.startOutgoingCall(
+      // Awaited on purpose. `startOutgoingCall` is async and rethrows after
+      // it has cleaned up, so without the await its error bypassed this
+      // catch entirely and surfaced as an uncaught zone error seconds after
+      // the UI had already given up - which is how a plain "TURN is not
+      // configured" 503 ended up in the logs as a crash report.
+      await widget.root.callService.startOutgoingCall(
         peerId: peerId,
         isVideo: isVideo,
         peerDisplayName: peerDisplayName,
