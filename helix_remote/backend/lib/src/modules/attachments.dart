@@ -8,14 +8,33 @@ import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 
 class AttachmentsModule {
-  static const int maxFileSize = 10 * 1024 * 1024; // 10MB
-  static const int maxQuota = 50 * 1024 * 1024; // 50MB
+  /// Defaults when the deployment sets no override. Both are operator
+  /// choices rather than protocol constants, which is why they are
+  /// configurable at all: raising them used to require an app release,
+  /// because the client hard-coded its own copy of the file limit.
+  static const int defaultMaxFileSize = 100 * 1024 * 1024; // 100MB
+  static const int defaultMaxQuota = 5 * 1024 * 1024 * 1024; // 5GB
 
   final BackendDatabase db;
   final Directory storageDir;
 
-  AttachmentsModule(this.db, {Directory? storageDir})
-    : storageDir = storageDir ?? Directory('attachments_storage') {
+  /// Largest single attachment, measured as **ciphertext** - which is what
+  /// actually arrives here. The client checks the same number against the
+  /// ciphertext size it is about to send, so the two agree; comparing a
+  /// plaintext length here would be comparing different things.
+  final int maxFileSize;
+
+  /// Cumulative per-account ciphertext budget.
+  final int maxQuota;
+
+  AttachmentsModule(
+    this.db, {
+    Directory? storageDir,
+    int? maxFileSize,
+    int? maxQuota,
+  }) : maxFileSize = maxFileSize ?? defaultMaxFileSize,
+       maxQuota = maxQuota ?? defaultMaxQuota,
+       storageDir = storageDir ?? Directory('attachments_storage') {
     if (!this.storageDir.existsSync()) {
       this.storageDir.createSync(recursive: true);
     }
@@ -51,16 +70,21 @@ class AttachmentsModule {
     }
 
     if (fileSize > maxFileSize) {
-      throw AppError.badRequest('File size exceeds maximum limit of 10MB');
+      throw AppError.badRequest(
+        'File size exceeds the maximum of ${_mb(maxFileSize)}MB',
+      ).withDetails({'max_attachment_bytes': maxFileSize});
     }
 
     final accountId = auth['account_id'] as String;
     final currentUsage = db.getAccountStorageUsage(accountId);
     if (currentUsage + fileSize > maxQuota) {
       throw AppError.badRequest(
-        'Upload exceeds account storage quota of 50MB',
+        'Upload exceeds the account storage quota of ${_mb(maxQuota)}MB',
         code: RemoteErrorCode.quotaExceeded,
-      );
+      ).withDetails({
+        'account_quota_bytes': maxQuota,
+        'account_bytes_used': currentUsage,
+      });
     }
 
     // Content-addressed: file_id is derived from file_hash
@@ -133,6 +157,8 @@ class AttachmentsModule {
     }
     return Response.ok(jsonEncode({'message': 'Reference registered'}));
   }
+
+  static int _mb(int bytes) => bytes ~/ (1024 * 1024);
 
   void cleanAttachmentReferences(String messageId) {
     try {

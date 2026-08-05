@@ -6,6 +6,7 @@ import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
+import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
@@ -23,6 +24,7 @@ class OperabilityModule {
     required this.wsRelay,
     required this.outboxWorker,
     required this.callsModule,
+    this.attachmentsModule,
     required this.adminAccountIds,
     required this.turnSecret,
     required this.turnUrl,
@@ -41,6 +43,10 @@ class OperabilityModule {
   final WebSocketRelay wsRelay;
   final OutboxWorker outboxWorker;
   final CallsModule callsModule;
+
+  /// Optional so tests that only exercise health/ops routes need not build
+  /// an attachments module; `/server/info` omits the limits when absent.
+  final AttachmentsModule? attachmentsModule;
   final Set<String> adminAccountIds;
   final String turnSecret;
   final String turnUrl;
@@ -103,6 +109,13 @@ class OperabilityModule {
       // Empty means the admin never named this server; clients fall back
       // to showing the hostname they connected to.
       'server_name': db.getServerConfig(serverNameConfigKey) ?? '',
+      // Attachment limits live here so an operator can change them in .env
+      // without an app release, and so the client's error message can never
+      // disagree with what this server will actually accept. Both are
+      // ciphertext byte counts - the same thing the upload endpoint
+      // measures.
+      'max_attachment_bytes': attachmentsModule?.maxFileSize,
+      'account_quota_bytes': attachmentsModule?.maxQuota,
     });
   }
 

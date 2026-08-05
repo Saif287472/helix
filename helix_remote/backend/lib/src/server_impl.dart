@@ -38,6 +38,8 @@ class BackendServer {
   final WebSocketRelay wsRelay;
   final OutboxWorker outboxWorker;
   final Directory? attachmentsStorageDir;
+  final int? maxAttachmentBytes;
+  final int? accountQuotaBytes;
   final String turnSecret;
   final String turnUrl;
   final SmsProvider smsProvider;
@@ -62,6 +64,8 @@ class BackendServer {
     required this.wsRelay,
     required this.outboxWorker,
     this.attachmentsStorageDir,
+    this.maxAttachmentBytes,
+    this.accountQuotaBytes,
     this.turnSecret = '',
     this.turnUrl = '',
     this.smsProvider = const NoopSmsProvider(),
@@ -84,6 +88,8 @@ class BackendServer {
     double rateLimitMaxTokens = 100.0,
     double rateLimitRefillRate = 10.0,
     Directory? attachmentsStorageDir,
+    int? maxAttachmentBytes,
+    int? accountQuotaBytes,
     String turnSecret = '',
     String turnUrl = '',
     SmsProvider? smsProvider,
@@ -126,6 +132,8 @@ class BackendServer {
       wsRelay: wsRelay,
       outboxWorker: outboxWorker,
       attachmentsStorageDir: attachmentsStorageDir,
+      maxAttachmentBytes: maxAttachmentBytes,
+      accountQuotaBytes: accountQuotaBytes,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
       smsProvider: smsProvider ?? const NoopSmsProvider(),
@@ -205,6 +213,8 @@ class BackendServer {
     final attachmentsModule = AttachmentsModule(
       db,
       storageDir: attachmentsStorageDir,
+      maxFileSize: maxAttachmentBytes,
+      maxQuota: accountQuotaBytes,
     );
     final messagingModule = MessagingModule(
       db,
@@ -239,6 +249,7 @@ class BackendServer {
       wsRelay: wsRelay,
       outboxWorker: outboxWorker,
       callsModule: callsModule,
+      attachmentsModule: attachmentsModule,
       adminAccountIds: adminAccountIds,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
