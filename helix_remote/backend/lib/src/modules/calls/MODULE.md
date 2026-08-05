@@ -7,9 +7,10 @@ for why these docs exist.
 ## Purpose
 
 1:1 WebRTC calling: issuing TURN relay credentials, routing signaling frames
-(offer / answer / ICE candidate / hangup) between devices, and the
-pending-call queue that lets a closed app be woken by push and then find out
-what it was woken for.
+(offer / answer / ICE candidate / hangup) between devices, enforcing the
+call's negotiated IP-privacy policy on those frames, and the pending-call
+queue that lets a closed app be woken by push and then find out what it was
+woken for.
 
 Group calls are a separate module (`../group_calls.dart`) — this one is
 strictly caller-to-callee.
@@ -76,6 +77,35 @@ keys beside `error`: the TURN 503 reports `turn_configured`, and the TURN
   `deploy/coturn/README.md`: if the secret drifts between backend and relay,
   calls fail with a 401 **from the relay** that never appears in the
   backend's own logs.
+- `call_media_policy.dart` (`../../call_media_policy.dart`) — the
+  enforcement primitive this module applies. Deliberately has no dependency
+  on `helix_remote_calls`; the wire names are the contract between them.
+
+## IP-privacy policy
+
+A call carries one policy, agreed once and enforced on every frame.
+
+- **Declared** on the wire as `ip_privacy`, one of `direct_and_relay`,
+  `direct_if_verified`, `relay_only`. Sent on offers and answers only.
+- **Agreed** as `strictest(caller, callee)`: the offer records the caller's
+  policy, the answer takes the stricter of the two. It can only ever tighten,
+  so neither side can talk the other out of relay-only.
+- **Stored** on `pending_calls.ip_privacy` (migration 39), not in memory. A
+  call's frames arrive on several sockets and outlive a reconnect, and the
+  ICE candidates that need constraining arrive long after the negotiation.
+- **Enforced** in `_routeOffer` and `_routeSessionSignal`: non-relay
+  `a=candidate:` lines are stripped from SDP, and a non-relay trickle
+  candidate makes the whole frame `dropped` (HTTP 200 — the frame was
+  well-formed and the server chose not to relay it).
+- **Fails closed.** Absent, unknown or malformed resolves to `relay_only`.
+  An old client that sends no policy is relayed rather than exposed, and an
+  in-flight call across the migration is too, since the column is null for
+  rows written before it.
+
+Metrics `policy_candidates_dropped` and `policy_sdp_candidates_stripped`
+should sit at zero: an honest peer that agreed relay-only does not gather
+host candidates in the first place. A steady count means some client is not
+honouring what it negotiated — which is the case this exists to survive.
 
 ## Gotchas
 
@@ -102,3 +132,13 @@ keys beside `error`: the TURN 503 reports `turn_configured`, and the TURN
 - **The 1:1 call lifecycle is described by `RemoteCallSessionStatus`** in
   `helix_remote_domain` (plan item A6). `active <-> reconnecting` cycles for
   ICE restarts; every other ending is terminal and a retry is a new call.
+- **Relay-only enforcement needs TURN to actually exist.** Under
+  `relay_only` every non-relay candidate is dropped, so a deployment with no
+  working coturn has no candidates left to pair and no call can connect.
+  That is the intended behaviour of a strict policy, not a bug in it — but
+  it means the relay is a hard prerequisite rather than an optimisation.
+- **An ICE-restart answer must declare its policy.** The answer branch takes
+  the strictest of stored and declared, so a mid-call answer that declares
+  nothing resolves to `relay_only` and silently tightens a call that had
+  agreed `direct_and_relay`. `_handleRestartOffer` in `remote_call_service`
+  sends `ipPrivacy` for exactly this reason.

@@ -102,6 +102,11 @@ mixin CallsPendingHandlers on CallsModuleBase {
         callId: callId,
         signalType: 'decline',
         isVideo: (session['is_video'] as int) != 0,
+        // A decline carries no SDP or candidate, so nothing here is
+        // filtered. The call's stored policy is used anyway so that a
+        // federated decline reports the policy actually in force rather
+        // than defaulting to relay-only on the far side.
+        declaredPolicy: CallMediaPolicy.fromWire(session['ip_privacy']),
       ),
       session: session,
       senderDeviceId: auth['device_id'] as String,
@@ -135,6 +140,7 @@ mixin CallsPendingHandlers on CallsModuleBase {
         callId: callId,
         signalType: 'cancel',
         isVideo: (session['is_video'] as int) != 0,
+        declaredPolicy: CallMediaPolicy.fromWire(session['ip_privacy']),
       ),
       session: session,
       senderDeviceId: auth['device_id'] as String,

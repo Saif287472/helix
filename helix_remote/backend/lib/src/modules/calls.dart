@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
+import 'package:helix_remote_backend/src/call_media_policy.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
@@ -214,6 +215,10 @@ class CallsModule extends CallsModuleBase
     'rejected': 0,
     'turn_credentials_success': 0,
     'turn_credentials_error': 0,
+    // Declared up front rather than created on first use, so "no client has
+    // ever violated its policy" reads as 0 instead of as a missing key.
+    'policy_candidates_dropped': 0,
+    'policy_sdp_candidates_stripped': 0,
   };
 
   @override

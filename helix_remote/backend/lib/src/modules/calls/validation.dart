@@ -52,6 +52,12 @@ mixin CallsValidation on CallsModuleBase {
         candidate: candidate,
         sdpMid: _string(payload['sdp_mid']),
         mlineIndex: mline as int?,
+        // Deliberately not rejected when unrecognised. An unknown policy is
+        // not a malformed frame, it is a client this server is older than,
+        // and `fromWire` already resolves anything it does not recognise to
+        // the strictest option. Rejecting instead would turn a forward-
+        // compatible client into a broken one.
+        declaredPolicy: CallMediaPolicy.fromWire(payload['ip_privacy']),
       ),
     );
   }
@@ -92,7 +98,10 @@ mixin CallsValidation on CallsModuleBase {
   @override
   int _httpStatusFor(Map<String, dynamic> result) {
     return switch (result['status']) {
-      'delivered' || 'queued' || 'partial' || 'duplicate' => 200,
+      // 'dropped' is a 200: the frame was well-formed and accepted, and the
+      // server chose not to relay it. Reporting a client error would tell a
+      // caller to retry something that will always be dropped.
+      'delivered' || 'queued' || 'partial' || 'duplicate' || 'dropped' => 200,
       'no_active_devices' => 409,
       'answered_elsewhere' => 409,
       'rate_limited' => 429,

@@ -1288,5 +1288,32 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 38;');
     }
+
+    if (version < 39) {
+      // The call's negotiated IP-privacy policy, so the server can enforce
+      // it on every frame rather than only on the one that declared it.
+      //
+      // This has to be persisted rather than held per-connection: a call's
+      // frames arrive on several sockets (caller, each callee device) and
+      // survive a reconnect, and the policy is agreed once on the
+      // offer/answer pair but must constrain every ICE candidate that
+      // follows. A restart between the offer and the candidates would
+      // otherwise lose the agreement - and losing it is exactly the case
+      // that must not fail open.
+      //
+      // Nullable with no default on purpose. A row written before this
+      // migration has no recorded policy, and `CallMediaPolicy.fromWire`
+      // maps null to relay-only, so in-flight calls across the upgrade are
+      // relayed rather than exposed.
+      final callColumns = _db
+          .select('PRAGMA table_info(pending_calls);')
+          .map((row) => row['name'] as String)
+          .toSet();
+      if (!callColumns.contains('ip_privacy')) {
+        _db.execute('ALTER TABLE pending_calls ADD COLUMN ip_privacy TEXT;');
+      }
+
+      _db.execute('PRAGMA user_version = 39;');
+    }
   }
 }

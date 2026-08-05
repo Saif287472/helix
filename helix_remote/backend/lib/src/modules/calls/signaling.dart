@@ -3,6 +3,13 @@ part of '../calls.dart';
 /// The signaling path proper: one REST endpoint and one WebSocket entry
 /// point that both funnel into [_routeSignal], which splits an opening
 /// offer from every subsequent in-session frame.
+///
+/// This is also where a call's IP-privacy policy is agreed and enforced.
+/// The offer declares the caller's policy and the answer the callee's; the
+/// server stores the stricter of the two and applies it to every frame it
+/// relays, including the ICE candidates that arrive long after the
+/// negotiation. See `call_media_policy.dart` for why the client cannot be
+/// the one enforcing this.
 mixin CallsSignalingHandlers on CallsModuleBase {
   Future<Response> _handleSignal(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
@@ -41,6 +48,52 @@ mixin CallsSignalingHandlers on CallsModuleBase {
       clientIp: 'websocket',
       message: message,
     );
+  }
+
+  /// Applies [policy] to one frame.
+  ///
+  /// Returns the frame to forward, or null when it must not be forwarded at
+  /// all. Null is only ever a non-relay trickle candidate: stripping its
+  /// address would leave an `ice` signal with nothing in it, and forwarding
+  /// that would just confuse the far side.
+  _ParsedCallSignal? _applyPolicyToSignal({
+    required CallMediaPolicy policy,
+    required _ParsedCallSignal signal,
+  }) {
+    final decision = applyMediaPolicy(
+      policy: policy,
+      sdp: signal.sdp,
+      candidate: signal.candidate,
+    );
+    if (!decision.allowed) {
+      _increment('policy_candidates_dropped');
+      return null;
+    }
+    if (decision.strippedSdpCandidates > 0) {
+      _increment('policy_sdp_candidates_stripped');
+      // Worth a line in the log: under an honest client this never fires,
+      // because a peer that agreed to relay-only does not gather host
+      // candidates in the first place. A steady stream of these means a
+      // client is not honouring what it negotiated.
+      logServerError(
+        '[CALL] policy_stripped_sdp_candidates call_id=${signal.callId} '
+        'signal=${signal.signalType} policy=${policy.wireName} '
+        'removed=${decision.strippedSdpCandidates}',
+      );
+    }
+    return decision.sdp == signal.sdp ? signal : signal.withSdp(decision.sdp);
+  }
+
+  Map<String, dynamic> _policyDroppedResponse(_ParsedCallSignal signal) {
+    logServerError(
+      '[CALL] policy_dropped_candidate call_id=${signal.callId} '
+      'signal=${signal.signalType}',
+    );
+    return {
+      'status': 'dropped',
+      'reason': 'candidate violates the call media policy',
+      'call_id': signal.callId,
+    };
   }
 
   @override
@@ -121,6 +174,22 @@ mixin CallsSignalingHandlers on CallsModuleBase {
     required int now,
     bool trustedRemote = false,
   }) async {
+    // The offer opens the negotiation, so the caller's declared policy is
+    // all there is to go on until the answer arrives. Enforced from this
+    // frame onward rather than from the answer: the offer's own SDP can
+    // carry inline candidates, and the window between offer and answer is
+    // exactly when a callee's device is ringing and most exposed.
+    final callerPolicy = signal.declaredPolicy;
+    final enforced = _applyPolicyToSignal(policy: callerPolicy, signal: signal);
+    if (enforced == null) {
+      _increment('rejected');
+      return _policyDroppedResponse(signal);
+    }
+    // Rebinding rather than shadowing: leaving the unfiltered frame in scope
+    // under a second name is a trap, since using it below would silently
+    // undo the enforcement.
+    signal = enforced;
+
     final calleeAccountId = signal.calleeAccountId;
     if (calleeAccountId == null) {
       return {'status': 'rejected', 'reason': 'callee_account_id is required'};
@@ -178,6 +247,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
         calleeAccountId: calleeAccountId,
         isVideo: signal.isVideo,
         offerSdp: signal.sdp,
+        ipPrivacy: callerPolicy.wireName,
         createdAt: now,
         expiresAt: expiresAt,
         targetDeviceIds: const [],
@@ -189,6 +259,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
         targetDeviceId: null,
         createdAt: now,
         expiresAt: expiresAt,
+        effectivePolicy: callerPolicy,
       );
       final result = await _proxyCallSignal(
         domain: FederationClient.domainOf(calleeAccountId)!,
@@ -232,6 +303,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
       calleeAccountId: calleeAccountId,
       isVideo: signal.isVideo,
       offerSdp: signal.sdp,
+      ipPrivacy: callerPolicy.wireName,
       createdAt: now,
       expiresAt: expiresAt,
       targetDeviceIds: targetDeviceIds,
@@ -239,7 +311,8 @@ mixin CallsSignalingHandlers on CallsModuleBase {
     logServerError(
       '[CALL] offer_received call_id=${signal.callId} '
       'caller=$accountId callee=$calleeAccountId '
-      'devices=${targetDeviceIds.length} video=${signal.isVideo}',
+      'devices=${targetDeviceIds.length} video=${signal.isVideo} '
+      'privacy=${callerPolicy.wireName}',
     );
 
     final canonical = signal.toCanonicalPayload(
@@ -249,6 +322,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
       targetDeviceId: null,
       createdAt: now,
       expiresAt: expiresAt,
+      effectivePolicy: callerPolicy,
     );
 
     var delivered = 0;
@@ -331,6 +405,41 @@ mixin CallsSignalingHandlers on CallsModuleBase {
         };
       }
     }
+
+    // The policy agreed for this call, recovered from storage rather than
+    // from the frame in hand - a peer does not get to restate (and so
+    // loosen) the policy on every candidate it sends.
+    var effectivePolicy = CallMediaPolicy.fromWire(session['ip_privacy']);
+    if (signal.signalType == 'answer' && isCallee) {
+      // The answer is the callee's half of the negotiation, and the only
+      // frame allowed to change the policy. Gated on isCallee so a caller
+      // cannot rewrite the record by sending a frame labelled 'answer';
+      // that frame is rejected a few lines below anyway, and a rejected
+      // frame should not leave anything behind.
+      //
+      // `strictest` means the change can only ever tighten: a callee asking
+      // for relay-only gets it even against a caller who asked for direct,
+      // and vice versa.
+      final agreed = CallMediaPolicy.strictest(
+        effectivePolicy,
+        signal.declaredPolicy,
+      );
+      if (agreed != effectivePolicy) {
+        db.updatePendingCallIpPrivacy(
+          callId: signal.callId,
+          ipPrivacy: agreed.wireName,
+        );
+        effectivePolicy = agreed;
+      }
+    }
+    final enforced = _applyPolicyToSignal(
+      policy: effectivePolicy,
+      signal: signal,
+    );
+    if (enforced == null) return _policyDroppedResponse(signal);
+    // See the note in _routeOffer: rebound, not shadowed, so the unfiltered
+    // frame cannot be reached by anything below.
+    signal = enforced;
 
     final terminal = {'decline', 'busy', 'cancel', 'end'};
     if (signal.signalType == 'answer') {
