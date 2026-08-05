@@ -6,7 +6,18 @@
 **Analysed against:** `origin/main` @ `d0f7bd7`.
 **Reconciled against:** the structural-upgrade branch (see
 [Reconciliation notes](#reconciliation-notes--what-changed-since-d0f7bd7)).
-**Status:** findings stand; remediation not yet started.
+**Status:** findings stand. Remediation status per item:
+
+| # | Status |
+|---|---|
+| P0-1 | Code hardening **done** (typed setup failures, no silent STUN fallback). **Deploying coturn on the VPS is still open — this is yours; nothing in the repo can fix it.** |
+| P0-2 | **Done** — `client_max_body_size 110m`, request buffering off, long `send_timeout`. Needs an nginx reload on the VPS to take effect. |
+| P0-3 | **Done** — budget metered per distinct hash (5000/day) rather than per request, 1000-hash batches, dedupe, `full_sync` caching, partial answers with `retry_after_seconds`. |
+| P1-1 | Serialisation and within-page backpressure **done** (see below). **The `1002` root cause is still not established** — the 4-step diagnostic procedure needs the live server and is yours. |
+| P1-2 | **Done** — limits are env-configurable, published via `/server/info`, and both sides now measure ciphertext. |
+| P1-3 | **Done** — call-setup failures are typed and awaited at the UI boundary. |
+| P2-1 | Open — vendor-side (IP whitelist / sender ID). Yours. |
+| P2-2, P2-3, P3-1 | Open. |
 
 All code paths below are relative to `helix_remote/`.
 
@@ -335,6 +346,31 @@ concurrently** with an in-flight replay, from unrelated async contexts, with no 
 **Fix regardless of whether it is the cause** — this is a latent correctness bug: route every
 write for a device through a single per-connection queue that awaits the sink, and apply
 backpressure inside a page, not just between pages.
+
+> **[DONE]** Implemented as a `_DeviceConnection` object per socket. Every write —
+> `sendToDevice`, `trySendToDevice`, the `pong` reply, the call-signal ack and replay — now goes
+> through `_DeviceConnection.send`, so there is one place that encodes, handles write errors and
+> deregisters. That last part fixed a second, separate bug: `sendToDevice` and `trySendToDevice`
+> removed the device from the connection map on a failed write **without** the identity check
+> `onDone`/`onError` already had, so a late failure on a socket the device had already replaced
+> tore down its current, healthy connection. `_replayWaiters` was keyed by `deviceId` for the
+> same reason and had the same race; it now lives on the connection object.
+>
+> Backpressure is now a **credit window of 20 outstanding events, applied per event** rather
+> than per 50-event page, released by the `replay_ack` the client already sends. A client that
+> stops acking stops receiving after 20 events instead of absorbing a whole page; a client that
+> never acks (older builds) trips a 5 s timeout **once**, which latches a yield-based fallback
+> for the rest of that replay rather than costing 5 s per window.
+>
+> **Correction to the recommendation above, worth recording:** "a queue that *awaits the sink*"
+> is not achievable in this stack, and it is better to say so than to write an `await` that
+> awaits nothing. `shelf_web_socket` hands the server an `IOWebSocketChannel` whose sink is a
+> `StreamChannelController(sync: true)` feeding `WebSocket.sendText`, which returns `void` and
+> buffers without bound; there is no `bufferedAmount`, and `sink.addStream` completes as fast as
+> the source produces. The client's acks are the only real drain signal available, which is why
+> the fix is built on them. **This also weakens H1 as an explanation for `1002`:** if the server
+> cannot observe its own send buffer, the flood hypothesis is harder to confirm from the server
+> side, and step 1 of the procedure below (bypass nginx) becomes the more valuable first move.
 
 **H2 — `permessage-deflate` negotiation mismatch.**
 The client uses `WebSocket.connect` (`remote_websocket_client.dart:65`), which offers
