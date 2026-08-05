@@ -66,7 +66,9 @@ void main(List<String> args) async {
   final entry = File('$modulesDir/$name.dart');
   if (entry.existsSync()) files.add(entry.path);
   final dir = Directory('$modulesDir/$name');
-  if (dir.existsSync()) files.addAll(_collect(dir.path));
+  // `.dart` only: the folder's own MODULE.md is added first, below, and
+  // collecting `.md` here as well would list it twice.
+  if (dir.existsSync()) files.addAll(_collect(dir.path, exts: ['.dart']));
   final doc = File('$modulesDir/$name.module.md');
   if (doc.existsSync()) files.insert(0, doc.path);
   final dirDoc = File('$modulesDir/$name/MODULE.md');
