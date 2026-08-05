@@ -19,115 +19,101 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
   /// notification with it - an explicit, documented placeholder, not a
   /// secure out-of-band channel.
   Future<Response> _requestPhoneOtpHandler(Request request) async {
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final phoneHash = body['phone_hash'] as String?;
-      if (phoneHash == null || phoneHash.isEmpty) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing phone_hash'}),
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final phoneHash = body['phone_hash'] as String?;
+    if (phoneHash == null || phoneHash.isEmpty) {
+      throw AppError.badRequest('Missing phone_hash');
+    }
+
+    String? phoneNumber;
+    if (smsProvider.isConfigured) {
+      phoneNumber = body['phone_number'] as String?;
+      if (phoneNumber == null || phoneNumber.isEmpty) {
+        // ignore: avoid_print
+        print('OTP request rejected: missing phone_number in body');
+        throw AppError.badRequest('Missing phone_number');
+      }
+      final salt = db.getServerConfig(phone_hash.discoverySaltConfigKey);
+      final computedHash = salt == null
+          ? null
+          : phone_hash.phoneHash(salt, phoneNumber);
+      if (salt == null || computedHash != phoneHash) {
+        // ignore: avoid_print
+        print(
+          'OTP request rejected: salt_present=${salt != null} '
+          'client_hash_prefix=${phoneHash.substring(0, phoneHash.length.clamp(0, 8))} '
+          'server_hash_prefix=${computedHash == null ? 'n/a' : computedHash.substring(0, computedHash.length.clamp(0, 8))}',
         );
+        throw AppError.badRequest('phone_number does not match phone_hash');
       }
+    }
 
-      String? phoneNumber;
-      if (smsProvider.isConfigured) {
-        phoneNumber = body['phone_number'] as String?;
-        if (phoneNumber == null || phoneNumber.isEmpty) {
-          // ignore: avoid_print
-          print('OTP request rejected: missing phone_number in body');
-          return Response.badRequest(
-            body: jsonEncode({'error': 'Missing phone_number'}),
-          );
-        }
-        final salt = db.getServerConfig(phone_hash.discoverySaltConfigKey);
-        final computedHash = salt == null
-            ? null
-            : phone_hash.phoneHash(salt, phoneNumber);
-        if (salt == null || computedHash != phoneHash) {
-          // ignore: avoid_print
-          print(
-            'OTP request rejected: salt_present=${salt != null} '
-            'client_hash_prefix=${phoneHash.substring(0, phoneHash.length.clamp(0, 8))} '
-            'server_hash_prefix=${computedHash == null ? 'n/a' : computedHash.substring(0, computedHash.length.clamp(0, 8))}',
-          );
-          return Response.badRequest(
-            body: jsonEncode({
-              'error': 'phone_number does not match phone_hash',
-            }),
-          );
-        }
-      }
-
-      if (db.isPhoneHashBlocked(phoneHash)) {
-        return Response(
-          403,
-          body: jsonEncode({'error': 'This phone number is blocked'}),
-        );
-      }
-
-      if (!_allowOtpRequest(phoneHash)) {
-        return Response(
-          429,
-          body: jsonEncode({'error': 'Too many verification code requests'}),
-        );
-      }
-
-      final code = _generateOtpCode();
-      final now = _now().millisecondsSinceEpoch;
-      final challengeId = _generateOtpChallengeId();
-      db.createOtpChallenge(
-        challengeId: challengeId,
-        phoneHash: phoneHash,
-        codeHash: _hashOtpCode(code),
-        purpose: 'REGISTRATION',
-        createdAt: now,
-        expiresAt: now + _otpTtl.inMilliseconds,
+    if (db.isPhoneHashBlocked(phoneHash)) {
+      return Response(
+        403,
+        body: jsonEncode({'error': 'This phone number is blocked'}),
       );
+    }
 
-      if (phoneNumber != null) {
-        try {
-          await smsProvider.send(
-            phoneNumber: phoneNumber,
-            message:
-                'Your Helix verification code is $code. It expires in '
-                '${_otpTtl.inMinutes} minutes.',
-          );
-        } on Object catch (e) {
-          // ignore: avoid_print
-          print('OTP SMS delivery failed: $e');
-          return Response(
-            502,
-            body: jsonEncode({
-              // Surfaced to the client so it can show the actual gateway
-              // rejection reason (e.g. bad API key, unapproved sender ID,
-              // insufficient balance) instead of a generic message - the
-              // provider's error text has never included the API key.
-              'error': 'Failed to send verification SMS: $e',
-            }),
-          );
-        }
-        return Response.ok(
-          jsonEncode({
-            'challenge_id': challengeId,
-            'expires_at': now + _otpTtl.inMilliseconds,
+    if (!_allowOtpRequest(phoneHash)) {
+      return Response(
+        429,
+        body: jsonEncode({'error': 'Too many verification code requests'}),
+      );
+    }
+
+    final code = _generateOtpCode();
+    final now = _now().millisecondsSinceEpoch;
+    final challengeId = _generateOtpChallengeId();
+    db.createOtpChallenge(
+      challengeId: challengeId,
+      phoneHash: phoneHash,
+      codeHash: _hashOtpCode(code),
+      purpose: 'REGISTRATION',
+      createdAt: now,
+      expiresAt: now + _otpTtl.inMilliseconds,
+    );
+
+    if (phoneNumber != null) {
+      try {
+        await smsProvider.send(
+          phoneNumber: phoneNumber,
+          message:
+              'Your Helix verification code is $code. It expires in '
+              '${_otpTtl.inMinutes} minutes.',
+        );
+      } on Object catch (e) {
+        // ignore: avoid_print
+        print('OTP SMS delivery failed: $e');
+        return Response(
+          502,
+          body: jsonEncode({
+            // Surfaced to the client so it can show the actual gateway
+            // rejection reason (e.g. bad API key, unapproved sender ID,
+            // insufficient balance) instead of a generic message - the
+            // provider's error text has never included the API key.
+            'error': 'Failed to send verification SMS: $e',
           }),
-          headers: {'Content-Type': 'application/json'},
         );
       }
-
       return Response.ok(
         jsonEncode({
           'challenge_id': challengeId,
-          'code': code,
           'expires_at': now + _otpTtl.inMilliseconds,
         }),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (_) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
-      );
     }
+
+    return Response.ok(
+      jsonEncode({
+        'challenge_id': challengeId,
+        'code': code,
+        'expires_at': now + _otpTtl.inMilliseconds,
+      }),
+      headers: {'Content-Type': 'application/json'},
+    );
   }
 
   String _generateOtpCode() {

@@ -2,217 +2,202 @@ part of '../auth.dart';
 
 mixin AuthRegistrationHandlers on AuthModuleBase {
   Future<Response> _registerHandler(Request request) async {
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final accountId = body['account_id'] as String?;
-      final registrationVersion = body['registration_version'];
-      final phoneHash = body['phone_hash'] as String?;
-      final otpCode = body['otp_code'] as String?;
-      final inviteCode = body['invite_code'] as String?;
-      final identityPublicKey = body['account_identity_public_key'] as String?;
-      final deviceId = body['device_id'] as String?;
-      final deviceSigningPublicKey =
-          body['device_signing_public_key'] as String?;
-      final deviceAgreementPublicKey =
-          body['device_agreement_public_key'] as String?;
-      final accountRegistrationSignature =
-          body['account_registration_signature'] as String?;
-      final deviceRegistrationSignature =
-          body['device_registration_signature'] as String?;
-      final deviceName = body['device_name'] as String?;
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final accountId = body['account_id'] as String?;
+    final registrationVersion = body['registration_version'];
+    final phoneHash = body['phone_hash'] as String?;
+    final otpCode = body['otp_code'] as String?;
+    final inviteCode = body['invite_code'] as String?;
+    final identityPublicKey = body['account_identity_public_key'] as String?;
+    final deviceId = body['device_id'] as String?;
+    final deviceSigningPublicKey = body['device_signing_public_key'] as String?;
+    final deviceAgreementPublicKey =
+        body['device_agreement_public_key'] as String?;
+    final accountRegistrationSignature =
+        body['account_registration_signature'] as String?;
+    final deviceRegistrationSignature =
+        body['device_registration_signature'] as String?;
+    final deviceName = body['device_name'] as String?;
 
-      if (registrationVersion != 3 ||
-          accountId == null ||
-          phoneHash == null ||
-          phoneHash.isEmpty ||
-          otpCode == null ||
-          inviteCode == null ||
-          inviteCode.isEmpty ||
-          identityPublicKey == null ||
-          deviceId == null ||
-          deviceSigningPublicKey == null ||
-          deviceAgreementPublicKey == null ||
-          accountRegistrationSignature == null ||
-          deviceRegistrationSignature == null ||
-          deviceName == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing required fields'}),
+    if (registrationVersion != 3 ||
+        accountId == null ||
+        phoneHash == null ||
+        phoneHash.isEmpty ||
+        otpCode == null ||
+        inviteCode == null ||
+        inviteCode.isEmpty ||
+        identityPublicKey == null ||
+        deviceId == null ||
+        deviceSigningPublicKey == null ||
+        deviceAgreementPublicKey == null ||
+        accountRegistrationSignature == null ||
+        deviceRegistrationSignature == null ||
+        deviceName == null) {
+      throw AppError.badRequest('Missing required fields');
+    }
+
+    final displayName = (body['display_name'] as String?)?.trim() ?? '';
+    if (displayName.isEmpty || displayName.length > 80) {
+      throw AppError.badRequest('Display name must be 1–80 characters');
+    }
+
+    // Optional, display-only hint for the admin console's Users screen -
+    // never the full number, never used for identity/lookup (phone_hash
+    // is what does that). Not part of the signed registration transcript
+    // below for the same reason display_name isn't: it's not
+    // security-relevant, just cosmetic. Silently dropped rather than
+    // rejecting registration if malformed, and left empty for older
+    // clients that don't send it yet.
+    final rawPhoneLast4 = body['phone_last4'] as String?;
+    final phoneLast4 =
+        rawPhoneLast4 != null && RegExp(r'^\d{2,4}$').hasMatch(rawPhoneLast4)
+        ? rawPhoneLast4
+        : '';
+
+    final keyValidation = await _validateRegistrationKeys(
+      accountId: accountId,
+      phoneHash: phoneHash,
+      accountIdentityPublicKey: identityPublicKey,
+      deviceId: deviceId,
+      deviceSigningPublicKey: deviceSigningPublicKey,
+      deviceAgreementPublicKey: deviceAgreementPublicKey,
+      deviceName: deviceName,
+      accountRegistrationSignature: accountRegistrationSignature,
+      deviceRegistrationSignature: deviceRegistrationSignature,
+    );
+    if (keyValidation != null) {
+      throw AppError.badRequest(keyValidation);
+    }
+
+    final phoneOwner = db.getAccountByPhoneHash(phoneHash);
+    final existingAccount = db.getAccount(accountId);
+
+    if (existingAccount == null) {
+      // A brand-new account: refuse a permanently blocked number outright
+      // (see OperabilityModule._blockUser) - checked before the invite/OTP
+      // work below since no amount of a valid invite or OTP should let a
+      // blocked number back in.
+      if (db.isPhoneHashBlocked(phoneHash)) {
+        return Response(
+          403,
+          body: jsonEncode({'error': 'This phone number is blocked'}),
+          headers: {'Content-Type': 'application/json'},
         );
       }
-
-      final displayName = (body['display_name'] as String?)?.trim() ?? '';
-      if (displayName.isEmpty || displayName.length > 80) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Display name must be 1–80 characters'}),
+      // This phone number must not already belong to a different
+      // account, and both the invite and the OTP just requested for it
+      // must check out before we create anything.
+      if (phoneOwner != null) {
+        return Response(
+          409,
+          body: jsonEncode({'error': 'Phone number is already registered'}),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
-      // Optional, display-only hint for the admin console's Users screen -
-      // never the full number, never used for identity/lookup (phone_hash
-      // is what does that). Not part of the signed registration transcript
-      // below for the same reason display_name isn't: it's not
-      // security-relevant, just cosmetic. Silently dropped rather than
-      // rejecting registration if malformed, and left empty for older
-      // clients that don't send it yet.
-      final rawPhoneLast4 = body['phone_last4'] as String?;
-      final phoneLast4 =
-          rawPhoneLast4 != null && RegExp(r'^\d{2,4}$').hasMatch(rawPhoneLast4)
-          ? rawPhoneLast4
-          : '';
+      final now = _now().millisecondsSinceEpoch;
+      final invite = db.getInviteByCodeHash(hashInviteCode(inviteCode));
+      if (invite == null ||
+          invite['status'] != 'PENDING' ||
+          (invite['expires_at'] as int) < now) {
+        return Response(
+          403,
+          body: jsonEncode({'error': 'Invalid or expired invite code'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
-      final keyValidation = await _validateRegistrationKeys(
+      final otpResult = _verifyPhoneOtp(phoneHash: phoneHash, code: otpCode);
+      if (otpResult.error != null) {
+        return Response(
+          403,
+          body: jsonEncode({'error': otpResult.error}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // Redeem last, only once every other check has passed, so a wrong
+      // OTP guess never burns a scarce invite credential.
+      final redeemed = db.redeemInviteCredential(
+        inviteId: invite['invite_id'] as String,
         accountId: accountId,
+        now: now,
+      );
+      if (!redeemed) {
+        return Response(
+          403,
+          body: jsonEncode({'error': 'Invite code already used'}),
+        );
+      }
+
+      db.createAccount(
+        accountId,
+        _reservedUsername(accountId),
+        identityPublicKey,
         phoneHash: phoneHash,
-        accountIdentityPublicKey: identityPublicKey,
+        phoneLast4: phoneLast4,
+      );
+      db.upsertAccountProfile(
+        accountId: accountId,
+        displayName: displayName,
+        now: _now(),
+      );
+      db.markOtpConsumed(otpResult.challengeId!, now);
+      db.logAudit(
+        accountId,
+        deviceId,
+        'ACCOUNT_REGISTERED',
+        request.context['client_ip'] as String?,
+        null,
+      );
+    } else {
+      if (_isRegistrationReplay(
+        existingAccount: existingAccount,
+        phoneHash: phoneHash,
+        identityPublicKey: identityPublicKey,
+        displayName: displayName,
         deviceId: deviceId,
         deviceSigningPublicKey: deviceSigningPublicKey,
         deviceAgreementPublicKey: deviceAgreementPublicKey,
         deviceName: deviceName,
-        accountRegistrationSignature: accountRegistrationSignature,
-        deviceRegistrationSignature: deviceRegistrationSignature,
-      );
-      if (keyValidation != null) {
-        return Response.badRequest(body: jsonEncode({'error': keyValidation}));
-      }
-
-      final phoneOwner = db.getAccountByPhoneHash(phoneHash);
-      final existingAccount = db.getAccount(accountId);
-
-      if (existingAccount == null) {
-        // A brand-new account: refuse a permanently blocked number outright
-        // (see OperabilityModule._blockUser) - checked before the invite/OTP
-        // work below since no amount of a valid invite or OTP should let a
-        // blocked number back in.
-        if (db.isPhoneHashBlocked(phoneHash)) {
-          return Response(
-            403,
-            body: jsonEncode({'error': 'This phone number is blocked'}),
-            headers: {'Content-Type': 'application/json'},
-          );
-        }
-        // This phone number must not already belong to a different
-        // account, and both the invite and the OTP just requested for it
-        // must check out before we create anything.
-        if (phoneOwner != null) {
-          return Response(
-            409,
-            body: jsonEncode({'error': 'Phone number is already registered'}),
-            headers: {'Content-Type': 'application/json'},
-          );
-        }
-
-        final now = _now().millisecondsSinceEpoch;
-        final invite = db.getInviteByCodeHash(hashInviteCode(inviteCode));
-        if (invite == null ||
-            invite['status'] != 'PENDING' ||
-            (invite['expires_at'] as int) < now) {
-          return Response(
-            403,
-            body: jsonEncode({'error': 'Invalid or expired invite code'}),
-            headers: {'Content-Type': 'application/json'},
-          );
-        }
-
-        final otpResult = _verifyPhoneOtp(phoneHash: phoneHash, code: otpCode);
-        if (otpResult.error != null) {
-          return Response(
-            403,
-            body: jsonEncode({'error': otpResult.error}),
-            headers: {'Content-Type': 'application/json'},
-          );
-        }
-
-        // Redeem last, only once every other check has passed, so a wrong
-        // OTP guess never burns a scarce invite credential.
-        final redeemed = db.redeemInviteCredential(
-          inviteId: invite['invite_id'] as String,
-          accountId: accountId,
-          now: now,
-        );
-        if (!redeemed) {
-          return Response(
-            403,
-            body: jsonEncode({'error': 'Invite code already used'}),
-          );
-        }
-
-        db.createAccount(
-          accountId,
-          _reservedUsername(accountId),
-          identityPublicKey,
-          phoneHash: phoneHash,
-          phoneLast4: phoneLast4,
-        );
-        db.upsertAccountProfile(
-          accountId: accountId,
-          displayName: displayName,
-          now: _now(),
-        );
-        db.markOtpConsumed(otpResult.challengeId!, now);
-        db.logAudit(
-          accountId,
-          deviceId,
-          'ACCOUNT_REGISTERED',
-          request.context['client_ip'] as String?,
-          null,
-        );
-      } else {
-        if (_isRegistrationReplay(
-          existingAccount: existingAccount,
-          phoneHash: phoneHash,
-          identityPublicKey: identityPublicKey,
-          displayName: displayName,
-          deviceId: deviceId,
-          deviceSigningPublicKey: deviceSigningPublicKey,
-          deviceAgreementPublicKey: deviceAgreementPublicKey,
-          deviceName: deviceName,
-        )) {
-          return Response.ok(
-            jsonEncode({
-              'message': 'Registration successful',
-              'account_id': accountId,
-              'device_id': deviceId,
-            }),
-            headers: {'Content-Type': 'application/json'},
-          );
-        }
-        return Response.forbidden(
+      )) {
+        return Response.ok(
           jsonEncode({
-            'error':
-                'Existing accounts must link devices from an active device',
+            'message': 'Registration successful',
+            'account_id': accountId,
+            'device_id': deviceId,
           }),
+          headers: {'Content-Type': 'application/json'},
         );
       }
-
-      db.registerDevice(
-        deviceId,
-        accountId,
-        deviceSigningPublicKey,
-        deviceAgreementPublicKey,
-        deviceName,
-      );
-      db.logAudit(
-        accountId,
-        deviceId,
-        'DEVICE_REGISTERED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(
-        jsonEncode({
-          'message': 'Registration successful',
-          'account_id': accountId,
-          'device_id': deviceId,
-        }),
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Existing accounts must link devices from an active device',
       );
     }
+
+    db.registerDevice(
+      deviceId,
+      accountId,
+      deviceSigningPublicKey,
+      deviceAgreementPublicKey,
+      deviceName,
+    );
+    db.logAudit(
+      accountId,
+      deviceId,
+      'DEVICE_REGISTERED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(
+      jsonEncode({
+        'message': 'Registration successful',
+        'account_id': accountId,
+        'device_id': deviceId,
+      }),
+    );
   }
 
   /// `accounts.username` remains UNIQUE NOT NULL for schema-compatibility

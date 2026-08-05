@@ -14,9 +14,7 @@ mixin AuthInviteHandlers on AuthModuleBase {
   Future<Response> _lookupInviteHandler(Request request) async {
     final code = request.url.queryParameters['invite_code'];
     if (code == null || code.isEmpty) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Missing invite_code'}),
-      );
+      throw AppError.badRequest('Missing invite_code');
     }
 
     final invite = db.getInviteByCodeHash(hashInviteCode(code));

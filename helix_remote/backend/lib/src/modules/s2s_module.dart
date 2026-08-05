@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/modules/groups.dart';
 import 'package:helix_remote_backend/src/modules/messaging.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 
 class S2SModule {
   final BackendDatabase db;
@@ -23,7 +25,7 @@ class S2SModule {
     this.callsModule,
   });
 
-  Router get router {
+  Handler get router {
     final router = Router();
     router.get('/prekeys/bundle', _prekeysBundleHandler);
     router.post('/messages/proxy', _messagesProxyHandler);
@@ -37,26 +39,20 @@ class S2SModule {
       _groupsEpochKeyDeliverBatchHandler,
     );
     router.post('/calls/signal', _callsSignalHandler);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   Future<Response> _prekeysBundleHandler(Request request) async {
     final requestedAccountId = request.url.queryParameters['account_id'];
     final targetAccountId = _localAccountId(requestedAccountId);
     if (targetAccountId == null) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Missing account_id parameter'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.badRequest('Missing account_id parameter');
     }
 
     try {
       final devices = db.getDevices(targetAccountId);
       if (devices.isEmpty) {
-        return Response.notFound(
-          jsonEncode({'error': 'No active devices found for this account'}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.notFound('No active devices found for this account');
       }
 
       final deviceBundles = <Map<String, dynamic>>[];
@@ -80,11 +76,14 @@ class S2SModule {
         }),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error: $e'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    } on AppError {
+      rethrow;
+    } catch (e, stack) {
+      // A federated peer gets the generic body the middleware produces; the
+      // detail this used to interpolate into the response stays here, where
+      // it belongs.
+      logServerError('S2S handler failed: $e\n$stack');
+      throw AppError.internal();
     }
   }
 
@@ -94,10 +93,9 @@ class S2SModule {
           jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final result = _applyProxiedMessage(body);
       if (result['ok'] != true) {
-        return Response(
-          result['status'] as int,
-          body: jsonEncode({'error': result['error']}),
-          headers: {'Content-Type': 'application/json'},
+        throw AppError(
+          result['error'] as String,
+          statusCode: result['status'] as int,
         );
       }
       return Response.ok(
@@ -107,11 +105,14 @@ class S2SModule {
         }),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error: $e'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    } on AppError {
+      rethrow;
+    } catch (e, stack) {
+      // A federated peer gets the generic body the middleware produces; the
+      // detail this used to interpolate into the response stays here, where
+      // it belongs.
+      logServerError('S2S handler failed: $e\n$stack');
+      throw AppError.internal();
     }
   }
 
@@ -126,10 +127,7 @@ class S2SModule {
           jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final envelopes = body['envelopes'] as List?;
       if (envelopes == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing envelopes'}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.badRequest('Missing envelopes');
       }
       final results = <Map<String, dynamic>>[];
       for (final raw in envelopes) {
@@ -139,11 +137,14 @@ class S2SModule {
         jsonEncode({'results': results}),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error: $e'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    } on AppError {
+      rethrow;
+    } catch (e, stack) {
+      // A federated peer gets the generic body the middleware produces; the
+      // detail this used to interpolate into the response stays here, where
+      // it belongs.
+      logServerError('S2S handler failed: $e\n$stack');
+      throw AppError.internal();
     }
   }
 
@@ -243,10 +244,7 @@ class S2SModule {
           jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final events = body['events'] as List?;
       if (events == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing events'}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.badRequest('Missing events');
       }
       var delivered = 0;
       for (final raw in events) {
@@ -296,11 +294,14 @@ class S2SModule {
         jsonEncode({'delivered': delivered}),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error: $e'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    } on AppError {
+      rethrow;
+    } catch (e, stack) {
+      // A federated peer gets the generic body the middleware produces; the
+      // detail this used to interpolate into the response stays here, where
+      // it belongs.
+      logServerError('S2S handler failed: $e\n$stack');
+      throw AppError.internal();
     }
   }
 
@@ -317,29 +318,18 @@ class S2SModule {
       final homeServerId = body['home_server_id'] as String?;
       final homeDomain = body['home_domain'] as String?;
       if (groupId == null || homeServerId == null || homeDomain == null) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error': 'Missing group_id, home_server_id, or home_domain',
-          }),
-          headers: {'Content-Type': 'application/json'},
+        throw AppError.badRequest(
+          'Missing group_id, home_server_id, or home_domain',
         );
       }
       if (homeServerId != senderId) {
-        return Response(
-          401,
-          body: jsonEncode({
-            'error': 'Only a group\'s home server may push sync for it',
-          }),
-          headers: {'Content-Type': 'application/json'},
+        throw AppError.unauthorized(
+          'Only a group\'s home server may push sync for it',
         );
       }
       final existing = db.getFederatedGroup(groupId);
       if (existing != null && existing['home_server_id'] != homeServerId) {
-        return Response(
-          401,
-          body: jsonEncode({'error': 'Group home server mismatch'}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.unauthorized('Group home server mismatch');
       }
 
       if (body.containsKey('members')) {
@@ -427,11 +417,14 @@ class S2SModule {
         jsonEncode({'status': 'synced', 'group_id': groupId}),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error: $e'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    } on AppError {
+      rethrow;
+    } catch (e, stack) {
+      // A federated peer gets the generic body the middleware produces; the
+      // detail this used to interpolate into the response stays here, where
+      // it belongs.
+      logServerError('S2S handler failed: $e\n$stack');
+      throw AppError.internal();
     }
   }
 
@@ -470,17 +463,11 @@ class S2SModule {
   Future<Response> _groupsStateHandler(Request request) async {
     final groupId = request.url.queryParameters['group_id'];
     if (groupId == null) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Missing group_id'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.badRequest('Missing group_id');
     }
     final group = db.getGroup(groupId);
     if (group == null) {
-      return Response.notFound(
-        jsonEncode({'error': 'This server is not home for that group'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.notFound('This server is not home for that group');
     }
     final members = <Map<String, dynamic>>[
       for (final id in db.getConversationMembers(groupId))
@@ -509,11 +496,7 @@ class S2SModule {
 
   Future<Response> _groupsActionHandler(Request request) async {
     if (groupsModule == null) {
-      return Response(
-        503,
-        body: jsonEncode({'error': 'Group federation is not configured'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.serviceUnavailable('Group federation is not configured');
     }
     try {
       final senderId = request.context['s2s_sender_id'] as String?;
@@ -524,20 +507,13 @@ class S2SModule {
       final actingAccountId = body['acting_account_id'] as String?;
       final payload = body['payload'] as Map<String, dynamic>? ?? {};
       if (groupId == null || action == null || actingAccountId == null) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error': 'Missing group_id, action, or acting_account_id',
-          }),
-          headers: {'Content-Type': 'application/json'},
+        throw AppError.badRequest(
+          'Missing group_id, action, or acting_account_id',
         );
       }
       if (db.getGroup(groupId) == null) {
-        return Response(
-          409,
-          body: jsonEncode({
-            'error': 'This server is not the home server for that group',
-          }),
-          headers: {'Content-Type': 'application/json'},
+        throw AppError.conflict(
+          'This server is not the home server for that group',
         );
       }
       // Defense-in-depth: if we already know the sender's domain, the
@@ -550,12 +526,8 @@ class S2SModule {
       if (senderDomain != null &&
           actingDomain != null &&
           senderDomain != actingDomain) {
-        return Response(
-          401,
-          body: jsonEncode({
-            'error': 'Acting account does not belong to the sending server',
-          }),
-          headers: {'Content-Type': 'application/json'},
+        throw AppError.unauthorized(
+          'Acting account does not belong to the sending server',
         );
       }
       return await groupsModule!.applyRemoteAction(
@@ -564,11 +536,14 @@ class S2SModule {
         actingAccountId,
         payload,
       );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error: $e'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    } on AppError {
+      rethrow;
+    } catch (e, stack) {
+      // A federated peer gets the generic body the middleware produces; the
+      // detail this used to interpolate into the response stays here, where
+      // it belongs.
+      logServerError('S2S handler failed: $e\n$stack');
+      throw AppError.internal();
     }
   }
 
@@ -578,10 +553,7 @@ class S2SModule {
           jsonDecode(await request.readAsString()) as Map<String, dynamic>;
       final deliveries = body['deliveries'] as List?;
       if (deliveries == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing deliveries'}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.badRequest('Missing deliveries');
       }
       var delivered = 0;
       for (final raw in deliveries) {
@@ -630,11 +602,14 @@ class S2SModule {
         jsonEncode({'delivered': delivered}),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error: $e'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    } on AppError {
+      rethrow;
+    } catch (e, stack) {
+      // A federated peer gets the generic body the middleware produces; the
+      // detail this used to interpolate into the response stays here, where
+      // it belongs.
+      logServerError('S2S handler failed: $e\n$stack');
+      throw AppError.internal();
     }
   }
 
@@ -644,11 +619,7 @@ class S2SModule {
 
   Future<Response> _callsSignalHandler(Request request) async {
     if (callsModule == null) {
-      return Response(
-        503,
-        body: jsonEncode({'error': 'Call federation is not configured'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.serviceUnavailable('Call federation is not configured');
     }
     try {
       final body =
@@ -657,11 +628,8 @@ class S2SModule {
       final senderDeviceId = body['sender_device_id'] as String?;
       final signal = body['signal'] as Map<String, dynamic>?;
       if (senderAccountId == null || senderDeviceId == null || signal == null) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error': 'Missing sender_account_id, sender_device_id, or signal',
-          }),
-          headers: {'Content-Type': 'application/json'},
+        throw AppError.badRequest(
+          'Missing sender_account_id, sender_device_id, or signal',
         );
       }
       final result = await callsModule!.receiveFederatedSignal(
@@ -682,11 +650,14 @@ class S2SModule {
         body: jsonEncode(result),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error: $e'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+    } on AppError {
+      rethrow;
+    } catch (e, stack) {
+      // A federated peer gets the generic body the middleware produces; the
+      // detail this used to interpolate into the response stays here, where
+      // it belongs.
+      logServerError('S2S handler failed: $e\n$stack');
+      throw AppError.internal();
     }
   }
 
