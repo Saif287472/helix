@@ -13,6 +13,18 @@ concurrency:
   group: helix-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# `pull-requests: read` is what the `changes` job actually needs. On a push,
+# dorny/paths-filter diffs with git and needs nothing; on a pull_request it
+# calls the "list PR files" API instead, which the default GITHUB_TOKEN does
+# not grant. Without this the filter job fails with "Resource not accessible
+# by integration", and because every verify job is gated on its outputs,
+# they all skip - so a PR reports no verification at all rather than a
+# failure. Declaring the block also pins the rest to read-only instead of
+# inheriting whatever the repository default happens to be.
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   changes:
     runs-on: ubuntu-latest
