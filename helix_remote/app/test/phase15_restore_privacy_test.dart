@@ -246,8 +246,8 @@ void main() {
         ),
       );
 
-      expect(find.text('Export My Data'), findsOneWidget);
-      expect(find.text('Delete Account'), findsOneWidget);
+      expect(find.text('Export my data'), findsOneWidget);
+      expect(find.text('Delete account'), findsOneWidget);
     });
 
     testWidgets('onBeforeDelete called before server deletion', (tester) async {
@@ -274,7 +274,11 @@ void main() {
       );
 
       // Tap Delete Account
-      await tester.tap(find.text('Delete Account'));
+      // Delete account now sits at the bottom of the screen, below the
+      // ordinary toggles, so the tile has to be scrolled into view first.
+      await tester.ensureVisible(find.text('Delete account'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete account'));
       await tester.pumpAndSettle();
 
       // Enter correct confirmation text
@@ -303,7 +307,11 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Delete Account'));
+      // Delete account now sits at the bottom of the screen, below the
+      // ordinary toggles, so the tile has to be scrolled into view first.
+      await tester.ensureVisible(find.text('Delete account'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete account'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField), 'wrong');
