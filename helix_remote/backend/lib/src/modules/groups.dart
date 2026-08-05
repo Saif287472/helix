@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/modules/messaging.dart';
@@ -87,7 +88,7 @@ abstract class GroupsModuleBase {
   });
   void _relayToGroupAdmins(String groupId, Map<String, dynamic> payload);
   String? _promoteAdminIfNeeded(String groupId);
-  Response _unauthorized();
+  AppError _unauthorized();
 }
 
 class GroupsModule extends GroupsModuleBase
@@ -115,7 +116,7 @@ class GroupsModule extends GroupsModuleBase
   @override
   final String? localDomain;
 
-  Router get router {
+  Handler get router {
     final r = Router();
     r.post('/create', _handleCreate);
     r.get('/info', _handleGetInfo);
@@ -139,7 +140,7 @@ class GroupsModule extends GroupsModuleBase
     r.post('/block-member', _handleBlockMember);
     // Milestone 4.2: group Sender Key epoch distribution.
     r.post('/epoch-key/deliver', _handleDeliverEpochKey);
-    return r;
+    return withAppErrorHandling(r.call);
   }
 
   // -------------------------------------------------------------------------
@@ -176,9 +177,7 @@ class GroupsModule extends GroupsModuleBase
   ) async {
     final handler = _remoteActionHandlers[action];
     if (handler == null) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Unknown group action: $action'}),
-      );
+      throw AppError.badRequest('Unknown group action: $action');
     }
     final body = Map<String, dynamic>.from(payload)..['group_id'] = groupId;
     final syntheticRequest = Request(

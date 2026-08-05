@@ -75,9 +75,10 @@ mixin GroupsRelayHelpers on GroupsModuleBase {
     return promoted;
   }
 
-  Response _unauthorized() => Response(
-    401,
-    body: jsonEncode({'error': 'Unauthorized'}),
-    headers: {'Content-Type': 'application/json'},
-  );
+  /// The one 401 every handler in this module raises when the request
+  /// carries no session. Returns the error rather than throwing it so the
+  /// call sites stay `throw _unauthorized();` - visibly an exit, and
+  /// type-checked as one.
+  AppError _unauthorized() =>
+      AppError.unauthorized('Unauthorized', code: RemoteErrorCode.unauthorized);
 }

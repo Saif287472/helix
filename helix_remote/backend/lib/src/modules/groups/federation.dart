@@ -42,11 +42,7 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
     Map<String, dynamic> payload,
   ) async {
     if (federationClient == null) {
-      return Response(
-        503,
-        body: jsonEncode({'error': 'Federation is not configured'}),
-        headers: {'Content-Type': 'application/json'},
-      );
+      throw AppError.serviceUnavailable('Federation is not configured');
     }
     try {
       final result = await federationClient!.proxyGroupAction(
@@ -69,10 +65,10 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (_) {
-      return Response(
-        502,
-        body: jsonEncode({'error': 'Failed to reach group home server'}),
-        headers: {'Content-Type': 'application/json'},
+      throw AppError(
+        'Failed to reach group home server',
+        statusCode: 502,
+        code: RemoteErrorCode.federationError,
       );
     }
   }
@@ -93,7 +89,7 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
         headers: {'Content-Type': 'application/json'},
       );
     }
-    return Response.notFound(jsonEncode({'error': 'Group not found'}));
+    throw AppError.notFound('Group not found');
   }
 
   /// Pushes the current group snapshot (metadata + full roster) to every
