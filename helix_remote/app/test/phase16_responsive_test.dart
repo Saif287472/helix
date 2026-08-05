@@ -191,8 +191,8 @@ void main() {
         ),
       );
 
-      expect(find.text('Export My Data'), findsOneWidget);
-      expect(find.text('Delete Account'), findsOneWidget);
+      expect(find.text('Export my data'), findsOneWidget);
+      expect(find.text('Delete account'), findsOneWidget);
     });
   });
 
