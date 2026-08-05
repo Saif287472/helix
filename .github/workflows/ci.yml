@@ -60,6 +60,15 @@ jobs:
       HELIX_VERIFY_BUILD: "1"
     steps:
       - uses: actions/checkout@v4
+      # Pinned rather than left to the runner image: the Android build needs a
+      # JDK that matches app/build.gradle.kts's Java 17 source/target level,
+      # and relying on whatever JAVA_HOME the image happens to ship makes this
+      # job fail on an image bump for reasons unrelated to the change under
+      # test.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
