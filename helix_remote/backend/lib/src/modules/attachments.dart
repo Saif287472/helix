@@ -4,6 +4,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 
 class AttachmentsModule {
@@ -20,7 +21,7 @@ class AttachmentsModule {
     }
   }
 
-  Router get router {
+  Handler get router {
     final router = Router();
     router.post('/upload', _requestUploadHandler);
     router.get('/upload/status/<fileId>', _uploadStatusHandler);
@@ -28,131 +29,109 @@ class AttachmentsModule {
     router.get('/download/<fileId>', _requestDownloadHandler);
     router.get('/download/file/<fileId>', _downloadFileHandler);
     router.post('/register-reference', _registerReferenceHandler);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   Future<Response> _requestUploadHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final fileSize = body['file_size'] as int?;
-      final fileHash = body['file_hash'] as String?;
-
-      if (fileSize == null || fileHash == null || fileHash.isEmpty) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing file_size or file_hash'}),
-        );
-      }
-
-      if (fileSize > maxFileSize) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error': 'File size exceeds maximum limit of 10MB',
-          }),
-        );
-      }
-
-      final accountId = auth['account_id'] as String;
-      final currentUsage = db.getAccountStorageUsage(accountId);
-      if (currentUsage + fileSize > maxQuota) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error': 'Upload exceeds account storage quota of 50MB',
-          }),
-        );
-      }
-
-      // Content-addressed: file_id is derived from file_hash
-      final fileId = fileHash;
-
-      db.createAttachment(
-        fileId: fileId,
-        accountId: accountId,
-        fileSize: fileSize,
-        fileHash: fileHash,
-      );
-
-      final uploadUrl = '/api/v1/attachments/upload/file/$fileId';
-      return Response.ok(
-        jsonEncode({
-          'file_id': fileId,
-          'upload_url': uploadUrl,
-          'headers': {'Content-Type': 'application/octet-stream'},
-        }),
-        headers: {'Content-Type': 'application/json'},
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final fileSize = body['file_size'] as int?;
+    final fileHash = body['file_hash'] as String?;
+
+    if (fileSize == null || fileHash == null || fileHash.isEmpty) {
+      throw AppError.badRequest('Missing file_size or file_hash');
+    }
+
+    if (fileSize > maxFileSize) {
+      throw AppError.badRequest('File size exceeds maximum limit of 10MB');
+    }
+
+    final accountId = auth['account_id'] as String;
+    final currentUsage = db.getAccountStorageUsage(accountId);
+    if (currentUsage + fileSize > maxQuota) {
+      throw AppError.badRequest(
+        'Upload exceeds account storage quota of 50MB',
+        code: RemoteErrorCode.quotaExceeded,
+      );
+    }
+
+    // Content-addressed: file_id is derived from file_hash
+    final fileId = fileHash;
+
+    db.createAttachment(
+      fileId: fileId,
+      accountId: accountId,
+      fileSize: fileSize,
+      fileHash: fileHash,
+    );
+
+    final uploadUrl = '/api/v1/attachments/upload/file/$fileId';
+    return Response.ok(
+      jsonEncode({
+        'file_id': fileId,
+        'upload_url': uploadUrl,
+        'headers': {'Content-Type': 'application/octet-stream'},
+      }),
+      headers: {'Content-Type': 'application/json'},
+    );
   }
 
   Future<Response> _registerReferenceHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final accountId = auth['account_id'] as String;
 
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final fileId = body['file_id'] as String?;
-      final messageId = body['message_id'] as String?;
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final fileId = body['file_id'] as String?;
+    final messageId = body['message_id'] as String?;
 
-      if (fileId == null ||
-          messageId == null ||
-          fileId.isEmpty ||
-          messageId.isEmpty) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing file_id or message_id'}),
-        );
-      }
+    if (fileId == null ||
+        messageId == null ||
+        fileId.isEmpty ||
+        messageId.isEmpty) {
+      throw AppError.badRequest('Missing file_id or message_id');
+    }
 
-      final attachment = db.getAttachment(fileId);
-      if (attachment == null) {
-        return Response.notFound(jsonEncode({'error': 'Attachment not found'}));
-      }
-      if (attachment['account_id'] != accountId) {
-        return Response.forbidden(
-          jsonEncode({
-            'error': 'Access denied: attachment belongs to another account',
-          }),
-        );
-      }
-
-      final message = db.getMessage(messageId);
-      if (message == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Referenced message not found'}),
-        );
-      }
-      if (message['sender_account_id'] != accountId) {
-        return Response.forbidden(
-          jsonEncode({
-            'error':
-                'Only the attachment uploader can register reference grants',
-          }),
-        );
-      }
-
-      final conversationId = message['conversation_id'] as String;
-      db.registerAttachmentReference(fileId, messageId);
-      for (final memberId in db.getConversationMembers(conversationId)) {
-        db.grantAttachmentAccess(fileId: fileId, accountId: memberId);
-      }
-      return Response.ok(jsonEncode({'message': 'Reference registered'}));
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+    final attachment = db.getAttachment(fileId);
+    if (attachment == null) {
+      throw AppError.notFound('Attachment not found');
+    }
+    if (attachment['account_id'] != accountId) {
+      throw AppError.forbidden(
+        'Access denied: attachment belongs to another account',
       );
     }
+
+    final message = db.getMessage(messageId);
+    if (message == null) {
+      throw AppError.badRequest('Referenced message not found');
+    }
+    if (message['sender_account_id'] != accountId) {
+      throw AppError.forbidden(
+        'Only the attachment uploader can register reference grants',
+      );
+    }
+
+    final conversationId = message['conversation_id'] as String;
+    db.registerAttachmentReference(fileId, messageId);
+    for (final memberId in db.getConversationMembers(conversationId)) {
+      db.grantAttachmentAccess(fileId: fileId, accountId: memberId);
+    }
+    return Response.ok(jsonEncode({'message': 'Reference registered'}));
   }
 
   void cleanAttachmentReferences(String messageId) {
@@ -216,18 +195,19 @@ class AttachmentsModule {
   Future<Response> _uploadStatusHandler(Request request, String fileId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final attachment = db.getAttachment(fileId);
     if (attachment == null) {
-      return Response.notFound(jsonEncode({'error': 'Attachment not found'}));
+      throw AppError.notFound('Attachment not found');
     }
     final accountId = auth['account_id'] as String;
     if (attachment['account_id'] != accountId) {
-      return Response.forbidden(
-        jsonEncode({
-          'error': 'Access denied: attachment belongs to another account',
-        }),
+      throw AppError.forbidden(
+        'Access denied: attachment belongs to another account',
       );
     }
 
@@ -260,15 +240,18 @@ class AttachmentsModule {
   Future<Response> _uploadFileHandler(Request request, String fileId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final attachment = db.getAttachment(fileId);
     if (attachment == null) {
-      return Response.notFound(jsonEncode({'error': 'Attachment not found'}));
+      throw AppError.notFound('Attachment not found');
     }
     final accountId = auth['account_id'] as String;
     if (attachment['account_id'] != accountId) {
-      return Response.forbidden(jsonEncode({'error': 'Access denied'}));
+      throw AppError.forbidden('Access denied');
     }
 
     final queryParams = request.url.queryParameters;
@@ -285,20 +268,14 @@ class AttachmentsModule {
       sink = file.openWrite(mode: FileMode.write);
     } else {
       if (!await file.exists()) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error':
-                'File does not exist on server, cannot resume at offset $offset',
-          }),
+        throw AppError.badRequest(
+          'File does not exist on server, cannot resume at offset $offset',
         );
       }
       final currentSize = await file.length();
       if (offset > currentSize) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'error':
-                'Offset $offset is greater than server file size $currentSize',
-          }),
+        throw AppError.badRequest(
+          'Offset $offset is greater than server file size $currentSize',
         );
       }
       // Truncate to offset to support clean resume
@@ -320,11 +297,7 @@ class AttachmentsModule {
       if (finalSize > expectedSize) {
         await file.delete();
         db.updateAttachmentProgress(fileId, 0, 'FAILED');
-        return Response.badRequest(
-          body: jsonEncode({
-            'error': 'Uploaded file size exceeds expected size',
-          }),
-        );
+        throw AppError.badRequest('Uploaded file size exceeds expected size');
       }
 
       if (finalSize == expectedSize) {
@@ -336,11 +309,7 @@ class AttachmentsModule {
         if (actualHash != expectedHash) {
           await file.delete();
           db.updateAttachmentProgress(fileId, 0, 'FAILED');
-          return Response.badRequest(
-            body: jsonEncode({
-              'error': 'Integrity check failed: hash mismatch',
-            }),
-          );
+          throw AppError.badRequest('Integrity check failed: hash mismatch');
         }
 
         db.updateAttachmentProgress(fileId, finalSize, 'COMPLETED');
@@ -363,11 +332,14 @@ class AttachmentsModule {
           headers: {'Content-Type': 'application/json'},
         );
       }
+    } on AppError {
+      // Thrown only after `sink.close()` above has already run - closing it
+      // again here would be a double close, and the error is already in the
+      // shape the middleware wants.
+      rethrow;
     } catch (e) {
       await sink.close();
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
-      );
+      throw AppError.internal();
     }
   }
 
@@ -377,21 +349,20 @@ class AttachmentsModule {
   ) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final accountId = auth['account_id'] as String;
 
     final attachment = db.getAttachment(fileId);
     if (attachment == null || attachment['status'] != 'COMPLETED') {
-      return Response.notFound(
-        jsonEncode({'error': 'Attachment not found or incomplete'}),
-      );
+      throw AppError.notFound('Attachment not found or incomplete');
     }
     if (!db.canAccessAttachment(fileId, accountId)) {
-      return Response.forbidden(
-        jsonEncode({
-          'error': 'Access denied: attachment is not shared with this account',
-        }),
+      throw AppError.forbidden(
+        'Access denied: attachment is not shared with this account',
       );
     }
 
@@ -405,25 +376,26 @@ class AttachmentsModule {
   Future<Response> _downloadFileHandler(Request request, String fileId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final accountId = auth['account_id'] as String;
 
     final attachment = db.getAttachment(fileId);
     if (attachment == null) {
-      return Response.notFound(jsonEncode({'error': 'Attachment not found'}));
+      throw AppError.notFound('Attachment not found');
     }
     if (!db.canAccessAttachment(fileId, accountId)) {
-      return Response.forbidden(
-        jsonEncode({
-          'error': 'Access denied: attachment is not shared with this account',
-        }),
+      throw AppError.forbidden(
+        'Access denied: attachment is not shared with this account',
       );
     }
 
     final file = File('${storageDir.path}/${p.basename(fileId)}');
     if (!await file.exists()) {
-      return Response.notFound(jsonEncode({'error': 'File not found on disk'}));
+      throw AppError.notFound('File not found on disk');
     }
 
     final totalLength = await file.length();
@@ -438,13 +410,11 @@ class AttachmentsModule {
           : (totalLength - 1);
 
       if (start >= totalLength || end >= totalLength || start > end) {
-        return Response(
-          416,
-          body: jsonEncode({'error': 'Requested Range Not Satisfiable'}),
-          headers: {
-            'Content-Range': 'bytes */$totalLength',
-            'Content-Type': 'application/json',
-          },
+        throw AppError(
+          'Requested Range Not Satisfiable',
+          statusCode: 416,
+          code: RemoteErrorCode.badRequest,
+          headers: {'Content-Range': 'bytes */$totalLength'},
         );
       }
 

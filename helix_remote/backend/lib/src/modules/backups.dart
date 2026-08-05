@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 
 class BackupsModule {
@@ -19,7 +20,7 @@ class BackupsModule {
     }
   }
 
-  Router get router {
+  Handler get router {
     final router = Router();
     router.post('/', _uploadBackupHandler);
     router.get('/', _downloadBackupHandler);
@@ -28,124 +29,113 @@ class BackupsModule {
     router.put('/media/<objectId>', _uploadMediaObjectHandler);
     router.get('/media/<objectId>', _downloadMediaObjectHandler);
     router.get('/attachments/upload-url', _getAttachmentUploadUrlHandler);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   Future<Response> _uploadBackupHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final backupData = body['backup_data'] as String?;
-      final backupId = body['backup_id'] as String?;
-      final version = body['version'] as int?;
-      final kdf = body['kdf'] as String?;
-      final salt = body['salt'] as String?;
-      final backupKeyHint = body['backup_key_hint'] as String? ?? '';
-      final deletionWatermark = body['deletion_watermark'] as int? ?? 0;
-
-      if (body.containsKey('backup_key') ||
-          body.containsKey('passphrase') ||
-          body.containsKey('recovery_phrase')) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Backup keys must never be uploaded'}),
-        );
-      }
-
-      if (backupData == null ||
-          backupId == null ||
-          version == null ||
-          kdf == null ||
-          salt == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing backup envelope metadata'}),
-        );
-      }
-      if (version < 1) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Unsupported backup version'}),
-        );
-      }
-
-      final accountId = auth['account_id'] as String;
-      db.setBackup(
-        accountId,
-        backupData,
-        backupId: backupId,
-        version: version,
-        kdf: kdf,
-        salt: salt,
-        backupKeyHint: backupKeyHint,
-        deletionWatermark: deletionWatermark,
-      );
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'BACKUP_UPLOADED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(jsonEncode({'message': 'Backup stored successfully'}));
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final backupData = body['backup_data'] as String?;
+    final backupId = body['backup_id'] as String?;
+    final version = body['version'] as int?;
+    final kdf = body['kdf'] as String?;
+    final salt = body['salt'] as String?;
+    final backupKeyHint = body['backup_key_hint'] as String? ?? '';
+    final deletionWatermark = body['deletion_watermark'] as int? ?? 0;
+
+    if (body.containsKey('backup_key') ||
+        body.containsKey('passphrase') ||
+        body.containsKey('recovery_phrase')) {
+      throw AppError.badRequest('Backup keys must never be uploaded');
+    }
+
+    if (backupData == null ||
+        backupId == null ||
+        version == null ||
+        kdf == null ||
+        salt == null) {
+      throw AppError.badRequest('Missing backup envelope metadata');
+    }
+    if (version < 1) {
+      throw AppError.badRequest('Unsupported backup version');
+    }
+
+    final accountId = auth['account_id'] as String;
+    db.setBackup(
+      accountId,
+      backupData,
+      backupId: backupId,
+      version: version,
+      kdf: kdf,
+      salt: salt,
+      backupKeyHint: backupKeyHint,
+      deletionWatermark: deletionWatermark,
+    );
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'BACKUP_UPLOADED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(jsonEncode({'message': 'Backup stored successfully'}));
   }
 
   Future<Response> _downloadBackupHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
-    }
-
-    try {
-      final accountId = auth['account_id'] as String;
-      final backup = db.getBackup(accountId);
-
-      if (backup == null) {
-        return Response.notFound(
-          jsonEncode({'error': 'No backup found for this account'}),
-        );
-      }
-
-      db.logAudit(
-        accountId,
-        auth['device_id'] as String?,
-        'BACKUP_DOWNLOADED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-
-      return Response.ok(
-        jsonEncode({
-          'backup_id': backup['backup_id'],
-          'version': backup['version'],
-          'kdf': backup['kdf'],
-          'salt': backup['salt'],
-          'backup_key_hint': backup['backup_key_hint'],
-          'backup_data': backup['backup_data'],
-          'created_at': backup['created_at'],
-          'deletion_watermark': backup['deletion_watermark'],
-          'requires_reupload': backup['requires_reupload'] == 1,
-        }),
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
       );
     }
+
+    final accountId = auth['account_id'] as String;
+    final backup = db.getBackup(accountId);
+
+    if (backup == null) {
+      throw AppError.notFound('No backup found for this account');
+    }
+
+    db.logAudit(
+      accountId,
+      auth['device_id'] as String?,
+      'BACKUP_DOWNLOADED',
+      request.context['client_ip'] as String?,
+      null,
+    );
+
+    return Response.ok(
+      jsonEncode({
+        'backup_id': backup['backup_id'],
+        'version': backup['version'],
+        'kdf': backup['kdf'],
+        'salt': backup['salt'],
+        'backup_key_hint': backup['backup_key_hint'],
+        'backup_data': backup['backup_data'],
+        'created_at': backup['created_at'],
+        'deletion_watermark': backup['deletion_watermark'],
+        'requires_reupload': backup['requires_reupload'] == 1,
+      }),
+    );
   }
 
   Future<Response> _getAttachmentUploadUrlHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
     final fileSize = int.tryParse(
@@ -153,12 +143,8 @@ class BackupsModule {
     );
     final fileHash = request.url.queryParameters['sha256'];
     if (fileSize == null || fileHash == null) {
-      return Response.badRequest(
-        body: jsonEncode({
-          'error':
-              'Use POST /api/v1/backups/media with byte_size and sha256 metadata',
-        }),
-        headers: {'Content-Type': 'application/json'},
+      throw AppError.badRequest(
+        'Use POST /api/v1/backups/media with byte_size and sha256 metadata',
       );
     }
 
@@ -173,31 +159,26 @@ class BackupsModule {
   Future<Response> _requestMediaUploadHandler(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
 
-    try {
-      final body =
-          jsonDecode(await request.readAsString()) as Map<String, dynamic>;
-      final byteSize = body['byte_size'] as int?;
-      final sha256Hex = body['sha256'] as String?;
-      final objectId = body['object_id'] as String? ?? sha256Hex;
-      if (byteSize == null || sha256Hex == null || objectId == null) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Missing backup media metadata'}),
-        );
-      }
-      return _createMediaUploadResponse(
-        accountId: auth['account_id'] as String,
-        objectId: objectId,
-        byteSize: byteSize,
-        sha256Hex: sha256Hex,
-      );
-    } catch (_) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
-      );
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final byteSize = body['byte_size'] as int?;
+    final sha256Hex = body['sha256'] as String?;
+    final objectId = body['object_id'] as String? ?? sha256Hex;
+    if (byteSize == null || sha256Hex == null || objectId == null) {
+      throw AppError.badRequest('Missing backup media metadata');
     }
+    return _createMediaUploadResponse(
+      accountId: auth['account_id'] as String,
+      objectId: objectId,
+      byteSize: byteSize,
+      sha256Hex: sha256Hex,
+    );
   }
 
   Response _createMediaUploadResponse({
@@ -207,19 +188,16 @@ class BackupsModule {
     required String sha256Hex,
   }) {
     if (!_isSafeObjectId(objectId) || !_isSha256Hex(sha256Hex)) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Invalid backup media object id or hash'}),
-      );
+      throw AppError.badRequest('Invalid backup media object id or hash');
     }
     if (byteSize <= 0 || byteSize > maxBackupMediaObjectSize) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Backup media object size is not allowed'}),
-      );
+      throw AppError.badRequest('Backup media object size is not allowed');
     }
     final currentUsage = _backupMediaUsage(accountId);
     if (currentUsage + byteSize > maxBackupMediaQuota) {
-      return Response.badRequest(
-        body: jsonEncode({'error': 'Backup media quota exceeded'}),
+      throw AppError.badRequest(
+        'Backup media quota exceeded',
+        code: RemoteErrorCode.quotaExceeded,
       );
     }
 
@@ -250,11 +228,14 @@ class BackupsModule {
   ) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final object = db.getBackupMediaObject(objectId);
     if (object == null || object['account_id'] != auth['account_id']) {
-      return Response.notFound(jsonEncode({'error': 'Backup media not found'}));
+      throw AppError.notFound('Backup media not found');
     }
     return Response.ok(
       jsonEncode({
@@ -274,11 +255,14 @@ class BackupsModule {
   ) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final object = db.getBackupMediaObject(objectId);
     if (object == null || object['account_id'] != auth['account_id']) {
-      return Response.notFound(jsonEncode({'error': 'Backup media not found'}));
+      throw AppError.notFound('Backup media not found');
     }
 
     final offset =
@@ -288,15 +272,11 @@ class BackupsModule {
       await file.delete();
     } else if (offset > 0) {
       if (!await file.exists()) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Cannot resume missing object'}),
-        );
+        throw AppError.badRequest('Cannot resume missing object');
       }
       final currentSize = await file.length();
       if (offset > currentSize) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Resume offset is beyond object size'}),
-        );
+        throw AppError.badRequest('Resume offset is beyond object size');
       }
       if (currentSize > offset) {
         final raf = await file.open(mode: FileMode.writeOnlyAppend);
@@ -320,9 +300,7 @@ class BackupsModule {
           uploadedBytes: 0,
           status: 'FAILED',
         );
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Uploaded object exceeds declared size'}),
-        );
+        throw AppError.badRequest('Uploaded object exceeds declared size');
       }
       if (uploadedBytes < expectedSize) {
         db.updateBackupMediaProgress(
@@ -348,9 +326,7 @@ class BackupsModule {
           uploadedBytes: 0,
           status: 'FAILED',
         );
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Backup media integrity check failed'}),
-        );
+        throw AppError.badRequest('Backup media integrity check failed');
       }
       db.updateBackupMediaProgress(
         objectId: objectId,
@@ -365,11 +341,14 @@ class BackupsModule {
         }),
         headers: {'Content-Type': 'application/json'},
       );
+    } on AppError {
+      // Every AppError above is thrown after `sink.close()` has already run,
+      // so the generic branch's close would be a second close on the same
+      // sink - and the error is already in the middleware's shape.
+      rethrow;
     } catch (_) {
       await sink.close();
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Internal server error'}),
-      );
+      throw AppError.internal();
     }
   }
 
@@ -379,17 +358,20 @@ class BackupsModule {
   ) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return Response.forbidden(jsonEncode({'error': 'Unauthorized'}));
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final object = db.getBackupMediaObject(objectId);
     if (object == null ||
         object['account_id'] != auth['account_id'] ||
         object['status'] != 'COMPLETED') {
-      return Response.notFound(jsonEncode({'error': 'Backup media not found'}));
+      throw AppError.notFound('Backup media not found');
     }
     final file = _mediaFile(objectId);
     if (!await file.exists()) {
-      return Response.notFound(jsonEncode({'error': 'Object missing on disk'}));
+      throw AppError.notFound('Object missing on disk');
     }
     final contentLength = await file.length();
     return Response.ok(

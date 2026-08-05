@@ -58,7 +58,13 @@ enum RemoteErrorCode {
 /// this gets the same body shape for free instead of inventing one per call
 /// site.
 class AppError implements Exception {
-  AppError(this.message, {required this.statusCode, this.code, this.details});
+  AppError(
+    this.message, {
+    required this.statusCode,
+    this.code,
+    this.details,
+    this.headers,
+  });
 
   factory AppError.unauthorized(
     String message, {
@@ -112,6 +118,13 @@ class AppError implements Exception {
   final RemoteErrorCode? code;
   final Map<String, Object?>? details;
 
+  /// Extra response headers this error must carry beyond `Content-Type`.
+  /// A few HTTP errors are only correct with one - a 416 has to report
+  /// `Content-Range: bytes * /<length>` so the client learns the real size -
+  /// which is why those call sites can throw instead of hand-building a
+  /// [Response] just to attach a header.
+  final Map<String, String>? headers;
+
   Map<String, Object?> toJson() => {
     'error': message,
     if (code != null) 'code': code!.wire,
@@ -121,7 +134,7 @@ class AppError implements Exception {
   Response toResponse() => Response(
     statusCode,
     body: jsonEncode(toJson()),
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...?headers},
   );
 
   @override
