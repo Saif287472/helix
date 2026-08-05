@@ -448,6 +448,23 @@ At 10 MB the current single-request upload is survivable. At 100 MB it is not:
 - **Disk.** 100 MB files × a family's usage on a VPS volume: add a disk-space pre-check before
   accepting an upload, and a retention/cleanup job. **This is currently the largest unbounded
   growth risk on the box** — there is no attachment GC today.
+
+  > **[DONE — with a correction to the finding]** "There is no attachment GC" was right about
+  > the effect and wrong about the cause. `AttachmentsModule.cleanupOrphans` and
+  > `runLifecycleRules` have existed for a long time and are covered by unit tests — but
+  > *nothing outside those tests ever called them*. The rules were written, tested, and never
+  > scheduled, so a running deployment had never reclaimed a byte. That is a worse failure mode
+  > than absence, because the tests read as if the feature works.
+  >
+  > They now run on an hourly sweep started by `BackendServer.start` and cancelled by `stop`,
+  > sweeping once immediately as well — a server restarted more often than the interval would
+  > otherwise never reach the first tick, which is exactly the deployment that most needs the
+  > disk back. Unfinished uploads are dropped after 24 h; completed attachments with no
+  > remaining message reference after `HELIX_REMOTE_ATTACHMENT_RETENTION_DAYS` (default 30).
+  >
+  > **The disk-space pre-check is still open.** It needs a free-space query, which Dart has no
+  > stdlib API for; doing it properly means shelling out per platform and degrading gracefully
+  > where that fails, and I would rather do that deliberately than bolt it on.
 - **Progress UI + cancel.** A 100 MB upload on a phone uplink is minutes long; it needs visible
   progress and a working cancel.
 - **Timeouts.** Client request timeout is 15 s in places (`invite_entry_screen.dart:107`);

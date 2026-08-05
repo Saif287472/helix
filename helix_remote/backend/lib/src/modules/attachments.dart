@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:shelf/shelf.dart';
@@ -6,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 
 class AttachmentsModule {
   /// Defaults when the deployment sets no override. Both are operator
@@ -14,6 +16,28 @@ class AttachmentsModule {
   /// because the client hard-coded its own copy of the file limit.
   static const int defaultMaxFileSize = 100 * 1024 * 1024; // 100MB
   static const int defaultMaxQuota = 5 * 1024 * 1024 * 1024; // 5GB
+
+  /// Maintenance sweep cadence and the ages it enforces.
+  ///
+  /// [cleanupOrphans] and [runLifecycleRules] have existed for a long time
+  /// and are covered by tests, but nothing outside those tests ever called
+  /// them - so in a running deployment neither had ever removed a single
+  /// byte. Attachments accumulated on disk forever. Raising the per-file
+  /// limit to 100 MB and the account quota to 5 GB made that the largest
+  /// unbounded growth risk on the box, so the sweep is now actually
+  /// scheduled.
+  static const Duration defaultSweepInterval = Duration(hours: 1);
+
+  /// An upload that was announced but never finished. A day is generous for
+  /// a 100 MB file on a phone uplink while still bounding the debris left by
+  /// clients that vanish mid-upload.
+  static const Duration defaultOrphanStaleAfter = Duration(hours: 24);
+
+  /// A completed attachment no message refers to any more. References are
+  /// dropped when the referencing message is deleted
+  /// ([cleanAttachmentReferences]), so this is the backstop for objects
+  /// whose last reference went away.
+  static const Duration defaultUnreferencedRetention = Duration(days: 30);
 
   final BackendDatabase db;
   final Directory storageDir;
@@ -27,17 +51,71 @@ class AttachmentsModule {
   /// Cumulative per-account ciphertext budget.
   final int maxQuota;
 
+  /// How often [sweepOnce] runs once [startMaintenance] is called.
+  final Duration sweepInterval;
+
+  /// Age at which an unfinished upload is treated as abandoned.
+  final Duration orphanStaleAfter;
+
+  /// How long a completed but unreferenced attachment is kept.
+  final Duration unreferencedRetention;
+
+  Timer? _sweepTimer;
+
   AttachmentsModule(
     this.db, {
     Directory? storageDir,
     int? maxFileSize,
     int? maxQuota,
+    Duration? sweepInterval,
+    Duration? orphanStaleAfter,
+    Duration? unreferencedRetention,
   }) : maxFileSize = maxFileSize ?? defaultMaxFileSize,
        maxQuota = maxQuota ?? defaultMaxQuota,
+       sweepInterval = sweepInterval ?? defaultSweepInterval,
+       orphanStaleAfter = orphanStaleAfter ?? defaultOrphanStaleAfter,
+       unreferencedRetention =
+           unreferencedRetention ?? defaultUnreferencedRetention,
        storageDir = storageDir ?? Directory('attachments_storage') {
     if (!this.storageDir.existsSync()) {
       this.storageDir.createSync(recursive: true);
     }
+  }
+
+  /// Starts the periodic storage sweep. Sweeps once immediately as well: a
+  /// server restarted more often than [sweepInterval] would otherwise never
+  /// reach the first tick, which is exactly the deployment that most needs
+  /// the disk reclaimed.
+  void startMaintenance() {
+    _sweepTimer?.cancel();
+    _sweepTimer = Timer.periodic(sweepInterval, (_) => sweepOnce());
+    sweepOnce();
+  }
+
+  void stopMaintenance() {
+    _sweepTimer?.cancel();
+    _sweepTimer = null;
+  }
+
+  /// Runs one storage sweep and returns what it removed. Never throws - a
+  /// failed sweep must not take down the timer or the request that triggered
+  /// it.
+  Map<String, int> sweepOnce() {
+    var orphans = 0;
+    var expired = 0;
+    try {
+      orphans = cleanupOrphans(staleAfter: orphanStaleAfter);
+      expired = runLifecycleRules(retainFor: unreferencedRetention);
+    } catch (e) {
+      logServerError('[Attachments] maintenance sweep error: $e');
+    }
+    if (orphans > 0 || expired > 0) {
+      logServerInfo(
+        '[Attachments] sweep removed $orphans abandoned upload(s) and '
+        '$expired unreferenced attachment(s)',
+      );
+    }
+    return {'orphans_removed': orphans, 'unreferenced_removed': expired};
   }
 
   Handler get router {
