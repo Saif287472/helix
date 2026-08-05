@@ -7,7 +7,6 @@ import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/screens/backup_screen.dart';
-import 'package:helix_remote/screens/contacts_screen.dart';
 import 'package:helix_remote/screens/device_management_screen.dart';
 import 'package:helix_remote/screens/groups_screen.dart';
 import 'package:helix_remote/screens/privacy_screen.dart';
@@ -391,18 +390,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _openContacts() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ContactsScreen(
-          messagingService: widget.messagingService,
-          root: widget.root,
-        ),
-      ),
-    );
-  }
-
   void _showServerInfo() {
     final serverUri = widget.root.devConfig.restBaseUri;
     showDialog<void>(
@@ -502,14 +489,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  int _acceptedContacts() {
-    try {
-      return widget.messagingService.acceptedContacts().length;
-    } catch (_) {
-      return 0;
-    }
-  }
-
   int _blockedContacts() {
     try {
       return widget.messagingService.db
@@ -536,10 +515,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  int _archivedCount() {
-    return 0;
-  }
-
   int _lockedCount() {
     try {
       return widget.messagingService.db.getLockedConversations().length;
@@ -556,9 +531,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final silenceUnknown = db.getSilenceUnknownCallers();
     final host = serverUri.host.isEmpty ? serverUri.toString() : serverUri.host;
 
+    // Nine rows used to lead to this same privacy screen and twelve more
+    // led nowhere at all. Rows that shared a destination are collapsed into
+    // one, with the state each of them displayed gathered into its subtitle:
+    // strictly more information in less space, and one tap target instead of
+    // nine. Placeholders survive only where the feature is genuinely next
+    // up - a settings list that mostly apologises teaches people to stop
+    // reading it.
+    final lockedChats = _lockedCount();
+    final blocked = _blockedContacts();
+    final privacySummary = [
+      appLock.enabled ? 'App lock on' : 'App lock off',
+      if (lockedChats > 0)
+        '$lockedChats locked ${lockedChats == 1 ? 'chat' : 'chats'}',
+      if (blocked > 0) '$blocked blocked',
+      'Disappearing ${_disappearingLabel(defaultDisappearing).toLowerCase()}',
+    ].join('  \u00b7  ');
+    final alertsSummary = [
+      previewsOn ? 'Previews shown' : 'Previews hidden',
+      silenceUnknown ? 'unknown callers silenced' : 'all calls ring',
+    ].join('  \u00b7  ');
+
     return [
       _SettingsGroup(
-        title: 'Account and devices',
+        title: 'Account',
         items: [
           _SettingsItem(
             icon: Icons.person_outline,
@@ -575,14 +571,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _openDevices,
           ),
           _SettingsItem(
-            icon: Icons.password_outlined,
-            color: const Color(0xFF11A37F),
-            title: 'Passkeys and authentication',
-            subtitle: 'Account lock and strongest privacy defaults',
-            value: appLock.enabled ? 'Lock on' : 'Lock off',
-            onTap: _openPrivacy,
-          ),
-          _SettingsItem(
             icon: Icons.backup_outlined,
             color: const Color(0xFF2FA84F),
             title: 'Backup and restore',
@@ -594,55 +582,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _SettingsGroup(
         title: 'Privacy and security',
         items: [
-          _SettingsItem(
-            icon: Icons.privacy_tip_outlined,
-            color: const Color(0xFF7C3AED),
-            title: 'Privacy',
-            subtitle: 'Export data, strict settings and privacy checkup',
-            onTap: _openPrivacy,
-          ),
+          // Absorbs what used to be five separate rows - Passkeys and
+          // authentication, Chat lock, Blocked contacts, Disappearing
+          // messages, Security notifications - every one of which opened
+          // exactly this screen.
           _SettingsItem(
             icon: Icons.lock_outline,
-            color: const Color(0xFF2563EB),
-            title: 'Chat lock',
-            subtitle: 'Protect private chats and app access',
-            value: _lockedCount() > 0 ? '${_lockedCount()}' : 'Off',
+            color: const Color(0xFF7C3AED),
+            title: 'Privacy and security',
+            subtitle: privacySummary,
             onTap: _openPrivacy,
           ),
           _SettingsItem(
-            icon: Icons.block_outlined,
-            color: const Color(0xFFE11D48),
-            title: 'Blocked contacts',
-            subtitle: 'People blocked from contacting you',
-            value: '${_blockedContacts()}',
-            onTap: _openPrivacy,
-          ),
-          _SettingsItem(
-            icon: Icons.timer_outlined,
-            color: const Color(0xFFF59E0B),
-            title: 'Disappearing messages',
-            subtitle: 'Default timer for new conversations',
-            value: _disappearingLabel(defaultDisappearing),
-            onTap: _openPrivacy,
-          ),
-          _SettingsItem(
-            icon: Icons.verified_user_outlined,
-            color: const Color(0xFF14B8A6),
-            title: 'Security notifications',
-            subtitle: 'Review privacy checkup and account protections',
+            icon: Icons.notifications_none_outlined,
+            color: const Color(0xFFF24E1E),
+            title: 'Notifications and calls',
+            subtitle: alertsSummary,
             onTap: _openPrivacy,
           ),
         ],
       ),
       _SettingsGroup(
-        title: 'Chats and appearance',
+        title: 'Chats',
         items: [
+          // Contacts is a bottom-tab destination; listing it here as well
+          // was pure duplication. Groups has no tab, so it stays.
           _SettingsItem(
-            icon: Icons.chat_bubble_outline,
-            color: const Color(0xFF22C55E),
-            title: 'Chats',
-            subtitle: 'History, locked chats and message behavior',
-            onTap: _openPrivacy,
+            icon: Icons.groups_outlined,
+            color: const Color(0xFF14B8A6),
+            title: 'Groups',
+            subtitle: 'Group conversations, invites and roles',
+            value: '${_groupCount()}',
+            onTap: _openGroups,
           ),
           _SettingsItem(
             icon: Icons.palette_outlined,
@@ -652,141 +623,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: 'System',
             onTap: () => _showSoon('Appearance'),
           ),
-          _SettingsItem(
-            icon: Icons.wallpaper_outlined,
-            color: const Color(0xFFF97316),
-            title: 'Chat themes and wallpaper',
-            subtitle: 'Conversation color and background options',
-            onTap: () => _showSoon('Chat themes and wallpaper'),
-          ),
-          _SettingsItem(
-            icon: Icons.format_list_bulleted_outlined,
-            color: const Color(0xFF06B6D4),
-            title: 'Lists',
-            subtitle: 'Organize favorites and chat lists',
-            onTap: () => _showSoon('Lists'),
-          ),
-          _SettingsItem(
-            icon: Icons.archive_outlined,
-            color: const Color(0xFF64748B),
-            title: 'Archived chats',
-            subtitle: 'Chats hidden from your main list',
-            value: '${_archivedCount()}',
-            onTap: () => _showSoon('Archived chats'),
-          ),
         ],
       ),
       _SettingsGroup(
-        title: 'Notifications and calls',
-        items: [
-          _SettingsItem(
-            icon: Icons.notifications_none_outlined,
-            color: const Color(0xFFF24E1E),
-            title: 'Notifications',
-            subtitle: 'Message, group and call notification previews',
-            value: previewsOn ? 'Preview on' : 'Private',
-            onTap: _openPrivacy,
-          ),
-          _SettingsItem(
-            icon: Icons.call_outlined,
-            color: const Color(0xFF10B981),
-            title: 'Call settings',
-            subtitle: 'Unknown callers and voice/video call behavior',
-            value: silenceUnknown ? 'Silenced' : 'Ring',
-            onTap: _openPrivacy,
-          ),
-          _SettingsItem(
-            icon: Icons.volume_up_outlined,
-            color: const Color(0xFF8B5CF6),
-            title: 'Sounds and vibration',
-            subtitle: 'Ringtones, alerts and vibration patterns',
-            onTap: () => _showSoon('Sounds and vibration'),
-          ),
-        ],
-      ),
-      _SettingsGroup(
-        title: 'Storage and data',
+        title: 'System',
         items: [
           _SettingsItem(
             icon: Icons.storage_outlined,
             color: const Color(0xFF0EA5E9),
-            title: 'Manage storage',
-            subtitle: 'Review local media and cache usage',
-            onTap: () => _showSoon('Manage storage'),
-          ),
-          _SettingsItem(
-            icon: Icons.network_check_outlined,
-            color: const Color(0xFF6366F1),
-            title: 'Network usage',
-            subtitle: 'Connection and transfer diagnostics',
-            onTap: _showServerInfo,
-          ),
-          _SettingsItem(
-            icon: Icons.download_outlined,
-            color: const Color(0xFF059669),
-            title: 'Media auto-download',
-            subtitle: 'Control automatic attachment downloads',
-            onTap: () => _showSoon('Media auto-download'),
-          ),
-          _SettingsItem(
-            icon: Icons.data_saver_on_outlined,
-            color: const Color(0xFF0891B2),
-            title: 'Data-saving settings',
-            subtitle: 'Reduce media and call data usage',
-            onTap: () => _showSoon('Data-saving settings'),
-          ),
-        ],
-      ),
-      _SettingsGroup(
-        title: 'Contacts and groups',
-        items: [
-          _SettingsItem(
-            icon: Icons.contacts_outlined,
-            color: const Color(0xFF3B82F6),
-            title: 'Contacts',
-            subtitle: 'Manage Helix contacts and requests',
-            value: '${_acceptedContacts()}',
-            onTap: _openContacts,
-          ),
-          _SettingsItem(
-            icon: Icons.groups_outlined,
-            color: const Color(0xFF14B8A6),
-            title: 'Groups',
-            subtitle: 'Manage group conversations, invites and roles',
-            value: '${_groupCount()}',
-            onTap: _openGroups,
-          ),
-        ],
-      ),
-      _SettingsGroup(
-        title: 'App preferences',
-        items: [
-          _SettingsItem(
-            icon: Icons.accessibility_new_outlined,
-            color: const Color(0xFF65A30D),
-            title: 'Accessibility',
-            subtitle: 'Contrast, motion and readable layout preferences',
-            onTap: () => _showSoon('Accessibility'),
-          ),
-          _SettingsItem(
-            icon: Icons.language_outlined,
-            color: const Color(0xFF0F766E),
-            title: 'App language',
-            subtitle: "English (device's language)",
-            value: 'System',
-            onTap: () => _showSoon('App language'),
-          ),
-        ],
-      ),
-      _SettingsGroup(
-        title: 'Support and system',
-        items: [
-          _SettingsItem(
-            icon: Icons.help_outline,
-            color: const Color(0xFF06B6D4),
-            title: 'Help and feedback',
-            subtitle: 'Help center, support and product feedback',
-            onTap: () => _showSoon('Help and feedback'),
+            title: 'Storage and data',
+            subtitle: 'Media cache, auto-download and data saving',
+            onTap: () => _showSoon('Storage and data'),
           ),
           _SettingsItem(
             icon: Icons.bug_report_outlined,
@@ -803,23 +650,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // The admin's name for the server when they set one, with the
             // host kept alongside it - the name is friendlier, but the
             // address is what actually identifies where data goes.
-            subtitle: _serverName == null ? host : '$_serverName  ·  $host',
+            subtitle: _serverName == null
+                ? host
+                : '$_serverName  \u00b7  $host',
             onTap: widget.onChangeServerUrl == null
                 ? _showServerInfo
                 : _confirmChangeServer,
           ),
-          _SettingsItem(
-            icon: Icons.system_update_alt_outlined,
-            color: const Color(0xFF3B82F6),
-            title: 'App updates',
-            subtitle: 'Check build and update information',
-            onTap: _showAboutHelix,
-          ),
+          // Absorbs "App updates", which opened this same dialog.
           _SettingsItem(
             icon: Icons.info_outline,
             color: const Color(0xFF6D6AAE),
             title: 'About Helix',
-            subtitle: 'Version, privacy and app information',
+            subtitle: 'Version, build and app information',
             onTap: _showAboutHelix,
           ),
         ],
