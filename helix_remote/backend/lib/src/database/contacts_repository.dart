@@ -378,6 +378,129 @@ extension BackendContactsRepository on BackendDatabase {
     return matches.take(limit).toList();
   }
 
+  /// Remaining contact-discovery budget for [accountId], as
+  /// (hashesRemaining, windowResetsAt). The window is a rolling 24h from the
+  /// first charged hash; both fields are what the client is told so it can
+  /// report honest progress rather than guessing.
+  ({int hashesRemaining, int windowResetsAt}) getContactsMatchBudget({
+    required String accountId,
+    required int limit,
+    required int now,
+    required int windowMs,
+  }) {
+    final stmt = _db.prepare(
+      'SELECT window_started_at, hashes_used FROM contacts_match_budget '
+      'WHERE account_id = ?;',
+    );
+    final rows = stmt.select([accountId]);
+    stmt.close();
+    if (rows.isEmpty) {
+      return (hashesRemaining: limit, windowResetsAt: now + windowMs);
+    }
+    final started = rows.first['window_started_at'] as int;
+    final used = rows.first['hashes_used'] as int;
+    if (now - started >= windowMs) {
+      // Window elapsed - the row is stale, so the full budget is available.
+      return (hashesRemaining: limit, windowResetsAt: now + windowMs);
+    }
+    final remaining = limit - used;
+    return (
+      hashesRemaining: remaining < 0 ? 0 : remaining,
+      windowResetsAt: started + windowMs,
+    );
+  }
+
+  /// Charges [hashes] against the account's budget, rolling the window over
+  /// if the previous one has elapsed. Callers check the budget first; this
+  /// only records the spend.
+  void chargeContactsMatchBudget({
+    required String accountId,
+    required int hashes,
+    required int now,
+    required int windowMs,
+  }) {
+    final stmt = _db.prepare(
+      'SELECT window_started_at FROM contacts_match_budget '
+      'WHERE account_id = ?;',
+    );
+    final rows = stmt.select([accountId]);
+    stmt.close();
+    final rolling =
+        rows.isEmpty ||
+        now - (rows.first['window_started_at'] as int) >= windowMs;
+    if (rolling) {
+      final reset = _db.prepare(
+        'INSERT INTO contacts_match_budget '
+        '(account_id, window_started_at, hashes_used, last_request_at) '
+        'VALUES (?, ?, ?, ?) '
+        'ON CONFLICT(account_id) DO UPDATE SET '
+        'window_started_at = excluded.window_started_at, '
+        'hashes_used = excluded.hashes_used, '
+        'last_request_at = excluded.last_request_at;',
+      );
+      reset.execute([accountId, now, hashes, now]);
+      reset.close();
+      return;
+    }
+    final bump = _db.prepare(
+      'UPDATE contacts_match_budget '
+      'SET hashes_used = hashes_used + ?, last_request_at = ? '
+      'WHERE account_id = ?;',
+    );
+    bump.execute([hashes, now, accountId]);
+    bump.close();
+  }
+
+  /// Drops budget rows whose window elapsed longer ago than [olderThanMs].
+  /// The in-memory map this replaced grew one entry per account forever;
+  /// this is the bounded equivalent, swept alongside the other operational
+  /// retention jobs.
+  int purgeExpiredContactsMatchBudgets(int now, int olderThanMs) {
+    final stmt = _db.prepare(
+      'DELETE FROM contacts_match_budget WHERE window_started_at < ?;',
+    );
+    stmt.execute([now - olderThanMs]);
+    stmt.close();
+    return _db.updatedRows;
+  }
+
+  /// The cached result for [accountId] when its phone book still hashes to
+  /// [fingerprint], or null. Re-syncing an unchanged phone book asks the
+  /// same questions and gets the same answers, so it should not cost budget.
+  Map<String, dynamic>? getContactsMatchCache({
+    required String accountId,
+    required String fingerprint,
+  }) {
+    final stmt = _db.prepare(
+      'SELECT matched_json FROM contacts_match_fingerprints '
+      'WHERE account_id = ? AND fingerprint = ?;',
+    );
+    final rows = stmt.select([accountId, fingerprint]);
+    stmt.close();
+    if (rows.isEmpty) return null;
+    return jsonDecode(rows.first['matched_json'] as String)
+        as Map<String, dynamic>;
+  }
+
+  void setContactsMatchCache({
+    required String accountId,
+    required String fingerprint,
+    required Map<String, dynamic> matched,
+    required int now,
+  }) {
+    final stmt = _db.prepare(
+      'INSERT INTO contacts_match_fingerprints '
+      '(account_id, fingerprint, matched_json, created_at) '
+      'VALUES (?, ?, ?, ?) '
+      'ON CONFLICT(account_id) DO UPDATE SET '
+      'fingerprint = excluded.fingerprint, '
+      'matched_json = excluded.matched_json, '
+      'created_at = excluded.created_at;',
+    );
+    stmt.execute([accountId, fingerprint, jsonEncode(matched), now]);
+    stmt.close();
+  }
+
   /// Batch phone-contact discovery: given a set of salted phone hashes (see
   /// `phone_hash.dart`), returns the account_id/display_name for every one
   /// that belongs to a registered, phone-discoverable account. Never

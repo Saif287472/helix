@@ -162,8 +162,15 @@ class _ContactsScreenState extends State<ContactsScreen> {
       // recordPhoneContactMatches() (called inside syncPhoneContacts) emits
       // a contacts-area change, which _onRemoteChange picks up and reloads -
       // this just adds the status message on top of that reload.
+      // A sync stopped by the server's daily discovery budget is a partial
+      // success, not a failure: the matches found so far are already
+      // applied, so say what got done and when the rest can run, rather
+      // than reporting a count that looks complete.
       _reload(
-        statusText: matchCount == 0 && unmatchedCount == 0
+        statusText: result.isPartial
+            ? '$matchCount on Helix so far — the rest will sync '
+                  '${_retryWhen(result.retryAfter)}'
+            : matchCount == 0 && unmatchedCount == 0
             ? 'No phone contacts found on Helix'
             : '$matchCount on Helix, $unmatchedCount not yet',
       );
@@ -172,6 +179,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
     } finally {
       if (mounted) setState(() => _syncingContacts = false);
     }
+  }
+
+  /// Human phrasing for when a budget-limited sync can continue. "tomorrow"
+  /// rather than a timestamp because the window is a rolling 24h and the
+  /// exact minute is not something a user acts on.
+  String _retryWhen(Duration? retryAfter) {
+    if (retryAfter == null) return 'later';
+    if (retryAfter.inHours >= 1) return 'in ${retryAfter.inHours}h';
+    if (retryAfter.inMinutes >= 1) return 'in ${retryAfter.inMinutes} min';
+    return 'shortly';
   }
 
   /// Shares a generic invite message via the OS share sheet (SMS, WhatsApp,

@@ -35,7 +35,10 @@ abstract class HelixRemoteRestClient {
   /// admin-chosen `server_name` (empty when unnamed).
   Future<Map<String, dynamic>> getServerInfo();
 
-  Future<Map<String, dynamic>> matchPhoneHashes(List<String> phoneHashes);
+  Future<Map<String, dynamic>> matchPhoneHashes(
+    List<String> phoneHashes, {
+    bool fullSync = false,
+  });
 
   Future<Map<String, dynamic>> getChallenge({
     required String accountId,

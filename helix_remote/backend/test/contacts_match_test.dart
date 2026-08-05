@@ -111,14 +111,89 @@ void main() {
     expect(result['statusCode'], 400);
   });
 
-  test('enforces the daily match-request quota', () async {
-    for (var i = 0; i < ContactsModule.contactsMatchDailyLimit; i++) {
-      final result = await match([phoneHash(salt, '+15550000002')]);
-      expect(result['statusCode'], 200);
-    }
-    final overflow = await match([phoneHash(salt, '+15550000002')]);
-    expect(overflow['statusCode'], 429);
+  test('meters distinct hashes, so chunk size does not change the cost', () {
+    // The point of the redesign: a 2,100-contact phone book used to cost the
+    // entire daily allowance no matter how it was chunked, because the cap
+    // counted requests. It now costs 2,100 of 5,000 hashes, leaving room for
+    // a retry, a second device, and tomorrow.
+    expect(ContactsModule.contactsMatchDailyHashLimit, greaterThan(2100 * 2));
   });
+
+  test('spends budget per hash and reports what is left', () async {
+    final first = await match([
+      phoneHash(salt, '+15550000002'),
+      phoneHash(salt, '+15550000003'),
+    ]);
+    expect(first['statusCode'], 200);
+    final body = first['body'] as Map<String, dynamic>;
+    expect(body['hashes_charged'], 2);
+    expect(
+      body['hashes_remaining_today'],
+      ContactsModule.contactsMatchDailyHashLimit - 2,
+    );
+  });
+
+  test('a duplicate number inside one request is charged once', () async {
+    final h = phoneHash(salt, '+15550000002');
+    final result = await match([h, h, h]);
+    expect((result['body'] as Map<String, dynamic>)['hashes_charged'], 1);
+  });
+
+  test('exhausting the budget answers 429 with a retry hint', () async {
+    // Spend the whole allowance in batches, then confirm the next request is
+    // refused with something the client can act on rather than a bare error.
+    var spent = 0;
+    var n = 0;
+    while (spent < ContactsModule.contactsMatchDailyHashLimit) {
+      final batch = List.generate(
+        ContactsModule.contactsMatchBatchLimit,
+        (i) => phoneHash(salt, '+1600${n}_$i'),
+      );
+      n++;
+      final result = await match(batch);
+      if (result['statusCode'] == 429) break;
+      spent +=
+          (result['body'] as Map<String, dynamic>)['hashes_charged'] as int;
+    }
+    final overflow = await match([phoneHash(salt, '+15559999999')]);
+    expect(overflow['statusCode'], 429);
+    final details =
+        (overflow['body'] as Map<String, dynamic>)['details']
+            as Map<String, dynamic>;
+    expect(details['hashes_remaining_today'], 0);
+    expect(details['retry_after_seconds'], greaterThan(0));
+  });
+
+  test(
+    'a request larger than the remaining budget is answered partially',
+    () async {
+      // A whole sync failing on its last chunk is worse than a short answer:
+      // the client keeps what it got and resumes when the window rolls over.
+      // Spend an amount that does not divide evenly into the batch size, so
+      // the budget runs out mid-request rather than exactly at a boundary.
+      await match(List.generate(500, (i) => phoneHash(salt, '+1699_$i')));
+
+      var n = 0;
+      while (true) {
+        final batch = List.generate(
+          ContactsModule.contactsMatchBatchLimit,
+          (i) => phoneHash(salt, '+1700${n}_$i'),
+        );
+        n++;
+        final result = await match(batch);
+        final body = result['body'] as Map<String, dynamic>;
+        if (result['statusCode'] == 429) {
+          fail('budget ran out before a partial');
+        }
+        if (body['partial'] == true) {
+          expect(body['hashes_charged'], lessThan(batch.length));
+          expect(body['hashes_charged'], greaterThan(0));
+          expect(body['retry_after_seconds'], greaterThan(0));
+          return;
+        }
+      }
+    },
+  );
 }
 
 void _seedAccountWithPhone(
