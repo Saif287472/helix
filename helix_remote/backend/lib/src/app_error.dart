@@ -138,6 +138,21 @@ class AppError implements Exception {
   /// [Response] just to attach a header.
   final Map<String, String>? headers;
 
+  /// A copy carrying [extra] as its [details].
+  ///
+  /// The named constructors above cover status and code but not details,
+  /// and adding a `details` parameter to each one would repeat it six
+  /// times. This keeps the common case (`AppError.tooManyRequests(msg)`)
+  /// short while letting the handful of call sites that have structured
+  /// context attach it: `AppError.tooManyRequests(msg).withDetails({...})`.
+  AppError withDetails(Map<String, Object?> extra) => AppError(
+    message,
+    statusCode: statusCode,
+    code: code,
+    details: {...?details, ...extra},
+    headers: headers,
+  );
+
   Map<String, Object?> toJson() => {
     'error': message,
     if (code != null) 'code': code!.wire,

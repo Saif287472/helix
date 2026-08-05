@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
@@ -208,7 +209,7 @@ class CallsModule extends CallsModuleBase
   // F7: push provider for offline call wake (optional; noop when unconfigured).
   late PushProvider pushProvider = const NoopPushProvider();
 
-  Router get router {
+  Handler get router {
     final r = Router();
     r.get('/turn-credentials', _handleTurnCredentials);
     r.post('/signal', _handleSignal);
@@ -221,7 +222,7 @@ class CallsModule extends CallsModuleBase
     r.post('/push-token', _handleRegisterPushToken);
     r.delete('/push-token', _handleDeregisterPushToken);
     r.post('/metrics', _handleCallMetrics);
-    return r;
+    return withAppErrorHandling(r.call);
   }
 
   Map<String, int> metrics() => Map.unmodifiable(_metrics);
@@ -238,17 +239,19 @@ class CallsModule extends CallsModuleBase
   Future<Response> _handleTurnCredentials(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     if (auth == null) {
-      return _json(403, {'error': 'Unauthorized'});
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     }
     final accountId = auth['account_id'] as String;
     final deviceId = auth['device_id'] as String;
     final urls = resolveTurnUrls(turnUrl);
     if (turnSecret.trim().isEmpty || urls.isEmpty) {
       _increment('turn_credentials_error');
-      return _json(503, {
-        'error': 'TURN is not configured',
-        'turn_configured': false,
-      });
+      throw AppError.serviceUnavailable(
+        'TURN is not configured',
+      ).withDetails({'turn_configured': false});
     }
 
     final issuedAt = DateTime.now().millisecondsSinceEpoch;
@@ -258,8 +261,9 @@ class CallsModule extends CallsModuleBase
     if (count >= _maxCredentialsPerHour ||
         deviceCount >= _maxDeviceCredentialsPerHour) {
       _increment('turn_credentials_error');
-      return _json(429, {
-        'error': 'TURN credential quota exceeded. Try again later.',
+      throw AppError.tooManyRequests(
+        'TURN credential quota exceeded. Try again later.',
+      ).withDetails({
         'account_quota_exceeded': count >= _maxCredentialsPerHour,
         'device_quota_exceeded': deviceCount >= _maxDeviceCredentialsPerHour,
       });

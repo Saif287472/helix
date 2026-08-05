@@ -79,21 +79,13 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       // work below since no amount of a valid invite or OTP should let a
       // blocked number back in.
       if (db.isPhoneHashBlocked(phoneHash)) {
-        return Response(
-          403,
-          body: jsonEncode({'error': 'This phone number is blocked'}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.forbidden('This phone number is blocked');
       }
       // This phone number must not already belong to a different
       // account, and both the invite and the OTP just requested for it
       // must check out before we create anything.
       if (phoneOwner != null) {
-        return Response(
-          409,
-          body: jsonEncode({'error': 'Phone number is already registered'}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.conflict('Phone number is already registered');
       }
 
       final now = _now().millisecondsSinceEpoch;
@@ -101,20 +93,12 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       if (invite == null ||
           invite['status'] != 'PENDING' ||
           (invite['expires_at'] as int) < now) {
-        return Response(
-          403,
-          body: jsonEncode({'error': 'Invalid or expired invite code'}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.forbidden('Invalid or expired invite code');
       }
 
       final otpResult = _verifyPhoneOtp(phoneHash: phoneHash, code: otpCode);
       if (otpResult.error != null) {
-        return Response(
-          403,
-          body: jsonEncode({'error': otpResult.error}),
-          headers: {'Content-Type': 'application/json'},
-        );
+        throw AppError.forbidden(otpResult.error!);
       }
 
       // Redeem last, only once every other check has passed, so a wrong
@@ -125,10 +109,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         now: now,
       );
       if (!redeemed) {
-        return Response(
-          403,
-          body: jsonEncode({'error': 'Invite code already used'}),
-        );
+        throw AppError.forbidden('Invite code already used');
       }
 
       db.createAccount(

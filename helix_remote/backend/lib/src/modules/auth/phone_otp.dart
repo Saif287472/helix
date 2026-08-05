@@ -50,17 +50,11 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
     }
 
     if (db.isPhoneHashBlocked(phoneHash)) {
-      return Response(
-        403,
-        body: jsonEncode({'error': 'This phone number is blocked'}),
-      );
+      throw AppError.forbidden('This phone number is blocked');
     }
 
     if (!_allowOtpRequest(phoneHash)) {
-      return Response(
-        429,
-        body: jsonEncode({'error': 'Too many verification code requests'}),
-      );
+      throw AppError.tooManyRequests('Too many verification code requests');
     }
 
     final code = _generateOtpCode();

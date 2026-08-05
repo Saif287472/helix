@@ -6,9 +6,13 @@ part of '../calls.dart';
 mixin CallsSignalingHandlers on CallsModuleBase {
   Future<Response> _handleSignal(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(403, {'error': 'Unauthorized'});
+    if (auth == null)
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     final body = await _readJson(request);
-    if (body == null) return _json(400, {'error': 'Invalid JSON body'});
+    if (body == null) throw AppError.badRequest('Invalid JSON body');
     try {
       final result = await _routeSignal(
         accountId: auth['account_id'] as String,
@@ -17,9 +21,11 @@ mixin CallsSignalingHandlers on CallsModuleBase {
         message: body,
       );
       return _json(_httpStatusFor(result), result);
+    } on AppError {
+      rethrow;
     } catch (e, st) {
       logServerError('[CALL_SIGNAL_ERROR] $e\n$st');
-      return _json(500, {'status': 'error', 'reason': 'signal handler: $e'});
+      throw AppError.internal();
     }
   }
 

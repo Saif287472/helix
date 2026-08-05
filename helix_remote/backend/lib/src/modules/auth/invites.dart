@@ -75,10 +75,7 @@ mixin AuthInviteHandlers on AuthModuleBase {
 
     final clientIp = request.context['client_ip'] as String? ?? 'unknown';
     if (!_allowGlobalAutoIssue(clientIp)) {
-      return Response(
-        429,
-        body: jsonEncode({'error': 'Too many invite requests'}),
-      );
+      throw AppError.tooManyRequests('Too many invite requests');
     }
 
     final now = _now().millisecondsSinceEpoch;

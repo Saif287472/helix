@@ -5,11 +5,15 @@ part of '../calls.dart';
 mixin CallsPendingHandlers on CallsModuleBase {
   Future<Response> _handlePendingCalls(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(403, {'error': 'Unauthorized'});
+    if (auth == null)
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     final key = '${auth['account_id']}:${auth['device_id']}';
     if (_pendingFetchRate.count(key) > _maxPendingFetchesPerMinute) {
       _increment('rate_limited');
-      return _json(429, {'error': 'pending call fetch rate limit exceeded'});
+      throw AppError.tooManyRequests('pending call fetch rate limit exceeded');
     }
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -23,15 +27,21 @@ mixin CallsPendingHandlers on CallsModuleBase {
           .map((call) => _pendingCallResponse(call))
           .toList(growable: false);
       return _json(200, {'calls': calls});
+    } on AppError {
+      rethrow;
     } catch (e, st) {
       logServerError('[CALL_PENDING_ERROR] $e\n$st');
-      return _json(500, {'status': 'error', 'reason': 'pending handler: $e'});
+      throw AppError.internal();
     }
   }
 
   Future<Response> _handleAcceptPending(Request request, String callId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(403, {'error': 'Unauthorized'});
+    if (auth == null)
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     final now = DateTime.now().millisecondsSinceEpoch;
     final session = db.getPendingCall(callId);
     if (session == null ||
@@ -41,7 +51,7 @@ mixin CallsPendingHandlers on CallsModuleBase {
           deviceId: auth['device_id'] as String,
           now: now,
         )) {
-      return _json(404, {'error': 'pending call not found'});
+      throw AppError.notFound('pending call not found');
     }
     final deviceId = auth['device_id'] as String;
     final accepted = db.markPendingCallAnswered(
@@ -68,7 +78,11 @@ mixin CallsPendingHandlers on CallsModuleBase {
 
   Future<Response> _handleDeclinePending(Request request, String callId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(403, {'error': 'Unauthorized'});
+    if (auth == null)
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     final session = db.getPendingCall(callId);
     final now = DateTime.now().millisecondsSinceEpoch;
     if (session == null ||
@@ -78,7 +92,7 @@ mixin CallsPendingHandlers on CallsModuleBase {
           deviceId: auth['device_id'] as String,
           now: now,
         )) {
-      return _json(404, {'error': 'pending call not found'});
+      throw AppError.notFound('pending call not found');
     }
     _sendToCaller(
       signal: _ParsedCallSignal(
@@ -100,12 +114,16 @@ mixin CallsPendingHandlers on CallsModuleBase {
 
   Future<Response> _handleCancelPending(Request request, String callId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(403, {'error': 'Unauthorized'});
+    if (auth == null)
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     final session = db.getPendingCall(callId);
     if (session == null ||
         session['caller_account_id'] != auth['account_id'] ||
         session['caller_device_id'] != auth['device_id']) {
-      return _json(404, {'error': 'pending call not found'});
+      throw AppError.notFound('pending call not found');
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     _sendToCalleeDevices(
@@ -128,9 +146,13 @@ mixin CallsPendingHandlers on CallsModuleBase {
 
   Future<Response> _handleExpirePending(Request request, String callId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(403, {'error': 'Unauthorized'});
+    if (auth == null)
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
     final session = db.getPendingCall(callId);
-    if (session == null) return _json(404, {'error': 'pending call not found'});
+    if (session == null) throw AppError.notFound('pending call not found');
     final accountId = auth['account_id'] as String;
     final deviceId = auth['device_id'] as String;
     final isCaller =
@@ -144,7 +166,7 @@ mixin CallsPendingHandlers on CallsModuleBase {
       allowExpired: true,
     );
     if (!isCaller && !isTarget) {
-      return _json(404, {'error': 'pending call not found'});
+      throw AppError.notFound('pending call not found');
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     db.markPendingCallTerminal(callId: callId, status: 'EXPIRED', now: now);

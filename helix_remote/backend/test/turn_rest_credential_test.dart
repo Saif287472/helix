@@ -159,7 +159,14 @@ void main() {
                 as Map<String, dynamic>;
 
         expect(response.statusCode, 503);
-        expect(body['turn_configured'], isFalse);
+        expect(body['code'], 'service_unavailable');
+        // Structured context now rides in `details` rather than sitting
+        // alongside `error` at the top level, so every error body in the
+        // backend has the same three keys.
+        expect(
+          (body['details'] as Map<String, dynamic>)['turn_configured'],
+          isFalse,
+        );
       } finally {
         http.close(force: true);
         await unconfigured.stop();

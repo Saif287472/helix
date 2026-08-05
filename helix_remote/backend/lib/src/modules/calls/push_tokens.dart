@@ -7,18 +7,18 @@ mixin CallsPushTokenHandlers on CallsModuleBase {
 
   Future<Response> _handleRegisterPushToken(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(401, {'error': 'Unauthorized'});
+    if (auth == null) throw AppError.unauthorized('Unauthorized');
     final body = await _readJson(request);
-    if (body == null) return _json(400, {'error': 'Invalid JSON'});
+    if (body == null) throw AppError.badRequest('Invalid JSON');
     final pushToken = body['push_token'] as String?;
     final tokenType = (body['token_type'] as String?) ?? 'FCM';
     if (pushToken == null ||
         pushToken.isEmpty ||
         pushToken.length > _maxPushTokenLength) {
-      return _json(400, {'error': 'push_token is required (max 4096 chars)'});
+      throw AppError.badRequest('push_token is required (max 4096 chars)');
     }
     if (tokenType != 'FCM' && tokenType != 'APNS') {
-      return _json(400, {'error': 'token_type must be FCM or APNS'});
+      throw AppError.badRequest('token_type must be FCM or APNS');
     }
     final accountId = auth['account_id'] as String;
     final deviceId = auth['device_id'] as String;
@@ -42,7 +42,7 @@ mixin CallsPushTokenHandlers on CallsModuleBase {
 
   Future<Response> _handleDeregisterPushToken(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(401, {'error': 'Unauthorized'});
+    if (auth == null) throw AppError.unauthorized('Unauthorized');
     db.deletePushToken(deviceId: auth['device_id'] as String);
     return _json(200, {'status': 'deregistered'});
   }
@@ -53,12 +53,12 @@ mixin CallsPushTokenHandlers on CallsModuleBase {
 
   Future<Response> _handleCallMetrics(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null) return _json(401, {'error': 'Unauthorized'});
+    if (auth == null) throw AppError.unauthorized('Unauthorized');
     final body = await _readJson(request);
-    if (body == null) return _json(400, {'error': 'Invalid JSON'});
+    if (body == null) throw AppError.badRequest('Invalid JSON');
     final callId = body['call_id'] as String?;
     if (callId == null || callId.isEmpty || callId.length > _maxIdLength) {
-      return _json(400, {'error': 'call_id is required'});
+      throw AppError.badRequest('call_id is required');
     }
     final accountId = auth['account_id'] as String;
     final deviceId = auth['device_id'] as String;

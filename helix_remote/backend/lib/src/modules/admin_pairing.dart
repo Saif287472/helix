@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/docker_host.dart';
 import 'package:helix_remote_backend/src/pairing_codes.dart';
@@ -47,11 +48,11 @@ class AdminPairingModule {
 
   static final _codePattern = RegExp(r'^[0-9]{16}$');
 
-  Router get router {
+  Handler get router {
     final router = Router();
     router.post('/generate', _generate);
     router.post('/redeem', _redeem);
-    return router;
+    return withAppErrorHandling(router.call);
   }
 
   Response _generate(Request request) {
@@ -90,12 +91,12 @@ class AdminPairingModule {
     try {
       body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
     } catch (_) {
-      return _json({'error': 'Malformed request body'}, status: 400);
+      throw AppError.badRequest('Malformed request body');
     }
 
     final code = body['code'] as String?;
     if (code == null || !_codePattern.hasMatch(code)) {
-      return _json({'error': 'Invalid or expired code'}, status: 401);
+      throw AppError.unauthorized('Invalid or expired code');
     }
 
     final now = _now().millisecondsSinceEpoch;
@@ -104,7 +105,7 @@ class AdminPairingModule {
       now: now,
     );
     if (!redeemed) {
-      return _json({'error': 'Invalid or expired code'}, status: 401);
+      throw AppError.unauthorized('Invalid or expired code');
     }
 
     final identity = await rotateAdminToken(db);
