@@ -5,11 +5,12 @@ part of '../calls.dart';
 mixin CallsPendingHandlers on CallsModuleBase {
   Future<Response> _handlePendingCalls(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null)
+    if (auth == null) {
       throw AppError.forbidden(
         'Unauthorized',
         code: RemoteErrorCode.unauthorized,
       );
+    }
     final key = '${auth['account_id']}:${auth['device_id']}';
     if (_pendingFetchRate.count(key) > _maxPendingFetchesPerMinute) {
       _increment('rate_limited');
@@ -37,11 +38,12 @@ mixin CallsPendingHandlers on CallsModuleBase {
 
   Future<Response> _handleAcceptPending(Request request, String callId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null)
+    if (auth == null) {
       throw AppError.forbidden(
         'Unauthorized',
         code: RemoteErrorCode.unauthorized,
       );
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
     final session = db.getPendingCall(callId);
     if (session == null ||
@@ -78,11 +80,12 @@ mixin CallsPendingHandlers on CallsModuleBase {
 
   Future<Response> _handleDeclinePending(Request request, String callId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null)
+    if (auth == null) {
       throw AppError.forbidden(
         'Unauthorized',
         code: RemoteErrorCode.unauthorized,
       );
+    }
     final session = db.getPendingCall(callId);
     final now = DateTime.now().millisecondsSinceEpoch;
     if (session == null ||
@@ -114,11 +117,12 @@ mixin CallsPendingHandlers on CallsModuleBase {
 
   Future<Response> _handleCancelPending(Request request, String callId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null)
+    if (auth == null) {
       throw AppError.forbidden(
         'Unauthorized',
         code: RemoteErrorCode.unauthorized,
       );
+    }
     final session = db.getPendingCall(callId);
     if (session == null ||
         session['caller_account_id'] != auth['account_id'] ||
@@ -146,11 +150,12 @@ mixin CallsPendingHandlers on CallsModuleBase {
 
   Future<Response> _handleExpirePending(Request request, String callId) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null)
+    if (auth == null) {
       throw AppError.forbidden(
         'Unauthorized',
         code: RemoteErrorCode.unauthorized,
       );
+    }
     final session = db.getPendingCall(callId);
     if (session == null) throw AppError.notFound('pending call not found');
     final accountId = auth['account_id'] as String;

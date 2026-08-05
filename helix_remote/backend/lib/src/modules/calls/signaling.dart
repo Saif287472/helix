@@ -6,11 +6,12 @@ part of '../calls.dart';
 mixin CallsSignalingHandlers on CallsModuleBase {
   Future<Response> _handleSignal(Request request) async {
     final auth = request.context['auth'] as Map<String, dynamic>?;
-    if (auth == null)
+    if (auth == null) {
       throw AppError.forbidden(
         'Unauthorized',
         code: RemoteErrorCode.unauthorized,
       );
+    }
     final body = await _readJson(request);
     if (body == null) throw AppError.badRequest('Invalid JSON body');
     try {
@@ -42,6 +43,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
     );
   }
 
+  @override
   Future<Map<String, dynamic>> _routeSignal({
     required String accountId,
     required String deviceId,

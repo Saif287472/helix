@@ -7,6 +7,7 @@ part of '../groups.dart';
 /// Every handler mixin below leans on this one, which is why its members are
 /// declared on [GroupsModuleBase] rather than only here.
 mixin GroupsFederationHelpers on GroupsModuleBase {
+  @override
   bool _isExternal(String accountId) {
     final at = accountId.lastIndexOf('@');
     if (at <= 0 || at == accountId.length - 1) return false;
@@ -14,6 +15,7 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
     return localDomain == null || domain != localDomain!.toLowerCase();
   }
 
+  @override
   String _qualify(String accountId) {
     if (accountId.contains('@') ||
         localDomain == null ||
@@ -23,6 +25,7 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
     return '$accountId@${localDomain!.toLowerCase()}';
   }
 
+  @override
   /// Federation-aware admin check: true if `accountId` is ADMIN either in
   /// this server's local `conversation_members` or (once roster sync has
   /// run) in `federated_conversation_members`. Used for every actor check
@@ -32,6 +35,7 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
   bool _isAdmin(String groupId, String accountId) =>
       db.getGroupMemberRoleIncludingFederated(groupId, accountId) == 'ADMIN';
 
+  @override
   /// Forwards a mutating action to the group's home server and translates
   /// its response (including error status/body) back verbatim.
   Future<Response> _proxyToHome(
@@ -73,6 +77,7 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
     }
   }
 
+  @override
   /// Guard for handlers not yet supported cross-server (join-link
   /// management, Phase 4.1 v1 scope cut): null if this server is home for
   /// `groupId` (proceed normally); an explicit error Response otherwise.
@@ -92,6 +97,7 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
     throw AppError.notFound('Group not found');
   }
 
+  @override
   /// Pushes the current group snapshot (metadata + full roster) to every
   /// domain in `domains` (fire-and-forget; failures fall back to the
   /// outbox for retry). Callers must pass the union of participating
@@ -115,6 +121,7 @@ mixin GroupsFederationHelpers on GroupsModuleBase {
     );
   }
 
+  @override
   Future<void> _sendGroupSync(
     String groupId,
     String domain,

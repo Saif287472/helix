@@ -2,6 +2,7 @@ part of '../groups.dart';
 
 /// Fan-out and last-admin bookkeeping shared by every handler mixin.
 mixin GroupsRelayHelpers on GroupsModuleBase {
+  @override
   void _relayToGroupMembers(
     String groupId,
     Map<String, dynamic> payload, {
@@ -32,6 +33,7 @@ mixin GroupsRelayHelpers on GroupsModuleBase {
     }
   }
 
+  @override
   void _relayToGroupAdmins(String groupId, Map<String, dynamic> payload) {
     final eventType = payload['type'] as String?;
     if (eventType == null) return;
@@ -55,6 +57,7 @@ mixin GroupsRelayHelpers on GroupsModuleBase {
     }
   }
 
+  @override
   String? _promoteAdminIfNeeded(String groupId) {
     if (!db.hasAnyGroupMembersIncludingFederated(groupId)) return null;
     if (db.countGroupAdminsIncludingFederated(groupId) > 0) return null;
@@ -75,6 +78,7 @@ mixin GroupsRelayHelpers on GroupsModuleBase {
     return promoted;
   }
 
+  @override
   /// The one 401 every handler in this module raises when the request
   /// carries no session. Returns the error rather than throwing it so the
   /// call sites stay `throw _unauthorized();` - visibly an exit, and

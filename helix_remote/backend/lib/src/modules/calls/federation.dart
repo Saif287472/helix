@@ -3,6 +3,7 @@ part of '../calls.dart';
 /// Milestone 5.1: deciding whose account an id belongs to, and moving a
 /// signal across a server boundary in either direction.
 mixin CallsFederationHelpers on CallsModuleBase {
+  @override
   bool _isExternal(String accountId) {
     final at = accountId.lastIndexOf('@');
     if (at <= 0 || at == accountId.length - 1) return false;
@@ -10,6 +11,7 @@ mixin CallsFederationHelpers on CallsModuleBase {
     return localDomain == null || domain != localDomain!.toLowerCase();
   }
 
+  @override
   String _qualify(String accountId) {
     if (accountId.contains('@') ||
         localDomain == null ||
@@ -57,6 +59,7 @@ mixin CallsFederationHelpers on CallsModuleBase {
     );
   }
 
+  @override
   Future<Map<String, dynamic>?> _proxyCallSignal({
     required String domain,
     required String senderAccountId,
@@ -78,6 +81,7 @@ mixin CallsFederationHelpers on CallsModuleBase {
     }
   }
 
+  @override
   /// Shared proxy path for [_sendToDevice]/[_sendToCalleeDevices]: relays a
   /// post-offer session signal (answer/ice/decline/busy/cancel/end) to
   /// whichever domain `targetAccountId` lives on. `targetDeviceId`, when

@@ -4,6 +4,7 @@ part of '../calls.dart';
 /// the answered-elsewhere notice its siblings get, and the push wake-up for
 /// a device with no live socket.
 mixin CallsDeliveryHelpers on CallsModuleBase {
+  @override
   Future<Map<String, dynamic>> _sendToCaller({
     required _ParsedCallSignal signal,
     required Map<String, dynamic> session,
@@ -23,6 +24,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
     );
   }
 
+  @override
   Future<Map<String, dynamic>> _sendToCalleeDevices({
     required _ParsedCallSignal signal,
     required Map<String, dynamic> session,
@@ -82,6 +84,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
     };
   }
 
+  @override
   Future<Map<String, dynamic>> _sendToDevice({
     required String targetDeviceId,
     required _ParsedCallSignal signal,
@@ -136,6 +139,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
     };
   }
 
+  @override
   void _notifyAnsweredElsewhere({
     required String callId,
     required String answeredDeviceId,
@@ -160,6 +164,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
     }
   }
 
+  @override
   bool _deliverSignal(
     String targetDeviceId,
     Map<String, dynamic> payload, {
@@ -176,6 +181,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
     return wsRelay.trySendToDevice(targetDeviceId, envelope);
   }
 
+  @override
   void _enqueueCallWake(String targetDeviceId, String callId) {
     final notifId =
         '${targetDeviceId}_call_${DateTime.now().millisecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}';
@@ -227,6 +233,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
     }
   }
 
+  @override
   bool _isPendingCalleeDevice({
     required Map<String, dynamic> session,
     required String accountId,
@@ -243,6 +250,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
         .contains(deviceId);
   }
 
+  @override
   Map<String, dynamic> _pendingCallResponse(Map<String, dynamic> call) {
     return {
       'call_id': call['call_id'],

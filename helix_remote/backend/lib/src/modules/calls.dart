@@ -180,16 +180,26 @@ class CallsModule extends CallsModuleBase
     wsRelay.setCallSignalHandler(_handleWebSocketSignal);
   }
 
+  @override
   final BackendDatabase db;
+  @override
   final WebSocketRelay wsRelay;
+  @override
   final String turnSecret;
+  @override
   final String turnUrl;
+  @override
   final FederationClient? federationClient;
+  @override
   final String? localDomain;
 
+  @override
   final _accountSignalRate = _WindowCounter(const Duration(minutes: 1));
+  @override
   final _deviceSignalRate = _WindowCounter(const Duration(minutes: 1));
+  @override
   final _ipSignalRate = _WindowCounter(const Duration(minutes: 1));
+  @override
   final _pendingFetchRate = _WindowCounter(const Duration(minutes: 1));
   final _metrics = <String, int>{
     'attempts': 0,
@@ -206,6 +216,7 @@ class CallsModule extends CallsModuleBase
     'turn_credentials_error': 0,
   };
 
+  @override
   // F7: push provider for offline call wake (optional; noop when unconfigured).
   late PushProvider pushProvider = const NoopPushProvider();
 
@@ -303,6 +314,7 @@ class CallsModule extends CallsModuleBase
     );
   }
 
+  @override
   Future<Map<String, dynamic>?> _readJson(Request request) async {
     try {
       final raw = await request.readAsString();
@@ -313,6 +325,7 @@ class CallsModule extends CallsModuleBase
     }
   }
 
+  @override
   Response _json(int status, Map<String, dynamic> body) {
     final responseBody = jsonEncode(body);
     if (status == 200) {
@@ -328,6 +341,7 @@ class CallsModule extends CallsModuleBase
     );
   }
 
+  @override
   String _newId(String prefix) {
     final random = Random.secure();
     final bytes = List<int>.generate(16, (_) => random.nextInt(256));

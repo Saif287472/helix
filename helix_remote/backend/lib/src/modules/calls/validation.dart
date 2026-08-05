@@ -8,6 +8,7 @@ part of '../calls.dart';
 /// candidate sizes cap what an unauthenticated-ish peer can push through a
 /// relay, and the per-account/device/IP windows cap how fast.
 mixin CallsValidation on CallsModuleBase {
+  @override
   _ParseResult _parseSignal(Map<String, dynamic> payload) {
     final callId = _string(payload['call_id']);
     final signalType = _string(payload['signal_type']);
@@ -61,8 +62,10 @@ mixin CallsValidation on CallsModuleBase {
       value.length <= _maxIdLength &&
       RegExp(r'^[A-Za-z0-9._:@-]+$').hasMatch(value);
 
+  @override
   String? _string(Object? value) => value is String ? value : null;
 
+  @override
   Map<String, dynamic>? _checkSignalRateLimit({
     required String accountId,
     required String deviceId,
@@ -86,6 +89,7 @@ mixin CallsValidation on CallsModuleBase {
     return null;
   }
 
+  @override
   int _httpStatusFor(Map<String, dynamic> result) {
     return switch (result['status']) {
       'delivered' || 'queued' || 'partial' || 'duplicate' => 200,
