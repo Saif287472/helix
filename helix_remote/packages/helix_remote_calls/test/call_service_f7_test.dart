@@ -121,6 +121,7 @@ RemoteCallService _makeService(
   Duration disconnectedGrace = const Duration(milliseconds: 5),
   List<Map<String, dynamic>>? capturedMetrics,
   Future<void> Function(Map<String, dynamic>)? metricsUploader,
+  List<Duration>? reconnectBackoff,
 }) {
   final svc = RemoteCallService(
     db: db,
@@ -128,6 +129,9 @@ RemoteCallService _makeService(
     signalingGateway: _StubGateway(),
     disconnectedGrace: disconnectedGrace,
     terminalStateGrace: Duration.zero,
+    // The production table is 2s..30s; a test driving six reconnects would
+    // otherwise sit through a minute of real backoff.
+    reconnectBackoff: reconnectBackoff ?? const [Duration(milliseconds: 5)],
     metricsUploader:
         metricsUploader ??
         (capturedMetrics != null ? (m) async => capturedMetrics.add(m) : null),
@@ -255,6 +259,7 @@ void main() {
         db,
         engine,
         disconnectedGrace: const Duration(milliseconds: 5),
+        reconnectBackoff: const [Duration(milliseconds: 5)],
       );
       await svc.startOutgoingCall(peerId: 'bob', isVideo: false);
       final callId = svc.activeCall!.callId;

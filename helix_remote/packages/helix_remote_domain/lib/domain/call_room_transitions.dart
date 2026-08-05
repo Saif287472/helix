@@ -167,10 +167,15 @@ class RemoteCallSessionStatus {
   /// `active <-> reconnecting` is the ICE-restart loop and has to cycle.
   /// `declined`, `busy`, `failed` and `ended` are all terminal: every one
   /// of them means this call object is finished, and a retry is a new call.
+  ///
+  /// `dialing`/`ringing -> active` skip `connecting` deliberately. The engine
+  /// reports `checking` and `connected` as separate events but is not obliged
+  /// to emit both, so a fast ICE path can reach `connected` first. Omitting
+  /// these two edges is what left a connected call stuck on "dialing".
   static const _transitions = <String, Set<String>>{
     preparing: {dialing, ringing, failed, ended},
-    dialing: {connecting, declined, busy, failed, ended},
-    ringing: {connecting, declined, failed, ended},
+    dialing: {connecting, active, declined, busy, failed, ended},
+    ringing: {connecting, active, declined, failed, ended},
     connecting: {active, failed, ended},
     active: {reconnecting, failed, ended},
     reconnecting: {active, failed, ended},

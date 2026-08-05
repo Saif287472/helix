@@ -223,7 +223,9 @@ class RemoteCallService {
     Duration iceConnectionTimeout = const Duration(seconds: 20),
     Duration disconnectedGrace = const Duration(seconds: 10),
     Duration? terminalStateGrace,
-  }) : _outgoingRingLimit = outgoingRingTimeout,
+    List<Duration>? reconnectBackoff,
+  }) : _reconnectBackoff = reconnectBackoff ?? _defaultReconnectBackoff,
+       _outgoingRingLimit = outgoingRingTimeout,
        _incomingRingLimit = incomingRingTimeout,
        _offerAnswerLimit = offerAnswerTimeout,
        _iceConnectionLimit = iceConnectionTimeout,
@@ -243,6 +245,10 @@ class RemoteCallService {
   final Duration _iceConnectionLimit;
   final Duration _disconnectedGracePeriod;
   final Duration _terminalStateGrace;
+
+  /// Injectable so a test can exercise the max-attempts path without waiting
+  /// out the real table, the same reason `disconnectedGrace` is injectable.
+  final List<Duration> _reconnectBackoff;
 
   RemoteCallStatus? _activeCall;
   RemoteCallStatus? get activeCall => _activeCall;
@@ -279,15 +285,24 @@ class RemoteCallService {
           RemoteCallState.dialing,
           RemoteCallState.connecting,
         }.contains(to);
+      // `active` is reachable directly, without an observed `connecting`.
+      // The engine reports `checking` and `connected` as separate events, but
+      // it is not obliged to give us both: a fast or already-warm ICE path
+      // can surface `connected` first, and the two can coalesce. Refusing the
+      // edge left such a call stuck showing "dialing" while media flowed, and
+      // silently disabled everything gated on `active` - adaptive media,
+      // reconnect backoff, and ICE restart.
       case RemoteCallState.dialing:
         return {
           RemoteCallState.connecting,
+          RemoteCallState.active,
           RemoteCallState.busy,
           RemoteCallState.declined,
         }.contains(to);
       case RemoteCallState.ringing:
         return {
           RemoteCallState.connecting,
+          RemoteCallState.active,
           RemoteCallState.declined,
           RemoteCallState.busy,
         }.contains(to);
@@ -530,7 +545,7 @@ class RemoteCallService {
 
   // F7: reconnect backoff
   int _reconnectAttempt = 0;
-  static const List<Duration> _reconnectBackoff = [
+  static const List<Duration> _defaultReconnectBackoff = [
     Duration(seconds: 2),
     Duration(seconds: 4),
     Duration(seconds: 8),
@@ -1025,13 +1040,21 @@ class RemoteCallService {
     try {
       await engine.restartIce(call.callId);
     } catch (_) {
-      _restartInProgress = false;
       await _finishCall(
         call,
         terminalState: RemoteCallState.failed,
         notifyPeer: true,
       );
       rethrow;
+    } finally {
+      // Cleared as soon as this attempt finishes, rather than latching until
+      // a later `connected` event. The flag exists to stop two restarts
+      // overlapping; latching it meant a restart that succeeded but never
+      // recovered blocked every future attempt, so `_reconnectAttempt` never
+      // grew, the max-attempts guard never fired, and the call sat in
+      // `reconnecting` indefinitely instead of failing. Retries stay paced by
+      // the backoff timer in the `disconnected` branch.
+      _restartInProgress = false;
     }
   }
 
@@ -1137,7 +1160,6 @@ class RemoteCallService {
 
   void _adaptMediaQuality(RemoteCallStatus call, CallQualityMetrics metrics) {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
-    if (nowMs - _lastAdaptMs < _adaptCooldownMs) return;
 
     final lossPoor =
         metrics.packetLossPercent > _weakLossThreshold ||
@@ -1146,7 +1168,15 @@ class RemoteCallService {
         metrics.packetLossPercent < _recoverLossThreshold &&
         metrics.roundTripMs < _recoverRttMs;
 
+    // The cooldown guards *dropping* video - the expensive, visible action we
+    // don't want flapping. It deliberately does not guard recovery, which is
+    // already paced by requiring [_recoverSamplesNeeded] consecutive good
+    // samples. Applying it to the whole method (as it was) also skipped the
+    // good-sample counting, and since quality events arrive every second or
+    // two, two good samples could never accumulate inside a 15s window - the
+    // recovery branch was unreachable in production, not just under test.
     if (!_audioOnlyFallback && lossPoor) {
+      if (nowMs - _lastAdaptMs < _adaptCooldownMs) return;
       _audioOnlyFallback = true;
       _goodQualitySamples = 0;
       _lastAdaptMs = nowMs;

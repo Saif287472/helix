@@ -356,7 +356,10 @@ void main() {
     migrated.initialize();
     addTearDown(migrated.close);
 
-    expect(migrated.schemaVersion, equals(18));
+    expect(
+      migrated.schemaVersion,
+      equals(RemoteDatabaseMigrations.latestSchemaVersion),
+    );
     final devices = migrated.getDevices('acc_v5');
     expect(devices.single.deviceId, equals('1'));
     expect(devices.single.deviceSigningPublicKey, equals('legacy_key'));
@@ -414,7 +417,10 @@ void main() {
     addTearDown(migrated.close);
 
     expect(migrated.getAccount('acc_plain')!.identityPublicKey, equals(marker));
-    expect(migrated.schemaVersion, equals(18));
+    expect(
+      migrated.schemaVersion,
+      equals(RemoteDatabaseMigrations.latestSchemaVersion),
+    );
     expect(_opensWithoutKey(file), isFalse);
     expect(_databaseFilesContain(file, marker), isFalse);
   });
@@ -502,7 +508,10 @@ void main() {
     reopened.initialize();
     addTearDown(reopened.close);
 
-    expect(reopened.schemaVersion, equals(18));
+    expect(
+      reopened.schemaVersion,
+      equals(RemoteDatabaseMigrations.latestSchemaVersion),
+    );
     expect(
       reopened.getOrCreateLocalHistorySessionSeed('conv_persist'),
       equals(seed),
