@@ -115,7 +115,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Strict Account Settings'),
+        title: const Text('Strict account settings'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,6 +202,14 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     }
   }
 
+  static String _relockLabel(int seconds) => switch (seconds) {
+    0 => 'immediately',
+    60 => 'after 1 minute',
+    300 => 'after 5 minutes',
+    900 => 'after 15 minutes',
+    _ => 'after ${seconds}s',
+  };
+
   @override
   Widget build(BuildContext context) {
     final db = widget.messagingService.db;
@@ -209,7 +217,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     final checkup = db.privacyCheckupItems();
     final defaultDisappearing = db.getAccountDefaultDisappearingSeconds();
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy & Account')),
+      appBar: AppBar(title: const Text('Privacy and security')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -219,7 +227,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.file_download),
-                  title: const Text('Export My Data'),
+                  title: const Text('Export my data'),
                   subtitle: const Text(
                     'Save JSON file outside encrypted app DB',
                   ),
@@ -230,20 +238,8 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
               const SizedBox(height: 8),
               Card(
                 child: ListTile(
-                  leading: const Icon(Icons.delete_forever, color: Colors.red),
-                  title: const Text('Delete Account'),
-                  subtitle: const Text(
-                    'Permanently delete account and all data',
-                  ),
-                  enabled: !_busy,
-                  onTap: _deleteAccount,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: ListTile(
                   leading: const Icon(Icons.security),
-                  title: const Text('Strict Account Settings'),
+                  title: const Text('Strict account settings'),
                   subtitle: const Text('Preview and apply strongest defaults'),
                   enabled: !_busy,
                   onTap: _applyStrictPreset,
@@ -255,9 +251,9 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                   children: [
                     SwitchListTile(
                       secondary: const Icon(Icons.lock_outline),
-                      title: const Text('App Lock'),
+                      title: const Text('App lock'),
                       subtitle: Text(
-                        'Relock after ${appLock.relockAfterSeconds == 0 ? 'immediately' : '${appLock.relockAfterSeconds}s'}',
+                        'Relock ${_relockLabel(appLock.relockAfterSeconds)}',
                       ),
                       value: appLock.enabled,
                       onChanged: _busy ? null : _setAppLock,
@@ -295,7 +291,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                   children: [
                     SwitchListTile(
                       secondary: const Icon(Icons.notifications_off_outlined),
-                      title: const Text('Hide Notification Previews'),
+                      title: const Text('Hide notification previews'),
                       subtitle: const Text(
                         'Locked chats and strict mode always redact content',
                       ),
@@ -309,7 +305,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                     ),
                     SwitchListTile(
                       secondary: const Icon(Icons.call_missed_outlined),
-                      title: const Text('Silence Unknown Callers'),
+                      title: const Text('Silence unknown callers'),
                       subtitle: const Text(
                         'Unknown calls do not ring and are rate-limited',
                       ),
@@ -352,12 +348,68 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                 ),
               ),
               const SizedBox(height: 8),
+              // Settings advertises a blocked count and a locked-chat count
+              // on the row that opens this screen. Until now neither could be
+              // reviewed here: blocking lives on the contact's own page and
+              // locking on the conversation's, so the only way to find out
+              // who you had blocked was to remember.
+              _ListCard(
+                icon: Icons.block_outlined,
+                title: 'Blocked contacts',
+                emptyLabel: 'No blocked contacts.',
+                entries: [
+                  for (final contact in db.getContacts())
+                    if (contact.status == 'Blocked')
+                      _ListCardEntry(
+                        label: contact.nickname.isEmpty
+                            ? contact.peerAccountId
+                            : contact.nickname,
+                        sublabel: contact.peerAccountId,
+                        actionLabel: 'Unblock',
+                        onAction: _busy
+                            ? null
+                            : () {
+                                widget.messagingService.unblockContact(
+                                  contact.peerAccountId,
+                                );
+                                setState(() {});
+                              },
+                      ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _ListCard(
+                icon: Icons.lock_person_outlined,
+                title: 'Locked chats',
+                emptyLabel: 'No locked chats.',
+                entries: [
+                  for (final conversation in db.getLockedConversations())
+                    _ListCardEntry(
+                      label: conversation.title.isEmpty
+                          ? conversation.conversationId
+                          : conversation.title,
+                      sublabel: conversation.type,
+                      actionLabel: 'Unlock',
+                      onAction: _busy
+                          ? null
+                          : () {
+                              db.setConversationLocked(
+                                conversation.conversationId,
+                                locked: false,
+                                hidden: false,
+                              );
+                              setState(() {});
+                            },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Card(
                 child: Column(
                   children: [
                     const ListTile(
                       leading: Icon(Icons.fact_check_outlined),
-                      title: Text('Privacy Checkup'),
+                      title: Text('Privacy checkup'),
                     ),
                     for (final item in checkup)
                       ListTile(
@@ -378,6 +430,19 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                 ),
               ),
               const SizedBox(height: 8),
+              // Last, not second. A permanent, unrecoverable action does not
+              // belong above the ordinary toggles.
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text('Delete account'),
+                  subtitle: const Text(
+                    'Permanently delete your account and all its data',
+                  ),
+                  enabled: !_busy,
+                  onTap: _deleteAccount,
+                ),
+              ),
               if (_status != null) ...[
                 const SizedBox(height: 16),
                 Text(_status!, textAlign: TextAlign.center),
@@ -413,7 +478,7 @@ class _ConfirmDeleteDialogState extends State<_ConfirmDeleteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Delete Account'),
+      title: const Text('Delete account'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,4 +505,77 @@ class _ConfirmDeleteDialogState extends State<_ConfirmDeleteDialog> {
       ],
     );
   }
+}
+
+/// One reviewable list inside the privacy screen - blocked contacts, locked
+/// chats. Shows an explicit empty state rather than collapsing to nothing:
+/// "no blocked contacts" and "this screen forgot to render" look identical
+/// when the card just disappears.
+class _ListCard extends StatelessWidget {
+  const _ListCard({
+    required this.icon,
+    required this.title,
+    required this.emptyLabel,
+    required this.entries,
+  });
+
+  final IconData icon;
+  final String title;
+  final String emptyLabel;
+  final List<_ListCardEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(icon),
+            title: Text(title),
+            trailing: entries.isEmpty ? null : Text('${entries.length}'),
+          ),
+          if (entries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  emptyLabel,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            )
+          else
+            for (final entry in entries)
+              ListTile(
+                dense: true,
+                title: Text(entry.label),
+                subtitle: Text(
+                  entry.sublabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: TextButton(
+                  onPressed: entry.onAction,
+                  child: Text(entry.actionLabel),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ListCardEntry {
+  const _ListCardEntry({
+    required this.label,
+    required this.sublabel,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String label;
+  final String sublabel;
+  final String actionLabel;
+  final VoidCallback? onAction;
 }
