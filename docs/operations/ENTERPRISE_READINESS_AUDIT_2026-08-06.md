@@ -70,6 +70,50 @@ the coverage figure — the true product-wide number is higher than 58.41%.
   certainly the origin of the risk register's incorrect "not directly declared by Helix" claim. It
   *is* directly declared, at `app/pubspec.yaml:34`.
 
+### Field defect found after Phase 2 — outgoing calls capped at 20 seconds
+
+**[CONFIRMED from production logs, fixed]** · `packages/helix_remote_calls/lib/src/remote_call_service.dart`
+
+Reported as "calls fail on the office network, work over VPN". It was neither — it was a timer.
+
+`_startOutgoingTimers` armed **two** timers on the outgoing offer, both calling
+`_failCallIfActive(..., failed)`:
+
+| Timer | Limit | Cancelled by |
+|---|---|---|
+| `_outgoingRingTimer` | 45s | answer, or terminal state |
+| `_offerAnswerTimer` | **20s** | **the answer only** — i.e. a human tapping Accept |
+
+Being the shorter of the two, the 20s timer always won, so **every outgoing call was really capped
+at 20 seconds and the 45s ring limit was dead code.** The callee's phone kept ringing for its full
+45s while the caller had already given up. Two field failures fired at 20.005s and 20.004s — a
+timer, not a network.
+
+The margin was thinner than 20s in practice. Measured from a *successful* call in the same logs,
+the callee spent **5.06s** between the user tapping Accept and the answer going out (ICE-config
+REST fetch 1.9s, mic init 1.5s, SDP), leaving the human roughly 13s. On a slower link that
+disappears — which is exactly why it correlated with one network and not another.
+
+It also reported the result as `failed`, whose copy is *"The call could not be completed. Check
+your network and try again"* — sending users to diagnose a network that was fine.
+
+**Fix.** The offer-answer timer is removed entirely; the 45s ring limit is now the sole authority
+for "nobody answered", which is what a phone does. Ring timeout now reports **"No answer."**
+rather than blaming the network. `_failCallIfActive` gained a message override so a timeout can
+say why without inventing a new terminal state.
+
+**Regression tests** (`remote_call_service_test.dart`): one asserts the timer-start diagnostic
+contains `outgoing_ring_ms=` and **not** `offer_answer_ms=` — the removed timer announced itself
+on that line, so its absence is what prevents a silent reintroduction; the other asserts an
+unanswered call surfaces `No answer.`. A harness detail surfaced on the way: `makeService` passed
+`terminalStateGrace: Duration.zero`, and `_finishCall` only emits the terminal status when that
+grace is `> 0`, so no test could previously observe terminal copy at all. It is now a parameter.
+
+**Still open, separately** — both contribute to call reliability but neither caused these failures:
+FCM is unconfigured (`push_ready: false`), so a backgrounded callee cannot be woken at all; and the
+WebSocket closes with `1002` every 2–110 seconds (P1-1 in `HELIX_REMEDIATION_PLAN.md`, still
+unresolved), which can delay or lose the offer.
+
 ### Phase 2 — what was and was not done
 
 Two items are deliberately incomplete, recorded here rather than quietly closed:

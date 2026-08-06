@@ -239,7 +239,6 @@ class RemoteCallService {
     this.metricsUploader,
     Duration outgoingRingTimeout = const Duration(seconds: 45),
     Duration incomingRingTimeout = const Duration(seconds: 45),
-    Duration offerAnswerTimeout = const Duration(seconds: 20),
     Duration iceConnectionTimeout = const Duration(seconds: 20),
     Duration disconnectedGrace = const Duration(seconds: 10),
     Duration adaptCooldown = const Duration(seconds: 15),
@@ -248,7 +247,6 @@ class RemoteCallService {
   }) : _reconnectBackoff = reconnectBackoff ?? _defaultReconnectBackoff,
        _outgoingRingLimit = outgoingRingTimeout,
        _incomingRingLimit = incomingRingTimeout,
-       _offerAnswerLimit = offerAnswerTimeout,
        _iceConnectionLimit = iceConnectionTimeout,
        _disconnectedGracePeriod = disconnectedGrace,
        _adaptCooldownPeriod = adaptCooldown,
@@ -263,7 +261,6 @@ class RemoteCallService {
   final Future<void> Function(Map<String, dynamic> metrics)? metricsUploader;
   final Duration _outgoingRingLimit;
   final Duration _incomingRingLimit;
-  final Duration _offerAnswerLimit;
   final Duration _iceConnectionLimit;
   final Duration _disconnectedGracePeriod;
 
@@ -363,12 +360,10 @@ class RemoteCallService {
   void _cancelTimers() {
     _outgoingRingTimer?.cancel();
     _incomingRingTimer?.cancel();
-    _offerAnswerTimer?.cancel();
     _iceConnectionTimer?.cancel();
     _disconnectedTimer?.cancel();
     _outgoingRingTimer = null;
     _incomingRingTimer = null;
-    _offerAnswerTimer = null;
     _iceConnectionTimer = null;
     _disconnectedTimer = null;
   }
@@ -377,20 +372,40 @@ class RemoteCallService {
     diagnostics?.call(message);
   }
 
+  /// Starts the single timer that bounds an outgoing call's ring.
+  ///
+  /// There used to be a second, shorter "offer answer" timer here (20s
+  /// against the ring's 45s), meant to catch a callee whose app never
+  /// responded. It could not actually tell that apart from a human who had
+  /// not picked up yet, because the only thing that cancelled it was the
+  /// *answer* - which arrives when a person taps Accept. Being the shorter of
+  /// the two it always won, so every call was really capped at 20 seconds and
+  /// the 45s ring limit was dead code. Worse, it reported the result as
+  /// `failed` ("check your network"), so a perfectly healthy call that nobody
+  /// reached in time was blamed on the network.
+  ///
+  /// A real measurement from a working call: the callee spent 5.06s between
+  /// the user tapping Accept and the answer going out (ICE config fetch, mic
+  /// init, SDP), which left the human barely 13s of the 20. On a slower link
+  /// that margin disappears entirely.
+  ///
+  /// The ring limit is now the sole authority for "nobody answered", which is
+  /// what a phone does.
   void _startOutgoingTimers(String callId) {
     _outgoingRingTimer?.cancel();
-    _offerAnswerTimer?.cancel();
     _diag(
-      'timer start cid=${_cid(callId)} outgoing_ring_ms=${_outgoingRingLimit.inMilliseconds} '
-      'offer_answer_ms=${_offerAnswerLimit.inMilliseconds}',
+      'timer start cid=${_cid(callId)} '
+      'outgoing_ring_ms=${_outgoingRingLimit.inMilliseconds}',
     );
     _outgoingRingTimer = Timer(
       _outgoingRingLimit,
-      () => _failCallIfActive(callId, RemoteCallState.failed),
-    );
-    _offerAnswerTimer = Timer(
-      _offerAnswerLimit,
-      () => _failCallIfActive(callId, RemoteCallState.failed),
+      () => _failCallIfActive(
+        callId,
+        RemoteCallState.failed,
+        // Not a network fault: the offer was delivered and simply never
+        // answered. Saying so stops sending people to check their Wi-Fi.
+        message: 'No answer.',
+      ),
     );
   }
 
@@ -416,10 +431,17 @@ class RemoteCallService {
     );
   }
 
+  /// Ends an in-flight call from a timer.
+  ///
+  /// [message] overrides the generic copy for [terminalState]. A ring timeout
+  /// is still terminal state `failed` - the call did not happen, and the
+  /// history entry should say so - but the *reason* is "nobody picked up",
+  /// which is not what the generic failure text describes.
   Future<void> _failCallIfActive(
     String callId,
-    RemoteCallState terminalState,
-  ) async {
+    RemoteCallState terminalState, {
+    String? message,
+  }) async {
     final call = _activeCall;
     if (call == null || call.callId != callId) return;
     _diag(
@@ -429,7 +451,7 @@ class RemoteCallService {
       call,
       terminalState: terminalState,
       notifyPeer: true,
-      errorMessage: _terminalMessage(terminalState),
+      errorMessage: message ?? _terminalMessage(terminalState),
     );
   }
 
@@ -566,7 +588,6 @@ class RemoteCallService {
   final Map<String, int> _silencedUnknownCalls = {};
   Timer? _outgoingRingTimer;
   Timer? _incomingRingTimer;
-  Timer? _offerAnswerTimer;
   Timer? _iceConnectionTimer;
   Timer? _disconnectedTimer;
   bool _restartInProgress = false;
@@ -929,7 +950,6 @@ class RemoteCallService {
       await engine.setRemoteAnswer(call.callId, signal.sdp!);
     }
     _outgoingRingTimer?.cancel();
-    _offerAnswerTimer?.cancel();
     _startIceConnectionTimer(call.callId);
     if (signal.callerDeviceId != null &&
         signal.callerDeviceId != call.peerDeviceId) {

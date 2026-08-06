@@ -193,9 +193,12 @@ void main() {
     RemoteIceConfig? iceConfig,
     Duration? outgoingRingTimeout,
     Duration? incomingRingTimeout,
-    Duration? offerAnswerTimeout,
     Duration? iceConnectionTimeout,
     Duration? disconnectedGrace,
+    // Defaults to zero so most tests skip the terminal-state dwell. A test
+    // that asserts on the terminal status itself must pass a non-zero value,
+    // because _finishCall only emits it when the grace is > 0.
+    Duration? terminalStateGrace,
     void Function(String message)? diagnostics,
   }) {
     final svc = RemoteCallService(
@@ -205,10 +208,9 @@ void main() {
       iceConfig: iceConfig ?? const RemoteIceConfig(iceServers: []),
       outgoingRingTimeout: outgoingRingTimeout ?? const Duration(seconds: 45),
       incomingRingTimeout: incomingRingTimeout ?? const Duration(seconds: 45),
-      offerAnswerTimeout: offerAnswerTimeout ?? const Duration(seconds: 20),
       iceConnectionTimeout: iceConnectionTimeout ?? const Duration(seconds: 20),
       disconnectedGrace: disconnectedGrace ?? const Duration(seconds: 10),
-      terminalStateGrace: Duration.zero,
+      terminalStateGrace: terminalStateGrace ?? Duration.zero,
       diagnostics: diagnostics,
     );
     svc.start();
@@ -1211,12 +1213,82 @@ void main() {
       expect(svc.getCallHistory().first['direction'], kCallDirectionOutgoing);
     });
 
+    // Regression: docs/operations/ENTERPRISE_READINESS_AUDIT_2026-08-06.md.
+    // A second, shorter "offer answer" timer (20s vs the 45s ring) used to
+    // fail every outgoing call that a human did not accept within 20 seconds,
+    // and reported it as a network fault. Field logs showed real calls dying
+    // at exactly 20.005s while the callee's phone was still ringing.
+    test('a call answered later than the old 20s cap still connects', () async {
+      final diagnostics = <String>[];
+      final svc = makeService(
+        outgoingRingTimeout: const Duration(milliseconds: 200),
+        diagnostics: diagnostics.add,
+      );
+      await svc.startOutgoingCall(peerId: 'bob', isVideo: false);
+      final callId = svc.activeCall!.callId;
+
+      // The precise guard against the old behaviour: exactly one timer now
+      // bounds an outgoing call. The removed timer announced itself as
+      // `offer_answer_ms=` in this same diagnostic line, so its absence is
+      // what proves it cannot come back and silently re-cap calls at 20s.
+      final timerLine = diagnostics.firstWhere(
+        (d) => d.contains('timer start') && d.contains('outgoing_ring_ms='),
+      );
+      expect(timerLine, isNot(contains('offer_answer_ms=')));
+
+      // Longer than the old offer-answer cap would have allowed, relative to
+      // the ring limit: the call must still be alive and answerable.
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(
+        svc.activeCall,
+        isNotNull,
+        reason: 'the call must still be ringing, not failed',
+      );
+
+      await svc.processInboundSignal(
+        RemoteCallSignal(
+          callId: callId,
+          signalType: kSignalAnswer,
+          sdp: 'answer-sdp',
+        ),
+      );
+      expect(svc.activeCall, isNotNull);
+      expect(svc.activeCall!.state, RemoteCallState.connecting);
+    });
+
+    test(
+      'an unanswered outgoing call reports no answer, not a network fault',
+      () async {
+        final svc = makeService(
+          outgoingRingTimeout: const Duration(milliseconds: 1),
+          terminalStateGrace: const Duration(milliseconds: 5),
+        );
+        final statuses = <RemoteCallStatus?>[];
+        final sub = svc.callStatusChanges.listen(statuses.add);
+
+        await svc.startOutgoingCall(peerId: 'bob', isVideo: false);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(svc.getCallHistory().first['direction'], kCallDirectionOutgoing);
+        final failed = statuses.firstWhere(
+          (s) => s?.state == RemoteCallState.failed,
+        )!;
+        expect(
+          failed.errorMessage,
+          equals('No answer.'),
+          reason:
+              'blaming the network for an unanswered call sends the user to '
+              'check their Wi-Fi for a problem that is not there',
+        );
+        await sub.cancel();
+      },
+    );
+
     test(
       'outgoing timeout cleans marker and persists failed history',
       () async {
         final svc = makeService(
           outgoingRingTimeout: const Duration(milliseconds: 1),
-          offerAnswerTimeout: const Duration(seconds: 1),
         );
         await svc.startOutgoingCall(peerId: 'bob', isVideo: false);
         final callId = svc.activeCall!.callId;
