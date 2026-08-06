@@ -14,20 +14,37 @@ import 'package:helix_remote/services/push_token_source.dart';
 /// app fetches the pending call after the user opens it.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  if (message.data['notification_type'] != 'incoming_call') return;
-
+  final type = message.data['notification_type'];
   final callId = message.data['call_id'] as String?;
+  final shortCallId = callId == null || callId.length <= 8
+      ? callId
+      : callId.substring(0, 8);
+  debugPrint(
+    '[push] background message received id=${message.messageId} '
+    'type=$type call_id=$shortCallId keys=${message.data.keys.join(',')}',
+  );
+  if (type != 'incoming_call') {
+    debugPrint('[push] background message ignored type=$type');
+    return;
+  }
+
   if (callId == null || callId.isEmpty) return;
 
   try {
     DartPluginRegistrant.ensureInitialized();
     await Firebase.initializeApp();
+    debugPrint('[push] background Firebase initialized call_id=$shortCallId');
     await LocalNotificationService.init();
+    debugPrint(
+      '[push] background local notifications initialized '
+      'call_id=$shortCallId',
+    );
     await LocalNotificationService.showIncomingCall(
       callId: callId,
       callerDisplayName: 'Incoming call',
       isVideo: false,
     );
+    debugPrint('[push] background notification shown call_id=$shortCallId');
   } catch (error) {
     // There is no foreground AppLogger instance in this isolate. Keep the
     // failure visible to Android's logcat without exposing the push token.
@@ -54,6 +71,7 @@ class FirebasePushTokenSource implements PushTokenSource {
   final StreamController<String> _refreshes =
       StreamController<String>.broadcast();
   StreamSubscription<String>? _sdkRefreshSub;
+  StreamSubscription<RemoteMessage>? _foregroundMessageSub;
   bool _initialized = false;
 
   @override
@@ -91,6 +109,10 @@ class FirebasePushTokenSource implements PushTokenSource {
       // banner - the data message still wakes the app, which is what a call
       // needs.
       final denied = settings.authorizationStatus == AuthorizationStatus.denied;
+      AppLogger.instance.info(
+        'push',
+        'notification permission status=${settings.authorizationStatus.name}',
+      );
       if (denied) {
         AppLogger.instance.warn('push', 'notification permission denied');
         return false;
@@ -104,6 +126,17 @@ class FirebasePushTokenSource implements PushTokenSource {
       _refreshes.add,
       onError: _refreshes.addError,
     );
+    _foregroundMessageSub = FirebaseMessaging.onMessage.listen((message) {
+      final callId = message.data['call_id'] as String?;
+      final shortCallId = callId == null || callId.length <= 8
+          ? callId
+          : callId.substring(0, 8);
+      AppLogger.instance.info(
+        'push',
+        'foreground message received id=${message.messageId} '
+        'type=${message.data['notification_type']} call_id=$shortCallId',
+      );
+    });
     _initialized = true;
     AppLogger.instance.info('push', 'FCM token source ready');
     return true;
@@ -122,6 +155,8 @@ class FirebasePushTokenSource implements PushTokenSource {
   Future<void> dispose() async {
     await _sdkRefreshSub?.cancel();
     _sdkRefreshSub = null;
+    await _foregroundMessageSub?.cancel();
+    _foregroundMessageSub = null;
     await _refreshes.close();
     _initialized = false;
   }

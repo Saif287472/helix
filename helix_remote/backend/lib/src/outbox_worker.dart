@@ -116,6 +116,9 @@ class OutboxWorker {
     final pushToken = db.getDevicePushToken(targetDeviceId);
 
     if (pushToken == null || pushToken.isEmpty) {
+      logServerWarning(
+        '[PUSH] outbox_skipped event=$eventId reason=token_missing',
+      );
       // Device has no registered push token — complete silently.
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);
       processed['completed'] = processed['completed']! + 1;
@@ -123,6 +126,9 @@ class OutboxWorker {
     }
 
     if (!_pushProvider.isConfigured) {
+      logServerWarning(
+        '[PUSH] outbox_skipped event=$eventId reason=provider_unconfigured',
+      );
       // FCM not configured — complete silently rather than filling the DLQ
       // with entries that can never succeed.
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);
@@ -136,9 +142,15 @@ class OutboxWorker {
     }
 
     try {
+      logServerInfo(
+        '[PUSH] outbox_attempt event=$eventId device=$targetDeviceId',
+      );
       await _pushProvider.deliver(token: pushToken, data: payload);
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);
       processed['completed'] = processed['completed']! + 1;
+      logServerInfo(
+        '[PUSH] outbox_delivered event=$eventId device=$targetDeviceId',
+      );
     } on FcmTokenNotFoundException {
       // Token is stale — silently complete (device will re-register or not).
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);

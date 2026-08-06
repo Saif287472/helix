@@ -194,44 +194,59 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
         'target_device_id': targetDeviceId,
       }),
     );
-    logServerError(
-      '[CALL] push_wake_enqueued call_id=$callId device=$targetDeviceId',
+    final tokenRow = db.getPushTokenForDevice(targetDeviceId);
+    final tokenPresent =
+        tokenRow != null &&
+        (tokenRow['push_token'] as String?)?.isNotEmpty == true;
+    logServerInfo(
+      '[CALL_PUSH] wake_enqueued call_id=$callId device=$targetDeviceId '
+      'event=$eventId provider_configured=${pushProvider.isConfigured} '
+      'token_present=$tokenPresent',
     );
     // F7: attempt immediate push delivery via stored token when configured.
-    if (pushProvider.isConfigured) {
-      final tokenRow = db.getPushTokenForDevice(targetDeviceId);
-      if (tokenRow != null) {
-        final token = tokenRow['push_token'] as String;
-        pushProvider
-            .deliver(
-              token: token,
-              data: {
-                'notification_type': 'incoming_call',
-                'call_id': callId,
-                'target_device_id': targetDeviceId,
-              },
-            )
-            .then((_) {
+    if (pushProvider.isConfigured && tokenPresent) {
+      final token = tokenRow['push_token'] as String;
+      logServerInfo(
+        '[CALL_PUSH] immediate_attempt call_id=$callId device=$targetDeviceId '
+        'event=$eventId',
+      );
+      pushProvider
+          .deliver(
+            token: token,
+            data: {
+              'notification_type': 'incoming_call',
+              'call_id': callId,
+              'target_device_id': targetDeviceId,
+            },
+          )
+          .then((_) {
+            db.updateOutboxStatus(eventId, 'COMPLETED', 0);
+            logServerInfo(
+              '[CALL_PUSH] immediate_delivered call_id=$callId '
+              'device=$targetDeviceId event=$eventId',
+            );
+          })
+          .catchError((Object e) {
+            if (e is FcmTokenNotFoundException) {
+              // Token is stale — prune it so we stop wasting FCM quota.
+              db.deletePushToken(deviceId: targetDeviceId);
               db.updateOutboxStatus(eventId, 'COMPLETED', 0);
-              logServerError(
-                '[CALL] push_delivered call_id=$callId device=$targetDeviceId',
+              logServerWarning(
+                '[CALL_PUSH] token_pruned device=$targetDeviceId '
+                'reason=expired event=$eventId',
               );
-            })
-            .catchError((Object e) {
-              if (e is FcmTokenNotFoundException) {
-                // Token is stale — prune it so we stop wasting FCM quota.
-                db.deletePushToken(deviceId: targetDeviceId);
-                db.updateOutboxStatus(eventId, 'COMPLETED', 0);
-                logServerError(
-                  '[CALL] push_token_pruned device=$targetDeviceId reason=expired',
-                );
-              } else {
-                logServerError(
-                  '[CALL] push_failed device=$targetDeviceId error=$e',
-                );
-              }
-            });
-      }
+            } else {
+              logServerError(
+                '[CALL_PUSH] immediate_failed call_id=$callId '
+                'device=$targetDeviceId event=$eventId error=$e',
+              );
+            }
+          });
+    } else {
+      logServerWarning(
+        '[CALL_PUSH] immediate_skipped call_id=$callId device=$targetDeviceId '
+        'event=$eventId reason=${!pushProvider.isConfigured ? 'provider_unconfigured' : 'token_missing'}',
+      );
     }
   }
 

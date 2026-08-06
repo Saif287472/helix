@@ -43,7 +43,16 @@ final class NoopPushProvider implements PushProvider {
 /// as FCM data-only message with high Android priority so the app can handle
 /// it without displaying a system notification.
 final class FcmPushProvider implements PushProvider {
-  FcmPushProvider({required this.projectId, required this.tokenSource});
+  FcmPushProvider({
+    required this.projectId,
+    required this.tokenSource,
+    Uri? endpoint,
+  }) : endpoint =
+           endpoint ??
+           Uri.https(
+             'fcm.googleapis.com',
+             '/v1/projects/$projectId/messages:send',
+           );
 
   /// A fixed, already-obtained token. Expires within the hour and cannot be
   /// renewed — for tests and one-off manual checks, not a deployment.
@@ -57,6 +66,7 @@ final class FcmPushProvider implements PushProvider {
 
   final String projectId;
   final FcmAccessTokenSource tokenSource;
+  final Uri endpoint;
 
   @override
   bool get isConfigured => projectId.isNotEmpty;
@@ -76,18 +86,13 @@ final class FcmPushProvider implements PushProvider {
       },
     });
 
-    final url = Uri.https(
-      'fcm.googleapis.com',
-      '/v1/projects/$projectId/messages:send',
-    );
-
     // Before opening the connection, so a refresh failure surfaces as itself
     // rather than as a delivery error against a half-built request.
     final accessToken = await tokenSource.bearerToken();
 
     final http = HttpClient();
     try {
-      final req = await http.postUrl(url);
+      final req = await http.postUrl(endpoint);
       req.headers
         ..set('Authorization', 'Bearer $accessToken')
         ..set('Content-Type', 'application/json; charset=utf-8');
@@ -95,7 +100,6 @@ final class FcmPushProvider implements PushProvider {
 
       final res = await req.close();
       final resBody = await res.transform(utf8.decoder).join();
-      await res.drain<void>();
 
       if (res.statusCode == 200) return;
 
