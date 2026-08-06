@@ -77,11 +77,25 @@ final class FcmPushProvider implements PushProvider {
     required Map<String, dynamic> data,
   }) async {
     final stringData = {for (final e in data.entries) e.key: '${e.value}'};
+    final notificationType = data['notification_type']?.toString();
+    final isCall = notificationType == 'incoming_call';
+    final notificationTitle = isCall ? 'Incoming call' : 'Helix Remote';
+    final notificationBody = switch (notificationType) {
+      'incoming_call' => 'You have an incoming call',
+      'new_message' => 'You have a new message',
+      'group_invite' => 'You have a new group invitation',
+      _ => 'You have a new notification',
+    };
+    final channelId = isCall ? 'helix_incoming_calls' : 'helix_messages';
 
     final body = jsonEncode({
       'message': {
         'token': token,
-        'android': {'priority': 'HIGH'},
+        'notification': {'title': notificationTitle, 'body': notificationBody},
+        'android': {
+          'priority': 'HIGH',
+          'notification': {'channel_id': channelId, 'sound': 'default'},
+        },
         'data': stringData,
       },
     });

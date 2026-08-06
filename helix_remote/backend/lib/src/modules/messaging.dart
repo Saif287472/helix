@@ -280,6 +280,7 @@ class MessagingModule {
         'outbox_${messageId}_$recipientDeviceId',
         'PUSH_NOTIFICATION',
         jsonEncode({
+          'notification_type': 'new_message',
           'recipient_account_id': recipientAccountId,
           'recipient_device_id': recipientDeviceId,
           'message_id': messageId,

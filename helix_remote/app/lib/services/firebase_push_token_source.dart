@@ -14,7 +14,7 @@ import 'package:helix_remote/services/push_token_source.dart';
 /// app fetches the pending call after the user opens it.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  final type = message.data['notification_type'];
+  final type = _notificationType(message.data);
   final callId = message.data['call_id'] as String?;
   final shortCallId = callId == null || callId.length <= 8
       ? callId
@@ -23,12 +23,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     '[push] background message received id=${message.messageId} '
     'type=$type call_id=$shortCallId keys=${message.data.keys.join(',')}',
   );
-  if (type != 'incoming_call') {
+  if (type != 'incoming_call' && type != 'new_message') {
     debugPrint('[push] background message ignored type=$type');
     return;
   }
 
-  if (callId == null || callId.isEmpty) return;
+  if (type == 'incoming_call' && (callId == null || callId.isEmpty)) return;
 
   try {
     DartPluginRegistrant.ensureInitialized();
@@ -39,11 +39,19 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       '[push] background local notifications initialized '
       'call_id=$shortCallId',
     );
-    await LocalNotificationService.showIncomingCall(
-      callId: callId,
-      callerDisplayName: 'Incoming call',
-      isVideo: false,
-    );
+    if (type == 'incoming_call') {
+      await LocalNotificationService.showIncomingCall(
+        callId: callId!,
+        callerDisplayName: 'Incoming call',
+        isVideo: false,
+      );
+    } else {
+      await LocalNotificationService.showMessage(
+        notificationKey: message.data['message_id'] as String? ??
+            message.messageId ??
+            'message',
+      );
+    }
     debugPrint('[push] background notification shown call_id=$shortCallId');
   } catch (error) {
     // There is no foreground AppLogger instance in this isolate. Keep the
@@ -127,19 +135,45 @@ class FirebasePushTokenSource implements PushTokenSource {
       onError: _refreshes.addError,
     );
     _foregroundMessageSub = FirebaseMessaging.onMessage.listen((message) {
-      final callId = message.data['call_id'] as String?;
-      final shortCallId = callId == null || callId.length <= 8
-          ? callId
-          : callId.substring(0, 8);
-      AppLogger.instance.info(
-        'push',
-        'foreground message received id=${message.messageId} '
-        'type=${message.data['notification_type']} call_id=$shortCallId',
-      );
+      unawaited(_showForegroundNotification(message));
     });
     _initialized = true;
     AppLogger.instance.info('push', 'FCM token source ready');
     return true;
+  }
+
+  Future<void> _showForegroundNotification(RemoteMessage message) async {
+    final type = _notificationType(message.data);
+    final callId = message.data['call_id'] as String?;
+    final shortCallId = callId == null || callId.length <= 8
+        ? callId
+        : callId.substring(0, 8);
+    AppLogger.instance.info(
+      'push',
+      'foreground message received id=${message.messageId} '
+      'type=$type call_id=$shortCallId',
+    );
+    try {
+      if (type == 'incoming_call' && callId != null && callId.isNotEmpty) {
+        await LocalNotificationService.showIncomingCall(
+          callId: callId,
+          callerDisplayName: 'Incoming call',
+          isVideo: false,
+        );
+      } else if (type == 'new_message') {
+        await LocalNotificationService.showMessage(
+          notificationKey: message.data['message_id'] as String? ??
+              message.messageId ??
+              'message',
+        );
+      }
+    } catch (error) {
+      AppLogger.instance.warn(
+        'push',
+        'foreground notification failed type=$type call_id=$callId '
+        'error=${error.runtimeType}',
+      );
+    }
   }
 
   @override
@@ -160,4 +194,11 @@ class FirebasePushTokenSource implements PushTokenSource {
     await _refreshes.close();
     _initialized = false;
   }
+}
+
+String? _notificationType(Map<String, dynamic> data) {
+  final explicit = data['notification_type'] as String?;
+  if (explicit != null && explicit.isNotEmpty) return explicit;
+  if (data['message_id'] is String) return 'new_message';
+  return null;
 }

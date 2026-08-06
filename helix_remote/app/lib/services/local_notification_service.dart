@@ -5,7 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 enum LocalNotificationCallAction { accept, decline }
 
 /// Thin wrapper around flutter_local_notifications for in-process system
-/// notifications and FCM-triggered call wake alerts.
+/// notifications and FCM-triggered offline/background alerts.
 class LocalNotificationService {
   LocalNotificationService._();
 
@@ -26,6 +26,15 @@ class LocalNotificationService {
     'Incoming Calls',
     description: 'Incoming Helix Remote call alerts',
     importance: Importance.max,
+    playSound: true,
+    enableVibration: true,
+  );
+
+  static const _messageChannel = AndroidNotificationChannel(
+    'helix_messages',
+    'Messages',
+    description: 'New Helix Remote messages',
+    importance: Importance.high,
     playSound: true,
     enableVibration: true,
   );
@@ -56,6 +65,11 @@ class LocalNotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.createNotificationChannel(_incomingCallChannel);
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(_messageChannel);
     await _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -176,6 +190,28 @@ class LocalNotificationService {
       callerDisplayName,
       NotificationDetails(android: androidDetails),
       payload: 'call_id=$callId',
+    );
+  }
+
+  static Future<void> showMessage({
+    required String notificationKey,
+    String title = 'Helix Remote',
+    String body = 'You have a new message',
+  }) async {
+    if (!_ready) return;
+    final androidDetails = AndroidNotificationDetails(
+      _messageChannel.id,
+      _messageChannel.name,
+      channelDescription: _messageChannel.description,
+      importance: Importance.high,
+      priority: Priority.high,
+      autoCancel: true,
+    );
+    await _plugin.show(
+      notificationKey.hashCode & 0x7fffffff,
+      title,
+      body,
+      NotificationDetails(android: androidDetails),
     );
   }
 

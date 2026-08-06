@@ -38,7 +38,22 @@ void main() {
       );
       await requestDone.future;
 
-      expect(requests.single['message'], isA<Map<String, dynamic>>());
+      final message = requests.single['message'] as Map<String, dynamic>;
+      expect(message['data'], {
+        'notification_type': 'incoming_call',
+        'call_id': 'call-1',
+      });
+      expect(message['notification'], {
+        'title': 'Incoming call',
+        'body': 'You have an incoming call',
+      });
+      expect(message['android'], {
+        'priority': 'HIGH',
+        'notification': {
+          'channel_id': 'helix_incoming_calls',
+          'sound': 'default',
+        },
+      });
     } finally {
       await subscription.cancel();
       await server.close(force: true);
