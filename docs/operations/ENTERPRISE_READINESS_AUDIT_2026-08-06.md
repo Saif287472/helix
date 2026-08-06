@@ -33,12 +33,42 @@ on: the CI workflow at `.github/workflows/ci.yml` currently gates its verificati
 both workspaces. Where a fix below touches a shared file, it is written to change Helix Remote's
 behaviour only and to leave Helix Local's arrangements exactly as they are.
 
-> **Toolchain caveat.** No Dart or Flutter SDK is installed in the audit container
-> (`dart`/`flutter` both `command not found`). **No analyzer run, no test run, no build, and no
-> coverage measurement was performed.** Every finding is derived from reading source at a cited
-> line, tagged **[CONFIRMED]** (verified by reading the code at the cited location) or
-> **[POTENTIAL]** (consistent with the code but requiring a runtime check). The one exception is
-> the dependency currency data in §20, which was obtained by querying the pub.dev API directly.
+> **Toolchain note.** The audit itself was written with no Dart or Flutter SDK available, so every
+> finding is derived from reading source at a cited line, tagged **[CONFIRMED]** (verified by
+> reading the code at the cited location) or **[POTENTIAL]** (consistent with the code but
+> requiring a runtime check). Dependency currency data in §20 came from the pub.dev API.
+>
+> **A toolchain was subsequently installed during Phase 0** (Flutter 3.44.8 / Dart 3.12.2, matching
+> the `^3.12.0` constraint), and the baseline in §28 is measured, not estimated. Findings verified
+> or sharpened by that run are marked inline.
+
+---
+
+## 28. Measured baseline (Phase 0, 2026-08-06)
+
+Established with Flutter 3.44.8 / Dart 3.12.2 against `helix_remote/`:
+
+| Gate | Result |
+|---|---|
+| `flutter analyze` | **Clean** — no issues found |
+| `dart test` (backend) | **411 passed**, 0 failed |
+| `flutter test` (app) | **327 passed**, 0 failed |
+| `flutter test` (admin) | **87 passed**, 0 failed |
+| `flutter test` (7 packages) | **224 passed**, 0 failed |
+| **Total** | **1,049 tests, all green** |
+| Line coverage (app + admin + packages) | **58.41%** (10,446 / 17,884 lines) |
+
+The backend's 411 tests run under `dart test`, which emits no lcov, so they are not represented in
+the coverage figure — the true product-wide number is higher than 58.41%.
+
+**Two findings were confirmed empirically by this run:**
+
+- **MED-7** — a fresh resolve of the declared `file_picker: ^12.0.0-beta.5` produced
+  **`12.0.0-beta.7`**. The pre-release drift is not theoretical; it reproduces on any clean checkout.
+- **MED-9** — the generated lockfile records `file_picker` as `dependency: transitive`, because in a
+  workspace the root lockfile classifies from the root package's perspective. That is almost
+  certainly the origin of the risk register's incorrect "not directly declared by Helix" claim. It
+  *is* directly declared, at `app/pubspec.yaml:34`.
 
 ---
 
@@ -311,10 +341,13 @@ the database and log directories.
 
 ### HIGH-4 · `pubspec.lock` is not committed, contradicting stated policy
 
-**[CONFIRMED]** · `git ls-files | grep -c pubspec.lock` → `0`; `.gitignore` does not mention it
+**[CONFIRMED]** · `git ls-files | grep -c pubspec.lock` → `0`, and `helix_remote/.gitignore:5`
+listed `pubspec.lock` explicitly
 
 `docs/dependencies/WORKSPACE_LOCKFILE_POLICY.md` states that the lockfile is committed "as the
-reproducible dependency snapshot". No lockfile is tracked.
+reproducible dependency snapshot". No lockfile was tracked — and this was not an oversight: the
+Helix Remote workspace `.gitignore` actively excluded it. (The root `.gitignore` does not mention
+`pubspec.lock`; the exclusion was one level down, which is why an initial check missed it.)
 
 **Impact.** Every CI run and every developer `pub get` re-resolves ~23 direct client dependencies
 within their caret ranges. Builds are not reproducible; a malicious or merely broken patch release

@@ -2,7 +2,10 @@
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-pubspec.lock
+# pubspec.lock is committed on purpose - see
+# docs/dependencies/WORKSPACE_LOCKFILE_POLICY.md. This is an application
+# workspace, not a published library, so the lockfile is the reproducible
+# dependency snapshot and CI enforces it with `pub get --enforce-lockfile`.
 build/
 *.iml
 .idea/
