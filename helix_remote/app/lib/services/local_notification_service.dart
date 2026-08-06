@@ -5,8 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 enum LocalNotificationCallAction { accept, decline }
 
 /// Thin wrapper around flutter_local_notifications for in-process system
-/// notifications. This covers the foreground and background-but-alive cases.
-/// True offline push (app killed / phone off) requires FCM integration.
+/// notifications and FCM-triggered call wake alerts.
 class LocalNotificationService {
   LocalNotificationService._();
 

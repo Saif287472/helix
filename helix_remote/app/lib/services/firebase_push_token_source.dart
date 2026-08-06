@@ -1,9 +1,39 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+import 'package:helix_remote/services/app_logger.dart';
+import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/services/push_token_source.dart';
+
+/// Handles the server's data-only call wake while the app is backgrounded or
+/// terminated. The notification is deliberately generic: the authenticated
+/// app fetches the pending call after the user opens it.
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (message.data['notification_type'] != 'incoming_call') return;
+
+  final callId = message.data['call_id'] as String?;
+  if (callId == null || callId.isEmpty) return;
+
+  try {
+    DartPluginRegistrant.ensureInitialized();
+    await Firebase.initializeApp();
+    await LocalNotificationService.init();
+    await LocalNotificationService.showIncomingCall(
+      callId: callId,
+      callerDisplayName: 'Incoming call',
+      isVideo: false,
+    );
+  } catch (error) {
+    // There is no foreground AppLogger instance in this isolate. Keep the
+    // failure visible to Android's logcat without exposing the push token.
+    debugPrint('[push] background wake failed: ${error.runtimeType}');
+  }
+}
 
 /// [PushTokenSource] backed by Firebase Cloud Messaging.
 ///
@@ -35,13 +65,21 @@ class FirebasePushTokenSource implements PushTokenSource {
     // FCM is Android-only for this product today: there is no iOS target, and
     // the desktop builds have no push transport. Calling into the plugin on
     // Windows throws a MissingPluginException on every launch.
-    if (!Platform.isAndroid) return false;
+    if (!Platform.isAndroid) {
+      AppLogger.instance.info('push', 'FCM unavailable on non-Android build');
+      return false;
+    }
 
     try {
       await Firebase.initializeApp();
-    } catch (e) {
+      AppLogger.instance.info('push', 'Firebase initialized');
+    } catch (error) {
       // Almost always a missing or malformed google-services.json. Treated as
       // "push not configured for this build" rather than a fatal error.
+      AppLogger.instance.warn(
+        'push',
+        'Firebase initialization failed: ${error.runtimeType}',
+      );
       return false;
     }
 
@@ -53,7 +91,10 @@ class FirebasePushTokenSource implements PushTokenSource {
       // banner - the data message still wakes the app, which is what a call
       // needs.
       final denied = settings.authorizationStatus == AuthorizationStatus.denied;
-      if (denied) return false;
+      if (denied) {
+        AppLogger.instance.warn('push', 'notification permission denied');
+        return false;
+      }
     } catch (_) {
       // An older embedding without the permission API - carry on and let the
       // token lookup decide.
@@ -64,6 +105,7 @@ class FirebasePushTokenSource implements PushTokenSource {
       onError: _refreshes.addError,
     );
     _initialized = true;
+    AppLogger.instance.info('push', 'FCM token source ready');
     return true;
   }
 

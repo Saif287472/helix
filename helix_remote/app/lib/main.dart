@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:helix_remote/app/composition_root.dart';
@@ -13,6 +15,7 @@ import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/screens/server_choice_screen.dart';
 import 'package:helix_remote/services/android_call_runtime_service.dart';
 import 'package:helix_remote/services/app_logger.dart';
+import 'package:helix_remote/services/firebase_push_token_source.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/services/onboarding_state_store.dart';
 import 'package:helix_remote/services/server_url_store.dart';
@@ -49,6 +52,11 @@ void main() {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      if (Platform.isAndroid) {
+        FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        );
+      }
       await AppLogger.instance.init('helix_remote');
       await LocalNotificationService.init();
       runApp(const HelixRemoteBootstrap());
