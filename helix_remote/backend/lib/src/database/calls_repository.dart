@@ -8,6 +8,7 @@ extension BackendCallsRepository on BackendDatabase {
     required String calleeAccountId,
     required bool isVideo,
     String? offerSdp,
+    String? ipPrivacy,
     required int createdAt,
     required int expiresAt,
     required List<String> targetDeviceIds,
@@ -22,11 +23,12 @@ extension BackendCallsRepository on BackendDatabase {
           callee_account_id,
           is_video,
           offer_sdp,
+          ip_privacy,
           status,
           created_at,
           expires_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, 'RINGING', ?, ?);
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'RINGING', ?, ?);
       ''');
       callStmt.execute([
         callId,
@@ -35,6 +37,7 @@ extension BackendCallsRepository on BackendDatabase {
         calleeAccountId,
         isVideo ? 1 : 0,
         offerSdp,
+        ipPrivacy,
         createdAt,
         expiresAt,
       ]);
@@ -74,11 +77,28 @@ extension BackendCallsRepository on BackendDatabase {
       'callee_account_id': row['callee_account_id'],
       'is_video': row['is_video'],
       'offer_sdp': row['offer_sdp'],
+      'ip_privacy': row['ip_privacy'],
       'status': row['status'],
       'created_at': row['created_at'],
       'expires_at': row['expires_at'],
       'answered_by_device_id': row['answered_by_device_id'],
     };
+  }
+
+  /// Records the policy agreed for a call.
+  ///
+  /// Written twice: once from the offer (the caller's declared policy) and
+  /// once from the answer (the strictest of both sides). Only ever
+  /// tightened by the caller in `_routeSessionSignal`, never relaxed.
+  void updatePendingCallIpPrivacy({
+    required String callId,
+    required String ipPrivacy,
+  }) {
+    final stmt = _db.prepare(
+      'UPDATE pending_calls SET ip_privacy = ? WHERE call_id = ?;',
+    );
+    stmt.execute([ipPrivacy, callId]);
+    stmt.close();
   }
 
   List<String> getPendingCallTargetDevices(String callId) {

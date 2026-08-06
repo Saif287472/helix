@@ -107,6 +107,10 @@ mixin CallsFederationHelpers on CallsModuleBase {
       targetDeviceId: targetDeviceId,
       createdAt: now,
       expiresAt: session['expires_at'] as int,
+      // The call's agreed policy, not this frame's declared one. An ICE
+      // candidate declares nothing, so taking it from the frame would send
+      // relay-only across the hop and tighten a call mid-flight.
+      effectivePolicy: CallMediaPolicy.fromWire(session['ip_privacy']),
     );
     return _proxyCallSignal(
       domain: FederationClient.domainOf(targetAccountId)!,

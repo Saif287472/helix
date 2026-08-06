@@ -31,6 +31,7 @@ class _ParsedCallSignal {
     required this.callId,
     required this.signalType,
     required this.isVideo,
+    required this.declaredPolicy,
     this.calleeAccountId,
     this.targetDeviceId,
     this.sdp,
@@ -49,6 +50,30 @@ class _ParsedCallSignal {
   final String? sdpMid;
   final int? mlineIndex;
 
+  /// The IP-privacy policy this frame's sender declared.
+  ///
+  /// Never null: an absent or unparseable `ip_privacy` resolves to
+  /// [CallMediaPolicy.relayOnly] at parse time, so "the sender said nothing"
+  /// and "the sender asked for relay-only" are deliberately the same case.
+  final CallMediaPolicy declaredPolicy;
+
+  /// This frame with policy enforcement applied.
+  ///
+  /// Only the SDP can change - a dropped candidate stops the frame from
+  /// being forwarded at all, so there is nothing to rewrite in that case.
+  _ParsedCallSignal withSdp(String? filteredSdp) => _ParsedCallSignal(
+    callId: callId,
+    signalType: signalType,
+    isVideo: isVideo,
+    declaredPolicy: declaredPolicy,
+    calleeAccountId: calleeAccountId,
+    targetDeviceId: targetDeviceId,
+    sdp: filteredSdp,
+    candidate: candidate,
+    sdpMid: sdpMid,
+    mlineIndex: mlineIndex,
+  );
+
   Map<String, dynamic> toCanonicalPayload({
     required String callerAccountId,
     required String callerDeviceId,
@@ -56,6 +81,7 @@ class _ParsedCallSignal {
     required String? targetDeviceId,
     required int createdAt,
     required int expiresAt,
+    CallMediaPolicy? effectivePolicy,
   }) {
     final payload = {
       'call_id': callId,
@@ -68,6 +94,11 @@ class _ParsedCallSignal {
       if (candidate != null) 'candidate': candidate,
       if (sdpMid != null) 'sdp_mid': sdpMid,
       if (mlineIndex != null) 'mline_index': mlineIndex,
+      // Carried across the hop so the far server enforces the same policy
+      // this one just agreed. Without it a federated call would arrive with
+      // no policy, resolve to relay-only there, and diverge from what the
+      // two clients negotiated.
+      'ip_privacy': (effectivePolicy ?? declaredPolicy).wireName,
       'created_at': createdAt,
       'expires_at': expiresAt,
     };

@@ -35,6 +35,7 @@ class RemoteCallSignal {
     this.isVideo = false,
     this.createdAt,
     this.expiresAt,
+    this.ipPrivacy,
     String? peerId,
   }) : _legacyPeerId = peerId;
 
@@ -51,6 +52,16 @@ class RemoteCallSignal {
   final bool isVideo;
   final int? createdAt;
   final int? expiresAt;
+
+  /// The IP-privacy policy this peer is asking for, sent on offers and
+  /// answers so the server can enforce the negotiated result.
+  ///
+  /// Null on the frames that do not negotiate (ICE candidates and the
+  /// terminal signals): the server holds the agreement for the call and
+  /// deliberately ignores any restatement of it, so sending one would be
+  /// noise at best and an attempt to loosen it at worst.
+  final IpPrivacyMode? ipPrivacy;
+
   final String? _legacyPeerId;
 
   @Deprecated('Use callerAccountId/calleeAccountId/targetDeviceId.')
@@ -69,6 +80,7 @@ class RemoteCallSignal {
     if (mlineIndex != null) 'mline_index': mlineIndex,
     if (sdpMid != null) 'sdp_mid': sdpMid,
     'is_video': isVideo,
+    if (ipPrivacy != null) 'ip_privacy': ipPrivacy!.wireName,
     if (createdAt != null) 'created_at': createdAt,
     if (expiresAt != null) 'expires_at': expiresAt,
     if (callerAccountId == null &&
@@ -94,6 +106,13 @@ class RemoteCallSignal {
         isVideo: json['is_video'] as bool? ?? false,
         createdAt: json['created_at'] as int?,
         expiresAt: json['expires_at'] as int?,
+        // Not `as String?`: this parses a frame relayed by a server, and a
+        // non-string here would throw inside the signal handler rather than
+        // degrade. `fromWire` already returns null for anything it does not
+        // recognise, so a bad value lands on the same path as an absent one.
+        ipPrivacy: IpPrivacyMode.fromWire(
+          json['ip_privacy'] is String ? json['ip_privacy'] as String : null,
+        ),
       );
 }
 
@@ -649,6 +668,7 @@ class RemoteCallService {
           sdp: sdp,
           isVideo: isVideo,
           calleeAccountId: peerId,
+          ipPrivacy: iceConfig.ipPrivacy,
         ),
       );
       _startOutgoingTimers(callId);
@@ -856,6 +876,7 @@ class RemoteCallService {
           sdp: sdp,
           isVideo: call.isVideo,
           targetDeviceId: call.peerDeviceId,
+          ipPrivacy: iceConfig.ipPrivacy,
         ),
       );
     } catch (_) {
@@ -1297,6 +1318,7 @@ class RemoteCallService {
         sdp: event.sdp,
         isVideo: call.isVideo,
         targetDeviceId: call.peerDeviceId,
+        ipPrivacy: iceConfig.ipPrivacy,
       ),
     );
   }
@@ -1320,6 +1342,11 @@ class RemoteCallService {
         sdp: sdp,
         isVideo: call.isVideo,
         targetDeviceId: call.peerDeviceId,
+        // Required, not decorative: the server takes the strictest of the
+        // stored policy and whatever an answer declares, so an ICE-restart
+        // answer that declared nothing would resolve to relay-only and
+        // silently tighten a call that had agreed direct-and-relay.
+        ipPrivacy: iceConfig.ipPrivacy,
       ),
     );
   }

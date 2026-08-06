@@ -133,6 +133,12 @@ void main() {
               'signal_type': 'offer',
               'call_id': 'call_fed_1',
               'sdp': 'offer_sdp_stub',
+              // This round-trip is about routing, and it carries a host
+              // candidate below. Both sides therefore have to actually ask
+              // for direct candidates: server-side media policy fails
+              // closed, so an offer that declares nothing is a relay-only
+              // call and that candidate is dropped rather than routed.
+              'ip_privacy': 'direct_and_relay',
             },
           },
           token: alice.token,
@@ -147,6 +153,10 @@ void main() {
         expect(offerPayload['caller_account_id'], equals('alice@a.test'));
         expect(offerPayload['callee_account_id'], equals('bob'));
         expect(offerPayload['target_device_id'], equals('bob_device'));
+        // The agreed policy has to survive the hop. If it did not, server B
+        // would resolve it to relay-only and the two servers would enforce
+        // different rules on the same call.
+        expect(offerPayload['ip_privacy'], equals('direct_and_relay'));
 
         // Bob answers -- must reach alice's original device on server A.
         final answerRes = await _postJson(
@@ -158,6 +168,10 @@ void main() {
               'signal_type': 'answer',
               'call_id': 'call_fed_1',
               'sdp': 'answer_sdp_stub',
+              // The answer half of the same agreement. Omitting it here
+              // would leave the call at strictest(direct_and_relay,
+              // relay_only) = relay_only, which is the point of the rule.
+              'ip_privacy': 'direct_and_relay',
             },
           },
           token: bob.token,
