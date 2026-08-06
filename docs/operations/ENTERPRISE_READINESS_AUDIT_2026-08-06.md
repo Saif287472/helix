@@ -70,6 +70,29 @@ the coverage figure — the true product-wide number is higher than 58.41%.
   certainly the origin of the risk register's incorrect "not directly declared by Helix" claim. It
   *is* directly declared, at `app/pubspec.yaml:34`.
 
+### Phase 2 — what was and was not done
+
+Two items are deliberately incomplete, recorded here rather than quietly closed:
+
+- **HIGH-2 covers Android only.** `FLAG_SECURE` is applied through a
+  `com.helix.remote/screen_security` channel, reference-counted so overlapping route
+  transitions never drop the flag mid-swap, and applied to the conversation, conversation-list,
+  and backup screens. The **Windows** desktop build is still capturable — that needs
+  `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` in the C++ runner, which is a separate piece
+  of work.
+- **MED-11 is partial by design.** The 19 app-layer swallowed exceptions now log (control flow
+  unchanged — the failure is still swallowed, it is simply no longer invisible). The remaining 26
+  live in migration files and are `ALTER TABLE … ADD COLUMN` idempotency guards where
+  "column already exists" *is* the expected outcome; rewriting them would add risk to schema
+  migration for no diagnostic gain. `AppLogger`'s own three catches stay silent deliberately —
+  logging a logging failure recurses.
+
+One protocol note: **the server must be deployed before or with the client.** The 401/403 split and
+the invite-lookup POST both change the contract. Both were written so an *older client* keeps
+working against the new server (the client retains a narrow legacy-403 branch keyed to the exact
+old response text; the server still answers the GET invite lookup), but a *newer client* against an
+old server would not.
+
 ### Post-Phase-1 baseline
 
 | Gate | Result |
@@ -147,11 +170,11 @@ Weighting: Security ×2, Architecture ×1.5, Testing ×1.5, all others ×1. → 
 |---|---|---|---|
 | **CRIT-1** ✅ | Reserved admin account ID `"admin"` is claimable by any registering user → full operator console takeover | Critical | CONFIRMED · **fixed (Phase 1)** |
 | **CRIT-2** ✅ | Refresh tokens are accepted as access tokens on every REST route and the WebSocket | High→Critical | CONFIRMED · **fixed (Phase 1)** |
-| **HIGH-1** | Client diagnostic log is unredacted, persistent, and user-shared — contradicts `LOG_REDACTION.md` | High | CONFIRMED |
-| **HIGH-2** | No `FLAG_SECURE` anywhere: message content is screenshot-, recorder-, and recents-visible | High | CONFIRMED |
-| **HIGH-3** | `android:allowBackup` left at default `true` — app-private data extractable via ADB/cloud backup | High | CONFIRMED |
+| **HIGH-1** ✅ | Client diagnostic log is unredacted, persistent, and user-shared — contradicts `LOG_REDACTION.md` | High | CONFIRMED · **fixed (Phase 2)** |
+| **HIGH-2** ✅ | No `FLAG_SECURE` anywhere: message content is screenshot-, recorder-, and recents-visible | High | CONFIRMED · **fixed on Android (Phase 2)**; Windows outstanding |
+| **HIGH-3** ✅ | `android:allowBackup` left at default `true` — app-private data extractable via ADB/cloud backup | High | CONFIRMED · **fixed (Phase 2)** |
 | **HIGH-4** ✅ | `pubspec.lock` is not committed despite policy — builds are not reproducible | High | CONFIRMED · **fixed (Phase 0)** |
-| **HIGH-5** | HTTP 403 is overloaded for both "expired token" and "not permitted", causing spurious refresh-token rotation on every authorization denial | High | CONFIRMED |
+| **HIGH-5** ✅ | HTTP 403 is overloaded for both "expired token" and "not permitted", causing spurious refresh-token rotation on every authorization denial | High | CONFIRMED · **fixed (Phase 2)** |
 | **MED-1** | Full loaded-window re-fetch + re-decrypt on every inbound message (O(n²) under burst) | Medium | CONFIRMED |
 | **MED-2** | Client has no state management, router, design system, localization, or responsive layout | Medium | CONFIRMED |
 | **MED-3** ✅ | Non-constant-time comparison of JWT signature and admin bearer token | Medium | CONFIRMED · **fixed (Phase 1)** |
@@ -162,11 +185,11 @@ Weighting: Security ×2, Architecture ×1.5, Testing ×1.5, all others ×1. → 
 | **MED-8** | Client dependencies materially behind current — `flutter_local_notifications` 4 majors, `flutter_contacts` 1 major, `connectivity_plus` 1 major | Medium | CONFIRMED |
 | **MED-9** | Dependency risk register is factually wrong about `file_picker` | Medium | CONFIRMED |
 | **MED-10** ✅ | `remote_release_gate.ps1` is unrunnable — statement precedes `param()` | Medium | CONFIRMED · **fixed (Phase 0)**, along with two dev scripts carrying the same defect |
-| **MED-11** | 45 silently swallowed exceptions | Medium | CONFIRMED |
+| **MED-11** ◐ | 45 silently swallowed exceptions | Medium | CONFIRMED · **app layer fixed (Phase 2)**; 26 migration guards left as legitimate |
 | **MED-12** | CI has no coverage gate, no vulnerability scanning, and no integration tests | Medium | CONFIRMED |
 | **LOW-1** | No release obfuscation / R8 / resource shrinking | Low | CONFIRMED |
 | **LOW-2** | Duplicate private helpers (`_bytesToHex` / `_hexBytes`), dead `is_admin` claim | Low | CONFIRMED |
-| **LOW-3** | Invite codes travel in URL query strings | Low | CONFIRMED |
+| **LOW-3** ✅ | Invite codes travel in URL query strings | Low | CONFIRMED · **fixed (Phase 2)** |
 | **LOW-4** | Unused Android foreground-service permissions declared | Low | POTENTIAL |
 | **LOW-5** | No iOS support | Low | CONFIRMED |
 

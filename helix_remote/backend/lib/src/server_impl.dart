@@ -499,11 +499,22 @@ class BackendServer {
         // access token meaningless and let a stolen 7-day refresh token skip
         // /accounts/refresh entirely - which is the only path that detects
         // reuse and revokes the device's sessions.
+        // 401 for authentication failures, 403 for authorization ones.
+        //
+        // This used to answer 403 for an expired token, which forced the
+        // client to treat 403 as "refresh and retry". But `AppError.forbidden`
+        // is also how ~40 handlers report ordinary permission denials ("only
+        // the host can kick participants"), so every legitimate denial spent a
+        // refresh-token rotation and re-sent a request that could never
+        // succeed. Splitting the codes is what lets the client stop.
         final claims = jwt.verifyToken(token, expect: ExpectedTokenType.access);
         if (claims == null) {
           return Response(
-            403,
-            body: jsonEncode({'error': 'Forbidden: Invalid or expired token'}),
+            401,
+            body: jsonEncode({
+              'error': 'Unauthorized: Invalid or expired token',
+              'code': 'token_invalid',
+            }),
             headers: {'Content-Type': 'application/json'},
           );
         }
@@ -513,16 +524,27 @@ class BackendServer {
         if (accountId == null ||
             deviceId == null ||
             !db.isDeviceActive(accountId, deviceId)) {
+          // 401, not 403: a revoked device means the credential no longer
+          // identifies anyone, so the right client response is to re-
+          // authenticate rather than to treat it as a permission problem.
           return Response(
-            403,
-            body: jsonEncode({'error': 'Forbidden: Device inactive'}),
+            401,
+            body: jsonEncode({
+              'error': 'Unauthorized: Device inactive',
+              'code': 'device_inactive',
+            }),
             headers: {'Content-Type': 'application/json'},
           );
         }
         if (db.isAccountSuspended(accountId)) {
+          // Stays 403: the credential is valid and the caller is who they say
+          // they are - they are simply not allowed. Refreshing would not help.
           return Response(
             403,
-            body: jsonEncode({'error': 'Forbidden: Account suspended'}),
+            body: jsonEncode({
+              'error': 'Forbidden: Account suspended',
+              'code': 'account_suspended',
+            }),
             headers: {'Content-Type': 'application/json'},
           );
         }

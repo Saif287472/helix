@@ -1,3 +1,4 @@
+import 'package:helix_remote/services/app_logger.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -412,7 +413,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Future<void> _sync() async {
     try {
       await widget.root.runtimeCoordinator.softSync();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.warn('contacts', 'sync failed: \$e');
+    }
     _reload();
   }
 

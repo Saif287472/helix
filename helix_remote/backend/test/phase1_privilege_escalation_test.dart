@@ -234,7 +234,7 @@ void main() {
       );
       expect(
         withRefresh.statusCode,
-        equals(403),
+        equals(401),
         reason: 'a refresh token must not authenticate a REST request',
       );
     });
@@ -310,6 +310,80 @@ void main() {
       expect(
         jwt.verifyToken(refresh, expect: ExpectedTokenType.access),
         isNull,
+      );
+    });
+  });
+
+  group('HIGH-5 401 means "who are you", 403 means "not allowed"', () {
+    test('an invalid token is 401, not 403', () async {
+      final response = await _get(
+        client,
+        port,
+        '/api/v1/contacts/',
+        token: 'not.a.token',
+      );
+      expect(response.statusCode, equals(401));
+      expect(response.body, contains('token_invalid'));
+    });
+
+    test('a revoked device is 401 — the credential no longer identifies '
+        'anyone', () async {
+      final account = await _registerAndLogin(
+        client,
+        port,
+        server.db,
+        ed25519,
+        accountId: 'revoked1',
+        username: 'revoked_phone',
+        deviceId: 'revoked_device',
+      );
+      expect(
+        (await _get(
+          client,
+          port,
+          '/api/v1/contacts/',
+          token: account.accessToken,
+        )).statusCode,
+        equals(200),
+      );
+
+      server.db.revokeDevice('revoked1', 'revoked_device');
+
+      final response = await _get(
+        client,
+        port,
+        '/api/v1/contacts/',
+        token: account.accessToken,
+      );
+      expect(response.statusCode, equals(401));
+      expect(response.body, contains('device_inactive'));
+    });
+
+    test('a permission denial stays 403, so the client does not burn a '
+        'token rotation on it', () async {
+      final account = await _registerAndLogin(
+        client,
+        port,
+        server.db,
+        ed25519,
+        accountId: 'plainuser',
+        username: 'plain_phone',
+        deviceId: 'plain_device',
+      );
+
+      // Authenticated perfectly well, simply not an operator. This is the
+      // case that used to be indistinguishable from an expired token.
+      final response = await _get(
+        client,
+        port,
+        '/api/v1/ops/metrics',
+        token: account.accessToken,
+      );
+      expect(response.statusCode, equals(403));
+      expect(
+        response.body,
+        isNot(contains('token_invalid')),
+        reason: 'a permission denial must not look like an auth failure',
       );
     });
   });

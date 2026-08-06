@@ -130,7 +130,7 @@ void main() {
         '/api/v1/privacy/export',
         token: alice.accessToken,
       );
-      expect(afterDelete.statusCode, equals(403));
+      expect(afterDelete.statusCode, equals(401));
     },
   );
 

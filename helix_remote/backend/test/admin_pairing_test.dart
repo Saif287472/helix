@@ -297,7 +297,7 @@ void main() {
         '/api/v1/ops/config',
         token: oldToken,
       );
-      expect(withOld.statusCode, equals(403));
+      expect(withOld.statusCode, equals(401));
 
       final withNew = await _getJson(
         client,

@@ -70,7 +70,12 @@ class _HomeScreenState extends State<HomeScreen> {
           .where((r) => r.direction == 'received' && r.status == 'Pending')
           .length;
       if (mounted) setState(() => _pendingContactRequests = count);
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.warn(
+        'home',
+        'contact request badge refresh failed: \$e',
+      );
+    }
   }
 
   @override

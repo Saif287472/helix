@@ -1,3 +1,4 @@
+import 'package:helix_remote/services/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
@@ -99,7 +100,11 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
         final name = widget.messagingService.peerDisplayName(convId);
         if (name != null && name.isNotEmpty) return name;
       }
-    } catch (_) {}
+    } catch (e) {
+      // Falls through to the contact-list lookup below, so the UI still
+      // resolves a name where it can.
+      AppLogger.instance.warn('calls_tab', 'peer name lookup failed: \$e');
+    }
     for (final contact in widget.messagingService.acceptedContacts()) {
       if (contact.peerAccountId == peerId && contact.nickname.isNotEmpty) {
         return contact.nickname;

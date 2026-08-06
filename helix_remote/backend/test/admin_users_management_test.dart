@@ -182,7 +182,7 @@ void main() {
       const badToken = 'not_a_real_admin_token';
       expect(
         (await getJson('/api/v1/ops/users', token: badToken)).statusCode,
-        equals(403),
+        equals(401),
       );
       expect(
         (await postJson(
@@ -190,7 +190,7 @@ void main() {
           null,
           token: badToken,
         )).statusCode,
-        equals(403),
+        equals(401),
       );
       expect(
         (await postJson(
@@ -198,7 +198,7 @@ void main() {
           null,
           token: badToken,
         )).statusCode,
-        equals(403),
+        equals(401),
       );
       expect(
         (await postJson(
@@ -206,7 +206,7 @@ void main() {
           null,
           token: badToken,
         )).statusCode,
-        equals(403),
+        equals(401),
       );
       expect(
         (await postJson(
@@ -214,7 +214,7 @@ void main() {
           null,
           token: badToken,
         )).statusCode,
-        equals(403),
+        equals(401),
       );
     },
   );
@@ -330,7 +330,7 @@ void main() {
           '/api/v1/accounts/devices',
           token: accessToken,
         );
-        expect(afterDelete.statusCode, equals(403));
+        expect(afterDelete.statusCode, equals(401));
 
         final loginAttempt = await login(
           accountId: 'delete_user',
@@ -391,7 +391,7 @@ void main() {
         '/api/v1/accounts/devices',
         token: accessToken,
       );
-      expect(afterBlock.statusCode, equals(403));
+      expect(afterBlock.statusCode, equals(401));
       final list = await getJson(
         '/api/v1/ops/users?limit=50&offset=0',
         token: identity.adminToken,
@@ -609,7 +609,7 @@ void main() {
         null,
         token: 'not_a_real_admin_token',
       );
-      expect(cancel.statusCode, equals(403));
+      expect(cancel.statusCode, equals(401));
     });
   });
 }

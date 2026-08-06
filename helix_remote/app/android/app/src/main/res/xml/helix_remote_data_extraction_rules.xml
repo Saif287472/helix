@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ (API 31) backup/transfer policy.
+
+    android:allowBackup="false" already refuses cloud and adb backup. This
+    file covers device-to-device transfer, which allowBackup does not govern,
+    and states the refusal explicitly rather than relying on a default.
+
+    Everything is excluded. There is nothing in this app's private storage
+    that is safe to move off the device by a mechanism the user did not
+    explicitly drive: the message database is SQLCipher-encrypted under a key
+    held in the Android Keystore, which does not travel, so a copied database
+    is useless at best and a leak at worst. Users who want their history on a
+    new device use the app's own backup flow, which is key-wrapped and
+    passphrase-protected.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+        <exclude domain="device_root" />
+        <exclude domain="device_file" />
+        <exclude domain="device_database" />
+        <exclude domain="device_sharedpref" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+        <exclude domain="device_root" />
+        <exclude domain="device_file" />
+        <exclude domain="device_database" />
+        <exclude domain="device_sharedpref" />
+    </device-transfer>
+</data-extraction-rules>

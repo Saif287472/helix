@@ -8,6 +8,36 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // FLAG_SECURE. Set while a screen showing message content, backup key
+        // material, or a verification QR is in front. It blocks screenshots
+        // and screen recording, and - the part that matters most - blanks the
+        // entry in the recents/task-switcher, which otherwise keeps the last
+        // rendered conversation in plaintext for anyone who picks up the
+        // device.
+        //
+        // Driven per screen rather than set once for the whole app so that
+        // ordinary screens (settings, onboarding, diagnostics) stay
+        // screenshot-able, which is what support and bug reports need.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.helix.remote/screen_security"
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "setSecure") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val secure = call.argument<Boolean>("secure") ?: false
+            runOnUiThread {
+                if (secure) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
+            result.success(null)
+        }
+
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "com.helix.remote/calls"
