@@ -10,6 +10,11 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
     if (runtimeCoordinator.snapshot.state == RemoteRuntimeState.ready) {
       markReady();
     }
+    // After the runtime is up, so the REST client can authenticate: the
+    // push-token endpoint is authenticated and registering earlier just 401s.
+    // Not awaited into the startup path's critical section - a slow or failed
+    // registration must not delay the app becoming usable.
+    unawaited(_startPushRegistration());
     await _recoverPendingCalls(reason: 'startup');
     // Load own profile display name after runtime is running
     try {
@@ -17,6 +22,16 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
       final dn = profile['display_name'] as String? ?? '';
       if (dn.isNotEmpty) _messagingService?.setDisplayName(dn);
     } catch (_) {}
+  }
+
+  Future<void> _startPushRegistration() async {
+    final service = _pushRegistration ??= PushRegistrationService(
+      source: FirebasePushTokenSource(),
+      // Resolved per call: the REST client is rebuilt when the server URL
+      // or session changes, so capturing one here would pin a stale one.
+      restClient: () => _requireReady(_restClient, 'restClient'),
+    );
+    await service.start();
   }
 
   Future<void> _recoverPendingCalls({required String reason}) async {
@@ -213,6 +228,11 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
 
   @override
   Future<void> _purgeLocalSessionOnly() async {
+    // Before the credentials go: the deregistration endpoint is
+    // authenticated, so once the access token is deleted there is no way to
+    // tell the server to stop waking this device. It swallows its own
+    // failures - sign-out must not be blocked by an unreachable server.
+    await _pushRegistration?.deregister();
     final store = _requireReady(_keyValue, 'keyValue');
     for (final key in [
       'access_token',

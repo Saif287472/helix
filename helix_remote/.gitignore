@@ -12,6 +12,13 @@ build/
 .vscode/
 coverage/
 
+# Firebase deployment material. Ties the build to a specific Firebase
+# project and is supplied per deployment, not committed. Its absence is a
+# supported state: app/build.gradle.kts skips the Google Services plugin and
+# FirebasePushTokenSource reports push unavailable.
+**/google-services.json
+**/GoogleService-Info.plist
+
 # Android
 app/android/.gradle/
 app/android/local.properties

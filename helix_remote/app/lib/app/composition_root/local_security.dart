@@ -144,6 +144,12 @@ mixin RemoteCompositionLocalSecurity on RemoteCompositionRootBase {
     _setState(RemoteStartupState.idle);
     unawaited(_stateController.close());
     unawaited(_callStatusController.close());
+    // Only tears down the local subscription and SDK handle - it does not
+    // deregister with the server. Disposing the root happens on app shutdown
+    // and account switch, where the device should keep receiving call wakes.
+    // Deregistration belongs to sign-out alone (_purgeLocalSessionOnly).
+    await _boundedDispose(_pushRegistration?.dispose());
+    _pushRegistration = null;
     await _boundedDispose(_runtimeCoordinator?.dispose());
     _runtimeCoordinator = null;
     await _boundedDispose(disconnectWebSocket());

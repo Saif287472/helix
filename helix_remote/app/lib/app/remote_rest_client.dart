@@ -598,6 +598,20 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       _request('GET', 'calls/turn-credentials');
 
   @override
+  Future<Map<String, dynamic>> registerPushToken({
+    required String pushToken,
+    String tokenType = 'FCM',
+  }) => _request(
+    'POST',
+    'calls/push-token',
+    body: {'push_token': pushToken, 'token_type': tokenType},
+  );
+
+  @override
+  Future<Map<String, dynamic>> deregisterPushToken() =>
+      _request('DELETE', 'calls/push-token');
+
+  @override
   Future<void> requestAccountDeletion({required String confirmation}) async {
     await _request(
       'DELETE',

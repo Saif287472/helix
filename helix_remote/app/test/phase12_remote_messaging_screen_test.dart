@@ -270,6 +270,17 @@ class _FakeRestClient implements HelixRemoteRestClient {
   Future<Map<String, dynamic>> cancelPendingCall(String callId) async => {};
 
   @override
+  Future<Map<String, dynamic>> registerPushToken({
+    required String pushToken,
+    String tokenType = 'FCM',
+  }) async => {'status': 'registered'};
+
+  @override
+  Future<Map<String, dynamic>> deregisterPushToken() async => {
+    'status': 'deregistered',
+  };
+
+  @override
   Future<Map<String, dynamic>> getTurnCredentials() async => {};
 }
 

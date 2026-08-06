@@ -20,7 +20,9 @@ import 'package:helix_remote/app/remote_sync_gateway.dart';
 import 'package:helix_remote/app/remote_websocket_client.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/services/message_latency_tracer.dart';
+import 'package:helix_remote/services/firebase_push_token_source.dart';
 import 'package:helix_remote/services/phone_contacts_service.dart';
+import 'package:helix_remote/services/push_registration_service.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 import 'package:helix_remote_domain/models.dart';
@@ -255,6 +257,8 @@ abstract class RemoteCompositionRootBase {
   set _attachmentService(RemoteAttachmentService? value);
   RemoteCallService? get _callService;
   set _callService(RemoteCallService? value);
+  PushRegistrationService? get _pushRegistration;
+  set _pushRegistration(PushRegistrationService? value);
   // Used by composition mixins; private abstract members are not seen as direct references.
   // ignore: unused_element
   RemoteGroupService? get _groupService;
@@ -398,6 +402,8 @@ class RemoteCompositionRoot extends RemoteCompositionRootBase
   RemoteAttachmentService? _attachmentService;
   @override
   RemoteCallService? _callService;
+  @override
+  PushRegistrationService? _pushRegistration;
   @override
   RemoteGroupService? _groupService;
   @override

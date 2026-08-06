@@ -38,6 +38,13 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   share_plus: ^13.1.0
   flutter_local_notifications: ^18.0.0
+  # Push wake for incoming calls. Without a registered push token the
+  # server's wake notification has nowhere to go and a closed app never
+  # rings - see services/push_registration_service.dart. Both degrade to
+  # "push unavailable" when google-services.json is absent, which is the
+  # state of any checkout that has not been given deployment material.
+  firebase_core: ^4.13.0
+  firebase_messaging: ^16.5.0
   connectivity_plus: ^6.1.3
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.2.0

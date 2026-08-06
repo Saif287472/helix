@@ -154,6 +154,20 @@ abstract class HelixRemoteRestClient {
 
   Future<Map<String, dynamic>> getTurnCredentials();
 
+  /// Registers this device's push token so the server can wake a closed app
+  /// for an incoming call. The server keys tokens by the device id in the
+  /// access token, so re-registering replaces rather than duplicates.
+  Future<Map<String, dynamic>> registerPushToken({
+    required String pushToken,
+    String tokenType = 'FCM',
+  });
+
+  /// Drops this device's push token. Called on sign-out, before the session
+  /// credentials are purged - the endpoint is authenticated, so afterwards
+  /// there is no way to reach it and the server would keep waking a device
+  /// that is no longer signed in.
+  Future<Map<String, dynamic>> deregisterPushToken();
+
   set accessToken(String? token);
 
   Future<void> close();
