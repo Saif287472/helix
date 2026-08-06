@@ -37,10 +37,13 @@ class GuideServerConfigPage extends StatelessWidget {
           title: 'Optional settings',
           detail:
               'HELIX_REMOTE_TURN_URL / HELIX_REMOTE_TURN_SECRET for '
-              'relay-only call support, HELIX_REMOTE_FCM_PROJECT_ID / '
-              'HELIX_REMOTE_FCM_ACCESS_TOKEN for push wakeups. Both are '
-              'optional - the server runs fine without them, just with '
-              'those features disabled.',
+              'relay-only call support, and HELIX_REMOTE_FCM_PROJECT_ID '
+              'plus HELIX_REMOTE_FCM_SERVICE_ACCOUNT for push wakeups. '
+              'The service account is the JSON key file Firebase gives '
+              'you, either inline or as a path to it - the server signs '
+              'with it and renews its own access tokens.\n\n'
+              'Both features are optional; the server runs fine without '
+              'them, just with those features disabled.',
         ),
         const SizedBox(height: 8),
         Text(

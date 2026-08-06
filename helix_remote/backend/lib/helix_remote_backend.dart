@@ -1,4 +1,5 @@
 export 'src/server_impl.dart';
+export 'src/fcm_access_token.dart';
 export 'src/push_provider.dart';
 export 'src/database.dart';
 export 'src/websocket.dart';

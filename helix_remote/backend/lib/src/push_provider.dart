@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:helix_remote_backend/src/app_error.dart';
+import 'package:helix_remote_backend/src/fcm_access_token.dart';
 
 abstract interface class PushProvider {
   bool get isConfigured;
@@ -30,21 +31,35 @@ final class NoopPushProvider implements PushProvider {
   }
 }
 
-/// FCM HTTP v1 push provider. Requires a GCP project ID and a pre-obtained
-/// OAuth2 access token (HELIX_REMOTE_FCM_PROJECT_ID + HELIX_REMOTE_FCM_ACCESS_TOKEN).
+/// FCM HTTP v1 push provider. Requires a GCP project ID
+/// (HELIX_REMOTE_FCM_PROJECT_ID) and a token source.
 ///
-/// Callers are responsible for refreshing the access token before it expires.
+/// The token is fetched per delivery rather than held as a field, because
+/// FCM access tokens last an hour and a server outlives that many times
+/// over. [ServiceAccountFcmAccessToken] caches and refreshes, so this is a
+/// field read in the common case rather than a round trip.
+///
 /// The minimal payload (notification_type, call_id, target_device_id) is sent
 /// as FCM data-only message with high Android priority so the app can handle
 /// it without displaying a system notification.
 final class FcmPushProvider implements PushProvider {
-  FcmPushProvider({required this.projectId, required this.accessToken});
+  FcmPushProvider({required this.projectId, required this.tokenSource});
+
+  /// A fixed, already-obtained token. Expires within the hour and cannot be
+  /// renewed — for tests and one-off manual checks, not a deployment.
+  FcmPushProvider.staticToken({
+    required String projectId,
+    required String accessToken,
+  }) : this(
+         projectId: projectId,
+         tokenSource: StaticFcmAccessToken(accessToken),
+       );
 
   final String projectId;
-  final String accessToken;
+  final FcmAccessTokenSource tokenSource;
 
   @override
-  bool get isConfigured => projectId.isNotEmpty && accessToken.isNotEmpty;
+  bool get isConfigured => projectId.isNotEmpty;
 
   @override
   Future<void> deliver({
@@ -65,6 +80,10 @@ final class FcmPushProvider implements PushProvider {
       'fcm.googleapis.com',
       '/v1/projects/$projectId/messages:send',
     );
+
+    // Before opening the connection, so a refresh failure surfaces as itself
+    // rather than as a delivery error against a half-built request.
+    final accessToken = await tokenSource.bearerToken();
 
     final http = HttpClient();
     try {

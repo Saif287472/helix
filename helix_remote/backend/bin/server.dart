@@ -4,6 +4,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:helix_remote_backend/src/env_sanitize.dart';
+import 'package:helix_remote_backend/src/fcm_access_token.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
 import 'package:helix_remote_backend/src/server_impl.dart';
 import 'package:helix_remote_backend/src/server_log.dart';
@@ -119,20 +120,42 @@ Future<void> _run(ServerLogSink logSink) async {
   final turnUrl = Platform.environment['HELIX_REMOTE_TURN_URL'] ?? '';
   final turnSecret = Platform.environment['HELIX_REMOTE_TURN_SECRET'] ?? '';
 
-  // FCM push provider — validated as a pair by validateStartupEnv above.
+  // FCM push provider — validated by validateStartupEnv above, which has
+  // already refused to start if the project ID is set without a credential.
   final fcmProjectId =
       Platform.environment['HELIX_REMOTE_FCM_PROJECT_ID'] ?? '';
+  final fcmServiceAccount =
+      Platform.environment['HELIX_REMOTE_FCM_SERVICE_ACCOUNT'] ?? '';
   final fcmAccessToken =
       Platform.environment['HELIX_REMOTE_FCM_ACCESS_TOKEN'] ?? '';
+
+  // Parsed before the server starts listening. A malformed or missing key
+  // file is a deploy mistake, and the only cheap moment to report it is now
+  // — the alternative is a stack trace on the first missed call, hours
+  // later, in whatever log nobody is tailing.
+  final serviceAccountJson = readFcmServiceAccount(fcmServiceAccount);
+
   final PushProvider pushProvider;
-  if (fcmProjectId.isNotEmpty && fcmAccessToken.isNotEmpty) {
+  if (fcmProjectId.isEmpty) {
+    pushProvider = const NoopPushProvider();
+  } else if (serviceAccountJson != null) {
     pushProvider = FcmPushProvider(
+      projectId: fcmProjectId,
+      tokenSource: ServiceAccountFcmAccessToken(
+        serviceAccountJson: serviceAccountJson,
+      ),
+    );
+    print('FCM push configured for project: $fcmProjectId (service account)');
+  } else {
+    pushProvider = FcmPushProvider.staticToken(
       projectId: fcmProjectId,
       accessToken: fcmAccessToken,
     );
-    print('FCM push configured for project: $fcmProjectId');
-  } else {
-    pushProvider = const NoopPushProvider();
+    print(
+      'FCM push configured for project: $fcmProjectId using a static access '
+      'token. Google expires these after an hour and this server cannot '
+      'renew one — set HELIX_REMOTE_FCM_SERVICE_ACCOUNT for a deployment.',
+    );
   }
 
   // Bulk SMS (BulkSMSBD) — validated as a pair by validateStartupEnv above.
