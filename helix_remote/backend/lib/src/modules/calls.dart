@@ -175,9 +175,10 @@ class CallsModule extends CallsModuleBase
     this.wsRelay, {
     required this.turnSecret,
     required this.turnUrl,
+    PushProvider? pushProvider,
     this.federationClient,
     this.localDomain,
-  }) {
+  }) : pushProvider = pushProvider ?? const NoopPushProvider() {
     wsRelay.setCallSignalHandler(_handleWebSocketSignal);
   }
 
@@ -221,9 +222,9 @@ class CallsModule extends CallsModuleBase
     'policy_sdp_candidates_stripped': 0,
   };
 
+  // F7: push provider for call wake (optional; noop when unconfigured).
   @override
-  // F7: push provider for offline call wake (optional; noop when unconfigured).
-  late PushProvider pushProvider = const NoopPushProvider();
+  final PushProvider pushProvider;
 
   Handler get router {
     final r = Router();

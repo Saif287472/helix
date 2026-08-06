@@ -183,10 +183,10 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
 
   @override
   void _enqueueCallWake(String targetDeviceId, String callId) {
-    final notifId =
+    final eventId =
         '${targetDeviceId}_call_${DateTime.now().millisecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}';
     db.enqueueOutbox(
-      notifId,
+      eventId,
       'PUSH_NOTIFICATION',
       jsonEncode({
         'notification_type': 'incoming_call',
@@ -212,6 +212,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
               },
             )
             .then((_) {
+              db.updateOutboxStatus(eventId, 'COMPLETED', 0);
               logServerError(
                 '[CALL] push_delivered call_id=$callId device=$targetDeviceId',
               );
@@ -220,6 +221,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
               if (e is FcmTokenNotFoundException) {
                 // Token is stale — prune it so we stop wasting FCM quota.
                 db.deletePushToken(deviceId: targetDeviceId);
+                db.updateOutboxStatus(eventId, 'COMPLETED', 0);
                 logServerError(
                   '[CALL] push_token_pruned device=$targetDeviceId reason=expired',
                 );

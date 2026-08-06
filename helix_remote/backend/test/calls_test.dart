@@ -48,6 +48,21 @@ class TestHttpClient {
   }
 }
 
+class RecordingPushProvider implements PushProvider {
+  final deliveries = <({String token, Map<String, dynamic> data})>[];
+
+  @override
+  bool get isConfigured => true;
+
+  @override
+  Future<void> deliver({
+    required String token,
+    required Map<String, dynamic> data,
+  }) async {
+    deliveries.add((token: token, data: Map.of(data)));
+  }
+}
+
 Future<Map<String, dynamic>> nextWsJson(
   StreamIterator<dynamic> iterator,
 ) async {
@@ -60,6 +75,7 @@ void main() {
   late BackendServer server;
   late int port;
   late String tokenA;
+  late RecordingPushProvider pushProvider;
   // Kept so a test can age a row directly. Reaching past the repository is
   // deliberate: simulating "this call has outlived its deadline" is a
   // storage fact, and inventing a production setter to express it would put
@@ -68,6 +84,7 @@ void main() {
 
   setUp(() async {
     rawSqlite = sqlite3.openInMemory();
+    pushProvider = RecordingPushProvider();
     server = BackendServer.create(
       sqliteDb: rawSqlite,
       jwtSecret: 'test_jwt_secret_calls_phase15',
@@ -75,6 +92,7 @@ void main() {
       rateLimitRefillRate: 50.0,
       turnSecret: 'test_turn_secret',
       turnUrl: 'turn:turn.test.example:3478',
+      pushProvider: pushProvider,
     );
 
     server.db.createAccount('user1', 'alice', 'alice_key');
@@ -565,6 +583,44 @@ void main() {
       expect(payload['notification_type'], equals('incoming_call'));
     },
   );
+
+  test('offer sends push wake even when the WebSocket is connected', () async {
+    server.db.upsertPushToken(
+      tokenId: 'token_device2',
+      accountId: 'user2',
+      deviceId: 'device2',
+      pushToken: 'fcm_device2',
+      tokenType: 'FCM',
+      now: DateTime.now().millisecondsSinceEpoch,
+    );
+    final tokenB = server.jwt.generateToken({
+      'account_id': 'user2',
+      'device_id': 'device2',
+    }, const Duration(hours: 1));
+    final socket = await WebSocket.connect(
+      'ws://127.0.0.1:$port/api/v1/ws',
+      headers: {'Authorization': 'Bearer $tokenB'},
+    );
+    try {
+      final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
+      final res = await client.post('/api/v1/calls/signal', {
+        'target_account_id': 'user2',
+        'payload': {'signal_type': 'offer', 'call_id': 'call_socket_wake'},
+      });
+
+      expect(res.status, equals(200));
+      await Future<void>.delayed(Duration.zero);
+      expect(pushProvider.deliveries, hasLength(1));
+      expect(pushProvider.deliveries.single.token, equals('fcm_device2'));
+      expect(
+        pushProvider.deliveries.single.data['call_id'],
+        equals('call_socket_wake'),
+      );
+      expect(server.db.getPendingOutbox(), isEmpty);
+    } finally {
+      await socket.close();
+    }
+  });
 
   test('signal endpoint rejects missing call target', () async {
     final client = TestHttpClient('http://127.0.0.1:$port', tokenA);

@@ -328,11 +328,19 @@ mixin CallsSignalingHandlers on CallsModuleBase {
     var delivered = 0;
     for (final targetDeviceId in targetDeviceIds) {
       final targetPayload = {...canonical, 'target_device_id': targetDeviceId};
-      if (_deliverSignal(targetDeviceId, targetPayload, requestId: requestId)) {
+      final socketDelivered = _deliverSignal(
+        targetDeviceId,
+        targetPayload,
+        requestId: requestId,
+      );
+      if (socketDelivered) {
         delivered++;
-      } else {
-        _enqueueCallWake(targetDeviceId, signal.callId);
       }
+      // A live socket does not prove that the app can process the event: the
+      // OS may have suspended its Dart isolate while the connection remains
+      // registered. The data-only wake is harmless in the foreground because
+      // the app handles the call through the socket there.
+      _enqueueCallWake(targetDeviceId, signal.callId);
     }
     if (delivered > 0) {
       _increment('offers_delivered');

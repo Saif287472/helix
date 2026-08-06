@@ -39,6 +39,7 @@ class BackendServer {
   final RateLimiter rateLimiter;
   final WebSocketRelay wsRelay;
   final OutboxWorker outboxWorker;
+  final PushProvider pushProvider;
   final Directory? attachmentsStorageDir;
   final int? maxAttachmentBytes;
   final int? accountQuotaBytes;
@@ -72,6 +73,7 @@ class BackendServer {
     required this.rateLimiter,
     required this.wsRelay,
     required this.outboxWorker,
+    this.pushProvider = const NoopPushProvider(),
     this.attachmentsStorageDir,
     this.maxAttachmentBytes,
     this.accountQuotaBytes,
@@ -140,6 +142,7 @@ class BackendServer {
       rateLimiter: rateLimiter,
       wsRelay: wsRelay,
       outboxWorker: outboxWorker,
+      pushProvider: pushProvider ?? const NoopPushProvider(),
       attachmentsStorageDir: attachmentsStorageDir,
       maxAttachmentBytes: maxAttachmentBytes,
       accountQuotaBytes: accountQuotaBytes,
@@ -238,6 +241,7 @@ class BackendServer {
       wsRelay,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
+      pushProvider: pushProvider,
       federationClient: federationClient,
       localDomain: federationDomain,
     );
