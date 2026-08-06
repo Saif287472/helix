@@ -174,8 +174,12 @@ class _AddContactScreenState extends State<AddContactScreen>
           labelColor: cs.onPrimary,
           unselectedLabelColor: cs.onPrimary.withAlpha(160),
           indicatorColor: cs.onPrimary,
+          // 'Search' rather than 'Search names': three equal-width tabs give
+          // each a third of the screen, and the longer label was being cut
+          // mid-word ("Search name") on a 1080p phone before any text
+          // scaling was applied. The other two are already one word.
           tabs: const [
-            Tab(icon: Icon(Icons.search), text: 'Search names'),
+            Tab(icon: Icon(Icons.search), text: 'Search'),
             Tab(icon: Icon(Icons.qr_code_2), text: 'My QR'),
             Tab(icon: Icon(Icons.qr_code_scanner), text: 'Scan'),
           ],
@@ -277,7 +281,12 @@ class _AddContactScreenState extends State<AddContactScreen>
   Widget _buildShareTab() {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    return Padding(
+    // Scrollable rather than a bare Column: this tab's height is not fixed.
+    // The link grows with the account id and signature, the caption below
+    // it wraps to a different number of lines on narrower screens, and the
+    // app allows system text scaling up to 1.3x on top of both. A layout
+    // that happens to fit one phone overflows the next.
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -353,7 +362,12 @@ class _AddContactScreenState extends State<AddContactScreen>
   Widget _buildScanTab() {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    return Padding(
+    // Same reason as the share tab, plus one specific to this one: the
+    // "Paste contact link" field raises the keyboard, which takes roughly
+    // half the height away from a square camera preview that does not
+    // shrink. Without a scroll view that is a guaranteed overflow every
+    // time someone taps the field.
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
