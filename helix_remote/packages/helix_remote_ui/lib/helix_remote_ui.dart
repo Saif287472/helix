@@ -176,9 +176,9 @@ abstract final class HelixThemes {
         bodyLarge: HelixTypography.body,
         labelLarge: HelixTypography.label,
       ),
-      cardTheme: CardThemeData(
+      cardTheme: const CardThemeData(
         elevation: HelixElevation.card,
-        shape: const RoundedRectangleBorder(borderRadius: HelixRadius.card),
+        shape: RoundedRectangleBorder(borderRadius: HelixRadius.card),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),

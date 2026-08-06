@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Collects line coverage for Helix Remote and prints a single percentage.
 #
-# Advisory by design: it reports, it does not gate. The point of Phase 0 is to
-# establish a real baseline number so a threshold can be chosen from evidence
-# rather than invented. Make it blocking once that number is known and stable.
+# The initial ratchet is deliberately conservative. It is a release gate, not
+# a report: raise it as new suites land, but never lower it to accommodate a
+# regression.
 #
 # Scope is helix_remote only. helix_local is a separate product with its own
 # arrangements and is deliberately untouched here.
@@ -12,6 +12,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 OUT_DIR="coverage"
+MIN_LINE_COVERAGE="${MIN_LINE_COVERAGE:-20}"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
@@ -24,12 +25,7 @@ collect() {
   [ -d "$dir" ] || return 0
 
   echo "==> coverage: ${label}"
-  # A suite that fails must not abort the whole run - coverage is advisory,
-  # and the test gate in verify.sh has already reported the real pass/fail.
-  if ! (cd "$dir" && flutter test --no-pub --coverage) ; then
-    echo "    (${label} tests failed; coverage for it is skipped)"
-    return 0
-  fi
+  (cd "$dir" && flutter test --no-pub --coverage)
 
   if [ -f "${dir}/coverage/lcov.info" ]; then
     cat "${dir}/coverage/lcov.info" >> "${OUT_DIR}/lcov.info"
@@ -51,14 +47,23 @@ fi
 # LF = lines found, LH = lines hit. Summing the per-record totals across the
 # concatenated files gives overall line coverage without needing lcov(1)
 # installed on the runner.
-awk -F: '
+coverage="$(awk -F: '
   /^LF:/ { found += $2 }
   /^LH:/ { hit   += $2 }
   END {
-    if (found == 0) { print "No lines instrumented."; exit }
-    printf "\nHelix Remote line coverage: %.2f%% (%d/%d lines)\n", (hit/found)*100, hit, found
+    if (found == 0) { exit 2 }
+    printf "%.2f", (hit/found)*100
   }
-' "${OUT_DIR}/lcov.info"
+')" || { echo "No lines instrumented."; exit 1; }
+
+echo
+echo "Helix Remote line coverage: ${coverage}% (minimum: ${MIN_LINE_COVERAGE}%)"
+awk -v actual="$coverage" -v minimum="$MIN_LINE_COVERAGE" 'BEGIN {
+  if (actual + 0 < minimum + 0) {
+    printf "Coverage gate failed: %.2f%% is below %.2f%%\n", actual, minimum
+    exit 1
+  }
+}'
 
 echo
 echo "Note: the backend is covered by 'dart test' in verify.sh, which does not"

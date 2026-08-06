@@ -109,12 +109,13 @@ jobs:
       - name: Verify on Linux
         shell: bash
         run: ./scripts/verify.sh
-      # Advisory for now: it reports the number and uploads the trace so a
-      # threshold can be set from real data rather than a guess. Deliberately
-      # not a gate yet - making it blocking before anyone has seen a baseline
-      # just produces an arbitrary number that gets lowered under pressure.
-      - name: Coverage (advisory)
-        continue-on-error: true
+      - name: Run client integration journey
+        working-directory: helix_remote/app
+        run: flutter test integration_test
+      - name: Run admin integration journey
+        working-directory: helix_remote/admin
+        run: flutter test integration_test
+      - name: Enforce coverage ratchet
         shell: bash
         run: ./scripts/coverage.sh
       - name: Upload coverage
