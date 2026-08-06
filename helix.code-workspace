@@ -1,0 +1,12 @@
+{
+  "folders": [
+    {
+      "name": "Helix Local",
+      "path": "helix_local"
+    },
+    {
+      "name": "Helix Remote",
+      "path": "helix_remote"
+    }
+  ]
+}
