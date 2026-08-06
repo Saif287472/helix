@@ -113,13 +113,27 @@ void main() {
     expect(createBody['invite_id'], isNotEmpty);
     expect(createBody['shareable_url'], contains(inviteCode));
 
-    final lookup = await getJson(
-      '/api/v1/accounts/invite/lookup?invite_code=$inviteCode',
-    );
+    // POST is the current form: it keeps the invite code - a bearer
+    // credential - out of the reverse proxy's access log and out of the
+    // client's own diagnostic log via RemoteRestException.uri.
+    final lookup = await postJson('/api/v1/accounts/invite/lookup', {
+      'invite_code': inviteCode,
+    });
     expect(lookup.statusCode, equals(200));
     final lookupBody = jsonDecode(lookup.body) as Map<String, dynamic>;
     expect(lookupBody['valid'], isTrue);
     expect(lookupBody['issuer_type'], equals('ADMIN'));
+
+    // The GET form still answers identically, so a client shipped before the
+    // change keeps working until it is retired.
+    final legacyLookup = await getJson(
+      '/api/v1/accounts/invite/lookup?invite_code=$inviteCode',
+    );
+    expect(legacyLookup.statusCode, equals(200));
+    expect(
+      jsonDecode(legacyLookup.body) as Map<String, dynamic>,
+      equals(lookupBody),
+    );
 
     final register = await registerWithInvite(
       accountId: 'invite_user_1',
@@ -265,13 +279,13 @@ void main() {
       null,
       token: 'not_a_real_admin_token',
     );
-    expect(create.statusCode, equals(403));
+    expect(create.statusCode, equals(401));
 
     final list = await getJson(
       '/api/v1/ops/invites',
       token: 'not_a_real_admin_token',
     );
-    expect(list.statusCode, equals(403));
+    expect(list.statusCode, equals(401));
   });
 
   group('Global auto-issue', () {

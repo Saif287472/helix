@@ -1,11 +1,15 @@
-$ErrorActionPreference = "Stop"
-
+# `param` has to be the first statement in the file - PowerShell parses an
+# earlier assignment as a command and then fails on the block. Setting
+# $ErrorActionPreference above it made this script unrunnable with any
+# argument, so the preference is set immediately after instead.
 param(
     [switch]$BuildArtifacts,
     [switch]$Android,
     [switch]$Windows,
     [switch]$StagingE2E
 )
+
+$ErrorActionPreference = "Stop"
 
 function Invoke-Step {
     param(

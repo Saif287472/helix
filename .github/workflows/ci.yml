@@ -69,11 +69,20 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # Pinned for the same reason as the JDK above, and additionally because
+      # `--enforce-lockfile` below is only meaningful against a known SDK: a
+      # floating `stable` can resolve a different package set and turn a
+      # reproducibility gate into a random failure. Bump this deliberately,
+      # together with helix_remote/pubspec.lock.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.44.8
           cache: true
-      - run: flutter pub get
+      # --enforce-lockfile makes the committed pubspec.lock authoritative:
+      # CI fails on drift instead of silently building against whatever the
+      # caret ranges resolve to today.
+      - run: flutter pub get --enforce-lockfile
       - name: Verify with mandatory Windows and Android debug builds
         shell: pwsh
         run: ./scripts/verify.ps1
@@ -94,11 +103,28 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.44.8
           cache: true
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - name: Verify on Linux
         shell: bash
         run: ./scripts/verify.sh
+      # Advisory for now: it reports the number and uploads the trace so a
+      # threshold can be set from real data rather than a guess. Deliberately
+      # not a gate yet - making it blocking before anyone has seen a baseline
+      # just produces an arbitrary number that gets lowered under pressure.
+      - name: Coverage (advisory)
+        continue-on-error: true
+        shell: bash
+        run: ./scripts/coverage.sh
+      - name: Upload coverage
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: helix-remote-coverage
+          path: helix_remote/coverage/
+          if-no-files-found: ignore
 
   no-source-changes:
     needs: changes

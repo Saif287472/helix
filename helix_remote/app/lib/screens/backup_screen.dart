@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:helix_remote/services/screen_security.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
@@ -31,7 +32,8 @@ class BackupScreen extends StatefulWidget {
   State<BackupScreen> createState() => _BackupScreenState();
 }
 
-class _BackupScreenState extends State<BackupScreen> {
+class _BackupScreenState extends State<BackupScreen>
+    with SecureScreenStateMixin {
   bool _busy = false;
   String? _status;
   int? _lastBackupSize;

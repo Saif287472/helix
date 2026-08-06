@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:helix_remote/services/log_redaction.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Persistent anomaly logger. Survives app restarts; accumulates entries across
@@ -56,13 +57,18 @@ class AppLogger {
     String message,
     StackTrace? stack,
   ) async {
-    debugPrint('[$_namespace $level] [$tag] $message');
-    final flat = message
+    // Redact before anything else, so the console mirror cannot leak what the
+    // file redacts - `flutter logs` and a connected IDE both see debugPrint.
+    final safe = truncateForLog(redactLogLine(message));
+    debugPrint('[$_namespace $level] [$tag] $safe');
+    final flat = safe
         .replaceAll('\r\n', ' | ')
         .replaceAll('\r', ' | ')
         .replaceAll('\n', ' | ')
         .trim();
-    final stackPart = stack != null ? ' | STACK: ${_flattenStack(stack)}' : '';
+    final stackPart = stack != null
+        ? ' | STACK: ${redactLogLine(_flattenStack(stack))}'
+        : '';
     final entry =
         '[${_fmt(DateTime.now())}] [S$_sessionNumber] [$level] [$tag] $flat$stackPart';
     await _append(entry);
@@ -86,10 +92,13 @@ class AppLogger {
 
   Future<void> _append(String line) async {
     if (_logFile == null) return;
-    final sanitized = line
-        .replaceAll('\r\n', ' | ')
-        .replaceAll('\r', ' | ')
-        .replaceAll('\n', ' | ');
+    // Last line of defence. [_write] has already redacted, and redaction is
+    // idempotent, so this costs a second pass to guarantee that anything
+    // reaching the file - including a future direct caller of [_append] - has
+    // been through it.
+    final sanitized = redactLogLine(
+      line,
+    ).replaceAll('\r\n', ' | ').replaceAll('\r', ' | ').replaceAll('\n', ' | ');
     _writeChain = _writeChain.then((_) async {
       try {
         await _logFile!.writeAsString('$sanitized\n', mode: FileMode.append);

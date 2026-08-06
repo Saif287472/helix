@@ -155,7 +155,7 @@ void main() {
         '/api/v1/accounts/devices',
         token: alice2Token.accessToken,
       );
-      expect(revokedAccess.statusCode, equals(403));
+      expect(revokedAccess.statusCode, equals(401));
 
       final revokedRefresh = await _postJson(
         client,
@@ -323,7 +323,7 @@ void main() {
         '/api/v1/accounts/devices',
         token: alice2Access,
       );
-      expect(revokedAccess.statusCode, equals(403));
+      expect(revokedAccess.statusCode, equals(401));
       final revokedRefresh = await _postJson(
         client,
         port,

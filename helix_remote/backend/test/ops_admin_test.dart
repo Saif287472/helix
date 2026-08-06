@@ -79,7 +79,7 @@ void main() {
       '/api/v1/ops/config',
       token: 'invalid_token',
     );
-    expect(resBadToken.statusCode, equals(403));
+    expect(resBadToken.statusCode, equals(401));
   });
 
   test('Admin Configured Token Override', () async {
@@ -117,7 +117,7 @@ void main() {
         '/api/v1/ops/config',
         token: overrideIdentity.adminToken,
       );
-      expect(resOld.statusCode, equals(403));
+      expect(resOld.statusCode, equals(401));
     } finally {
       await overrideServer.stop();
     }

@@ -8,7 +8,6 @@ import 'package:helix_remote_backend/src/phone_hash.dart';
 
 class ContactsModule {
   final BackendDatabase db;
-  final Set<String> adminAccountIds;
   final void Function(String deviceId, Map<String, dynamic> payload)?
   notifyDevice;
   final Map<String, List<int>> _searchAttempts = {};
@@ -34,8 +33,7 @@ class ContactsModule {
   /// Budget rows are swept once their window is a week stale.
   static const int contactsMatchBudgetRetentionMs = 7 * 24 * 60 * 60 * 1000;
 
-  ContactsModule(this.db, {Set<String>? adminAccountIds, this.notifyDevice})
-    : adminAccountIds = adminAccountIds ?? const {'admin'};
+  ContactsModule(this.db, {this.notifyDevice});
 
   Handler get router {
     final router = Router();
@@ -667,7 +665,7 @@ class ContactsModule {
     }
 
     final actorAccountId = auth['account_id'] as String;
-    if (!adminAccountIds.contains(actorAccountId)) {
+    if (auth['is_admin'] != true) {
       db.logAudit(
         actorAccountId,
         auth['device_id'] as String?,

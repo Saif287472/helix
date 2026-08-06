@@ -74,6 +74,46 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     return res.isNotEmpty;
   }
 
+  /// Whether this account holds the operator capability.
+  ///
+  /// Authoritative source for admin authorization on JWT-authenticated
+  /// requests. An account id is just an id - it grants nothing on its own.
+  /// A missing row reads as false, so an unknown account is never an admin.
+  bool isAccountAdmin(String accountId) {
+    final stmt = _db.prepare('''
+      SELECT 1 FROM accounts WHERE account_id = ? AND is_admin = 1;
+    ''');
+    final res = stmt.select([accountId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
+  /// Grants or revokes the operator capability. There is no HTTP route to
+  /// this: promotion is an out-of-band action by whoever administers the
+  /// database, so a compromised account cannot promote itself.
+  void setAccountAdmin(String accountId, {required bool isAdmin}) {
+    final stmt = _db.prepare(
+      'UPDATE accounts SET is_admin = ? WHERE account_id = ?;',
+    );
+    stmt.execute([isAdmin ? 1 : 0, accountId]);
+    stmt.close();
+  }
+
+  /// Account ids in the table that are now reserved and unregisterable.
+  ///
+  /// Used by the startup guard: such a row can only predate the reserved-id
+  /// check, and under the old name-based operator gate it would have held
+  /// admin. Comparison is case-insensitive and whitespace-trimmed to match
+  /// [isReservedAccountId].
+  List<String> findAccountsWithReservedIds() {
+    final rows = _db.select('SELECT account_id FROM accounts;');
+    return [
+      for (final row in rows)
+        if (isReservedAccountId(row['account_id'] as String))
+          row['account_id'] as String,
+    ];
+  }
+
   /// Looks up an account by its salted phone-number hash (see
   /// `phone_hash.dart`). This is the identity lookup used by phone-based
   /// registration and login; the server never sees a raw phone number.

@@ -11,8 +11,26 @@ mixin AuthInviteHandlers on AuthModuleBase {
   /// On failure, `reason` distinguishes *why* (not_found / already_used /
   /// cancelled / expired) so the client can show a specific explanation
   /// instead of a generic "invalid" message.
+  /// Looks up an invite by code.
+  ///
+  /// Accepts the code in a POST body (preferred) or, for older clients, in a
+  /// query parameter. An invite code is a bearer credential: in a query string
+  /// it lands in the reverse proxy's access log, in browser and proxy history,
+  /// and in any `Referer` a redirect would carry — none of which are places a
+  /// credential should be readable at rest. The GET form is kept only so a
+  /// client that predates this change keeps working, and should be removed
+  /// once none remain in the field.
   Future<Response> _lookupInviteHandler(Request request) async {
-    final code = request.url.queryParameters['invite_code'];
+    String? code;
+    if (request.method == 'POST') {
+      final raw = await request.readAsString();
+      if (raw.isNotEmpty) {
+        final body = jsonDecode(raw) as Map<String, dynamic>;
+        code = body['invite_code'] as String?;
+      }
+    } else {
+      code = request.url.queryParameters['invite_code'];
+    }
     if (code == null || code.isEmpty) {
       throw AppError.badRequest('Missing invite_code');
     }

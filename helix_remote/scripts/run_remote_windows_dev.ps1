@@ -1,9 +1,11 @@
-$ErrorActionPreference = "Stop"
-
+# `param` must be the first statement in the file, so the preference is set
+# just below it rather than above.
 param(
     [string]$BackendHost = "127.0.0.1",
     [int]$BackendPort = 8080
 )
+
+$ErrorActionPreference = "Stop"
 
 Push-Location app
 try {

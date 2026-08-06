@@ -6,11 +6,9 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 class PrivacyComplianceModule {
-  PrivacyComplianceModule(this.db, {Set<String>? adminAccountIds})
-    : adminAccountIds = adminAccountIds ?? const {'admin'};
+  PrivacyComplianceModule(this.db);
 
   final BackendDatabase db;
-  final Set<String> adminAccountIds;
 
   Handler get privacyRouter {
     final router = Router();
@@ -91,7 +89,7 @@ class PrivacyComplianceModule {
     }
 
     final accountId = auth['account_id'] as String;
-    if (!adminAccountIds.contains(accountId)) {
+    if (auth['is_admin'] != true) {
       db.logAudit(
         accountId,
         auth['device_id'] as String?,

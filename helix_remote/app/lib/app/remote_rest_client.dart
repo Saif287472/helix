@@ -80,10 +80,13 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       } on RemoteRestException catch (e) {
         if (!skipAuthRefresh &&
             !retriedAfterRefresh &&
-            _isAuthFailure(e.statusCode) &&
+            _isAuthFailure(e.statusCode, e.message) &&
             await _refreshAuthOnce()) {
           retriedAfterRefresh = true;
-          attempt = 0;
+          // The retry budget is deliberately *not* reset here. It used to be,
+          // which let one request make up to six round trips - three before
+          // the refresh and three after - and turned a server having a bad
+          // minute into six times the load from every client at once.
           continue;
         }
         if (attempt >= maxAttempts || !_isRetryableStatus(e.statusCode)) {
@@ -154,7 +157,15 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
 
     throw RemoteRestException(
       statusCode: resp.statusCode,
-      message: respBody.isEmpty ? 'REST ${resp.statusCode}' : respBody,
+      // The body is kept because RemoteUserErrorCopy parses the `error` field
+      // out of it for actionable messages, but it is capped: a structured
+      // error is a few hundred bytes, and anything past the cap is an HTML
+      // proxy page or a runaway response - neither worth holding whole in an
+      // exception that may be retained, rendered, or written to a log.
+      // Redaction of what does get logged happens at the AppLogger boundary.
+      message: respBody.isEmpty
+          ? 'REST ${resp.statusCode}'
+          : _capErrorBody(respBody),
       uri: uri,
       correlationId:
           resp.headers.value('x-correlation-id') ??
@@ -164,6 +175,15 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       failureKind: RemoteRestFailureKind.http,
     );
   }
+
+  /// Generous enough that every structured error body this server emits
+  /// survives intact and stays JSON-parseable; small enough that a stray HTML
+  /// error page cannot be carried around whole.
+  static const int _maxErrorBodyChars = 8192;
+
+  static String _capErrorBody(String body) => body.length <= _maxErrorBodyChars
+      ? body
+      : '${body.substring(0, _maxErrorBodyChars)}… [truncated]';
 
   bool _isSafeMethod(String method) =>
       method == 'GET' || method == 'HEAD' || method == 'OPTIONS';
@@ -176,8 +196,29 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       statusCode == 503 ||
       statusCode == 504;
 
-  bool _isAuthFailure(int? statusCode) =>
-      statusCode == 401 || statusCode == 403;
+  /// Whether a failure means "your credential is no longer good", as opposed
+  /// to "you are not allowed to do that".
+  ///
+  /// Only 401. This used to include 403, because the server answered 403 for
+  /// an expired token - but 403 is also how every ordinary permission denial
+  /// arrives, so each one triggered a refresh-token rotation and a retry of a
+  /// request that could never succeed. The server now answers 401 for
+  /// authentication failures (`token_invalid`, `device_inactive`) and reserves
+  /// 403 for authorization.
+  ///
+  /// The legacy branch below keeps a client that ships ahead of its server
+  /// working. It matches only the exact body the old server sent, so a real
+  /// permission denial - which never carried that text - no longer triggers a
+  /// refresh even against an old server. Remove it once no deployment
+  /// predating the 401 split remains.
+  bool _isAuthFailure(int? statusCode, [String? body]) {
+    if (statusCode == 401) return true;
+    if (statusCode == 403 && body != null) {
+      return body.contains('Forbidden: Invalid or expired token') ||
+          body.contains('Forbidden: Device inactive');
+    }
+    return false;
+  }
 
   Future<bool> _refreshAuthOnce() {
     final refreshAuth = _refreshAuth;
@@ -292,10 +333,14 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
 
   @override
   Future<Map<String, dynamic>> lookupInvite({required String inviteCode}) =>
+      // POST, not GET with a query parameter: an invite code is a bearer
+      // credential, and in a query string it is written to the reverse
+      // proxy's access log and to this client's own diagnostic log by way of
+      // RemoteRestException.uri.
       _request(
-        'GET',
+        'POST',
         'accounts/invite/lookup',
-        queryParameters: {'invite_code': inviteCode},
+        body: {'invite_code': inviteCode},
       );
 
   @override

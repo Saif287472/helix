@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/env_sanitize.dart';
 import 'package:helix_remote_backend/src/fcm_access_token.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
@@ -194,6 +195,36 @@ Future<void> _run(ServerLogSink logSink) async {
     pushProvider: pushProvider,
     smsProvider: smsProvider,
   );
+
+  // Refuse to serve a database that already contains an account holding a
+  // reserved id. Before registration validated this, `account_id` was
+  // client-chosen and the operator gate was `account_id == 'admin'`, so such
+  // a row is the fingerprint of a claimed-admin compromise. Migration 40
+  // moves admin to a stored capability and no reserved id grants anything
+  // anymore - but a server whose database carries that row has a history
+  // worth looking at before it takes traffic, and failing loudly is the only
+  // way an operator finds out.
+  final reservedAccounts = server.db.findAccountsWithReservedIds();
+  if (reservedAccounts.isNotEmpty) {
+    stderr.writeln('==================================================');
+    stderr.writeln('REFUSING TO START: reserved account id(s) present');
+    stderr.writeln('');
+    stderr.writeln('  ${reservedAccounts.join(', ')}');
+    stderr.writeln('');
+    stderr.writeln(
+      'These ids are reserved and can no longer be registered. A row that '
+      'holds one was created while the operator check was still "account_id '
+      'equals admin", so treat it as a possible privilege-escalation '
+      'compromise: audit the account\'s activity in the audit log before '
+      'doing anything else.',
+    );
+    stderr.writeln('');
+    stderr.writeln(
+      'Once reviewed, rename or delete the row to start the server.',
+    );
+    stderr.writeln('==================================================');
+    exit(1);
+  }
 
   final identity = await ServerIdentity.loadOrCreate(server.db);
   server.serverIdentity = identity;

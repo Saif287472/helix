@@ -25,7 +25,6 @@ class OperabilityModule {
     required this.outboxWorker,
     required this.callsModule,
     this.attachmentsModule,
-    required this.adminAccountIds,
     required this.turnSecret,
     required this.turnUrl,
     this.logFilePath,
@@ -47,7 +46,6 @@ class OperabilityModule {
   /// Optional so tests that only exercise health/ops routes need not build
   /// an attachments module; `/server/info` omits the limits when absent.
   final AttachmentsModule? attachmentsModule;
-  final Set<String> adminAccountIds;
   final String turnSecret;
   final String turnUrl;
   final String? logFilePath;
@@ -269,7 +267,10 @@ class OperabilityModule {
     final auth = request.context['auth'] as Map<String, dynamic>?;
     final accountId = auth?['account_id'] as String?;
     final deviceId = auth?['device_id'] as String?;
-    if (accountId == null || !adminAccountIds.contains(accountId)) {
+    // The capability is resolved once, in the auth middleware: either the
+    // static admin token (which carries it directly) or the account's stored
+    // is_admin flag. Never inferred from the account id here.
+    if (accountId == null || auth?['is_admin'] != true) {
       db.logAudit(
         accountId,
         deviceId,

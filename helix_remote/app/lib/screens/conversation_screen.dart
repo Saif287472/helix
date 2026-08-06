@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:helix_remote/services/screen_security.dart';
 import 'package:helix_remote/app/attachment_export.dart';
 import 'package:helix_remote/app/attachment_safety.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
@@ -122,7 +123,8 @@ class ConversationScreen extends StatefulWidget {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-class _ConversationScreenState extends State<ConversationScreen> {
+class _ConversationScreenState extends State<ConversationScreen>
+    with SecureScreenStateMixin {
   static const _pageSize = 50;
 
   final _controller = TextEditingController();

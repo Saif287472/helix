@@ -1,3 +1,4 @@
+import 'package:helix_remote/services/app_logger.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -176,7 +177,12 @@ class RemoteRuntimeCoordinator {
     try {
       await _catchUpInbound();
       await drainOutbox();
-    } catch (_) {}
+    } catch (e) {
+      // Swallowed by contract - callers treat soft sync as best-effort and
+      // must not surface its failures. Logged anyway: a soft sync that fails
+      // every time looks identical to one that works from the UI.
+      AppLogger.instance.warn('runtime_coordinator', 'soft sync failed: \$e');
+    }
   }
 
   Future<void> handleRealtimeClosed() async {

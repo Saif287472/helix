@@ -247,7 +247,15 @@ mixin RemoteConversationManagement on RemoteMessagingServiceBase {
     if (file.existsSync()) {
       try {
         file.deleteSync();
-      } catch (_) {}
+      } catch (e) {
+        // The draft row is already gone, so a failure here leaves decrypted
+        // media on disk with nothing pointing at it - a retention problem
+        // that was previously invisible.
+        AppLogger.instance.warn(
+          'conversations',
+          'discarded media draft file could not be deleted: $e',
+        );
+      }
     }
   }
 

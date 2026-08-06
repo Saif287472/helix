@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 11 and below (API <= 30) backup policy.
+
+    Paired with android:allowBackup="false", which is what actually does the
+    work on these releases. This file is the belt to that braces: if a future
+    change ever flips allowBackup back to true, the exclusions below still
+    keep the message database, diagnostic log, and preferences out of the
+    backup set rather than silently shipping them.
+-->
+<full-backup-content>
+    <exclude domain="root" />
+    <exclude domain="file" />
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+</full-backup-content>

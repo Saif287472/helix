@@ -37,6 +37,15 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       throw AppError.badRequest('Missing required fields');
     }
 
+    // account_id is client-chosen, and the registration transcript is signed
+    // with the registrant's own key - so the signature proves the client
+    // committed to this id, never that the id is rightfully theirs. Reject
+    // reserved and malformed ids before anything is created.
+    final accountIdProblem = accountIdError(accountId);
+    if (accountIdProblem != null) {
+      throw AppError.badRequest(accountIdProblem);
+    }
+
     final displayName = (body['display_name'] as String?)?.trim() ?? '';
     if (displayName.isEmpty || displayName.length > 80) {
       throw AppError.badRequest('Display name must be 1–80 characters');

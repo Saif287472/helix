@@ -11,9 +11,12 @@ mixin AuthRefreshHandlers on AuthModuleBase {
       throw AppError.badRequest('Missing refresh_token');
     }
 
-    final claims = jwt.verifyToken(refreshToken);
+    final claims = jwt.verifyToken(
+      refreshToken,
+      expect: ExpectedTokenType.refresh,
+    );
 
-    if (claims == null || claims['refresh'] != true) {
+    if (claims == null) {
       throw AppError.forbidden('Invalid or expired refresh token');
     }
 

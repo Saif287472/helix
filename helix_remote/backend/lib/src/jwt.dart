@@ -1,6 +1,26 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:helix_remote_backend/src/constant_time.dart';
+
+/// Which kind of token a caller is willing to accept.
+///
+/// This is a required argument on [JwtHelper.verifyToken] rather than an
+/// optional one on purpose. `verifyToken` used to check the signature, issuer,
+/// audience and expiry but *not* the token type, and neither the REST auth
+/// middleware nor the WebSocket upgrade checked it either — so a refresh token
+/// was accepted anywhere an access token was, turning a 1-hour credential into
+/// a 7-day one and letting a stolen refresh token reach every endpoint without
+/// ever calling `/accounts/refresh`, which is the only place that would have
+/// detected and revoked it. Making the expectation explicit means a new call
+/// site cannot inherit that behaviour by omission.
+enum ExpectedTokenType {
+  access,
+  refresh;
+
+  String get wireName =>
+      this == ExpectedTokenType.access ? 'access' : 'refresh';
+}
 
 class JwtHelper {
   final List<int> _secretBytes;
@@ -40,7 +60,10 @@ class JwtHelper {
     return '$header.$payload.$signature';
   }
 
-  Map<String, dynamic>? verifyToken(String token) {
+  Map<String, dynamic>? verifyToken(
+    String token, {
+    required ExpectedTokenType expect,
+  }) {
     final parts = token.split('.');
     if (parts.length != 3) return null;
 
@@ -49,7 +72,9 @@ class JwtHelper {
     final signature = parts[2];
 
     final expectedSignature = _sign('$header.$payload');
-    if (signature != expectedSignature) return null;
+    // Constant-time: `!=` on String stops at the first differing character,
+    // which times how much of a forged signature was correct.
+    if (!constantTimeStringEqual(signature, expectedSignature)) return null;
 
     try {
       final headerJson = utf8.decode(
@@ -73,12 +98,27 @@ class JwtHelper {
       final nbf = payloadMap['nbf'] as int?;
       if (nbf != null && now < nbf) return null;
 
+      // `exp` is mandatory. It used to be optional, which meant a token
+      // without one never expired. `generateToken` always sets it, so no
+      // token this server issues is affected - but "absent means eternal" is
+      // the wrong way for a validator to fail, and making it explicit costs
+      // nothing.
       final exp = payloadMap['exp'] as int?;
-      if (exp != null) {
-        if (now > exp) {
-          return null; // Expired
-        }
-      }
+      if (exp == null || now > exp) return null;
+
+      // Token type must match what the caller asked for. Both the explicit
+      // `token_type` claim and the older boolean `refresh` claim are checked,
+      // and they must agree: a token asserting `refresh: true` alongside
+      // `token_type: 'access'` is malformed, and the safe reading of a
+      // contradiction is to reject it.
+      final isRefresh = payloadMap['refresh'] == true;
+      final declaredType = payloadMap['token_type'] as String?;
+      // Absent `token_type` is treated as a mismatch rather than derived from
+      // `refresh`: fail closed, so a token minted before the claim existed
+      // cannot slip through unclassified.
+      if (declaredType != expect.wireName) return null;
+      if (isRefresh != (expect == ExpectedTokenType.refresh)) return null;
+
       return payloadMap;
     } catch (_) {
       return null;

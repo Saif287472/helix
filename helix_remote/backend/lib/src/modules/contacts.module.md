@@ -38,7 +38,7 @@ session.
 | POST | `/presence` | `_presenceHeartbeatHandler` | Updates the caller device's last-seen timestamp. |
 | GET | `/presence/<accountId>` | `_presenceHandler` | Presence of another account, filtered by that account's privacy settings. |
 | POST | `/report` | `_reportHandler` | Abuse report; rejects payloads carrying plaintext. |
-| POST | `/reports/action` | `_safetyActionHandler` | Admin-only (`adminAccountIds`). |
+| POST | `/reports/action` | `_safetyActionHandler` | Admin-only (`is_admin` claim). |
 
 ## Error codes this module throws
 

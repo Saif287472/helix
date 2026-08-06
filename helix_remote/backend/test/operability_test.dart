@@ -18,7 +18,6 @@ void main() {
       jwtSecret: 'phase19_test_secret',
       rateLimitMaxTokens: 1000,
       rateLimitRefillRate: 1000,
-      adminAccountIds: const {'admin'},
       turnSecret: 'phase19_turn_secret',
       turnUrl: 'turn:turn.test.example:3478',
       wsReconnectsPerMinute: 2,
@@ -28,10 +27,13 @@ void main() {
       ),
     );
 
-    server.db.createAccount('admin', 'admin_user', 'admin_key');
+    // Admin is a stored capability now, not a magic account id. The id is
+    // deliberately an ordinary one to prove the grant is what matters.
+    server.db.createAccount('ops1', 'ops_user', 'admin_key');
+    server.db.setAccountAdmin('ops1', isAdmin: true);
     server.db.registerDevice(
       'admin_device',
-      'admin',
+      'ops1',
       'admin_device_key',
       'Admin',
     );
@@ -39,7 +41,7 @@ void main() {
     server.db.registerDevice('user_device', 'user1', 'user_device_key', 'User');
 
     adminToken = server.jwt.generateToken({
-      'account_id': 'admin',
+      'account_id': 'ops1',
       'device_id': 'admin_device',
     }, const Duration(hours: 1));
     userToken = server.jwt.generateToken({
@@ -84,7 +86,7 @@ void main() {
         headers: {'X-Forwarded-For': '203.0.113.42, 10.0.0.2'},
       );
       expect(metrics.statusCode, equals(200));
-      final audit = server.db.getAuditLogs(accountId: 'admin').first;
+      final audit = server.db.getAuditLogs(accountId: 'ops1').first;
       expect(audit['client_ip'], equals('203.0.113.0'));
 
       final strictServer = BackendServer.create(
@@ -92,20 +94,20 @@ void main() {
         jwtSecret: 'phase19_test_secret_strict_proxy',
         rateLimitMaxTokens: 1000,
         rateLimitRefillRate: 1000,
-        adminAccountIds: const {'admin'},
         trustedProxyAddresses: const {},
         turnSecret: 'phase19_turn_secret',
         turnUrl: 'turn:turn.test.example:3478',
       );
-      strictServer.db.createAccount('admin', 'admin_user', 'admin_key');
+      strictServer.db.createAccount('ops1', 'ops_user', 'admin_key');
+      strictServer.db.setAccountAdmin('ops1', isAdmin: true);
       strictServer.db.registerDevice(
         'admin_device',
-        'admin',
+        'ops1',
         'admin_device_key',
         'Admin',
       );
       final token = strictServer.jwt.generateToken({
-        'account_id': 'admin',
+        'account_id': 'ops1',
         'device_id': 'admin_device',
       }, const Duration(hours: 1));
       await strictServer.start('127.0.0.1', 0);
@@ -119,7 +121,7 @@ void main() {
         );
         expect(res.statusCode, equals(200));
         final strictAudit = strictServer.db
-            .getAuditLogs(accountId: 'admin')
+            .getAuditLogs(accountId: 'ops1')
             .first;
         expect(strictAudit['client_ip'], equals('127.0.0.0'));
       } finally {
@@ -175,7 +177,7 @@ void main() {
     expect(metrics.body, isNot(contains('opaque_phase19_ciphertext')));
     expect(metrics.body, isNot(contains('user_device_key')));
 
-    final audit = server.db.getAuditLogs(accountId: 'admin');
+    final audit = server.db.getAuditLogs(accountId: 'ops1');
     expect(
       audit.any((row) => row['action'] == 'ADMIN_OPERABILITY_METRICS_READ'),
       isTrue,

@@ -9,6 +9,7 @@ import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
 import 'package:helix_remote_backend/src/phone_hash.dart' as phone_hash;
+import 'package:helix_remote_backend/src/reserved_identifiers.dart';
 import 'package:helix_remote_backend/src/server_name.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
 
@@ -116,6 +117,9 @@ class AuthModule extends AuthModuleBase
     // Public routes
     router.post('/register', _registerHandler);
     router.post('/phone/otp/request', _requestPhoneOtpHandler);
+    // POST is the current form - it keeps the invite code out of access logs
+    // and proxy history. GET is retained for clients predating that change.
+    router.post('/invite/lookup', _lookupInviteHandler);
     router.get('/invite/lookup', _lookupInviteHandler);
     router.post('/invite/auto-issue', _autoIssueInviteHandler);
     router.get('/challenge', _challengeHandler);
