@@ -251,7 +251,7 @@ class RemoteCallService {
        _offerAnswerLimit = offerAnswerTimeout,
        _iceConnectionLimit = iceConnectionTimeout,
        _disconnectedGracePeriod = disconnectedGrace,
-       _adaptCooldown = adaptCooldown,
+       _adaptCooldownPeriod = adaptCooldown,
        _terminalStateGrace = terminalStateGrace ?? const Duration(seconds: 2);
 
   final HelixRemoteDatabase db;
@@ -271,7 +271,7 @@ class RemoteCallService {
   /// before adaptation may act again. Stops a marginal link from flapping
   /// the camera, and stops the adapter from immediately undoing a user who
   /// has just turned video back on.
-  final Duration _adaptCooldown;
+  final Duration _adaptCooldownPeriod;
   final Duration _terminalStateGrace;
 
   /// Injectable so a test can exercise the max-attempts path without waiting
@@ -1242,7 +1242,7 @@ class RemoteCallService {
     // two, two good samples could never accumulate inside a 15s window - the
     // recovery branch was unreachable in production, not just under test.
     if (!_audioOnlyFallback && lossPoor) {
-      if (nowMs - _lastAdaptMs < _adaptCooldown.inMilliseconds) return;
+      if (nowMs - _lastAdaptMs < _adaptCooldownPeriod.inMilliseconds) return;
       _audioOnlyFallback = true;
       _goodQualitySamples = 0;
       _lastAdaptMs = nowMs;
