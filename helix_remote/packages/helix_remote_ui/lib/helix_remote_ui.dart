@@ -12,9 +12,15 @@ abstract final class HelixColorTokens {
   static const warning = Color(0xFFF4A340);
   static const danger = Color(0xFFBA1A1A);
   static const avatarPalette = <Color>[
-    Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF3F51B5),
-    Color(0xFF2196F3), Color(0xFF009688), Color(0xFF4CAF50),
-    Color(0xFFFF9800), Color(0xFFF44336), Color(0xFF00BCD4),
+    Color(0xFFE91E63),
+    Color(0xFF9C27B0),
+    Color(0xFF3F51B5),
+    Color(0xFF2196F3),
+    Color(0xFF009688),
+    Color(0xFF4CAF50),
+    Color(0xFFFF9800),
+    Color(0xFFF44336),
+    Color(0xFF00BCD4),
     Color(0xFF795548),
   ];
 
@@ -97,8 +103,10 @@ abstract final class HelixSpace {
 /// asymmetry, but the Flutter primitive itself is kept in this UI package.
 abstract final class HelixInsets {
   static const zero = EdgeInsets.zero;
-  static const horizontal12Vertical18 =
-      EdgeInsets.symmetric(horizontal: HelixSpace.sm, vertical: 18);
+  static const horizontal12Vertical18 = EdgeInsets.symmetric(
+    horizontal: HelixSpace.sm,
+    vertical: 18,
+  );
   static EdgeInsets all(double value) => EdgeInsets.all(value);
   static EdgeInsets symmetric({double horizontal = 0, double vertical = 0}) =>
       EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical);
@@ -173,10 +181,16 @@ abstract final class HelixThemes {
         shape: const RoundedRectangleBorder(borderRadius: HelixRadius.card),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(minimumSize: const Size(44, 44)),
+        style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(minimumSize: const Size(44, 44)),
+        style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(minimumSize: const Size.square(48)),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

@@ -297,7 +297,11 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       appBar: AppBar(
         title: const Text('Devices'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _load,
+            tooltip: 'Refresh devices',
+          ),
         ],
       ),
       body: _busy

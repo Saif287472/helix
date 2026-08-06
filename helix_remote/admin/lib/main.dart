@@ -41,6 +41,14 @@ class _HelixAdminAppState extends State<HelixAdminApp> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      builder: (context, child) => Semantics(
+        container: true,
+        label: 'Helix Admin',
+        child: FocusTraversalGroup(
+          policy: OrderedTraversalPolicy(),
+          child: child!,
+        ),
+      ),
       home: MainAdminPage(
         isDarkMode: _isDarkMode,
         onDarkModeChanged: (v) => setState(() => _isDarkMode = v),
@@ -509,7 +517,11 @@ class _MainAdminPageState extends State<MainAdminPage> {
       ),
       actions: [
         if (_serverDependentTabs.contains(_selectedTab))
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshData,
+            tooltip: 'Refresh data',
+          ),
         const SizedBox(width: 16),
       ],
     );

@@ -255,7 +255,11 @@ class _CallSearchField extends StatelessWidget {
           prefixIcon: const Icon(Icons.search),
           suffixIcon: controller.text.isEmpty
               ? null
-              : IconButton(icon: const Icon(Icons.close), onPressed: onClear),
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: onClear,
+                  tooltip: 'Clear search',
+                ),
           filled: true,
           fillColor: cs.surfaceContainerHighest.withAlpha(
             theme.brightness == Brightness.dark ? 130 : 105,

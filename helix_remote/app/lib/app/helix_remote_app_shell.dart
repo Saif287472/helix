@@ -43,21 +43,11 @@ class HelixRemoteAppShell extends StatelessWidget {
           },
           child: FocusTraversalGroup(
             policy: OrderedTraversalPolicy(),
-            child: _clampTextScale(context, child),
+            child: child!,
           ),
         ),
       ),
       home: home,
     );
   }
-}
-
-Widget _clampTextScale(BuildContext context, Widget? child) {
-  final mediaQuery = MediaQuery.of(context);
-  return MediaQuery(
-    data: mediaQuery.copyWith(
-      textScaler: mediaQuery.textScaler.clamp(maxScaleFactor: 1.3),
-    ),
-    child: child!,
-  );
 }

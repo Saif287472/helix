@@ -101,20 +101,23 @@ class HelixStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = color ?? Theme.of(context).colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: HelixSpace.xs,
-        vertical: HelixSpace.xxs,
-      ),
-      decoration: BoxDecoration(
-        color: value.withValues(alpha: .12),
-        borderRadius: const BorderRadius.all(HelixRadius.small),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: value,
-          fontWeight: FontWeight.w700,
+    return Semantics(
+      label: label,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: HelixSpace.xs,
+          vertical: HelixSpace.xxs,
+        ),
+        decoration: BoxDecoration(
+          color: value.withValues(alpha: .12),
+          borderRadius: const BorderRadius.all(HelixRadius.small),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: value,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide DiagnosticLevel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
@@ -31,31 +30,6 @@ void main() {
 
     expect(find.text('Helix Remote'), findsOneWidget);
     expect(find.text('Starting Helix Remote...'), findsOneWidget);
-
-    root.dispose();
-  });
-
-  testWidgets('a very large system text-size setting is clamped, not applied '
-      'unbounded - several fixed-size layout elements (nav bar, chips, quick '
-      'action bubbles) clip or overflow well past that', (
-    WidgetTester tester,
-  ) async {
-    final root = RemoteCompositionRoot.production(
-      databaseDirectory: Directory.systemTemp.path,
-      devConfig: _devConfig(),
-    );
-
-    await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(3.0)),
-        child: HelixRemoteApp(root: root),
-      ),
-    );
-
-    final resolvedScaler = MediaQuery.textScalerOf(
-      tester.element(find.text('Helix Remote')),
-    );
-    expect(resolvedScaler.scale(1.0), closeTo(1.3, 0.001));
 
     root.dispose();
   });
