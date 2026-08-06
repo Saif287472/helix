@@ -696,6 +696,21 @@ void main() {
     );
   });
 
+  test(
+    'call push-token registration also feeds message push delivery',
+    () async {
+      final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
+      final res = await client.post('/api/v1/calls/push-token', {
+        'push_token': 'fcm_call_registration_token',
+      });
+      expect(res.status, equals(200));
+      expect(
+        server.db.getDevicePushToken('device1'),
+        equals('fcm_call_registration_token'),
+      );
+    },
+  );
+
   test('push token endpoint rejects empty token', () async {
     final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
     expect(

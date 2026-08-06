@@ -443,9 +443,15 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
   }
 
   String? getDevicePushToken(String deviceId) {
-    final stmt = _db.prepare(
-      "SELECT push_token FROM devices WHERE device_id = ? AND status = 'ACTIVE';",
-    );
+    final stmt = _db.prepare('''
+      SELECT COALESCE(
+        NULLIF(p.push_token, ''),
+        NULLIF(d.push_token, '')
+      ) AS push_token
+      FROM devices d
+      LEFT JOIN device_push_tokens p ON p.device_id = d.device_id
+      WHERE d.device_id = ? AND d.status = 'ACTIVE';
+    ''');
     final res = stmt.select([deviceId]);
     stmt.close();
     if (res.isEmpty) return null;
