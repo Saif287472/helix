@@ -43,10 +43,18 @@ void main() {
   // RP5-010 — Schema version gate
   // -------------------------------------------------------------------------
 
-  test('RP5-010: fresh in-memory database has schema version 27', () {
+  // 28 adds unmatched_phone_contacts (+ its sync marker), so the "not on
+  // Helix yet" list survives leaving the Contacts screen.
+  //
+  // Deliberately a literal rather than HelixRemoteMigrations
+  // .latestSchemaVersion: compared against the constant this test could only
+  // ever agree with itself. Spelled out, it fails on any schema change and
+  // makes bumping the version a decision someone took rather than something
+  // that happened.
+  test('RP5-010: fresh in-memory database has schema version 28', () {
     final db = _freshDb();
     addTearDown(db.close);
-    expect(db.schemaVersion, equals(27));
+    expect(db.schemaVersion, equals(28));
   });
 
   // -------------------------------------------------------------------------
