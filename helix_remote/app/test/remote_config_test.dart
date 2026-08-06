@@ -287,7 +287,9 @@ void main() {
     ).readAsStringSync();
 
     expect(mainManifest, isNot(contains('usesCleartextTraffic')));
-    expect(mainManifest, isNot(contains('networkSecurityConfig')));
+    // Release now has a separate pinning configuration. The debug manifest
+    // still overrides it, and is the only configuration that permits HTTP.
+    expect(mainManifest, contains('networkSecurityConfig'));
     expect(debugManifest, contains('networkSecurityConfig'));
     expect(networkSecurity, contains('<domain>10.0.2.2</domain>'));
     expect(networkSecurity, contains('<domain>127.0.0.1</domain>'));

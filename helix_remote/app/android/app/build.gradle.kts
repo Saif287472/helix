@@ -81,6 +81,15 @@ android {
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // Shipping without shrinking leaves debug metadata and unused
+            // Android resources in the public artifact. Dart obfuscation is
+            // passed by the release gate so its symbol map is retained too.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

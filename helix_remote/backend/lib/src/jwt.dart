@@ -16,14 +16,18 @@ import 'package:helix_remote_backend/src/constant_time.dart';
 /// site cannot inherit that behaviour by omission.
 enum ExpectedTokenType {
   access,
-  refresh;
+  refresh,
+  admin;
 
-  String get wireName =>
-      this == ExpectedTokenType.access ? 'access' : 'refresh';
+  String get wireName => switch (this) {
+    ExpectedTokenType.access => 'access',
+    ExpectedTokenType.refresh => 'refresh',
+    ExpectedTokenType.admin => 'admin',
+  };
 }
 
 class JwtHelper {
-  final List<int> _secretBytes;
+  final Map<String, List<int>> _keys;
   final String issuer;
   final String audience;
   final String keyId;
@@ -35,7 +39,23 @@ class JwtHelper {
     this.audience = 'helix.remote.clients',
     this.keyId = 'default',
     DateTime Function()? now,
-  }) : _secretBytes = utf8.encode(secret),
+  }) : _keys = {keyId: utf8.encode(secret)},
+       _now = now ?? DateTime.now;
+
+  /// Creates a verifier which signs with [keyId] but accepts every key in
+  /// [keys]. Keeping retired keys here for the maximum issued-token lifetime
+  /// lets an operator rotate credentials without disconnecting every session.
+  JwtHelper.keyRing(
+    Map<String, String> keys, {
+    required this.keyId,
+    this.issuer = 'helix.remote.backend',
+    this.audience = 'helix.remote.clients',
+    DateTime Function()? now,
+  }) : assert(keys.isNotEmpty),
+       assert(keys.containsKey(keyId)),
+       _keys = {
+         for (final entry in keys.entries) entry.key: utf8.encode(entry.value),
+       },
        _now = now ?? DateTime.now;
 
   String generateToken(Map<String, dynamic> claims, Duration expiry) {
@@ -56,7 +76,7 @@ class JwtHelper {
         (payloadMap['refresh'] == true ? 'refresh' : 'access');
     final payload = base64UrlEncode(utf8.encode(jsonEncode(payloadMap)));
 
-    final signature = _sign('$header.$payload');
+    final signature = _sign('$header.$payload', _keys[keyId]!);
     return '$header.$payload.$signature';
   }
 
@@ -71,19 +91,23 @@ class JwtHelper {
     final payload = parts[1];
     final signature = parts[2];
 
-    final expectedSignature = _sign('$header.$payload');
-    // Constant-time: `!=` on String stops at the first differing character,
-    // which times how much of a forged signature was correct.
-    if (!constantTimeStringEqual(signature, expectedSignature)) return null;
-
     try {
       final headerJson = utf8.decode(
         base64Url.decode(base64Url.normalize(header)),
       );
       final headerMap = jsonDecode(headerJson) as Map<String, dynamic>;
-      if (headerMap['alg'] != 'HS256' || headerMap['kid'] != keyId) {
+      if (headerMap['alg'] != 'HS256') {
         return null;
       }
+      final tokenKeyId = headerMap['kid'];
+      if (tokenKeyId is! String) return null;
+      final verificationKey = _keys[tokenKeyId];
+      if (verificationKey == null) return null;
+
+      final expectedSignature = _sign('$header.$payload', verificationKey);
+      // Constant-time: `!=` on String stops at the first differing character,
+      // which times how much of a forged signature was correct.
+      if (!constantTimeStringEqual(signature, expectedSignature)) return null;
 
       final payloadJson = utf8.decode(
         base64Url.decode(base64Url.normalize(payload)),
@@ -117,7 +141,11 @@ class JwtHelper {
       // `refresh`: fail closed, so a token minted before the claim existed
       // cannot slip through unclassified.
       if (declaredType != expect.wireName) return null;
-      if (isRefresh != (expect == ExpectedTokenType.refresh)) return null;
+      if (expect == ExpectedTokenType.admin) {
+        if (isRefresh || payloadMap['is_admin'] != true) return null;
+      } else if (isRefresh != (expect == ExpectedTokenType.refresh)) {
+        return null;
+      }
 
       return payloadMap;
     } catch (_) {
@@ -125,8 +153,8 @@ class JwtHelper {
     }
   }
 
-  String _sign(String input) {
-    final hmac = Hmac(sha256, _secretBytes);
+  String _sign(String input, List<int> secretBytes) {
+    final hmac = Hmac(sha256, secretBytes);
     final digest = hmac.convert(utf8.encode(input));
     return base64UrlEncode(digest.bytes);
   }

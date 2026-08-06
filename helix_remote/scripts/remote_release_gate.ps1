@@ -98,7 +98,7 @@ if ($BuildArtifacts) {
         Invoke-Step "Build Helix Remote Windows release" {
             Push-Location app
             try {
-                flutter build windows --release
+                flutter build windows --release --obfuscate --split-debug-info=build\symbols\windows
             } finally {
                 Pop-Location
             }
@@ -109,7 +109,7 @@ if ($BuildArtifacts) {
         Invoke-Step "Build Helix Remote Android release APK" {
             Push-Location app
             try {
-                flutter build apk --release
+                flutter build apk --release --obfuscate --split-debug-info=build\symbols\android
             } finally {
                 Pop-Location
             }

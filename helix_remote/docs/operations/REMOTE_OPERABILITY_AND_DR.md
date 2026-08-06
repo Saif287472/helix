@@ -77,6 +77,10 @@ Required and optional environment variables for `backend/bin/server.dart`:
 | `HELIX_REMOTE_HOST` | No | `127.0.0.1` | Bind address for the HTTP server. |
 | `HELIX_REMOTE_PORT` | No | `8080` | TCP port for the HTTP server. |
 | `HELIX_REMOTE_DB_PATH` | No | `remote_backend.db` | Path to the SQLite database file. |
+| `HELIX_REMOTE_DEPLOYMENT_TOPOLOGY` | No | `single_host` | Production guard: only `single_host` is supported by the SQLite baseline. |
+| `HELIX_REMOTE_BACKEND_WORKERS` | No | `1` | Production guard: must be 1-4 while using SQLite. |
+| `HELIX_REMOTE_JWT_KEY_RING_JSON` | No | none | JSON map of `kid` to signing secret during a rotation overlap. |
+| `HELIX_REMOTE_JWT_ACTIVE_KID` | Conditional | none | Required when a JWT key ring is set; identifies the only key used to sign new tokens. |
 | `HELIX_REMOTE_ATTACHMENTS_DIR` | No (warns) | none | Directory for attachment storage. If unset, file uploads/downloads are unavailable and a warning is printed on startup. Directory is created if it does not exist. |
 | `HELIX_REMOTE_TURN_URL` | No (warns) | none | TURN server URL (e.g. `turn:turn.example.com:3478`). If unset, relay-only WebRTC calls fail and a warning is printed on startup. |
 | `HELIX_REMOTE_TURN_SECRET` | No (warns) | none | TURN shared secret for credential generation. Required alongside `HELIX_REMOTE_TURN_URL`. |
@@ -95,7 +99,16 @@ dart run backend/bin/server.dart
 kill -SIGINT <pid>
 ```
 
-### Rotate JWT secret
+### Rotate JWT key ring without forced logout
+
+1. Add a new high-entropy secret to `HELIX_REMOTE_JWT_KEY_RING_JSON` and set
+   `HELIX_REMOTE_JWT_ACTIVE_KID` to the new `kid`.
+2. Restart each process while keeping the retiring key in the ring.
+3. Wait longer than the longest issued access and refresh token lifetime.
+4. Remove the retiring key in a subsequent deploy. Do not remove it early:
+   that deliberately invalidates live sessions.
+
+### Legacy single-key rotation (forces logout)
 
 1. Generate a new secret: `openssl rand -hex 32`
 2. Update the environment variable on the host/secret manager.

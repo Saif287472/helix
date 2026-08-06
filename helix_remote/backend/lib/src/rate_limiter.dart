@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:sqlite3/sqlite3.dart';
 
 class TokenBucket {
   final double maxTokens;
@@ -47,6 +48,15 @@ abstract interface class RateLimitStore {
 
   void reset(String key);
   int get trackedKeys;
+
+  /// Atomically spends a token. Implementations backed by a shared database
+  /// must make the read/refill/write one transaction, otherwise two server
+  /// processes can both admit the same request.
+  bool consume(
+    String key, {
+    required double maxTokens,
+    required double refillRatePerSecond,
+  });
 
   /// Releases any background resources (e.g. a cleanup timer). Safe to call
   /// more than once.
@@ -98,6 +108,17 @@ class InMemoryRateLimitStore implements RateLimitStore {
   }
 
   @override
+  bool consume(
+    String key, {
+    required double maxTokens,
+    required double refillRatePerSecond,
+  }) => bucketFor(
+    key,
+    maxTokens: maxTokens,
+    refillRatePerSecond: refillRatePerSecond,
+  ).consume(1.0);
+
+  @override
   int get trackedKeys => _buckets.length;
 
   @override
@@ -105,6 +126,107 @@ class InMemoryRateLimitStore implements RateLimitStore {
     _cleanupTimer?.cancel();
     _cleanupTimer = null;
   }
+}
+
+/// SQLite-backed buckets survive process restarts and are shared by every
+/// Helix backend process pointed at the same database. SQLite is deliberately
+/// used as the production baseline until the documented Postgres migration;
+/// `BEGIN IMMEDIATE` serializes a bucket update across processes.
+class SqliteRateLimitStore implements RateLimitStore {
+  SqliteRateLimitStore(this._db) {
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+        bucket_key TEXT PRIMARY KEY,
+        tokens REAL NOT NULL,
+        last_refill_ms INTEGER NOT NULL
+      );
+    ''');
+  }
+
+  final Database _db;
+
+  @override
+  TokenBucket bucketFor(
+    String key, {
+    required double maxTokens,
+    required double refillRatePerSecond,
+  }) {
+    // Kept for source compatibility with the original store API. Callers
+    // should use RateLimiter.isAllowed, which invokes atomic [consume].
+    final result = _db.select(
+      'SELECT tokens, last_refill_ms FROM rate_limit_buckets WHERE bucket_key = ?',
+      [key],
+    );
+    final bucket = TokenBucket(
+      maxTokens: maxTokens,
+      refillRatePerSecond: refillRatePerSecond,
+    );
+    if (result.isNotEmpty) {
+      bucket.tokens = (result.first['tokens'] as num).toDouble();
+      bucket.lastRefill = result.first['last_refill_ms'] as int;
+    }
+    return bucket;
+  }
+
+  @override
+  bool consume(
+    String key, {
+    required double maxTokens,
+    required double refillRatePerSecond,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _db.execute('BEGIN IMMEDIATE');
+    try {
+      final rows = _db.select(
+        'SELECT tokens, last_refill_ms FROM rate_limit_buckets WHERE bucket_key = ?',
+        [key],
+      );
+      var tokens = maxTokens;
+      var lastRefill = now;
+      if (rows.isNotEmpty) {
+        tokens = (rows.first['tokens'] as num).toDouble();
+        lastRefill = rows.first['last_refill_ms'] as int;
+        final elapsed = now - lastRefill;
+        if (elapsed > 0) {
+          tokens = (tokens + elapsed * (refillRatePerSecond / 1000)).clamp(
+            0.0,
+            maxTokens,
+          );
+          lastRefill = now;
+        }
+      }
+      final allowed = tokens >= 1;
+      if (allowed) tokens -= 1;
+      _db.execute(
+        '''INSERT INTO rate_limit_buckets(bucket_key, tokens, last_refill_ms)
+           VALUES (?, ?, ?)
+           ON CONFLICT(bucket_key) DO UPDATE SET
+             tokens = excluded.tokens, last_refill_ms = excluded.last_refill_ms''',
+        [key, tokens, lastRefill],
+      );
+      _db.execute('COMMIT');
+      return allowed;
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  @override
+  void reset(String key) {
+    _db.execute('DELETE FROM rate_limit_buckets WHERE bucket_key = ?', [key]);
+  }
+
+  @override
+  int get trackedKeys =>
+      (_db
+                  .select('SELECT COUNT(*) AS count FROM rate_limit_buckets')
+                  .first['count']
+              as num)
+          .toInt();
+
+  @override
+  void dispose() {}
 }
 
 class RateLimiter {
@@ -119,12 +241,11 @@ class RateLimiter {
   }) : store = store ?? InMemoryRateLimitStore();
 
   bool isAllowed(String key) {
-    final bucket = store.bucketFor(
+    return store.consume(
       key,
       maxTokens: maxTokens,
       refillRatePerSecond: refillRatePerSecond,
     );
-    return bucket.consume(1.0);
   }
 
   void reset(String key) {

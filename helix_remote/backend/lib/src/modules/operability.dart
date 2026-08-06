@@ -5,6 +5,7 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
+import 'package:helix_remote_backend/src/feature_flags.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
@@ -60,6 +61,7 @@ class OperabilityModule {
   final String federationDirectoryUrl;
   final String publicBaseUrl;
   final DateTime Function() _now;
+  late final FeatureFlagService _featureFlags = FeatureFlagService(db);
 
   static const sloTargets = {
     'availability_monthly': '99.5%',
@@ -135,6 +137,8 @@ class OperabilityModule {
     router.post('/invites/<inviteId>/cancel', _cancelInvite);
     router.get('/federation', _federationStatus);
     router.post('/federation/worldwide', _setWorldwideMode);
+    router.get('/feature-flags', _featureFlagsSnapshot);
+    router.post('/feature-flags/<name>', _setFeatureFlag);
     return withAppErrorHandling(router.call);
   }
 
@@ -332,6 +336,31 @@ class OperabilityModule {
           CallsModule.resolveTurnUrls(turnUrl).isNotEmpty,
       'federation': _federationConfig(),
     });
+  }
+
+  Response _featureFlagsSnapshot(Request request) {
+    if (!_isAdmin(request)) {
+      throw AppError.forbidden('Admin privileges required');
+    }
+    _auditAdminRead(request, 'ADMIN_FEATURE_FLAGS_READ');
+    return _json({'flags': _featureFlags.snapshot()});
+  }
+
+  Future<Response> _setFeatureFlag(Request request, String name) async {
+    if (!_isAdmin(request)) {
+      throw AppError.forbidden('Admin privileges required');
+    }
+    final body = jsonDecode(await request.readAsString());
+    if (body is! Map || body['enabled'] is! bool) {
+      throw AppError.badRequest('Expected {"enabled": boolean}');
+    }
+    try {
+      _featureFlags.set(name, body['enabled'] as bool);
+    } on ArgumentError {
+      throw AppError.notFound('Unknown feature flag');
+    }
+    _auditAdminRead(request, 'ADMIN_FEATURE_FLAG_UPDATED:$name');
+    return _json({'name': name, 'enabled': _featureFlags.isEnabled(name)});
   }
 
   /// Sets (or clears) the server's display name.

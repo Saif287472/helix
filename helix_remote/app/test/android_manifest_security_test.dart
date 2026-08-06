@@ -10,4 +10,18 @@ void main() {
     expect(manifest, contains('android:dataExtractionRules='));
     expect(manifest, contains('android:fullBackupContent='));
   });
+
+  test('release manifest pins the Helix Global certificate key', () {
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    final networkConfig = File(
+      'android/app/src/main/res/xml/helix_remote_network_security.xml',
+    ).readAsStringSync();
+
+    expect(manifest, contains('networkSecurityConfig'));
+    expect(networkConfig, contains('hr.agiletechbd.com'));
+    expect(networkConfig, contains('pin-set'));
+    expect(networkConfig, contains('SHA-256'));
+  });
 }

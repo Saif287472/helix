@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
@@ -96,6 +97,8 @@ class BackendServer {
   factory BackendServer.create({
     required Database sqliteDb,
     required String jwtSecret,
+    Map<String, String>? jwtKeyRing,
+    String? jwtSigningKeyId,
     double rateLimitMaxTokens = 100.0,
     double rateLimitRefillRate = 10.0,
     Directory? attachmentsStorageDir,
@@ -120,10 +123,16 @@ class BackendServer {
     String? serverAudience,
   }) {
     final db = BackendDatabase(sqliteDb);
-    final jwt = JwtHelper(jwtSecret);
+    final jwt = jwtKeyRing == null
+        ? JwtHelper(jwtSecret)
+        : JwtHelper.keyRing(
+            jwtKeyRing,
+            keyId: jwtSigningKeyId ?? jwtKeyRing.keys.first,
+          );
     final rateLimiter = RateLimiter(
       maxTokens: rateLimitMaxTokens,
       refillRatePerSecond: rateLimitRefillRate,
+      store: SqliteRateLimitStore(sqliteDb),
     );
     final wsRelay = WebSocketRelay(
       db,
@@ -305,6 +314,7 @@ class BackendServer {
     router.get('/api/v1/ws', wsRelay.handleUpgrade);
 
     final pipeline = const Pipeline()
+        .addMiddleware(_correlationMiddleware())
         .addMiddleware(_requestLogMiddleware())
         .addMiddleware(_errorHandlingMiddleware())
         .addMiddleware(_rateLimitMiddleware())
@@ -313,6 +323,32 @@ class BackendServer {
         .addHandler(router.call);
 
     return pipeline;
+  }
+
+  /// Carries a client correlation id through middleware and returns it to the
+  /// caller. A malformed value is replaced, so log search keys stay bounded
+  /// and never become a header-injection or sensitive-data channel.
+  Middleware _correlationMiddleware() {
+    return (Handler innerHandler) {
+      return (Request request) async {
+        final supplied = request.headers['x-correlation-id'];
+        final correlationId =
+            supplied != null &&
+                RegExp(r'^[A-Za-z0-9_-]{16,128}$').hasMatch(supplied)
+            ? supplied
+            : _newCorrelationId();
+        final response = await innerHandler(
+          request.change(context: {'correlation_id': correlationId}),
+        );
+        return response.change(headers: {'x-correlation-id': correlationId});
+      };
+    };
+  }
+
+  String _newCorrelationId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(12, (_) => random.nextInt(256));
+    return base64Url.encode(bytes).replaceAll('=', '');
   }
 
   Future<void> start(String host, int port) async {
@@ -351,7 +387,8 @@ class BackendServer {
           watch.stop();
           final line =
               '${request.method} /${request.url.path} '
-              '${response.statusCode} ${watch.elapsedMilliseconds}ms';
+              '${response.statusCode} ${watch.elapsedMilliseconds}ms '
+              'correlation=${request.context['correlation_id'] ?? 'none'}';
           if (response.statusCode >= 500) {
             sink.error(line);
           } else if (response.statusCode >= 400) {
@@ -436,17 +473,39 @@ class BackendServer {
     return parsed.address;
   }
 
-  bool _isValidAdminToken(String token) {
+  Map<String, dynamic>? _adminClaimsForToken(String token) {
     // Constant-time throughout: `==` on the raw override compared a bearer
     // token character by character with an early return, which is a direct
     // timing oracle on the operator credential.
     if (adminTokenOverride != null && adminTokenOverride!.isNotEmpty) {
-      return constantTimeStringEqual(token, adminTokenOverride!);
+      return constantTimeStringEqual(token, adminTokenOverride!)
+          ? {
+              'account_id': kAdminTokenAccountId,
+              'device_id': 'admin_break_glass',
+              'is_admin': true,
+              'admin_scopes': const ['ops:*'],
+              'admin_credential': 'environment_break_glass',
+            }
+          : null;
     }
     final dbHash = db.getServerConfig('admin_token_hash');
-    if (dbHash == null) return false;
+    if (dbHash == null) return null;
     final inputHash = crypto_pkg.sha256.convert(utf8.encode(token)).toString();
-    return constantTimeStringEqual(inputHash, dbHash);
+    if (!constantTimeStringEqual(inputHash, dbHash)) return null;
+    final expiry = int.tryParse(
+      db.getServerConfig('admin_token_expires_at') ?? '',
+    );
+    if (expiry == null || now().millisecondsSinceEpoch > expiry) return null;
+    final scopes = (db.getServerConfig('admin_token_scopes') ?? '').split(' ')
+      ..removeWhere((scope) => scope.isEmpty);
+    if (scopes.isEmpty) return null;
+    return {
+      'account_id': kAdminTokenAccountId,
+      'device_id': 'admin_device',
+      'is_admin': true,
+      'admin_scopes': scopes,
+      'admin_credential': 'paired_expiring',
+    };
   }
 
   Middleware _authMiddleware() {
@@ -489,12 +548,8 @@ class BackendServer {
         // Check for Admin API token first. This is the operator's break-glass
         // credential, so it carries the admin capability directly rather than
         // resolving one from an account row - there is no account behind it.
-        if (_isValidAdminToken(token)) {
-          final adminClaims = {
-            'account_id': kAdminTokenAccountId,
-            'device_id': 'admin_device',
-            'is_admin': true,
-          };
+        final adminClaims = _adminClaimsForToken(token);
+        if (adminClaims != null) {
           final updatedRequest = request.change(context: {'auth': adminClaims});
           return innerHandler(updatedRequest);
         }

@@ -31,7 +31,8 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:fullBackupContent="@xml/helix_remote_backup_rules"
-        android:dataExtractionRules="@xml/helix_remote_data_extraction_rules">
+        android:dataExtractionRules="@xml/helix_remote_data_extraction_rules"
+        android:networkSecurityConfig="@xml/helix_remote_network_security">
         <activity
             android:name=".MainActivity"
             android:exported="true"

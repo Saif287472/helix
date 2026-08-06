@@ -171,3 +171,38 @@ jobs:
       - run: flutter pub get
       - name: Scheduled Phase 11 fuzz seed corpus regression
         run: dart test tool/fuzz_seed_corpus_test.dart
+
+  supply-chain:
+    needs: changes
+    if: >-
+      needs.changes.outputs.common == 'true' ||
+      needs.changes.outputs.remote == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    defaults:
+      run:
+        working-directory: helix_remote
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.8
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Generate resolved CycloneDX SBOM
+        run: dart run tool/generate_sbom.dart pubspec.lock build/sbom.cdx.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: helix-remote-sbom
+          path: helix_remote/build/sbom.cdx.json
+          if-no-files-found: error
+      - name: Scan resolved dependency files for known vulnerabilities
+        uses: google/osv-scanner-action@v2.3.8
+        with:
+          scan-args: |-
+            --recursive
+            ./helix_remote

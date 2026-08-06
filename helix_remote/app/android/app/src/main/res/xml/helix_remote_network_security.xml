@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release transport policy. The pin is SHA-256(SPKI) for hr.agiletechbd.com,
+  captured 2026-08-07. Rotate using ADR 022 before the pin-set expiry; debug
+  builds intentionally override this file for local emulator development.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">hr.agiletechbd.com</domain>
+        <pin-set expiration="2027-05-01">
+            <pin digest="SHA-256">fjt5zE6K0c3n1+uhpv6oLsJ+ksWtV511oiwSd79rpzs=</pin>
+        </pin-set>
+    </domain-config>
+</network-security-config>

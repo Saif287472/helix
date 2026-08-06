@@ -108,8 +108,16 @@ class AdminPairingModule {
       throw AppError.unauthorized('Invalid or expired code');
     }
 
-    final identity = await rotateAdminToken(db);
-    return _json({'admin_token': identity.adminToken});
+    final identity = await rotateAdminToken(db, now: _now);
+    return _json({
+      'admin_token': identity.adminToken,
+      'expires_at': db.getServerConfig('admin_token_expires_at'),
+      'scopes': db.getServerConfig('admin_token_scopes')?.split(' ') ?? [],
+      // Pairing requires terminal/loopback possession plus a one-time code;
+      // clients retain this evidence rather than claiming a password-based
+      // MFA factor that the deployment does not have.
+      'issued_via': 'loopback_pairing_code',
+    });
   }
 
   Response _json(Map<String, dynamic> body, {int status = 200}) {

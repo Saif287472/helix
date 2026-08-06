@@ -34,7 +34,13 @@ class ServerIdentity {
     this.adminToken,
   });
 
-  static Future<ServerIdentity> loadOrCreate(BackendDatabase db) async {
+  static const adminCredentialLifetime = Duration(hours: 12);
+  static const adminCredentialScopes = 'ops:*';
+
+  static Future<ServerIdentity> loadOrCreate(
+    BackendDatabase db, {
+    DateTime Function()? now,
+  }) async {
     final serverId = db.getServerConfig('server_id');
     final publicKeyBase64 = db.getServerConfig('server_public_key');
     final privateKeyBase64 = db.getServerConfig('server_private_key');
@@ -87,6 +93,26 @@ class ServerIdentity {
           .convert(utf8.encode(generatedAdminToken))
           .toString();
       db.setServerConfig('admin_token_hash', hash);
+      db.setServerConfig(
+        'admin_token_expires_at',
+        (now ?? DateTime.now)()
+            .add(adminCredentialLifetime)
+            .millisecondsSinceEpoch
+            .toString(),
+      );
+      db.setServerConfig('admin_token_scopes', adminCredentialScopes);
+    } else if (db.getServerConfig('admin_token_expires_at') == null) {
+      // A pre-Phase-9 token is upgraded at the next boot rather than being
+      // silently perpetual. It remains usable for one normal operator shift,
+      // giving the owner time to pair the admin console again.
+      db.setServerConfig(
+        'admin_token_expires_at',
+        (now ?? DateTime.now)()
+            .add(adminCredentialLifetime)
+            .millisecondsSinceEpoch
+            .toString(),
+      );
+      db.setServerConfig('admin_token_scopes', adminCredentialScopes);
     }
 
     return ServerIdentity(
@@ -107,7 +133,12 @@ class ServerIdentity {
 /// server's federation identity/keypair is untouched either way. The
 /// returned identity's `adminToken` is always non-null (the token hash was
 /// just cleared above, so loadOrCreate always regenerates one).
-Future<ServerIdentity> rotateAdminToken(BackendDatabase db) async {
+Future<ServerIdentity> rotateAdminToken(
+  BackendDatabase db, {
+  DateTime Function()? now,
+}) async {
   db.deleteServerConfig('admin_token_hash');
-  return ServerIdentity.loadOrCreate(db);
+  db.deleteServerConfig('admin_token_expires_at');
+  db.deleteServerConfig('admin_token_scopes');
+  return ServerIdentity.loadOrCreate(db, now: now);
 }

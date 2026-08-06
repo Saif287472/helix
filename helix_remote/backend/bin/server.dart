@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
@@ -50,6 +51,24 @@ Future<void> _run(ServerLogSink logSink) async {
       int.tryParse(Platform.environment['HELIX_REMOTE_PORT'] ?? '') ?? 8080;
   final host = Platform.environment['HELIX_REMOTE_HOST'] ?? '127.0.0.1';
   final devMode = Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1';
+  final topology =
+      Platform.environment['HELIX_REMOTE_DEPLOYMENT_TOPOLOGY'] ?? 'single_host';
+  final configuredWorkers = int.tryParse(
+    Platform.environment['HELIX_REMOTE_BACKEND_WORKERS'] ?? '1',
+  );
+  if (!devMode &&
+      (topology != 'single_host' ||
+          configuredWorkers == null ||
+          configuredWorkers < 1 ||
+          configuredWorkers > 4)) {
+    logServerError(
+      'FATAL: SQLite production baseline requires '
+      'HELIX_REMOTE_DEPLOYMENT_TOPOLOGY=single_host and '
+      'HELIX_REMOTE_BACKEND_WORKERS in 1..4. Use the Postgres migration '
+      'path before deploying beyond this ceiling.',
+    );
+    exit(1);
+  }
 
   // One aggregated pass over every required/conditional env var, so a
   // misconfigured deploy sees every problem at once instead of restarting
@@ -74,6 +93,8 @@ Future<void> _run(ServerLogSink logSink) async {
   // live session on deploy. validateStartupEnv sanitizes only to decide
   // whether the value is present/long enough, not to change what's used.
   final resolvedJwtSecret = Platform.environment['HELIX_REMOTE_JWT_SECRET']!;
+  final jwtKeyRing = _readJwtKeyRing(Platform.environment);
+  final jwtSigningKeyId = Platform.environment['HELIX_REMOTE_JWT_ACTIVE_KID'];
   final dbPath =
       Platform.environment['HELIX_REMOTE_DB_PATH'] ?? 'remote_backend.db';
 
@@ -184,6 +205,8 @@ Future<void> _run(ServerLogSink logSink) async {
   final server = BackendServer.create(
     sqliteDb: sqliteDb,
     jwtSecret: resolvedJwtSecret,
+    jwtKeyRing: jwtKeyRing,
+    jwtSigningKeyId: jwtSigningKeyId,
     attachmentsStorageDir: attachmentsStorageDir,
     maxAttachmentBytes: maxAttachmentBytes,
     accountQuotaBytes: accountQuotaBytes,
@@ -300,4 +323,39 @@ Future<void> _run(ServerLogSink logSink) async {
 
   watchSignal(ProcessSignal.sigint, 'SIGINT');
   watchSignal(ProcessSignal.sigterm, 'SIGTERM');
+}
+
+/// Optional rotation configuration. The legacy single secret remains the
+/// default, while a JSON object such as
+/// `{\"2026-07\":\"old\",\"2026-08\":\"new\"}` lets a deployment accept
+/// old and new sessions during the overlap. Secrets are intentionally read
+/// unchanged: operators may use arbitrary high-entropy values.
+Map<String, String>? _readJwtKeyRing(Map<String, String> environment) {
+  final source = environment['HELIX_REMOTE_JWT_KEY_RING_JSON'];
+  if (source == null || source.trim().isEmpty) return null;
+  try {
+    final decoded = jsonDecode(source);
+    if (decoded is! Map) throw const FormatException('must be an object');
+    final keyRing = <String, String>{};
+    for (final entry in decoded.entries) {
+      if (entry.key is! String ||
+          entry.value is! String ||
+          (entry.key as String).trim().isEmpty ||
+          (entry.value as String).isEmpty) {
+        throw const FormatException(
+          'keys and values must be non-empty strings',
+        );
+      }
+      keyRing[entry.key as String] = entry.value as String;
+    }
+    final active = environment['HELIX_REMOTE_JWT_ACTIVE_KID'];
+    if (keyRing.isEmpty || active == null || !keyRing.containsKey(active)) {
+      throw const FormatException(
+        'HELIX_REMOTE_JWT_ACTIVE_KID must name a key in the ring',
+      );
+    }
+    return keyRing;
+  } on FormatException catch (error) {
+    throw ArgumentError('Invalid HELIX_REMOTE_JWT_KEY_RING_JSON: $error');
+  }
 }
