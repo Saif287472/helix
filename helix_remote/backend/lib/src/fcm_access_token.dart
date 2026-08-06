@@ -94,17 +94,15 @@ Future<FcmAccessToken> exchangeServiceAccountForFcmToken(
 /// one until it is nearly expired.
 final class ServiceAccountFcmAccessToken implements FcmAccessTokenSource {
   ServiceAccountFcmAccessToken({
-    required Map<String, dynamic> serviceAccountJson,
-    FcmTokenExchange exchange = exchangeServiceAccountForFcmToken,
-    DateTime Function() clock = _utcNow,
+    required this.serviceAccountJson,
+    this.exchange = exchangeServiceAccountForFcmToken,
+    this.clock = _utcNow,
     this.refreshMargin = const Duration(minutes: 5),
-  }) : _serviceAccountJson = serviceAccountJson,
-       _exchange = exchange,
-       _clock = clock;
+  });
 
-  final Map<String, dynamic> _serviceAccountJson;
-  final FcmTokenExchange _exchange;
-  final DateTime Function() _clock;
+  final Map<String, dynamic> serviceAccountJson;
+  final FcmTokenExchange exchange;
+  final DateTime Function() clock;
 
   /// How long before the stated expiry a token is treated as spent.
   ///
@@ -121,7 +119,7 @@ final class ServiceAccountFcmAccessToken implements FcmAccessTokenSource {
   Future<String> bearerToken() {
     final cached = _cached;
     if (cached != null &&
-        _clock().isBefore(cached.expiresAt.subtract(refreshMargin))) {
+        clock().isBefore(cached.expiresAt.subtract(refreshMargin))) {
       return Future.value(cached.value);
     }
     return _refresh();
@@ -137,16 +135,25 @@ final class ServiceAccountFcmAccessToken implements FcmAccessTokenSource {
     final inFlight = _inFlight;
     if (inFlight != null) return inFlight;
 
-    final future = _exchange(_serviceAccountJson)
-        .then((token) {
-          _cached = token;
-          return token.value;
-        })
-        .whenComplete(() {
-          _inFlight = null;
-        });
+    final future = _exchangeAndCache();
     _inFlight = future;
     return future;
+  }
+
+  Future<String> _exchangeAndCache() async {
+    // Yield before touching anything, so this function cannot reach its
+    // `finally` during the synchronous part of the call that created it.
+    // Otherwise an exchange that fails immediately would clear _inFlight
+    // before _refresh had assigned it, leaving a permanently-failed future
+    // in the field for the life of the process.
+    await Future<void>.value();
+    try {
+      final token = await exchange(serviceAccountJson);
+      _cached = token;
+      return token.value;
+    } finally {
+      _inFlight = null;
+    }
   }
 }
 
@@ -174,14 +181,10 @@ Map<String, dynamic>? readFcmServiceAccount(String value) {
   try {
     decoded = jsonDecode(raw);
   } on FormatException catch (e) {
-    throw FormatException(
-      'FCM service account is not valid JSON: ${e.message}',
-    );
+    throw FormatException('Invalid JSON in FCM service account: ${e.message}');
   }
   if (decoded is! Map<String, dynamic>) {
-    throw const FormatException(
-      'FCM service account must be a JSON object.',
-    );
+    throw const FormatException('FCM service account must be a JSON object.');
   }
   // Checked here rather than left to the first token exchange: these are the
   // two fields the JWT cannot be built without, and a key file that is
