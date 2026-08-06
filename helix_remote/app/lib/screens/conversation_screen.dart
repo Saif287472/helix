@@ -14,6 +14,7 @@ import 'package:helix_remote/screens/conversation/message_tile.dart';
 import 'package:helix_remote/screens/contact_info_screen.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:path/path.dart' as p;
 
 part 'conversation/app_bars.dart';

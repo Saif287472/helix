@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:convert';
 import 'dart:math';
 
@@ -58,8 +59,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     });
   }
 
-  String get _currentAccountId =>
-      _viewModel.currentAccountId;
+  String get _currentAccountId => _viewModel.currentAccountId;
 
   bool _isGroupConversation(RemoteConversation conv) =>
       conv.type == 'group' || conv.type == 'GROUP';
@@ -75,9 +75,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     final currentAccountId = _currentAccountId;
     final rows = <_GroupRowData>[];
     for (final conversation in _viewModel.conversations()) {
-      final members = _viewModel.memberIds(
-        conversation.conversationId,
-      );
+      final members = _viewModel.memberIds(conversation.conversationId);
       final isGroup = members.length > 2 || _isGroupConversation(conversation);
       if (!isGroup) continue;
 

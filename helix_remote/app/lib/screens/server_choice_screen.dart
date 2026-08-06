@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
@@ -98,7 +99,7 @@ class _ServerChoiceScreenState extends State<ServerChoiceScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: HelixInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -207,7 +208,7 @@ class _ChoiceTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: HelixInsets.all(16),
           child: Row(
             children: [
               loading
@@ -250,7 +251,7 @@ class _HostYourOwnInfoScreen extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: HelixInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,

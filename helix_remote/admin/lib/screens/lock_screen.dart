@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
@@ -52,14 +53,18 @@ class _LockScreenState extends State<LockScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F16),
+      backgroundColor: HelixColorTokens.cFF0F0F16,
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: HelixInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.radar, size: 56, color: Color(0xFF00E5FF)),
+              const Icon(
+                Icons.radar,
+                size: 56,
+                color: HelixColorTokens.cFF00E5FF,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Helix Admin is locked',
@@ -71,7 +76,7 @@ class _LockScreenState extends State<LockScreen> {
                   _error!,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Color(0xFFFF3366),
+                    color: HelixColorTokens.cFFFF3366,
                     fontSize: 13,
                   ),
                 ),
@@ -91,12 +96,9 @@ class _LockScreenState extends State<LockScreen> {
                     : const Icon(Icons.lock_open),
                 label: Text(_isAuthenticating ? 'Unlocking…' : 'Unlock'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8A2BE2),
+                  backgroundColor: HelixColorTokens.cFF8A2BE2,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
+                  padding: HelixInsets.symmetric(horizontal: 24, vertical: 14),
                 ),
               ),
             ],

@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 
 /// Reassuring onboarding highlight: "Protected by military-grade AES-256
@@ -16,7 +17,7 @@ class OnboardingSecurityBadge extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: HelixInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: cs.primaryContainer,
         borderRadius: BorderRadius.circular(24),
@@ -55,7 +56,7 @@ class OtpPlaceholderNotice extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: HelixInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.amber.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),

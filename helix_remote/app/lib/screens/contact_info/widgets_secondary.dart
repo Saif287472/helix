@@ -9,7 +9,7 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 8),
+      margin: HelixInsets.only(top: 8),
       color: color,
       child: Column(
         children: [
@@ -54,7 +54,7 @@ class _InfoRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(30, 17, 30, 17),
+        padding: HelixInsets.fromLTRB(30, 17, 30, 17),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -122,14 +122,14 @@ class _CommonGroupsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.only(top: 8),
+      margin: HelixInsets.only(top: 8),
       color: color,
-      padding: const EdgeInsets.only(top: 16, bottom: 10),
+      padding: HelixInsets.only(top: 16, bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 30),
+            padding: HelixInsets.symmetric(horizontal: 30),
             child: Text(
               '${groups.length} ${groups.length == 1 ? 'Group' : 'Groups'} in common',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -176,7 +176,7 @@ class _GroupRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final title = group.title.isEmpty ? 'Group' : group.title;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(30, 14, 30, 14),
+      padding: HelixInsets.fromLTRB(30, 14, 30, 14),
       child: Row(
         children: [
           CircleAvatar(
@@ -231,7 +231,7 @@ class _MetricLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: HelixInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Expanded(child: Text(label)),

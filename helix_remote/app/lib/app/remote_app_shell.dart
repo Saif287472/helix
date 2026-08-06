@@ -238,7 +238,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
+            HelixSkeleton(width: 192, height: 24),
             SizedBox(height: 16),
             Text('Starting Helix Remote...'),
           ],
@@ -280,7 +280,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: HelixInsets.all(24),
                 child: _buildCreateAccountStepSafely(),
               ),
             ),

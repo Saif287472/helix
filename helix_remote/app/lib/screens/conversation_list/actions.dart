@@ -33,7 +33,7 @@ extension _ConversationListBody on _ConversationListScreenState {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 18, bottom: 112),
+      padding: HelixInsets.only(top: 18, bottom: 112),
       itemCount: list.length,
       itemBuilder: (context, index) {
         final conv = list[index];

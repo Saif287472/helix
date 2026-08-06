@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -191,16 +192,16 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
               itemBuilder: (_, index) {
                 if (index == 0) {
                   return ListTile(
-                  dense: true,
-                  title: const Text('First seen'),
-                  subtitle: Text(device.createdAt.toLocal().toString()),
+                    dense: true,
+                    title: const Text('First seen'),
+                    subtitle: Text(device.createdAt.toLocal().toString()),
                   );
                 }
                 if (index == 1) {
                   return ListTile(
-                  dense: true,
-                  title: const Text('Key fingerprint'),
-                  subtitle: Text(_fingerprint(device.deviceSigningPublicKey)),
+                    dense: true,
+                    title: const Text('Key fingerprint'),
+                    subtitle: Text(_fingerprint(device.deviceSigningPublicKey)),
                   );
                 }
                 if (index == 2) return const Divider();
@@ -212,14 +213,14 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                 }
                 final row = history[index - 3];
                 return ListTile(
-                      dense: true,
-                      title: Text(row['type'].toString()),
-                      subtitle: Text(
-                        DateTime.fromMillisecondsSinceEpoch(
-                          row['timestamp'] as int,
-                        ).toLocal().toString(),
-                      ),
-                    );
+                  dense: true,
+                  title: Text(row['type'].toString()),
+                  subtitle: Text(
+                    DateTime.fromMillisecondsSinceEpoch(
+                      row['timestamp'] as int,
+                    ).toLocal().toString(),
+                  ),
+                );
               },
             ),
           ),
@@ -300,7 +301,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
         ],
       ),
       body: _busy
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: HelixSkeleton(width: 192, height: 24))
           : _error != null
           ? Center(child: Text('Error: $_error'))
           : Column(
@@ -363,7 +364,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
 
   Widget _buildLinkDeviceAction(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.all(12),
+      margin: HelixInsets.all(12),
       child: ListTile(
         leading: const Icon(Icons.qr_code_scanner),
         title: const Text('Link New Device'),

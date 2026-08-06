@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 
 /// A country's name, ISO 3166-1 alpha-2 code, and international dialing
@@ -242,7 +243,7 @@ class CountryCodeSelector extends StatelessWidget {
         child: InputDecorator(
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+            contentPadding: HelixInsets.horizontal12Vertical18,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -369,7 +370,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
       builder: (context, scrollController) {
         final filtered = _filtered;
         return Padding(
-          padding: EdgeInsets.only(
+          padding: HelixInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
           // Deliberately not mainAxisSize.min: this Column fills the
@@ -378,7 +379,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: HelixInsets.fromLTRB(16, 16, 16, 8),
                 child: TextField(
                   controller: _searchController,
                   autofocus: true,

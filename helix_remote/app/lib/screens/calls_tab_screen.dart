@@ -10,6 +10,7 @@ import 'package:helix_remote_domain/models.dart'
     show RemoteContact, ScheduledCall;
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 part 'calls_tab/widgets_primary.dart';
 part 'calls_tab/widgets_secondary.dart';
@@ -301,13 +302,13 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
               ],
       ),
       body: !_loaded
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: HelixSkeleton(width: 192, height: 24))
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (_showSearch)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 2, 24, 12),
+                    padding: HelixInsets.fromLTRB(24, 2, 24, 12),
                     child: _CallSearchField(
                       controller: _searchController,
                       onChanged: (value) => setState(() => _query = value),
@@ -331,7 +332,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
                       _callBack(peerId, isVideo: false, peerDisplayName: name),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(32, 22, 32, 14),
+                  padding: HelixInsets.fromLTRB(32, 22, 32, 14),
                   child: Text(
                     'Recent',
                     style: theme.textTheme.titleMedium?.copyWith(
@@ -362,7 +363,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
         onRefresh: () async => _load(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(top: 56),
+          padding: HelixInsets.only(top: 56),
           children: [
             Icon(Icons.call_outlined, size: 64, color: cs.outline),
             const SizedBox(height: 16),
@@ -390,7 +391,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
     return RefreshIndicator(
       onRefresh: () async => _load(),
       child: ListView.builder(
-        padding: const EdgeInsets.only(bottom: 112),
+        padding: HelixInsets.only(bottom: 112),
         itemCount: visible.length,
         itemBuilder: (context, index) {
           final row = visible[index];
@@ -445,9 +446,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
   }
 
   void _messagePeer(_CallHistoryRow row) {
-    final conversationId = _viewModel.conversationIdForPeer(
-      row.peerId,
-    );
+    final conversationId = _viewModel.conversationIdForPeer(row.peerId);
     if (conversationId == null) {
       _showPlaceholder('No Helix chat exists for this contact yet');
       return;
@@ -529,7 +528,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
       context: context,
       barrierColor: Colors.black.withAlpha(120),
       builder: (ctx) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 60),
+        insetPadding: HelixInsets.symmetric(horizontal: 60),
         alignment: Alignment.center,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         child: _QuickContactCard(

@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -69,7 +70,7 @@ class _MessageTileState extends State<ConversationMessageTile> {
 
     final baseBubbleBg = isMine ? palette.outgoing : palette.incoming;
     final bubbleBg = widget.isHighlighted
-        ? Color.lerp(baseBubbleBg, const Color(0xFFFFD54F), 0.45)!
+        ? Color.lerp(baseBubbleBg, HelixColorTokens.cFFFFD54F, 0.45)!
         : baseBubbleBg;
     final hasLargeMedia =
         widget.message.media != null && _isImageLike(widget.message.media!);
@@ -78,7 +79,7 @@ class _MessageTileState extends State<ConversationMessageTile> {
     Widget bubble = AnimatedContainer(
       key: ValueKey('message_bubble_${widget.message.messageId}'),
       duration: const Duration(milliseconds: 180),
-      padding: EdgeInsets.fromLTRB(
+      padding: HelixInsets.fromLTRB(
         hasLargeMedia ? 4 : 10,
         hasLargeMedia ? 4 : 6,
         hasLargeMedia ? 4 : 10,
@@ -156,7 +157,7 @@ class _MessageTileState extends State<ConversationMessageTile> {
           : _onHorizontalDragUpdate,
       onHorizontalDragEnd: widget.selectionMode ? null : _onHorizontalDragEnd,
       child: Padding(
-        padding: EdgeInsets.only(
+        padding: HelixInsets.only(
           left: isMine ? horizontalInset : 8,
           right: isMine ? 8 : horizontalInset,
           top: 1,
@@ -182,13 +183,13 @@ class _MessageTileState extends State<ConversationMessageTile> {
               children: [
                 if (widget.selectionMode)
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: HelixInsets.only(right: 8),
                     child: Icon(
                       widget.isSelected
                           ? Icons.check_circle
                           : Icons.radio_button_unchecked,
                       color: widget.isSelected
-                          ? const Color(0xFF25D366)
+                          ? HelixColorTokens.cFF25D366
                           : Colors.grey,
                       size: 22,
                     ),
@@ -245,12 +246,12 @@ class _MessageTileState extends State<ConversationMessageTile> {
         ],
         if (widget.message.reactions.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: HelixInsets.only(top: 4),
             child: InkWell(
               onTap: widget.onReactionTap,
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                padding: HelixInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Wrap(
                   spacing: 4,
                   children: widget.message.reactions

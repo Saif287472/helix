@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -122,7 +123,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
           children: [
             for (final entry in preview.entries)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
+                padding: HelixInsets.symmetric(vertical: 2),
                 child: Text('${entry.key}: ${entry.value}'),
               ),
           ],
@@ -220,7 +221,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
       appBar: AppBar(title: const Text('Privacy and security')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: HelixInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -259,7 +260,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                       onChanged: _busy ? null : _setAppLock,
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      padding: HelixInsets.fromLTRB(16, 0, 16, 12),
                       child: DropdownButtonFormField<int>(
                         initialValue: appLock.relockAfterSeconds,
                         decoration: const InputDecoration(
@@ -318,7 +319,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                             },
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      padding: HelixInsets.fromLTRB(16, 0, 16, 12),
                       child: DropdownButtonFormField<int>(
                         initialValue: defaultDisappearing,
                         decoration: const InputDecoration(
@@ -448,9 +449,9 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                 Text(_status!, textAlign: TextAlign.center),
               ],
               if (_busy)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(),
+                Padding(
+                  padding: HelixInsets.all(16),
+                  child: const CircularProgressIndicator(),
                 ),
             ],
           ),
@@ -536,7 +537,7 @@ class _ListCard extends StatelessWidget {
           ),
           if (entries.isEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: HelixInsets.fromLTRB(16, 0, 16, 16),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(

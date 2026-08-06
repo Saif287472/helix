@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -85,9 +86,9 @@ class _LogsTabState extends State<LogsTab> {
   Widget build(BuildContext context) {
     final lines = _visibleLines;
     return Card(
-      color: const Color(0xFF08080C),
+      color: HelixColorTokens.cFF08080C,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: HelixInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -182,7 +183,7 @@ class _LogsTabState extends State<LogsTab> {
       itemBuilder: (context, index) {
         final line = lines[index];
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: HelixInsets.symmetric(vertical: 4),
           child: SelectableText(
             line,
             style: TextStyle(
@@ -199,8 +200,8 @@ class _LogsTabState extends State<LogsTab> {
   /// Errors and warnings are worth spotting at a glance in a wall of
   /// green monospace.
   Color _colorFor(String line) {
-    if (line.contains('[ERROR]')) return const Color(0xFFFF6B6B);
-    if (line.contains('[WARN]')) return const Color(0xFFFFC107);
+    if (line.contains('[ERROR]')) return HelixColorTokens.cFFFF6B6B;
+    if (line.contains('[WARN]')) return HelixColorTokens.cFFFFC107;
     return Colors.greenAccent;
   }
 
@@ -220,7 +221,7 @@ class _LogsTabState extends State<LogsTab> {
     final message = widget.logs.message;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: HelixInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

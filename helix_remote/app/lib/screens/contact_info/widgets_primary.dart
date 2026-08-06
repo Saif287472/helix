@@ -56,7 +56,7 @@ class _ProfileHeader extends StatelessWidget {
     final cs = theme.colorScheme;
     return Container(
       color: cs.surface,
-      padding: const EdgeInsets.fromLTRB(30, 72, 30, 18),
+      padding: HelixInsets.fromLTRB(30, 72, 30, 18),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -213,15 +213,15 @@ class _MediaSection extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Container(
-      margin: const EdgeInsets.only(top: 8),
+      margin: HelixInsets.only(top: 8),
       color: color,
-      padding: const EdgeInsets.fromLTRB(30, 18, 0, 16),
+      padding: HelixInsets.fromLTRB(30, 18, 0, 16),
       child: Column(
         children: [
           InkWell(
             onTap: messages.isEmpty ? null : onOpen,
             child: Padding(
-              padding: const EdgeInsets.only(right: 22),
+              padding: HelixInsets.only(right: 22),
               child: Row(
                 children: [
                   Expanded(
@@ -260,7 +260,7 @@ class _MediaSection extends StatelessWidget {
                   )
                 : ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.only(right: 22),
+                    padding: HelixInsets.only(right: 22),
                     itemCount: messages.take(18).length,
                     separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (_, index) =>

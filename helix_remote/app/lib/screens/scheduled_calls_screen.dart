@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:helix_remote_domain/models.dart';
 
@@ -36,7 +37,7 @@ class ScheduledCallsScreen extends StatelessWidget {
       body: calls.isEmpty
           ? const Center(child: Text('No upcoming scheduled calls'))
           : ListView.separated(
-              padding: const EdgeInsets.all(16),
+              padding: HelixInsets.all(16),
               itemCount: calls.length,
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, i) => _ScheduledCallCard(
@@ -91,9 +92,9 @@ class _ScheduledCallCard extends StatelessWidget {
     final myRsvp = _myRsvp;
 
     return Card(
-      margin: EdgeInsets.zero,
+      margin: HelixInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: HelixInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -110,10 +111,7 @@ class _ScheduledCallCard extends StatelessWidget {
                 ),
                 if (isImminent)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
+                    padding: HelixInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.orange.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
@@ -169,7 +167,7 @@ class _ScheduledCallCard extends StatelessWidget {
                       color: color,
                     ),
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: EdgeInsets.zero,
+                    padding: HelixInsets.zero,
                   );
                 }).toList(),
               ),

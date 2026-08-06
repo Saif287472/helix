@@ -54,7 +54,7 @@ class _ConversationTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         color: isSelected ? selectedColor : cs.surface,
-        padding: const EdgeInsets.fromLTRB(22, 8, 20, 8),
+        padding: HelixInsets.fromLTRB(22, 8, 20, 8),
         constraints: const BoxConstraints(minHeight: 72),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -62,7 +62,11 @@ class _ConversationTile extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                _Avatar(name: title, size: 56),
+                _Avatar(
+                  name: title,
+                  size: 56,
+                  heroTag: 'conversation_avatar_${conversation.conversationId}',
+                ),
                 if (isSelectionMode && isSelected)
                   Positioned(
                     right: -2,
@@ -159,7 +163,7 @@ class _ConversationTile extends StatelessWidget {
                         Container(
                           constraints: const BoxConstraints(minWidth: 22),
                           height: 22,
-                          padding: const EdgeInsets.symmetric(horizontal: 7),
+                          padding: HelixInsets.symmetric(horizontal: 7),
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: cs.primary,
@@ -194,7 +198,7 @@ class _ConversationTile extends StatelessWidget {
       return const _PreviewStyle(
         text: 'Missed voice call',
         icon: Icons.call_missed,
-        color: Color(0xFFE91E63),
+        color: HelixColorTokens.cFFE91E63,
       );
     }
     if (lower.contains('video call')) {
@@ -256,7 +260,7 @@ class _OutboxBanner extends StatelessWidget {
     return Material(
       color: cs.tertiaryContainer,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: HelixInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
             Icon(Icons.outbox_outlined, color: cs.onTertiaryContainer),

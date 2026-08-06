@@ -16,7 +16,7 @@ class _ConnectionBanner extends StatelessWidget {
     final isError = _isError(stateLabel);
     return Container(
       color: isError ? Colors.red.shade100 : Colors.orange.shade100,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: HelixInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
           Icon(
@@ -30,7 +30,7 @@ class _ConnectionBanner extends StatelessWidget {
             TextButton(
               onPressed: onRetry,
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: HelixInsets.symmetric(horizontal: 8),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity: VisualDensity.compact,
@@ -157,7 +157,7 @@ class _SearchField extends StatelessWidget {
             borderRadius: BorderRadius.circular(28),
             borderSide: BorderSide.none,
           ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          contentPadding: HelixInsets.symmetric(vertical: 14),
         ),
       ),
     );
@@ -193,20 +193,20 @@ class _FilterChipsRow extends StatelessWidget {
       color: cs.surface,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(30, 0, 16, 12),
+        padding: HelixInsets.fromLTRB(30, 0, 16, 12),
         child: Row(
           children: chips.map((entry) {
             final (filter, label) = entry;
             final selected = active == filter;
             return Padding(
-              padding: const EdgeInsets.only(right: 10),
+              padding: HelixInsets.only(right: 10),
               child: InkWell(
                 borderRadius: BorderRadius.circular(999),
                 onTap: () => onSelect(filter),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 120),
                   height: 34,
-                  padding: EdgeInsets.symmetric(
+                  padding: HelixInsets.symmetric(
                     horizontal: label == '+' ? 12 : 16,
                   ),
                   alignment: Alignment.center,

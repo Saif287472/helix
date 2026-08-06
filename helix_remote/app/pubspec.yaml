@@ -29,6 +29,8 @@ dependencies:
   flutter_webrtc: ^1.5.1
   helix_remote_groups:
     path: ../packages/helix_remote_groups
+  helix_remote_ui:
+    path: ../packages/helix_remote_ui
   path: ^1.9.1
   path_provider: ^2.1.6
   file_picker: ^12.0.0-beta.5

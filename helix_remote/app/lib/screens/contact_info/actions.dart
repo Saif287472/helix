@@ -8,9 +8,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
   }
 
   String _memberSummary(RemoteConversation group) {
-    final members = _viewModel.memberIds(
-      group.conversationId,
-    );
+    final members = _viewModel.memberIds(group.conversationId);
     if (members.isEmpty) return 'No members';
     final names = members.map((id) {
       if (id == _viewModel.currentAccountId) return 'You';
@@ -59,7 +57,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(24),
+        insetPadding: HelixInsets.all(24),
         child: GestureDetector(
           onTap: () => Navigator.pop(ctx),
           child: Center(
@@ -88,7 +86,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
       isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          padding: HelixInsets.fromLTRB(20, 4, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,7 +125,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
       showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 6, 24, 28),
+          padding: HelixInsets.fromLTRB(24, 6, 24, 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,18 +159,12 @@ extension _ContactInfoActions on _ContactInfoScreenState {
 
   void _setMediaVisibility(bool value) {
     final next = _privacy.copyWith(automaticMediaSaveAllowed: value);
-    _viewModel.setPrivacy(
-      widget.conversationId,
-      next,
-    );
+    _viewModel.setPrivacy(widget.conversationId, next);
     _update(() => _privacy = next);
   }
 
   void _setChatLocked(bool value) {
-    _viewModel.setLocked(
-      widget.conversationId,
-      locked: value,
-    );
+    _viewModel.setLocked(widget.conversationId, locked: value);
     _update(() {
       _privacy = _viewModel.privacy(widget.conversationId);
     });
@@ -198,10 +190,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
       ),
     );
     if (selected == null) return;
-    _viewModel.setDisappearingPolicy(
-      widget.conversationId,
-      selected,
-    );
+    _viewModel.setDisappearingPolicy(widget.conversationId, selected);
     _update(() {
       _privacy = _viewModel.privacy(widget.conversationId);
     });
@@ -232,7 +221,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
       showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+          padding: HelixInsets.fromLTRB(20, 6, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -272,10 +261,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
       externalSaveAllowed: externalSaveAllowed,
       forwardingAllowed: forwardingAllowed,
     );
-    _viewModel.setPrivacy(
-      widget.conversationId,
-      next,
-    );
+    _viewModel.setPrivacy(widget.conversationId, next);
     _update(() => _privacy = next);
     Navigator.pop(sheetContext);
   }
@@ -304,9 +290,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
     if (peer == null || groupService == null || current == null) return;
     final groups = _viewModel.conversations().where((group) {
       if (!_isGroupConversation(group)) return false;
-      final members = _viewModel.memberIds(
-        group.conversationId,
-      );
+      final members = _viewModel.memberIds(group.conversationId);
       return !members.contains(peer);
     }).toList();
     if (groups.isEmpty) {
@@ -321,7 +305,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
           shrinkWrap: true,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+              padding: HelixInsets.fromLTRB(24, 8, 24, 12),
               child: Text(
                 'Add to group',
                 style: Theme.of(
@@ -351,10 +335,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
   }
 
   void _toggleFavorite() {
-    _viewModel.setFavorite(
-      widget.conversationId,
-      favorite: !_isFavorite,
-    );
+    _viewModel.setFavorite(widget.conversationId, favorite: !_isFavorite);
     unawaited(_load());
   }
 

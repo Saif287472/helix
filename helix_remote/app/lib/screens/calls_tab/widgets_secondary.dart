@@ -11,7 +11,7 @@ class _CallInfoHistoryRow extends StatelessWidget {
     final cs = theme.colorScheme;
     final warning = row.isMissed;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(54, 13, 32, 24),
+      padding: HelixInsets.fromLTRB(54, 13, 32, 24),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -70,7 +70,7 @@ class _CallInfoHistoryRow extends StatelessWidget {
                   ),
                 if (row.mediaLabel.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 6),
+                    padding: HelixInsets.only(top: 6),
                     child: Text(
                       row.mediaLabel,
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -114,7 +114,7 @@ class _QuickContactCard extends StatelessWidget {
           Container(
             height: 64,
             alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: HelixInsets.symmetric(horizontal: 16),
             color: cs.primaryContainer.withAlpha(
               theme.brightness == Brightness.dark ? 120 : 170,
             ),
@@ -264,7 +264,7 @@ class _CallSearchField extends StatelessWidget {
             borderRadius: BorderRadius.circular(28),
             borderSide: BorderSide.none,
           ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          contentPadding: HelixInsets.symmetric(vertical: 14),
         ),
       ),
     );

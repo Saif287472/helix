@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'guide_widgets.dart';
@@ -53,9 +54,9 @@ class GuideSizingPage extends StatelessWidget {
     String withCalling,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: HelixInsets.only(bottom: 16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: HelixInsets.all(16),
         decoration: BoxDecoration(
           color: context.sunkenSurface,
           borderRadius: BorderRadius.circular(8),

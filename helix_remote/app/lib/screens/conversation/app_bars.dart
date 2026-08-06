@@ -22,15 +22,18 @@ extension _ConversationAppBars on _ConversationScreenState {
         borderRadius: BorderRadius.circular(8),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 21,
-              backgroundColor: cs.primaryContainer,
-              child: Text(
-                initials,
-                style: TextStyle(
-                  color: cs.onPrimaryContainer,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
+            Hero(
+              tag: 'conversation_avatar_${widget.conversationId}',
+              child: CircleAvatar(
+                radius: 21,
+                backgroundColor: cs.primaryContainer,
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    color: cs.onPrimaryContainer,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),

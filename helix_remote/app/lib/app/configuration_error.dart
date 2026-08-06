@@ -12,7 +12,7 @@ class HelixRemoteConfigurationErrorApp extends StatelessWidget {
         appBar: AppBar(title: const Text('Helix Remote')),
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: HelixInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

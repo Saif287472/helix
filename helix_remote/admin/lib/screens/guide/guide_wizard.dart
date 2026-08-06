@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'backups_page.dart';
@@ -64,7 +65,7 @@ class _GuideWizardState extends State<GuideWizard> {
           child: SingleChildScrollView(
             child: Card(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: HelixInsets.all(24),
                 child: IndexedStack(index: _pageIndex, children: _pages),
               ),
             ),
@@ -87,7 +88,9 @@ class _GuideWizardState extends State<GuideWizard> {
             value: (_pageIndex + 1) / _pages.length,
             minHeight: 6,
             backgroundColor: context.sunkenSurface,
-            valueColor: const AlwaysStoppedAnimation(Color(0xFF8A2BE2)),
+            valueColor: const AlwaysStoppedAnimation(
+              HelixColorTokens.cFF8A2BE2,
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -97,7 +100,7 @@ class _GuideWizardState extends State<GuideWizard> {
             children: [
               for (var i = 0; i < _pageTitles.length; i++)
                 Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: HelixInsets.only(right: 8),
                   child: _pageChip(i),
                 ),
             ],
@@ -114,15 +117,15 @@ class _GuideWizardState extends State<GuideWizard> {
       borderRadius: BorderRadius.circular(16),
       onTap: () => _goTo(index),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: HelixInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF8A2BE2).withValues(alpha: 0.2)
+              ? HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.2)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected
-                ? const Color(0xFF8A2BE2)
+                ? HelixColorTokens.cFF8A2BE2
                 : context.textPrimary.withValues(alpha: 0.24),
           ),
         ),
@@ -157,7 +160,7 @@ class _GuideWizardState extends State<GuideWizard> {
       icon: const Icon(Icons.arrow_forward),
       label: const Text('Next'),
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF8A2BE2),
+        backgroundColor: HelixColorTokens.cFF8A2BE2,
         foregroundColor: Colors.white,
       ),
     );

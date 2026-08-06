@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 
 import '../admin_client.dart';
@@ -116,7 +117,7 @@ class _ServerNameCardState extends State<ServerNameCard> {
     final host = widget.serverHost;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: HelixInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

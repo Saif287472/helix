@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -72,15 +73,11 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
     final conversation = conversations
         .where((c) => c.conversationId == widget.conversationId)
         .firstOrNull;
-    final peer = _viewModel.peerAccountIdForConversation(
-      widget.conversationId,
-    );
+    final peer = _viewModel.peerAccountIdForConversation(widget.conversationId);
     final groups = <RemoteConversation>[];
     if (peer != null) {
       for (final group in conversations.where(_isGroupConversation)) {
-        final members = _viewModel.memberIds(
-          group.conversationId,
-        );
+        final members = _viewModel.memberIds(group.conversationId);
         if (members.contains(peer)) groups.add(group);
       }
     }
@@ -116,8 +113,10 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final pageColor = dark ? const Color(0xFF0B0B0C) : const Color(0xFFF4F5F7);
-    final sectionColor = dark ? const Color(0xFF171719) : cs.surface;
+    final pageColor = dark
+        ? HelixColorTokens.cFF0B0B0C
+        : HelixColorTokens.cFFF4F5F7;
+    final sectionColor = dark ? HelixColorTokens.cFF171719 : cs.surface;
 
     return Scaffold(
       backgroundColor: pageColor,
@@ -149,11 +148,9 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
               ),
             ),
             if (!_loaded)
-              SliverFillRemaining(
+              const SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(
-                  child: CircularProgressIndicator(color: cs.primary),
-                ),
+                child: Center(child: HelixSkeleton(width: 192, height: 24)),
               )
             else ...[
               SliverToBoxAdapter(

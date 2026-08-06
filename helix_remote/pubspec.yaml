@@ -17,6 +17,7 @@ workspace:
   - packages/helix_remote_calls
   - packages/helix_remote_groups
   - packages/helix_remote_cli
+  - packages/helix_remote_ui
 
 hooks:
   user_defines:

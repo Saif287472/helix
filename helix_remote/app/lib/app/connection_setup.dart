@@ -28,7 +28,9 @@ class _ServerChoiceHostState extends State<_ServerChoiceHost> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    return const Scaffold(
+      body: Center(child: HelixSkeleton(width: 192, height: 24)),
+    );
   }
 }
 
@@ -64,7 +66,7 @@ class _OfflineShellScreen extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: HelixInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -180,7 +182,7 @@ class _ServerUrlEntryScreenState extends State<_ServerUrlEntryScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: HelixInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

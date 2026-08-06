@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -209,7 +210,7 @@ class _ActiveCallOverlayState extends State<_ActiveCallOverlay> {
             ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: HelixInsets.all(20),
               child: Column(
                 children: [
                   _CallHeader(status: status),
@@ -257,7 +258,7 @@ class _CallHeader extends StatelessWidget {
         ),
         if (status.startedAt != null && status.state == RemoteCallState.active)
           Padding(
-            padding: const EdgeInsets.only(top: 6),
+            padding: HelixInsets.only(top: 6),
             child: Text(
               _formatDuration(DateTime.now().difference(status.startedAt!)),
               style: theme.textTheme.bodyMedium?.copyWith(
@@ -302,7 +303,7 @@ class _VideoPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ColoredBox(
-      color: const Color(0xFF101418),
+      color: HelixColorTokens.cFF101418,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -350,7 +351,7 @@ class _CallErrorBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: HelixInsets.symmetric(horizontal: 14, vertical: 10),
         child: Text(
           message,
           textAlign: TextAlign.center,

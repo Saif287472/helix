@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../admin_client.dart';
@@ -128,7 +129,7 @@ class _InvitesTabState extends State<InvitesTab> {
         children: [
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: HelixInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -162,15 +163,15 @@ class _InvitesTabState extends State<InvitesTab> {
                       _generating ? 'Generating…' : 'Generate Invite',
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8A2BE2),
+                      backgroundColor: HelixColorTokens.cFF8A2BE2,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: HelixInsets.symmetric(vertical: 16),
                     ),
                   ),
                   if (_lastShareableUrl != null) ...[
                     const SizedBox(height: 16),
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: HelixInsets.all(16),
                       decoration: BoxDecoration(
                         color: context.sunkenSurface,
                         borderRadius: BorderRadius.circular(8),
@@ -216,7 +217,7 @@ class _InvitesTabState extends State<InvitesTab> {
           const SizedBox(height: 24),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: HelixInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -240,15 +241,15 @@ class _InvitesTabState extends State<InvitesTab> {
                   ),
                   const SizedBox(height: 16),
                   if (_loading)
-                    const Center(
+                    Center(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: CircularProgressIndicator(),
+                        padding: HelixInsets.all(24),
+                        child: const CircularProgressIndicator(),
                       ),
                     )
                   else if (_invites.isEmpty)
                     Padding(
-                      padding: const EdgeInsets.all(24),
+                      padding: HelixInsets.all(24),
                       child: Text(
                         'No invites issued yet.',
                         style: TextStyle(color: context.textFaint),

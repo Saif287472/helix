@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_config.dart';
@@ -210,7 +211,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: HelixInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

@@ -46,7 +46,7 @@ class _NewCallSheetState extends State<_NewCallSheet> {
         return Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 4),
+              padding: HelixInsets.only(top: 10, bottom: 4),
               child: Container(
                 width: 40,
                 height: 4,
@@ -57,7 +57,7 @@ class _NewCallSheetState extends State<_NewCallSheet> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: HelixInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   Text(
@@ -75,7 +75,7 @@ class _NewCallSheetState extends State<_NewCallSheet> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: HelixInsets.symmetric(horizontal: 16, vertical: 4),
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
@@ -87,7 +87,7 @@ class _NewCallSheetState extends State<_NewCallSheet> {
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  contentPadding: HelixInsets.symmetric(vertical: 0),
                 ),
                 onChanged: (v) => setState(() => _query = v.toLowerCase()),
               ),
@@ -248,9 +248,9 @@ Color _avatarColor(String name, ColorScheme cs) {
     cs.primaryContainer,
     cs.secondaryContainer,
     cs.tertiaryContainer,
-    const Color(0xFFD7ECFF),
-    const Color(0xFFFFE0CC),
-    const Color(0xFFDFF6DE),
+    HelixColorTokens.cFFD7ECFF,
+    HelixColorTokens.cFFFFE0CC,
+    HelixColorTokens.cFFDFF6DE,
   ];
   return colors[name.hashCode.abs() % colors.length];
 }

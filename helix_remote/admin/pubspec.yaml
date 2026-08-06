@@ -17,6 +17,8 @@ dependencies:
   mobile_scanner: ^7.2.0
   shared_preferences: ^2.5.3
   url_launcher: ^6.3.2
+  helix_remote_ui:
+    path: ../packages/helix_remote_ui
 
 dev_dependencies:
   flutter_test:

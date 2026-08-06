@@ -172,7 +172,9 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
   Widget _buildBootHome() {
     switch (_bootState) {
       case _BootState.loading:
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        return const Scaffold(
+          body: Center(child: HelixSkeleton(width: 192, height: 24)),
+        );
       case _BootState.needsServerChoice:
         return _ServerChoiceHost(onChoice: _onServerChoiceMade);
       case _BootState.offline:
@@ -188,7 +190,9 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         );
       case _BootState.running:
         // Handled above before reaching this switch.
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        return const Scaffold(
+          body: Center(child: HelixSkeleton(width: 192, height: 24)),
+        );
     }
   }
 }

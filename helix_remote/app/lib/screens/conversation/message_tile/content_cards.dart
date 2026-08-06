@@ -29,7 +29,7 @@ class _ReplyQuote extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Container(
           constraints: const BoxConstraints(minWidth: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: HelixInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
             color: cs.surface.withAlpha(
               theme.brightness == Brightness.dark ? 44 : 150,
@@ -104,7 +104,7 @@ class _AttachmentCard extends StatelessWidget {
     final ext = p.extension(attachment.filename).replaceFirst('.', '');
     final label = ext.isEmpty ? 'FILE' : ext.toUpperCase();
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: HelixInsets.only(top: 8),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
@@ -113,7 +113,7 @@ class _AttachmentCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           child: Container(
             constraints: const BoxConstraints(minWidth: 220, maxWidth: 360),
-            padding: const EdgeInsets.all(10),
+            padding: HelixInsets.all(10),
             decoration: BoxDecoration(
               color: cs.onSurface.withAlpha(
                 theme.brightness == Brightness.dark ? 14 : 12,
@@ -191,10 +191,10 @@ class _FileGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = mimeType.startsWith('image/')
-        ? const Color(0xFF0EA5E9)
+        ? HelixColorTokens.cFF0EA5E9
         : mimeType.contains('android') || label == 'APK'
-        ? const Color(0xFF64748B)
-        : const Color(0xFF0284C7);
+        ? HelixColorTokens.cFF64748B
+        : HelixColorTokens.cFF0284C7;
     return Container(
       width: 42,
       height: 42,
@@ -332,20 +332,20 @@ class _CallEventCard extends StatelessWidget {
     final danger = data.missed;
     return Container(
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 320),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: HelixInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           CircleAvatar(
             radius: 27,
             backgroundColor: danger
-                ? const Color(0xFFE11D48).withAlpha(24)
+                ? HelixColorTokens.cFFE11D48.withAlpha(24)
                 : cs.onSurface.withAlpha(
                     theme.brightness == Brightness.dark ? 24 : 18,
                   ),
             child: Icon(
               data.video ? Icons.videocam_outlined : Icons.call_outlined,
-              color: danger ? const Color(0xFFE11D48) : cs.onSurfaceVariant,
+              color: danger ? HelixColorTokens.cFFE11D48 : cs.onSurfaceVariant,
               size: 25,
             ),
           ),
@@ -361,7 +361,7 @@ class _CallEventCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: danger ? const Color(0xFFE11D48) : cs.onSurface,
+                    color: danger ? HelixColorTokens.cFFE11D48 : cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),

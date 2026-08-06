@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
@@ -233,28 +234,25 @@ class _VideoTileState extends State<_VideoTile> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.isMuted)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 4),
-                    child: Icon(
+                  Padding(
+                    padding: HelixInsets.only(right: 4),
+                    child: const Icon(
                       Icons.mic_off,
                       color: Colors.redAccent,
                       size: 16,
                     ),
                   ),
                 if (widget.isScreenSharing)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 4),
-                    child: Icon(
+                  Padding(
+                    padding: HelixInsets.only(right: 4),
+                    child: const Icon(
                       Icons.screen_share,
                       color: Colors.blueAccent,
                       size: 16,
                     ),
                   ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
+                  padding: HelixInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(4),
@@ -296,7 +294,7 @@ class _ControlBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: Colors.black87,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: HelixInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [

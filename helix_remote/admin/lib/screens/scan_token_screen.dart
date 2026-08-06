@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -40,7 +41,7 @@ class _ScanTokenScreenState extends State<ScanTokenScreen> {
             child: Container(
               width: double.infinity,
               color: Colors.black54,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              padding: HelixInsets.symmetric(horizontal: 24, vertical: 20),
               child: const Text(
                 'Point the camera at the QR code your server printed when '
                 'it first started (or after running '

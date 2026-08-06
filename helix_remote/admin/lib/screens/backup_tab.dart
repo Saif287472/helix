@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -19,7 +20,7 @@ class BackupTab extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 500),
           child: Card(
             child: Padding(
-              padding: const EdgeInsets.all(32),
+              padding: HelixInsets.all(32),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -27,7 +28,7 @@ class BackupTab extends StatelessWidget {
                   const Icon(
                     Icons.settings_backup_restore,
                     size: 64,
-                    color: Color(0xFF8A2BE2),
+                    color: HelixColorTokens.cFF8A2BE2,
                   ),
                   const SizedBox(height: 24),
                   const Text(
@@ -52,9 +53,9 @@ class BackupTab extends StatelessWidget {
                     icon: const Icon(Icons.backup),
                     label: const Text('TRIGGER SNAPSHOT BACKUP'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8A2BE2),
+                      backgroundColor: HelixColorTokens.cFF8A2BE2,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: HelixInsets.symmetric(vertical: 16),
                     ),
                   ),
                 ],

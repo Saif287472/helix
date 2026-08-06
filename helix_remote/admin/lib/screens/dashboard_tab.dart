@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -32,7 +33,7 @@ class DashboardTab extends StatelessWidget {
         'Mailbox Encrypted Messages',
         '${tblCounts['messages'] ?? 0}',
         Icons.mail,
-        const Color(0xFF8A2BE2),
+        HelixColorTokens.cFF8A2BE2,
       ),
       _Metric(
         'Quarantined Security Events',
@@ -83,10 +84,10 @@ class DashboardTab extends StatelessWidget {
   Widget _metricRow(BuildContext context, _Metric metric) {
     return Card(
       elevation: 0,
-      margin: EdgeInsets.zero,
+      margin: HelixInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: HelixInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
             Container(
@@ -139,7 +140,7 @@ class DashboardTab extends StatelessWidget {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: HelixInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

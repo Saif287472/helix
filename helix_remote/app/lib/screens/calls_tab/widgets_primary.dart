@@ -26,7 +26,7 @@ class _QuickActions extends StatelessWidget {
       height: 128,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(46, 16, 24, 0),
+        padding: HelixInsets.fromLTRB(46, 16, 24, 0),
         children: [
           _QuickActionBubble(
             icon: Icons.call_outlined,
@@ -97,7 +97,7 @@ class _QuickActionBubble extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(right: 32),
+      padding: HelixInsets.only(right: 32),
       child: InkWell(
         borderRadius: BorderRadius.circular(28),
         onTap: onTap,
@@ -172,7 +172,7 @@ class _CallHistoryTile extends StatelessWidget {
         duration: const Duration(milliseconds: 120),
         constraints: const BoxConstraints(minHeight: 86),
         color: isSelected ? selectedColor : cs.surface,
-        padding: const EdgeInsets.fromLTRB(30, 9, 30, 9),
+        padding: HelixInsets.fromLTRB(30, 9, 30, 9),
         child: Row(
           children: [
             GestureDetector(
@@ -290,7 +290,7 @@ class _CallInfoScreen extends StatelessWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 28),
+        padding: HelixInsets.only(bottom: 28),
         children: [
           const SizedBox(height: 22),
           Center(child: _InitialAvatar(name: row.peerName, size: 80)),
@@ -306,7 +306,7 @@ class _CallInfoScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: HelixInsets.symmetric(horizontal: 32),
             child: Text(
               row.identifier,
               textAlign: TextAlign.center,
@@ -321,7 +321,7 @@ class _CallInfoScreen extends StatelessWidget {
           ),
           const SizedBox(height: 34),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: HelixInsets.symmetric(horizontal: 32),
             child: Row(
               children: [
                 Expanded(
@@ -354,7 +354,7 @@ class _CallInfoScreen extends StatelessWidget {
           Divider(height: 1, color: cs.outlineVariant.withAlpha(90)),
           const SizedBox(height: 34),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 30),
+            padding: HelixInsets.symmetric(horizontal: 30),
             child: Text(
               _sectionLabel(row.dateTime),
               style: theme.textTheme.titleLarge?.copyWith(

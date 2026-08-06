@@ -107,7 +107,7 @@ class _WaveformPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF25D366)
+      ..color = HelixColorTokens.cFF25D366
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
     final step = size.width / samples.length;

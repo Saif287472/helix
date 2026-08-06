@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_remote/app/composition_root.dart';
@@ -92,7 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: HelixInsets.all(24),
         children: [
           // Avatar
           Center(
@@ -153,7 +154,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text('Account ID', style: theme.textTheme.labelLarge),
           const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            padding: HelixInsets.symmetric(horizontal: 12, vertical: 14),
             decoration: BoxDecoration(
               border: Border.all(color: cs.outlineVariant),
               borderRadius: BorderRadius.circular(4),

@@ -68,7 +68,7 @@ class ContactTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: HelixInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
             _Avatar(name: name, size: 48),
@@ -135,25 +135,15 @@ class _MoreMenu extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, this.size = 48});
+  const _Avatar({required this.name, this.size = 48, this.heroTag});
 
   final String name;
   final double size;
+  final Object? heroTag;
 
-  static const _palette = [
-    Color(0xFFE91E63),
-    Color(0xFF9C27B0),
-    Color(0xFF3F51B5),
-    Color(0xFF2196F3),
-    Color(0xFF009688),
-    Color(0xFF4CAF50),
-    Color(0xFFFF9800),
-    Color(0xFFF44336),
-    Color(0xFF00BCD4),
-    Color(0xFF795548),
-  ];
-
-  Color _color() => _palette[name.hashCode.abs() % _palette.length];
+  Color _color() =>
+      HelixColorTokens.avatarPalette[name.hashCode.abs() %
+          HelixColorTokens.avatarPalette.length];
 
   String _initials() {
     final trimmed = name.trim();
@@ -167,7 +157,7 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CircleAvatar(
+    final avatar = CircleAvatar(
       radius: size / 2,
       backgroundColor: _color(),
       child: Text(
@@ -179,6 +169,7 @@ class _Avatar extends StatelessWidget {
         ),
       ),
     );
+    return heroTag == null ? avatar : Hero(tag: heroTag!, child: avatar);
   }
 }
 
@@ -229,7 +220,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
           children: [
             // Handle bar
             Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 4),
+              padding: HelixInsets.only(top: 10, bottom: 4),
               child: Container(
                 width: 40,
                 height: 4,
@@ -241,7 +232,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
             ),
             // Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: HelixInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   Text(
@@ -260,7 +251,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
             ),
             // Search field
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: HelixInsets.symmetric(horizontal: 16, vertical: 4),
               child: TextField(
                 controller: _searchController,
                 autofocus: false,
@@ -273,7 +264,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  contentPadding: HelixInsets.symmetric(vertical: 0),
                 ),
                 onChanged: (v) => setState(() => _query = v),
               ),

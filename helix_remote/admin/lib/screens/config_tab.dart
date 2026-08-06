@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/server_name_card.dart';
@@ -46,7 +47,7 @@ class ConfigTab extends StatelessWidget {
           const SizedBox(height: 16),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: HelixInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -147,7 +148,7 @@ class ConfigTab extends StatelessWidget {
 
   Widget _configField(BuildContext context, String label, String val) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: HelixInsets.symmetric(vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

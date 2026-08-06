@@ -181,7 +181,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
             ),
           if (_status != null)
             Padding(
-              padding: const EdgeInsets.all(8),
+              padding: HelixInsets.all(8),
               child: Text(_status!, textAlign: TextAlign.center),
             ),
           Expanded(
@@ -201,7 +201,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                                   right: 0,
                                   top: 0,
                                   child: Container(
-                                    padding: const EdgeInsets.all(2),
+                                    padding: HelixInsets.all(2),
                                     decoration: const BoxDecoration(
                                       color: Colors.red,
                                       shape: BoxShape.circle,

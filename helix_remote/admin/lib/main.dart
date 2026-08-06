@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -440,7 +441,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
   @override
   Widget build(BuildContext context) {
     if (_prefs == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: HelixSkeleton(width: 192, height: 24)),
+      );
     }
     if (_appLockEnabled && !_isUnlocked) {
       return LockScreen(onUnlocked: _handleUnlocked);
@@ -483,7 +486,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
                     Container(
                       width: 260,
                       color: context.sunkenSurface,
-                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      padding: HelixInsets.symmetric(vertical: 24),
                       child: _buildSidebarContent(inDrawer: false),
                     ),
                     Expanded(child: _buildBody(isMobile: false)),
@@ -530,7 +533,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: HelixInsets.symmetric(horizontal: 24),
           child: Row(
             children: [
               Icon(Icons.radar, color: context.accentColor),
@@ -594,16 +597,16 @@ class _MainAdminPageState extends State<MainAdminPage> {
     return InkWell(
       onTap: () => onSelect(tabId),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        margin: HelixInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: HelixInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF8A2BE2).withValues(alpha: 0.15)
+              ? HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.15)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: isSelected
               ? Border.all(
-                  color: const Color(0xFF8A2BE2).withValues(alpha: 0.4),
+                  color: HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.4),
                 )
               : null,
         ),
@@ -638,10 +641,10 @@ class _MainAdminPageState extends State<MainAdminPage> {
         _metrics == null &&
         _serverDependentTabs.contains(_selectedTab);
     if (showFullPageSpinner) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: HelixSkeleton(width: 192, height: 24));
     }
     return Padding(
-      padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
+      padding: HelixInsets.all(isMobile ? 16.0 : 24.0),
       child: _getTabWidget(),
     );
   }

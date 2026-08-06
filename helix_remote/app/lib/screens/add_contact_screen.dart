@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_remote/app/composition_root.dart';
@@ -195,7 +196,7 @@ class _AddContactScreenState extends State<AddContactScreen>
   Widget _buildSearchTab() {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: HelixInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -209,9 +210,9 @@ class _AddContactScreenState extends State<AddContactScreen>
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.person_search_outlined),
               suffixIcon: _searching
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox.square(
+                  ? Padding(
+                      padding: HelixInsets.all(12),
+                      child: const SizedBox.square(
                         dimension: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
@@ -287,7 +288,7 @@ class _AddContactScreenState extends State<AddContactScreen>
     // app allows system text scaling up to 1.3x on top of both. A layout
     // that happens to fit one phone overflows the next.
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: HelixInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -307,7 +308,7 @@ class _AddContactScreenState extends State<AddContactScreen>
           ),
           const SizedBox(height: 24),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: HelixInsets.all(16),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
@@ -368,7 +369,7 @@ class _AddContactScreenState extends State<AddContactScreen>
     // shrink. Without a scroll view that is a guaranteed overflow every
     // time someone taps the field.
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: HelixInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

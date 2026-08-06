@@ -12,6 +12,7 @@ import 'package:helix_remote/services/phone_contacts_service.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:share_plus/share_plus.dart';
 
 part 'contacts/widgets.dart';
@@ -437,7 +438,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: HelixSkeleton(width: 180, height: 24)),
+      );
     }
 
     final cs = Theme.of(context).colorScheme;
@@ -639,7 +642,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Widget _buildSectionHeader(String title) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: HelixInsets.fromLTRB(16, 12, 16, 4),
       child: Text(
         title,
         style: Theme.of(

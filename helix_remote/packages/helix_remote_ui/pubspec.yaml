@@ -1,0 +1,13 @@
+name: helix_remote_ui
+description: Shared Helix Remote design tokens, themes, and UI components.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter

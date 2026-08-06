@@ -81,7 +81,7 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
           onTap: widget.onChangeServerUrl,
           borderRadius: BorderRadius.circular(8),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            padding: HelixInsets.symmetric(vertical: 10, horizontal: 4),
             child: Row(
               children: [
                 Icon(
@@ -122,9 +122,9 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
       case null:
         return null;
       case _InviteCheckState.checking:
-        return const Padding(
-          padding: EdgeInsets.all(12),
-          child: SizedBox.square(
+        return Padding(
+          padding: HelixInsets.all(12),
+          child: const SizedBox.square(
             dimension: 18,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),

@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 
 /// First-launch welcome screen. Purely informational - no URL/token fields
@@ -15,14 +16,14 @@ class IntroScreen extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF0F0F16), Color(0xFF1E0B36)],
+            colors: [HelixColorTokens.cFF0F0F16, HelixColorTokens.cFF1E0B36],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            padding: HelixInsets.symmetric(horizontal: 24, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Card(
@@ -30,9 +31,9 @@ class IntroScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
-                color: const Color(0xFF161624).withValues(alpha: 0.9),
+                color: HelixColorTokens.cFF161624.withValues(alpha: 0.9),
                 child: Container(
-                  padding: const EdgeInsets.all(32),
+                  padding: HelixInsets.all(32),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -40,7 +41,7 @@ class IntroScreen extends StatelessWidget {
                       const Icon(
                         Icons.admin_panel_settings,
                         size: 64,
-                        color: Color(0xFF00E5FF),
+                        color: HelixColorTokens.cFF00E5FF,
                       ),
                       const SizedBox(height: 16),
                       const Text(
@@ -65,9 +66,9 @@ class IntroScreen extends StatelessWidget {
                       ElevatedButton(
                         onPressed: onGetStarted,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF8A2BE2),
+                          backgroundColor: HelixColorTokens.cFF8A2BE2,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: HelixInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),

@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -19,7 +20,7 @@ class SettingsSectionCard extends StatelessWidget {
       children: [
         if (title != null) ...[
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            padding: HelixInsets.only(left: 4, bottom: 8),
             child: Text(
               title!.toUpperCase(),
               style: TextStyle(
@@ -94,7 +95,7 @@ class SettingsRow extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: HelixInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
                   Container(
@@ -147,7 +148,7 @@ class SettingsRow extends StatelessWidget {
         ),
         if (trailing != null) ...[
           const SizedBox(width: 8),
-          Padding(padding: const EdgeInsets.only(right: 16), child: trailing!),
+          Padding(padding: HelixInsets.only(right: 16), child: trailing!),
         ],
       ],
     );

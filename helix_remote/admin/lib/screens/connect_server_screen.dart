@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'pairing_code_screen.dart';
@@ -86,7 +87,7 @@ class ConnectServerScreen extends StatelessWidget {
         title: const Text('SERVER CONNECTION'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: HelixInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -119,7 +120,7 @@ class ConnectServerScreen extends StatelessWidget {
               icon: const Icon(Icons.qr_code_scanner),
               label: const Text('Scan Token from Server Terminal'),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: HelixInsets.symmetric(vertical: 14),
               ),
             ),
             const SizedBox(height: 6),
@@ -136,7 +137,7 @@ class ConnectServerScreen extends StatelessWidget {
               icon: const Icon(Icons.terminal),
               label: const Text('Get a Pairing Code from the Server'),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: HelixInsets.symmetric(vertical: 14),
               ),
             ),
             const SizedBox(height: 6),
@@ -151,7 +152,7 @@ class ConnectServerScreen extends StatelessWidget {
               children: [
                 const Expanded(child: Divider()),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: HelixInsets.symmetric(horizontal: 12),
                   child: Text(
                     'OR ENTER MANUALLY',
                     style: TextStyle(color: context.textFaint, fontSize: 11),
@@ -218,9 +219,9 @@ class ConnectServerScreen extends StatelessWidget {
                     : (isConnected ? 'Reconnect' : 'Connect'),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF8A2BE2),
+                backgroundColor: HelixColorTokens.cFF8A2BE2,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: HelixInsets.symmetric(vertical: 16),
               ),
             ),
             if (isConnected) ...[

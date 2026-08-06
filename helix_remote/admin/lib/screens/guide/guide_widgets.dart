@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 
@@ -10,7 +11,7 @@ class GuidePageTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: HelixInsets.only(bottom: 16),
       child: Text(
         text,
         style: TextStyle(
@@ -40,7 +41,7 @@ class GuideDetailExpansion extends StatelessWidget {
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
+        tilePadding: HelixInsets.zero,
         title: Text(
           title,
           style: TextStyle(
@@ -55,7 +56,7 @@ class GuideDetailExpansion extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: HelixInsets.only(bottom: 12),
               child: Text(
                 detail,
                 style: TextStyle(
@@ -82,8 +83,8 @@ class AiAssistantTip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(12),
+      margin: HelixInsets.only(top: 16),
+      padding: HelixInsets.all(12),
       decoration: BoxDecoration(
         color: context.accentColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),

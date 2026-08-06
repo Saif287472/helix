@@ -69,21 +69,21 @@ extension _SettingsActions on _SettingsScreenState {
         items: [
           _SettingsItem(
             icon: Icons.person_outline,
-            color: const Color(0xFF3B82F6),
+            color: HelixColorTokens.cFF3B82F6,
             title: 'Account',
             subtitle: 'Profile name and account ID',
             onTap: _openProfile,
           ),
           _SettingsItem(
             icon: Icons.devices_outlined,
-            color: const Color(0xFF5B6EE1),
+            color: HelixColorTokens.cFF5B6EE1,
             title: 'Linked devices',
             subtitle: 'View and manage connected devices',
             onTap: _openDevices,
           ),
           _SettingsItem(
             icon: Icons.backup_outlined,
-            color: const Color(0xFF2FA84F),
+            color: HelixColorTokens.cFF2FA84F,
             title: 'Backup and restore',
             subtitle: 'Create encrypted backups or restore this device',
             onTap: _openBackup,
@@ -99,14 +99,14 @@ extension _SettingsActions on _SettingsScreenState {
           // exactly this screen.
           _SettingsItem(
             icon: Icons.lock_outline,
-            color: const Color(0xFF7C3AED),
+            color: HelixColorTokens.cFF7C3AED,
             title: 'Privacy and security',
             subtitle: privacySummary,
             onTap: _openPrivacy,
           ),
           _SettingsItem(
             icon: Icons.notifications_none_outlined,
-            color: const Color(0xFFF24E1E),
+            color: HelixColorTokens.cFFF24E1E,
             title: 'Notifications and calls',
             subtitle: alertsSummary,
             onTap: _openPrivacy,
@@ -120,7 +120,7 @@ extension _SettingsActions on _SettingsScreenState {
           // was pure duplication. Groups has no tab, so it stays.
           _SettingsItem(
             icon: Icons.groups_outlined,
-            color: const Color(0xFF14B8A6),
+            color: HelixColorTokens.cFF14B8A6,
             title: 'Groups',
             subtitle: 'Group conversations, invites and roles',
             value: '${_groupCount()}',
@@ -128,7 +128,7 @@ extension _SettingsActions on _SettingsScreenState {
           ),
           _SettingsItem(
             icon: Icons.palette_outlined,
-            color: const Color(0xFFEC4899),
+            color: HelixColorTokens.cFFEC4899,
             title: 'Appearance',
             subtitle: 'App theme and chat presentation',
             value: 'System',
@@ -141,14 +141,14 @@ extension _SettingsActions on _SettingsScreenState {
         items: [
           _SettingsItem(
             icon: Icons.storage_outlined,
-            color: const Color(0xFF0EA5E9),
+            color: HelixColorTokens.cFF0EA5E9,
             title: 'Storage and data',
             subtitle: 'Media cache, auto-download and data saving',
             onTap: () => _showSoon('Storage and data'),
           ),
           _SettingsItem(
             icon: Icons.bug_report_outlined,
-            color: const Color(0xFFF97316),
+            color: HelixColorTokens.cFFF97316,
             title: 'Diagnostics and logs',
             subtitle: 'Export and clear Helix anomaly logs',
             trailingIcon: Icons.ios_share_outlined,
@@ -156,7 +156,7 @@ extension _SettingsActions on _SettingsScreenState {
           ),
           _SettingsItem(
             icon: Icons.dns_outlined,
-            color: const Color(0xFF4F46E5),
+            color: HelixColorTokens.cFF4F46E5,
             title: 'Server connection',
             // The admin's name for the server when they set one, with the
             // host kept alongside it - the name is friendlier, but the
@@ -171,7 +171,7 @@ extension _SettingsActions on _SettingsScreenState {
           // Absorbs "App updates", which opened this same dialog.
           _SettingsItem(
             icon: Icons.info_outline,
-            color: const Color(0xFF6D6AAE),
+            color: HelixColorTokens.cFF6D6AAE,
             title: 'About Helix',
             subtitle: 'Version, build and app information',
             onTap: _showAboutHelix,
@@ -213,7 +213,7 @@ extension _SettingsActions on _SettingsScreenState {
     final destructiveItems = [
       _SettingsItem(
         icon: Icons.logout,
-        color: const Color(0xFFDC2626),
+        color: HelixColorTokens.cFFDC2626,
         title: 'Log out',
         subtitle: 'Clear this device session',
         isDestructive: true,
@@ -221,7 +221,7 @@ extension _SettingsActions on _SettingsScreenState {
       ),
       _SettingsItem(
         icon: Icons.delete_forever_outlined,
-        color: const Color(0xFFB91C1C),
+        color: HelixColorTokens.cFFB91C1C,
         title: 'Delete account',
         subtitle: 'Permanently delete your Helix account',
         isDestructive: true,
@@ -234,7 +234,7 @@ extension _SettingsActions on _SettingsScreenState {
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+          padding: HelixInsets.fromLTRB(16, 10, 16, 24),
           children: [
             _SettingsSearchField(
               controller: _searchController,
@@ -257,7 +257,7 @@ extension _SettingsActions on _SettingsScreenState {
             const SizedBox(height: 18),
             if (_query.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                padding: HelixInsets.fromLTRB(4, 0, 4, 8),
                 child: Text(
                   groups.isEmpty && destructiveItems.isEmpty
                       ? 'No settings found'

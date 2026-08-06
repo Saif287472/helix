@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../admin_client.dart';
 import '../theme/app_theme.dart';
@@ -171,7 +172,7 @@ class _UsersTabState extends State<UsersTab> {
     return SingleChildScrollView(
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: HelixInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -199,15 +200,15 @@ class _UsersTabState extends State<UsersTab> {
               ),
               const SizedBox(height: 16),
               if (_loading)
-                const Center(
+                Center(
                   child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(),
+                    padding: HelixInsets.all(24),
+                    child: const CircularProgressIndicator(),
                   ),
                 )
               else if (_users.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: HelixInsets.all(24),
                   child: Text(
                     'No users registered yet.',
                     style: TextStyle(color: context.textFaint),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// The nested/sunken surface tone used for the sidebar, app bar, and inline
 /// code/example blocks: one step darker than the page background in dark
@@ -32,26 +33,26 @@ class AppSurfaces extends ThemeExtension<AppSurfaces> {
 class AppTheme {
   AppTheme._();
 
-  static const _primary = Color(0xFF8A2BE2);
+  static const _primary = HelixColorTokens.cFF8A2BE2;
 
   static final ThemeData dark = _build(
     brightness: Brightness.dark,
-    background: const Color(0xFF0F0F16),
-    surface: const Color(0xFF161624),
-    sunken: const Color(0xFF0B0B12),
+    background: HelixColorTokens.cFF0F0F16,
+    surface: HelixColorTokens.cFF161624,
+    sunken: HelixColorTokens.cFF0B0B12,
     onSurface: Colors.white,
-    accent: const Color(0xFF00E5FF),
-    error: const Color(0xFFFF3366),
+    accent: HelixColorTokens.cFF00E5FF,
+    error: HelixColorTokens.cFFFF3366,
   );
 
   static final ThemeData light = _build(
     brightness: Brightness.light,
-    background: const Color(0xFFF5F3FA),
+    background: HelixColorTokens.cFFF5F3FA,
     surface: Colors.white,
-    sunken: const Color(0xFFEDEAF5),
-    onSurface: const Color(0xFF1A1A2E),
-    accent: const Color(0xFF0077B6),
-    error: const Color(0xFFC2185B),
+    sunken: HelixColorTokens.cFFEDEAF5,
+    onSurface: HelixColorTokens.cFF1A1A2E,
+    accent: HelixColorTokens.cFF0077B6,
+    error: HelixColorTokens.cFFC2185B,
   );
 
   static ThemeData _build({

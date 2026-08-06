@@ -111,7 +111,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
           return InkWell(
             onTap: fn,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: HelixInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   Icon(icon, color: c, size: 20),
@@ -146,12 +146,9 @@ extension _ConversationMessageActions on _ConversationScreenState {
                 left: 8,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
+                  padding: HelixInsets.symmetric(horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A2A),
+                    color: HelixColorTokens.cFF2A2A2A,
                     borderRadius: BorderRadius.circular(32),
                     boxShadow: const [
                       BoxShadow(
@@ -172,7 +169,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
                             _exitSelectionMode();
                           },
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
+                            padding: HelixInsets.symmetric(
                               horizontal: 6,
                               vertical: 4,
                             ),
@@ -185,9 +182,9 @@ extension _ConversationMessageActions on _ConversationScreenState {
                       const VerticalDivider(width: 16, color: Colors.white24),
                       GestureDetector(
                         onTap: () => Navigator.pop(ctx),
-                        child: const Padding(
-                          padding: EdgeInsets.all(6),
-                          child: Icon(
+                        child: Padding(
+                          padding: HelixInsets.all(6),
+                          child: const Icon(
                             Icons.add_reaction_outlined,
                             color: Colors.white70,
                             size: 22,
@@ -206,7 +203,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
                 width: 230,
                 child: Material(
                   borderRadius: BorderRadius.circular(12),
-                  color: const Color(0xFF2A2A2A),
+                  color: HelixColorTokens.cFF2A2A2A,
                   elevation: 8,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -240,7 +237,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
                           _exitSelectionMode();
                           _deleteForSelf(message);
                         },
-                        color: const Color(0xFFFF6B6B),
+                        color: HelixColorTokens.cFFFF6B6B,
                       ),
                       if (isMine)
                         actionItem(
@@ -251,7 +248,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
                             _exitSelectionMode();
                             _deleteForEveryone(message);
                           },
-                          color: const Color(0xFFFF6B6B),
+                          color: HelixColorTokens.cFFFF6B6B,
                         ),
                     ],
                   ),
@@ -321,7 +318,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
         return SafeArea(
           child: ListView(
             shrinkWrap: true,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: HelixInsets.symmetric(vertical: 8),
             children: [
               ListTile(
                 leading: const Icon(Icons.add_reaction_outlined),

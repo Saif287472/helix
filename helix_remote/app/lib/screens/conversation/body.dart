@@ -14,7 +14,7 @@ extension _ConversationBody on _ConversationScreenState {
 
     return Container(
       color: cs.surfaceContainerHigh,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: HelixInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
           Container(width: 3, height: 40, color: cs.primary),
@@ -62,7 +62,7 @@ extension _ConversationBody on _ConversationScreenState {
     final theme = Theme.of(context);
     final palette = conversationPalette(theme);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      padding: HelixInsets.fromLTRB(12, 8, 12, 6),
       child: TextField(
         controller: _searchController,
         autofocus: true,
@@ -71,7 +71,7 @@ extension _ConversationBody on _ConversationScreenState {
           hintText: 'Search this conversation',
           filled: true,
           fillColor: palette.input,
-          contentPadding: EdgeInsets.zero,
+          contentPadding: HelixInsets.zero,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(24),
             borderSide: BorderSide.none,
@@ -84,7 +84,7 @@ extension _ConversationBody on _ConversationScreenState {
 
   Widget _buildLoadEarlierButton() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: HelixInsets.symmetric(vertical: 12),
       child: Center(
         child: _loadingMore
             ? const SizedBox.square(
@@ -96,10 +96,7 @@ extension _ConversationBody on _ConversationScreenState {
                 icon: const Icon(Icons.expand_less, size: 18),
                 label: const Text('Load earlier messages'),
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 6,
-                  ),
+                  padding: HelixInsets.symmetric(horizontal: 16, vertical: 6),
                   backgroundColor: Theme.of(
                     context,
                   ).colorScheme.surfaceContainerHigh,
@@ -176,7 +173,7 @@ extension _ConversationBody on _ConversationScreenState {
   Widget _buildMessageList() {
     if (!_loaded) {
       return const _ChatWallpaper(
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: HelixSkeleton(width: 192, height: 24)),
       );
     }
     if (_errorMessage != null) {
@@ -200,7 +197,7 @@ extension _ConversationBody on _ConversationScreenState {
       return _ChatWallpaper(
         child: Center(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: HelixInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: conversationPalette(Theme.of(context)).dateChip,
               borderRadius: BorderRadius.circular(18),
@@ -224,7 +221,7 @@ extension _ConversationBody on _ConversationScreenState {
       child: ListView.builder(
         controller: _scrollController,
         reverse: true,
-        padding: const EdgeInsets.fromLTRB(0, 7, 0, 8),
+        padding: HelixInsets.fromLTRB(0, 7, 0, 8),
         itemCount: _messages.length + (hasHeader ? 1 : 0),
         itemBuilder: (context, index) {
           if (hasHeader && index == _messages.length) {
@@ -306,7 +303,7 @@ extension _ConversationBody on _ConversationScreenState {
       top: false,
       child: Container(
         color: palette.inputBar,
-        padding: const EdgeInsets.fromLTRB(8, 5, 8, 6),
+        padding: HelixInsets.fromLTRB(8, 5, 8, 6),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -327,7 +324,7 @@ extension _ConversationBody on _ConversationScreenState {
                       ),
                       onPressed: null,
                       tooltip: 'Emoji',
-                      padding: const EdgeInsets.all(8),
+                      padding: HelixInsets.all(8),
                       visualDensity: VisualDensity.compact,
                     ),
                     Expanded(
@@ -335,10 +332,10 @@ extension _ConversationBody on _ConversationScreenState {
                         controller: _controller,
                         maxLines: 5,
                         minLines: 1,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Message',
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                          contentPadding: HelixInsets.symmetric(vertical: 10),
                         ),
                         onChanged: (value) {
                           _publishTyping(value.trim().isNotEmpty);
@@ -358,7 +355,7 @@ extension _ConversationBody on _ConversationScreenState {
                             : Icon(Icons.attach_file, color: cs.outline),
                         onPressed: _attachmentBusy ? null : _attachFile,
                         tooltip: 'Attach file',
-                        padding: const EdgeInsets.all(8),
+                        padding: HelixInsets.all(8),
                         visualDensity: VisualDensity.compact,
                       ),
                     IconButton(
@@ -373,7 +370,7 @@ extension _ConversationBody on _ConversationScreenState {
                               initialKind: RemoteMediaContent.cameraCaptureKind,
                             ),
                       tooltip: 'Camera',
-                      padding: const EdgeInsets.all(8),
+                      padding: HelixInsets.all(8),
                       visualDensity: VisualDensity.compact,
                     ),
                     const SizedBox(width: 4),
@@ -480,10 +477,10 @@ class _DateChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = conversationPalette(Theme.of(context));
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: HelixInsets.symmetric(vertical: 8),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          padding: HelixInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
             color: palette.dateChip,
             borderRadius: BorderRadius.circular(9),

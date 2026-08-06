@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_group_card.dart';
@@ -54,7 +55,7 @@ class SettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: HelixInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -76,7 +77,7 @@ class SettingsTab extends StatelessWidget {
             rows: [
               SettingsRow(
                 icon: Icons.dark_mode,
-                iconColor: const Color(0xFF6D6AAE),
+                iconColor: HelixColorTokens.cFF6D6AAE,
                 title: 'Dark Mode',
                 subtitle: 'Toggle between dark and light theme',
                 onTap: () => onDarkModeChanged(!isDarkMode),
@@ -94,7 +95,7 @@ class SettingsTab extends StatelessWidget {
               SettingsRow(
                 key: const Key('settings_app_lock_row'),
                 icon: Icons.fingerprint,
-                iconColor: const Color(0xFF11A37F),
+                iconColor: HelixColorTokens.cFF11A37F,
                 title: 'App Lock',
                 subtitle:
                     'Require your device unlock to open Helix Admin. '
@@ -116,7 +117,7 @@ class SettingsTab extends StatelessWidget {
             rows: [
               SettingsRow(
                 icon: Icons.menu_book,
-                iconColor: const Color(0xFF4F46E5),
+                iconColor: HelixColorTokens.cFF4F46E5,
                 title: 'Self-Hosting Guide',
                 subtitle: 'Setup walkthrough and connection help',
                 onTap: onOpenConnectGuide,
@@ -159,10 +160,7 @@ class _ConnectionStatusCard extends StatelessWidget {
             child: InkWell(
               onTap: onTap,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
+                padding: HelixInsets.symmetric(horizontal: 16, vertical: 16),
                 child: Row(
                   children: [
                     Container(
@@ -171,8 +169,8 @@ class _ConnectionStatusCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: isConnected
-                            ? const Color(0xFF2FA84F)
-                            : const Color(0xFF3A3A46),
+                            ? HelixColorTokens.cFF2FA84F
+                            : HelixColorTokens.cFF3A3A46,
                       ),
                       child: Icon(
                         isConnected ? Icons.cloud_done : Icons.cloud_off,
@@ -219,7 +217,7 @@ class _ConnectionStatusCard extends StatelessWidget {
           ),
           if (isConnected)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: HelixInsets.only(right: 8),
               child: IconButton(
                 tooltip: 'Disconnect',
                 onPressed: onDisconnect,

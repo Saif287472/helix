@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 
 /// Conversation-specific colours shared by the screen and its message tiles.
@@ -37,34 +38,34 @@ ConversationPalette conversationPalette(ThemeData theme) {
   final scheme = theme.colorScheme;
   if (theme.brightness == Brightness.dark) {
     return const ConversationPalette(
-      page: Color(0xFF0B1417),
-      appBar: Color(0xFF0B1114),
+      page: HelixColorTokens.cFF0B1417,
+      appBar: HelixColorTokens.cFF0B1114,
       onAppBar: Colors.white,
-      inputBar: Color(0xFF0B1417),
-      input: Color(0xFF1F2C34),
-      incoming: Color(0xFF1F2C34),
-      outgoing: Color(0xFF005C4B),
-      incomingTime: Color(0xFF98A4AA),
-      outgoingTime: Color(0xFFB8D5C8),
-      dateChip: Color(0xE61C252B),
-      dateChipText: Color(0xFFD7DEE2),
-      accent: Color(0xFF00A884),
-      readTick: Color(0xFF53BDEB),
+      inputBar: HelixColorTokens.cFF0B1417,
+      input: HelixColorTokens.cFF1F2C34,
+      incoming: HelixColorTokens.cFF1F2C34,
+      outgoing: HelixColorTokens.cFF005C4B,
+      incomingTime: HelixColorTokens.cFF98A4AA,
+      outgoingTime: HelixColorTokens.cFFB8D5C8,
+      dateChip: HelixColorTokens.cE61C252B,
+      dateChipText: HelixColorTokens.cFFD7DEE2,
+      accent: HelixColorTokens.cFF00A884,
+      readTick: HelixColorTokens.cFF53BDEB,
     );
   }
   return ConversationPalette(
-    page: const Color(0xFFEDE7DE),
+    page: HelixColorTokens.cFFEDE7DE,
     appBar: scheme.surface,
     onAppBar: scheme.onSurface,
-    inputBar: const Color(0xFFEDE7DE),
+    inputBar: HelixColorTokens.cFFEDE7DE,
     input: Colors.white,
     incoming: Colors.white,
-    outgoing: const Color(0xFFD9FFD2),
-    incomingTime: const Color(0xFF667781),
-    outgoingTime: const Color(0xFF667781),
-    dateChip: const Color(0xF7FFFFFF),
-    dateChipText: const Color(0xFF667781),
-    accent: const Color(0xFF00A884),
-    readTick: const Color(0xFF34B7F1),
+    outgoing: HelixColorTokens.cFFD9FFD2,
+    incomingTime: HelixColorTokens.cFF667781,
+    outgoingTime: HelixColorTokens.cFF667781,
+    dateChip: HelixColorTokens.cF7FFFFFF,
+    dateChipText: HelixColorTokens.cFF667781,
+    accent: HelixColorTokens.cFF00A884,
+    readTick: HelixColorTokens.cFF34B7F1,
   );
 }

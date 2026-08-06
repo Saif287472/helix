@@ -11,6 +11,7 @@ import 'package:helix_remote/screens/conversation_screen.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 part 'conversation_list/actions.dart';
 part 'conversation_list/widgets_primary.dart';
@@ -51,6 +52,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
   final _searchController = TextEditingController();
   _ChatFilter _activeFilter = _ChatFilter.all;
   final Set<String> _selectedConversationIds = {};
+  String? _desktopConversationId;
 
   bool get _selectionMode => _selectedConversationIds.isNotEmpty;
 
@@ -101,16 +103,13 @@ class _ConversationListScreenState extends State<ConversationListScreen>
 
   void _fetchLastMessages(List<RemoteConversation> convos) {
     for (final conv in convos) {
-      _viewModel
-          .preview(conv.conversationId)
-          .then((msgs) {
-            if (msgs.isNotEmpty && mounted) {
-              setState(() {
-                _lastMessagePreview[conv.conversationId] = msgs.first.text;
-              });
-            }
-          })
-          .ignore();
+      _viewModel.preview(conv.conversationId).then((msgs) {
+        if (msgs.isNotEmpty && mounted) {
+          setState(() {
+            _lastMessagePreview[conv.conversationId] = msgs.first.text;
+          });
+        }
+      }).ignore();
     }
   }
 
@@ -137,9 +136,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
       builder: (ctx) => _ContactPickerSheet(contacts: contacts),
     );
     if (peerAccountId == null || !mounted) return;
-    final derivedId = _viewModel.conversationIdForPeer(
-      peerAccountId,
-    );
+    final derivedId = _viewModel.conversationIdForPeer(peerAccountId);
     if (derivedId == null) return;
     // conversationIdForPeer only derives the ID string - it never creates
     // the conversation row/membership. Without this, picking a contact
@@ -157,6 +154,10 @@ class _ConversationListScreenState extends State<ConversationListScreen>
   }
 
   void _openConversation(String conversationId) {
+    if (HelixBreakpoints.isTablet(context)) {
+      setState(() => _desktopConversationId = conversationId);
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ConversationScreen(
@@ -185,9 +186,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
     required bool isVideo,
   }) async {
     final accountId = _viewModel.currentAccountId;
-    final members = _viewModel.memberIds(
-      conversationId,
-    );
+    final members = _viewModel.memberIds(conversationId);
     final peer = members.where((id) => id != accountId).firstOrNull;
     if (peer == null) return;
     final contact = _viewModel
@@ -249,11 +248,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
         list = list.where(_isGroupConversation).toList();
       case _ChatFilter.unread:
         list = list
-            .where(
-              (c) =>
-                  _viewModel.unreadCount(c.conversationId) >
-                  0,
-            )
+            .where((c) => _viewModel.unreadCount(c.conversationId) > 0)
             .toList();
       case _ChatFilter.favorites:
         list = list.where((c) => c.isFavorite).toList();
@@ -280,13 +275,11 @@ class _ConversationListScreenState extends State<ConversationListScreen>
       .toList();
 
   bool _hasUnread(RemoteConversation conversation) =>
-      _viewModel.unreadCount(conversation.conversationId) >
-      0;
+      _viewModel.unreadCount(conversation.conversationId) > 0;
 
   String _resolvedTitle(RemoteConversation conv) => conv.title.isNotEmpty
       ? conv.title
-      : _viewModel.peerDisplayName(conv.conversationId) ??
-            conv.conversationId;
+      : _viewModel.peerDisplayName(conv.conversationId) ?? conv.conversationId;
 
   void _toggleSelection(RemoteConversation conversation) {
     setState(() {
@@ -446,7 +439,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
       final cs = Theme.of(context).colorScheme;
       return Scaffold(
         backgroundColor: cs.surface,
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: HelixSkeleton(width: 180, height: 24)),
       );
     }
 
@@ -578,53 +571,93 @@ class _ConversationListScreenState extends State<ConversationListScreen>
                 ),
               ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 4, 22, 14),
-            child: _SearchField(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _searchQuery = value),
-              onClear: () {
-                _searchController.clear();
-                setState(() {
-                  _searchQuery = '';
-                  _showSearch = false;
-                });
-              },
-            ),
-          ),
-          if (_runtimeSnapshot != null)
-            _ConnectionBanner(
-              stateLabel: _runtimeSnapshot!.state.name,
-              onRetry: () => _tryRuntimeCoordinator()?.start(),
-            ),
-          if (_statusText != null)
-            MaterialBanner(
-              content: Text(_statusText!),
-              actions: [
-                TextButton(
-                  onPressed: () => setState(() => _statusText = null),
-                  child: const Text('Dismiss'),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final listPane = Column(
+            children: [
+              Padding(
+                padding: HelixInsets.fromLTRB(22, 4, 22, 14),
+                child: _SearchField(
+                  controller: _searchController,
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                  onClear: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                      _showSearch = false;
+                    });
+                  },
                 ),
-              ],
-            ),
-          if (_outboxSummary?.hasVisibleWork ?? false)
-            _OutboxBanner(
-              summary: _outboxSummary!,
-              onRetry: () async {
-                await _viewModel.retryFailedOutbox();
-                if (mounted) _refreshOutboxSummary();
-              },
-            ),
-          _FilterChipsRow(
-            active: _activeFilter,
-            unreadCount: _conversations.where(_hasUnread).length,
-            groupCount: _conversations.where(_isGroupConversation).length,
-            onSelect: (_ChatFilter f) => setState(() => _activeFilter = f),
-          ),
-          Expanded(child: _buildConversationList()),
-        ],
+              ),
+              if (_runtimeSnapshot != null)
+                _ConnectionBanner(
+                  stateLabel: _runtimeSnapshot!.state.name,
+                  onRetry: () => _tryRuntimeCoordinator()?.start(),
+                ),
+              if (_statusText != null)
+                MaterialBanner(
+                  content: Text(_statusText!),
+                  actions: [
+                    TextButton(
+                      onPressed: () => setState(() => _statusText = null),
+                      child: const Text('Dismiss'),
+                    ),
+                  ],
+                ),
+              if (_outboxSummary?.hasVisibleWork ?? false)
+                _OutboxBanner(
+                  summary: _outboxSummary!,
+                  onRetry: () async {
+                    await _viewModel.retryFailedOutbox();
+                    if (mounted) _refreshOutboxSummary();
+                  },
+                ),
+              _FilterChipsRow(
+                active: _activeFilter,
+                unreadCount: _conversations.where(_hasUnread).length,
+                groupCount: _conversations.where(_isGroupConversation).length,
+                onSelect: (_ChatFilter f) => setState(() => _activeFilter = f),
+              ),
+              Expanded(child: _buildConversationList()),
+            ],
+          );
+          if (constraints.maxWidth < HelixBreakpoints.medium) return listPane;
+          final selectedConversationId = _desktopConversationId;
+          return Row(
+            children: [
+              SizedBox(width: 380, child: listPane),
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: colorScheme.outlineVariant,
+              ),
+              Expanded(
+                child: selectedConversationId == null
+                    ? const HelixEmptyState(
+                        icon: Icons.forum_outlined,
+                        title: 'Select a conversation',
+                        message:
+                            'Choose a chat to open it alongside your list.',
+                      )
+                    : ConversationScreen(
+                        conversationId: selectedConversationId,
+                        messagingService: widget.messagingService,
+                        attachmentService: _tryAttachmentService(),
+                        groupService: _tryGroupService(),
+                        callsAvailable: _tryCallsAvailable(),
+                        onStartAudioCall: () => _initiateCall(
+                          selectedConversationId,
+                          isVideo: false,
+                        ),
+                        onStartVideoCall: () => _initiateCall(
+                          selectedConversationId,
+                          isVideo: true,
+                        ),
+                      ),
+              ),
+            ],
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.small(
         heroTag: 'new_chat_fab',

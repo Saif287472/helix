@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
@@ -33,7 +34,7 @@ class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {
 
   Widget _toggleBanner() {
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: HelixInsets.all(4),
       decoration: BoxDecoration(
         color: context.sunkenSurface,
         borderRadius: BorderRadius.circular(24),
@@ -54,9 +55,9 @@ class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {
       onTap: () => setState(() => _mode = mode),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: HelixInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF8A2BE2) : Colors.transparent,
+          color: selected ? HelixColorTokens.cFF8A2BE2 : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         alignment: Alignment.center,
@@ -142,7 +143,7 @@ class _ProviderLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: HelixInsets.only(bottom: 8),
       child: InkWell(
         key: Key('provider_link_$name'),
         onTap: () => launchUrl(Uri.parse(url)),

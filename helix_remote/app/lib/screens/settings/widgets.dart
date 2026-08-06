@@ -35,7 +35,7 @@ class _SettingsSearchField extends StatelessWidget {
                 ),
           filled: true,
           fillColor: _settingsCardColor(theme, cs),
-          contentPadding: EdgeInsets.zero,
+          contentPadding: HelixInsets.zero,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(28),
             borderSide: BorderSide.none,
@@ -81,7 +81,7 @@ class _ProfileCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          padding: HelixInsets.fromLTRB(16, 14, 12, 14),
           child: Row(
             children: [
               CircleAvatar(
@@ -218,7 +218,7 @@ class _SettingsRow extends StatelessWidget {
     return InkWell(
       onTap: item.onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 16, 18, 16),
+        padding: HelixInsets.fromLTRB(32, 16, 18, 16),
         child: Row(
           children: [
             _CategoryIcon(icon: item.icon, color: item.color),
@@ -314,7 +314,7 @@ class _EmptySearchState extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+      padding: HelixInsets.symmetric(horizontal: 18, vertical: 28),
       decoration: BoxDecoration(
         color: _settingsCardColor(theme, cs),
         borderRadius: BorderRadius.circular(28),

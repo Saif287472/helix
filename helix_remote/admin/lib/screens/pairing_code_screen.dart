@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../admin_client.dart';
@@ -74,7 +75,7 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('PAIRING CODE')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: HelixInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -86,7 +87,7 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: HelixInsets.all(16),
               decoration: BoxDecoration(
                 color: context.sunkenSurface,
                 borderRadius: BorderRadius.circular(8),
@@ -166,9 +167,9 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
                   : const Icon(Icons.key),
               label: Text(_isRedeeming ? 'Redeeming…' : 'Redeem Code'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF8A2BE2),
+                backgroundColor: HelixColorTokens.cFF8A2BE2,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: HelixInsets.symmetric(vertical: 16),
               ),
             ),
           ],

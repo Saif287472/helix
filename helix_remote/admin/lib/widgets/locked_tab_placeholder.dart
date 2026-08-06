@@ -1,3 +1,4 @@
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -19,7 +20,7 @@ class LockedTabPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: HelixInsets.symmetric(horizontal: 24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 320),
           child: Column(
@@ -38,12 +39,9 @@ class LockedTabPlaceholder extends StatelessWidget {
                 icon: const Icon(Icons.tune),
                 label: const Text('Connect a server first'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8A2BE2),
+                  backgroundColor: HelixColorTokens.cFF8A2BE2,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
+                  padding: HelixInsets.symmetric(horizontal: 24, vertical: 14),
                 ),
               ),
             ],

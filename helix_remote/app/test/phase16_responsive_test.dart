@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/screens/backup_screen.dart';
 import 'package:helix_remote/screens/device_management_screen.dart';
 import 'package:helix_remote/screens/privacy_screen.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
@@ -88,11 +89,14 @@ void _loadSqlCipher() {
   if (foundPath != null) DynamicLibrary.open(foundPath);
 }
 
-void _setSmallScreen(WidgetTester tester) {
-  tester.view.physicalSize = const Size(320, 568);
+void _setSurface(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 }
+
+void _setSmallScreen(WidgetTester tester) =>
+    _setSurface(tester, const Size(320, 568));
 
 HelixRemoteDatabase _openDb() {
   final db = HelixRemoteDatabase(File(':memory:'));
@@ -133,6 +137,35 @@ Future<RemoteMessagingService> _makeMessaging(HelixRemoteDatabase db) async {
 
 void main() {
   setUpAll(_loadSqlCipher);
+
+  group('P16-W00 responsive breakpoints', () {
+    testWidgets('differentiate phone, tablet, and desktop widths', (
+      tester,
+    ) async {
+      for (final entry in <(Size, bool, bool)>[
+        (const Size(390, 844), false, false),
+        (const Size(900, 900), true, false),
+        (const Size(1280, 900), true, true),
+      ]) {
+        _setSurface(tester, entry.$1);
+        var tablet = false;
+        var desktop = false;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Builder(
+              builder: (context) {
+                tablet = HelixBreakpoints.isTablet(context);
+                desktop = HelixBreakpoints.isDesktop(context);
+                return const SizedBox();
+              },
+            ),
+          ),
+        );
+        expect(tablet, entry.$2);
+        expect(desktop, entry.$3);
+      }
+    });
+  });
 
   group('P16-W01 BackupScreen small screen (320×568)', () {
     testWidgets('renders without overflow', (tester) async {

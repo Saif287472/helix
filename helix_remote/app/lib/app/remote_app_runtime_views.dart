@@ -13,7 +13,7 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
       appBar: AppBar(title: const Text('Startup Error')),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: HelixInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -52,7 +52,7 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: HelixInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
