@@ -42,24 +42,57 @@ class _ContactsScreenState extends State<ContactsScreen> {
   String _searchQuery = '';
   String? _statusText;
 
-  /// Phone-book contacts from the most recent sync that had a valid number
-  /// but matched no Helix account - i.e. not registered on this server
-  /// (yet). Unlike matched suggestions, this isn't persisted: it's a
-  /// snapshot of the last sync, not a standing invite list, so it clears on
-  /// the next sync rather than accumulating names that may since have
-  /// joined.
-  List<String> _unmatchedPhoneBookNames = [];
+  /// Phone-book contacts that had a valid number but matched no Helix
+  /// account - i.e. not registered on this server (yet).
+  ///
+  /// Read from storage, not from the last sync's return value. Holding it
+  /// in state alone meant leaving the tab threw the list away and it had to
+  /// be re-synced by hand to see it again. Names that have since joined are
+  /// not accumulated: every complete sync rewrites the stored list, so
+  /// someone who joined drops out of it on the next refresh.
+  List<String> _unmatchedPhoneBookNames = const [];
   final TextEditingController _searchController = TextEditingController();
   StreamSubscription<RemoteSyncChange>? _changeSub;
 
   PhoneContactsService get _phoneContactsService =>
       widget.phoneContactsService ?? const DevicePhoneContactsService();
 
+  /// How stale the stored "not on Helix yet" list may get before opening
+  /// the tab quietly refreshes it.
+  static const Duration _unmatchedRefreshInterval = Duration(hours: 24);
+
   @override
   void initState() {
     super.initState();
     _changeSub = widget.messagingService.changes.listen(_onRemoteChange);
     _reload();
+    // Post-frame, not inline: _runContactsSync() calls setState before its
+    // first await, so starting it here directly would mark the element
+    // dirty while it is still being built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeAutoRefresh();
+    });
+  }
+
+  /// Rebuilds the stored list in the background when it has gone stale, so
+  /// someone who joined Helix stops being offered an Invite button without
+  /// anyone having to press sync.
+  ///
+  /// Gated on a previous complete sync (`syncedAt != null`). That is what
+  /// proves contacts permission was granted before, so re-requesting it
+  /// returns immediately rather than raising a dialog the user did not ask
+  /// for. Without the gate, merely opening this tab would prompt for access
+  /// to the phone book.
+  ///
+  /// Affordable because the server caches match results against a
+  /// phone-book fingerprint: an unchanged phone book re-syncs without
+  /// spending any of the daily discovery budget.
+  void _maybeAutoRefresh() {
+    final syncedAt = widget.messagingService.unmatchedPhoneContactsSyncedAt();
+    if (syncedAt == null) return;
+    final age = DateTime.now().millisecondsSinceEpoch - syncedAt;
+    if (age < _unmatchedRefreshInterval.inMilliseconds) return;
+    unawaited(_runContactsSync());
   }
 
   void _onRemoteChange(RemoteSyncChange change) {
@@ -88,11 +121,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
             ),
           )
           .toList(growable: false);
+      final unmatched = widget.messagingService.unmatchedPhoneContacts();
       if (mounted) {
         setState(() {
           _contacts = entries;
           _openRequestsByPeer = openRequestsByPeer;
           _pendingReceivedCount = pendingReceivedCount;
+          _unmatchedPhoneBookNames = unmatched;
           _loaded = true;
           if (statusText != null) _statusText = statusText;
         });
@@ -156,7 +191,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
       final phoneBook = await _phoneContactsService.loadContacts();
       final result = await widget.root.syncPhoneContacts(phoneBook);
       if (!mounted) return;
-      setState(() => _unmatchedPhoneBookNames = result.unmatchedNames);
+      // The unmatched list is not taken from the result: a complete sync has
+      // already written it to storage, and _reload() below reads it back
+      // from there. A partial sync deliberately writes nothing, so the
+      // previous list stays rather than being replaced by a view that
+      // cannot tell "not on Helix" from "never looked up".
       final matchCount = result.matches.length;
       final unmatchedCount = result.unmatchedNames.length;
       // recordPhoneContactMatches() (called inside syncPhoneContacts) emits
@@ -512,11 +551,20 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 
-  /// Unmatched phone-book names, hidden while searching (same as
-  /// [_phoneBookSuggestions]) since they're not part of what's being
-  /// searched for - they're not Helix contacts at all yet.
-  List<String> get _unmatchedForDisplay =>
-      _searchQuery.isEmpty ? _unmatchedPhoneBookNames : const [];
+  /// Unmatched phone-book names, filtered by the search query rather than
+  /// hidden by it.
+  ///
+  /// These used to disappear entirely as soon as anything was typed, on the
+  /// grounds that they are not Helix contacts. But searching for someone in
+  /// order to invite them is one of the main reasons to look here at all,
+  /// and with a long list scrolling is not a substitute.
+  List<String> get _unmatchedForDisplay {
+    if (_searchQuery.isEmpty) return _unmatchedPhoneBookNames;
+    final q = _searchQuery.toLowerCase();
+    return _unmatchedPhoneBookNames
+        .where((name) => name.toLowerCase().contains(q))
+        .toList(growable: false);
+  }
 
   Widget _buildList() {
     final list = _filteredContacts;
@@ -693,8 +741,11 @@ class _NotOnHelixTile extends StatelessWidget {
           ),
         ),
       ),
+      // No subtitle: these tiles only ever appear under the "Not on Helix
+      // yet" section header, so a per-row "Not on Helix" repeated the
+      // heading once for every contact and made a long list twice as tall
+      // for no added information.
       title: Text(name, style: theme.textTheme.titleMedium),
-      subtitle: const Text('Not on Helix'),
       trailing: OutlinedButton(
         onPressed: onInvite,
         child: const Text('Invite'),

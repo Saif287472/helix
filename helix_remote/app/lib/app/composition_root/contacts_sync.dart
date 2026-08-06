@@ -152,6 +152,14 @@ mixin RemoteCompositionContactsSync
             .toList()
           ..sort();
 
+    // Persisted only on a complete sync, for the same reason the result
+    // below withholds them on a partial one: a truncated sync cannot tell
+    // "not on Helix" from "never looked up", and storing that view would
+    // drop names that were simply never checked.
+    if (complete) {
+      ms.recordUnmatchedPhoneContacts(unmatchedNames);
+    }
+
     return PhoneContactsSyncResult(
       matches: results,
       // Only meaningful for the hashes actually looked up: a contact whose
