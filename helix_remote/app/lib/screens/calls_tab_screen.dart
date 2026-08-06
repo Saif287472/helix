@@ -38,6 +38,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
   bool _loaded = false;
   bool _showSearch = false;
   String _query = '';
+  bool _sortByName = false;
 
   bool get _selectionMode => _selectedCallIds.isNotEmpty;
 
@@ -133,16 +134,21 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
 
   List<_CallHistoryRow> get _filteredHistory {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _history;
-    return _history
-        .where(
-          (row) =>
-              row.peerName.toLowerCase().contains(q) ||
-              row.peerId.toLowerCase().contains(q) ||
-              row.directionLabel.toLowerCase().contains(q) ||
-              row.timeLabel.toLowerCase().contains(q),
-        )
-        .toList(growable: false);
+    final history = q.isEmpty
+        ? [..._history]
+        : _history
+              .where(
+                (row) =>
+                    row.peerName.toLowerCase().contains(q) ||
+                    row.peerId.toLowerCase().contains(q) ||
+                    row.directionLabel.toLowerCase().contains(q) ||
+                    row.timeLabel.toLowerCase().contains(q),
+              )
+              .toList(growable: false);
+    if (_sortByName) {
+      history.sort((a, b) => a.peerName.compareTo(b.peerName));
+    }
+    return history;
   }
 
   void _toggleSelection(_CallHistoryRow row) {
@@ -285,6 +291,10 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
                         _showPlaceholder(
                           'Call settings are available from Settings',
                         );
+                      case 'sort_recent':
+                        setState(() => _sortByName = false);
+                      case 'sort_name':
+                        setState(() => _sortByName = true);
                     }
                   },
                   itemBuilder: (_) => const [
@@ -297,6 +307,15 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
                       child: Text('Scheduled calls'),
                     ),
                     PopupMenuItem(value: 'settings', child: Text('Settings')),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'sort_recent',
+                      child: Text('Sort by recent'),
+                    ),
+                    PopupMenuItem(
+                      value: 'sort_name',
+                      child: Text('Sort by name'),
+                    ),
                   ],
                 ),
               ],

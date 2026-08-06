@@ -45,6 +45,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   bool _syncBannerDismissed = false;
   String _searchQuery = '';
   String? _statusText;
+  bool _sortByName = false;
 
   /// Phone-book contacts that had a valid number but matched no Helix
   /// account - i.e. not registered on this server (yet).
@@ -154,9 +155,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   List<_ContactSearchEntry> get _filteredContacts {
-    if (_searchQuery.isEmpty) return _contacts;
-    final q = _searchQuery.toLowerCase();
-    return _contacts.where((entry) => entry.searchText.contains(q)).toList();
+    final contacts = _searchQuery.isEmpty
+        ? [..._contacts]
+        : _contacts.where((entry) {
+            final q = _searchQuery.toLowerCase();
+            return entry.searchText.contains(q);
+          }).toList();
+    if (_sortByName) {
+      return contacts..sort((a, b) => a.searchText.compareTo(b.searchText));
+    }
+    return contacts;
   }
 
   /// Matched phone-book contacts that aren't a Helix contact (in any
@@ -507,6 +515,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
             },
             tooltip: _showSearch ? 'Close search' : 'Search',
           ),
+          PopupMenuButton<bool>(
+            icon: Icon(Icons.sort, color: cs.onPrimary),
+            onSelected: (byName) => setState(() => _sortByName = byName),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: false, child: Text('Sort by recent')),
+              PopupMenuItem(value: true, child: Text('Sort by name')),
+            ],
+          ),
         ],
       ),
       body: Column(
@@ -579,23 +595,28 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final suggestions = _phoneBookSuggestions;
     final unmatched = _unmatchedForDisplay;
     if (list.isEmpty && suggestions.isEmpty && unmatched.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      return RefreshIndicator(
+        onRefresh: () async => _sync(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            Icon(
-              Icons.people_outline,
-              size: 64,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _searchQuery.isNotEmpty
-                  ? 'No contacts match "$_searchQuery"'
-                  : 'No contacts yet',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height * .65,
+              child: HelixEmptyState(
+                icon: Icons.people_outline,
+                title: _searchQuery.isNotEmpty
+                    ? 'No contacts match "$_searchQuery"'
+                    : 'No contacts yet',
+                message: _searchQuery.isEmpty
+                    ? 'Add a contact to start a secure conversation.'
+                    : 'Try a different search.',
+                action: _searchQuery.isEmpty
+                    ? FilledButton.icon(
+                        onPressed: _addContact,
+                        icon: const Icon(Icons.person_add_outlined),
+                        label: const Text('Add contact'),
+                      )
+                    : null,
               ),
             ),
           ],
@@ -628,14 +649,18 @@ class _ContactsScreenState extends State<ContactsScreen> {
       }
     }
 
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (_, _) => Divider(
-        height: 1,
-        indent: 72,
-        color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
+    return RefreshIndicator(
+      onRefresh: () async => _sync(),
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => Divider(
+          height: 1,
+          indent: 72,
+          color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
+        ),
+        itemBuilder: (context, index) => items[index],
       ),
-      itemBuilder: (context, index) => items[index],
     );
   }
 

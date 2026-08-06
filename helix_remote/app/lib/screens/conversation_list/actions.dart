@@ -11,53 +11,62 @@ extension _ConversationListBody on _ConversationListScreenState {
           : _searchQuery.isNotEmpty
           ? 'No chats match "$_searchQuery"'
           : 'No conversations yet';
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      return RefreshIndicator(
+        onRefresh: () async => _reload(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 64,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              emptyLabel,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height * .65,
+              child: HelixEmptyState(
+                icon: Icons.chat_bubble_outline,
+                title: emptyLabel,
+                message: _searchQuery.isNotEmpty
+                    ? 'Try a different search or filter.'
+                    : 'Start an encrypted conversation with a contact.',
+                action: _searchQuery.isEmpty
+                    ? FilledButton.icon(
+                        onPressed: _showNewChatPicker,
+                        icon: const Icon(Icons.add_comment),
+                        label: const Text('New chat'),
+                      )
+                    : null,
               ),
             ),
           ],
         ),
       );
     }
-    return ListView.builder(
-      padding: HelixInsets.only(top: 18, bottom: 112),
-      itemCount: list.length,
-      itemBuilder: (context, index) {
-        final conv = list[index];
-        final resolvedTitle = _resolvedTitle(conv);
-        return _ConversationTile(
-          conversation: conv,
-          title: resolvedTitle,
-          lastMessagePreview: _lastMessagePreview[conv.conversationId],
-          unreadCount: widget.messagingService
-              .unreadSummary(conv.conversationId)
-              .unreadCount,
-          isSelected: _selectedConversationIds.contains(conv.conversationId),
-          isSelectionMode: _selectionMode,
-          isGroup: _isGroupConversation(conv),
-          onTap: () {
-            if (_selectionMode) {
-              _toggleSelection(conv);
-              return;
-            }
-            _openConversation(conv.conversationId);
-          },
-          onLongPress: () => _toggleSelection(conv),
-        );
-      },
+    return RefreshIndicator(
+      onRefresh: () async => _forceSync(),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: HelixInsets.only(top: 18, bottom: 112),
+        itemCount: list.length,
+        itemBuilder: (context, index) {
+          final conv = list[index];
+          final resolvedTitle = _resolvedTitle(conv);
+          return _ConversationTile(
+            conversation: conv,
+            title: resolvedTitle,
+            lastMessagePreview: _lastMessagePreview[conv.conversationId],
+            unreadCount: widget.messagingService
+                .unreadSummary(conv.conversationId)
+                .unreadCount,
+            isSelected: _selectedConversationIds.contains(conv.conversationId),
+            isSelectionMode: _selectionMode,
+            isGroup: _isGroupConversation(conv),
+            onTap: () {
+              if (_selectionMode) {
+                _toggleSelection(conv);
+                return;
+              }
+              _openConversation(conv.conversationId);
+            },
+            onLongPress: () => _toggleSelection(conv),
+          );
+        },
+      ),
     );
   }
 }

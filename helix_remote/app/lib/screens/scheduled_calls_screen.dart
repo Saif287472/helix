@@ -35,7 +35,18 @@ class ScheduledCallsScreen extends StatelessWidget {
         ],
       ),
       body: calls.isEmpty
-          ? const Center(child: Text('No upcoming scheduled calls'))
+          ? HelixEmptyState(
+              icon: Icons.event_available_outlined,
+              title: 'No upcoming scheduled calls',
+              message: 'Schedule a call so everyone has a clear time to join.',
+              action: onCreateNew == null
+                  ? null
+                  : FilledButton.icon(
+                      onPressed: onCreateNew,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Schedule a call'),
+                    ),
+            )
           : ListView.separated(
               padding: HelixInsets.all(16),
               itemCount: calls.length,

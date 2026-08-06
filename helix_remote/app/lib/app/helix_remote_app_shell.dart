@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:helix_remote/app/routes.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -30,7 +31,22 @@ class HelixRemoteAppShell extends StatelessWidget {
       highContrastDarkTheme: HelixThemes.highContrastDark(),
       themeMode: ThemeMode.system,
       onGenerateRoute: RemoteRouter.onGenerateRoute,
-      builder: _clampTextScale,
+      builder: (context, child) => Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+        },
+        child: Actions(
+          actions: {
+            DismissIntent: CallbackAction<DismissIntent>(
+              onInvoke: (_) => Navigator.of(context).maybePop(),
+            ),
+          },
+          child: FocusTraversalGroup(
+            policy: OrderedTraversalPolicy(),
+            child: _clampTextScale(context, child),
+          ),
+        ),
+      ),
       home: home,
     );
   }

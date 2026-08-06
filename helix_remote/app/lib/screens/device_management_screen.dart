@@ -303,13 +303,18 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       body: _busy
           ? const Center(child: HelixSkeleton(width: 192, height: 24))
           : _error != null
-          ? Center(child: Text('Error: $_error'))
+          ? HelixErrorState(message: _error!, onRetry: _load)
           : Column(
               children: [
                 _buildLinkDeviceAction(context),
                 Expanded(
                   child: _devices.isEmpty
-                      ? const Center(child: Text('No devices found'))
+                      ? const HelixEmptyState(
+                          icon: Icons.devices_other_outlined,
+                          title: 'No devices found',
+                          message:
+                              'Link another device to manage its access here.',
+                        )
                       : ListView.builder(
                           itemCount: _devices.length,
                           itemBuilder: (_, i) {

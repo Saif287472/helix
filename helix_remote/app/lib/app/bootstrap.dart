@@ -3,7 +3,9 @@ part of '../main.dart';
 enum _BootState { loading, needsServerChoice, needsUrl, offline, running }
 
 class HelixRemoteBootstrap extends StatefulWidget {
-  const HelixRemoteBootstrap({super.key});
+  const HelixRemoteBootstrap({super.key, this.initialLink});
+
+  final HelixDeepLink? initialLink;
 
   @override
   State<HelixRemoteBootstrap> createState() => _HelixRemoteBootstrapState();
@@ -30,6 +32,15 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
       final appDir = await getApplicationDocumentsDirectory();
       _dbDir = p.join(appDir.path, 'helix_remote_db');
       _cacheDir = p.join(appDir.path, 'attachments_cache');
+
+      final initialLink = widget.initialLink;
+      if (initialLink?.kind == HelixDeepLinkKind.invite) {
+        _pendingInviteCode = initialLink!.inviteCode;
+        _currentServerUrl = initialLink.serverUrl ?? kHelixGlobalServerUrl;
+        await OnboardingStateStore.instance.markFirstLaunchCompleted();
+        await _onConnectUrl(_currentServerUrl);
+        return;
+      }
 
       // Prefer URL saved at runtime (entered by the user)
       final savedUrl = await ServerUrlStore.instance.load();

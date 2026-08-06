@@ -36,6 +36,8 @@ class ConversationListScreen extends StatefulWidget {
 
 enum _ChatFilter { all, unread, favorites, groups, custom }
 
+enum _ConversationSort { recent, name }
+
 class _ConversationListScreenState extends State<ConversationListScreen>
     with SecureScreenStateMixin {
   late final ConversationListViewModel _viewModel;
@@ -51,6 +53,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
   StreamSubscription<RemoteRuntimeSnapshot>? _runtimeSub;
   final _searchController = TextEditingController();
   _ChatFilter _activeFilter = _ChatFilter.all;
+  _ConversationSort _sort = _ConversationSort.recent;
   final Set<String> _selectedConversationIds = {};
   String? _desktopConversationId;
 
@@ -261,6 +264,10 @@ class _ConversationListScreenState extends State<ConversationListScreen>
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       list = list.where((c) => c.title.toLowerCase().contains(q)).toList();
+    }
+    if (_sort == _ConversationSort.name) {
+      list = [...list]
+        ..sort((a, b) => _resolvedTitle(a).compareTo(_resolvedTitle(b)));
     }
     return list;
   }
@@ -563,10 +570,25 @@ class _ConversationListScreenState extends State<ConversationListScreen>
                 PopupMenuButton<String>(
                   icon: Icon(Icons.more_vert, color: colorScheme.onSurface),
                   onSelected: (v) {
-                    if (v == 'refresh') _forceSync();
+                    if (v == 'refresh') {
+                      _forceSync();
+                    } else if (v == 'sort_recent') {
+                      setState(() => _sort = _ConversationSort.recent);
+                    } else if (v == 'sort_name') {
+                      setState(() => _sort = _ConversationSort.name);
+                    }
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'sort_recent',
+                      child: Text('Sort by recent'),
+                    ),
+                    PopupMenuItem(
+                      value: 'sort_name',
+                      child: Text('Sort by name'),
+                    ),
                   ],
                 ),
               ],

@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/helix_remote_app_shell.dart';
 import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/deep_link.dart';
 import 'package:helix_remote/app/routes.dart';
 import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_config.dart';
@@ -33,7 +34,7 @@ part 'app/remote_app_registration.dart';
 part 'app/remote_app_runtime_views.dart';
 part 'app/configuration_error.dart';
 
-void main() {
+void main(List<String> args) {
   FlutterError.onError = (details) {
     debugPrint('[Helix ERROR] ${details.exception}');
     debugPrint('[Helix STACK] ${details.stack}');
@@ -50,7 +51,18 @@ void main() {
       }
       await AppLogger.instance.init('helix_remote');
       await LocalNotificationService.init();
-      runApp(const HelixRemoteAppShell(home: HelixRemoteBootstrap()));
+      final initialLink = HelixDeepLink.tryParse(
+        args.firstWhere(
+          (argument) => HelixDeepLink.tryParse(argument) != null,
+          orElse: () =>
+              WidgetsBinding.instance.platformDispatcher.defaultRouteName,
+        ),
+      );
+      runApp(
+        HelixRemoteAppShell(
+          home: HelixRemoteBootstrap(initialLink: initialLink),
+        ),
+      );
     },
     (error, stack) {
       debugPrint('[Helix UNCAUGHT] $error');
