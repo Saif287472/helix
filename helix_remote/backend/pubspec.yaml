@@ -15,6 +15,12 @@ dependencies:
   sqlite3: ^3.3.3
   crypto: ^3.0.7
   cryptography: ^2.9.0
+  # FCM HTTP v1 authenticates with a short-lived Google OAuth2 token, which
+  # means signing a JWT with the service account's RSA key. package:crypto
+  # is hash/HMAC only and package:cryptography has no pure-Dart RSA on the
+  # VM, so this is the alternative to hand-rolling PKCS#1 v1.5 signing.
+  googleapis_auth: ^1.6.0
+  http: ^1.2.0
   web_socket_channel: ^3.0.3
   meta: ^1.18.0
   path: ^1.9.0

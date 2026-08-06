@@ -389,6 +389,46 @@ void main() {
     },
   );
 
+  test('two sends started together both survive', () async {
+    // From a device log during rapid sending:
+    //   [MessageSend] sendText failed ... SqliteException(1): cannot start
+    //   a transaction within a transaction
+    //
+    // The send path held a SQLite transaction open across the X3DH await,
+    // and the app has one connection. A second send from the same burst
+    // reached BEGIN IMMEDIATE while the first was still open, threw, and
+    // took its message with it.
+    final conversationId = service.createDirectConversation(
+      peerAccountId: 'bob',
+      conversationId: 'dm_concurrent_send',
+      title: 'Bob',
+    );
+
+    final ids = await Future.wait([
+      service.sendText(
+        conversationId: conversationId,
+        messageId: 'msg_concurrent_a',
+        plaintext: 'first',
+        recipientDeviceIds: const [],
+      ),
+      service.sendText(
+        conversationId: conversationId,
+        messageId: 'msg_concurrent_b',
+        plaintext: 'second',
+        recipientDeviceIds: const [],
+      ),
+    ]);
+
+    expect(ids, containsAll(['msg_concurrent_a', 'msg_concurrent_b']));
+    for (final id in ids) {
+      expect(
+        db.getMessageById(id),
+        isNotNull,
+        reason: 'a concurrent send must not lose its message',
+      );
+    }
+  });
+
   test('reply send stores clean body text with reply metadata', () async {
     final conversationId = service.createDirectConversation(
       peerAccountId: 'bob',

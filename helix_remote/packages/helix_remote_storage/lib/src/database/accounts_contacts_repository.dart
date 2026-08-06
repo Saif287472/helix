@@ -264,4 +264,73 @@ mixin RemoteAccountsContactsRepository on HelixRemoteDatabaseBase {
         row['peer_account_id'] as String: row['phone_book_name'] as String,
     };
   }
+
+  /// Replaces the whole "not on Helix yet" list in one transaction.
+  ///
+  /// Whole-list replacement, not a merge, and that is the point: a name that
+  /// has since joined Helix is matched by the sync that produced [names], so
+  /// it is simply not in the new set and disappears without needing to be
+  /// tracked and promoted individually.
+  ///
+  /// Only ever called for a *complete* sync. A sync cut short by the
+  /// server's discovery budget knows nothing about the contacts it never
+  /// looked up, and writing its partial view here would delete names that
+  /// were never actually checked.
+  void replaceUnmatchedPhoneContacts({
+    required List<String> phoneBookNames,
+    required int syncedAt,
+  }) {
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      _db.execute('DELETE FROM unmatched_phone_contacts;');
+      final stmt = _db.prepare(
+        'INSERT OR REPLACE INTO unmatched_phone_contacts (phone_book_name) '
+        'VALUES (?);',
+      );
+      for (final name in phoneBookNames) {
+        final trimmed = name.trim();
+        if (trimmed.isEmpty) continue;
+        stmt.execute([trimmed]);
+      }
+      stmt.close();
+      final syncStmt = _db.prepare(
+        'INSERT OR REPLACE INTO unmatched_phone_contacts_sync '
+        '(id, synced_at) VALUES (1, ?);',
+      );
+      syncStmt.execute([syncedAt]);
+      syncStmt.close();
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  List<String> unmatchedPhoneContactNames() {
+    final stmt = _db.prepare(
+      'SELECT phone_book_name FROM unmatched_phone_contacts '
+      'ORDER BY phone_book_name ASC;',
+    );
+    final res = stmt.select();
+    stmt.close();
+    return res
+        .map((row) => row['phone_book_name'] as String)
+        .toList(growable: false);
+  }
+
+  /// When the stored list was last written, or null if it never has been.
+  ///
+  /// Null is meaningfully different from "old": it means no complete sync
+  /// has run on this device, so the contacts permission may never have been
+  /// granted and a background refresh would surface a permission dialog the
+  /// user did not ask for.
+  int? unmatchedPhoneContactsSyncedAt() {
+    final stmt = _db.prepare(
+      'SELECT synced_at FROM unmatched_phone_contacts_sync WHERE id = 1;',
+    );
+    final res = stmt.select();
+    stmt.close();
+    if (res.isEmpty) return null;
+    return res.first['synced_at'] as int?;
+  }
 }

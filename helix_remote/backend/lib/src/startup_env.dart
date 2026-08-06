@@ -5,13 +5,24 @@ import 'package:helix_remote_backend/src/env_sanitize.dart';
 /// it means a deploy typo'd or half-copied a variable name, and the feature
 /// would otherwise silently fall back to disabled instead of failing loudly.
 class ConditionalEnvGroup {
-  const ConditionalEnvGroup(this.label, this.vars);
+  const ConditionalEnvGroup(this.label, this.vars, {this.anyOf = const []});
 
   /// Human-readable name shown in warnings/errors, e.g. "SMS delivery".
   final String label;
 
   /// Env var names that make up this feature. All-or-nothing.
   final List<String> vars;
+
+  /// Alternative ways to supply one thing, of which exactly one is needed
+  /// once the feature is switched on at all. FCM credentials are either a
+  /// service-account key or a pre-obtained access token; demanding both
+  /// would be wrong, and demanding neither would let a deployment configure
+  /// a project ID and no way to authenticate against it.
+  final List<String> anyOf;
+
+  /// Every variable this feature reads, in the order an operator should see
+  /// them listed.
+  List<String> get allVars => [...vars, ...anyOf];
 }
 
 /// Backend features gated behind a group of env vars. Each one already has
@@ -22,10 +33,14 @@ const List<ConditionalEnvGroup> remoteConditionalEnvGroups = [
     'HELIX_REMOTE_SMS_API_KEY',
     'HELIX_REMOTE_SMS_SENDER_ID',
   ]),
-  ConditionalEnvGroup('FCM push notifications', [
-    'HELIX_REMOTE_FCM_PROJECT_ID',
-    'HELIX_REMOTE_FCM_ACCESS_TOKEN',
-  ]),
+  ConditionalEnvGroup(
+    'FCM push notifications',
+    ['HELIX_REMOTE_FCM_PROJECT_ID'],
+    anyOf: [
+      'HELIX_REMOTE_FCM_SERVICE_ACCOUNT',
+      'HELIX_REMOTE_FCM_ACCESS_TOKEN',
+    ],
+  ),
   ConditionalEnvGroup('TURN relay (WebRTC calls)', [
     'HELIX_REMOTE_TURN_URL',
     'HELIX_REMOTE_TURN_SECRET',
@@ -83,23 +98,40 @@ StartupEnvResult validateStartupEnv(
 
   for (final group in remoteConditionalEnvGroups) {
     final values = [for (final v in group.vars) sanitizeEnvValue(env[v])];
+    final alternatives = [
+      for (final v in group.anyOf) sanitizeEnvValue(env[v]),
+    ];
     final setCount = values.where((v) => v.isNotEmpty).length;
-    if (setCount == 0) {
+    final alternativesSet = alternatives.where((v) => v.isNotEmpty).length;
+
+    if (setCount == 0 && alternativesSet == 0) {
       if (!devMode) {
         warnings.add(
           '${group.label} is not configured '
-          '(${group.vars.join(', ')} not set). This feature is disabled.',
+          '(${group.allVars.join(', ')} not set). This feature is disabled.',
         );
       }
-    } else if (setCount < group.vars.length) {
-      final missingVars = [
-        for (var i = 0; i < group.vars.length; i++)
-          if (values[i].isEmpty) group.vars[i],
-      ];
+      continue;
+    }
+
+    // Something is set, so the operator meant to turn this on. Report every
+    // way in which they did not finish, rather than the first.
+    final missingVars = [
+      for (var i = 0; i < group.vars.length; i++)
+        if (values[i].isEmpty) group.vars[i],
+    ];
+    if (missingVars.isNotEmpty) {
       fatal.add(
         '${group.label} is partially configured: '
         '${missingVars.join(', ')} missing while the rest of '
-        '${group.vars.join(', ')} is set. Set all of them or none.',
+        '${group.allVars.join(', ')} is set. Set all of them or none.',
+      );
+    }
+    if (group.anyOf.isNotEmpty && alternativesSet == 0) {
+      fatal.add(
+        '${group.label} is partially configured: one of '
+        '${group.anyOf.join(' or ')} is required once '
+        '${group.vars.join(', ')} is set.',
       );
     }
   }

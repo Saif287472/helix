@@ -125,6 +125,42 @@ void main() {
     expect(db.phoneContactName('carol_id'), equals('Carol Smith'));
   });
 
+  test('the "not on Helix yet" list survives and self-corrects', () {
+    expect(db.unmatchedPhoneContactNames(), isEmpty);
+    // Null, not 0: nothing has ever synced, which is what stops the screen
+    // from auto-refreshing (and so prompting for contacts permission)
+    // before the user has ever asked for a sync.
+    expect(db.unmatchedPhoneContactsSyncedAt(), isNull);
+
+    db.replaceUnmatchedPhoneContacts(
+      phoneBookNames: ['Zoe', 'Abbu', 'Hasan'],
+      syncedAt: 1000,
+    );
+    expect(
+      db.unmatchedPhoneContactNames(),
+      equals(['Abbu', 'Hasan', 'Zoe']),
+      reason: 'sorted for display, so the screen does not have to be',
+    );
+    expect(db.unmatchedPhoneContactsSyncedAt(), equals(1000));
+
+    // Hasan joins Helix, so the next complete sync matches him and he is
+    // simply absent from the new set. This is why the whole list is
+    // replaced rather than merged - no per-name promotion is needed.
+    db.replaceUnmatchedPhoneContacts(
+      phoneBookNames: ['Zoe', 'Abbu'],
+      syncedAt: 2000,
+    );
+    expect(db.unmatchedPhoneContactNames(), equals(['Abbu', 'Zoe']));
+    expect(db.unmatchedPhoneContactsSyncedAt(), equals(2000));
+
+    // Everyone in the phone book is now on Helix. The list is empty, but a
+    // sync definitely happened - if the timestamp were derived from the
+    // rows this would read as "never synced" and re-sync on every open.
+    db.replaceUnmatchedPhoneContacts(phoneBookNames: [], syncedAt: 3000);
+    expect(db.unmatchedPhoneContactNames(), isEmpty);
+    expect(db.unmatchedPhoneContactsSyncedAt(), equals(3000));
+  });
+
   test('F3 app lock, locked chat vault, and secret attempt policy persist', () {
     db.setAppLockSettings(
       const RemoteAppLockSettings(

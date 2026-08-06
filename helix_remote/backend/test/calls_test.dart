@@ -60,10 +60,16 @@ void main() {
   late BackendServer server;
   late int port;
   late String tokenA;
+  // Kept so a test can age a row directly. Reaching past the repository is
+  // deliberate: simulating "this call has outlived its deadline" is a
+  // storage fact, and inventing a production setter to express it would put
+  // a method in the repository that only tests would ever call.
+  late Database rawSqlite;
 
   setUp(() async {
+    rawSqlite = sqlite3.openInMemory();
     server = BackendServer.create(
-      sqliteDb: sqlite3.openInMemory(),
+      sqliteDb: rawSqlite,
       jwtSecret: 'test_jwt_secret_calls_phase15',
       rateLimitMaxTokens: 200.0,
       rateLimitRefillRate: 50.0,
@@ -417,6 +423,57 @@ void main() {
       (jsonDecode(second.body) as Map<String, dynamic>)['status'],
       equals('duplicate'),
     );
+  });
+
+  test('an answered call can still hang up past the ring timeout', () async {
+    // From a device log, on a call that ran 77 seconds:
+    //   [CALL_SIGNAL] send begin end cid=41717041
+    //   [CALL_SIGNAL] end WS rejected status=expired reason=call expired
+    //
+    // The 45s deadline is a *ring* timeout. Applied to an answered call it
+    // meant hanging up was refused, so the other end was never told and sat
+    // there until its own ICE gave up.
+    final tokenB = server.jwt.generateToken({
+      'account_id': 'user2',
+      'device_id': 'device2',
+    }, const Duration(hours: 1));
+    final clientA = TestHttpClient('http://127.0.0.1:$port', tokenA);
+    final clientB = TestHttpClient('http://127.0.0.1:$port', tokenB);
+
+    await clientA.post('/api/v1/calls/signal', {
+      'target_account_id': 'user2',
+      'payload': {
+        'signal_type': 'offer',
+        'call_id': 'call_long',
+        'sdp': 'offer-sdp',
+      },
+    });
+    final answer = await clientB.post('/api/v1/calls/signal', {
+      'payload': {
+        'signal_type': 'answer',
+        'call_id': 'call_long',
+        'sdp': 'answer-sdp',
+      },
+    });
+    expect(answer.status, equals(200));
+
+    // Push the deadline into the past, as a call outlasting the ring
+    // timeout does. The row stays ANSWERED — only ringing calls expire.
+    rawSqlite.execute(
+      'UPDATE pending_calls SET expires_at = 1 WHERE call_id = ?;',
+      ['call_long'],
+    );
+
+    final end = await clientA.post('/api/v1/calls/signal', {
+      'payload': {'signal_type': 'end', 'call_id': 'call_long'},
+    });
+    expect(end.status, equals(200));
+    expect(
+      (jsonDecode(end.body) as Map<String, dynamic>)['status'],
+      isNot(equals('expired')),
+      reason: 'a live call must be able to tell the other side it ended',
+    );
+    expect(server.db.getPendingCall('call_long')!['status'], equals('END'));
   });
 
   test('expired and out-of-order call signals do not revive a call', () async {

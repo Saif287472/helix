@@ -119,6 +119,7 @@ RemoteCallService _makeService(
   HelixRemoteDatabase db,
   _StubEngine engine, {
   Duration disconnectedGrace = const Duration(milliseconds: 5),
+  Duration adaptCooldown = Duration.zero,
   List<Map<String, dynamic>>? capturedMetrics,
   Future<void> Function(Map<String, dynamic>)? metricsUploader,
   List<Duration>? reconnectBackoff,
@@ -128,6 +129,10 @@ RemoteCallService _makeService(
     engine: engine,
     signalingGateway: _StubGateway(),
     disconnectedGrace: disconnectedGrace,
+    // Production paces video drops 15s apart so a marginal link cannot
+    // flap the camera. A test asserting the second drop happens at all
+    // would otherwise have to sit through that.
+    adaptCooldown: adaptCooldown,
     terminalStateGrace: Duration.zero,
     // The production table is 2s..30s; a test driving six reconnects would
     // otherwise sit through a minute of real backoff.
@@ -215,6 +220,79 @@ void main() {
         await svc.dispose();
       },
     );
+
+    test('keeps video on a slow but clean link', () async {
+      // Reported from a device: video dropped itself ~6s into every call.
+      //   adapt video_off loss=0.0% rtt=504ms
+      // Relay-only sends every packet through TURN, so a healthy call sits
+      // in the hundreds of milliseconds by construction. Latency is not a
+      // reason to drop video - turning the camera off does not make a round
+      // trip shorter, it just removes the picture from a working call.
+      final svc = _makeService(db, engine);
+      await svc.startOutgoingCall(peerId: 'bob', isVideo: true);
+      final callId = svc.activeCall!.callId;
+      engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
+      await Future<void>.delayed(Duration.zero);
+
+      engine.emitQuality(callId, loss: 0, rtt: 504, isRelay: true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(engine.log, isNot(contains('setVideo:$callId:false')));
+      await svc.dispose();
+    });
+
+    test('recovers on a link that stays slow', () async {
+      // The other half of the same report: once video had dropped it never
+      // came back on its own. Recovery used to require RTT under 200ms,
+      // which a relay path holding steady near 500ms can never reach, so
+      // the fallback latched for the rest of the call.
+      final svc = _makeService(db, engine);
+      await svc.startOutgoingCall(peerId: 'bob', isVideo: true);
+      final callId = svc.activeCall!.callId;
+      engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
+      await Future<void>.delayed(Duration.zero);
+
+      engine.emitQuality(callId, loss: 20, rtt: 500, isRelay: true);
+      await Future<void>.delayed(Duration.zero);
+      expect(engine.log, contains('setVideo:$callId:false'));
+
+      // Loss clears, latency does not - which is the normal shape of a
+      // relay call recovering from a bad patch.
+      engine.emitQuality(callId, loss: 0, rtt: 500, isRelay: true);
+      await Future<void>.delayed(Duration.zero);
+      engine.emitQuality(callId, loss: 0, rtt: 500, isRelay: true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(engine.log, contains('setVideo:$callId:true'));
+      await svc.dispose();
+    });
+
+    test('turning video back on by hand re-arms adaptation', () async {
+      // The drop branch is guarded by !_audioOnlyFallback, so if a manual
+      // re-enable left the flag set, adaptation would be dead for the rest
+      // of the call - the link could collapse and nothing would react.
+      final svc = _makeService(db, engine);
+      await svc.startOutgoingCall(peerId: 'bob', isVideo: true);
+      final callId = svc.activeCall!.callId;
+      engine.emitConn(callId, RemoteCallEngineConnectionState.connected);
+      await Future<void>.delayed(Duration.zero);
+
+      engine.emitQuality(callId, loss: 20, rtt: 100);
+      await Future<void>.delayed(Duration.zero);
+      expect(engine.log, contains('setVideo:$callId:false'));
+
+      await svc.setVideoEnabled(enabled: true);
+      engine.log.clear();
+
+      engine.emitQuality(callId, loss: 30, rtt: 100);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        engine.log,
+        contains('setVideo:$callId:false'),
+        reason: 'adaptation must still be able to act after a manual override',
+      );
+      await svc.dispose();
+    });
 
     test('does not disable video for audio-only call', () async {
       final svc = _makeService(db, engine);

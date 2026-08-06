@@ -371,7 +371,26 @@ mixin CallsSignalingHandlers on CallsModuleBase {
     if (sessionStatus != 'RINGING' && sessionStatus != 'ANSWERED') {
       return {'status': 'expired', 'reason': 'call is no longer pending'};
     }
-    if ((session['expires_at'] as int) <= now) {
+    // The deadline is a *ring* timeout, not a limit on how long a call may
+    // last. Applying it to an ANSWERED call made every conversation longer
+    // than `_pendingCallTtlMs` unable to signal: hanging up was answered
+    // with `expired`, so the other end was never told and sat there until
+    // its own ICE gave up.
+    //
+    //   [CALL_SIGNAL] send begin end cid=41717041
+    //   [CALL_SIGNAL] end WS rejected status=expired reason=call expired
+    //
+    // `expirePendingCalls` already scopes itself to RINGING; this check was
+    // the one place that did not, so the two disagreed about what an
+    // expired call even was.
+    //
+    // `expires_at` is deliberately left alone rather than pushed out on
+    // answer. `countActivePendingCallsForAccount` counts rows with
+    // `expires_at > now`, so the deadline passing is also what frees the
+    // account's concurrent-call slot - extending it would mean a call whose
+    // client died mid-conversation blocked every later call until the new
+    // deadline, instead of for the ring timeout.
+    if (sessionStatus == 'RINGING' && (session['expires_at'] as int) <= now) {
       db.markPendingCallTerminal(
         callId: signal.callId,
         status: 'EXPIRED',

@@ -22,7 +22,7 @@ void main() {
       turnSecret: 'phase19_turn_secret',
       turnUrl: 'turn:turn.test.example:3478',
       wsReconnectsPerMinute: 2,
-      pushProvider: FcmPushProvider(
+      pushProvider: FcmPushProvider.staticToken(
         projectId: 'test-project',
         accessToken: 'test-token',
       ),

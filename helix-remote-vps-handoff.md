@@ -158,9 +158,19 @@ unchanged — the capture is additive. The admin token is deliberately excluded 
 the captured stream, as are request query strings (they carry invite codes).
 
 ## Optional/unconfigured (mentioned in server logs as warnings, not errors)
-- `HELIX_REMOTE_FCM_PROJECT_ID` / `HELIX_REMOTE_FCM_ACCESS_TOKEN` — not set. Push wake
+- `HELIX_REMOTE_FCM_PROJECT_ID` / `HELIX_REMOTE_FCM_SERVICE_ACCOUNT` — not set. Push wake
   notifications disabled; app presumably still works via direct WebSocket while open/
   backgrounded per its own logic.
+  - `HELIX_REMOTE_FCM_SERVICE_ACCOUNT` takes the Firebase service-account JSON key,
+    either inline or as a path to the file (mount it as a Docker secret and point at
+    it). The server signs with the key and renews its own access tokens.
+  - `HELIX_REMOTE_FCM_ACCESS_TOKEN` still works and is still accepted in its place,
+    but Google expires those after an hour and the server cannot renew one — it is
+    for a manual test, not a deployment. Setting the project ID with neither is a
+    startup error rather than a silent no-op.
+  - Note this only covers the *server* half. The app has no Firebase integration
+    yet, so no device registers a push token and nothing is delivered regardless of
+    what is configured here.
 
 ## Not yet done
 - **Flutter Android APK build** — user is building this themselves on their own

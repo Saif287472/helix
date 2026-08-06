@@ -269,6 +269,27 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
   /// storage rather than a single sync's in-memory result.
   Map<String, String> phoneContactOverrides() => db.phoneContactNames();
 
+  /// Records the phone-book contacts that matched no Helix account.
+  ///
+  /// Call only for a complete sync: this replaces the stored list wholesale,
+  /// and a budget-truncated sync has no opinion about the contacts it never
+  /// looked up.
+  void recordUnmatchedPhoneContacts(List<String> phoneBookNames) {
+    db.replaceUnmatchedPhoneContacts(
+      phoneBookNames: phoneBookNames,
+      syncedAt: _clock().millisecondsSinceEpoch,
+    );
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts}));
+  }
+
+  /// The stored "not on Helix yet" list. Survives leaving the screen and
+  /// restarting the app, unlike the sync result it came from.
+  List<String> unmatchedPhoneContacts() => db.unmatchedPhoneContactNames();
+
+  /// When that list was last rebuilt, or null if no complete sync has ever
+  /// run on this device.
+  int? unmatchedPhoneContactsSyncedAt() => db.unmatchedPhoneContactsSyncedAt();
+
   List<RemoteContact> searchLocalContacts(String query) {
     final normalized = query.toLowerCase();
     return db

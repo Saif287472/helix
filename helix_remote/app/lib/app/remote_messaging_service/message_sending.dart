@@ -55,6 +55,31 @@ mixin RemoteMessageSending on RemoteMessagingServiceBase {
 
     var transactionOpen = false;
     try {
+      // Built before the transaction opens, not inside it.
+      //
+      // This is the only await in the write path, and the app has a single
+      // SQLite connection. While one send sat here waiting on X3DH, a
+      // second send from the same burst of taps would reach BEGIN
+      // IMMEDIATE and die with
+      //   cannot start a transaction within a transaction
+      // losing that message. Both sends were "in" a transaction because
+      // there is only one connection to be in one on.
+      //
+      // Keeping the transaction free of awaits makes it a synchronous
+      // critical section, so the interleaving cannot happen at all rather
+      // than being unlikely. Nothing observable moves: the rows written
+      // below were invisible to readers until COMMIT anyway.
+      trace.mark('x3dh_start');
+      final envelopes = await _buildX3dhEnvelopes(
+        conversationId: conversationId,
+        messageId: id,
+        plaintext: messagePlaintext,
+        recipientDeviceIds: uniqueRecipientDeviceIds,
+        senderAccountId: accountId,
+        senderDeviceId: deviceId,
+      );
+      trace.mark('x3dh_complete');
+
       db.rawExecute('BEGIN IMMEDIATE;');
       transactionOpen = true;
       db.ensureConversationExists(
@@ -71,17 +96,6 @@ mixin RemoteMessageSending on RemoteMessagingServiceBase {
         viewOnce: privacy.viewOnce,
         keepInChat: privacy.keepInChat,
       );
-
-      trace.mark('x3dh_start');
-      final envelopes = await _buildX3dhEnvelopes(
-        conversationId: conversationId,
-        messageId: id,
-        plaintext: messagePlaintext,
-        recipientDeviceIds: uniqueRecipientDeviceIds,
-        senderAccountId: accountId,
-        senderDeviceId: deviceId,
-      );
-      trace.mark('x3dh_complete');
 
       db.enqueueOperation(
         'send_message_$id',

@@ -5,7 +5,7 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
   /// assert against one source of truth instead of a literal that silently
   /// goes stale every time a migration is added - which is exactly what had
   /// happened: two tests still expected 18 after the schema reached 27.
-  static const int latestSchemaVersion = 27;
+  static const int latestSchemaVersion = 28;
 
   int get schemaVersion =>
       _db.select('PRAGMA user_version').first['user_version'] as int;
@@ -559,8 +559,44 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       _db.execute(
         "DELETE FROM pending_operations WHERE type = 'MARK_CONVERSATION_READ';",
       );
+      _db.execute('PRAGMA user_version = 27;');
+    }
+    if (version < 28) {
+      _createUnmatchedPhoneContactsTable();
       _db.execute('PRAGMA user_version = $latestSchemaVersion;');
     }
+  }
+
+  /// Phone-book contacts that matched no Helix account on the last complete
+  /// sync - the "Not on Helix yet" list.
+  ///
+  /// Stored rather than held in the Contacts screen's state, which is what
+  /// it used to be: leaving the tab destroyed the list, so it had to be
+  /// re-synced by hand every single time to see it again.
+  ///
+  /// The original reason for not storing it was that a stored list goes
+  /// stale - someone on it joins Helix later and keeps being offered an
+  /// Invite button. That is handled by rewriting the whole table on every
+  /// complete sync (see `replaceUnmatchedPhoneContacts`), so a name that
+  /// has since joined is simply absent from the next write. `synced_at` is
+  /// what makes that refresh automatic rather than manual.
+  void _createUnmatchedPhoneContactsTable() {
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS unmatched_phone_contacts (
+        phone_book_name TEXT PRIMARY KEY
+      );
+    ''');
+    // The timestamp lives in its own single-row table rather than as a
+    // column above, because "synced, and everyone in the phone book is on
+    // Helix" is a legitimate result with no rows at all. Derived from the
+    // rows it would be indistinguishable from "never synced", and the
+    // screen would re-sync on every open forever.
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS unmatched_phone_contacts_sync (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        synced_at INTEGER NOT NULL
+      );
+    ''');
   }
 
   void _createPhoneContactNamesTable() {

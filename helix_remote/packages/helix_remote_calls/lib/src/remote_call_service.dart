@@ -242,6 +242,7 @@ class RemoteCallService {
     Duration offerAnswerTimeout = const Duration(seconds: 20),
     Duration iceConnectionTimeout = const Duration(seconds: 20),
     Duration disconnectedGrace = const Duration(seconds: 10),
+    Duration adaptCooldown = const Duration(seconds: 15),
     Duration? terminalStateGrace,
     List<Duration>? reconnectBackoff,
   }) : _reconnectBackoff = reconnectBackoff ?? _defaultReconnectBackoff,
@@ -250,6 +251,7 @@ class RemoteCallService {
        _offerAnswerLimit = offerAnswerTimeout,
        _iceConnectionLimit = iceConnectionTimeout,
        _disconnectedGracePeriod = disconnectedGrace,
+       _adaptCooldownPeriod = adaptCooldown,
        _terminalStateGrace = terminalStateGrace ?? const Duration(seconds: 2);
 
   final HelixRemoteDatabase db;
@@ -264,6 +266,12 @@ class RemoteCallService {
   final Duration _offerAnswerLimit;
   final Duration _iceConnectionLimit;
   final Duration _disconnectedGracePeriod;
+
+  /// How long after an automatic video drop - or a manual override of one -
+  /// before adaptation may act again. Stops a marginal link from flapping
+  /// the camera, and stops the adapter from immediately undoing a user who
+  /// has just turned video back on.
+  final Duration _adaptCooldownPeriod;
   final Duration _terminalStateGrace;
 
   /// Injectable so a test can exercise the max-attempts path without waiting
@@ -578,11 +586,11 @@ class RemoteCallService {
   bool _audioOnlyFallback = false;
   int _goodQualitySamples = 0;
   int _lastAdaptMs = 0;
-  static const int _adaptCooldownMs = 15000;
   static const double _weakLossThreshold = 15.0;
   static const double _recoverLossThreshold = 5.0;
+  // Only meaningful alongside packet loss - see _adaptMediaQuality. A relay
+  // call is routinely above this with a perfectly healthy link.
   static const double _weakRttMs = 400.0;
-  static const double _recoverRttMs = 200.0;
   static const int _recoverSamplesNeeded = 2;
 
   // F7: privacy-safe metrics accumulators
@@ -1029,6 +1037,19 @@ class RemoteCallService {
     final call = _activeCall;
     if (call == null) return;
     await engine.setVideoEnabled(call.callId, enabled: enabled);
+    // Turning video back on by hand clears the automatic fallback, because
+    // otherwise the two disagree about what is happening: the flag would
+    // still say "we dropped video for quality reasons" while video is
+    // plainly on. The drop branch is guarded by !_audioOnlyFallback, so a
+    // stale true meant adaptation silently stopped working for the rest of
+    // the call - the network could degrade badly and nothing would happen.
+    // The counter goes too, so recovery is not judged on samples collected
+    // while the user had already overridden the decision.
+    if (enabled && _audioOnlyFallback) {
+      _audioOnlyFallback = false;
+      _goodQualitySamples = 0;
+      _lastAdaptMs = DateTime.now().millisecondsSinceEpoch;
+    }
     _activeCall = call.copyWith(isLocalVideoEnabled: enabled);
     _emitCallStatus();
   }
@@ -1190,12 +1211,28 @@ class RemoteCallService {
   void _adaptMediaQuality(RemoteCallStatus call, CallQualityMetrics metrics) {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
+    // Packet loss is what actually means "this link cannot carry video".
+    // Round-trip time means the call feels laggy, and dropping video does
+    // not fix latency - it just makes a working video call into an audio
+    // one. RTT therefore only counts as evidence when loss agrees with it.
+    //
+    // This matters most on exactly the calls Helix defaults to. Relay-only
+    // routes every packet through TURN, so a perfectly healthy call sits at
+    // several hundred milliseconds RTT by construction; a 500ms round trip
+    // with 0.0% loss is normal there, not a degraded link.
     final lossPoor =
         metrics.packetLossPercent > _weakLossThreshold ||
-        metrics.roundTripMs > _weakRttMs;
-    final lossGood =
-        metrics.packetLossPercent < _recoverLossThreshold &&
-        metrics.roundTripMs < _recoverRttMs;
+        (metrics.roundTripMs > _weakRttMs &&
+            metrics.packetLossPercent > _recoverLossThreshold);
+
+    // Recovery is the negation of the drop condition, not an independent
+    // set of thresholds. Independent ones can disagree: the pair here used
+    // to drop video above 400ms RTT and restore it only below 200ms, so on
+    // a relay path holding steady around 500ms the fallback was a latch
+    // rather than an adaptation - nothing short of ending the call could
+    // clear it. Deriving one from the other makes recovery reachable by
+    // construction whenever the reason for dropping has passed.
+    final lossGood = metrics.packetLossPercent < _recoverLossThreshold;
 
     // The cooldown guards *dropping* video - the expensive, visible action we
     // don't want flapping. It deliberately does not guard recovery, which is
@@ -1205,7 +1242,7 @@ class RemoteCallService {
     // two, two good samples could never accumulate inside a 15s window - the
     // recovery branch was unreachable in production, not just under test.
     if (!_audioOnlyFallback && lossPoor) {
-      if (nowMs - _lastAdaptMs < _adaptCooldownMs) return;
+      if (nowMs - _lastAdaptMs < _adaptCooldownPeriod.inMilliseconds) return;
       _audioOnlyFallback = true;
       _goodQualitySamples = 0;
       _lastAdaptMs = nowMs;
