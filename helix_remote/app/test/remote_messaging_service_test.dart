@@ -37,7 +37,7 @@ class _FakeProtector implements RemoteMessageProtector {
     required String ciphertext,
   }) async {
     if (!ciphertext.startsWith('cipher:')) {
-      throw FormatException('Unexpected ciphertext envelope');
+      throw const FormatException('Unexpected ciphertext envelope');
     }
     final envelope =
         jsonDecode(

@@ -126,6 +126,28 @@ jobs:
           path: helix_remote/coverage/
           if-no-files-found: ignore
 
+  performance-budgets:
+    needs: changes
+    if: >-
+      needs.changes.outputs.common == 'true' ||
+      needs.changes.outputs.remote == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helix_remote
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.8
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Verify declared performance budgets
+        run: dart tool/check_performance_budgets.dart
+      - name: Enforce message-list burst budget on the CI reference runner
+        run: flutter test app/test/phase4_performance_budget_test.dart
+
   no-source-changes:
     needs: changes
     if: >-

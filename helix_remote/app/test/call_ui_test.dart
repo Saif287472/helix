@@ -26,7 +26,7 @@ void main() {
 
   group('P12-A01 callsAvailable ICE gating', () {
     test('relay-only with no servers → unavailable', () {
-      final config = RemoteIceConfig(
+      final config = const RemoteIceConfig(
         iceServers: [],
         ipPrivacy: IpPrivacyMode.relayOnly,
       );
@@ -34,7 +34,7 @@ void main() {
     });
 
     test('relay-only with STUN only → unavailable', () {
-      final config = RemoteIceConfig(
+      final config = const RemoteIceConfig(
         iceServers: [IceServerConfig(url: 'stun:stun.l.google.com:19302')],
         ipPrivacy: IpPrivacyMode.relayOnly,
       );
@@ -42,7 +42,7 @@ void main() {
     });
 
     test('relay-only with TURN configured → available', () {
-      final config = RemoteIceConfig(
+      final config = const RemoteIceConfig(
         iceServers: [
           IceServerConfig(
             url: 'turn:turn.example.com:3478',
@@ -56,7 +56,7 @@ void main() {
     });
 
     test('relay-only with TURNS (secure TURN) configured → available', () {
-      final config = RemoteIceConfig(
+      final config = const RemoteIceConfig(
         iceServers: [
           IceServerConfig(
             url: 'turns:turn.example.com:5349',
@@ -70,7 +70,7 @@ void main() {
     });
 
     test('directAndRelay mode with no servers → available', () {
-      final config = RemoteIceConfig(
+      final config = const RemoteIceConfig(
         iceServers: [],
         ipPrivacy: IpPrivacyMode.directAndRelay,
       );
@@ -269,10 +269,10 @@ void main() {
         MaterialApp(
           home: Scaffold(
             appBar: AppBar(
-              actions: [
+              actions: const [
                 IconButton(
                   tooltip: 'Calls require TURN relay configuration',
-                  icon: const Icon(Icons.call),
+                  icon: Icon(Icons.call),
                   onPressed: null,
                 ),
               ],

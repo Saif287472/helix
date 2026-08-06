@@ -33,7 +33,7 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
       _keyValue =
           _keyValueStore ??
           SecureStorageStore(prefix: config.secureStoragePrefix);
-      _keyStorage = RemoteSecureKeyStorage();
+      _keyStorage = const RemoteSecureKeyStorage();
 
       _setState(RemoteStartupState.firstRunInitialization);
       final dbKey = await _loadOrCreateDbKey();

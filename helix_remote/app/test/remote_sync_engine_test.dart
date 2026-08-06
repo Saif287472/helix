@@ -617,7 +617,7 @@ void main() {
         timestamp: _ts(),
       );
       db.saveMessage(
-        RemoteMessage(
+        const RemoteMessage(
           messageId: messageId,
           conversationId: conversationId,
           senderAccountId: 'acc-alice',

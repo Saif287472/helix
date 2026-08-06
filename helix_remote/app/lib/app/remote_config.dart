@@ -458,7 +458,7 @@ class RemoteDevelopmentConfig {
       case 'https':
         return 'wss';
       default:
-        throw RemoteConfigurationException(
+        throw const RemoteConfigurationException(
           'Remote REST scheme must be http or https.',
         );
     }

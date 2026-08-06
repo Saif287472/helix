@@ -21,6 +21,7 @@ class RemoteSyncChange {
     required this.areas,
     this.conversationId,
     this.messageId,
+    this.contactAccountId,
   });
 
   final Set<RemoteSyncChangeArea> areas;
@@ -31,6 +32,10 @@ class RemoteSyncChange {
   /// Consumers can use this to update a rendered message in place rather
   /// than re-reading and decrypting the whole conversation window.
   final String? messageId;
+
+  /// Present for contact/profile updates so presentation layers can refresh
+  /// only the affected peer instead of rebuilding every open conversation.
+  final String? contactAccountId;
 
   bool affects(RemoteSyncChangeArea area) => areas.contains(area);
 
@@ -502,7 +507,11 @@ class RemoteSyncEngine {
       case 'privacy_updated':
       case 'presence_updated':
       case 'safety_notice':
-        return const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts});
+        return RemoteSyncChange(
+          areas: const {RemoteSyncChangeArea.contacts},
+          contactAccountId: env.payload['peer_account_id'] as String? ??
+              env.payload['account_id'] as String?,
+        );
       case 'group_created':
       case 'group_invite':
       case 'group_deleted':

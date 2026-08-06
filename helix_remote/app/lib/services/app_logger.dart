@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -14,6 +17,8 @@ class AppLogger {
   File? _logFile;
   File? _counterFile;
   Future<void> _writeChain = Future<void>.value();
+  final List<String> _pendingLines = [];
+  Future<void>? _scheduledFlush;
   int _sessionNumber = 0;
   String _namespace = 'helix_remote';
 
@@ -99,35 +104,68 @@ class AppLogger {
     final sanitized = redactLogLine(
       line,
     ).replaceAll('\r\n', ' | ').replaceAll('\r', ' | ').replaceAll('\n', ' | ');
-    _writeChain = _writeChain.then((_) async {
+    _pendingLines.add(sanitized);
+    await _scheduleFlush();
+  }
+
+  /// Coalesces bursts into a single append, without weakening the ordering
+  /// guarantee callers get from awaiting their log method.
+  Future<void> _scheduleFlush() {
+    return _scheduledFlush ??= Future<void>.delayed(
+      const Duration(milliseconds: 16),
+    ).then((_) async {
       try {
-        await _logFile!.writeAsString('$sanitized\n', mode: FileMode.append);
-      } catch (_) {}
+        while (_pendingLines.isNotEmpty) {
+          final batch = List<String>.from(_pendingLines);
+          _pendingLines.clear();
+          _writeChain = _writeChain.then((_) async {
+            try {
+              await _logFile!.writeAsString(
+                '${batch.join('\n')}\n',
+                mode: FileMode.append,
+              );
+            } catch (_) {}
+          });
+          await _writeChain;
+        }
+      } finally {
+        _scheduledFlush = null;
+        if (_pendingLines.isNotEmpty) {
+          unawaited(_scheduleFlush());
+        }
+      }
     });
-    await _writeChain;
   }
 
   Future<void> _purge() async {
     if (_logFile == null || !await _logFile!.exists()) return;
     try {
-      final lines = await _logFile!.readAsLines();
       final cutoff = DateTime.now().subtract(const Duration(days: _maxAgeDays));
+      final kept = ListQueue<String>();
+      var lineCount = 0;
+      await for (final line in _logFile!
+          .openRead()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+        lineCount++;
+        if (line.startsWith('---')) {
+          kept.addLast(line);
+        } else {
+          final m = RegExp(r'^\[(\d{4}-\d{2}-\d{2})').firstMatch(line);
+          if (m == null) {
+            kept.addLast(line);
+          } else {
+            final date = DateTime.tryParse(m.group(1)!);
+            if (date == null || !date.isBefore(cutoff)) {
+              kept.addLast(line);
+            }
+          }
+        }
+        if (kept.length > _maxLines) kept.removeFirst();
+      }
 
-      final kept = lines.where((line) {
-        if (line.startsWith('---')) return true;
-        final m = RegExp(r'^\[(\d{4}-\d{2}-\d{2})').firstMatch(line);
-        if (m == null) return true;
-        final date = DateTime.tryParse(m.group(1)!);
-        if (date == null) return true;
-        return !date.isBefore(cutoff);
-      }).toList();
-
-      final trimmed = kept.length > _maxLines
-          ? kept.sublist(kept.length - _maxLines)
-          : kept;
-
-      if (trimmed.length != lines.length) {
-        await _logFile!.writeAsString('${trimmed.join('\n')}\n');
+      if (kept.length != lineCount) {
+        await _logFile!.writeAsString('${kept.join('\n')}\n');
       }
     } catch (_) {}
   }
@@ -146,6 +184,8 @@ class AppLogger {
   /// Deletes the log file and writes a fresh session marker.
   Future<void> clearLogs() async {
     try {
+      await _scheduledFlush;
+      await _writeChain;
       if (_logFile != null && await _logFile!.exists()) {
         await _logFile!.delete();
       }

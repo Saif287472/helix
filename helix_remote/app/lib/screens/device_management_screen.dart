@@ -185,28 +185,33 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
           title: Text('${device.deviceName} Security'),
           content: SizedBox(
             width: double.maxFinite,
-            child: ListView(
+            child: ListView.builder(
               shrinkWrap: true,
-              children: [
-                ListTile(
+              itemCount: history.isEmpty ? 4 : history.length + 3,
+              itemBuilder: (_, index) {
+                if (index == 0) {
+                  return ListTile(
                   dense: true,
                   title: const Text('First seen'),
                   subtitle: Text(device.createdAt.toLocal().toString()),
-                ),
-                ListTile(
+                  );
+                }
+                if (index == 1) {
+                  return ListTile(
                   dense: true,
                   title: const Text('Key fingerprint'),
                   subtitle: Text(_fingerprint(device.deviceSigningPublicKey)),
-                ),
-                const Divider(),
-                if (history.isEmpty)
-                  const ListTile(
+                  );
+                }
+                if (index == 2) return const Divider();
+                if (history.isEmpty) {
+                  return const ListTile(
                     dense: true,
                     title: Text('No security history found.'),
-                  )
-                else
-                  for (final row in history)
-                    ListTile(
+                  );
+                }
+                final row = history[index - 3];
+                return ListTile(
                       dense: true,
                       title: Text(row['type'].toString()),
                       subtitle: Text(
@@ -214,8 +219,8 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                           row['timestamp'] as int,
                         ).toLocal().toString(),
                       ),
-                    ),
-              ],
+                    );
+              },
             ),
           ),
           actions: [

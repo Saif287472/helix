@@ -65,7 +65,7 @@ void main() {
 
       expect(
         () => registry.addAccount(
-          RemoteAccountRuntimeDescriptor(
+          const RemoteAccountRuntimeDescriptor(
             accountId: 'work',
             displayName: 'work',
             databasePath: 'data/alice/remote.db',
@@ -79,7 +79,7 @@ void main() {
       );
       expect(
         () => registry.addAccount(
-          RemoteAccountRuntimeDescriptor(
+          const RemoteAccountRuntimeDescriptor(
             accountId: 'personal',
             displayName: 'personal',
             databasePath: 'data/personal/remote.db',

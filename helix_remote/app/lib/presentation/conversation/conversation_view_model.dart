@@ -196,6 +196,16 @@ class ConversationViewModel extends ChangeNotifier {
 
   void _onRemoteChange(RemoteSyncChange change) {
     if (_disposed) return;
+    if (change.affects(RemoteSyncChangeArea.contacts)) {
+      final changedAccountId = change.contactAccountId;
+      if (changedAccountId != null &&
+          conversationMemberIds.contains(changedAccountId)) {
+        // Name and avatar bindings are read by the view; only redraw when the
+        // change is for this conversation's peer.
+        _notify();
+      }
+      return;
+    }
     if (!change.affectsConversation(conversationId)) return;
     if (!change.affects(RemoteSyncChangeArea.messages)) return;
     final messageId = change.messageId;
