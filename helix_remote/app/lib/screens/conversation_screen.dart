@@ -8,92 +8,24 @@ import 'package:helix_remote/app/attachment_export.dart';
 import 'package:helix_remote/app/attachment_safety.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/presentation/conversation/conversation_view_model.dart';
+import 'package:helix_remote/screens/conversation/chat_palette.dart';
+import 'package:helix_remote/screens/conversation/message_tile.dart';
 import 'package:helix_remote/screens/contact_info_screen.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
-import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as p;
 
 part 'conversation/app_bars.dart';
 part 'conversation/attachment_actions.dart';
 part 'conversation/body.dart';
 part 'conversation/message_actions.dart';
-part 'conversation/message_tile.dart';
 
 typedef AttachmentFilePicker = Future<File?> Function();
 typedef AttachmentFileExporter =
     Future<String?> Function(RemoteAttachmentContent attachment, File file);
 
 const _kReactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '😡'];
-
-class _ChatPalette {
-  const _ChatPalette({
-    required this.page,
-    required this.appBar,
-    required this.onAppBar,
-    required this.inputBar,
-    required this.input,
-    required this.incoming,
-    required this.outgoing,
-    required this.incomingTime,
-    required this.outgoingTime,
-    required this.dateChip,
-    required this.dateChipText,
-    required this.accent,
-    required this.readTick,
-  });
-
-  final Color page;
-  final Color appBar;
-  final Color onAppBar;
-  final Color inputBar;
-  final Color input;
-  final Color incoming;
-  final Color outgoing;
-  final Color incomingTime;
-  final Color outgoingTime;
-  final Color dateChip;
-  final Color dateChipText;
-  final Color accent;
-  final Color readTick;
-}
-
-_ChatPalette _chatPalette(ThemeData theme) {
-  final cs = theme.colorScheme;
-  final dark = theme.brightness == Brightness.dark;
-  if (dark) {
-    return _ChatPalette(
-      page: const Color(0xFF0B1417),
-      appBar: const Color(0xFF0B1114),
-      onAppBar: Colors.white,
-      inputBar: const Color(0xFF0B1417),
-      input: const Color(0xFF1F2C34),
-      incoming: const Color(0xFF1F2C34),
-      outgoing: const Color(0xFF005C4B),
-      incomingTime: const Color(0xFF98A4AA),
-      outgoingTime: const Color(0xFFB8D5C8),
-      dateChip: const Color(0xE61C252B),
-      dateChipText: const Color(0xFFD7DEE2),
-      accent: const Color(0xFF00A884),
-      readTick: const Color(0xFF53BDEB),
-    );
-  }
-  return _ChatPalette(
-    page: const Color(0xFFEDE7DE),
-    appBar: cs.surface,
-    onAppBar: cs.onSurface,
-    inputBar: const Color(0xFFEDE7DE),
-    input: Colors.white,
-    incoming: Colors.white,
-    outgoing: const Color(0xFFD9FFD2),
-    incomingTime: const Color(0xFF667781),
-    outgoingTime: const Color(0xFF667781),
-    dateChip: const Color(0xF7FFFFFF),
-    dateChipText: const Color(0xFF667781),
-    accent: const Color(0xFF00A884),
-    readTick: const Color(0xFF34B7F1),
-  );
-}
 
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({
@@ -125,25 +57,22 @@ class ConversationScreen extends StatefulWidget {
 
 class _ConversationScreenState extends State<ConversationScreen>
     with SecureScreenStateMixin {
-  static const _pageSize = 50;
-
   final _controller = TextEditingController();
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
-  final _receiptMarked = <String>{};
   final _messageKeys = <String, GlobalKey>{};
+  late final ConversationViewModel _model;
 
-  List<RemoteDecryptedMessage> _messages = [];
-  bool _loaded = false;
-  bool _loadingMore = false;
-  bool _hasMore = false;
+  List<RemoteDecryptedMessage> get _messages => _model.messages;
+  bool get _loaded => _model.loaded;
+  bool get _loadingMore => _model.loadingMore;
+  bool get _hasMore => _model.hasMore;
+  String? get _errorMessage => _model.errorMessage;
   bool _searching = false;
   bool _typingActive = false;
   bool _attachmentBusy = false;
-  String? _errorMessage;
   String? _attachmentStatus;
   String? _highlightedMessageId;
-  StreamSubscription<RemoteSyncChange>? _changeSub;
 
   // Selection / reply state
   bool _selectionMode = false;
@@ -155,8 +84,15 @@ class _ConversationScreenState extends State<ConversationScreen>
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _changeSub = widget.messagingService.changes.listen(_onRemoteChange);
-    _loadMessages();
+    _model = ConversationViewModel(
+      conversationId: widget.conversationId,
+      messaging: widget.messagingService,
+    )..addListener(_onModelChanged);
+    unawaited(_model.load());
+  }
+
+  void _onModelChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onScroll() {
@@ -165,91 +101,14 @@ class _ConversationScreenState extends State<ConversationScreen>
     if (show != _showScrollToBottom) setState(() => _showScrollToBottom = show);
   }
 
-  void _onRemoteChange(RemoteSyncChange change) {
-    // Contact updates can change the display name shown in the app bar.
-    if (change.affects(RemoteSyncChangeArea.contacts)) {
-      if (mounted) setState(() {});
-      return;
-    }
-    if (!change.affectsConversation(widget.conversationId)) return;
-    if (change.affects(RemoteSyncChangeArea.messages)) {
-      unawaited(_refreshVisibleMessages());
-      return;
-    }
-    if (change.affects(RemoteSyncChangeArea.conversations)) {
-      // A conversations-area-only change (title/pin/mute, or this screen's
-      // own markConversationRead call at the end of _loadMessages) never
-      // alters message content, so a cheap rebuild is enough - it must not
-      // also re-fetch and re-decrypt messages. That used to happen
-      // unconditionally here, and _loadMessages() itself calls
-      // markConversationRead() at the end of every load, which re-emits
-      // this exact conversations-area change: reload -> markConversationRead
-      // -> emit -> reload -> ... an unbounded self-triggering loop with no
-      // base case, fast enough on an empty/new conversation to peg the CPU
-      // and produce an ANR.
-      if (mounted) setState(() {});
-    }
-  }
-
-  Future<void> _loadMessages({int? limit}) async {
-    try {
-      final effectiveLimit = limit ?? _pageSize;
-      final messages = _searching && _searchController.text.trim().isNotEmpty
-          ? await widget.messagingService.searchDecryptedHistory(
-              conversationId: widget.conversationId,
-              query: _searchController.text.trim(),
-            )
-          : await widget.messagingService.messageHistory(
-              widget.conversationId,
-              limit: effectiveLimit,
-            );
-      if (mounted) {
-        setState(() {
-          _messages = messages;
-          _loaded = true;
-          _hasMore = !_searching && messages.length == _pageSize;
-          _errorMessage = null;
-        });
-      }
-      _markVisibleReceipts(messages);
-      widget.messagingService.markConversationRead(widget.conversationId);
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _loaded = true;
-          _errorMessage = 'Could not load messages. Tap to retry.';
-        });
-      }
-    }
-  }
+  Future<void> _loadMessages({int? limit}) =>
+      _model.load(query: _searching ? _searchController.text : '');
 
   Future<void> _refreshVisibleMessages() async {
-    final visibleLimit = _messages.length > _pageSize
-        ? _messages.length
-        : _pageSize;
-    await _loadMessages(limit: visibleLimit);
+    await _loadMessages();
   }
 
-  Future<void> _loadMore() async {
-    if (_loadingMore || _searching) return;
-    setState(() => _loadingMore = true);
-    try {
-      final nextPage = await widget.messagingService.messageHistory(
-        widget.conversationId,
-        limit: _pageSize,
-        offset: _messages.length,
-      );
-      if (mounted) {
-        setState(() {
-          _messages = [..._messages, ...nextPage];
-          _hasMore = nextPage.length == _pageSize;
-        });
-      }
-      _markVisibleReceipts(nextPage);
-    } finally {
-      if (mounted) setState(() => _loadingMore = false);
-    }
-  }
+  Future<void> _loadMore() => _model.loadMore();
 
   Future<void> _send() async {
     final text = _controller.text.trim();
@@ -267,45 +126,15 @@ class _ConversationScreenState extends State<ConversationScreen>
           );
     setState(() => _replyTo = null);
 
-    final tempId = 'pending_${DateTime.now().microsecondsSinceEpoch}';
-    final accountId = widget.messagingService.currentAccountId ?? '';
-    final optimistic = RemoteDecryptedMessage(
-      messageId: tempId,
-      conversationId: widget.conversationId,
-      senderAccountId: accountId,
-      senderDeviceId: '',
-      text: text,
-      status: 'PENDING',
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-      replyTo: replyReference,
-    );
-    setState(() => _messages = [optimistic, ..._messages]);
-
-    final deviceIds = widget.messagingService.recipientDeviceIdsForConversation(
-      widget.conversationId,
-    );
-    widget.messagingService
-        .sendText(
-          conversationId: widget.conversationId,
-          plaintext: text,
-          recipientDeviceIds: deviceIds,
-          replyTo: replyReference,
-        )
-        .catchError((Object e, StackTrace _) {
-          if (mounted) {
-            setState(
-              () => _messages = _messages
-                  .where((m) => m.messageId != tempId)
-                  .toList(),
-            );
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Could not send message. Try again.'),
-              ),
-            );
-          }
-          return '';
-        });
+    try {
+      await _model.sendText(text, replyTo: replyReference);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not send message. Try again.')),
+        );
+      }
+    }
   }
 
   static String _snippet(String text) =>
@@ -315,7 +144,9 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   void dispose() {
-    _changeSub?.cancel();
+    _model
+      ..removeListener(_onModelChanged)
+      ..dispose();
     unawaited(_publishTyping(false));
     _scrollController.dispose();
     _controller.dispose();
@@ -327,9 +158,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final displayName =
-        widget.messagingService.peerDisplayName(widget.conversationId) ??
-        widget.conversationId;
+    final displayName = _model.peerDisplayName ?? widget.conversationId;
     final initials = displayName.isEmpty
         ? '?'
         : displayName
@@ -342,7 +171,7 @@ class _ConversationScreenState extends State<ConversationScreen>
         if (!didPop) _exitSelectionMode();
       },
       child: Scaffold(
-        backgroundColor: _chatPalette(theme).page,
+        backgroundColor: conversationPalette(theme).page,
         appBar: _selectionMode
             ? _buildSelectionAppBar(cs)
             : _buildNormalAppBar(cs, displayName, initials),
@@ -359,7 +188,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                       right: 18,
                       bottom: 16,
                       child: Material(
-                        color: _chatPalette(theme).input,
+                        color: conversationPalette(theme).input,
                         elevation: 3,
                         shape: const CircleBorder(),
                         child: InkWell(

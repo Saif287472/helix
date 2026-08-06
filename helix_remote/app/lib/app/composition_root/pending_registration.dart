@@ -62,9 +62,9 @@ class _PendingRegistration {
     final deviceAgreementPubKey = await deviceAgreementKeyPair
         .extractPublicKey();
 
-    final accountId = _hexBytes(identityPubKey.bytes.sublist(0, 8));
+    final accountId = _bytesToHex(identityPubKey.bytes.sublist(0, 8));
     final deviceId =
-        'dev_${_hexBytes(deviceSigningPubKey.bytes.sublist(0, 4))}';
+        'dev_${_bytesToHex(deviceSigningPubKey.bytes.sublist(0, 4))}';
     final deviceName = 'Dev ${deviceId.substring(0, 8)}';
 
     final accountIdentityPublicKey = _base64Url(identityPubKey.bytes);

@@ -7,12 +7,10 @@ extension _ConversationBody on _ConversationScreenState {
 
   Widget _buildReplyPreview(ColorScheme cs) {
     final reply = _replyTo!;
-    final isMine =
-        reply.senderAccountId == widget.messagingService.currentAccountId;
+    final isMine = reply.senderAccountId == _model.currentAccountId;
     final senderLabel = isMine
         ? 'You'
-        : (widget.messagingService.peerDisplayName(widget.conversationId) ??
-              reply.senderAccountId);
+        : (_model.peerDisplayName ?? reply.senderAccountId);
 
     return Container(
       color: cs.surfaceContainerHigh,
@@ -62,7 +60,7 @@ extension _ConversationBody on _ConversationScreenState {
 
   Widget _buildSearchField() {
     final theme = Theme.of(context);
-    final palette = _chatPalette(theme);
+    final palette = conversationPalette(theme);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: TextField(
@@ -204,13 +202,13 @@ extension _ConversationBody on _ConversationScreenState {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: _chatPalette(Theme.of(context)).dateChip,
+              color: conversationPalette(Theme.of(context)).dateChip,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Text(
               _searching ? 'No matching messages' : 'No messages yet',
               style: TextStyle(
-                color: _chatPalette(Theme.of(context)).dateChipText,
+                color: conversationPalette(Theme.of(context)).dateChipText,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -218,7 +216,7 @@ extension _ConversationBody on _ConversationScreenState {
         ),
       );
     }
-    final currentAccountId = widget.messagingService.currentAccountId;
+    final currentAccountId = _model.currentAccountId;
     // In a reverse list, the last index renders at the visual top.
     // We add one extra slot there for the "load earlier" button when applicable.
     final hasHeader = _hasMore && !_searching;
@@ -239,7 +237,7 @@ extension _ConversationBody on _ConversationScreenState {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (showDate) _DateChip(timestamp: msg.timestamp),
-              _MessageTile(
+              ConversationMessageTile(
                 key: _keyForMessage(msg.messageId),
                 message: msg,
                 currentAccountId: currentAccountId,
@@ -302,7 +300,7 @@ extension _ConversationBody on _ConversationScreenState {
   Widget _buildInput() {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final palette = _chatPalette(theme);
+    final palette = conversationPalette(theme);
 
     return SafeArea(
       top: false,
@@ -423,7 +421,7 @@ class _ChatWallpaper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = _chatPalette(Theme.of(context));
+    final palette = conversationPalette(Theme.of(context));
     return ColoredBox(
       color: palette.page,
       child: CustomPaint(
@@ -480,7 +478,7 @@ class _DateChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = _chatPalette(Theme.of(context));
+    final palette = conversationPalette(Theme.of(context));
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Center(

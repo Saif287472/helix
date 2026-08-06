@@ -59,13 +59,13 @@ extension _ConversationMessageActions on _ConversationScreenState {
         .toList();
     _exitSelectionMode();
     for (final msg in toDelete) {
-      widget.messagingService.deleteForSelf(msg.messageId);
+      _model.deleteForSelf(msg.messageId);
     }
     await _loadMessages();
   }
 
   Future<void> _deleteEveryoneSelected() async {
-    final myId = widget.messagingService.currentAccountId;
+    final myId = _model.currentAccountId;
     final toDelete = _messages
         .where(
           (m) =>
@@ -74,16 +74,13 @@ extension _ConversationMessageActions on _ConversationScreenState {
         .toList();
     _exitSelectionMode();
     for (final msg in toDelete) {
-      widget.messagingService.deleteForEveryone(
-        messageId: msg.messageId,
-        conversationId: msg.conversationId,
-      );
+      _model.deleteForEveryone(msg);
     }
     await _loadMessages();
   }
 
   bool get _allSelectedAreMine {
-    final myId = widget.messagingService.currentAccountId;
+    final myId = _model.currentAccountId;
     return _messages
         .where((m) => _selectedIds.contains(m.messageId))
         .every((m) => m.senderAccountId == myId);
@@ -94,8 +91,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
   // ---------------------------------------------------------------------------
 
   void _showMessageOverlay(RemoteDecryptedMessage message, Offset globalPos) {
-    final isMine =
-        message.senderAccountId == widget.messagingService.currentAccountId;
+    final isMine = message.senderAccountId == _model.currentAccountId;
     showDialog<void>(
       context: context,
       barrierColor: Colors.black54,
@@ -272,32 +268,8 @@ extension _ConversationMessageActions on _ConversationScreenState {
     if (_typingActive == isTyping) return;
     _typingActive = isTyping;
     try {
-      await widget.messagingService.publishTyping(
-        conversationId: widget.conversationId,
-        isTyping: isTyping,
-      );
+      await _model.publishTyping(isTyping);
     } catch (_) {}
-  }
-
-  void _markVisibleReceipts(List<RemoteDecryptedMessage> messages) {
-    final currentAccountId = widget.messagingService.currentAccountId;
-    if (currentAccountId == null) return;
-    for (final message in messages) {
-      if (message.senderAccountId == currentAccountId) continue;
-      if (!_receiptMarked.add(message.messageId)) continue;
-      unawaited(
-        widget.messagingService.markDelivered(
-          messageId: message.messageId,
-          conversationId: message.conversationId,
-        ),
-      );
-      unawaited(
-        widget.messagingService.markRead(
-          messageId: message.messageId,
-          conversationId: message.conversationId,
-        ),
-      );
-    }
   }
 
   Future<void> _editMessage(RemoteDecryptedMessage message) async {
@@ -326,11 +298,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
       ),
     );
     if (updated == null || updated.isEmpty || updated == message.text) return;
-    await widget.messagingService.editMessage(
-      messageId: message.messageId,
-      conversationId: message.conversationId,
-      plaintext: updated,
-    );
+    await _model.editMessage(message, updated);
     await _loadMessages();
   }
 
@@ -338,10 +306,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
     RemoteDecryptedMessage message,
     String emoji,
   ) async {
-    widget.messagingService.addReaction(
-      messageId: message.messageId,
-      reaction: emoji,
-    );
+    _model.addReaction(message, emoji);
     await _loadMessages();
   }
 
@@ -349,7 +314,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
       _addReaction(message, _kReactionEmojis.first);
 
   void _showReactionDetails(RemoteDecryptedMessage message) {
-    final details = widget.messagingService.reactionDetails(message.messageId);
+    final details = _model.reactionDetails(message.messageId);
     showModalBottomSheet<void>(
       context: context,
       builder: (context) {
@@ -380,26 +345,18 @@ extension _ConversationMessageActions on _ConversationScreenState {
   }
 
   Future<void> _deleteForSelf(RemoteDecryptedMessage message) async {
-    widget.messagingService.deleteForSelf(message.messageId);
+    _model.deleteForSelf(message.messageId);
     await _loadMessages();
   }
 
   Future<void> _deleteForEveryone(RemoteDecryptedMessage message) async {
-    widget.messagingService.deleteForEveryone(
-      messageId: message.messageId,
-      conversationId: message.conversationId,
-    );
+    _model.deleteForEveryone(message);
     await _loadMessages();
   }
 
   void _blockPeer() {
-    final current = widget.messagingService.currentAccountId;
-    final peer = widget.messagingService
-        .conversationMemberIds(widget.conversationId)
-        .where((id) => id != current)
-        .firstOrNull;
-    if (peer == null) return;
-    widget.messagingService.blockContact(peer);
+    if (_model.conversationMemberIds.length < 2) return;
+    _model.blockPeer();
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Contact blocked')));

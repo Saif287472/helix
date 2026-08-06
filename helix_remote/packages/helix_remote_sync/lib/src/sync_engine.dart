@@ -17,10 +17,20 @@ enum RemoteSyncChangeArea {
 }
 
 class RemoteSyncChange {
-  const RemoteSyncChange({required this.areas, this.conversationId});
+  const RemoteSyncChange({
+    required this.areas,
+    this.conversationId,
+    this.messageId,
+  });
 
   final Set<RemoteSyncChangeArea> areas;
   final String? conversationId;
+
+  /// The affected message when a change is scoped to one message.
+  ///
+  /// Consumers can use this to update a rendered message in place rather
+  /// than re-reading and decrypting the whole conversation window.
+  final String? messageId;
 
   bool affects(RemoteSyncChangeArea area) => areas.contains(area);
 
@@ -429,6 +439,7 @@ class RemoteSyncEngine {
               RemoteSyncChangeArea.outbox,
             },
             conversationId: convId,
+            messageId: messageId,
           ),
         );
       } else {
@@ -477,6 +488,7 @@ class RemoteSyncEngine {
             RemoteSyncChangeArea.conversations,
           },
           conversationId: env.payload['conversation_id'] as String?,
+          messageId: env.payload['message_id'] as String?,
         );
       case 'conversation_created':
       case 'membership_changed':

@@ -41,17 +41,13 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
         fileHash: prepared['file_hash'] as String,
         mimeType: _inferMimeType(selected.path),
       );
-      final recipientDeviceIds = widget.messagingService
-          .recipientDeviceIdsForConversation(widget.conversationId);
       if (!mounted) return;
       _update(() => _attachmentStatus = 'Queueing attachment message');
-      final messageId = await widget.messagingService.sendRichMedia(
-        conversationId: widget.conversationId,
+      final messageId = await _model.sendRichMedia(
         kind: options.kind,
         manifest: manifest,
         filename: prepared['filename'] as String,
         keyDeliverySecret: prepared['key_delivery_secret'] as String,
-        recipientDeviceIds: recipientDeviceIds,
         caption: options.caption,
         viewOnce: options.viewOnce,
       );
@@ -225,10 +221,7 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
     final attachmentService = widget.attachmentService;
     final path = attachment.localPath;
     if (attachmentService == null || path == null || _attachmentBusy) return;
-    if (!widget.messagingService.canExportAttachment(
-      conversationId: widget.conversationId,
-      attachment: attachment,
-    )) {
+    if (!_model.canExportAttachment(attachment)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This chat blocks external export')),
       );

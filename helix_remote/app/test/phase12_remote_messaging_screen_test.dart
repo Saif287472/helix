@@ -299,6 +299,36 @@ class _ThrowingConversationListService extends RemoteMessagingService {
       throw StateError('simulated DB failure');
 }
 
+class _CountingMessagingService extends RemoteMessagingService {
+  _CountingMessagingService({
+    required super.db,
+    required super.syncEngine,
+    required super.gateway,
+    required super.protector,
+    required super.restClient,
+    required super.clock,
+  });
+
+  int historyReads = 0;
+  int singleMessageReads = 0;
+
+  @override
+  Future<List<RemoteDecryptedMessage>> messageHistory(
+    String conversationId, {
+    int limit = 50,
+    int offset = 0,
+  }) {
+    historyReads++;
+    return super.messageHistory(conversationId, limit: limit, offset: offset);
+  }
+
+  @override
+  Future<RemoteDecryptedMessage?> messageById(String messageId) {
+    singleMessageReads++;
+    return super.messageById(messageId);
+  }
+}
+
 RemoteDevelopmentConfig _devConfig(String dir) => RemoteDevelopmentConfig(
   profile: RemoteRuntimeProfile.localWindows,
   restBaseUri: Uri.parse('http://127.0.0.1:8080'),
@@ -336,7 +366,7 @@ void main() {
 
   late HelixRemoteDatabase db;
   late _FakeGateway gateway;
-  late RemoteMessagingService service;
+  late _CountingMessagingService service;
   late _FakeProtector protector;
   var tick = 0;
 
@@ -357,7 +387,7 @@ void main() {
     db.initialize();
     gateway = _FakeGateway();
     protector = _FakeProtector();
-    service = RemoteMessagingService(
+    service = _CountingMessagingService(
       db: db,
       syncEngine: RemoteSyncEngine(db),
       gateway: gateway,
@@ -491,6 +521,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('live arrival'), findsNothing);
+    final historyReadsBeforeInbound = service.historyReads;
 
     final applied = service.syncEngine.handleIncomingEnvelope(
       RemoteRealtimeEnvelope(
@@ -517,6 +548,8 @@ void main() {
     await tester.runAsync(() async {});
     await tester.pumpAndSettle();
     expect(find.text('live arrival'), findsOneWidget);
+    expect(service.historyReads, historyReadsBeforeInbound);
+    expect(service.singleMessageReads, equals(1));
   });
 
   testWidgets('P12 conversation screen sends and mutates through service', (

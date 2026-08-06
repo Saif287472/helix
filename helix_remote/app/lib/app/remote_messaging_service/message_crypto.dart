@@ -20,7 +20,7 @@ class _BundleCacheEntry {
         'identity_key': device['identity_key'],
         'device_key': device['device_key'],
         'signed_prekey': device['signed_prekey'],
-        // one_time_prekey deliberately omitted — must not be reused
+        // one_time_prekey deliberately omitted â€” must not be reused
       };
     }
     return _BundleCacheEntry._(
@@ -99,7 +99,7 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
 
     final inflight = _bundleFetchInFlight[accountId];
     if (inflight != null) {
-      // Another call is already fetching — wait for it, then return the cached
+      // Another call is already fetching â€” wait for it, then return the cached
       // (no-OPK) version so only the initiating caller consumes the OPK.
       await inflight;
       final entry = _bundleCache[accountId];
@@ -158,7 +158,7 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
     final bundleFutures = otherMembers.map((m) => _fetchOrCacheBundle(m));
     final bundleResults = await Future.wait(bundleFutures, eagerError: false);
 
-    // Build device_id → bundle and device_id → accountId maps; persist
+    // Build device_id â†’ bundle and device_id â†’ accountId maps; persist
     // discovered peer devices so future sends do not require pre-seeded metadata.
     final deviceBundleMap = <String, Map<String, dynamic>>{};
     final deviceToAccount = <String, String>{};
@@ -316,7 +316,7 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
 
         final masterKeyBytes = await masterSecret.extractBytes();
         if (masterKeyBytes.isEmpty) {
-          // X3DH produced an unusable shared secret — do not persist this
+          // X3DH produced an unusable shared secret â€” do not persist this
           // session so future sends retry full X3DH with a fresh bundle.
           throw const SecureSessionUnavailableException(
             'X3DH derived empty shared secret',
@@ -424,11 +424,11 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
       // Delete it so the next sendText triggers a fresh X3DH exchange.
       db.deleteCryptoSession(sessionId);
       throw SecureSessionUnavailableException(
-        'corrupt session (empty root key) for $recipientDeviceId — session cleared',
+        'corrupt session (empty root key) for $recipientDeviceId â€” session cleared',
       );
     }
 
-    // Synchronous counter increment — no await between read and write.
+    // Synchronous counter increment â€” no await between read and write.
     final now = DateTime.now().millisecondsSinceEpoch;
     db.upsertCryptoSession(
       sessionId: sessionId,
@@ -523,253 +523,5 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
   // Decodes base64url strings that may be missing `=` padding.
   Uint8List _b64d(String s) => base64Url.decode(base64Url.normalize(s));
 
-  /// Decrypts a message ciphertext, routing to the correct handler based on
-  /// the envelope version field:
-  ///   v=1  X3DH packed envelope (initial message from a peer device)
-  ///   v=2  session-reuse envelope (subsequent messages, X3DH skipped)
-  ///   (none) local AES-GCM ciphertext (own-device history)
-  @override
-  Future<String> _decryptMessage({
-    required String conversationId,
-    required String messageId,
-    required String ciphertext,
-  }) async {
-    if (_prekeyResolver != null && _devicePrivateKey != null) {
-      Map<String, dynamic>? envelope;
-      try {
-        final jsonBytes = _b64d(ciphertext);
-        envelope = jsonDecode(utf8.decode(jsonBytes)) as Map<String, dynamic>;
-      } catch (_) {
-        // Not a packed envelope JSON — fall through to local protector.
-      }
-      if (envelope != null) {
-        final version = envelope['v'];
-        if (version == 1 &&
-            envelope.containsKey('ct') &&
-            envelope.containsKey('h')) {
-          return _decryptX3dhEnvelope(envelope);
-        }
-        if (version == _kSessionMsgVersion &&
-            envelope.containsKey('ct') &&
-            envelope.containsKey('sid')) {
-          return _decryptSessionEnvelope(envelope);
-        }
-      }
-    }
-    return protector.decryptText(
-      conversationId: conversationId,
-      messageId: messageId,
-      ciphertext: ciphertext,
-    );
-  }
 
-  Future<String> _decryptX3dhEnvelope(Map<String, dynamic> envelope) async {
-    final innerCiphertext = envelope['ct'] as String;
-    final header = envelope['h'] as Map<String, dynamic>;
-
-    final senderIdentityPubKey = crypto.SimplePublicKey(
-      _b64d(header['identity_key'] as String),
-      type: crypto.KeyPairType.x25519,
-    );
-    final senderEphemeralPubKey = crypto.SimplePublicKey(
-      _b64d(header['ephemeral_key'] as String),
-      type: crypto.KeyPairType.x25519,
-    );
-    final usedOpkId = header['used_one_time_prekey_id'] as int?;
-    final usedSpkId = header['used_signed_prekey_id'] as int?;
-    final aadMap = header['aad'] as Map<String, dynamic>;
-    final senderDeviceId = aadMap['sender_device_id'] as String? ?? '';
-    final recipientDeviceId = aadMap['recipient_device_id'] as String? ?? '';
-    final convId = aadMap['conversation_id'] as String? ?? '';
-
-    // Receiver's device agreement key (identity key for X3DH).
-    final bobIdentityKey = crypto.SimpleKeyPairData(
-      _devicePrivateKey!,
-      publicKey: crypto.SimplePublicKey(
-        _devicePublicKey!,
-        type: crypto.KeyPairType.x25519,
-      ),
-      type: crypto.KeyPairType.x25519,
-    );
-
-    // Look up the signed prekey that was used.
-    final deviceId = _requireDeviceId();
-    final spkRows = db.getLocalPrekeys(
-      deviceId: deviceId,
-      role: 'signed_prekey',
-    );
-    final spkRow = usedSpkId != null
-        ? (spkRows.firstWhere(
-            (r) => r['key_id'] == usedSpkId,
-            orElse: () => spkRows.isNotEmpty ? spkRows.last : {},
-          ))
-        : (spkRows.isNotEmpty ? spkRows.last : <String, dynamic>{});
-    if (spkRow.isEmpty) {
-      throw StateError('No signed prekey found for decryption');
-    }
-    final spkPrivBytes = await _prekeyResolver!(
-      spkRow['private_key_ref'] as String,
-    );
-    final bobSpk = crypto.SimpleKeyPairData(
-      spkPrivBytes,
-      publicKey: crypto.SimplePublicKey(
-        _b64d(spkRow['public_key'] as String),
-        type: crypto.KeyPairType.x25519,
-      ),
-      type: crypto.KeyPairType.x25519,
-    );
-
-    // Look up the one-time prekey if one was used.
-    crypto.SimpleKeyPair? bobOpk;
-    if (usedOpkId != null) {
-      final otkRows = db.getLocalPrekeys(
-        deviceId: deviceId,
-        role: 'one_time_prekey',
-      );
-      final otkRow = otkRows.where((r) => r['key_id'] == usedOpkId).firstOrNull;
-      if (otkRow != null) {
-        final otkPrivBytes = await _prekeyResolver(
-          otkRow['private_key_ref'] as String,
-        );
-        bobOpk = crypto.SimpleKeyPairData(
-          otkPrivBytes,
-          publicKey: crypto.SimplePublicKey(
-            _b64d(otkRow['public_key'] as String),
-            type: crypto.KeyPairType.x25519,
-          ),
-          type: crypto.KeyPairType.x25519,
-        );
-      }
-    }
-
-    // Derive the shared master secret using X3DH receive.
-    final x3dh = X3dhSessionInitiator();
-    final masterSecret = await x3dh.receiveSession(
-      bobIdentityKey: bobIdentityKey,
-      bobSignedPrekey: bobSpk,
-      bobOneTimePrekey: bobOpk,
-      aliceIdentityPublicKey: senderIdentityPubKey,
-      aliceEphemeralPublicKey: senderEphemeralPubKey,
-      protocolVersion: (aadMap['protocol_version'] ?? 1).toString(),
-      conversationId: convId,
-      senderDeviceId: senderDeviceId,
-      recipientDeviceId: recipientDeviceId,
-    );
-
-    final masterKeyBytes = await masterSecret.extractBytes();
-
-    // Decrypt inner ciphertext: nonce(12) || ciphertext || mac(16).
-    final rawCt = _b64d(innerCiphertext);
-    final nonce = rawCt.sublist(0, 12);
-    final mac = rawCt.sublist(rawCt.length - 16);
-    final body = rawCt.sublist(12, rawCt.length - 16);
-
-    final aad = _messageAad(
-      messageId: aadMap['message_id'] as String? ?? '',
-      conversationId: convId,
-      senderDeviceId: senderDeviceId,
-      recipientDeviceId: recipientDeviceId,
-      protocolVersion: aadMap['protocol_version'] as int? ?? 1,
-      contentType:
-          aadMap['content_type'] as String? ??
-          RemoteCapability.contentEnvelopeV1,
-      counter: aadMap['counter'] as int? ?? 0,
-    );
-
-    final decrypted = await crypto.AesGcm.with256bits().decrypt(
-      crypto.SecretBox(body, nonce: nonce, mac: crypto.Mac(mac)),
-      secretKey: crypto.SecretKey(masterKeyBytes),
-      aad: aad,
-    );
-
-    // Persist the receiver-side session so incoming v=2 messages from this
-    // sender can be decrypted without repeating X3DH.
-    final sessionId = _sessionKey(convId, senderDeviceId, recipientDeviceId);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    db.upsertCryptoSession(
-      sessionId: sessionId,
-      conversationId: convId,
-      peerDeviceId: senderDeviceId,
-      role: 'receiver',
-      protocolVersion: 1,
-      rootKey: base64Url.encode(masterKeyBytes),
-      sendingChainKey: '',
-      receivingChainKey: '',
-      sendCount: 0,
-      receiveCount: (aadMap['counter'] as int? ?? 0) + 1,
-      createdAt: now,
-      updatedAt: now,
-    );
-
-    return utf8.decode(decrypted);
-  }
-
-  // Decrypts a v=2 session-reuse envelope. Looks up the session by 'sid' and
-  // re-derives the per-message key from the root key using HKDF. X3DH does
-  // not repeat. Throws [StateError] if no matching session is found — this
-  // indicates the v=1 establishing message was never processed, which cannot
-  // happen under normal sequential delivery.
-  Future<String> _decryptSessionEnvelope(Map<String, dynamic> envelope) async {
-    final sessionId = envelope['sid'] as String;
-    final counter = envelope['mc'] as int;
-    final innerCiphertext = envelope['ct'] as String;
-    final aadMap = envelope['aad'] as Map<String, dynamic>? ?? {};
-
-    final session = db.getCryptoSession(sessionId);
-    if (session == null) {
-      throw StateError('No persisted session for id=$sessionId');
-    }
-
-    final rootKeyBytes = _b64d(session['root_key'] as String);
-    final messageId = aadMap['message_id'] as String? ?? '';
-    final msgKey = await _deriveMessageKey(
-      rootKeyBytes,
-      counter,
-      sessionId,
-      messageId,
-    );
-
-    final rawCt = _b64d(innerCiphertext);
-    final nonce = rawCt.sublist(0, 12);
-    final mac = rawCt.sublist(rawCt.length - 16);
-    final body = rawCt.sublist(12, rawCt.length - 16);
-
-    final aad = _messageAad(
-      messageId: messageId,
-      conversationId: aadMap['conversation_id'] as String? ?? '',
-      senderDeviceId: aadMap['sender_device_id'] as String? ?? '',
-      recipientDeviceId: aadMap['recipient_device_id'] as String? ?? '',
-      protocolVersion: _kSessionMsgVersion,
-      contentType:
-          aadMap['content_type'] as String? ??
-          RemoteCapability.contentEnvelopeV1,
-      counter: counter,
-    );
-
-    final decrypted = await crypto.AesGcm.with256bits().decrypt(
-      crypto.SecretBox(body, nonce: nonce, mac: crypto.Mac(mac)),
-      secretKey: msgKey,
-      aad: aad,
-    );
-
-    // Update receive counter so skipped-message detection can work later.
-    final now = DateTime.now().millisecondsSinceEpoch;
-    db.upsertCryptoSession(
-      sessionId: sessionId,
-      conversationId: aadMap['conversation_id'] as String? ?? '',
-      peerDeviceId: session['peer_device_id'] as String?,
-      peerAccountId: session['peer_account_id'] as String?,
-      role: session['role'] as String? ?? 'receiver',
-      protocolVersion: session['protocol_version'] as int? ?? 1,
-      rootKey: session['root_key'] as String,
-      sendingChainKey: session['sending_chain_key'] as String? ?? '',
-      receivingChainKey: session['receiving_chain_key'] as String? ?? '',
-      sendCount: session['send_count'] as int? ?? 0,
-      receiveCount: counter + 1,
-      createdAt: session['created_at'] as int? ?? now,
-      updatedAt: now,
-    );
-
-    return utf8.decode(decrypted);
-  }
 }

@@ -125,10 +125,6 @@ String _bytesToHex(List<int> bytes) {
   return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }
 
-String _hexBytes(List<int> bytes) {
-  return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-}
-
 String _base64Url(List<int> bytes) {
   return base64Url.encode(bytes).replaceAll('=', '');
 }

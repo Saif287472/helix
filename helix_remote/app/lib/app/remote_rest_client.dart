@@ -7,6 +7,8 @@ import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_endpoints.dart';
 import 'package:helix_remote_domain/models.dart';
 
+part 'remote_rest_client/support.dart';
+
 class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   HelixRemoteRestClientImpl({
     required Uri baseUri,
@@ -175,18 +177,6 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       failureKind: RemoteRestFailureKind.http,
     );
   }
-
-  /// Generous enough that every structured error body this server emits
-  /// survives intact and stays JSON-parseable; small enough that a stray HTML
-  /// error page cannot be carried around whole.
-  static const int _maxErrorBodyChars = 8192;
-
-  static String _capErrorBody(String body) => body.length <= _maxErrorBodyChars
-      ? body
-      : '${body.substring(0, _maxErrorBodyChars)}… [truncated]';
-
-  bool _isSafeMethod(String method) =>
-      method == 'GET' || method == 'HEAD' || method == 'OPTIONS';
 
   bool _isRetryableStatus(int? statusCode) =>
       statusCode == 408 ||
@@ -701,24 +691,4 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   Future<void> close() async {
     _httpClient.close(force: true);
   }
-}
-
-enum RemoteRestFailureKind { http, serverDown, noInternet, timeout, unknown }
-
-class RemoteRestException extends HttpException {
-  const RemoteRestException({
-    required String message,
-    Uri? uri,
-    this.statusCode,
-    this.correlationId,
-    this.retryAfter,
-    this.failureKind = RemoteRestFailureKind.unknown,
-  }) : super(message, uri: uri);
-
-  final int? statusCode;
-  final String? correlationId;
-  final Duration? retryAfter;
-  final RemoteRestFailureKind failureKind;
-
-  bool get isTransportFailure => statusCode == null;
 }

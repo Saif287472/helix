@@ -54,6 +54,18 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
     );
   }
 
+  /// Resolves one message for presentation-layer delta updates.
+  ///
+  /// A conversation sync change normally identifies the affected message.
+  /// Decoding only that row prevents an inbound burst from repeatedly
+  /// decrypting every message currently visible in the conversation screen.
+  Future<RemoteDecryptedMessage?> messageById(String messageId) async {
+    final row = db.getMessageById(messageId);
+    if (row == null) return null;
+    final decoded = await _decodeRows([row]);
+    return decoded.isEmpty ? null : decoded.single;
+  }
+
   Future<List<RemoteDecryptedMessage>> searchDecryptedHistory({
     required String conversationId,
     required String query,
@@ -439,6 +451,7 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
       RemoteSyncChange(
         areas: const {RemoteSyncChangeArea.messages},
         conversationId: conversationId,
+        messageId: messageId,
       ),
     );
     return message;

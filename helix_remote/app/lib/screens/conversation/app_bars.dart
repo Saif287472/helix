@@ -7,7 +7,7 @@ extension _ConversationAppBars on _ConversationScreenState {
     String initials,
   ) {
     final theme = Theme.of(context);
-    final palette = _chatPalette(theme);
+    final palette = conversationPalette(theme);
     return AppBar(
       toolbarHeight: 64,
       elevation: 0,
@@ -251,7 +251,7 @@ extension _ConversationAppBars on _ConversationScreenState {
       case 'block':
         _blockPeer();
       case 'clear':
-        widget.messagingService.clearChat(widget.conversationId);
+        _model.clearChat();
         await _loadMessages();
       default:
         _showPlaceholder(switch (selected) {
@@ -290,10 +290,7 @@ extension _ConversationAppBars on _ConversationScreenState {
       ),
     );
     if (selected == null) return;
-    widget.messagingService.db.setConversationDisappearingPolicy(
-      widget.conversationId,
-      selected,
-    );
+    _model.setDisappearingPolicy(selected);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -305,7 +302,7 @@ extension _ConversationAppBars on _ConversationScreenState {
   AppBar _buildSelectionAppBar(ColorScheme cs) {
     final count = _selectedIds.length;
     final singleSelected = count == 1;
-    final palette = _chatPalette(Theme.of(context));
+    final palette = conversationPalette(Theme.of(context));
     return AppBar(
       toolbarHeight: 64,
       elevation: 0,
