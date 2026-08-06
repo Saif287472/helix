@@ -10,7 +10,9 @@ import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
 import 'package:helix_remote_backend/src/outbox_worker.dart';
 import 'package:helix_remote_backend/src/push_provider.dart';
+import 'package:helix_remote_backend/src/constant_time.dart';
 import 'package:helix_remote_backend/src/rate_limiter.dart';
+import 'package:helix_remote_backend/src/reserved_identifiers.dart';
 import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
@@ -47,7 +49,6 @@ class BackendServer {
   final String turnSecret;
   final String turnUrl;
   final SmsProvider smsProvider;
-  final Set<String> adminAccountIds;
   final Set<String> trustedProxyAddresses;
   final DateTime Function() now;
   final String? logFilePath;
@@ -78,7 +79,6 @@ class BackendServer {
     this.turnSecret = '',
     this.turnUrl = '',
     this.smsProvider = const NoopSmsProvider(),
-    this.adminAccountIds = const {'admin'},
     this.trustedProxyAddresses = const {'127.0.0.1', '::1'},
     required this.now,
     this.logFilePath,
@@ -103,7 +103,6 @@ class BackendServer {
     String turnSecret = '',
     String turnUrl = '',
     SmsProvider? smsProvider,
-    Set<String> adminAccountIds = const {'admin'},
     Set<String> trustedProxyAddresses = const {'127.0.0.1', '::1'},
     PushProvider? pushProvider,
     bool pushProviderAvailable = true,
@@ -148,7 +147,6 @@ class BackendServer {
       turnSecret: turnSecret,
       turnUrl: turnUrl,
       smsProvider: smsProvider ?? const NoopSmsProvider(),
-      adminAccountIds: adminAccountIds,
       trustedProxyAddresses: trustedProxyAddresses,
       now: now ?? DateTime.now,
       logFilePath: logFilePath ?? Platform.environment['HELIX_REMOTE_LOG_FILE'],
@@ -217,7 +215,6 @@ class BackendServer {
     );
     final contactsModule = ContactsModule(
       db,
-      adminAccountIds: adminAccountIds,
       notifyDevice: wsRelay.sendToDevice,
     );
     final backupsModule = BackupsModule(db);
@@ -251,10 +248,7 @@ class BackendServer {
       localDomain: federationDomain,
     );
     final groupCallsModule = GroupCallsModule(db, wsRelay);
-    final privacyComplianceModule = PrivacyComplianceModule(
-      db,
-      adminAccountIds: adminAccountIds,
-    );
+    final privacyComplianceModule = PrivacyComplianceModule(db);
     final adminPairingModule = AdminPairingModule(db: db, now: now);
     final operabilityModule = OperabilityModule(
       db: db,
@@ -263,7 +257,6 @@ class BackendServer {
       outboxWorker: outboxWorker,
       callsModule: callsModule,
       attachmentsModule: attachmentsModule,
-      adminAccountIds: adminAccountIds,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
       logFilePath: logFilePath,
@@ -440,13 +433,16 @@ class BackendServer {
   }
 
   bool _isValidAdminToken(String token) {
+    // Constant-time throughout: `==` on the raw override compared a bearer
+    // token character by character with an early return, which is a direct
+    // timing oracle on the operator credential.
     if (adminTokenOverride != null && adminTokenOverride!.isNotEmpty) {
-      return token == adminTokenOverride;
+      return constantTimeStringEqual(token, adminTokenOverride!);
     }
     final dbHash = db.getServerConfig('admin_token_hash');
     if (dbHash == null) return false;
     final inputHash = crypto_pkg.sha256.convert(utf8.encode(token)).toString();
-    return inputHash == dbHash;
+    return constantTimeStringEqual(inputHash, dbHash);
   }
 
   Middleware _authMiddleware() {
@@ -486,10 +482,12 @@ class BackendServer {
 
         final token = authHeader.substring(7);
 
-        // Check for Admin API token first
+        // Check for Admin API token first. This is the operator's break-glass
+        // credential, so it carries the admin capability directly rather than
+        // resolving one from an account row - there is no account behind it.
         if (_isValidAdminToken(token)) {
           final adminClaims = {
-            'account_id': 'admin',
+            'account_id': kAdminTokenAccountId,
             'device_id': 'admin_device',
             'is_admin': true,
           };
@@ -497,7 +495,11 @@ class BackendServer {
           return innerHandler(updatedRequest);
         }
 
-        final claims = jwt.verifyToken(token);
+        // Access tokens only. Accepting a refresh token here made the 1-hour
+        // access token meaningless and let a stolen 7-day refresh token skip
+        // /accounts/refresh entirely - which is the only path that detects
+        // reuse and revokes the device's sessions.
+        final claims = jwt.verifyToken(token, expect: ExpectedTokenType.access);
         if (claims == null) {
           return Response(
             403,
@@ -525,7 +527,17 @@ class BackendServer {
           );
         }
 
-        final updatedRequest = request.change(context: {'auth': claims});
+        // Admin is a stored capability on the account row, resolved here so
+        // every downstream handler reads one authoritative flag. It is
+        // deliberately *not* derived from the account id: treating the string
+        // 'admin' as the credential meant whoever registered that id first
+        // became the operator.
+        final authorizedClaims = Map<String, dynamic>.from(claims)
+          ..['is_admin'] = db.isAccountAdmin(accountId);
+
+        final updatedRequest = request.change(
+          context: {'auth': authorizedClaims},
+        );
         return innerHandler(updatedRequest);
       };
     };

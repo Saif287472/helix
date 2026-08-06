@@ -39,8 +39,13 @@ missing or wrong deletion confirmation.
 
 - `BackendDatabase` (`../database.dart`) - `exportAccountData`,
   `deleteAccountData`, `getAuditLogs`.
-- `adminAccountIds` - defaults to `{'admin'}`, matching the synthetic claim
-  `_authMiddleware` mints for the admin API token.
+- The `is_admin` claim injected by `_authMiddleware`. It comes from one of two
+  places: the static admin API token (which carries the capability directly,
+  since no account row backs it), or the account's stored `accounts.is_admin`
+  column. It is deliberately **not** derived from the account id — that check
+  used to be `adminAccountIds.contains(account_id)` over `{'admin'}`, and
+  because `account_id` is client-chosen at registration, whoever registered
+  that id first became the operator.
 
 ## Gotchas
 

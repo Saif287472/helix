@@ -1315,5 +1315,31 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 39;');
     }
+
+    if (version < 40) {
+      // Admin as a stored capability rather than a magic account id.
+      //
+      // The gate used to be `adminAccountIds.contains(account_id)` over the
+      // literal set {'admin'}, while `account_id` is chosen by the client at
+      // registration - so the operator console belonged to whoever registered
+      // the id 'admin' first. Nothing reserved it.
+      //
+      // Defaulting to 0 is the whole point: no existing account is silently
+      // promoted by this migration. Operators keep using the admin token
+      // (which carries the capability directly and needs no row), and a real
+      // account is granted admin only by an explicit UPDATE.
+      final accountColumns = _db
+          .select('PRAGMA table_info(accounts);')
+          .map((row) => row['name'] as String)
+          .toSet();
+      if (!accountColumns.contains('is_admin')) {
+        _db.execute(
+          'ALTER TABLE accounts ADD COLUMN is_admin INTEGER NOT NULL '
+          'DEFAULT 0;',
+        );
+      }
+
+      _db.execute('PRAGMA user_version = 40;');
+    }
   }
 }

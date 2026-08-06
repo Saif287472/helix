@@ -510,7 +510,7 @@ void main() {
       'account_id': 'acc1',
       'device_id': 'dev1',
     }, const Duration(hours: 1));
-    final claims = jwt.verifyToken(token)!;
+    final claims = jwt.verifyToken(token, expect: ExpectedTokenType.access)!;
     expect(claims['iss'], equals('helix.remote.backend'));
     expect(claims['aud'], equals('helix.remote.clients'));
     expect(claims['sub'], equals('acc1'));

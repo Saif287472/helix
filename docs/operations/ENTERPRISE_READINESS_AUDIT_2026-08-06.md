@@ -70,6 +70,16 @@ the coverage figure — the true product-wide number is higher than 58.41%.
   certainly the origin of the risk register's incorrect "not directly declared by Helix" claim. It
   *is* directly declared, at `app/pubspec.yaml:34`.
 
+### Post-Phase-1 baseline
+
+| Gate | Result |
+|---|---|
+| `dart format --set-exit-if-changed` | Clean (367 files) |
+| `flutter analyze` / `dart analyze backend tool` | Clean |
+| Backend | **425 passed** (411 + 14 new security regressions) |
+| App / admin / packages | 327 / 87 / 224 passed |
+| **Total** | **1,063 tests, all green** |
+
 ---
 
 ## 1. Executive Summary
@@ -135,23 +145,23 @@ Weighting: Security ×2, Architecture ×1.5, Testing ×1.5, all others ×1. → 
 
 | ID | Finding | Severity | Confidence |
 |---|---|---|---|
-| **CRIT-1** | Reserved admin account ID `"admin"` is claimable by any registering user → full operator console takeover | Critical | CONFIRMED |
-| **CRIT-2** | Refresh tokens are accepted as access tokens on every REST route and the WebSocket | High→Critical | CONFIRMED |
+| **CRIT-1** ✅ | Reserved admin account ID `"admin"` is claimable by any registering user → full operator console takeover | Critical | CONFIRMED · **fixed (Phase 1)** |
+| **CRIT-2** ✅ | Refresh tokens are accepted as access tokens on every REST route and the WebSocket | High→Critical | CONFIRMED · **fixed (Phase 1)** |
 | **HIGH-1** | Client diagnostic log is unredacted, persistent, and user-shared — contradicts `LOG_REDACTION.md` | High | CONFIRMED |
 | **HIGH-2** | No `FLAG_SECURE` anywhere: message content is screenshot-, recorder-, and recents-visible | High | CONFIRMED |
 | **HIGH-3** | `android:allowBackup` left at default `true` — app-private data extractable via ADB/cloud backup | High | CONFIRMED |
-| **HIGH-4** | `pubspec.lock` is not committed despite policy — builds are not reproducible | High | CONFIRMED |
+| **HIGH-4** ✅ | `pubspec.lock` is not committed despite policy — builds are not reproducible | High | CONFIRMED · **fixed (Phase 0)** |
 | **HIGH-5** | HTTP 403 is overloaded for both "expired token" and "not permitted", causing spurious refresh-token rotation on every authorization denial | High | CONFIRMED |
 | **MED-1** | Full loaded-window re-fetch + re-decrypt on every inbound message (O(n²) under burst) | Medium | CONFIRMED |
 | **MED-2** | Client has no state management, router, design system, localization, or responsive layout | Medium | CONFIRMED |
-| **MED-3** | Non-constant-time comparison of JWT signature and admin bearer token | Medium | CONFIRMED |
+| **MED-3** ✅ | Non-constant-time comparison of JWT signature and admin bearer token | Medium | CONFIRMED · **fixed (Phase 1)** |
 | **MED-4** | No crash reporting or analytics | Medium | CONFIRMED |
 | **MED-5** | Accessibility: 1 `Semantics` widget in ~30k LOC; text scale hard-capped at 1.3× | Medium | CONFIRMED |
 | **MED-6** | In-memory rate limiter — resets on restart, not shared across processes | Medium | CONFIRMED |
 | **MED-7** | `file_picker` pinned to a pre-release with a caret range that has already drifted | Medium | CONFIRMED |
 | **MED-8** | Client dependencies materially behind current — `flutter_local_notifications` 4 majors, `flutter_contacts` 1 major, `connectivity_plus` 1 major | Medium | CONFIRMED |
 | **MED-9** | Dependency risk register is factually wrong about `file_picker` | Medium | CONFIRMED |
-| **MED-10** | `remote_release_gate.ps1` is unrunnable — statement precedes `param()` | Medium | CONFIRMED |
+| **MED-10** ✅ | `remote_release_gate.ps1` is unrunnable — statement precedes `param()` | Medium | CONFIRMED · **fixed (Phase 0)**, along with two dev scripts carrying the same defect |
 | **MED-11** | 45 silently swallowed exceptions | Medium | CONFIRMED |
 | **MED-12** | CI has no coverage gate, no vulnerability scanning, and no integration tests | Medium | CONFIRMED |
 | **LOW-1** | No release obfuscation / R8 / resource shrinking | Low | CONFIRMED |
@@ -223,20 +233,34 @@ The issued JWT then carries `account_id: "admin"`, and `_isAdmin()` returns `tru
 plus the privacy-compliance and contacts admin paths. It is first-come-first-served and permanent —
 once `getAccount('admin')` is non-null, the legitimate operator can never claim it either.
 
-**Fix (layered — do all three).**
+**Fix (layered — do all three).** ✅ **Fixed in Phase 1.**
 1. **Reserve the namespace.** Reject `account_id` values in a reserved set (`admin`, `system`,
-   `root`, `helix`, …) at registration, and constrain the format — the honest client generates a
-   random ID (`app/lib/app/composition_root/registration.dart:101`), so requiring a UUIDv4 costs
-   nothing.
+   `root`, `helix`, …) at registration, and bound the format.
+   > **Correction to this audit.** An earlier draft said "requiring a UUIDv4 costs nothing". That
+   > was wrong. The client derives `account_id` as **16 lowercase hex characters** — the first 8
+   > bytes of the Ed25519 identity public key
+   > (`app/lib/app/composition_root/pending_registration.dart:65`) — not a UUID, and existing
+   > deployments also hold ids predating any rule. Enforcing UUIDv4 would have broken every
+   > client. Implemented instead: a reserved-name check plus loose character/length bounds that
+   > only reject what no honest client sends.
+   >
+   > A stronger control remains available and is **not** yet implemented: because the id *is*
+   > derivable from the identity public key the server already receives, registration could verify
+   > the derivation and make reserved ids unclaimable by construction. That is a test-suite and
+   > data migration (the backend suite registers accounts as `alice`, `bob`, …), so it is recorded
+   > here as follow-up rather than smuggled into a security fix.
 2. **Stop using a string as a capability.** Replace `adminAccountIds` with an explicit `is_admin`
-   column on the accounts table, or key admin off the already-existing `is_admin: true` claim that
-   `server_impl.dart:494` sets for the admin-token path — that claim is currently written and
-   **never read by anything** (see LOW-2).
-3. **Add a migration guard** that fails startup if an account row with a reserved ID exists, so an
-   already-compromised deployment is caught rather than silently trusted.
+   column on the accounts table (migration 40), resolved once in the auth middleware and read by
+   every gate. The parameter is gone from `BackendServer`, `OperabilityModule`, `ContactsModule`,
+   and `PrivacyComplianceModule`. Promotion is `setAccountAdmin`, an out-of-band database action
+   with no HTTP route, so a compromised account cannot promote itself.
+3. **Add a startup guard** that refuses to serve a database containing a reserved id, since such a
+   row can only predate the check and is the fingerprint of a claimed-admin compromise.
 
-**Regression test.** Assert that `POST /accounts/register` with `account_id: "admin"` returns 400,
-and that a JWT minted for a self-registered account cannot reach any `/ops/*` route.
+**Regression test.** `backend/test/phase1_privilege_escalation_test.dart` — 14 cases covering
+reserved-id rejection (including casing), ordinary ids still registering, `/ops/*` refusing a
+self-registered account across five routes, grant-then-revoke of the capability, and the startup
+guard.
 
 ---
 
@@ -264,13 +288,16 @@ and it checks it in the *opposite* direction.
   revoked token) is bypassed entirely. The single strongest detection control in the auth design is
   silently unreachable.
 
-**Fix.** In both middleware paths, reject when `claims['refresh'] == true` or
-`claims['token_type'] != 'access'`. Prefer asserting the positive (`== 'access'`) so tokens minted
-before `token_type` existed fail closed rather than open.
+**Fix.** ✅ **Fixed in Phase 1.** `verifyToken` now takes a **required** `expect:
+ExpectedTokenType` argument, so the expectation cannot be inherited by omission at a new call site.
+It asserts the positive (`token_type == 'access'`), so a token minted before the claim existed
+fails closed; it also cross-checks the legacy boolean `refresh` claim and rejects any token where
+the two disagree. All three production call sites now state their expectation:
+`server_impl.dart` and `websocket.dart` require `access`, `auth/refresh.dart` requires `refresh` —
+which closes the swap in both directions.
 
-**Hardening while you are in this file.** `verifyToken` treats `exp` as optional (`jwt.dart:76-81`)
-— a token without `exp` never expires. Unreachable today because `generateToken` always sets it,
-but make absence a rejection.
+**Hardening done alongside.** `exp` is now mandatory (`jwt.dart`) — absence is a rejection rather
+than an unexpiring token. Signature comparison is constant-time (MED-3).
 
 ---
 

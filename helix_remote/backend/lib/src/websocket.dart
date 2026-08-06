@@ -167,7 +167,9 @@ class WebSocketRelay implements MessageRelay {
       );
     }
 
-    final claims = jwt.verifyToken(token);
+    // Access tokens only. A refresh token used to be accepted here, which
+    // handed a 7-day credential the full realtime stream.
+    final claims = jwt.verifyToken(token, expect: ExpectedTokenType.access);
     if (claims == null) {
       return Response.forbidden(
         jsonEncode({'error': 'Invalid or expired auth token'}),

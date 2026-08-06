@@ -20,7 +20,6 @@ void main() {
       jwtSecret: 'phase18_test_secret',
       rateLimitMaxTokens: 1000,
       rateLimitRefillRate: 1000,
-      adminAccountIds: const {'admin'},
     );
     await server.start('127.0.0.1', 0);
     port = server.httpServer!.port;
@@ -150,10 +149,13 @@ void main() {
       port,
       server.db,
       ed25519,
-      accountId: 'admin',
+      accountId: 'ops1',
       username: 'admin_user',
       deviceId: 'admin_device',
     );
+    // Admin is a stored capability, not a magic account id - the id here is
+    // an ordinary one, and the grant is what opens the admin route below.
+    server.db.setAccountAdmin('ops1', isAdmin: true);
 
     final denied = await _getJson(
       client,
@@ -170,7 +172,7 @@ void main() {
     server.db.createReport(
       reportId: 'r_admin',
       reporterAccountId: 'alice',
-      subjectAccountId: 'admin',
+      subjectAccountId: 'ops1',
       category: 'spam',
       reasonCode: 'test',
       contextHash: 'sha256:abc',
@@ -188,7 +190,7 @@ void main() {
     final audit = await _getJson(
       client,
       port,
-      '/api/v1/privacy/admin/audit?account_id=admin',
+      '/api/v1/privacy/admin/audit?account_id=ops1',
       token: admin.accessToken,
     );
     expect(audit.statusCode, equals(200));

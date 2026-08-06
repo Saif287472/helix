@@ -259,8 +259,9 @@ void main() {
         _request(
           'POST',
           '/reports/action',
-          authAccount: 'admin',
+          authAccount: 'ops1',
           authDevice: 'admin_device',
+          isAdmin: true,
           body: {
             'action_id': 'sa_1',
             'report_id': 'r_good',
@@ -459,6 +460,9 @@ Request _request(
   required String authAccount,
   required String authDevice,
   Map<String, dynamic>? body,
+  // Mirrors what the auth middleware injects. Defaults to false so a test
+  // has to opt in to admin explicitly, the same way a real account does.
+  bool isAdmin = false,
 }) {
   return Request(
     method,
@@ -466,7 +470,11 @@ Request _request(
     body: body == null ? null : jsonEncode(body),
     headers: {'content-type': 'application/json'},
     context: {
-      'auth': {'account_id': authAccount, 'device_id': authDevice},
+      'auth': {
+        'account_id': authAccount,
+        'device_id': authDevice,
+        'is_admin': isAdmin,
+      },
       'client_ip': '127.0.0.1',
     },
   );
