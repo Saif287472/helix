@@ -38,6 +38,8 @@ class _ParsedCallSignal {
     this.candidate,
     this.sdpMid,
     this.mlineIndex,
+    this.callerDisplayName,
+    this.callerPhoneLast4,
   });
 
   final String callId;
@@ -49,6 +51,8 @@ class _ParsedCallSignal {
   final String? candidate;
   final String? sdpMid;
   final int? mlineIndex;
+  final String? callerDisplayName;
+  final String? callerPhoneLast4;
 
   /// The IP-privacy policy this frame's sender declared.
   ///
@@ -72,6 +76,8 @@ class _ParsedCallSignal {
     candidate: candidate,
     sdpMid: sdpMid,
     mlineIndex: mlineIndex,
+    callerDisplayName: callerDisplayName,
+    callerPhoneLast4: callerPhoneLast4,
   );
 
   Map<String, dynamic> toCanonicalPayload({
@@ -94,6 +100,8 @@ class _ParsedCallSignal {
       if (candidate != null) 'candidate': candidate,
       if (sdpMid != null) 'sdp_mid': sdpMid,
       if (mlineIndex != null) 'mline_index': mlineIndex,
+      if (callerDisplayName != null) 'caller_display_name': callerDisplayName,
+      if (callerPhoneLast4 != null) 'caller_phone_last4': callerPhoneLast4,
       // Carried across the hop so the far server enforces the same policy
       // this one just agreed. Without it a federated call would arrive with
       // no policy, resolve to relay-only there, and diverge from what the

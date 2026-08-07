@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:helix_remote/services/android_call_runtime_service.dart';
 import 'package:helix_remote/services/app_logger.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/services/push_token_source.dart';
@@ -40,10 +41,14 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       'call_id=$shortCallId',
     );
     if (type == 'incoming_call') {
+      final isVideo = _isVideoCall(message.data);
+      final fullScreen =
+          await AndroidCallRuntimeService.shouldUseFullScreenIncomingCall();
       await LocalNotificationService.showIncomingCall(
         callId: callId!,
-        callerDisplayName: 'Incoming call',
-        isVideo: false,
+        callerDisplayName: _callerLabel(message.data),
+        isVideo: isVideo,
+        fullScreenIntent: fullScreen,
       );
     } else {
       await LocalNotificationService.showMessage(
@@ -158,8 +163,9 @@ class FirebasePushTokenSource implements PushTokenSource {
       if (type == 'incoming_call' && callId != null && callId.isNotEmpty) {
         await LocalNotificationService.showIncomingCall(
           callId: callId,
-          callerDisplayName: 'Incoming call',
-          isVideo: false,
+          callerDisplayName: _callerLabel(message.data),
+          isVideo: _isVideoCall(message.data),
+          fullScreenIntent: false,
         );
       } else if (type == 'new_message') {
         await LocalNotificationService.showMessage(
@@ -196,6 +202,19 @@ class FirebasePushTokenSource implements PushTokenSource {
     await _refreshes.close();
     _initialized = false;
   }
+}
+
+bool _isVideoCall(Map<String, dynamic> data) =>
+    data['is_video'] == true || data['is_video']?.toString() == 'true';
+
+String _callerLabel(Map<String, dynamic> data) {
+  final displayName = data['caller_display_name']?.toString().trim();
+  if (displayName != null && displayName.isNotEmpty) return displayName;
+  final phoneLast4 = data['caller_phone_last4']?.toString().trim();
+  if (phoneLast4 != null && phoneLast4.isNotEmpty) {
+    return 'Phone ending $phoneLast4';
+  }
+  return 'Unknown caller';
 }
 
 String? _notificationType(Map<String, dynamic> data) {

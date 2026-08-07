@@ -153,16 +153,20 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
       _callService!.recoverCallState();
       _callStatusSub?.cancel();
       String? lastIncomingCallNotificationId;
+      String? foregroundCallId;
       _callStatusSub = _callService!.callStatusChanges.listen((status) {
         if (status != null &&
             status.state == RemoteCallState.ringing &&
             status.direction == kCallDirectionIncoming) {
           lastIncomingCallNotificationId = status.callId;
           unawaited(
-            LocalNotificationService.showIncomingCall(
-              callId: status.callId,
-              callerDisplayName: status.displayName,
-              isVideo: status.isVideo,
+            AndroidCallRuntimeService.shouldUseFullScreenIncomingCall().then(
+              (fullScreen) => LocalNotificationService.showIncomingCall(
+                callId: status.callId,
+                callerDisplayName: status.displayName,
+                isVideo: status.isVideo,
+                fullScreenIntent: fullScreen,
+              ),
             ),
           );
         } else if (status != null) {
@@ -177,6 +181,31 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
             lastIncomingCallNotificationId = null;
           }
         }
+        if (status != null &&
+            (status.state == RemoteCallState.connecting ||
+                status.state == RemoteCallState.active ||
+                status.state == RemoteCallState.reconnecting)) {
+          foregroundCallId = status.callId;
+          unawaited(
+            LocalNotificationService.showOngoingCall(
+              callId: status.callId,
+              callerDisplayName: status.displayName,
+              isVideo: status.isVideo,
+            ),
+          );
+          unawaited(
+            AndroidCallRuntimeService.startForegroundCall(
+              callId: status.callId,
+              callerDisplayName: status.displayName,
+              isVideo: status.isVideo,
+            ),
+          );
+        } else if (status == null ||
+            (foregroundCallId != null && status.callId == foregroundCallId)) {
+          foregroundCallId = null;
+          unawaited(LocalNotificationService.cancelOngoingCall());
+          unawaited(AndroidCallRuntimeService.stopForegroundCall());
+        }
         if (!_callStatusController.isClosed) _callStatusController.add(status);
       });
       LocalNotificationService.setCallActionHandler((action, callId) {
@@ -186,6 +215,8 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
           unawaited(_callService?.acceptIncomingCall());
         } else if (action == LocalNotificationCallAction.decline) {
           unawaited(_callService?.declineIncomingCall());
+        } else if (action == LocalNotificationCallAction.end) {
+          unawaited(_callService?.endActiveCall());
         }
       });
 

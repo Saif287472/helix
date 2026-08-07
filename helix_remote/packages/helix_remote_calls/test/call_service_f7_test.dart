@@ -98,11 +98,17 @@ class _StubEngine implements RemoteCallEngine {
 
 class _StubGateway implements RemoteCallSignalingGateway {
   @override
-  Future<void> sendCallSignal({
+  Future<RemoteCallSignalDeliveryReceipt> sendCallSignal({
     String? targetAccountId,
     String? targetDeviceId,
     required RemoteCallSignal signal,
-  }) async {}
+  }) async {
+    return const RemoteCallSignalDeliveryReceipt(
+      status: 'delivered',
+      delivered: true,
+      queued: false,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

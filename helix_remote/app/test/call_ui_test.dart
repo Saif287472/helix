@@ -94,7 +94,7 @@ void main() {
       home: home,
     );
 
-    testWidgets('ringing state shows peer ID, accept and decline', (
+    testWidgets('ringing state hides peer ID and shows accept and decline', (
       tester,
     ) async {
       const status = RemoteCallStatus(
@@ -119,7 +119,8 @@ void main() {
         ),
       );
 
-      expect(find.text('alice'), findsOneWidget);
+      expect(find.text('alice'), findsNothing);
+      expect(find.text('Unknown caller'), findsOneWidget);
       expect(find.text('Accept'), findsOneWidget);
       expect(find.text('Decline'), findsOneWidget);
 
@@ -153,7 +154,8 @@ void main() {
       );
 
       expect(find.text('Calling'), findsOneWidget);
-      expect(find.text('bob'), findsOneWidget);
+      expect(find.text('bob'), findsNothing);
+      expect(find.text('Unknown caller'), findsOneWidget);
       expect(find.text('End'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.call_end)); // End FAB

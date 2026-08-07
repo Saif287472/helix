@@ -44,7 +44,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onCallStatus(RemoteCallStatus? status) {
     if (!mounted) return;
-    if (status != null && !_callScreenShowing) {
+    final shouldShowCallScreen =
+        status != null &&
+        !(status.state == RemoteCallState.ringing &&
+            status.direction == kCallDirectionIncoming);
+    if (shouldShowCallScreen && !_callScreenShowing) {
       _callScreenShowing = true;
       AppLogger.instance.info(
         'CALL_NAV',

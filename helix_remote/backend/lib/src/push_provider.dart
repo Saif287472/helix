@@ -79,9 +79,13 @@ final class FcmPushProvider implements PushProvider {
     final stringData = {for (final e in data.entries) e.key: '${e.value}'};
     final notificationType = data['notification_type']?.toString();
     final isCall = notificationType == 'incoming_call';
-    final notificationTitle = isCall ? 'Incoming call' : 'Helix Remote';
+    final callIsVideo = data['is_video']?.toString() == 'true';
+    final callerLabel = _callerLabel(data);
+    final notificationTitle = isCall
+        ? (callIsVideo ? 'Incoming video call' : 'Incoming audio call')
+        : 'Helix Remote';
     final notificationBody = switch (notificationType) {
-      'incoming_call' => 'You have an incoming call',
+      'incoming_call' => callerLabel,
       'new_message' => 'You have a new message',
       'group_invite' => 'You have a new group invitation',
       _ => 'You have a new notification',
@@ -126,6 +130,16 @@ final class FcmPushProvider implements PushProvider {
     } finally {
       http.close(force: true);
     }
+  }
+
+  String _callerLabel(Map<String, dynamic> data) {
+    final displayName = data['caller_display_name']?.toString().trim();
+    if (displayName != null && displayName.isNotEmpty) return displayName;
+    final phoneLast4 = data['caller_phone_last4']?.toString().trim();
+    if (phoneLast4 != null && phoneLast4.isNotEmpty) {
+      return 'Phone ending $phoneLast4';
+    }
+    return 'Unknown caller';
   }
 }
 

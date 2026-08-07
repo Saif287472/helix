@@ -124,7 +124,7 @@ class StubSignalingGateway implements RemoteCallSignalingGateway {
   bool failSends = false;
 
   @override
-  Future<void> sendCallSignal({
+  Future<RemoteCallSignalDeliveryReceipt> sendCallSignal({
     String? targetAccountId,
     String? targetDeviceId,
     required RemoteCallSignal signal,
@@ -136,6 +136,11 @@ class StubSignalingGateway implements RemoteCallSignalingGateway {
       'device': targetDeviceId,
       'signal': signal,
     });
+    return const RemoteCallSignalDeliveryReceipt(
+      status: 'delivered',
+      delivered: true,
+      queued: false,
+    );
   }
 
   RemoteCallSignal? lastSignalTo(String peer) {
@@ -951,7 +956,7 @@ void main() {
   );
 
   test(
-    'P12-A04: callStatusChanges emits preparing and dialing on startOutgoingCall',
+    'P12-A04: callStatusChanges emits preparing, dialing and ringing on delivered startOutgoingCall',
     () async {
       final svc = makeService();
       final emitted = <RemoteCallStatus?>[];
@@ -962,6 +967,7 @@ void main() {
       expect(emitted.map((status) => status?.state), [
         RemoteCallState.preparing,
         RemoteCallState.dialing,
+        RemoteCallState.ringing,
       ]);
       expect(emitted.first?.isVideo, isTrue);
 
@@ -1000,7 +1006,7 @@ void main() {
     final svc = makeService();
 
     await svc.startOutgoingCall(peerId: 'peer_a', isVideo: false);
-    expect(svc.activeCall?.state, RemoteCallState.dialing);
+    expect(svc.activeCall?.state, RemoteCallState.ringing);
 
     final sentBefore = gateway.sent.length;
 
@@ -1015,8 +1021,8 @@ void main() {
       ),
     );
 
-    // Call remains in dialing state; no spurious signals sent.
-    expect(svc.activeCall?.state, RemoteCallState.dialing);
+    // Call remains in ringing state; no spurious signals sent.
+    expect(svc.activeCall?.state, RemoteCallState.ringing);
     expect(gateway.sent.length, equals(sentBefore));
 
     await svc.dispose();

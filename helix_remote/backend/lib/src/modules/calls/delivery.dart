@@ -183,6 +183,12 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
 
   @override
   void _enqueueCallWake(String targetDeviceId, String callId) {
+    final call = db.getPendingCall(callId);
+    final isVideo = (call?['is_video'] as int? ?? 0) != 0;
+    final callerAccountId = call?['caller_account_id'] as String?;
+    final callerIdentity = callerAccountId == null
+        ? const <String, String>{}
+        : _callerIdentityData(callerAccountId);
     final eventId =
         '${targetDeviceId}_call_${DateTime.now().millisecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}';
     db.enqueueOutbox(
@@ -192,6 +198,8 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
         'notification_type': 'incoming_call',
         'call_id': callId,
         'target_device_id': targetDeviceId,
+        'is_video': isVideo,
+        ...callerIdentity,
       }),
     );
     final tokenRow = db.getPushTokenForDevice(targetDeviceId);
@@ -217,6 +225,8 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
               'notification_type': 'incoming_call',
               'call_id': callId,
               'target_device_id': targetDeviceId,
+              'is_video': isVideo,
+              ...callerIdentity,
             },
           )
           .then((_) {
@@ -250,6 +260,21 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
     }
   }
 
+  Map<String, String> _callerIdentityData(String callerAccountId) {
+    final data = <String, String>{};
+    final profile = db.getAccountProfile(callerAccountId);
+    final displayName = (profile?['display_name'] as String?)?.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      data['caller_display_name'] = displayName;
+    }
+    final account = db.getAccount(callerAccountId);
+    final phoneLast4 = (account?['phone_last4'] as String?)?.trim();
+    if (phoneLast4 != null && phoneLast4.isNotEmpty) {
+      data['caller_phone_last4'] = phoneLast4;
+    }
+    return data;
+  }
+
   @override
   bool _isPendingCalleeDevice({
     required Map<String, dynamic> session,
@@ -280,6 +305,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
       'expires_at': call['expires_at'],
       'answered_by_device_id': call['answered_by_device_id'],
       if (call['offer_sdp'] != null) 'sdp': call['offer_sdp'],
+      ..._callerIdentityData(call['caller_account_id'] as String),
     };
   }
 }

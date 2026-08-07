@@ -37,6 +37,14 @@ mixin CallsValidation on CallsModuleBase {
     if (targetDeviceId != null && !_validId(targetDeviceId)) {
       return const _ParseResult(error: 'invalid target_device_id');
     }
+    final callerDisplayName = _boundedDisplay(
+      payload['caller_display_name'],
+      maxLength: 80,
+    );
+    final callerPhoneLast4 = _boundedDisplay(
+      payload['caller_phone_last4'],
+      maxLength: 4,
+    );
     final mline = payload['mline_index'];
     if (mline != null && (mline is! int || mline < 0 || mline > 64)) {
       return const _ParseResult(error: 'invalid mline_index');
@@ -52,6 +60,8 @@ mixin CallsValidation on CallsModuleBase {
         candidate: candidate,
         sdpMid: _string(payload['sdp_mid']),
         mlineIndex: mline as int?,
+        callerDisplayName: callerDisplayName,
+        callerPhoneLast4: callerPhoneLast4,
         // Deliberately not rejected when unrecognised. An unknown policy is
         // not a malformed frame, it is a client this server is older than,
         // and `fromWire` already resolves anything it does not recognise to
@@ -67,6 +77,13 @@ mixin CallsValidation on CallsModuleBase {
       value.isNotEmpty &&
       value.length <= _maxIdLength &&
       RegExp(r'^[A-Za-z0-9._:@-]+$').hasMatch(value);
+
+  String? _boundedDisplay(Object? value, {required int maxLength}) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed.length > maxLength) return null;
+    return trimmed;
+  }
 
   @override
   String? _string(Object? value) => value is String ? value : null;

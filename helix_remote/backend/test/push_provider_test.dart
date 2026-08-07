@@ -34,7 +34,12 @@ void main() {
       );
       await provider.deliver(
         token: 'device-token',
-        data: {'notification_type': 'incoming_call', 'call_id': 'call-1'},
+        data: {
+          'notification_type': 'incoming_call',
+          'call_id': 'call-1',
+          'is_video': true,
+          'caller_display_name': 'Ada',
+        },
       );
       await requestDone.future;
 
@@ -42,10 +47,12 @@ void main() {
       expect(message['data'], {
         'notification_type': 'incoming_call',
         'call_id': 'call-1',
+        'is_video': 'true',
+        'caller_display_name': 'Ada',
       });
       expect(message['notification'], {
-        'title': 'Incoming call',
-        'body': 'You have an incoming call',
+        'title': 'Incoming video call',
+        'body': 'Ada',
       });
       expect(message['android'], {
         'priority': 'HIGH',

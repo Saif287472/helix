@@ -261,6 +261,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
         expiresAt: expiresAt,
         effectivePolicy: callerPolicy,
       );
+      _attachCallerIdentity(canonical, accountId);
       final result = await _proxyCallSignal(
         domain: FederationClient.domainOf(calleeAccountId)!,
         senderAccountId: _qualify(accountId),
@@ -324,6 +325,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
       expiresAt: expiresAt,
       effectivePolicy: callerPolicy,
     );
+    _attachCallerIdentity(canonical, accountId);
 
     var delivered = 0;
     for (final targetDeviceId in targetDeviceIds) {
@@ -361,6 +363,23 @@ mixin CallsSignalingHandlers on CallsModuleBase {
       'target_device_ids': targetDeviceIds,
       'expires_at': expiresAt,
     };
+  }
+
+  void _attachCallerIdentity(
+    Map<String, dynamic> payload,
+    String callerAccountId,
+  ) {
+    final profile = db.getAccountProfile(callerAccountId);
+    final displayName = (profile?['display_name'] as String?)?.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      payload['caller_display_name'] = displayName;
+    }
+
+    final account = db.getAccount(callerAccountId);
+    final phoneLast4 = (account?['phone_last4'] as String?)?.trim();
+    if (phoneLast4 != null && phoneLast4.isNotEmpty) {
+      payload['caller_phone_last4'] = phoneLast4;
+    }
   }
 
   Future<Map<String, dynamic>> _routeSessionSignal({

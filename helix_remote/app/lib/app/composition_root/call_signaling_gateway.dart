@@ -7,7 +7,7 @@ class _RemoteRestCallSignalingGateway implements RemoteCallSignalingGateway {
   final RemoteCompositionRootBase _root;
 
   @override
-  Future<void> sendCallSignal({
+  Future<RemoteCallSignalDeliveryReceipt> sendCallSignal({
     String? targetAccountId,
     String? targetDeviceId,
     required RemoteCallSignal signal,
@@ -34,13 +34,13 @@ class _RemoteRestCallSignalingGateway implements RemoteCallSignalingGateway {
           requestId: requestId,
           payload: payload,
         );
-        _validateCallSignalAck(ack);
+        final receipt = _validateCallSignalAck(ack);
         AppLogger.instance.info(
           'CALL_SIGNAL',
           '$tag via WS cid=$cid ack=${ack['status']} '
               'req=${_requestSuffix(requestId)}',
         );
-        return;
+        return receipt;
       } on RemoteCallSignalRejected catch (e) {
         AppLogger.instance.error(
           'CALL_SIGNAL',
@@ -72,12 +72,13 @@ class _RemoteRestCallSignalingGateway implements RemoteCallSignalingGateway {
         payload: payload,
         requestId: requestId,
       );
-      _validateCallSignalAck(response);
+      final receipt = _validateCallSignalAck(response);
       AppLogger.instance.info(
         'CALL_SIGNAL',
         '$tag via REST cid=$cid ack=${response['status']} '
             'req=${_requestSuffix(requestId)}',
       );
+      return receipt;
     } on RemoteCallSignalRejected catch (e) {
       AppLogger.instance.error(
         'CALL_SIGNAL',
@@ -88,10 +89,21 @@ class _RemoteRestCallSignalingGateway implements RemoteCallSignalingGateway {
     }
   }
 
-  void _validateCallSignalAck(Map<String, dynamic> ack) {
+  RemoteCallSignalDeliveryReceipt _validateCallSignalAck(
+    Map<String, dynamic> ack,
+  ) {
     final status = ack['status'] as String?;
     const successful = {'delivered', 'partial', 'queued', 'duplicate'};
-    if (status != null && successful.contains(status)) return;
+    if (status != null && successful.contains(status)) {
+      return RemoteCallSignalDeliveryReceipt(
+        status: status,
+        delivered:
+            ack['delivered'] == true ||
+            status == 'delivered' ||
+            status == 'partial',
+        queued: status == 'queued' || (ack['queued_count'] as int? ?? 0) > 0,
+      );
+    }
     throw RemoteCallSignalRejected(
       status: status ?? 'unknown',
       reason: ack['reason'] as String?,

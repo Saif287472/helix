@@ -36,6 +36,8 @@ class RemoteCallSignal {
     this.createdAt,
     this.expiresAt,
     this.ipPrivacy,
+    this.callerDisplayName,
+    this.callerPhoneLast4,
     String? peerId,
   }) : _legacyPeerId = peerId;
 
@@ -52,6 +54,8 @@ class RemoteCallSignal {
   final bool isVideo;
   final int? createdAt;
   final int? expiresAt;
+  final String? callerDisplayName;
+  final String? callerPhoneLast4;
 
   /// The IP-privacy policy this peer is asking for, sent on offers and
   /// answers so the server can enforce the negotiated result.
@@ -81,6 +85,8 @@ class RemoteCallSignal {
     if (sdpMid != null) 'sdp_mid': sdpMid,
     'is_video': isVideo,
     if (ipPrivacy != null) 'ip_privacy': ipPrivacy!.wireName,
+    if (callerDisplayName != null) 'caller_display_name': callerDisplayName,
+    if (callerPhoneLast4 != null) 'caller_phone_last4': callerPhoneLast4,
     if (createdAt != null) 'created_at': createdAt,
     if (expiresAt != null) 'expires_at': expiresAt,
     if (callerAccountId == null &&
@@ -113,11 +119,25 @@ class RemoteCallSignal {
         ipPrivacy: IpPrivacyMode.fromWire(
           json['ip_privacy'] is String ? json['ip_privacy'] as String : null,
         ),
+        callerDisplayName: json['caller_display_name'] as String?,
+        callerPhoneLast4: json['caller_phone_last4'] as String?,
       );
 }
 
+class RemoteCallSignalDeliveryReceipt {
+  const RemoteCallSignalDeliveryReceipt({
+    required this.status,
+    required this.delivered,
+    required this.queued,
+  });
+
+  final String status;
+  final bool delivered;
+  final bool queued;
+}
+
 abstract interface class RemoteCallSignalingGateway {
-  Future<void> sendCallSignal({
+  Future<RemoteCallSignalDeliveryReceipt> sendCallSignal({
     String? targetAccountId,
     String? targetDeviceId,
     required RemoteCallSignal signal,
@@ -177,7 +197,7 @@ class RemoteCallStatus {
 
   String get displayName =>
       peerDisplayName == null || peerDisplayName!.trim().isEmpty
-      ? peerAccountId
+      ? 'Unknown caller'
       : peerDisplayName!;
 
   @Deprecated('Use peerAccountId.')
@@ -321,6 +341,7 @@ class RemoteCallService {
         return {
           RemoteCallState.connecting,
           RemoteCallState.active,
+          RemoteCallState.ringing,
           RemoteCallState.busy,
           RemoteCallState.declined,
         }.contains(to);
@@ -676,6 +697,7 @@ class RemoteCallService {
       direction: kCallDirectionOutgoing,
       state: RemoteCallState.preparing,
       peerDisplayName: peerDisplayName,
+      isSpeakerOn: _defaultSpeakerOn(isVideo: isVideo),
     );
     _emitCallStatus();
     db.setActiveCallMarker(
@@ -688,8 +710,9 @@ class RemoteCallService {
 
     try {
       final sdp = await engine.createOffer(callId, video: isVideo);
+      await _applyDefaultAudioRoute(callId: callId, isVideo: isVideo);
       _transition(RemoteCallState.dialing);
-      await signalingGateway.sendCallSignal(
+      final receipt = await signalingGateway.sendCallSignal(
         targetAccountId: peerId,
         signal: RemoteCallSignal(
           callId: callId,
@@ -700,6 +723,9 @@ class RemoteCallService {
           ipPrivacy: iceConfig.ipPrivacy,
         ),
       );
+      if (receipt.delivered) {
+        _transition(RemoteCallState.ringing);
+      }
       _startOutgoingTimers(callId);
     } catch (error) {
       await _safeEndCall(callId);
@@ -710,6 +736,7 @@ class RemoteCallService {
         direction: kCallDirectionOutgoing,
         state: RemoteCallState.failed,
         peerDisplayName: peerDisplayName,
+        isSpeakerOn: _defaultSpeakerOn(isVideo: isVideo),
         // A setup failure that knows what went wrong says so. The generic
         // sentence remains only for genuinely unclassified errors - it used
         // to be shown even when the server had told us plainly that it has
@@ -862,6 +889,11 @@ class RemoteCallService {
       isVideo: signal.isVideo,
       direction: kCallDirectionIncoming,
       state: RemoteCallState.ringing,
+      peerDisplayName: _resolvedPeerDisplayName(
+        signal.callerAccountId ?? signal.peerId ?? '',
+        signal: signal,
+      ),
+      isSpeakerOn: _defaultSpeakerOn(isVideo: signal.isVideo),
     );
     _emitCallStatus();
     _startIncomingTimer(signal.callId);
@@ -887,6 +919,7 @@ class RemoteCallService {
         offerSdp,
         video: call.isVideo,
       );
+      await _applyDefaultAudioRoute(callId: call.callId, isVideo: call.isVideo);
       await _flushQueuedIce(call.callId);
       db.setActiveCallMarker(
         callId: call.callId,
@@ -1053,6 +1086,47 @@ class RemoteCallService {
     _emitCallStatus();
   }
 
+  bool _defaultSpeakerOn({required bool isVideo}) => isVideo;
+
+  Future<void> _applyDefaultAudioRoute({
+    required String callId,
+    required bool isVideo,
+  }) async {
+    final enabled = _defaultSpeakerOn(isVideo: isVideo);
+    await engine.setSpeakerOn(callId, enabled: enabled);
+    final call = _activeCall;
+    if (call == null || call.callId != callId) return;
+    if (call.isSpeakerOn == enabled) return;
+    _activeCall = call.copyWith(isSpeakerOn: enabled);
+    _emitCallStatus();
+  }
+
+  String? _resolvedPeerDisplayName(
+    String peerAccountId, {
+    RemoteCallSignal? signal,
+  }) {
+    final contact = peerAccountId.isEmpty ? null : db.getContact(peerAccountId);
+    final nickname = contact?.nickname.trim();
+    if (nickname != null && nickname.isNotEmpty) return nickname;
+
+    final phoneBookName = peerAccountId.isEmpty
+        ? null
+        : db.phoneContactName(peerAccountId)?.trim();
+    if (phoneBookName != null && phoneBookName.isNotEmpty) {
+      return phoneBookName;
+    }
+
+    final profileName = signal?.callerDisplayName?.trim();
+    if (profileName != null && profileName.isNotEmpty) return profileName;
+
+    final phoneLast4 = signal?.callerPhoneLast4?.trim();
+    if (phoneLast4 != null && phoneLast4.isNotEmpty) {
+      return 'Phone ending $phoneLast4';
+    }
+
+    return null;
+  }
+
   Future<void> setVideoEnabled({required bool enabled}) async {
     final call = _activeCall;
     if (call == null) return;
@@ -1146,22 +1220,22 @@ class RemoteCallService {
         'action=${shouldForward ? "forward" : "filter"}',
       );
       if (!shouldForward) return;
-      unawaited(
-        signalingGateway.sendCallSignal(
-          targetAccountId: call.direction == kCallDirectionOutgoing
-              ? call.peerAccountId
-              : null,
-          targetDeviceId: call.peerDeviceId,
-          signal: RemoteCallSignal(
-            callId: call.callId,
-            signalType: kSignalIce,
-            candidate: event.candidate,
-            mlineIndex: event.mlineIndex,
-            sdpMid: event.sdpMid,
+      signalingGateway
+          .sendCallSignal(
+            targetAccountId: call.direction == kCallDirectionOutgoing
+                ? call.peerAccountId
+                : null,
             targetDeviceId: call.peerDeviceId,
-          ),
-        ),
-      );
+            signal: RemoteCallSignal(
+              callId: call.callId,
+              signalType: kSignalIce,
+              candidate: event.candidate,
+              mlineIndex: event.mlineIndex,
+              sdpMid: event.sdpMid,
+              targetDeviceId: call.peerDeviceId,
+            ),
+          )
+          .ignore();
     } else if (event is RemoteCallConnectionStateEvent) {
       unawaited(_handleEngineConnectionState(event));
     } else if (event is RemoteRenegotiationOfferEvent) {

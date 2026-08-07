@@ -1,5 +1,9 @@
 package com.helix.remote
 
+import android.app.KeyguardManager
+import android.content.Context
+import android.os.Build
+import android.os.PowerManager
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -46,28 +50,49 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "com.helix.remote/calls"
         ).setMethodCallHandler { call, result ->
-            if (call.method != "setCallActive") {
-                result.notImplemented()
-                return@setMethodCallHandler
-            }
-            val active = call.argument<Boolean>("active") ?: false
-            val keepScreenOn = call.argument<Boolean>("keepScreenOn") ?: false
-            runOnUiThread {
-                if (active) {
-                    window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
-                    window.addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
-                    if (keepScreenOn) {
-                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    } else {
-                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            when (call.method) {
+                "setCallActive" -> {
+                    val active = call.argument<Boolean>("active") ?: false
+                    val keepScreenOn = call.argument<Boolean>("keepScreenOn") ?: false
+                    runOnUiThread {
+                        if (active) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+                            window.addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+                            if (keepScreenOn) {
+                                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            } else {
+                                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            }
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
                     }
-                } else {
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    result.success(null)
                 }
+                "shouldUseFullScreenIncomingCall" -> {
+                    val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                    val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+                    result.success(keyguard.isKeyguardLocked || !power.isInteractive)
+                }
+                "startForegroundCall" -> {
+                    val caller = call.argument<String>("callerDisplayName") ?: "Unknown caller"
+                    val isVideo = call.argument<Boolean>("isVideo") ?: false
+                    val intent = CallForegroundService.startIntent(this, caller, isVideo)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                    result.success(null)
+                }
+                "stopForegroundCall" -> {
+                    stopService(CallForegroundService.stopIntent(this))
+                    result.success(null)
+                }
+                else -> result.notImplemented()
             }
-            result.success(null)
         }
     }
 }

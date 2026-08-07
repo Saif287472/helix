@@ -78,6 +78,8 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
           isVideo: raw['is_video'] == 1 || raw['is_video'] == true,
           createdAt: raw['created_at'] as int?,
           expiresAt: raw['expires_at'] as int?,
+          callerDisplayName: raw['caller_display_name'] as String?,
+          callerPhoneLast4: raw['caller_phone_last4'] as String?,
         );
         _dispatchInboundCallSignal(_callService, signal);
       }

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-enum LocalNotificationCallAction { accept, decline }
+enum LocalNotificationCallAction { accept, decline, end }
 
 /// Thin wrapper around flutter_local_notifications for in-process system
 /// notifications and FCM-triggered offline/background alerts.
@@ -28,6 +28,13 @@ class LocalNotificationService {
     importance: Importance.max,
     playSound: true,
     enableVibration: true,
+  );
+
+  static const _activeCallChannel = AndroidNotificationChannel(
+    'helix_active_calls',
+    'Active Calls',
+    description: 'Ongoing Helix Remote call controls',
+    importance: Importance.low,
   );
 
   static const _messageChannel = AndroidNotificationChannel(
@@ -65,6 +72,11 @@ class LocalNotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.createNotificationChannel(_incomingCallChannel);
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(_activeCallChannel);
     await _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -162,6 +174,7 @@ class LocalNotificationService {
     required String callId,
     required String callerDisplayName,
     required bool isVideo,
+    bool fullScreenIntent = false,
   }) async {
     if (!_ready) return;
     final androidDetails = AndroidNotificationDetails(
@@ -172,7 +185,7 @@ class LocalNotificationService {
       priority: Priority.max,
       category: AndroidNotificationCategory.call,
       visibility: NotificationVisibility.public,
-      fullScreenIntent: true,
+      fullScreenIntent: fullScreenIntent,
       ongoing: true,
       autoCancel: false,
       actions: const [
@@ -187,6 +200,33 @@ class LocalNotificationService {
     await _plugin.show(
       callId.hashCode & 0x7fffffff,
       isVideo ? 'Incoming video call' : 'Incoming audio call',
+      callerDisplayName,
+      NotificationDetails(android: androidDetails),
+      payload: 'call_id=$callId',
+    );
+  }
+
+  static Future<void> showOngoingCall({
+    required String callId,
+    required String callerDisplayName,
+    required bool isVideo,
+  }) async {
+    if (!_ready) return;
+    final androidDetails = AndroidNotificationDetails(
+      _activeCallChannel.id,
+      _activeCallChannel.name,
+      channelDescription: _activeCallChannel.description,
+      importance: Importance.low,
+      priority: Priority.low,
+      category: AndroidNotificationCategory.call,
+      visibility: NotificationVisibility.public,
+      ongoing: true,
+      autoCancel: false,
+      actions: const [AndroidNotificationAction('end_call', 'End')],
+    );
+    await _plugin.show(
+      _ongoingCallNotificationId,
+      isVideo ? 'Video call in progress' : 'Audio call in progress',
       callerDisplayName,
       NotificationDetails(android: androidDetails),
       payload: 'call_id=$callId',
@@ -220,6 +260,11 @@ class LocalNotificationService {
     await _plugin.cancel(callId.hashCode & 0x7fffffff);
   }
 
+  static Future<void> cancelOngoingCall() async {
+    if (!_ready) return;
+    await _plugin.cancel(_ongoingCallNotificationId);
+  }
+
   static void _handleNotificationResponse(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null || !payload.startsWith('call_id=')) return;
@@ -228,8 +273,11 @@ class LocalNotificationService {
     final action = switch (response.actionId) {
       'accept_call' => LocalNotificationCallAction.accept,
       'decline_call' => LocalNotificationCallAction.decline,
+      'end_call' => LocalNotificationCallAction.end,
       _ => null,
     };
     if (action != null) _callActionHandler?.call(action, callId);
   }
+
+  static const _ongoingCallNotificationId = 0x48434c4c;
 }

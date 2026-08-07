@@ -104,10 +104,14 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     _callSub = widget.root.callStatusChanges.listen((status) {
       if (!mounted) return;
       _activeCallStatus = status;
+      final inCall =
+          status != null &&
+          !(status.state == RemoteCallState.ringing &&
+              status.direction == kCallDirectionIncoming);
       unawaited(
         AndroidCallRuntimeService.setCallActive(
-          active: status != null,
-          keepScreenOn: status?.isVideo == true,
+          active: inCall,
+          keepScreenOn: inCall && status.isVideo,
         ),
       );
     });

@@ -9,27 +9,9 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-
-    <!--
-        FOREGROUND_SERVICE, FOREGROUND_SERVICE_CAMERA and
-        FOREGROUND_SERVICE_MICROPHONE used to be declared here and were removed
-        (LOW-4). Nothing in the product ever ran a foreground service:
-
-        - this manifest declares no <service> element of its own;
-        - the merged plugin manifests contribute only firebase_messaging's
-          background JobService and its MESSAGING_EVENT service, neither of
-          which is a foreground service or declares a foregroundServiceType;
-        - flutter_local_notifications does expose a startForegroundService
-          API, but it requires the app to declare that service itself, and no
-          Dart code calls it;
-        - calls run in-process. android_call_runtime_service.dart only drives
-          window flags over the com.helix.remote/calls MethodChannel.
-
-        Play Console requires a written justification for each foreground
-        service type, and asking for camera and microphone foreground access
-        that the app never uses is a review risk taken for nothing. Re-add
-        them together with the <service> that needs them, not ahead of it.
-    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!--
         allowBackup=false: the app's private directory holds the SQLCipher
@@ -79,6 +61,10 @@
                 <data android:scheme="helix" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

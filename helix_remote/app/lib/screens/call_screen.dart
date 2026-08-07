@@ -65,47 +65,62 @@ class _IncomingCallOverlay extends StatelessWidget {
     return Material(
       color: theme.colorScheme.surface,
       child: SafeArea(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 44,
-              child: Icon(
-                callStatus.isVideo ? Icons.video_call : Icons.call,
-                size: 48,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              HelixLocalizations.of(context).ringing,
-              style: theme.textTheme.labelLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Incoming ${callStatus.isVideo ? 'video' : 'audio'} call',
-              style: theme.textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(callStatus.displayName, style: theme.textTheme.bodyLarge),
-            const SizedBox(height: 48),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        child: SizedBox.expand(
+          child: Padding(
+            padding: HelixInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _CallActionButton(
-                  icon: Icons.call_end,
-                  label: 'Decline',
-                  color: HelixCallColors.endCall,
-                  onPressed: onDecline,
+                CircleAvatar(
+                  radius: 44,
+                  child: Icon(
+                    callStatus.isVideo ? Icons.video_call : Icons.call,
+                    size: 48,
+                  ),
                 ),
-                _CallActionButton(
-                  icon: Icons.call,
-                  label: 'Accept',
-                  color: HelixCallColors.answerCall,
-                  onPressed: onAccept,
+                const SizedBox(height: 18),
+                Text(
+                  HelixLocalizations.of(context).ringing,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Incoming ${callStatus.isVideo ? 'video' : 'audio'} call',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  callStatus.displayName,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 48),
+                Wrap(
+                  alignment: WrapAlignment.spaceEvenly,
+                  runAlignment: WrapAlignment.center,
+                  spacing: 48,
+                  runSpacing: 20,
+                  children: [
+                    _CallActionButton(
+                      icon: Icons.call_end,
+                      label: 'Decline',
+                      color: HelixCallColors.endCall,
+                      onPressed: onDecline,
+                    ),
+                    _CallActionButton(
+                      icon: Icons.call,
+                      label: 'Accept',
+                      color: HelixCallColors.answerCall,
+                      onPressed: onAccept,
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -214,25 +229,28 @@ class _ActiveCallOverlayState extends State<_ActiveCallOverlay> {
                 ),
               ),
             ),
-          SafeArea(
-            child: Padding(
-              padding: HelixInsets.all(20),
-              child: Column(
-                children: [
-                  _CallHeader(status: status),
-                  const Spacer(),
-                  if (status.errorMessage != null)
-                    _CallErrorBanner(message: status.errorMessage!),
-                  const SizedBox(height: 16),
-                  _CallControls(
-                    status: status,
-                    onEnd: widget.onEnd,
-                    onMute: widget.onMute,
-                    onSpeaker: widget.onSpeaker,
-                    onVideo: widget.onVideo,
-                    onSwitchCamera: widget.onSwitchCamera,
-                  ),
-                ],
+          Positioned.fill(
+            child: SafeArea(
+              child: Padding(
+                padding: HelixInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _CallHeader(status: status),
+                    const Spacer(),
+                    if (status.errorMessage != null)
+                      _CallErrorBanner(message: status.errorMessage!),
+                    const SizedBox(height: 16),
+                    _CallControls(
+                      status: status,
+                      onEnd: widget.onEnd,
+                      onMute: widget.onMute,
+                      onSpeaker: widget.onSpeaker,
+                      onVideo: widget.onVideo,
+                      onSwitchCamera: widget.onSwitchCamera,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
