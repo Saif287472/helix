@@ -6,6 +6,7 @@ import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/screens/conversation/chat_palette.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:path/path.dart' as p;
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'message_tile/content_cards.dart';
 part 'message_tile/status_and_painters.dart';
@@ -93,11 +94,11 @@ class _MessageTileState extends State<ConversationMessageTile> {
           bottomLeft: Radius.circular(isMine ? 10 : 3),
           bottomRight: Radius.circular(isMine ? 3 : 10),
         ),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withAlpha(18),
+            color: HelixScrimColors.shadow,
             blurRadius: 1.5,
-            offset: const Offset(0, 1),
+            offset: Offset(0, 1),
           ),
         ],
       ),
@@ -113,7 +114,7 @@ class _MessageTileState extends State<ConversationMessageTile> {
             children: [
               if (widget.message.edited) ...[
                 Text(
-                  'Edited',
+                  HelixLocalizations.of(context).edited,
                   style: TextStyle(
                     fontSize: 11.5,
                     color: isMine ? palette.outgoingTime : palette.incomingTime,
@@ -145,7 +146,10 @@ class _MessageTileState extends State<ConversationMessageTile> {
 
     // Selection highlight
     if (widget.isSelected) {
-      bubble = ColoredBox(color: Colors.blue.withAlpha(30), child: bubble);
+      bubble = ColoredBox(
+        color: HelixStatusColors.highlight.withAlpha(30),
+        child: bubble,
+      );
     }
 
     return GestureDetector(
@@ -172,7 +176,11 @@ class _MessageTileState extends State<ConversationMessageTile> {
                 left: 0,
                 child: Opacity(
                   opacity: (_swipeDx / 40).clamp(0.0, 1.0),
-                  child: const Icon(Icons.reply, color: Colors.grey, size: 20),
+                  child: const Icon(
+                    Icons.reply,
+                    color: HelixStatusColors.neutral,
+                    size: 20,
+                  ),
                 ),
               ),
             Row(
@@ -190,7 +198,7 @@ class _MessageTileState extends State<ConversationMessageTile> {
                           : Icons.radio_button_unchecked,
                       color: widget.isSelected
                           ? HelixColorTokens.cFF25D366
-                          : Colors.grey,
+                          : HelixStatusColors.neutral,
                       size: 22,
                     ),
                   ),

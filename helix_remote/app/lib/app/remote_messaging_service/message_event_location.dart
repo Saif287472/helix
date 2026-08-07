@@ -1,6 +1,7 @@
 part of '../remote_messaging_service.dart';
 
-mixin RemoteEventLocationSending on RemoteMessagingServiceBase, RemoteMessageSending {
+mixin RemoteEventLocationSending
+    on RemoteMessagingServiceBase, RemoteMessageSending {
   Future<String> sendEventContent({
     required String conversationId,
     required String title,
@@ -262,5 +263,4 @@ mixin RemoteEventLocationSending on RemoteMessagingServiceBase, RemoteMessageSen
       viewOnce: true,
     );
   }
-
 }

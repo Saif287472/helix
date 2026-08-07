@@ -382,7 +382,7 @@ void main() {
   test('P15-002: inbound offer sets call to ringing state', () async {
     final svc = makeService();
     await svc.processInboundSignal(
-      RemoteCallSignal(
+      const RemoteCallSignal(
         callId: 'call_1',
         signalType: kSignalOffer,
         sdp: 'offer_sdp',
@@ -436,7 +436,7 @@ void main() {
 
     gateway.sent.clear();
     await svc.processInboundSignal(
-      RemoteCallSignal(
+      const RemoteCallSignal(
         callId: 'call_intruder',
         signalType: kSignalOffer,
         peerId: 'peer_charlie',
@@ -595,7 +595,7 @@ void main() {
   test('P15-013: declined incoming call is recorded as MISSED', () async {
     final svc = makeService();
     await svc.processInboundSignal(
-      RemoteCallSignal(
+      const RemoteCallSignal(
         callId: 'call_missed',
         signalType: kSignalOffer,
         peerId: 'peer_alice',

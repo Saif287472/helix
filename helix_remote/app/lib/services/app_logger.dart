@@ -111,30 +111,29 @@ class AppLogger {
   /// Coalesces bursts into a single append, without weakening the ordering
   /// guarantee callers get from awaiting their log method.
   Future<void> _scheduleFlush() {
-    return _scheduledFlush ??= Future<void>.delayed(
-      const Duration(milliseconds: 16),
-    ).then((_) async {
-      try {
-        while (_pendingLines.isNotEmpty) {
-          final batch = List<String>.from(_pendingLines);
-          _pendingLines.clear();
-          _writeChain = _writeChain.then((_) async {
-            try {
-              await _logFile!.writeAsString(
-                '${batch.join('\n')}\n',
-                mode: FileMode.append,
-              );
-            } catch (_) {}
-          });
-          await _writeChain;
-        }
-      } finally {
-        _scheduledFlush = null;
-        if (_pendingLines.isNotEmpty) {
-          unawaited(_scheduleFlush());
-        }
-      }
-    });
+    return _scheduledFlush ??=
+        Future<void>.delayed(const Duration(milliseconds: 16)).then((_) async {
+          try {
+            while (_pendingLines.isNotEmpty) {
+              final batch = List<String>.from(_pendingLines);
+              _pendingLines.clear();
+              _writeChain = _writeChain.then((_) async {
+                try {
+                  await _logFile!.writeAsString(
+                    '${batch.join('\n')}\n',
+                    mode: FileMode.append,
+                  );
+                } catch (_) {}
+              });
+              await _writeChain;
+            }
+          } finally {
+            _scheduledFlush = null;
+            if (_pendingLines.isNotEmpty) {
+              unawaited(_scheduleFlush());
+            }
+          }
+        });
   }
 
   Future<void> _purge() async {
@@ -143,10 +142,11 @@ class AppLogger {
       final cutoff = DateTime.now().subtract(const Duration(days: _maxAgeDays));
       final kept = ListQueue<String>();
       var lineCount = 0;
-      await for (final line in _logFile!
-          .openRead()
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())) {
+      await for (final line
+          in _logFile!
+              .openRead()
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())) {
         lineCount++;
         if (line.startsWith('---')) {
           kept.addLast(line);

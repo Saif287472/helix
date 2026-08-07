@@ -286,6 +286,7 @@ class BackendServer {
     router.mount('/api/v1/health', operabilityModule.healthRouter.call);
     router.mount('/api/v1/ops', operabilityModule.opsRouter.call);
     router.mount('/api/v1/server', operabilityModule.serverRouter.call);
+    router.mount('/api/v1/telemetry', operabilityModule.telemetryRouter.call);
     router.mount('/api/v1/admin-pairing', adminPairingModule.router.call);
     router.mount('/api/v1/accounts', authModule.router.call);
     router.mount('/api/v1/devices', authModule.router.call);
@@ -337,8 +338,16 @@ class BackendServer {
                 RegExp(r'^[A-Za-z0-9_-]{16,128}$').hasMatch(supplied)
             ? supplied
             : _newCorrelationId();
-        final response = await innerHandler(
-          request.change(context: {'correlation_id': correlationId}),
+        // Published as a zone value as well as in the request context, so
+        // every log line emitted while handling this request carries the same
+        // id the caller gets back in the response header — without threading
+        // a parameter through every module. That is the propagation the audit
+        // recorded as missing: the ids were generated and went nowhere.
+        final response = await runWithCorrelationId(
+          correlationId,
+          () => innerHandler(
+            request.change(context: {'correlation_id': correlationId}),
+          ),
         );
         return response.change(headers: {'x-correlation-id': correlationId});
       };

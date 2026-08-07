@@ -15,14 +15,16 @@ class _ConnectionBanner extends StatelessWidget {
     if (text == null) return const SizedBox.shrink();
     final isError = _isError(stateLabel);
     return Container(
-      color: isError ? Colors.red.shade100 : Colors.orange.shade100,
+      color: isError
+          ? HelixStatusColors.dangerContainer
+          : HelixStatusColors.cautionContainer,
       padding: HelixInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
           Icon(
             isError ? Icons.cloud_off_outlined : Icons.info_outline,
             size: 16,
-            color: isError ? Colors.red.shade700 : null,
+            color: isError ? HelixStatusColors.onDangerContainer : null,
           ),
           const SizedBox(width: 8),
           Expanded(child: Text(text, style: const TextStyle(fontSize: 12))),
@@ -35,7 +37,10 @@ class _ConnectionBanner extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity: VisualDensity.compact,
               ),
-              child: const Text('Retry', style: TextStyle(fontSize: 12)),
+              child: Text(
+                HelixLocalizations.of(context).retry,
+                style: const TextStyle(fontSize: 12),
+              ),
             ),
         ],
       ),

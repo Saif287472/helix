@@ -13,6 +13,7 @@ export 'src/migrations.dart';
 export 'src/object_storage.dart';
 export 'src/postgresql_adapter.dart';
 export 'src/redacted_logger.dart';
+export 'src/server_log.dart';
 export 'src/feature_flags.dart';
 export 'src/modules/attachments.dart';
 export 'src/modules/calls.dart';

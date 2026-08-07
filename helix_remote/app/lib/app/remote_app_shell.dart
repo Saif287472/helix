@@ -4,17 +4,12 @@ class HelixRemoteApp extends StatefulWidget {
   const HelixRemoteApp({
     super.key,
     required this.root,
-    this.embedded = false,
     this.onChangeServerUrl,
     this.initialInviteCode,
     this.initialPhoneNumber,
   });
 
   final RemoteCompositionRoot root;
-
-  /// True when the process-level [HelixRemoteAppShell] already supplies the
-  /// MaterialApp. Standalone construction remains supported for widget tests.
-  final bool embedded;
   final Future<void> Function()? onChangeServerUrl;
 
   /// Invite code carried over from the first-launch server-choice screen
@@ -200,11 +195,22 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     super.dispose();
   }
 
+  /// This widget is always a page *below* [HelixRemoteAppShell], never its own
+  /// application.
+  ///
+  /// It used to wrap itself in a shell when constructed standalone, which only
+  /// widget tests ever did. That stopped being workable once screens read
+  /// their copy through `HelixLocalizations.of(context)`: a State's `context`
+  /// is its own element's, so a shell returned from here sits *below* the
+  /// context those screens resolve against, and every lookup missed the
+  /// Localizations scope. Wrapping the result in a `Builder` does not help
+  /// either — `_buildBaseScreen` uses `State.context`, not the builder's.
+  ///
+  /// Rather than thread a context through every screen builder to support a
+  /// path production never took, the flag is gone. Callers wrap, which is what
+  /// `bootstrap.dart` already did.
   @override
-  Widget build(BuildContext context) {
-    final home = _buildBaseScreen();
-    return widget.embedded ? home : HelixRemoteAppShell(home: home);
-  }
+  Widget build(BuildContext context) => _buildBaseScreen();
 
   Widget _buildBaseScreen() {
     switch (_startupState) {
@@ -234,13 +240,13 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   Widget _buildLoadingScreen() {
     return Scaffold(
       appBar: AppBar(title: Text(widget.root.config.displayName)),
-      body: const Center(
+      body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            HelixSkeleton(width: 192, height: 24),
-            SizedBox(height: 16),
-            Text('Starting Helix Remote...'),
+            const HelixSkeleton(width: 192, height: 24),
+            const SizedBox(height: 16),
+            Text(HelixLocalizations.of(context).startingHelixRemote),
           ],
         ),
       ),
@@ -250,7 +256,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   Widget _buildCreateAccountScreen() {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create account'),
+        title: Text(HelixLocalizations.of(context).createAccount),
         leading: switch (_createAccountStep) {
           // Entry point of the (now single, deterministic) onboarding flow -
           // nothing to go back to. "Change server" lives in the body instead
@@ -308,7 +314,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Something went wrong loading this screen.',
+            HelixLocalizations.of(context).somethingWentWrongLoadingScreen,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
@@ -317,7 +323,7 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
           OutlinedButton(
             onPressed: () =>
                 setState(() => _createAccountStep = _createAccountStep),
-            child: const Text('Retry'),
+            child: Text(HelixLocalizations.of(context).retry),
           ),
         ],
       );

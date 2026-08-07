@@ -265,7 +265,7 @@ void main() {
   test('group messages contain ciphertext only — no plaintext field', () {
     service.createGroup(groupId: 'g1', name: 'G', creatorId: 'alice');
     db.saveMessage(
-      RemoteMessage(
+      const RemoteMessage(
         messageId: 'msg1',
         conversationId: 'g1',
         senderAccountId: 'alice',

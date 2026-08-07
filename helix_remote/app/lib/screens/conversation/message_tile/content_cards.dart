@@ -207,13 +207,17 @@ class _FileGlyph extends StatelessWidget {
           const Positioned(
             right: 4,
             top: 4,
-            child: Icon(Icons.description, size: 12, color: Colors.white54),
+            child: Icon(
+              Icons.description,
+              size: 12,
+              color: HelixScrimColors.onBackdropFaint,
+            ),
           ),
           Center(
             child: Text(
               label.length > 4 ? label.substring(0, 4) : label,
               style: const TextStyle(
-                color: Colors.white,
+                color: HelixScrimColors.onBackdrop,
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
               ),
@@ -263,7 +267,7 @@ class _MediaPreview extends StatelessWidget {
               minHeight: 160,
               maxHeight: 430,
             ),
-            color: Colors.black.withAlpha(28),
+            color: HelixScrimColors.shadowStrong,
             child: hasFile
                 ? Image.file(File(localPath), fit: BoxFit.cover)
                 : AspectRatio(
@@ -289,7 +293,9 @@ class _MediaPreview extends StatelessWidget {
                           TextButton.icon(
                             onPressed: onDownload,
                             icon: const Icon(Icons.download),
-                            label: const Text('Download'),
+                            label: Text(
+                              HelixLocalizations.of(context).download,
+                            ),
                           ),
                         ],
                       ),

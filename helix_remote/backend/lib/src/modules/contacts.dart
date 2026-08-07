@@ -872,7 +872,7 @@ class ContactsModule {
     const allowed = {'EVERYONE', 'CONTACTS', 'NOBODY'};
     final normalized = (value ?? 'CONTACTS').toUpperCase();
     if (!allowed.contains(normalized)) {
-      throw FormatException('Invalid visibility value');
+      throw const FormatException('Invalid visibility value');
     }
     return normalized;
   }

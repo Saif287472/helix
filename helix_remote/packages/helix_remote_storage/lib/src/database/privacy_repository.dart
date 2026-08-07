@@ -421,7 +421,7 @@ mixin RemotePrivacyRepository on HelixRemoteDatabaseBase {
         state: '${getLockedConversations().length} locked',
         enforcementSource: 'conversations.is_locked',
       ),
-      RemotePrivacyCheckupItem(
+      const RemotePrivacyCheckupItem(
         id: 'backup',
         label: 'Backups',
         state: 'locked/view-once excluded',

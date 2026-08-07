@@ -44,6 +44,62 @@ behaviour only and to leave Helix Local's arrangements exactly as they are.
 
 ---
 
+## 0. Roadmap status (updated 2026-08-07)
+
+This section is the answer to "how much of the plan is done". It is kept current because the
+alternative was demonstrated: the document previously recorded status only through Phase 2 while
+Phases 3–10 had all been committed, so reading it gave the impression work had stopped four weeks in.
+
+**Measured, not asserted.** Every number below came from running the gate named next to it.
+
+### CI was red, and had been
+
+Phases 3–9 were committed without a passing `scripts/verify.sh`. Three gates were failing at once:
+
+| Gate | State before | Cause |
+|---|---|---|
+| `dart format --set-exit-if-changed` | 17 files unformatted | never run |
+| `flutter analyze` | 49 issues | Phase 4 added `prefer_const_*` without fixing what they surfaced |
+| `flutter test` | 6 failures | 2 real defects (below) + 4 platform-specific golden baselines |
+
+All green as of this update. The two test failures were **real**, not stale expectations: the
+localization delegate returned a plain `Future`, so `Localizations` rendered a blank frame on every
+launch; and four golden baselines had been approved off-Linux, failing every Linux run at ~1% pixel
+diff — font anti-aliasing, not a regression. Goldens are now scoped to the CI reference platform.
+
+### Phase status
+
+| Phase | State | Evidence and what remains |
+|---|---|---|
+| 0 — Ground truth | **Done** | Lockfile committed and enforced on both jobs against a pinned SDK; coverage ratchet; release gate runs |
+| 1 — Critical security | **Done** | `is_admin` capability, `verifyToken(expect:)`, mandatory `exp`, constant-time compares. One follow-up recorded and open: deriving `account_id` from the identity key to make reserved ids unclaimable by construction |
+| 2 — Data exposure | **Done** | Redaction at the write boundary, `allowBackup=false`, 401/403 split, invite code out of the URL. **HIGH-2 now covers Windows** — the runner sets `WDA_EXCLUDEFROMCAPTURE` with a `WDA_MONITOR` fallback. MED-11's 26 remaining catches are migration idempotency guards, left deliberately |
+| 3 — Architecture | **Mostly done** | `main.dart` 1,588 → 73 lines; three `MaterialApp`s → one; composition root and messaging service split; router in place. **Open:** 182 `setState` and 17 inline `MaterialPageRoute` remain, and 6 view-models cover 6 screens of ~30. Two files sit just over the 700-line criterion (703, 713) — marginal, not the 2,239/3,591-line god objects the finding described |
+| 4 — Performance | **Done** | Delta-apply, streaming log purge, `prefer_const_*` **with the fallout fixed**, CI budget job and burst test |
+| 5 — UI | **Done for the stated criterion** | Zero colour literals outside `helix_remote_ui`, enforced by `phase5_design_tokens_test.dart`; 127 became named tokens grouped by meaning. `Colors.transparent` is exempt — it means "draw nothing". **Open:** responsive layout is still one `LayoutBuilder`, and motion is 6 widgets |
+| 6 — UX | **Partly done** | Intent filters, a Windows URI handler, and a parser for all three link kinds; pull-to-refresh 2 → 6; search present. **Only `invite` links are acted on** — `bootstrap.dart` is the sole consumer and matches `HelixDeepLinkKind.invite`, so a tapped call or group-join link opens the app and does nothing. `deep_link_test.dart` asserts the parser keeps their targets, which passes while nothing reads them: the same shape as MED-4's unused consent types. Snackbar-heavy feedback unchanged |
+| 7 — Accessibility | **Done** | The 1.3× cap is gone and a test forbids its return. All 51 icon buttons labelled, enforced by a source sweep. Guidelines now run against a real screen in light, dark, and both high-contrast themes — the previous suite asserted them against three widgets in isolation and passed while twelve buttons announced nothing |
+| 8 — Testing | **Partly done** | Coverage ratchet, gallery goldens, OSV + SBOM, and a regression matrix that is now machine-checked against the tests it names. **Open:** the `integration_test/` journeys remain thin; the substantive end-to-end coverage is `backend/test/phase4_e2e_harness_test.dart`, which does registration, send/receive and multi-device fan-out with real crypto |
+| 9 — Hardening | **Done** | Durable rate limiting, multi-`kid` JWT rotation, feature flags, SBOM, R8, TLS pinning, DR evidence. **MED-4 and tracing were shapes without callers** and are now wired: crash reporting reaches a self-hosted sink behind two-part consent, and correlation ids propagate into every log line emitted while handling a request, and across the S2S hop |
+| 10 — Polish | **Mostly done** | Localization is real: ARB + `gen-l10n` replaced the hand-rolled ternary catalog, and **every plain literal in the client is extracted** — 245 keys, 0 remaining, enforced by `phase10_localization_test.dart`. The 51 interpolated `Text('$…')` sites are left deliberately: each needs an ICU placeholder and a human deciding what the message says. Bengali stays English-backed with the gap recorded in `untranslated.json` rather than machine-invented. `file_picker` pinned exactly rather than by caret (the caret is what allowed the drift MED-7 recorded); `googleapis_auth` 1→2 with 451 backend tests green; unused foreground-service permissions removed; governance gate grown 6 → 19 controls. **Open:** four major dependency bumps, deferred *with reasons*, and the external security review |
+
+### Deliberately not done
+
+Recorded so these read as decisions rather than omissions.
+
+- **Four major dependency upgrades** (`flutter_local_notifications` 18→22, `flutter_secure_storage`
+  10→11, `flutter_contacts` 1→2, `connectivity_plus` 6→7). Each is a platform plugin whose failure
+  mode is invisible to a headless suite — a notification that never arrives, a database key that
+  cannot be read on an existing install. §26 already prescribes a device matrix for the first of
+  these; taking any of them on a green CI run alone would be the failure it warns about. Reasons per
+  package are in `docs/dependencies/DEPENDENCY_RISK_REGISTER.md`.
+- **P1-1's root cause.** H2 is now *eliminated* rather than untested — compression is never
+  negotiated in either direction, so diagnostic step 2 would have been a no-op build. What remains
+  needs step 1, which needs the VPS.
+- **P0-1 (TURN) and P2-1 (SMS vendor).** Infrastructure, not repository changes.
+
+---
+
 ## 28. Measured baseline (Phase 0, 2026-08-06)
 
 Established with Flutter 3.44.8 / Dart 3.12.2 against `helix_remote/`:
@@ -215,27 +271,27 @@ Weighting: Security ×2, Architecture ×1.5, Testing ×1.5, all others ×1. → 
 | **CRIT-1** ✅ | Reserved admin account ID `"admin"` is claimable by any registering user → full operator console takeover | Critical | CONFIRMED · **fixed (Phase 1)** |
 | **CRIT-2** ✅ | Refresh tokens are accepted as access tokens on every REST route and the WebSocket | High→Critical | CONFIRMED · **fixed (Phase 1)** |
 | **HIGH-1** ✅ | Client diagnostic log is unredacted, persistent, and user-shared — contradicts `LOG_REDACTION.md` | High | CONFIRMED · **fixed (Phase 2)** |
-| **HIGH-2** ✅ | No `FLAG_SECURE` anywhere: message content is screenshot-, recorder-, and recents-visible | High | CONFIRMED · **fixed on Android (Phase 2)**; Windows outstanding |
+| **HIGH-2** ✅ | No `FLAG_SECURE` anywhere: message content is screenshot-, recorder-, and recents-visible | High | CONFIRMED · **fixed on Android (Phase 2), Windows (2026-08-07)** |
 | **HIGH-3** ✅ | `android:allowBackup` left at default `true` — app-private data extractable via ADB/cloud backup | High | CONFIRMED · **fixed (Phase 2)** |
 | **HIGH-4** ✅ | `pubspec.lock` is not committed despite policy — builds are not reproducible | High | CONFIRMED · **fixed (Phase 0)** |
 | **HIGH-5** ✅ | HTTP 403 is overloaded for both "expired token" and "not permitted", causing spurious refresh-token rotation on every authorization denial | High | CONFIRMED · **fixed (Phase 2)** |
-| **MED-1** | Full loaded-window re-fetch + re-decrypt on every inbound message (O(n²) under burst) | Medium | CONFIRMED |
-| **MED-2** | Client has no state management, router, design system, localization, or responsive layout | Medium | CONFIRMED |
+| **MED-1** ✅ | Full loaded-window re-fetch + re-decrypt on every inbound message (O(n²) under burst) | Medium | CONFIRMED · **fixed (Phase 3/4)** |
+| **MED-2** ◐ | Client has no state management, router, design system, localization, or responsive layout | Medium | CONFIRMED · **router, single shell, design tokens and localization done**; state management partial (182 `setState`), responsive layout open |
 | **MED-3** ✅ | Non-constant-time comparison of JWT signature and admin bearer token | Medium | CONFIRMED · **fixed (Phase 1)** |
-| **MED-4** | No crash reporting or analytics | Medium | CONFIRMED |
-| **MED-5** | Accessibility: 1 `Semantics` widget in ~30k LOC; text scale hard-capped at 1.3× | Medium | CONFIRMED |
-| **MED-6** | In-memory rate limiter — resets on restart, not shared across processes | Medium | CONFIRMED |
-| **MED-7** | `file_picker` pinned to a pre-release with a caret range that has already drifted | Medium | CONFIRMED |
-| **MED-8** | Client dependencies materially behind current — `flutter_local_notifications` 4 majors, `flutter_contacts` 1 major, `connectivity_plus` 1 major | Medium | CONFIRMED |
-| **MED-9** | Dependency risk register is factually wrong about `file_picker` | Medium | CONFIRMED |
+| **MED-4** ✅ | No crash reporting or analytics | Medium | CONFIRMED · **fixed (2026-08-07)** — opt-in, redacted, self-hosted sink. The consent and event types had existed since Phase 9 with no caller |
+| **MED-5** ✅ | Accessibility: 1 `Semantics` widget in ~30k LOC; text scale hard-capped at 1.3× | Medium | CONFIRMED · **fixed (Phase 7 / 2026-08-07)** — cap removed and guarded, all icon buttons labelled, guidelines run against a real screen |
+| **MED-6** ✅ | In-memory rate limiter — resets on restart, not shared across processes | Medium | CONFIRMED · **fixed (Phase 9)** |
+| **MED-7** ✅ | `file_picker` pinned to a pre-release with a caret range that has already drifted | Medium | CONFIRMED · **fixed (2026-08-07)** — exact pin; ADR-024 records the win32 conflict that keeps it on 12.x |
+| **MED-8** ◐ | Client dependencies materially behind current — `flutter_local_notifications` 4 majors, `flutter_contacts` 1 major, `connectivity_plus` 1 major | Medium | CONFIRMED · minor gaps closed, `googleapis_auth` 1→2; **four majors deferred with reasons** |
+| **MED-9** ✅ | Dependency risk register is factually wrong about `file_picker` | Medium | CONFIRMED · **fixed (2026-08-07)** — corrected, and a governance control keeps the withdrawn claim withdrawn |
 | **MED-10** ✅ | `remote_release_gate.ps1` is unrunnable — statement precedes `param()` | Medium | CONFIRMED · **fixed (Phase 0)**, along with two dev scripts carrying the same defect |
 | **MED-11** ◐ | 45 silently swallowed exceptions | Medium | CONFIRMED · **app layer fixed (Phase 2)**; 26 migration guards left as legitimate |
-| **MED-12** | CI has no coverage gate, no vulnerability scanning, and no integration tests | Medium | CONFIRMED |
-| **LOW-1** | No release obfuscation / R8 / resource shrinking | Low | CONFIRMED |
-| **LOW-2** | Duplicate private helpers (`_bytesToHex` / `_hexBytes`), dead `is_admin` claim | Low | CONFIRMED |
+| **MED-12** ◐ | CI has no coverage gate, no vulnerability scanning, and no integration tests | Medium | CONFIRMED · coverage ratchet, OSV and SBOM done; integration journeys still thin |
+| **LOW-1** ✅ | No release obfuscation / R8 / resource shrinking | Low | CONFIRMED · **fixed (Phase 9)** |
+| **LOW-2** ✅ | Duplicate private helpers (`_bytesToHex` / `_hexBytes`), dead `is_admin` claim | Low | CONFIRMED · **fixed (Phase 3)** |
 | **LOW-3** ✅ | Invite codes travel in URL query strings | Low | CONFIRMED · **fixed (Phase 2)** |
-| **LOW-4** | Unused Android foreground-service permissions declared | Low | POTENTIAL |
-| **LOW-5** | No iOS support | Low | CONFIRMED |
+| **LOW-4** ✅ | Unused Android foreground-service permissions declared | Low | **CONFIRMED and fixed (2026-08-07)** — no service element anywhere, none contributed by merged plugin manifests, no caller for `startForegroundService` |
+| **LOW-5** ✅ | No iOS support | Low | CONFIRMED · **recorded in ADR-023 (Phase 10)** |
 
 ### Verified clean (audited, no issue found)
 

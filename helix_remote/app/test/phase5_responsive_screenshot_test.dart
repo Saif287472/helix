@@ -1,7 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
+/// Golden baselines are platform-specific rasterisations; see
+/// `packages/helix_remote_ui/test/component_gallery_golden_test.dart` for the
+/// full reasoning. Linux is the reference platform, matching CI's
+/// `verify-linux` job and the pinned Flutter version.
+///
+/// Regenerate with, on Linux:
+///   flutter test test/phase5_responsive_screenshot_test.dart --update-goldens
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -12,7 +22,13 @@ void main() {
       binding.platformDispatcher.views.first.resetPhysicalSize();
       binding.platformDispatcher.views.first.resetDevicePixelRatio();
     });
-    await tester.pumpWidget(const MaterialApp(home: _ConversationSnapshot()));
+    await tester.pumpWidget(
+      const MaterialApp(
+        localizationsDelegates: HelixLocalizations.localizationsDelegates,
+        supportedLocales: HelixLocalizations.supportedLocales,
+        home: _ConversationSnapshot(),
+      ),
+    );
     await tester.pump();
   }
 
@@ -23,7 +39,7 @@ void main() {
       find.byType(_ConversationSnapshot),
       matchesGoldenFile('goldens/phase5_phone.png'),
     );
-  });
+  }, skip: !Platform.isLinux);
 
   testWidgets('P5 visual snapshot - tablet master detail', (tester) async {
     await setSurface(tester, const Size(900, 844));
@@ -32,7 +48,7 @@ void main() {
       find.byType(_ConversationSnapshot),
       matchesGoldenFile('goldens/phase5_tablet.png'),
     );
-  });
+  }, skip: !Platform.isLinux);
 
   testWidgets('P5 visual snapshot - desktop master detail', (tester) async {
     await setSurface(tester, const Size(1280, 844));
@@ -41,7 +57,7 @@ void main() {
       find.byType(_ConversationSnapshot),
       matchesGoldenFile('goldens/phase5_desktop.png'),
     );
-  });
+  }, skip: !Platform.isLinux);
 }
 
 class _ConversationSnapshot extends StatelessWidget {

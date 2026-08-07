@@ -36,12 +36,18 @@ class ContactTile extends StatelessWidget {
         children: [
           IconButton(
             tooltip: 'Accept request',
-            icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+            icon: const Icon(
+              Icons.check_circle_outline,
+              color: HelixStatusColors.positive,
+            ),
             onPressed: onAccept,
           ),
           IconButton(
             tooltip: 'Reject request',
-            icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+            icon: const Icon(
+              Icons.cancel_outlined,
+              color: HelixStatusColors.danger,
+            ),
             onPressed: onReject,
           ),
           if (onRemove != null) _MoreMenu(onRemove: onRemove!),
@@ -51,7 +57,10 @@ class ContactTile extends StatelessWidget {
       trailing = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          TextButton(onPressed: onCancel, child: const Text('Cancel')),
+          TextButton(
+            onPressed: onCancel,
+            child: Text(HelixLocalizations.of(context).cancel),
+          ),
           if (onRemove != null) _MoreMenu(onRemove: onRemove!),
         ],
       );
@@ -114,14 +123,20 @@ class _MoreMenu extends StatelessWidget {
       onSelected: (value) {
         if (value == 'remove') onRemove();
       },
-      itemBuilder: (_) => const [
+      itemBuilder: (_) => [
         PopupMenuItem(
           value: 'remove',
           child: Row(
             children: [
-              Icon(Icons.person_remove_outlined, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Remove contact', style: TextStyle(color: Colors.red)),
+              const Icon(
+                Icons.person_remove_outlined,
+                color: HelixStatusColors.danger,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                HelixLocalizations.of(context).removeContact,
+                style: const TextStyle(color: HelixStatusColors.danger),
+              ),
             ],
           ),
         ),
@@ -163,7 +178,7 @@ class _Avatar extends StatelessWidget {
       child: Text(
         _initials(),
         style: TextStyle(
-          color: Colors.white,
+          color: HelixScrimColors.onBackdrop,
           fontSize: size * 0.35,
           fontWeight: FontWeight.bold,
         ),
@@ -236,13 +251,14 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
               child: Row(
                 children: [
                   Text(
-                    'New chat',
+                    HelixLocalizations.of(context).newChat,
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const Spacer(),
                   IconButton(
+                    tooltip: 'Close search',
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.of(context).pop(),
                   ),

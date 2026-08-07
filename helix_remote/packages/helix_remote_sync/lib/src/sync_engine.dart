@@ -509,7 +509,8 @@ class RemoteSyncEngine {
       case 'safety_notice':
         return RemoteSyncChange(
           areas: const {RemoteSyncChangeArea.contacts},
-          contactAccountId: env.payload['peer_account_id'] as String? ??
+          contactAccountId:
+              env.payload['peer_account_id'] as String? ??
               env.payload['account_id'] as String?,
         );
       case 'group_created':

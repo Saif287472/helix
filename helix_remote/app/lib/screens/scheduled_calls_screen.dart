@@ -1,6 +1,7 @@
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class ScheduledCallsScreen extends StatelessWidget {
   const ScheduledCallsScreen({
@@ -24,7 +25,7 @@ class ScheduledCallsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scheduled calls'),
+        title: Text(HelixLocalizations.of(context).scheduledCalls),
         actions: [
           if (onCreateNew != null)
             IconButton(
@@ -44,7 +45,7 @@ class ScheduledCallsScreen extends StatelessWidget {
                   : FilledButton.icon(
                       onPressed: onCreateNew,
                       icon: const Icon(Icons.add),
-                      label: const Text('Schedule a call'),
+                      label: Text(HelixLocalizations.of(context).scheduleCall),
                     ),
             )
           : ListView.separated(
@@ -124,12 +125,15 @@ class _ScheduledCallCard extends StatelessWidget {
                   Container(
                     padding: HelixInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.15),
+                      color: HelixStatusColors.caution.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text(
-                      'Starting soon',
-                      style: TextStyle(fontSize: 11, color: Colors.orange),
+                    child: Text(
+                      HelixLocalizations.of(context).startingSoon,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: HelixStatusColors.caution,
+                      ),
                     ),
                   ),
               ],
@@ -137,18 +141,32 @@ class _ScheduledCallCard extends StatelessWidget {
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.schedule, size: 14, color: Colors.grey),
+                const Icon(
+                  Icons.schedule,
+                  size: 14,
+                  color: HelixStatusColors.neutral,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   timeLabel,
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: const TextStyle(
+                    color: HelixStatusColors.neutral,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                const Icon(Icons.people, size: 14, color: Colors.grey),
+                const Icon(
+                  Icons.people,
+                  size: 14,
+                  color: HelixStatusColors.neutral,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   '${call.attendees.length} attendee${call.attendees.length == 1 ? '' : 's'}',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: const TextStyle(
+                    color: HelixStatusColors.neutral,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -159,9 +177,9 @@ class _ScheduledCallCard extends StatelessWidget {
                 spacing: 6,
                 children: call.attendees.map((a) {
                   final color = switch (a.rsvpStatus) {
-                    RsvpStatus.yes => Colors.green,
-                    RsvpStatus.no => Colors.red,
-                    RsvpStatus.pending => Colors.grey,
+                    RsvpStatus.yes => HelixStatusColors.positive,
+                    RsvpStatus.no => HelixStatusColors.danger,
+                    RsvpStatus.pending => HelixStatusColors.neutral,
                   };
                   return Chip(
                     label: Text(
@@ -191,29 +209,33 @@ class _ScheduledCallCard extends StatelessWidget {
                 if (!_isHost && myRsvp != RsvpStatus.yes && onRsvp != null)
                   TextButton.icon(
                     icon: const Icon(Icons.check, size: 16),
-                    label: const Text('Accept'),
+                    label: Text(HelixLocalizations.of(context).accept),
                     onPressed: () => onRsvp!(call.scheduledCallId, 'YES'),
                   ),
                 if (!_isHost && myRsvp != RsvpStatus.no && onRsvp != null)
                   TextButton.icon(
                     icon: const Icon(Icons.close, size: 16),
-                    label: const Text('Decline'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    label: Text(HelixLocalizations.of(context).decline),
+                    style: TextButton.styleFrom(
+                      foregroundColor: HelixStatusColors.danger,
+                    ),
                     onPressed: () => onRsvp!(call.scheduledCallId, 'NO'),
                   ),
                 const Spacer(),
                 // Host cancel
                 if (_isHost && onCancel != null)
                   TextButton(
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    style: TextButton.styleFrom(
+                      foregroundColor: HelixStatusColors.danger,
+                    ),
                     onPressed: () => _confirmCancel(context),
-                    child: const Text('Cancel'),
+                    child: Text(HelixLocalizations.of(context).cancel),
                   ),
                 // Join button (room already live, or time is now)
                 if ((hasRoom || isStartable) && onJoin != null)
                   FilledButton.icon(
                     icon: const Icon(Icons.video_call, size: 16),
-                    label: const Text('Join'),
+                    label: Text(HelixLocalizations.of(context).join),
                     onPressed: () => onJoin!(call),
                   ),
               ],
@@ -228,20 +250,22 @@ class _ScheduledCallCard extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel scheduled call?'),
-        content: const Text('All attendees will be notified.'),
+        title: Text(HelixLocalizations.of(context).cancelScheduledCall),
+        content: Text(HelixLocalizations.of(context).allAttendeesWillNotified),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Keep'),
+            child: Text(HelixLocalizations.of(context).keep),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: HelixStatusColors.danger,
+            ),
             onPressed: () {
               Navigator.of(ctx).pop();
               onCancel!(call.scheduledCallId);
             },
-            child: const Text('Cancel call'),
+            child: Text(HelixLocalizations.of(context).cancelCall),
           ),
         ],
       ),

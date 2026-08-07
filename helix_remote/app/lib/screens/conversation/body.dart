@@ -46,6 +46,7 @@ extension _ConversationBody on _ConversationScreenState {
             ),
           ),
           IconButton(
+            tooltip: 'Cancel reply',
             icon: const Icon(Icons.close, size: 20),
             onPressed: () => _update(() => _replyTo = null),
           ),
@@ -94,7 +95,7 @@ extension _ConversationBody on _ConversationScreenState {
             : TextButton.icon(
                 onPressed: _loadMore,
                 icon: const Icon(Icons.expand_less, size: 18),
-                label: const Text('Load earlier messages'),
+                label: Text(HelixLocalizations.of(context).loadEarlierMessages),
                 style: TextButton.styleFrom(
                   padding: HelixInsets.symmetric(horizontal: 16, vertical: 6),
                   backgroundColor: Theme.of(
@@ -131,7 +132,9 @@ extension _ConversationBody on _ConversationScreenState {
     if (index < 0) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Original message not found')),
+        SnackBar(
+          content: Text(HelixLocalizations.of(context).originalMessageNotFound),
+        ),
       );
       return;
     }
@@ -184,7 +187,11 @@ extension _ConversationBody on _ConversationScreenState {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: HelixStatusColors.danger,
+                ),
                 const SizedBox(height: 8),
                 Text(_errorMessage!, textAlign: TextAlign.center),
               ],
@@ -288,7 +295,7 @@ extension _ConversationBody on _ConversationScreenState {
       actions: [
         TextButton(
           onPressed: () => _update(() => _attachmentStatus = null),
-          child: const Text('Dismiss'),
+          child: Text(HelixLocalizations.of(context).dismiss),
         ),
       ],
     );
@@ -392,7 +399,7 @@ extension _ConversationBody on _ConversationScreenState {
                     mini: true,
                     elevation: 2,
                     backgroundColor: palette.accent,
-                    foregroundColor: Colors.black,
+                    foregroundColor: HelixScrimColors.backdrop,
                     child: Icon(hasText ? Icons.send : Icons.mic),
                   ),
                 );
@@ -406,7 +413,11 @@ extension _ConversationBody on _ConversationScreenState {
 
   void _showVoiceNoteUnavailable() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Voice messages are not available yet')),
+      SnackBar(
+        content: Text(
+          HelixLocalizations.of(context).voiceMessagesNotAvailableYet,
+        ),
+      ),
     );
   }
 }
@@ -424,8 +435,8 @@ class _ChatWallpaper extends StatelessWidget {
       child: CustomPaint(
         painter: _ChatWallpaperPainter(
           color: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white.withAlpha(16)
-              : Colors.black.withAlpha(18),
+              ? HelixScrimColors.highlightOnDark
+              : HelixScrimColors.shadow,
         ),
         child: child,
       ),
@@ -484,11 +495,11 @@ class _DateChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: palette.dateChip,
             borderRadius: BorderRadius.circular(9),
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(
-                color: Colors.black.withAlpha(16),
+                color: HelixScrimColors.shadowSoft,
                 blurRadius: 1.5,
-                offset: const Offset(0, 1),
+                offset: Offset(0, 1),
               ),
             ],
           ),

@@ -18,16 +18,19 @@ void main() {
     '',
   ];
 
-  test('P8 property corpus: arbitrary message-status transitions never escape validation', () {
-    final random = Random(0xC0DEC0DE);
-    for (var seed = 0; seed < 2000; seed++) {
-      final from = statuses[random.nextInt(statuses.length)];
-      final to = statuses[random.nextInt(statuses.length)];
-      expect(
-        () => RemoteMessageStatus.validateTransition(from, to),
-        anyOf(returnsNormally, throwsA(isA<Exception>())),
-        reason: 'seed=$seed from=$from to=$to',
-      );
-    }
-  });
+  test(
+    'P8 property corpus: arbitrary message-status transitions never escape validation',
+    () {
+      final random = Random(0xC0DEC0DE);
+      for (var seed = 0; seed < 2000; seed++) {
+        final from = statuses[random.nextInt(statuses.length)];
+        final to = statuses[random.nextInt(statuses.length)];
+        expect(
+          () => RemoteMessageStatus.validateTransition(from, to),
+          anyOf(returnsNormally, throwsA(isA<Exception>())),
+          reason: 'seed=$seed from=$from to=$to',
+        );
+      }
+    },
+  );
 }

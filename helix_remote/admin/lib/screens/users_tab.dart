@@ -188,6 +188,7 @@ class _UsersTabState extends State<UsersTab> {
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Reload users',
                     icon: const Icon(Icons.refresh),
                     onPressed: () => _loadUsers(offset: _offset),
                   ),

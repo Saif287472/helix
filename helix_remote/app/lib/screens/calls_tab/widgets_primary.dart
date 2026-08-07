@@ -269,11 +269,12 @@ class _CallInfoScreen extends StatelessWidget {
         foregroundColor: cs.onSurface,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Back',
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Call info',
+          HelixLocalizations.of(context).callInfo,
           style: theme.textTheme.titleLarge?.copyWith(
             fontSize: 20,
             color: cs.onSurface,
@@ -283,8 +284,11 @@ class _CallInfoScreen extends StatelessWidget {
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'clear', child: Text('Clear this log')),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'clear',
+                child: Text(HelixLocalizations.of(context).clearLog),
+              ),
             ],
           ),
         ],

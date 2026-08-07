@@ -372,10 +372,35 @@ backpressure inside a page, not just between pages.
 > cannot observe its own send buffer, the flood hypothesis is harder to confirm from the server
 > side, and step 1 of the procedure below (bypass nginx) becomes the more valuable first move.
 
-**H2 — `permessage-deflate` negotiation mismatch.**
+**H2 — `permessage-deflate` negotiation mismatch. [ELIMINATED — 2026-08-07]**
 The client uses `WebSocket.connect` (`remote_websocket_client.dart:65`), which offers
 compression by default; the server uses `shelf_web_socket`. An RSV-bit / window-bits disagreement
 produces exactly `1002`. Cheap to test.
+
+> **[DISPROVEN]** Settled from source rather than by shipping a build, and pinned by
+> `backend/test/websocket_compression_negotiation_test.dart` (3 cases). Compression is never
+> negotiated **in either direction**, which is the one state that cannot produce an RSV mismatch:
+>
+> 1. `shelf_web_socket` 3.0.0 writes the `101` response by hand
+>    (`web_socket_handler.dart:82-88`) and emits only `Upgrade`, `Connection`,
+>    `Sec-WebSocket-Accept` and optionally `Sec-WebSocket-Protocol`. It never emits
+>    `Sec-WebSocket-Extensions`, which per RFC 7692 declines everything the client offered.
+> 2. It then calls `WebSocket.fromUpgradedSocket` **without** a `compression:` argument. That
+>    factory forwards to `_WebSocketImpl._fromSocket`, whose optional `deflate` positional it does
+>    not pass — so the server's deflate helper is `null` regardless of what `CompressionOptions`
+>    says, and `addFrame` sets RSV1 only when that helper is non-null. The `compression` parameter
+>    is dead on this path; it is honoured only in the `HttpServer` upgrade path
+>    (`_negotiateCompression`), which this server does not use.
+> 3. `negotiateClientCompression` returns `null` unless the response carries
+>    `Sec-WebSocket-Extensions: permessage-deflate`, so the client's helper is `null` too. The test
+>    asserts `socket.extensions` is empty even when the client asks explicitly with non-default
+>    window bits.
+>
+> **Consequence for the procedure below: skip step 2.** Setting
+> `CompressionOptions.compressionOff` on the client would change nothing. The tests protect the
+> *agreement*, not the absence of compression — a `shelf_web_socket` upgrade that starts echoing
+> the extension header, or a move to serving the upgrade through `HttpServer`, would reopen H2 and
+> fail them.
 
 **H3 — Ping/pong interaction.** The client runs **two** keepalives: protocol-level
 (`pingInterval = 20 s`, `remote_websocket_client.dart:86`) and application-level JSON ping every
@@ -385,9 +410,10 @@ produces exactly `1002`. Cheap to test.
 
 1. **Bypass nginx.** Point a test client at `127.0.0.1:8080` directly on the VPS. If 1002
    disappears, it is the proxy; if it persists, it is application-level. *This single step splits
-   the search space in half — do it first.*
-2. **Disable compression** on the client (`compression: CompressionOptions.compressionOff`) for
-   one build. If 1002 disappears → H2.
+   the search space in half — do it first.* **This is now the only remaining cheap discriminator,
+   and it needs the VPS.**
+2. ~~**Disable compression** on the client for one build.~~ **Skip — H2 is disproven above;
+   compression is never negotiated, so this build would be identical to the current one.**
 3. **Correlate with replay.** Log event counts per replay and the socket's buffered amount. If
    1002 clusters with large replays → H1.
 4. Now that the admin console's Logs screen works, watch the **server** side during a close —

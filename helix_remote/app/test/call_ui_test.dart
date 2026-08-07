@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/screens/call_screen.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 // ---------------------------------------------------------------------------
 // P12-A01 through P12-A03: callsAvailable ICE gating logic
@@ -87,7 +88,11 @@ void main() {
   // -----------------------------------------------------------------------
 
   group('P12-W01 incoming call UI', () {
-    Widget makeApp(Widget home) => MaterialApp(home: home);
+    Widget makeApp(Widget home) => MaterialApp(
+      localizationsDelegates: HelixLocalizations.localizationsDelegates,
+      supportedLocales: HelixLocalizations.supportedLocales,
+      home: home,
+    );
 
     testWidgets('ringing state shows peer ID, accept and decline', (
       tester,
@@ -267,6 +272,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: Scaffold(
             appBar: AppBar(
               actions: const [

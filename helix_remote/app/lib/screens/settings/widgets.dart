@@ -299,7 +299,7 @@ class _CategoryIcon extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-      child: Icon(icon, color: Colors.white, size: 23),
+      child: Icon(icon, color: HelixScrimColors.onBackdrop, size: 23),
     );
   }
 }
@@ -332,7 +332,7 @@ class _EmptySearchState extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Try a different title or description.',
+            HelixLocalizations.of(context).tryDifferentTitleDescription,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,

@@ -99,7 +99,7 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Send media'),
+            title: Text(HelixLocalizations.of(context).sendMedia),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -109,24 +109,32 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
                     labelText: 'Media type',
                     border: OutlineInputBorder(),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'image', child: Text('Image')),
-                    DropdownMenuItem(value: 'video', child: Text('Video')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'image',
+                      child: Text(HelixLocalizations.of(context).image),
+                    ),
+                    DropdownMenuItem(
+                      value: 'video',
+                      child: Text(HelixLocalizations.of(context).video),
+                    ),
                     DropdownMenuItem(
                       value: 'document',
-                      child: Text('Document'),
+                      child: Text(HelixLocalizations.of(context).document),
                     ),
                     DropdownMenuItem(
                       value: 'scanner_document',
-                      child: Text('Scanned document'),
+                      child: Text(
+                        HelixLocalizations.of(context).scannedDocument,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'camera_capture',
-                      child: Text('Camera capture'),
+                      child: Text(HelixLocalizations.of(context).cameraCapture),
                     ),
                     DropdownMenuItem(
                       value: 'live_photo',
-                      child: Text('Live Photo'),
+                      child: Text(HelixLocalizations.of(context).livePhoto),
                     ),
                   ],
                   onChanged: (value) {
@@ -149,14 +157,14 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
                   value: viewOnce,
                   onChanged: (value) =>
                       setDialogState(() => viewOnce = value ?? false),
-                  title: const Text('View once'),
+                  title: Text(HelixLocalizations.of(context).viewOnce),
                 ),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(HelixLocalizations.of(context).cancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(
@@ -167,7 +175,7 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
                     viewOnce: viewOnce,
                   ),
                 ),
-                child: const Text('Send'),
+                child: Text(HelixLocalizations.of(context).send),
               ),
             ],
           );
@@ -223,7 +231,11 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
     if (attachmentService == null || path == null || _attachmentBusy) return;
     if (!_model.canExportAttachment(attachment)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This chat blocks external export')),
+        SnackBar(
+          content: Text(
+            HelixLocalizations.of(context).chatBlocksExternalExport,
+          ),
+        ),
       );
       return;
     }
@@ -283,7 +295,7 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),

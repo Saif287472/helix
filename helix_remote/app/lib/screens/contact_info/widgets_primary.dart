@@ -188,10 +188,19 @@ class _OverflowMenu extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       constraints: const BoxConstraints(minWidth: 260),
       onSelected: onSelected,
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'share', child: Text('Share profile')),
-        PopupMenuItem(value: 'edit', child: Text('Edit nickname')),
-        PopupMenuItem(value: 'verify', child: Text('Verify security code')),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'share',
+          child: Text(HelixLocalizations.of(context).shareProfile),
+        ),
+        PopupMenuItem(
+          value: 'edit',
+          child: Text(HelixLocalizations.of(context).editNickname),
+        ),
+        PopupMenuItem(
+          value: 'verify',
+          child: Text(HelixLocalizations.of(context).verifySecurityCode),
+        ),
       ],
     );
   }
@@ -226,7 +235,7 @@ class _MediaSection extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Media, links, and docs',
+                      HelixLocalizations.of(context).mediaLinksDocs,
                       style: theme.textTheme.titleLarge?.copyWith(
                         color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
@@ -252,7 +261,7 @@ class _MediaSection extends StatelessWidget {
                 ? Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'No shared media yet',
+                      HelixLocalizations.of(context).noSharedMediaYet,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),

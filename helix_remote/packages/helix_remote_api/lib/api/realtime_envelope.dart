@@ -51,7 +51,7 @@ class RemoteRealtimeEnvelope {
         schemaVersion == null ||
         timestamp == null ||
         type == null) {
-      throw FormatException(
+      throw const FormatException(
         'Missing required envelope fields: event_id, schema_version, timestamp, or type',
       );
     }

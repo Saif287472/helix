@@ -12,6 +12,11 @@ void main() {
     expect(link?.serverUrl, 'https://chat.example');
   });
 
+  // NOTE: parsing is all these two kinds have. `bootstrap.dart` is the only
+  // consumer of a parsed link and it matches HelixDeepLinkKind.invite, so a
+  // tapped call or group-join link opens the app and does nothing further.
+  // This test passing is not evidence that those links work end to end — it
+  // asserts the parser, and the parser is not the missing half.
   test('P6 call and group join links retain their explicit targets', () {
     final call = HelixDeepLink.tryParse('helix://call/call-42');
     final group = HelixDeepLink.tryParse(

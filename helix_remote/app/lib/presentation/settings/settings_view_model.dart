@@ -24,7 +24,9 @@ class SettingsViewModel {
           .length;
     }
   }
-  int get lockedConversationCount => _messaging.db.getLockedConversations().length;
+
+  int get lockedConversationCount =>
+      _messaging.db.getLockedConversations().length;
   bool get appLockEnabled => _messaging.db.getAppLockSettings().enabled;
   int get defaultDisappearingSeconds =>
       _messaging.db.getAccountDefaultDisappearingSeconds();

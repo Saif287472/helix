@@ -14,6 +14,7 @@ import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'contacts/widgets.dart';
 
@@ -283,9 +284,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
       if (updated == null || updated.status != 'Accepted') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'Waiting for the other person to accept your request.',
+                HelixLocalizations.of(context).waitingOtherPersonAcceptRequest,
               ),
             ),
           );
@@ -299,8 +300,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
     if (contact.status != 'Accepted') {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Accept the request before opening a chat.'),
+          SnackBar(
+            content: Text(
+              HelixLocalizations.of(context).acceptRequestBeforeOpeningChat,
+            ),
           ),
         );
       }
@@ -385,17 +388,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove contact'),
+        title: Text(HelixLocalizations.of(context).removeContact),
         content: Text('Remove $name from your contacts?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: HelixStatusColors.danger,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove'),
+            child: Text(HelixLocalizations.of(context).remove),
           ),
         ],
       ),
@@ -473,7 +478,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 onChanged: (v) => setState(() => _searchQuery = v),
               )
             : Text(
-                'Contacts',
+                HelixLocalizations.of(context).contacts,
                 style: TextStyle(
                   color: cs.onPrimary,
                   fontWeight: FontWeight.bold,
@@ -518,9 +523,15 @@ class _ContactsScreenState extends State<ContactsScreen> {
           PopupMenuButton<bool>(
             icon: Icon(Icons.sort, color: cs.onPrimary),
             onSelected: (byName) => setState(() => _sortByName = byName),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: false, child: Text('Sort by recent')),
-              PopupMenuItem(value: true, child: Text('Sort by name')),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: false,
+                child: Text(HelixLocalizations.of(context).sortByRecent),
+              ),
+              PopupMenuItem(
+                value: true,
+                child: Text(HelixLocalizations.of(context).sortByName),
+              ),
             ],
           ),
         ],
@@ -529,18 +540,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
         children: [
           if (!_syncBannerDismissed && !_syncingContacts)
             MaterialBanner(
-              content: const Text(
-                'Find contacts already on Helix? Phone numbers are hashed '
-                'before comparison and never sent in the clear.',
+              content: Text(
+                HelixLocalizations.of(context).findContactsAlreadyHelixPhone,
               ),
               actions: [
                 TextButton(
                   onPressed: () => setState(() => _syncBannerDismissed = true),
-                  child: const Text('Not now'),
+                  child: Text(HelixLocalizations.of(context).notNow),
                 ),
                 FilledButton(
                   onPressed: _runContactsSync,
-                  child: const Text('Sync contacts'),
+                  child: Text(HelixLocalizations.of(context).syncContacts),
                 ),
               ],
             ),
@@ -550,7 +560,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 '$_pendingReceivedCount pending contact request${_pendingReceivedCount == 1 ? '' : 's'}',
               ),
               actions: [
-                TextButton(onPressed: () {}, child: const Text('View')),
+                TextButton(
+                  onPressed: () {},
+                  child: Text(HelixLocalizations.of(context).view),
+                ),
               ],
             ),
           if (_statusText != null)
@@ -559,7 +572,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => setState(() => _statusText = null),
-                  child: const Text('Dismiss'),
+                  child: Text(HelixLocalizations.of(context).dismiss),
                 ),
               ],
             ),
@@ -614,7 +627,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     ? FilledButton.icon(
                         onPressed: _addContact,
                         icon: const Icon(Icons.person_add_outlined),
-                        label: const Text('Add contact'),
+                        label: Text(HelixLocalizations.of(context).addContact2),
                       )
                     : null,
               ),

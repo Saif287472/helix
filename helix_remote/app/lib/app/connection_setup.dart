@@ -59,7 +59,7 @@ class _OfflineShellScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Helix Remote')),
+      appBar: AppBar(title: Text(HelixLocalizations.of(context).appTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Center(
@@ -77,15 +77,15 @@ class _OfflineShellScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'You\'re browsing offline',
+                      HelixLocalizations.of(context).browsingOffline,
                       style: theme.textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'No server is connected, so messaging, calls, and '
-                      'contacts aren\'t available yet. Connect a server '
-                      'anytime to get started.',
+                      HelixLocalizations.of(
+                        context,
+                      ).noServerConnectedSoMessaging,
                       style: theme.textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
@@ -103,7 +103,9 @@ class _OfflineShellScreen extends StatelessWidget {
                       child: FilledButton.icon(
                         onPressed: () => _connect(context),
                         icon: const Icon(Icons.link),
-                        label: const Text('Connect a server'),
+                        label: Text(
+                          HelixLocalizations.of(context).connectServer,
+                        ),
                       ),
                     ),
                   ],
@@ -175,7 +177,7 @@ class _ServerUrlEntryScreenState extends State<_ServerUrlEntryScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Helix Remote')),
+      appBar: AppBar(title: Text(HelixLocalizations.of(context).appTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Center(
@@ -189,13 +191,13 @@ class _ServerUrlEntryScreenState extends State<_ServerUrlEntryScreen> {
                     const Icon(Icons.dns_outlined, size: 64),
                     const SizedBox(height: 16),
                     Text(
-                      'Connect to Server',
+                      HelixLocalizations.of(context).connectServer2,
                       style: theme.textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Enter the URL of your Helix Remote backend.',
+                      HelixLocalizations.of(context).enterUrlHelixRemoteBackend,
                       style: theme.textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),

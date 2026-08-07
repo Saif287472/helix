@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/main.dart';
+import 'package:helix_remote/app/helix_remote_app_shell.dart';
 
 RemoteDevelopmentConfig _devConfig() => RemoteDevelopmentConfig(
   profile: RemoteRuntimeProfile.localWindows,
@@ -26,7 +27,9 @@ void main() {
       databaseDirectory: Directory.systemTemp.path,
       devConfig: _devConfig(),
     );
-    await tester.pumpWidget(HelixRemoteApp(root: root));
+    await tester.pumpWidget(
+      HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
+    );
 
     expect(find.text('Helix Remote'), findsOneWidget);
     expect(find.text('Starting Helix Remote...'), findsOneWidget);
@@ -51,9 +54,13 @@ void main() {
   testWidgets('configuration errors render a stable startup screen', (
     WidgetTester tester,
   ) async {
+    // Wrapped, because this is a page rather than an application — it used to
+    // supply its own shell and read its copy from the context above it.
     await tester.pumpWidget(
-      const HelixRemoteConfigurationErrorApp(
-        message: 'HELIX_REMOTE_HOST is required.',
+      const HelixRemoteAppShell(
+        home: HelixRemoteConfigurationErrorApp(
+          message: 'HELIX_REMOTE_HOST is required.',
+        ),
       ),
     );
 

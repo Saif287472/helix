@@ -33,9 +33,7 @@ class RedactedTelemetryEvent {
     : name = 'app_crash',
       fields = {
         'error': _redact(error.toString()),
-        'stack': _redact(
-          stack.toString().split('\n').take(5).join(' | '),
-        ),
+        'stack': _redact(stack.toString().split('\n').take(5).join(' | ')),
       };
 
   RedactedTelemetryEvent.analytics(String name)

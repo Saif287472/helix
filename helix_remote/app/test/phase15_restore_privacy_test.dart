@@ -14,6 +14,7 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as pathpkg;
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 // ---------------------------------------------------------------------------
 // Stubs
@@ -161,6 +162,8 @@ void main() {
       addTearDown(db.close);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _StubRestClient(),
@@ -184,6 +187,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: restClient,
@@ -214,6 +219,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _StubRestClient(),
@@ -239,6 +246,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: PrivacyScreen(
             restClient: _StubRestClient(),
             messagingService: messaging,
@@ -261,6 +270,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: PrivacyScreen(
             restClient: restClient,
             messagingService: messaging,
@@ -300,6 +311,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: PrivacyScreen(
             restClient: _StubRestClient(),
             messagingService: messaging,

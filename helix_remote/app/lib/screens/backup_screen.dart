@@ -8,6 +8,7 @@ import 'package:helix_remote/services/screen_security.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_crypto/helix_remote_crypto.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({
@@ -173,7 +174,7 @@ class _BackupScreenState extends State<BackupScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Backup & Restore')),
+      appBar: AppBar(title: Text(HelixLocalizations.of(context).backupRestore)),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: HelixInsets.all(16),
@@ -183,9 +184,9 @@ class _BackupScreenState extends State<BackupScreen>
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.upload),
-                  title: const Text('Create Backup'),
-                  subtitle: const Text(
-                    'Encrypt app data with Argon2id recovery protection',
+                  title: Text(HelixLocalizations.of(context).createBackup),
+                  subtitle: Text(
+                    HelixLocalizations.of(context).encryptAppDataArgonId,
                   ),
                   enabled: !_busy,
                   onTap: _createBackup,
@@ -195,9 +196,11 @@ class _BackupScreenState extends State<BackupScreen>
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.download),
-                  title: const Text('Restore Backup'),
-                  subtitle: const Text(
-                    'Decrypt, stage-validate, then replace local state',
+                  title: Text(HelixLocalizations.of(context).restoreBackup),
+                  subtitle: Text(
+                    HelixLocalizations.of(
+                      context,
+                    ).decryptStageValidateThenReplace,
                   ),
                   enabled: !_busy,
                   onTap: _restoreBackup,
@@ -207,7 +210,7 @@ class _BackupScreenState extends State<BackupScreen>
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.verified_user_outlined),
-                  title: const Text('Backup Status'),
+                  title: Text(HelixLocalizations.of(context).backupStatus),
                   subtitle: Text(_backupStatusText()),
                 ),
               ),
@@ -270,7 +273,7 @@ class _RecoverySecretDialogState extends State<_RecoverySecretDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(HelixLocalizations.of(context).cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, _controller.text),

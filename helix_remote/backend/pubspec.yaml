@@ -19,7 +19,7 @@ dependencies:
   # means signing a JWT with the service account's RSA key. package:crypto
   # is hash/HMAC only and package:cryptography has no pure-Dart RSA on the
   # VM, so this is the alternative to hand-rolling PKCS#1 v1.5 signing.
-  googleapis_auth: ^1.6.0
+  googleapis_auth: ^2.3.3
   http: ^1.2.0
   web_socket_channel: ^3.0.3
   meta: ^1.18.0

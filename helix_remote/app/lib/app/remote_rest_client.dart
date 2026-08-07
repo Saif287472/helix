@@ -341,6 +341,25 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   Future<Map<String, dynamic>> getServerInfo() =>
       _request('GET', 'server/info');
 
+  /// Posts a redacted diagnostic event to the server's own crash sink.
+  ///
+  /// Not part of [HelixRemoteRestClient]: telemetry is optional, and a
+  /// deployment that points [TelemetrySink] somewhere else should not have to
+  /// implement this to satisfy the interface.
+  ///
+  /// `skipAuthRefresh` because a crash report is never worth rotating a
+  /// refresh token over. If the session has expired, the report is dropped —
+  /// the ordinary request that follows will do the refresh.
+  Future<Map<String, dynamic>> reportTelemetryCrash({
+    required String name,
+    required Map<String, String> fields,
+  }) => _request(
+    'POST',
+    'telemetry/crash',
+    body: {'name': name, 'fields': fields},
+    skipAuthRefresh: true,
+  );
+
   @override
   Future<Map<String, dynamic>> matchPhoneHashes(
     List<String> phoneHashes, {

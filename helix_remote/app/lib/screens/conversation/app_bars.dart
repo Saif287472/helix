@@ -98,29 +98,35 @@ extension _ConversationAppBars on _ConversationScreenState {
           constraints: const BoxConstraints(minWidth: 280),
           onSelected: _handleConversationMenu,
           itemBuilder: (_) => [
-            const PopupMenuItem(value: 'view', child: Text('View contact')),
+            PopupMenuItem(
+              value: 'view',
+              child: Text(HelixLocalizations.of(context).viewContact),
+            ),
             PopupMenuItem(
               value: 'search',
               child: Text(_searching ? 'Close search' : 'Search'),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'media',
-              child: Text('Media, links, and docs'),
+              child: Text(HelixLocalizations.of(context).mediaLinksDocs),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'mute',
-              child: Text('Mute notifications'),
+              child: Text(HelixLocalizations.of(context).muteNotifications),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'disappearing',
-              child: Text('Disappearing messages'),
+              child: Text(HelixLocalizations.of(context).disappearingMessages),
             ),
-            const PopupMenuItem(value: 'theme', child: Text('Chat theme')),
+            PopupMenuItem(
+              value: 'theme',
+              child: Text(HelixLocalizations.of(context).chatTheme),
+            ),
             PopupMenuItem(
               value: 'more',
               child: Row(
                 children: [
-                  const Expanded(child: Text('More')),
+                  Expanded(child: Text(HelixLocalizations.of(context).more)),
                   Icon(Icons.arrow_right, color: cs.onSurfaceVariant),
                 ],
               ),
@@ -208,7 +214,11 @@ extension _ConversationAppBars on _ConversationScreenState {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Calls require TURN relay configuration')),
+      SnackBar(
+        content: Text(
+          HelixLocalizations.of(context).callsRequireTurnRelayConfiguration,
+        ),
+      ),
     );
   }
 
@@ -240,13 +250,31 @@ extension _ConversationAppBars on _ConversationScreenState {
       position: RelativeRect.fromLTRB(overlay.size.width - 236, 78, 12, 0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       constraints: const BoxConstraints(minWidth: 220),
-      items: const [
-        PopupMenuItem(value: 'report', child: Text('Report')),
-        PopupMenuItem(value: 'block', child: Text('Block')),
-        PopupMenuItem(value: 'clear', child: Text('Clear chat')),
-        PopupMenuItem(value: 'export', child: Text('Export chat')),
-        PopupMenuItem(value: 'shortcut', child: Text('Add shortcut')),
-        PopupMenuItem(value: 'list', child: Text('Add to list')),
+      items: [
+        PopupMenuItem(
+          value: 'report',
+          child: Text(HelixLocalizations.of(context).report),
+        ),
+        PopupMenuItem(
+          value: 'block',
+          child: Text(HelixLocalizations.of(context).block),
+        ),
+        PopupMenuItem(
+          value: 'clear',
+          child: Text(HelixLocalizations.of(context).clearChat),
+        ),
+        PopupMenuItem(
+          value: 'export',
+          child: Text(HelixLocalizations.of(context).exportChat),
+        ),
+        PopupMenuItem(
+          value: 'shortcut',
+          child: Text(HelixLocalizations.of(context).addShortcut),
+        ),
+        PopupMenuItem(
+          value: 'list',
+          child: Text(HelixLocalizations.of(context).addList),
+        ),
       ],
     );
     if (!mounted || selected == null) return;
@@ -277,7 +305,7 @@ extension _ConversationAppBars on _ConversationScreenState {
     final selected = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Disappearing messages'),
+        title: Text(HelixLocalizations.of(context).disappearingMessages),
         children: [
           for (final option in const {
             0: 'Off',
@@ -312,6 +340,7 @@ extension _ConversationAppBars on _ConversationScreenState {
       backgroundColor: palette.appBar,
       foregroundColor: palette.onAppBar,
       leading: IconButton(
+        tooltip: 'Exit selection',
         icon: Icon(Icons.close, color: palette.onAppBar),
         onPressed: _exitSelectionMode,
       ),
@@ -340,19 +369,19 @@ extension _ConversationAppBars on _ConversationScreenState {
           },
           itemBuilder: (_) => [
             if (_allSelectedAreMine)
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'delete_everyone',
                 child: Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.delete_forever_outlined,
                       size: 20,
-                      color: Colors.red,
+                      color: HelixStatusColors.danger,
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Text(
-                      'Delete for everyone',
-                      style: TextStyle(color: Colors.red),
+                      HelixLocalizations.of(context).deleteEveryone,
+                      style: const TextStyle(color: HelixStatusColors.danger),
                     ),
                   ],
                 ),

@@ -49,7 +49,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -112,7 +112,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Groups'),
+        title: Text(HelixLocalizations.of(context).groups),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -138,11 +138,19 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.check, color: Colors.green),
+                            tooltip: 'Approve join request',
+                            icon: const Icon(
+                              Icons.check,
+                              color: HelixStatusColors.positive,
+                            ),
                             onPressed: () => _approveJoinRequest(req, true),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red),
+                            tooltip: 'Decline join request',
+                            icon: const Icon(
+                              Icons.close,
+                              color: HelixStatusColors.danger,
+                            ),
                             onPressed: () => _approveJoinRequest(req, false),
                           ),
                         ],
@@ -166,11 +174,19 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.check, color: Colors.green),
+                            tooltip: 'Accept invitation',
+                            icon: const Icon(
+                              Icons.check,
+                              color: HelixStatusColors.positive,
+                            ),
                             onPressed: () => _respondToInvite(inv, true),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red),
+                            tooltip: 'Decline invitation',
+                            icon: const Icon(
+                              Icons.close,
+                              color: HelixStatusColors.danger,
+                            ),
                             onPressed: () => _respondToInvite(inv, false),
                           ),
                         ],
@@ -186,7 +202,9 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
             ),
           Expanded(
             child: groups.isEmpty
-                ? const Center(child: Text('No groups yet'))
+                ? Center(
+                    child: Text(HelixLocalizations.of(context).noGroupsYet),
+                  )
                 : ListView.builder(
                     itemCount: groups.length,
                     itemBuilder: (context, index) {
@@ -203,14 +221,14 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                                   child: Container(
                                     padding: HelixInsets.all(2),
                                     decoration: const BoxDecoration(
-                                      color: Colors.red,
+                                      color: HelixStatusColors.danger,
                                       shape: BoxShape.circle,
                                     ),
                                     child: Text(
                                       '${group.unreadMentionCount}',
                                       style: const TextStyle(
                                         fontSize: 9,
-                                        color: Colors.white,
+                                        color: HelixScrimColors.onBackdrop,
                                       ),
                                     ),
                                   ),
@@ -228,7 +246,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                                       ? Icons.volume_off
                                       : Icons.notifications_none,
                                   size: 14,
-                                  color: Colors.grey,
+                                  color: HelixStatusColors.neutral,
                                 ),
                             ],
                           ),
@@ -263,78 +281,110 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                               }
                             },
                             itemBuilder: (ctx) => [
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'open',
                                 child: ListTile(
-                                  leading: Icon(Icons.chat),
-                                  title: Text('Open'),
+                                  leading: const Icon(Icons.chat),
+                                  title: Text(
+                                    HelixLocalizations.of(context).open,
+                                  ),
                                 ),
                               ),
                               if (group.isAdmin)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'invite',
                                   child: ListTile(
-                                    leading: Icon(Icons.person_add),
-                                    title: Text('Invite member'),
+                                    leading: const Icon(Icons.person_add),
+                                    title: Text(
+                                      HelixLocalizations.of(
+                                        context,
+                                      ).inviteMember2,
+                                    ),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'join_link',
                                   child: ListTile(
-                                    leading: Icon(Icons.link),
-                                    title: Text('Join link'),
+                                    leading: const Icon(Icons.link),
+                                    title: Text(
+                                      HelixLocalizations.of(context).joinLink2,
+                                    ),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'privacy',
                                   child: ListTile(
-                                    leading: Icon(Icons.lock_outline),
-                                    title: Text('Group-add privacy'),
+                                    leading: const Icon(Icons.lock_outline),
+                                    title: Text(
+                                      HelixLocalizations.of(
+                                        context,
+                                      ).groupAddPrivacy2,
+                                    ),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'members',
                                   child: ListTile(
-                                    leading: Icon(Icons.people_outline),
-                                    title: Text('Manage members'),
+                                    leading: const Icon(Icons.people_outline),
+                                    title: Text(
+                                      HelixLocalizations.of(
+                                        context,
+                                      ).manageMembers,
+                                    ),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'transfer',
                                   child: ListTile(
-                                    leading: Icon(Icons.swap_horiz),
-                                    title: Text('Transfer ownership'),
+                                    leading: const Icon(Icons.swap_horiz),
+                                    title: Text(
+                                      HelixLocalizations.of(
+                                        context,
+                                      ).transferOwnership2,
+                                    ),
                                   ),
                                 ),
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'notifications',
                                 child: ListTile(
-                                  leading: Icon(Icons.notifications_outlined),
-                                  title: Text('Notifications'),
+                                  leading: const Icon(
+                                    Icons.notifications_outlined,
+                                  ),
+                                  title: Text(
+                                    HelixLocalizations.of(
+                                      context,
+                                    ).notifications,
+                                  ),
                                 ),
                               ),
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'leave',
                                 child: ListTile(
-                                  leading: Icon(Icons.exit_to_app),
-                                  title: Text('Leave group'),
+                                  leading: const Icon(Icons.exit_to_app),
+                                  title: Text(
+                                    HelixLocalizations.of(context).leaveGroup,
+                                  ),
                                 ),
                               ),
                               if (group.isAdmin)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'delete',
                                   child: ListTile(
-                                    leading: Icon(
+                                    leading: const Icon(
                                       Icons.delete_forever,
-                                      color: Colors.red,
+                                      color: HelixStatusColors.danger,
                                     ),
                                     title: Text(
-                                      'Delete group',
-                                      style: TextStyle(color: Colors.red),
+                                      HelixLocalizations.of(
+                                        context,
+                                      ).deleteGroup,
+                                      style: const TextStyle(
+                                        color: HelixStatusColors.danger,
+                                      ),
                                     ),
                                   ),
                                 ),

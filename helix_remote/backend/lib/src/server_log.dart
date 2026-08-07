@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
@@ -213,33 +214,69 @@ void resetServerLogForTesting() {
   _activeServerLog = null;
 }
 
+/// Zone key under which the correlation middleware publishes the id for the
+/// request currently being handled.
+const correlationIdZoneKey = #helixCorrelationId;
+
+/// The correlation id of the request being handled on this call stack, or
+/// null outside a request — a background sweep, the outbox worker, startup.
+///
+/// A zone value rather than a parameter threaded through every module. The
+/// alternative is adding a correlation argument to several hundred call sites
+/// and relying on each one to pass it, which is how the existing
+/// `RedactedLogger.correlationId` parameter ended up used by nothing: the
+/// shape was there, and no caller ever filled it in.
+String? get currentCorrelationId {
+  final value = Zone.current[correlationIdZoneKey];
+  return value is String ? value : null;
+}
+
+/// Runs [body] with [correlationId] visible to [currentCorrelationId] for
+/// everything it calls, synchronously or asynchronously.
+T runWithCorrelationId<T>(String correlationId, T Function() body) =>
+    runZoned(body, zoneValues: {correlationIdZoneKey: correlationId});
+
+/// Prefixes [message] with the active correlation id.
+///
+/// This is what makes a user-reported error traceable: the same id is on the
+/// `x-correlation-id` response header the client saw, so an operator can go
+/// from "it failed and the app showed me this id" to every server log line
+/// emitted while handling that request.
+String _withCorrelation(String message) {
+  final id = currentCorrelationId;
+  return id == null ? message : '[cid=$id] $message';
+}
+
 /// Logs an error from library code: captured for the admin console when a
 /// sink is installed, and written to stderr either way.
 void logServerError(String message) {
+  final line = _withCorrelation(message);
   final sink = _activeServerLog;
   if (sink != null) {
-    sink.error(message);
+    sink.error(line);
     return;
   }
-  stderr.writeln(message);
+  stderr.writeln(line);
 }
 
 /// Logs a warning from library code. See [logServerError].
 void logServerWarning(String message) {
+  final line = _withCorrelation(message);
   final sink = _activeServerLog;
   if (sink != null) {
-    sink.warn(message);
+    sink.warn(line);
     return;
   }
-  stderr.writeln(message);
+  stderr.writeln(line);
 }
 
 /// Logs an informational line from library code. See [logServerError].
 void logServerInfo(String message) {
+  final line = _withCorrelation(message);
   final sink = _activeServerLog;
   if (sink != null) {
-    sink.info(message);
+    sink.info(line);
     return;
   }
-  stdout.writeln(message);
+  stdout.writeln(line);
 }

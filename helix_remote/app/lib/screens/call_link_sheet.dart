@@ -2,6 +2,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 /// Bottom sheet for creating and sharing a call link.
 class CallLinkSheet extends StatelessWidget {
@@ -43,33 +44,40 @@ class CallLinkSheet extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: HelixNeutralColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Call link',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Text(
+            HelixLocalizations.of(context).callLink,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           if (expired)
-            const _Badge(label: 'Expired', color: Colors.red)
+            const _Badge(label: 'Expired', color: HelixCallColors.endCall)
           else
             _Badge(
               label: daysLeft == 0 ? 'Expires today' : 'Expires in $daysLeft d',
-              color: daysLeft <= 1 ? Colors.orange : Colors.green,
+              color: daysLeft <= 1
+                  ? HelixStatusColors.caution
+                  : HelixCallColors.answerCall,
             ),
           if (link.requiresApproval) ...[
             const SizedBox(height: 4),
-            const _Badge(label: 'Requires approval', color: Colors.blueGrey),
+            const _Badge(
+              label: 'Requires approval',
+              color: HelixStatusColors.neutral,
+            ),
           ],
           if (link.maxUses > 0) ...[
             const SizedBox(height: 4),
             _Badge(
               label: '${link.useCount}/${link.maxUses} uses',
-              color: link.isExhausted ? Colors.red : Colors.teal,
+              color: link.isExhausted
+                  ? HelixCallColors.endCall
+                  : HelixStatusColors.positive,
             ),
           ],
           const SizedBox(height: 20),
@@ -77,7 +85,7 @@ class CallLinkSheet extends StatelessWidget {
           Container(
             padding: HelixInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: HelixNeutralColors.subtle,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -98,7 +106,11 @@ class CallLinkSheet extends StatelessWidget {
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: token));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Link token copied')),
+                      SnackBar(
+                        content: Text(
+                          HelixLocalizations.of(context).linkTokenCopied,
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -111,8 +123,10 @@ class CallLinkSheet extends StatelessWidget {
               width: double.infinity,
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.link_off),
-                label: const Text('Revoke link'),
-                style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                label: Text(HelixLocalizations.of(context).revokeLink),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: HelixCallColors.endCall,
+                ),
                 onPressed: () {
                   Navigator.of(context).pop();
                   onRevoke!();

@@ -171,7 +171,6 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
     if (_bootState == _BootState.running && _root != null) {
       return HelixRemoteApp(
         root: _root!,
-        embedded: true,
         onChangeServerUrl: _onChangeServerUrl,
         initialInviteCode: _pendingInviteCode,
         initialPhoneNumber: _pendingPhoneNumber,

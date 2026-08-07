@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "screen_security.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -25,6 +26,10 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  // The top-level window, not the Flutter child view: display affinity applies
+  // to the window the compositor captures, and capturing the parent is what a
+  // screen recorder does.
+  RegisterScreenSecurityChannel(flutter_controller_->engine(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
