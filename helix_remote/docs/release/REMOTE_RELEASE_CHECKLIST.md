@@ -24,6 +24,8 @@ credentials, app-store accounts, or signing keys.
   and insecure transport flags.
 - Remote Android release/main manifest does not enable global cleartext traffic
   or debug network-security config.
+- Android and Windows are the supported release platforms; iOS is explicitly
+  excluded by ADR 023 until its platform controls are implemented and reviewed.
 - Remote contains no Local LAN discovery, UDP broadcast, mDNS browsing, or Local
   panic-wipe orchestration.
 - Fresh-device account restore is link-first: release testing must verify
@@ -55,6 +57,8 @@ credentials, app-store accounts, or signing keys.
   monitoring, backups, and status-page communication paths are complete.
 - Production secrets must come from a vault or deployment secret manager, not
   committed files.
+- Independent penetration-test and implementation-level cryptographic-review
+  evidence must satisfy `docs/security/EXTERNAL_SECURITY_REVIEW_GATE.md`.
 
 ## Release Notes
 

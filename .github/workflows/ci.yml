@@ -109,6 +109,8 @@ jobs:
       - name: Verify on Linux
         shell: bash
         run: ./scripts/verify.sh
+      - name: Verify governance control evidence
+        run: dart run tool/check_governance_controls.dart
       - name: Run client integration journey
         working-directory: helix_remote/app
         run: flutter test integration_test

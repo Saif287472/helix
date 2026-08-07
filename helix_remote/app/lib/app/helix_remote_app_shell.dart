@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:helix_remote/app/routes.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// The single application shell for every Remote startup state.
@@ -17,14 +18,15 @@ class HelixRemoteAppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Helix Remote',
+      onGenerateTitle: (context) => HelixLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
+        HelixLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('en')],
+      supportedLocales: const [Locale('en'), Locale('bn')],
       theme: HelixThemes.light(),
       darkTheme: HelixThemes.dark(),
       highContrastTheme: HelixThemes.highContrastLight(),

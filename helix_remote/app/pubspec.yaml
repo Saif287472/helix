@@ -33,6 +33,9 @@ dependencies:
     path: ../packages/helix_remote_ui
   path: ^1.9.1
   path_provider: ^2.1.6
+  # The currently compatible line is prerelease 12: stable 11 depends on
+  # win32 ^5 while the current share_plus requires win32 ^6. ADR 024 records
+  # the constrained exception and its removal gate.
   file_picker: ^12.0.0-beta.5
   cryptography: ^2.9.0
   cryptography_flutter: ^2.0.0
