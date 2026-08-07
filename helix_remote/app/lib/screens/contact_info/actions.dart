@@ -92,7 +92,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Media, links, and docs',
+                HelixLocalizations.of(context).mediaLinksDocs,
                 style: Theme.of(
                   ctx,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -131,7 +131,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Manage storage',
+                HelixLocalizations.of(context).manageStorage,
                 style: Theme.of(
                   ctx,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -174,7 +174,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
     final selected = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Disappearing messages'),
+        title: Text(HelixLocalizations.of(context).disappearingMessages),
         children: [
           for (final option in const {
             0: 'Off',
@@ -200,15 +200,12 @@ extension _ContactInfoActions on _ContactInfoScreenState {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Verify security code'),
-        content: const Text(
-          'Helix protects this chat with end-to-end encryption. Verify this '
-          'contact on a trusted device before sharing sensitive information.',
-        ),
+        title: Text(HelixLocalizations.of(context).verifySecurityCode),
+        content: Text(HelixLocalizations.of(context).helixProtectsChatEndEnd),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Done'),
+            child: Text(HelixLocalizations.of(context).done),
           ),
         ],
       ),
@@ -227,19 +224,19 @@ extension _ContactInfoActions on _ContactInfoScreenState {
             children: [
               SwitchListTile.adaptive(
                 value: _privacy.exportAllowed,
-                title: const Text('Allow export'),
+                title: Text(HelixLocalizations.of(context).allowExport),
                 onChanged: (value) =>
                     _updateAdvancedPrivacy(ctx, exportAllowed: value),
               ),
               SwitchListTile.adaptive(
                 value: _privacy.forwardingAllowed,
-                title: const Text('Allow forwarding'),
+                title: Text(HelixLocalizations.of(context).allowForwarding),
                 onChanged: (value) =>
                     _updateAdvancedPrivacy(ctx, forwardingAllowed: value),
               ),
               SwitchListTile.adaptive(
                 value: _privacy.externalSaveAllowed,
-                title: const Text('Allow external save'),
+                title: Text(HelixLocalizations.of(context).allowExternalSave),
                 onChanged: (value) =>
                     _updateAdvancedPrivacy(ctx, externalSaveAllowed: value),
               ),
@@ -307,7 +304,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
             Padding(
               padding: HelixInsets.fromLTRB(24, 8, 24, 12),
               child: Text(
-                'Add to group',
+                HelixLocalizations.of(context).addGroup,
                 style: Theme.of(
                   ctx,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -404,7 +401,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit nickname'),
+        title: Text(HelixLocalizations.of(context).editNickname),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -413,11 +410,11 @@ extension _ContactInfoActions on _ContactInfoScreenState {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Save'),
+            child: Text(HelixLocalizations.of(context).save),
           ),
         ],
       ),
@@ -442,7 +439,7 @@ extension _ContactInfoActions on _ContactInfoScreenState {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(HelixLocalizations.of(context).cancel),
               ),
               FilledButton(
                 style: destructive

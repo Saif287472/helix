@@ -5,6 +5,7 @@ import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/widgets/onboarding_security_badges.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 /// Returned when the user chooses to continue without connecting to a
 /// server yet.
@@ -92,7 +93,7 @@ class _ServerChoiceScreenState extends State<ServerChoiceScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Helix Remote')),
+      appBar: AppBar(title: Text(HelixLocalizations.of(context).appTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Center(
@@ -106,13 +107,13 @@ class _ServerChoiceScreenState extends State<ServerChoiceScreen> {
                     const Icon(Icons.hub_outlined, size: 64),
                     const SizedBox(height: 16),
                     Text(
-                      'Welcome to Helix Remote',
+                      HelixLocalizations.of(context).welcomeHelixRemote,
                       style: theme.textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'How would you like to get started?',
+                      HelixLocalizations.of(context).howWouldLikeGetStarted,
                       style: theme.textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
@@ -244,7 +245,7 @@ class _HostYourOwnInfoScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Host your own server')),
+      appBar: AppBar(title: Text(HelixLocalizations.of(context).hostOwnServer)),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Center(
@@ -265,27 +266,20 @@ class _HostYourOwnInfoScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Run your own Helix Remote server',
+                      HelixLocalizations.of(context).runOwnHelixRemoteServer,
                       style: theme.textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Helix Admin is a free companion app that sets up and '
-                      'manages a Helix Remote server on your own PC or a '
-                      'rented VPS. You stay in full control of your data.',
+                      HelixLocalizations.of(context).helixAdminFreeCompanionApp,
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '1. Install Helix Admin on the machine that will run '
-                      'your server.\n'
-                      '2. Follow its Self-Hosting Guide to install and '
-                      'configure the backend.\n'
-                      '3. Once it\'s running, Helix Admin gives you a '
-                      'shareable invite link.\n'
-                      '4. Come back here and choose "Join a personal '
-                      'server" with that link.',
+                      HelixLocalizations.of(
+                        context,
+                      ).installHelixAdminMachineWill,
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 24),
@@ -293,7 +287,7 @@ class _HostYourOwnInfoScreen extends StatelessWidget {
                       width: double.infinity,
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Back'),
+                        child: Text(HelixLocalizations.of(context).back),
                       ),
                     ),
                   ],

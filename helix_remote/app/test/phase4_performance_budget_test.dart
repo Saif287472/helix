@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 /// Deterministic CI harness for the message-list burst budget. Device-lab
 /// traces remain the release authority; this catches accidental eager builds
@@ -9,7 +10,13 @@ void main() {
     tester,
   ) async {
     final key = GlobalKey<_BurstListState>();
-    await tester.pumpWidget(MaterialApp(home: _BurstList(key: key)));
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: HelixLocalizations.localizationsDelegates,
+        supportedLocales: HelixLocalizations.supportedLocales,
+        home: _BurstList(key: key),
+      ),
+    );
     await tester.pump();
 
     final stopwatch = Stopwatch()..start();

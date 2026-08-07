@@ -332,7 +332,7 @@ class _EmptySearchState extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Try a different title or description.',
+            HelixLocalizations.of(context).tryDifferentTitleDescription,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,

@@ -37,7 +37,10 @@ class _ConnectionBanner extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity: VisualDensity.compact,
               ),
-              child: const Text('Retry', style: TextStyle(fontSize: 12)),
+              child: Text(
+                HelixLocalizations.of(context).retry,
+                style: const TextStyle(fontSize: 12),
+              ),
             ),
         ],
       ),

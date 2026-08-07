@@ -84,6 +84,10 @@ flutter_launcher_icons:
 
 flutter:
   uses-material-design: true
+  # Runs `gen-l10n` on `pub get`, driven by l10n.yaml. The generated catalog is
+  # committed too, so the analyzer and the format gate can see it without a
+  # codegen step having run first.
+  generate: true
   assets:
     - assets/logo.png
 

@@ -2,6 +2,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 /// Bottom sheet for creating and sharing a call link.
 class CallLinkSheet extends StatelessWidget {
@@ -49,9 +50,9 @@ class CallLinkSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Call link',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Text(
+            HelixLocalizations.of(context).callLink,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           if (expired)
@@ -105,7 +106,11 @@ class CallLinkSheet extends StatelessWidget {
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: token));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Link token copied')),
+                      SnackBar(
+                        content: Text(
+                          HelixLocalizations.of(context).linkTokenCopied,
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -118,7 +123,7 @@ class CallLinkSheet extends StatelessWidget {
               width: double.infinity,
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.link_off),
-                label: const Text('Revoke link'),
+                label: Text(HelixLocalizations.of(context).revokeLink),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: HelixCallColors.endCall,
                 ),

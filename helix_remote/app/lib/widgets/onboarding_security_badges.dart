@@ -1,5 +1,6 @@
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 /// Reassuring onboarding highlight: "Protected by military-grade AES-256
 /// encryption". No pre-existing onboarding-highlight component exists
@@ -29,7 +30,7 @@ class OnboardingSecurityBadge extends StatelessWidget {
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              'Protected by military-grade AES-256 encryption',
+              HelixLocalizations.of(context).protectedByAes,
               style: theme.textTheme.labelMedium?.copyWith(
                 color: cs.onPrimaryContainer,
                 fontWeight: FontWeight.w600,
@@ -73,8 +74,9 @@ class OtpPlaceholderNotice extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'This verification code is a placeholder, not a secure '
-              'delivery channel yet.',
+              HelixLocalizations.of(
+                context,
+              ).verificationCodePlaceholderNotSecure,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurface,
                 fontStyle: FontStyle.italic,

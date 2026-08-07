@@ -18,6 +18,7 @@ import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as p;
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 // ---------------------------------------------------------------------------
 // Stubs (same pattern as phase12_remote_messaging_screen_test.dart)
@@ -151,6 +152,8 @@ void main() {
       // Build a standalone ConversationScreen for the known conversation.
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: ConversationScreen(
             conversationId: 'dm_alice_bob',
             messagingService: h.messaging,
@@ -179,6 +182,8 @@ void main() {
       // callsAvailable: false → call dropdown opens but selecting shows SnackBar
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: ConversationScreen(
             conversationId: 'dm_alice_bob',
             messagingService: h.messaging,
@@ -211,6 +216,8 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: HelixLocalizations.localizationsDelegates,
+            supportedLocales: HelixLocalizations.supportedLocales,
             home: ConversationScreen(
               conversationId: 'dm_alice_bob',
               messagingService: h.messaging,
@@ -242,6 +249,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: ConversationScreen(
             conversationId: 'dm_alice_bob',
             messagingService: h.messaging,

@@ -22,6 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/main.dart';
+import 'package:helix_remote/app/helix_remote_app_shell.dart';
 
 class _InMemoryKeyValueStore implements KeyValueStore {
   final _store = <String, String>{};
@@ -74,7 +75,9 @@ void main() {
       keyValueStore: _InMemoryKeyValueStore(),
     );
 
-    await tester.pumpWidget(HelixRemoteApp(root: root));
+    await tester.pumpWidget(
+      HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
+    );
     // Allow the async boot to complete (it throws and transitions to resetRequired).
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
@@ -100,7 +103,9 @@ void main() {
         keyValueStore: _InMemoryKeyValueStore(),
       );
 
-      await tester.pumpWidget(HelixRemoteApp(root: root));
+      await tester.pumpWidget(
+        HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
+      );
       await tester.pumpAndSettle(const Duration(seconds: 2));
 
       await tester.tap(find.text('Reset Helix Remote'));
@@ -132,7 +137,9 @@ void main() {
         keyValueStore: store,
       );
 
-      await tester.pumpWidget(HelixRemoteApp(root: root));
+      await tester.pumpWidget(
+        HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
+      );
 
       // Reach setup, then drive authenticatedAndSyncing directly so this
       // widget assertion does not depend on live runtime I/O.
@@ -178,7 +185,9 @@ void main() {
         keyValueStore: _InMemoryKeyValueStore(),
       );
 
-      await tester.pumpWidget(HelixRemoteApp(root: root));
+      await tester.pumpWidget(
+        HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
+      );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
         if (find.text('Server invitation code').evaluate().isNotEmpty) break;
@@ -226,7 +235,9 @@ void main() {
         keyValueStore: _InMemoryKeyValueStore(),
       );
 
-      await tester.pumpWidget(HelixRemoteApp(root: root));
+      await tester.pumpWidget(
+        HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
+      );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
         if (find.text('Server invitation code').evaluate().isNotEmpty) break;
@@ -271,7 +282,9 @@ void main() {
         keyValueStore: _InMemoryKeyValueStore(),
       );
 
-      await tester.pumpWidget(HelixRemoteApp(root: root));
+      await tester.pumpWidget(
+        HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
+      );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
         if (find.text('Server invitation code').evaluate().isNotEmpty) break;
@@ -311,7 +324,9 @@ void main() {
         keyValueStore: _InMemoryKeyValueStore(),
       );
 
-      await tester.pumpWidget(HelixRemoteApp(root: root));
+      await tester.pumpWidget(
+        HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
+      );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
         if (find.text('Server invitation code').evaluate().isNotEmpty) break;

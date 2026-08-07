@@ -18,6 +18,7 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as pathpkg;
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 // ---------------------------------------------------------------------------
 // Minimal stubs
@@ -152,6 +153,8 @@ void main() {
         var desktop = false;
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: HelixLocalizations.localizationsDelegates,
+            supportedLocales: HelixLocalizations.supportedLocales,
             home: Builder(
               builder: (context) {
                 tablet = HelixBreakpoints.isTablet(context);
@@ -175,6 +178,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _MinRestClient(),
@@ -195,6 +200,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _MinRestClient(),
@@ -217,6 +224,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: PrivacyScreen(
             restClient: _MinRestClient(),
             messagingService: messaging,
@@ -234,7 +243,11 @@ void main() {
       _setSmallScreen(tester);
 
       await tester.pumpWidget(
-        MaterialApp(home: DeviceManagementScreen(restClient: _MinRestClient())),
+        MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
+          home: DeviceManagementScreen(restClient: _MinRestClient()),
+        ),
       );
       await tester.pump();
 
@@ -249,6 +262,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _MinRestClient(),
@@ -267,6 +282,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: PrivacyScreen(
             restClient: _MinRestClient(),
             messagingService: messaging,

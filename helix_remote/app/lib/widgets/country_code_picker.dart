@@ -1,5 +1,6 @@
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 /// A country's name, ISO 3166-1 alpha-2 code, and international dialing
 /// code, used by [CountryCodeSelector]/[PhoneNumberInput] to build a
@@ -393,7 +394,11 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               ),
               Expanded(
                 child: filtered.isEmpty
-                    ? const Center(child: Text('No matching countries'))
+                    ? Center(
+                        child: Text(
+                          HelixLocalizations.of(context).noMatchingCountries,
+                        ),
+                      )
                     : ListView.builder(
                         controller: scrollController,
                         itemCount: filtered.length,

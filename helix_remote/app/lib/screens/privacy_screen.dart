@@ -7,6 +7,7 @@ import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({
@@ -116,7 +117,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Strict account settings'),
+        title: Text(HelixLocalizations.of(context).strictAccountSettings),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,11 +132,11 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Apply'),
+            child: Text(HelixLocalizations.of(context).apply),
           ),
         ],
       ),
@@ -218,7 +219,9 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     final checkup = db.privacyCheckupItems();
     final defaultDisappearing = db.getAccountDefaultDisappearingSeconds();
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy and security')),
+      appBar: AppBar(
+        title: Text(HelixLocalizations.of(context).privacySecurity),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: HelixInsets.all(16),
@@ -228,9 +231,9 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.file_download),
-                  title: const Text('Export my data'),
-                  subtitle: const Text(
-                    'Save JSON file outside encrypted app DB',
+                  title: Text(HelixLocalizations.of(context).exportMyData),
+                  subtitle: Text(
+                    HelixLocalizations.of(context).saveJsonFileOutsideEncrypted,
                   ),
                   enabled: !_busy,
                   onTap: _exportData,
@@ -240,8 +243,14 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.security),
-                  title: const Text('Strict account settings'),
-                  subtitle: const Text('Preview and apply strongest defaults'),
+                  title: Text(
+                    HelixLocalizations.of(context).strictAccountSettings,
+                  ),
+                  subtitle: Text(
+                    HelixLocalizations.of(
+                      context,
+                    ).previewApplyStrongestDefaults,
+                  ),
                   enabled: !_busy,
                   onTap: _applyStrictPreset,
                 ),
@@ -252,7 +261,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                   children: [
                     SwitchListTile(
                       secondary: const Icon(Icons.lock_outline),
-                      title: const Text('App lock'),
+                      title: Text(HelixLocalizations.of(context).appLock),
                       subtitle: Text(
                         'Relock ${_relockLabel(appLock.relockAfterSeconds)}',
                       ),
@@ -266,16 +275,26 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                         decoration: const InputDecoration(
                           labelText: 'Relock policy',
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 0, child: Text('Immediate')),
-                          DropdownMenuItem(value: 60, child: Text('1 minute')),
+                        items: [
+                          DropdownMenuItem(
+                            value: 0,
+                            child: Text(
+                              HelixLocalizations.of(context).immediate,
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 60,
+                            child: Text(HelixLocalizations.of(context).minute),
+                          ),
                           DropdownMenuItem(
                             value: 300,
-                            child: Text('5 minutes'),
+                            child: Text(HelixLocalizations.of(context).minutes),
                           ),
                           DropdownMenuItem(
                             value: 900,
-                            child: Text('15 minutes'),
+                            child: Text(
+                              HelixLocalizations.of(context).minutes2,
+                            ),
                           ),
                         ],
                         onChanged: _busy || !appLock.enabled
@@ -292,9 +311,13 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                   children: [
                     SwitchListTile(
                       secondary: const Icon(Icons.notifications_off_outlined),
-                      title: const Text('Hide notification previews'),
-                      subtitle: const Text(
-                        'Locked chats and strict mode always redact content',
+                      title: Text(
+                        HelixLocalizations.of(context).hideNotificationPreviews,
+                      ),
+                      subtitle: Text(
+                        HelixLocalizations.of(
+                          context,
+                        ).lockedChatsStrictModeAlways,
                       ),
                       value: !db.getNotificationPreviewsEnabled(),
                       onChanged: _busy
@@ -306,9 +329,11 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                     ),
                     SwitchListTile(
                       secondary: const Icon(Icons.call_missed_outlined),
-                      title: const Text('Silence unknown callers'),
-                      subtitle: const Text(
-                        'Unknown calls do not ring and are rate-limited',
+                      title: Text(
+                        HelixLocalizations.of(context).silenceUnknownCallers,
+                      ),
+                      subtitle: Text(
+                        HelixLocalizations.of(context).unknownCallsDoNotRing,
                       ),
                       value: db.getSilenceUnknownCallers(),
                       onChanged: _busy
@@ -325,19 +350,22 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                         decoration: const InputDecoration(
                           labelText: 'Default disappearing messages',
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 0, child: Text('Off')),
+                        items: [
+                          DropdownMenuItem(
+                            value: 0,
+                            child: Text(HelixLocalizations.of(context).off),
+                          ),
                           DropdownMenuItem(
                             value: 86400,
-                            child: Text('24 hours'),
+                            child: Text(HelixLocalizations.of(context).hours),
                           ),
                           DropdownMenuItem(
                             value: 604800,
-                            child: Text('7 days'),
+                            child: Text(HelixLocalizations.of(context).days),
                           ),
                           DropdownMenuItem(
                             value: 7776000,
-                            child: Text('90 days'),
+                            child: Text(HelixLocalizations.of(context).days2),
                           ),
                         ],
                         onChanged: _busy
@@ -408,9 +436,11 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
               Card(
                 child: Column(
                   children: [
-                    const ListTile(
-                      leading: Icon(Icons.fact_check_outlined),
-                      title: Text('Privacy checkup'),
+                    ListTile(
+                      leading: const Icon(Icons.fact_check_outlined),
+                      title: Text(
+                        HelixLocalizations.of(context).privacyCheckup,
+                      ),
                     ),
                     for (final item in checkup)
                       ListTile(
@@ -439,9 +469,11 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                     Icons.delete_forever,
                     color: HelixStatusColors.danger,
                   ),
-                  title: const Text('Delete account'),
-                  subtitle: const Text(
-                    'Permanently delete your account and all its data',
+                  title: Text(HelixLocalizations.of(context).deleteAccount),
+                  subtitle: Text(
+                    HelixLocalizations.of(
+                      context,
+                    ).permanentlyDeleteAccountAllIts,
                   ),
                   enabled: !_busy,
                   onTap: _deleteAccount,
@@ -482,12 +514,12 @@ class _ConfirmDeleteDialogState extends State<_ConfirmDeleteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Delete account'),
+      title: Text(HelixLocalizations.of(context).deleteAccount),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Type DELETE to confirm.'),
+          Text(HelixLocalizations.of(context).typeDeleteConfirm),
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
@@ -499,14 +531,14 @@ class _ConfirmDeleteDialogState extends State<_ConfirmDeleteDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(HelixLocalizations.of(context).cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, _controller.text.trim()),
           style: FilledButton.styleFrom(
             backgroundColor: HelixStatusColors.danger,
           ),
-          child: const Text('Delete'),
+          child: Text(HelixLocalizations.of(context).delete),
         ),
       ],
     );

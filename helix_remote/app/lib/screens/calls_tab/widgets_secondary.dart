@@ -45,7 +45,7 @@ class _CallInfoHistoryRow extends StatelessWidget {
                 if (row.isMissed || row.isNotAnswered) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'Not answered',
+                    HelixLocalizations.of(context).notAnswered,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: cs.onSurfaceVariant,
                       fontSize: 13,

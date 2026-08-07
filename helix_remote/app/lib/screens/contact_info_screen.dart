@@ -9,6 +9,7 @@ import 'package:helix_remote/presentation/contact_info/contact_info_view_model.d
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'contact_info/actions.dart';
 part 'contact_info/widgets_primary.dart';

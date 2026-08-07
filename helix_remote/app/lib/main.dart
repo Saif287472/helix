@@ -27,6 +27,7 @@ import 'package:helix_remote/widgets/onboarding_security_badges.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'app/bootstrap.dart';
 part 'app/connection_setup.dart';

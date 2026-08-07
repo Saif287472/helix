@@ -57,7 +57,10 @@ class ContactTile extends StatelessWidget {
       trailing = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          TextButton(onPressed: onCancel, child: const Text('Cancel')),
+          TextButton(
+            onPressed: onCancel,
+            child: Text(HelixLocalizations.of(context).cancel),
+          ),
           if (onRemove != null) _MoreMenu(onRemove: onRemove!),
         ],
       );
@@ -120,19 +123,19 @@ class _MoreMenu extends StatelessWidget {
       onSelected: (value) {
         if (value == 'remove') onRemove();
       },
-      itemBuilder: (_) => const [
+      itemBuilder: (_) => [
         PopupMenuItem(
           value: 'remove',
           child: Row(
             children: [
-              Icon(
+              const Icon(
                 Icons.person_remove_outlined,
                 color: HelixStatusColors.danger,
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Text(
-                'Remove contact',
-                style: TextStyle(color: HelixStatusColors.danger),
+                HelixLocalizations.of(context).removeContact,
+                style: const TextStyle(color: HelixStatusColors.danger),
               ),
             ],
           ),
@@ -248,7 +251,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
               child: Row(
                 children: [
                   Text(
-                    'New chat',
+                    HelixLocalizations.of(context).newChat,
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),

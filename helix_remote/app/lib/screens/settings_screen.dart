@@ -18,6 +18,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'settings/actions.dart';
 part 'settings/widgets.dart';
@@ -78,7 +79,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     if (file == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No anomalies recorded yet.')),
+        SnackBar(
+          content: Text(HelixLocalizations.of(context).noAnomaliesRecordedYet),
+        ),
       );
       return;
     }
@@ -94,8 +97,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await Process.run('explorer', ['/select,', dest]);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Log saved to Documents\\Helix Remote\\'),
+          SnackBar(
+            content: Text(HelixLocalizations.of(context).logSavedToDocuments),
           ),
         );
       } catch (e) {
@@ -143,7 +146,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await AppLogger.instance.clearLogs();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Log exported and cleared.')),
+        SnackBar(
+          content: Text(HelixLocalizations.of(context).logExportedCleared),
+        ),
       );
       return;
     }
@@ -180,7 +185,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Anomaly Log'),
+        title: Text(HelixLocalizations.of(context).anomalyLog),
         content: SizedBox(
           width: double.maxFinite,
           height: 400,
@@ -214,7 +219,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
+            child: Text(HelixLocalizations.of(context).close),
           ),
           if (Platform.isAndroid)
             TextButton(
@@ -233,7 +238,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
               },
-              child: const Text('Share...'),
+              child: Text(HelixLocalizations.of(context).share),
             ),
           FilledButton(
             onPressed: () async {
@@ -252,7 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               }
             },
-            child: const Text('Copy & clear'),
+            child: Text(HelixLocalizations.of(context).copyClear),
           ),
         ],
       ),
@@ -264,7 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Change Server URL'),
+        title: Text(HelixLocalizations.of(context).changeServerUrl),
         content: Text(
           'Currently connected to $serverHost.\n\n'
           'This will disconnect and let you enter a new server URL. '
@@ -273,11 +278,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Change'),
+            child: Text(HelixLocalizations.of(context).change),
           ),
         ],
       ),
@@ -291,19 +296,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Log out'),
-        content: const Text(
-          'This clears the saved session on this device. Your account and '
-          'server data are not deleted.',
+        title: Text(HelixLocalizations.of(context).logOut),
+        content: Text(
+          HelixLocalizations.of(context).clearsSavedSessionDeviceAccount,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Log out'),
+            child: Text(HelixLocalizations.of(context).logOut),
           ),
         ],
       ),
@@ -405,7 +409,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Server connection'),
+        title: Text(HelixLocalizations.of(context).serverConnection),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,7 +427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
+            child: Text(HelixLocalizations.of(context).close),
           ),
         ],
       ),
@@ -462,7 +466,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
+            child: Text(HelixLocalizations.of(context).close),
           ),
           if (accountId.isNotEmpty)
             FilledButton(
@@ -470,10 +474,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Clipboard.setData(ClipboardData(text: accountId));
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Account ID copied')),
+                  SnackBar(
+                    content: Text(
+                      HelixLocalizations.of(context).accountIdCopied,
+                    ),
+                  ),
                 );
               },
-              child: const Text('Copy'),
+              child: Text(HelixLocalizations.of(context).copy),
             ),
         ],
       ),

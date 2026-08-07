@@ -100,7 +100,7 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
                   ),
                 ),
                 Text(
-                  'Change',
+                  HelixLocalizations.of(context).change,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.primary,
                   ),
@@ -288,7 +288,7 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
           child: FilledButton.icon(
             onPressed: _continueToDisplayNameStep,
             icon: const Icon(Icons.arrow_forward),
-            label: const Text('Verify'),
+            label: Text(HelixLocalizations.of(context).verify),
           ),
         ),
       ],
@@ -329,7 +329,7 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'What should people see as your name?',
+          HelixLocalizations.of(context).whatShouldPeopleSeeName,
           style: Theme.of(context).textTheme.titleMedium,
           textAlign: TextAlign.center,
         ),
@@ -375,7 +375,7 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
             onPressed: _registering
                 ? null
                 : () => _confirmSkipDisplayName(context),
-            child: const Text('Skip'),
+            child: Text(HelixLocalizations.of(context).skip),
           ),
         ),
       ],
@@ -386,19 +386,16 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Skip display name?'),
-        content: const Text(
-          'No display name was provided. Your phone number will be used '
-          'as your display name until you change it in Settings.',
-        ),
+        title: Text(HelixLocalizations.of(context).skipDisplayName),
+        content: Text(HelixLocalizations.of(context).noDisplayNameWasProvided),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Skip'),
+            child: Text(HelixLocalizations.of(context).skip),
           ),
         ],
       ),

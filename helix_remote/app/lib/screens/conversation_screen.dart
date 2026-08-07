@@ -16,6 +16,7 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:path/path.dart' as p;
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'conversation/app_bars.dart';
 part 'conversation/attachment_actions.dart';
@@ -132,7 +133,11 @@ class _ConversationScreenState extends State<ConversationScreen>
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not send message. Try again.')),
+          SnackBar(
+            content: Text(
+              HelixLocalizations.of(context).couldNotSendMessageTry,
+            ),
+          ),
         );
       }
     }

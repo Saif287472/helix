@@ -4,6 +4,7 @@ import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/widgets/country_code_picker.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 /// Result of successfully validating a personal server + invite combo, with
 /// the phone number collected alongside it on the same screen.
@@ -161,7 +162,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Join this server?'),
+        title: Text(HelixLocalizations.of(context).joinServer),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,20 +180,17 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Your invite is for this server. Only continue if you '
-              'recognise it.',
-            ),
+            Text(HelixLocalizations.of(context).inviteServerOnlyContinueIf),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(HelixLocalizations.of(context).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Join'),
+            child: Text(HelixLocalizations.of(context).join),
           ),
         ],
       ),
@@ -204,7 +202,9 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Connect to a personal server')),
+      appBar: AppBar(
+        title: Text(HelixLocalizations.of(context).connectPersonalServer),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Center(
@@ -218,14 +218,15 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
                     const Icon(Icons.link, size: 64),
                     const SizedBox(height: 16),
                     Text(
-                      'Paste your invite link',
+                      HelixLocalizations.of(context).pasteInviteLink,
                       style: theme.textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'The admin of the server you\'re joining shares a link '
-                      'like https://their-server.example/join?invite=CODE.',
+                      HelixLocalizations.of(
+                        context,
+                      ).adminServerYoureJoiningShares,
                       style: theme.textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),

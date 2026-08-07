@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:helix_remote/app/routes.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -20,13 +19,10 @@ class HelixRemoteAppShell extends StatelessWidget {
     return MaterialApp(
       onGenerateTitle: (context) => HelixLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        HelixLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('en'), Locale('bn')],
+      // Both lists come from the generated catalog, so adding a locale to
+      // l10n.yaml's arb-dir is the only edit a new language needs.
+      localizationsDelegates: HelixLocalizations.localizationsDelegates,
+      supportedLocales: HelixLocalizations.supportedLocales,
       theme: HelixThemes.light(),
       darkTheme: HelixThemes.dark(),
       highContrastTheme: HelixThemes.highContrastLight(),

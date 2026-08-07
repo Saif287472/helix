@@ -1,0 +1,18 @@
+# Localization is generated from ARB, not hand-written. The previous catalog
+# was a class of ternaries on locale.languageCode, which is workable for one
+# string and does not survive a few hundred.
+#
+# Generated output is committed rather than produced at build time: CI runs
+# `flutter pub get --enforce-lockfile` and a format gate, and a generated file
+# that only exists after a codegen step is a file those gates cannot see.
+# `flutter gen-l10n` regenerates it; the ratchet test fails if it is stale.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-dir: lib/l10n
+output-localization-file: helix_localizations.dart
+output-class: HelixLocalizations
+nullable-getter: false
+# Bengali intentionally falls back to English for anything not yet translated
+# by a human. Machine-inventing a few hundred Bengali strings would look like
+# a finished translation and read like nonsense to the people who need it.
+untranslated-messages-file: lib/l10n/untranslated.json

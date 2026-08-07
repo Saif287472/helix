@@ -10,11 +10,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/screens/server_choice_screen.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 void main() {
   group('ServerChoiceScreen', () {
     testWidgets('renders all four first-launch options', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: ServerChoiceScreen()));
+      await tester.pumpWidget(
+        const MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
+          home: ServerChoiceScreen(),
+        ),
+      );
 
       expect(find.text('Helix Global'), findsOneWidget);
       expect(find.text('Join a personal server'), findsOneWidget);
@@ -28,6 +35,8 @@ void main() {
       Object? popped;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
           home: Builder(
             builder: (context) => ElevatedButton(
               onPressed: () async {
@@ -53,7 +62,13 @@ void main() {
     testWidgets('host your own opens an informational screen with a way back', (
       tester,
     ) async {
-      await tester.pumpWidget(const MaterialApp(home: ServerChoiceScreen()));
+      await tester.pumpWidget(
+        const MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
+          home: ServerChoiceScreen(),
+        ),
+      );
 
       await tester.ensureVisible(find.text('Host your own server'));
       await tester.tap(find.text('Host your own server'));
@@ -72,7 +87,13 @@ void main() {
     testWidgets('join a personal server navigates to InviteEntryScreen', (
       tester,
     ) async {
-      await tester.pumpWidget(const MaterialApp(home: ServerChoiceScreen()));
+      await tester.pumpWidget(
+        const MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
+          home: ServerChoiceScreen(),
+        ),
+      );
 
       await tester.ensureVisible(find.text('Join a personal server'));
       await tester.tap(find.text('Join a personal server'));
@@ -86,7 +107,13 @@ void main() {
     testWidgets(
       'rejects a link missing an invite code without any network call',
       (tester) async {
-        await tester.pumpWidget(const MaterialApp(home: InviteEntryScreen()));
+        await tester.pumpWidget(
+          const MaterialApp(
+            localizationsDelegates: HelixLocalizations.localizationsDelegates,
+            supportedLocales: HelixLocalizations.supportedLocales,
+            home: InviteEntryScreen(),
+          ),
+        );
 
         await tester.enterText(
           find.byType(TextField).first,
@@ -103,7 +130,13 @@ void main() {
     );
 
     testWidgets('rejects an empty field', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: InviteEntryScreen()));
+      await tester.pumpWidget(
+        const MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
+          home: InviteEntryScreen(),
+        ),
+      );
 
       await tester.tap(find.text('Continue'));
       await tester.pump();

@@ -5,6 +5,7 @@ import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class AddContactScreen extends StatefulWidget {
   const AddContactScreen({
@@ -128,16 +129,16 @@ class _AddContactScreenState extends State<AddContactScreen>
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Send contact request?'),
+          title: Text(HelixLocalizations.of(context).sendContactRequest),
           content: Text('Send a Helix contact request to $accountId?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(HelixLocalizations.of(context).cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Send request'),
+              child: Text(HelixLocalizations.of(context).sendRequest),
             ),
           ],
         ),
@@ -167,7 +168,7 @@ class _AddContactScreenState extends State<AddContactScreen>
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
         title: Text(
-          'Add Contact',
+          HelixLocalizations.of(context).addContact,
           style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.bold),
         ),
         bottom: TabBar(
@@ -227,7 +228,7 @@ class _AddContactScreenState extends State<AddContactScreen>
           FilledButton.icon(
             onPressed: _searching ? null : _search,
             icon: const Icon(Icons.search),
-            label: const Text('Search'),
+            label: Text(HelixLocalizations.of(context).search),
           ),
           if (_foundAccounts.isNotEmpty) ...[
             const SizedBox(height: 24),
@@ -266,7 +267,7 @@ class _AddContactScreenState extends State<AddContactScreen>
                         onPressed: accountId.isEmpty
                             ? null
                             : () => _sendRequest(accountId, displayName),
-                        child: const Text('Add'),
+                        child: Text(HelixLocalizations.of(context).add),
                       ),
                     ),
                   );
@@ -294,7 +295,7 @@ class _AddContactScreenState extends State<AddContactScreen>
         children: [
           const SizedBox(height: 8),
           Text(
-            'Share this link with someone so they can add you as a contact.',
+            HelixLocalizations.of(context).shareLinkSomeoneSoThey,
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 24),
@@ -329,7 +330,11 @@ class _AddContactScreenState extends State<AddContactScreen>
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: _shareLink));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Link copied to clipboard')),
+                      SnackBar(
+                        content: Text(
+                          HelixLocalizations.of(context).linkCopiedClipboard,
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -338,8 +343,7 @@ class _AddContactScreenState extends State<AddContactScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'Send this via WhatsApp, email, or any other channel. '
-            'The link expires in 7 days and opens a confirmation screen before any contact request is sent.',
+            HelixLocalizations.of(context).sendViaWhatsappEmailAny,
             style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
           ),
           const SizedBox(height: 24),
@@ -347,13 +351,15 @@ class _AddContactScreenState extends State<AddContactScreen>
             onPressed: () {
               Clipboard.setData(ClipboardData(text: _shareLink));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Link copied — paste it anywhere to share'),
+                SnackBar(
+                  content: Text(
+                    HelixLocalizations.of(context).linkCopiedPasteAnywhereShare,
+                  ),
                 ),
               );
             },
             icon: const Icon(Icons.copy),
-            label: const Text('Copy link'),
+            label: Text(HelixLocalizations.of(context).copyLink),
           ),
         ],
       ),
@@ -417,11 +423,11 @@ class _AddContactScreenState extends State<AddContactScreen>
                     ),
                   )
                 : const Icon(Icons.verified_user_outlined),
-            label: const Text('Validate link'),
+            label: Text(HelixLocalizations.of(context).validateLink),
           ),
           const SizedBox(height: 12),
           Text(
-            'Scanned links are checked for expiry and replay before a request is sent.',
+            HelixLocalizations.of(context).scannedLinksCheckedExpiryReplay,
             style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
           ),
         ],

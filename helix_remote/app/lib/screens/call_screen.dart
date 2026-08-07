@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class CallScreen extends StatelessWidget {
   const CallScreen({
@@ -75,7 +76,10 @@ class _IncomingCallOverlay extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            Text('Ringing', style: theme.textTheme.labelLarge),
+            Text(
+              HelixLocalizations.of(context).ringing,
+              style: theme.textTheme.labelLarge,
+            ),
             const SizedBox(height: 8),
             Text(
               'Incoming ${callStatus.isVideo ? 'video' : 'audio'} call',
