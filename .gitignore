@@ -68,6 +68,13 @@ google-services.json
 GoogleService-Info.plist
 firebase_options.dart
 secrets/
+
+# Host-specific compose additions - secret bind mounts, per-host ports.
+# Docker Compose reads this automatically alongside docker-compose.yml, so a
+# deployment never has to modify the tracked file. Editing the tracked file
+# live is what makes every subsequent `git pull` conflict.
+docker-compose.override.yml
+docker-compose.override.yaml
 private/
 local.properties
 
