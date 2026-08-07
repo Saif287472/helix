@@ -2348,6 +2348,55 @@ paths:
         '401':
           description: Unauthorized
 
+  # ─── Telemetry ────────────────────────────────────────────────
+  /telemetry/crash:
+    post:
+      summary: >-
+        Self-hosted, opt-in crash sink (MED-4). The client sends nothing unless
+        the user has granted crash-reporting consent, and redacts before
+        sending; the server truncates before logging, because it cannot verify
+        that the client redacted. Rate-limited per device so one device in a
+        crash loop cannot drown out the rest.
+      operationId: reportCrash
+      tags: [Telemetry]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, fields]
+              properties:
+                name:
+                  type: string
+                  description: Event name, e.g. app_crash.
+                fields:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >-
+                    Redacted key/value detail. At most 8 entries are recorded
+                    and each value is truncated.
+      responses:
+        '200':
+          description: Report accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted]
+                properties:
+                  accepted:
+                    type: boolean
+        '400':
+          description: Malformed body
+        '401':
+          description: Unauthorized
+        '429':
+          description: Crash report rate exceeded
+
   # ─── Privacy & Account ────────────────────────────────────────
   /privacy/export:
     get:

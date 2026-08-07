@@ -119,6 +119,86 @@ class OperabilityModule {
     });
   }
 
+  /// Self-hosted crash sink (MED-4).
+  ///
+  /// Authenticated by the standard middleware — this route is not on the
+  /// public skip list, so a report is always attributable to a device and
+  /// cannot be used by an unauthenticated caller to flood the log.
+  ///
+  /// Deliberately *not* mounted under `/ops`: those routes are admin-gated,
+  /// and the reporter here is an ordinary client posting about itself.
+  Handler get telemetryRouter {
+    final router = Router();
+    router.post('/crash', _reportCrash);
+    return withAppErrorHandling(router.call);
+  }
+
+  /// Counters behind `/ops/metrics`. In-process and reset by a restart, which
+  /// is honest for a rate rather than a total: an operator reads this to see
+  /// whether crashes are arriving now, and the redacted detail lands in the
+  /// server log, which is durable.
+  int _crashReportsAccepted = 0;
+  int _crashReportsRejected = 0;
+  DateTime? _lastCrashReportAt;
+
+  Future<Response> _reportCrash(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    final accountId = auth?['account_id'] as String?;
+    final deviceId = auth?['device_id'] as String?;
+    if (accountId == null || deviceId == null) {
+      throw AppError.unauthorized('Authentication required');
+    }
+
+    // Per-device, so one device in a crash loop cannot drown out the rest.
+    if (!rateLimiter.isAllowed('telemetry_crash:$deviceId')) {
+      _crashReportsRejected++;
+      throw AppError.tooManyRequests('Crash report rate exceeded');
+    }
+
+    final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      _crashReportsRejected++;
+      throw AppError.badRequest('Invalid JSON body');
+    }
+
+    final name = body['name'];
+    final fields = body['fields'];
+    if (name is! String || name.isEmpty || fields is! Map) {
+      _crashReportsRejected++;
+      throw AppError.badRequest('name and fields are required');
+    }
+
+    // The client redacts before sending; this truncates before storing. Two
+    // independent bounds because the server cannot verify the first one
+    // happened, and an un-truncated stack from a hostile client would be an
+    // unbounded write into the operator's log.
+    final summary = fields.entries
+        .take(_crashFieldLimit)
+        .map((entry) => '${entry.key}=${_truncate('${entry.value}')}')
+        .join(' | ');
+
+    _crashReportsAccepted++;
+    _lastCrashReportAt = _now().toUtc();
+    logServerWarning(
+      'telemetry_crash account=$accountId device=$deviceId '
+      'event=${_truncate(name)} $summary',
+    );
+
+    return _json({'accepted': true});
+  }
+
+  static const _crashFieldLimit = 8;
+  static const _crashValueLimit = 512;
+
+  String _truncate(String value) {
+    final flattened = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return flattened.length <= _crashValueLimit
+        ? flattened
+        : '\${flattened.substring(0, _crashValueLimit)}…';
+  }
+
   Handler get opsRouter {
     final router = Router();
     router.get('/metrics', _metrics);
@@ -218,6 +298,11 @@ class OperabilityModule {
         'available': outboxWorker.pushProviderAvailable,
       },
       'turn': _turnStatus(),
+      'telemetry': {
+        'crash_reports_accepted': _crashReportsAccepted,
+        'crash_reports_rejected': _crashReportsRejected,
+        'last_crash_report_at': _lastCrashReportAt?.toIso8601String(),
+      },
       'slo_targets': sloTargets,
       'alert_thresholds': alertThresholds,
     });

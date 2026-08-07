@@ -164,11 +164,59 @@ const controls = <GovernanceControl>[
     because: 'if this moves, the risk register entry needs to move with it.',
   ),
 
+  // --- MED-4: crash reporting ----------------------------------------------
+  GovernanceControl(
+    'crash reporter is wired to the zone handlers',
+    'app/lib/main.dart',
+    'TelemetryReporter.instance.reportCrash',
+    because:
+        'MED-4 — the consent and event types existed for a while with no '
+        'caller, so no crash was ever reported. The wiring is the control, '
+        'not the types.',
+  ),
+  GovernanceControl(
+    'crash reporting stays opt-in',
+    'app/lib/services/telemetry_reporter.dart',
+    'sink != null && _consent.crashReporting',
+    because:
+        'reporting must require BOTH a configured sink and explicit '
+        'consent. Weakening either half turns a privacy-first product into '
+        'one that phones home by default.',
+  ),
+  GovernanceControl(
+    'the crash sink is self-hosted',
+    'backend/lib/src/modules/operability.dart',
+    'telemetryRouter',
+    because:
+        'MED-4 asked for a self-hosted sink specifically. A vendor SDK '
+        'in the client would satisfy the letter and not the intent.',
+  ),
+
+  // --- Observability -------------------------------------------------------
+  GovernanceControl(
+    'correlation ids propagate into logs',
+    'backend/lib/src/server_log.dart',
+    'currentCorrelationId',
+    because:
+        '§23 — ids were generated and echoed but never reached the log '
+        'lines emitted while handling the request, so they correlated '
+        'nothing.',
+  ),
+
   // --- Localization --------------------------------------------------------
   GovernanceControl(
     'localization delegate',
     'app/lib/l10n/helix_localizations.dart',
     "'bn'",
+  ),
+  GovernanceControl(
+    'localization loads synchronously',
+    'app/lib/l10n/helix_localizations.dart',
+    'SynchronousFuture',
+    because:
+        'Localizations renders nothing until every delegate resolves. An '
+        'async delegate over a compiled-in catalog cost a blank frame on '
+        'every launch.',
   ),
 ];
 

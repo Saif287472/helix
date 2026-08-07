@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
-import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 

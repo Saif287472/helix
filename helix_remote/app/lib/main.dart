@@ -21,6 +21,7 @@ import 'package:helix_remote/services/firebase_push_token_source.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/services/onboarding_state_store.dart';
 import 'package:helix_remote/services/server_url_store.dart';
+import 'package:helix_remote/services/telemetry_reporter.dart';
 import 'package:helix_remote/widgets/country_code_picker.dart';
 import 'package:helix_remote/widgets/onboarding_security_badges.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
@@ -39,6 +40,15 @@ void main(List<String> args) {
     debugPrint('[Helix ERROR] ${details.exception}');
     debugPrint('[Helix STACK] ${details.stack}');
     AppLogger.instance.error('flutter', '${details.exception}', details.stack);
+    // No-ops unless the user opted in and a sink is configured (MED-4).
+    // Unawaited on purpose: the framework's error path must not wait on a
+    // network round trip.
+    unawaited(
+      TelemetryReporter.instance.reportCrash(
+        details.exception,
+        details.stack ?? StackTrace.empty,
+      ),
+    );
   };
 
   runZonedGuarded(
@@ -50,6 +60,11 @@ void main(List<String> args) {
         );
       }
       await AppLogger.instance.init('helix_remote');
+      // Read before the first frame so a crash during startup - the class of
+      // crash least likely to be reproduced by hand - is already covered.
+      TelemetryReporter.instance.configure(
+        consent: await const TelemetryConsentStore().read(),
+      );
       await LocalNotificationService.init();
       final initialLink = HelixDeepLink.tryParse(
         args.firstWhere(
@@ -68,6 +83,7 @@ void main(List<String> args) {
       debugPrint('[Helix UNCAUGHT] $error');
       debugPrint('[Helix STACK] $stack');
       AppLogger.instance.error('uncaught', '$error', stack);
+      unawaited(TelemetryReporter.instance.reportCrash(error, stack));
     },
   );
 }

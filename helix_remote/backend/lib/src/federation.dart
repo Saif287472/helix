@@ -6,6 +6,7 @@ import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
+import 'package:helix_remote_backend/src/server_log.dart';
 
 class S2SSignatures {
   static String bodyHash(String body) =>
@@ -316,6 +317,18 @@ class FederationClient {
     };
     request.headers.contentType = ContentType.json;
     headers.forEach(request.headers.set);
+    // Carry the trace across the server-to-server hop. The peer's own
+    // correlation middleware accepts a supplied id when it matches the
+    // expected shape, so a federated message keeps one id end to end instead
+    // of becoming two unrelated halves in two servers' logs.
+    //
+    // Set after `headers` so a caller cannot accidentally overwrite it, and
+    // skipped outside a request — the outbox worker and background sweeps
+    // have no correlation id to carry.
+    final correlationId = currentCorrelationId;
+    if (correlationId != null) {
+      request.headers.set('x-correlation-id', correlationId);
+    }
     if (body != null) {
       request.write(body);
     }
