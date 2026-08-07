@@ -185,9 +185,16 @@ mixin RemoteProductivityRepository on HelixRemoteDatabaseBase {
     }
     if (kind == 'favorites') {
       return _conversationRows('''
-        SELECT * FROM conversations
+        SELECT c.*,
+          COALESCE(
+            (SELECT MAX(m.timestamp)
+               FROM messages m
+              WHERE m.conversation_id = c.conversation_id),
+            c.created_at
+          ) AS latest_activity_at
+        FROM conversations c
         WHERE hidden_from_list = 0 AND is_favorite = 1
-        ORDER BY last_sequence DESC;
+        ORDER BY latest_activity_at DESC, c.last_sequence DESC, c.created_at DESC;
         ''');
     }
     if (kind == 'custom' && listId != null) {
@@ -392,6 +399,13 @@ mixin RemoteProductivityRepository on HelixRemoteDatabaseBase {
     required int now,
   }) {
     final uri = Uri.tryParse(link);
+    final signature = uri?.queryParameters['s'];
+    if (signature == null || expectedSignature != signature) return false;
+    return verifyContactLinkPayload(link, now: now);
+  }
+
+  bool verifyContactLinkPayload(String link, {required int now}) {
+    final uri = Uri.tryParse(link);
     if (uri == null || uri.scheme != 'helix' || uri.host != 'contact') {
       return false;
     }
@@ -409,13 +423,14 @@ mixin RemoteProductivityRepository on HelixRemoteDatabaseBase {
         now > expiresAt) {
       return false;
     }
-    if (expectedSignature != signature) return false;
     final rows = _db.select(
-      'SELECT used_at FROM contact_links WHERE link_id = ?;',
+      'SELECT signature, used_at FROM contact_links WHERE link_id = ?;',
       [linkId],
     );
-    if (rows.isNotEmpty && (rows.first['used_at'] as int? ?? 0) > 0) {
-      return false;
+    if (rows.isNotEmpty) {
+      final row = rows.first;
+      if (row['signature'] != signature) return false;
+      if ((row['used_at'] as int? ?? 0) > 0) return false;
     }
     return true;
   }

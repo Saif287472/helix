@@ -1065,6 +1065,11 @@ void main() {
         ttl: const Duration(minutes: 5),
       );
       expect(service.verifySignedContactLink(link), isTrue);
+      final tamperedLink = link.replaceFirst(
+        RegExp(r's=[0-9a-f]+'),
+        's=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      );
+      expect(service.verifySignedContactLink(tamperedLink), isFalse);
       db.markContactLinkUsed(
         'service_link',
         DateTime.now().millisecondsSinceEpoch,

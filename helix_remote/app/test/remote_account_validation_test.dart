@@ -8,6 +8,18 @@ void main() {
         RemoteAccountValidation.normalizePhoneNumber(' +1 (555) 123-4567 '),
         '+15551234567',
       );
+      expect(
+        RemoteAccountValidation.normalizePhoneNumber('01712-345678'),
+        '+8801712345678',
+      );
+      expect(
+        RemoteAccountValidation.normalizePhoneNumber('+880 (1712) 345-678'),
+        '+8801712345678',
+      );
+      expect(
+        RemoteAccountValidation.normalizePhoneNumber('8801712345678'),
+        '+8801712345678',
+      );
       expect(RemoteAccountValidation.phoneNumberError('+15551234567'), isNull);
       expect(
         RemoteAccountValidation.phoneNumberError(''),

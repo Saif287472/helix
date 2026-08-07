@@ -186,18 +186,23 @@ extension BackendBackupsOutboxRepository on BackendDatabase {
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
-      INSERT INTO outbox (event_id, type, payload, status, retries, created_at)
-      VALUES (?, ?, ?, 'PENDING', 0, ?);
+      INSERT OR IGNORE INTO outbox
+        (event_id, type, payload, status, retries, created_at, next_attempt_at)
+      VALUES (?, ?, ?, 'PENDING', 0, ?, ?);
     ''');
-    stmt.execute([eventId, type, payload, now]);
+    stmt.execute([eventId, type, payload, now, now]);
     stmt.close();
   }
 
   List<Map<String, dynamic>> getPendingOutbox() {
-    final stmt = _db.prepare(
-      "SELECT * FROM outbox WHERE status = 'PENDING' OR (status = 'FAILED' AND retries < 5);",
-    );
-    final res = stmt.select();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stmt = _db.prepare('''
+      SELECT * FROM outbox
+      WHERE (status = 'PENDING' OR (status = 'FAILED' AND retries < 5))
+        AND next_attempt_at <= ?
+      ORDER BY created_at ASC;
+      ''');
+    final res = stmt.select([now]);
     stmt.close();
     return res
         .map(
@@ -208,6 +213,7 @@ extension BackendBackupsOutboxRepository on BackendDatabase {
             'status': row['status'],
             'retries': row['retries'],
             'created_at': row['created_at'],
+            'next_attempt_at': row['next_attempt_at'] ?? 0,
           },
         )
         .toList();
@@ -227,6 +233,14 @@ extension BackendBackupsOutboxRepository on BackendDatabase {
       'UPDATE outbox SET status = ?, retries = ? WHERE event_id = ?;',
     );
     stmt.execute([status, retries, eventId]);
+    stmt.close();
+  }
+
+  void scheduleOutboxAttempt(String eventId, int nextAttemptAt) {
+    final stmt = _db.prepare(
+      'UPDATE outbox SET next_attempt_at = ? WHERE event_id = ?;',
+    );
+    stmt.execute([nextAttemptAt, eventId]);
     stmt.close();
   }
 

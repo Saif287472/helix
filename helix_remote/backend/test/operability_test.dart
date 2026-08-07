@@ -224,6 +224,7 @@ void main() {
       for (var i = 0; i < 4; i++) {
         final result = await server.outboxWorker.processOnce();
         expect(result['failed'], equals(1));
+        server.db.scheduleOutboxAttempt('push_outage', 0);
       }
 
       final finalResult = await server.outboxWorker.processOnce();

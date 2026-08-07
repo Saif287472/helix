@@ -28,4 +28,24 @@ void main() {
     expect(group?.groupId, 'team');
     expect(group?.inviteCode, 'invite-7');
   });
+
+  test('P6 contact add QR links retain generated schema fields', () {
+    final expiresAt = DateTime.now()
+        .add(const Duration(days: 7))
+        .millisecondsSinceEpoch;
+    final link = HelixDeepLink.tryParse(
+      'helix://contact/add?v=1&id=cl_1&a=alice&n=nonce&e=$expiresAt'
+      '&s=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+
+    expect(link?.kind, HelixDeepLinkKind.contactAdd);
+    expect(link?.contactLinkId, 'cl_1');
+    expect(link?.contactAccountId, 'alice');
+    expect(link?.contactNonce, 'nonce');
+    expect(link?.contactExpiresAt, expiresAt);
+    expect(
+      link?.contactSignature,
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+  });
 }

@@ -108,7 +108,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   void _reload({String? statusText}) {
     try {
-      final contacts = widget.messagingService.searchLocalContacts('');
+      final contacts = _uniqueContacts(
+        widget.messagingService.searchLocalContacts(''),
+      );
       final requests = widget.messagingService.contactRequests();
       final openRequestsByPeer = <String, RemoteContactRequest>{};
       var pendingReceivedCount = 0;
@@ -168,6 +170,28 @@ class _ContactsScreenState extends State<ContactsScreen> {
     return contacts;
   }
 
+  List<RemoteContact> _uniqueContacts(List<RemoteContact> contacts) {
+    final byPeer = <String, RemoteContact>{};
+    for (final contact in contacts) {
+      final current = byPeer[contact.peerAccountId];
+      if (current == null ||
+          _contactStatusRank(contact.status) >
+              _contactStatusRank(current.status)) {
+        byPeer[contact.peerAccountId] = contact;
+      }
+    }
+    return byPeer.values.toList(growable: false);
+  }
+
+  int _contactStatusRank(String status) {
+    return switch (status) {
+      'Accepted' => 3,
+      'PendingReceived' => 2,
+      'PendingSent' => 1,
+      _ => 0,
+    };
+  }
+
   /// Matched phone-book contacts that aren't a Helix contact (in any
   /// status) yet - shown as suggestions at the top of the list. Sourced
   /// from the persisted phone-book overrides table, so a match survives
@@ -209,7 +233,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
       // from there. A partial sync deliberately writes nothing, so the
       // previous list stays rather than being replaced by a view that
       // cannot tell "not on Helix" from "never looked up".
-      final matchCount = result.matches.length;
+      final matchCount = _uniqueContacts(
+        widget.messagingService.searchLocalContacts(''),
+      ).length;
       final unmatchedCount = result.unmatchedNames.length;
       // recordPhoneContactMatches() (called inside syncPhoneContacts) emits
       // a contacts-area change, which _onRemoteChange picks up and reloads -

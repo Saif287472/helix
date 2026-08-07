@@ -5,7 +5,7 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
   /// assert against one source of truth instead of a literal that silently
   /// goes stale every time a migration is added - which is exactly what had
   /// happened: two tests still expected 18 after the schema reached 27.
-  static const int latestSchemaVersion = 28;
+  static const int latestSchemaVersion = 29;
 
   int get schemaVersion =>
       _db.select('PRAGMA user_version').first['user_version'] as int;
@@ -110,6 +110,10 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
     _db.execute('''
       CREATE INDEX IF NOT EXISTS idx_messages_timestamp
       ON messages(timestamp DESC);
+    ''');
+    _db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_messages_conv_timestamp
+      ON messages(conversation_id, timestamp DESC);
     ''');
     // `idx_messages_expiry` is deliberately NOT created here. It indexes
     // `expires_at` and `view_once_opened_at`, which the v16 migration adds -
@@ -563,6 +567,13 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
     }
     if (version < 28) {
       _createUnmatchedPhoneContactsTable();
+      _db.execute('PRAGMA user_version = 28;');
+    }
+    if (version < 29) {
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_messages_conv_timestamp
+        ON messages(conversation_id, timestamp DESC);
+      ''');
       _db.execute('PRAGMA user_version = $latestSchemaVersion;');
     }
   }

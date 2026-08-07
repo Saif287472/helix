@@ -54,78 +54,89 @@ class _ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return Container(
-      color: cs.surface,
-      padding: HelixInsets.fromLTRB(30, 72, 30, 18),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          GestureDetector(
-            onTap: onAvatarTap,
-            child: CircleAvatar(
-              radius: 72,
-              backgroundColor: cs.primaryContainer,
-              child: Text(
-                initial,
-                style: theme.textTheme.displayLarge?.copyWith(
-                  color: cs.onPrimaryContainer,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontSize: 22,
-              fontWeight: FontWeight.w400,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: cs.onSurfaceVariant,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 390;
+        final avatarRadius = compact ? 56.0 : 72.0;
+        final topPadding = compact ? 48.0 : 72.0;
+        final actionHeight = compact ? 76.0 : 88.0;
+        return Container(
+          color: cs.surface,
+          padding: HelixInsets.fromLTRB(30, topPadding, 30, 18),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Expanded(
-                child: _HeaderAction(
-                  icon: Icons.call_outlined,
-                  label: 'Audio',
-                  onTap: onAudio,
+              GestureDetector(
+                onTap: onAvatarTap,
+                child: CircleAvatar(
+                  radius: avatarRadius,
+                  backgroundColor: cs.primaryContainer,
+                  child: Text(
+                    initial,
+                    style: theme.textTheme.displayLarge?.copyWith(
+                      color: cs.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _HeaderAction(
-                  icon: Icons.videocam_outlined,
-                  label: 'Video',
-                  onTap: onVideo,
+              SizedBox(height: compact ? 12 : 16),
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _HeaderAction(
-                  icon: Icons.search,
-                  label: 'Search',
-                  onTap: onSearch,
+              const SizedBox(height: 7),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  letterSpacing: 0,
                 ),
+              ),
+              SizedBox(height: compact ? 14 : 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _HeaderAction(
+                      icon: Icons.call_outlined,
+                      label: 'Audio',
+                      height: actionHeight,
+                      onTap: onAudio,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _HeaderAction(
+                      icon: Icons.videocam_outlined,
+                      label: 'Video',
+                      height: actionHeight,
+                      onTap: onVideo,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _HeaderAction(
+                      icon: Icons.search,
+                      label: 'Search',
+                      height: actionHeight,
+                      onTap: onSearch,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -134,11 +145,13 @@ class _HeaderAction extends StatelessWidget {
   const _HeaderAction({
     required this.icon,
     required this.label,
+    required this.height,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
+  final double height;
   final VoidCallback onTap;
 
   @override
@@ -150,7 +163,7 @@ class _HeaderAction extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          height: 88,
+          height: height,
           decoration: BoxDecoration(
             border: Border.all(color: cs.outlineVariant),
             borderRadius: BorderRadius.circular(16),
@@ -162,6 +175,8 @@ class _HeaderAction extends StatelessWidget {
               const SizedBox(height: 7),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),

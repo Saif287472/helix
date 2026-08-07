@@ -67,6 +67,8 @@ class _NotOnHelixTile extends StatelessWidget {
     final cs = theme.colorScheme;
     final initial = name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();
     return ListTile(
+      minVerticalPadding: 8,
+      contentPadding: HelixInsets.symmetric(horizontal: 16, vertical: 2),
       leading: CircleAvatar(
         backgroundColor: cs.surfaceContainerHighest,
         child: Text(
@@ -81,7 +83,12 @@ class _NotOnHelixTile extends StatelessWidget {
       // yet" section header, so a per-row "Not on Helix" repeated the
       // heading once for every contact and made a long list twice as tall
       // for no added information.
-      title: Text(name, style: theme.textTheme.titleMedium),
+      title: Text(
+        name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.titleMedium,
+      ),
       trailing: OutlinedButton(
         onPressed: onInvite,
         child: Text(HelixLocalizations.of(context).invite),

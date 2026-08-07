@@ -2,6 +2,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/deep_link.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -114,12 +115,25 @@ class _AddContactScreenState extends State<AddContactScreen>
       _linkError = null;
     });
     try {
-      if (!widget.messagingService.verifySignedContactLink(trimmed)) {
-        setState(() => _linkError = 'This contact link is invalid or expired.');
+      final parsed = HelixDeepLink.tryParse(trimmed);
+      if (parsed?.kind != HelixDeepLinkKind.contactAdd) {
+        setState(() => _linkError = 'This is not a valid Helix contact link.');
         return;
       }
-      final uri = Uri.parse(trimmed);
-      final accountId = uri.queryParameters['a'] ?? '';
+      final expiresAt = parsed!.contactExpiresAt;
+      if (expiresAt == null ||
+          DateTime.now().millisecondsSinceEpoch > expiresAt) {
+        setState(
+          () => _linkError =
+              'This QR code has expired. Ask the user to generate a new one.',
+        );
+        return;
+      }
+      if (!widget.messagingService.verifySignedContactLink(trimmed)) {
+        setState(() => _linkError = 'This contact link is invalid.');
+        return;
+      }
+      final accountId = parsed.contactAccountId ?? '';
       if (accountId.isEmpty ||
           accountId == widget.messagingService.currentAccountId) {
         setState(() => _linkError = 'This link cannot be used here.');
@@ -283,13 +297,14 @@ class _AddContactScreenState extends State<AddContactScreen>
   Widget _buildShareTab() {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+    final bottomPadding = 24 + MediaQuery.paddingOf(context).bottom;
     // Scrollable rather than a bare Column: this tab's height is not fixed.
     // The link grows with the account id and signature, the caption below
     // it wraps to a different number of lines on narrower screens, and the
     // app allows system text scaling up to 1.3x on top of both. A layout
     // that happens to fit one phone overflows the next.
     return SingleChildScrollView(
-      padding: HelixInsets.all(24),
+      padding: HelixInsets.fromLTRB(24, 24, 24, bottomPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -369,13 +384,14 @@ class _AddContactScreenState extends State<AddContactScreen>
   Widget _buildScanTab() {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+    final bottomPadding = 24 + MediaQuery.paddingOf(context).bottom;
     // Same reason as the share tab, plus one specific to this one: the
     // "Paste contact link" field raises the keyboard, which takes roughly
     // half the height away from a square camera preview that does not
     // shrink. Without a scroll view that is a guaranteed overflow every
     // time someone taps the field.
     return SingleChildScrollView(
-      padding: HelixInsets.all(24),
+      padding: HelixInsets.fromLTRB(24, 24, 24, bottomPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

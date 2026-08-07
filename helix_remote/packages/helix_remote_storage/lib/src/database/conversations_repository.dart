@@ -54,9 +54,19 @@ mixin RemoteConversationsRepository on HelixRemoteDatabaseBase {
   @override
   List<RemoteConversation> getConversations() {
     final stmt = _db.prepare('''
-      SELECT * FROM conversations
-      WHERE hidden_from_list = 0
-      ORDER BY is_pinned DESC, last_sequence DESC;
+      SELECT c.*,
+        COALESCE(
+          (SELECT MAX(m.timestamp)
+             FROM messages m
+            WHERE m.conversation_id = c.conversation_id),
+          c.created_at
+        ) AS latest_activity_at
+      FROM conversations c
+      WHERE c.hidden_from_list = 0
+      ORDER BY c.is_pinned DESC,
+        latest_activity_at DESC,
+        c.last_sequence DESC,
+        c.created_at DESC;
       ''');
     final res = stmt.select();
     stmt.close();

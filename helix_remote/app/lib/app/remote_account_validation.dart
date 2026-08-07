@@ -7,16 +7,38 @@ class RemoteAccountValidation {
 
   static final RegExp _e164Pattern = RegExp(r'^\+[1-9]\d{7,14}$');
 
-  /// Strips everything but digits and a leading `+`, adding the `+` if the
-  /// user omitted it. This is intentionally a light touch, not a full
-  /// libphonenumber-style parser - good enough for E.164 validation without
-  /// pulling in a new dependency for this alone.
+  /// Canonicalizes the app's supported phone-number forms to E.164.
+  ///
+  /// Bangladesh local/mobile forms are accepted because Helix Remote's
+  /// current user base stores contacts interchangeably as `017...`,
+  /// `88017...`, and `+88017...`. Other countries must include an
+  /// international prefix so the client and server hash the same string.
   static String normalizePhoneNumber(String value) {
-    final digitsAndPlus = value.trim().replaceAll(RegExp(r'[^\d+]'), '');
-    if (digitsAndPlus.startsWith('+')) return digitsAndPlus;
-    if (digitsAndPlus.isEmpty) return '';
-    return '+$digitsAndPlus';
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+
+    var cleaned = trimmed.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleaned.startsWith('00')) {
+      cleaned = '+${cleaned.substring(2)}';
+    }
+    if (cleaned.startsWith('+')) {
+      return '+${cleaned.substring(1).replaceAll(RegExp(r'\D'), '')}';
+    }
+
+    final digits = cleaned.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return '';
+    if (_looksLikeBangladeshLocal(digits)) {
+      return '+880${digits.substring(1)}';
+    }
+    if (_looksLikeBangladeshInternational(digits)) return '+$digits';
+    return '+$digits';
   }
+
+  static bool _looksLikeBangladeshLocal(String digits) =>
+      digits.length == 11 && digits.startsWith('01');
+
+  static bool _looksLikeBangladeshInternational(String digits) =>
+      digits.length == 13 && digits.startsWith('8801');
 
   static String normalizeDisplayName(String value) => value.trim();
 

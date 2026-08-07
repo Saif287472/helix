@@ -47,14 +47,25 @@ extension BackendOperationalRepository on BackendDatabase {
       'messages',
       'attachments',
       'backups',
-      'outbox',
       'audit_logs',
       'reports',
       'groups',
       'group_invites',
       'turn_credential_log',
     ];
-    return {for (final table in tables) table: _countRows(table)};
+    return {
+      for (final table in tables) table: _countRows(table),
+      'outbox': _retryableOutboxCount(),
+    };
+  }
+
+  int _retryableOutboxCount() {
+    final rows = _db.select('''
+      SELECT COUNT(*) AS count
+      FROM outbox
+      WHERE status = 'PENDING' OR (status = 'FAILED' AND retries < 5);
+    ''');
+    return rows.first['count'] as int;
   }
 
   Map<String, int> getOperationalMailboxStats() {

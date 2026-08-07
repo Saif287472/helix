@@ -161,6 +161,61 @@ void main() {
     expect(db.unmatchedPhoneContactsSyncedAt(), equals(3000));
   });
 
+  test('conversation list sorts by latest message timestamp', () {
+    db.upsertConversation(
+      RemoteConversation(
+        conversationId: 'conv_old_more_sequences',
+        title: 'Yesterday',
+        type: 'DIRECT',
+        lastActivitySequence: 5,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+      ),
+      ['alice', 'bob'],
+    );
+    db.upsertConversation(
+      RemoteConversation(
+        conversationId: 'conv_newer_less_sequences',
+        title: 'Today',
+        type: 'DIRECT',
+        lastActivitySequence: 1,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+      ),
+      ['alice', 'carol'],
+    );
+    db.saveMessage(
+      const RemoteMessage(
+        messageId: 'old_msg',
+        conversationId: 'conv_old_more_sequences',
+        senderAccountId: 'bob',
+        senderDeviceId: 'bob_phone',
+        ciphertext: 'old',
+      ),
+      5,
+      2000,
+      'DELIVERED',
+    );
+    db.saveMessage(
+      const RemoteMessage(
+        messageId: 'new_msg',
+        conversationId: 'conv_newer_less_sequences',
+        senderAccountId: 'carol',
+        senderDeviceId: 'carol_phone',
+        ciphertext: 'new',
+      ),
+      1,
+      3000,
+      'DELIVERED',
+    );
+
+    expect(
+      db.getConversations().map((c) => c.conversationId),
+      orderedEquals([
+        'conv_newer_less_sequences',
+        'conv_old_more_sequences',
+      ]),
+    );
+  });
+
   test('F3 app lock, locked chat vault, and secret attempt policy persist', () {
     db.setAppLockSettings(
       const RemoteAppLockSettings(

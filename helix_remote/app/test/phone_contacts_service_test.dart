@@ -38,6 +38,32 @@ void main() {
       expect(result.keys.single, equals(_expectedHash));
     });
 
+    test(
+      'normalizes Bangladesh local and country-code variants identically',
+      () {
+        final result = hashPhoneBookContacts(
+          contacts: const [
+            PhoneBookContact(
+              displayName: 'Local',
+              phoneNumbers: ['01712-345678'],
+            ),
+            PhoneBookContact(
+              displayName: 'Plus',
+              phoneNumbers: ['+880 (1712) 345-678'],
+            ),
+            PhoneBookContact(
+              displayName: 'Bare',
+              phoneNumbers: ['8801712345678'],
+            ),
+          ],
+          discoverySaltBase64: _testSaltBase64,
+        );
+
+        expect(result, hasLength(1));
+        expect(result.values.single, equals('Local'));
+      },
+    );
+
     test('skips invalid numbers and contacts with no phone numbers', () {
       final result = hashPhoneBookContacts(
         contacts: const [

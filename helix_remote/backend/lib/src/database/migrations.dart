@@ -129,7 +129,8 @@ extension BackendDatabaseMigrations on BackendDatabase {
           payload TEXT NOT NULL,
           status TEXT NOT NULL,
           retries INTEGER NOT NULL DEFAULT 0,
-          created_at INTEGER NOT NULL
+          created_at INTEGER NOT NULL,
+          next_attempt_at INTEGER NOT NULL DEFAULT 0
         );
       ''');
 
@@ -1340,6 +1341,25 @@ extension BackendDatabaseMigrations on BackendDatabase {
       }
 
       _db.execute('PRAGMA user_version = 40;');
+    }
+
+    if (version < 41) {
+      final outboxColumns = _db
+          .select('PRAGMA table_info(outbox);')
+          .map((row) => row['name'] as String)
+          .toSet();
+      if (!outboxColumns.contains('next_attempt_at')) {
+        _db.execute(
+          'ALTER TABLE outbox ADD COLUMN next_attempt_at INTEGER NOT NULL '
+          'DEFAULT 0;',
+        );
+      }
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_outbox_due
+        ON outbox(status, next_attempt_at, created_at);
+      ''');
+
+      _db.execute('PRAGMA user_version = 41;');
     }
   }
 }

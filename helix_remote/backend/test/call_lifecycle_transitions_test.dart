@@ -267,6 +267,20 @@ void main() {
         throwsA(isA<RemoteIllegalStatusTransitionException>()),
       );
     });
+
+    test('failed outbox events are hidden until their retry deadline', () {
+      final future = DateTime.now()
+          .add(const Duration(minutes: 5))
+          .millisecondsSinceEpoch;
+      db.enqueueOutbox('evt_retry_later', 'S2S_GROUP_SYNC', '{}');
+      db.updateOutboxStatus('evt_retry_later', RemoteOutboxStatus.failed, 1);
+      db.scheduleOutboxAttempt('evt_retry_later', future);
+
+      expect(db.getPendingOutbox(), isEmpty);
+
+      db.scheduleOutboxAttempt('evt_retry_later', 0);
+      expect(db.getPendingOutbox().single['event_id'], 'evt_retry_later');
+    });
   });
 
   test('an illegal transition surfaces as a 409, not a 500', () async {

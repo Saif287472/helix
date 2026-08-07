@@ -1,7 +1,7 @@
 /// Parsed target for the `helix://` protocol registered by the mobile and
 /// Windows clients. Keeping parsing independent of platform channels makes
 /// incoming links straightforward to validate and test before navigation.
-enum HelixDeepLinkKind { invite, call, groupJoin }
+enum HelixDeepLinkKind { invite, call, groupJoin, contactAdd }
 
 class HelixDeepLink {
   const HelixDeepLink._({
@@ -10,6 +10,11 @@ class HelixDeepLink {
     this.serverUrl,
     this.callId,
     this.groupId,
+    this.contactLinkId,
+    this.contactAccountId,
+    this.contactNonce,
+    this.contactExpiresAt,
+    this.contactSignature,
   });
 
   final HelixDeepLinkKind kind;
@@ -17,12 +22,18 @@ class HelixDeepLink {
   final String? serverUrl;
   final String? callId;
   final String? groupId;
+  final String? contactLinkId;
+  final String? contactAccountId;
+  final String? contactNonce;
+  final int? contactExpiresAt;
+  final String? contactSignature;
 
   /// Accepts the canonical protocol forms:
   ///
   /// * `helix://invite?code=CODE&server=https%3A%2F%2Fchat.example`
   /// * `helix://call/CALL_ID`
   /// * `helix://group/join?group=GROUP_ID&invite=CODE`
+  /// * `helix://contact/add?v=1&id=ID&a=ACCOUNT&n=NONCE&e=MS&s=SIG`
   ///
   /// A self-hosted web invite (`https://server.example/join?invite=CODE`) is
   /// also accepted when supplied by another platform entry point.
@@ -42,6 +53,9 @@ class HelixDeepLink {
         'group' when uri.pathSegments.firstOrNull == 'join' => _groupJoin(
           uri.queryParameters['group'],
           uri.queryParameters['invite'] ?? uri.queryParameters['code'],
+        ),
+        'contact' when uri.pathSegments.firstOrNull == 'add' => _contactAdd(
+          uri.queryParameters,
         ),
         _ => null,
       };
@@ -82,6 +96,34 @@ class HelixDeepLink {
       kind: HelixDeepLinkKind.groupJoin,
       groupId: groupId,
       inviteCode: inviteCode,
+    );
+  }
+
+  static HelixDeepLink? _contactAdd(Map<String, String> params) {
+    if (params['v'] != '1') return null;
+    final linkId = params['id'];
+    final accountId = params['a'];
+    final nonce = params['n'];
+    final expiresAt = int.tryParse(params['e'] ?? '');
+    final signature = params['s'];
+    if (linkId == null ||
+        linkId.isEmpty ||
+        accountId == null ||
+        accountId.isEmpty ||
+        nonce == null ||
+        nonce.isEmpty ||
+        expiresAt == null ||
+        signature == null ||
+        signature.isEmpty) {
+      return null;
+    }
+    return HelixDeepLink._(
+      kind: HelixDeepLinkKind.contactAdd,
+      contactLinkId: linkId,
+      contactAccountId: accountId,
+      contactNonce: nonce,
+      contactExpiresAt: expiresAt,
+      contactSignature: signature,
     );
   }
 

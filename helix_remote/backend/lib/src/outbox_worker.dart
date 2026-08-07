@@ -13,6 +13,8 @@ class OutboxWorker {
     this.interval = const Duration(seconds: 2),
     this.pushProviderAvailable = true,
     this.maxRetries = 5,
+    this.initialRetryDelay = const Duration(seconds: 5),
+    this.maxRetryDelay = const Duration(minutes: 5),
   }) : _pushProvider = pushProvider ?? const NoopPushProvider();
 
   final BackendDatabase db;
@@ -20,6 +22,8 @@ class OutboxWorker {
   final Duration interval;
   bool pushProviderAvailable;
   final int maxRetries;
+  final Duration initialRetryDelay;
+  final Duration maxRetryDelay;
   Timer? _timer;
 
   /// Set post-construction once a server identity/federation config is
@@ -226,7 +230,19 @@ class OutboxWorker {
       processed['dlq'] = processed['dlq']! + 1;
     } else {
       db.updateOutboxStatus(eventId, 'FAILED', nextRetries);
+      db.scheduleOutboxAttempt(
+        eventId,
+        DateTime.now().millisecondsSinceEpoch +
+            _retryDelay(nextRetries).inMilliseconds,
+      );
       processed['failed'] = processed['failed']! + 1;
     }
+  }
+
+  Duration _retryDelay(int retries) {
+    final shift = (retries - 1).clamp(0, 10);
+    final delayMs = initialRetryDelay.inMilliseconds * (1 << shift);
+    if (delayMs >= maxRetryDelay.inMilliseconds) return maxRetryDelay;
+    return Duration(milliseconds: delayMs);
   }
 }

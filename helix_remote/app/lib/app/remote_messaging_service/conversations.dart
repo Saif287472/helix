@@ -322,20 +322,29 @@ mixin RemoteConversationManagement on RemoteMessagingServiceBase {
 
   bool verifySignedContactLink(String link) {
     final uri = Uri.tryParse(link);
-    final accountId = uri?.queryParameters['a'];
-    final nonce = uri?.queryParameters['n'];
-    final expiresAt = int.tryParse(uri?.queryParameters['e'] ?? '');
-    if (accountId == null || nonce == null || expiresAt == null) {
+    if (uri == null ||
+        uri.scheme != 'helix' ||
+        uri.host != 'contact' ||
+        uri.pathSegments.firstOrNull != 'add') {
       return false;
     }
-    final expectedSignature = _contactLinkSignature(
-      accountId: accountId,
-      nonce: nonce,
-      expiresAt: expiresAt,
-    );
-    return db.verifyContactLink(
+    final params = uri.queryParameters;
+    final accountId = params['a'];
+    final nonce = params['n'];
+    final expiresAt = int.tryParse(params['e'] ?? '');
+    final signature = params['s'];
+    if (params['v'] != '1' ||
+        accountId == null ||
+        accountId.isEmpty ||
+        nonce == null ||
+        nonce.isEmpty ||
+        expiresAt == null ||
+        signature == null ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(signature)) {
+      return false;
+    }
+    return db.verifyContactLinkPayload(
       link,
-      expectedSignature: expectedSignature,
       now: _clock().millisecondsSinceEpoch,
     );
   }
