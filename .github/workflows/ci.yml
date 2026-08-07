@@ -109,14 +109,23 @@ jobs:
       - name: Verify on Linux
         shell: bash
         run: ./scripts/verify.sh
+      # The integration_test suites are NOT run here, and removing the steps
+      # that pretended to is the point.
+      #
+      # `flutter test integration_test` drives a real app on a real device.
+      # This runner has none - Flutter reports "No supported devices
+      # connected", since the project targets android and windows and the
+      # runner offers linux desktop and web. The two steps were added with
+      # the Phase 8 work and failed on every run from the day they landed,
+      # which also meant the coverage ratchet below never executed: it sits
+      # after them and was skipped every time.
+      #
+      # Restoring them needs an emulator in this job
+      # (reactivecircus/android-emulator-runner or equivalent) AND journeys
+      # worth ~10 minutes of runner time. Today's two files pump a widget
+      # each; see helix_remote/app/integration_test/README.md.
       - name: Verify governance control evidence
         run: dart run tool/check_governance_controls.dart
-      - name: Run client integration journey
-        working-directory: helix_remote/app
-        run: flutter test integration_test
-      - name: Run admin integration journey
-        working-directory: helix_remote/admin
-        run: flutter test integration_test
       - name: Enforce coverage ratchet
         shell: bash
         run: ./scripts/coverage.sh
@@ -203,7 +212,7 @@ jobs:
           path: helix_remote/build/sbom.cdx.json
           if-no-files-found: error
       - name: Scan resolved dependency files for known vulnerabilities
-        uses: google/osv-scanner-action@v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
             --recursive

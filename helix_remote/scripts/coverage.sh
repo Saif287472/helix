@@ -12,7 +12,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 OUT_DIR="coverage"
-MIN_LINE_COVERAGE="${MIN_LINE_COVERAGE:-20}"
+
+# Raised 20 -> 55 once this script actually ran for the first time and
+# reported 56.66%. A gate set 36 points below the real number cannot fail, so
+# it was not a ratchet - it was a report that nobody read. 55 leaves a small
+# margin for normal movement while still catching a real regression.
+#
+# Raise it as new suites land. Never lower it to accommodate one.
+MIN_LINE_COVERAGE="${MIN_LINE_COVERAGE:-55}"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
@@ -47,6 +54,11 @@ fi
 # LF = lines found, LH = lines hit. Summing the per-record totals across the
 # concatenated files gives overall line coverage without needing lcov(1)
 # installed on the runner.
+# The lcov file is passed as an operand. Without it awk reads stdin, which in
+# CI is empty - so `found` stayed 0, the END block exited 2, and the gate
+# always reported "No lines instrumented". It went unnoticed because this
+# script has never actually executed in CI: it sits after the integration
+# journey steps in the same job, and those failed on every run.
 coverage="$(awk -F: '
   /^LF:/ { found += $2 }
   /^LH:/ { hit   += $2 }
@@ -54,7 +66,7 @@ coverage="$(awk -F: '
     if (found == 0) { exit 2 }
     printf "%.2f", (hit/found)*100
   }
-')" || { echo "No lines instrumented."; exit 1; }
+' "${OUT_DIR}/lcov.info")" || { echo "No lines instrumented."; exit 1; }
 
 echo
 echo "Helix Remote line coverage: ${coverage}% (minimum: ${MIN_LINE_COVERAGE}%)"

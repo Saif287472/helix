@@ -209,10 +209,7 @@ void main() {
 
     expect(
       db.getConversations().map((c) => c.conversationId),
-      orderedEquals([
-        'conv_newer_less_sequences',
-        'conv_old_more_sequences',
-      ]),
+      orderedEquals(['conv_newer_less_sequences', 'conv_old_more_sequences']),
     );
   });
 

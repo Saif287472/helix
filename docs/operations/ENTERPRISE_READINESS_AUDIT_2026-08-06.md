@@ -54,13 +54,32 @@ Phases 3–10 had all been committed, so reading it gave the impression work had
 
 ### CI was red, and had been
 
-Phases 3–9 were committed without a passing `scripts/verify.sh`. Three gates were failing at once:
+Two rounds of this have now been found. **The first**, before this update: Phases 3–9 were committed
+without a passing `scripts/verify.sh`. Three gates were failing at once:
 
 | Gate | State before | Cause |
 |---|---|---|
 | `dart format --set-exit-if-changed` | 17 files unformatted | never run |
 | `flutter analyze` | 49 issues | Phase 4 added `prefer_const_*` without fixing what they surfaced |
 | `flutter test` | 6 failures | 2 real defects (below) + 4 platform-specific golden baselines |
+
+**The second**, found by reading the GitHub Actions logs rather than running locally: three CI *jobs*
+had never passed at all, and local verification could not see any of them.
+
+| Job | Failure | Since |
+|---|---|---|
+| `verify-linux` | `flutter test integration_test` — "No supported devices connected". The project targets android and windows; the runner offers linux desktop and web | the steps were added (Phase 8) |
+| `supply-chain` | `google/osv-scanner-action@v2.3.8` — the repo root `action.yml` is a stub with no `runs:` section; the real action is at `osv-scanner-action/action.yml` | the job was added (Phase 9) |
+| `verify-windows` | the Android debug build's manifest merger, then the format gate | Phase 9 / after the merge |
+
+Two knock-on effects are worth stating, because both looked like working controls:
+
+- **The coverage ratchet had never executed.** It sits after the integration steps in the same job,
+  so it was skipped on every run. When finally run it also turned out to be broken on its own terms —
+  its `awk` had no input file operand, so it read empty stdin and would have reported "No lines
+  instrumented" regardless. Fixed; it now reports **56.66%**, and the gate was raised from 20 to 55.
+- **The OSV vulnerability scan had never run.** MED-12 was recorded as closed on the strength of a
+  job that failed during "Set up job" every time.
 
 All green as of this update. The two test failures were **real**, not stale expectations: the
 localization delegate returned a plain `Future`, so `Localizations` rendered a blank frame on every
@@ -79,7 +98,7 @@ diff — font anti-aliasing, not a regression. Goldens are now scoped to the CI 
 | 5 — UI | **Done for the stated criterion** | Zero colour literals outside `helix_remote_ui`, enforced by `phase5_design_tokens_test.dart`; 127 became named tokens grouped by meaning. `Colors.transparent` is exempt — it means "draw nothing". **Open:** responsive layout is still one `LayoutBuilder`, and motion is 6 widgets |
 | 6 — UX | **Partly done** | Intent filters, a Windows URI handler, and a parser for all three link kinds; pull-to-refresh 2 → 6; search present. **Only `invite` links are acted on** — `bootstrap.dart` is the sole consumer and matches `HelixDeepLinkKind.invite`, so a tapped call or group-join link opens the app and does nothing. `deep_link_test.dart` asserts the parser keeps their targets, which passes while nothing reads them: the same shape as MED-4's unused consent types. Snackbar-heavy feedback unchanged |
 | 7 — Accessibility | **Done** | The 1.3× cap is gone and a test forbids its return. All 51 icon buttons labelled, enforced by a source sweep. Guidelines now run against a real screen in light, dark, and both high-contrast themes — the previous suite asserted them against three widgets in isolation and passed while twelve buttons announced nothing |
-| 8 — Testing | **Partly done** | Coverage ratchet, gallery goldens, OSV + SBOM, and a regression matrix that is now machine-checked against the tests it names. **Open:** the `integration_test/` journeys remain thin; the substantive end-to-end coverage is `backend/test/phase4_e2e_harness_test.dart`, which does registration, send/receive and multi-device fan-out with real crypto |
+| 8 — Testing | **Partly done** | Gallery goldens, SBOM, and a regression matrix that is now machine-checked against the tests it names. The coverage ratchet **now runs** and reports 56.66%; its gate was raised 20 → 55, since a threshold 36 points below the real number cannot fail. **Open:** the `integration_test/` journeys remain thin and no longer run in CI (they need a device — see `app/integration_test/README.md`); the substantive end-to-end coverage is `backend/test/phase4_e2e_harness_test.dart`, which does registration, send/receive and multi-device fan-out with real crypto |
 | 9 — Hardening | **Done** | Durable rate limiting, multi-`kid` JWT rotation, feature flags, SBOM, R8, TLS pinning, DR evidence. **MED-4 and tracing were shapes without callers** and are now wired: crash reporting reaches a self-hosted sink behind two-part consent, and correlation ids propagate into every log line emitted while handling a request, and across the S2S hop |
 | 10 — Polish | **Mostly done** | Localization is real: ARB + `gen-l10n` replaced the hand-rolled ternary catalog, and **every plain literal in the client is extracted** — 245 keys, 0 remaining, enforced by `phase10_localization_test.dart`. The 51 interpolated `Text('$…')` sites are left deliberately: each needs an ICU placeholder and a human deciding what the message says. Bengali stays English-backed with the gap recorded in `untranslated.json` rather than machine-invented. `file_picker` pinned exactly rather than by caret (the caret is what allowed the drift MED-7 recorded); `googleapis_auth` 1→2 with 451 backend tests green; unused foreground-service permissions removed; governance gate grown 6 → 19 controls. **Open:** four major dependency bumps, deferred *with reasons*, and the external security review |
 
@@ -286,7 +305,7 @@ Weighting: Security ×2, Architecture ×1.5, Testing ×1.5, all others ×1. → 
 | **MED-9** ✅ | Dependency risk register is factually wrong about `file_picker` | Medium | CONFIRMED · **fixed (2026-08-07)** — corrected, and a governance control keeps the withdrawn claim withdrawn |
 | **MED-10** ✅ | `remote_release_gate.ps1` is unrunnable — statement precedes `param()` | Medium | CONFIRMED · **fixed (Phase 0)**, along with two dev scripts carrying the same defect |
 | **MED-11** ◐ | 45 silently swallowed exceptions | Medium | CONFIRMED · **app layer fixed (Phase 2)**; 26 migration guards left as legitimate |
-| **MED-12** ◐ | CI has no coverage gate, no vulnerability scanning, and no integration tests | Medium | CONFIRMED · coverage ratchet, OSV and SBOM done; integration journeys still thin |
+| **MED-12** ◐ | CI has no coverage gate, no vulnerability scanning, and no integration tests | Medium | CONFIRMED · SBOM done. The coverage gate and the OSV scan were recorded as done while **neither had ever executed** — the ratchet was skipped behind a failing step and its `awk` read empty stdin; the scanner referenced a stub `action.yml`. Both run now. Integration journeys remain absent |
 | **LOW-1** ✅ | No release obfuscation / R8 / resource shrinking | Low | CONFIRMED · **fixed (Phase 9)** |
 | **LOW-2** ✅ | Duplicate private helpers (`_bytesToHex` / `_hexBytes`), dead `is_admin` claim | Low | CONFIRMED · **fixed (Phase 3)** |
 | **LOW-3** ✅ | Invite codes travel in URL query strings | Low | CONFIRMED · **fixed (Phase 2)** |
