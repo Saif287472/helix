@@ -90,13 +90,13 @@ class _IncomingCallOverlay extends StatelessWidget {
                 _CallActionButton(
                   icon: Icons.call_end,
                   label: 'Decline',
-                  color: Colors.red,
+                  color: HelixCallColors.endCall,
                   onPressed: onDecline,
                 ),
                 _CallActionButton(
                   icon: Icons.call,
                   label: 'Accept',
-                  color: Colors.green,
+                  color: HelixCallColors.answerCall,
                   onPressed: onAccept,
                 ),
               ],
@@ -161,7 +161,7 @@ class _ActiveCallOverlayState extends State<_ActiveCallOverlay> {
         status.localRenderer != null;
 
     return Material(
-      color: Colors.black,
+      color: HelixScrimColors.backdrop,
       child: Stack(
         children: [
           Positioned.fill(
@@ -196,8 +196,10 @@ class _ActiveCallOverlayState extends State<_ActiveCallOverlay> {
                     height: 168,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: Colors.black,
-                        border: Border.all(color: Colors.white24),
+                        color: HelixScrimColors.backdrop,
+                        border: Border.all(
+                          color: HelixScrimColors.onBackdropSubtle,
+                        ),
                       ),
                       child: RemoteCallVideoView(
                         renderer: status.localRenderer!,
@@ -249,12 +251,16 @@ class _CallHeader extends StatelessWidget {
         Text(
           status.displayName,
           textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            color: HelixScrimColors.onBackdrop,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           _stateLabel(status.state),
-          style: theme.textTheme.titleMedium?.copyWith(color: Colors.white70),
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: HelixScrimColors.onBackdropMuted,
+          ),
         ),
         if (status.startedAt != null && status.state == RemoteCallState.active)
           Padding(
@@ -262,7 +268,7 @@ class _CallHeader extends StatelessWidget {
             child: Text(
               _formatDuration(DateTime.now().difference(status.startedAt!)),
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white70,
+                color: HelixScrimColors.onBackdropMuted,
               ),
             ),
           ),
@@ -310,13 +316,13 @@ class _VideoPlaceholder extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 54,
-              backgroundColor: Colors.white12,
+              backgroundColor: HelixScrimColors.controlSurface,
               child: Text(
                 status.displayName.isEmpty
                     ? '?'
                     : status.displayName.characters.first.toUpperCase(),
                 style: theme.textTheme.displaySmall?.copyWith(
-                  color: Colors.white,
+                  color: HelixScrimColors.onBackdrop,
                 ),
               ),
             ),
@@ -328,7 +334,7 @@ class _VideoPlaceholder extends StatelessWidget {
                   ? 'Waiting for video'
                   : 'Audio call',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: Colors.white70,
+                color: HelixScrimColors.onBackdropMuted,
               ),
             ),
           ],
@@ -347,7 +353,7 @@ class _CallErrorBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.red.withAlpha(220),
+        color: HelixCallColors.endCall.withAlpha(220),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -355,7 +361,7 @@ class _CallErrorBanner extends StatelessWidget {
         child: Text(
           message,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: HelixScrimColors.onBackdrop),
         ),
       ),
     );
@@ -389,7 +395,7 @@ class _CallControls extends StatelessWidget {
         _CallActionButton(
           icon: status.isMuted ? Icons.mic_off : Icons.mic,
           label: status.isMuted ? 'Unmute' : 'Mute',
-          color: Colors.white24,
+          color: HelixScrimColors.onBackdropSubtle,
           onPressed: onMute == null
               ? null
               : () => onMute!(muted: !status.isMuted),
@@ -397,7 +403,7 @@ class _CallControls extends StatelessWidget {
         _CallActionButton(
           icon: status.isSpeakerOn ? Icons.volume_up : Icons.hearing,
           label: status.isSpeakerOn ? 'Speaker' : 'Earpiece',
-          color: Colors.white24,
+          color: HelixScrimColors.onBackdropSubtle,
           onPressed: onSpeaker == null
               ? null
               : () => onSpeaker!(enabled: !status.isSpeakerOn),
@@ -408,7 +414,7 @@ class _CallControls extends StatelessWidget {
                 ? Icons.videocam
                 : Icons.videocam_off,
             label: status.isLocalVideoEnabled ? 'Video' : 'Video off',
-            color: Colors.white24,
+            color: HelixScrimColors.onBackdropSubtle,
             onPressed: onVideo == null
                 ? null
                 : () => onVideo!(enabled: !status.isLocalVideoEnabled),
@@ -417,13 +423,13 @@ class _CallControls extends StatelessWidget {
           _CallActionButton(
             icon: Icons.cameraswitch,
             label: 'Switch',
-            color: Colors.white24,
+            color: HelixScrimColors.onBackdropSubtle,
             onPressed: onSwitchCamera,
           ),
         _CallActionButton(
           icon: Icons.call_end,
           label: 'End',
-          color: Colors.red,
+          color: HelixCallColors.endCall,
           onPressed: onEnd,
         ),
       ],
@@ -451,12 +457,14 @@ class _CallActionButton extends StatelessWidget {
       children: [
         FloatingActionButton(
           heroTag: 'call_$label',
-          backgroundColor: onPressed != null ? color : Colors.grey,
+          backgroundColor: onPressed != null
+              ? color
+              : HelixCallColors.controlDisabled,
           onPressed: onPressed,
-          child: Icon(icon, color: Colors.white),
+          child: Icon(icon, color: HelixScrimColors.onBackdrop),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white)),
+        Text(label, style: const TextStyle(color: HelixScrimColors.onBackdrop)),
       ],
     );
   }

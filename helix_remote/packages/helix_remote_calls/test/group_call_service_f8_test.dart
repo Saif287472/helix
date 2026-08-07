@@ -146,11 +146,11 @@ void main() {
 
         // Simulate already-active state (skip media acquisition).
         svc.seedState(
-          GroupCallState(
+          const GroupCallState(
             status: GroupCallStatus.active,
             roomId: 'room_001',
             isVideo: true,
-            peers: const [],
+            peers: [],
           ),
         );
 
@@ -189,11 +189,11 @@ void main() {
       final svc = _makeService(outbound: signals, engines: [bobEngine]);
 
       svc.seedState(
-        GroupCallState(
+        const GroupCallState(
           status: GroupCallStatus.active,
           roomId: 'room_001',
           isVideo: true,
-          peers: const [],
+          peers: [],
         ),
       );
 
@@ -220,11 +220,11 @@ void main() {
       final svc = _makeService(outbound: signals, engines: [bobEngine]);
 
       svc.seedState(
-        GroupCallState(
+        const GroupCallState(
           status: GroupCallStatus.active,
           roomId: 'room_001',
           isVideo: false,
-          peers: const [],
+          peers: [],
         ),
       );
 
@@ -254,11 +254,11 @@ void main() {
       final svc = _makeService(engines: [bobEngine]);
 
       svc.seedState(
-        GroupCallState(
+        const GroupCallState(
           status: GroupCallStatus.active,
           roomId: 'room_001',
           isVideo: true,
-          peers: const [],
+          peers: [],
         ),
       );
 
@@ -286,11 +286,11 @@ void main() {
       final svc = _makeService();
 
       svc.seedState(
-        GroupCallState(
+        const GroupCallState(
           status: GroupCallStatus.active,
           roomId: 'room_001',
           isVideo: false,
-          peers: const [],
+          peers: [],
         ),
       );
 
@@ -305,11 +305,11 @@ void main() {
       final svc = _makeService(engines: [bobEngine]);
 
       svc.seedState(
-        GroupCallState(
+        const GroupCallState(
           status: GroupCallStatus.active,
           roomId: 'room_001',
           isVideo: false,
-          peers: const [],
+          peers: [],
         ),
       );
 
@@ -340,11 +340,11 @@ void main() {
       final svc = _makeService(engines: [bobEngine]);
 
       svc.seedState(
-        GroupCallState(
+        const GroupCallState(
           status: GroupCallStatus.active,
           roomId: 'room_001',
           isVideo: true,
-          peers: const [],
+          peers: [],
         ),
       );
 
@@ -374,11 +374,11 @@ void main() {
       final svc = _makeService(engines: [e1, e2]);
 
       svc.seedState(
-        GroupCallState(
+        const GroupCallState(
           status: GroupCallStatus.active,
           roomId: 'room_001',
           isVideo: false,
-          peers: const [],
+          peers: [],
         ),
       );
 

@@ -285,7 +285,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
               setState(() => _status = 'Join link revoked');
               _reload();
             },
-            child: const Text('Revoke', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Revoke',
+              style: TextStyle(color: HelixStatusColors.danger),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),

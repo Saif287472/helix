@@ -312,6 +312,7 @@ extension _ConversationAppBars on _ConversationScreenState {
       backgroundColor: palette.appBar,
       foregroundColor: palette.onAppBar,
       leading: IconButton(
+        tooltip: 'Exit selection',
         icon: Icon(Icons.close, color: palette.onAppBar),
         onPressed: _exitSelectionMode,
       ),
@@ -347,12 +348,12 @@ extension _ConversationAppBars on _ConversationScreenState {
                     Icon(
                       Icons.delete_forever_outlined,
                       size: 20,
-                      color: Colors.red,
+                      color: HelixStatusColors.danger,
                     ),
                     SizedBox(width: 12),
                     Text(
                       'Delete for everyone',
-                      style: TextStyle(color: Colors.red),
+                      style: TextStyle(color: HelixStatusColors.danger),
                     ),
                   ],
                 ),

@@ -87,7 +87,7 @@ void main() {
   });
 
   test('Contact CRUD and blocking validation', () {
-    final contact = RemoteContact(
+    final contact = const RemoteContact(
       peerAccountId: 'bob_id',
       nickname: 'Bob Friend',
       status: 'Accepted',
@@ -218,7 +218,7 @@ void main() {
     final members = db.getConversationMembers('conv_123');
     expect(members, containsAll(['alice', 'bob']));
 
-    final message = RemoteMessage(
+    final message = const RemoteMessage(
       messageId: 'msg_1',
       conversationId: 'conv_123',
       senderAccountId: 'alice',
@@ -614,7 +614,7 @@ void main() {
         ['acc_restore'],
       );
       db.saveMessage(
-        RemoteMessage(
+        const RemoteMessage(
           messageId: 'msg_keep',
           conversationId: 'conv_restore',
           senderAccountId: 'acc_restore',
@@ -626,7 +626,7 @@ void main() {
         'DELIVERED',
       );
       db.saveMessage(
-        RemoteMessage(
+        const RemoteMessage(
           messageId: 'msg_deleted',
           conversationId: 'conv_restore',
           senderAccountId: 'acc_restore',

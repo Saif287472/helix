@@ -68,6 +68,7 @@ class _NewCallSheetState extends State<_NewCallSheet> {
                   ),
                   const Spacer(),
                   IconButton(
+                    tooltip: 'Close',
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.of(context).pop(),
                   ),

@@ -522,6 +522,4 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
 
   // Decodes base64url strings that may be missing `=` padding.
   Uint8List _b64d(String s) => base64Url.decode(base64Url.normalize(s));
-
-
 }

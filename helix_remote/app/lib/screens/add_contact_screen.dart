@@ -303,7 +303,7 @@ class _AddContactScreenState extends State<AddContactScreen>
               data: _shareLink,
               version: QrVersions.auto,
               size: 220,
-              backgroundColor: Colors.white,
+              backgroundColor: HelixScrimColors.onBackdrop,
             ),
           ),
           const SizedBox(height: 24),

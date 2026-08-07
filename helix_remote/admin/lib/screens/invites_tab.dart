@@ -234,6 +234,7 @@ class _InvitesTabState extends State<InvitesTab> {
                         ),
                       ),
                       IconButton(
+                        tooltip: 'Reload invites',
                         icon: const Icon(Icons.refresh),
                         onPressed: () => _loadInvites(offset: _offset),
                       ),

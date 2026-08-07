@@ -33,21 +33,26 @@ class ContactInfoViewModel {
       _messaging.db.setConversationDisappearingPolicy(conversationId, seconds);
   void setFavorite(String conversationId, {required bool favorite}) =>
       _messaging.favoriteConversation(conversationId, favorite: favorite);
-  void addToList({required String listId, required String conversationId, required int sortOrder}) =>
-      _messaging.addConversationToCustomList(
-        listId: listId,
-        conversationId: conversationId,
-        sortOrder: sortOrder,
-      );
+  void addToList({
+    required String listId,
+    required String conversationId,
+    required int sortOrder,
+  }) => _messaging.addConversationToCustomList(
+    listId: listId,
+    conversationId: conversationId,
+    sortOrder: sortOrder,
+  );
   void clearChat(String conversationId) => _messaging.clearChat(conversationId);
   void blockContact(String accountId) => _messaging.blockContact(accountId);
-  void reportContact({required String accountId, required String contextHash}) =>
-      _messaging.reportAccount(
-        subjectAccountId: accountId,
-        category: 'contact',
-        reasonCode: 'user_reported',
-        contextHash: contextHash,
-      );
+  void reportContact({
+    required String accountId,
+    required String contextHash,
+  }) => _messaging.reportAccount(
+    subjectAccountId: accountId,
+    category: 'contact',
+    reasonCode: 'user_reported',
+    contextHash: contextHash,
+  );
   void saveNickname({required String accountId, required String nickname}) =>
       _messaging.addContact(peerAccountId: accountId, nickname: nickname);
 }

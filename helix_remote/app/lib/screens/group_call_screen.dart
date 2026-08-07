@@ -45,7 +45,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       return const SizedBox.shrink();
     }
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: HelixScrimColors.backdrop,
       body: SafeArea(
         child: Stack(
           children: [
@@ -203,7 +203,7 @@ class _VideoTileState extends State<_VideoTile> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.grey[900],
+      color: HelixNeutralColors.videoPlaceholder,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -215,14 +215,21 @@ class _VideoTileState extends State<_VideoTile> {
             )
           else
             const Center(
-              child: Icon(Icons.person, color: Colors.white54, size: 48),
+              child: Icon(
+                Icons.person,
+                color: HelixScrimColors.onBackdropFaint,
+                size: 48,
+              ),
             ),
           // Active speaker ring
           if (widget.isActive)
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.greenAccent, width: 3),
+                  border: Border.all(
+                    color: HelixCallColors.activeSpeaker,
+                    width: 3,
+                  ),
                 ),
               ),
             ),
@@ -238,7 +245,7 @@ class _VideoTileState extends State<_VideoTile> {
                     padding: HelixInsets.only(right: 4),
                     child: const Icon(
                       Icons.mic_off,
-                      color: Colors.redAccent,
+                      color: HelixCallColors.participantMuted,
                       size: 16,
                     ),
                   ),
@@ -247,19 +254,22 @@ class _VideoTileState extends State<_VideoTile> {
                     padding: HelixInsets.only(right: 4),
                     child: const Icon(
                       Icons.screen_share,
-                      color: Colors.blueAccent,
+                      color: HelixCallColors.participantSharing,
                       size: 16,
                     ),
                   ),
                 Container(
                   padding: HelixInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.black54,
+                    color: HelixScrimColors.barrier,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     widget.label,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    style: const TextStyle(
+                      color: HelixScrimColors.onBackdrop,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ],
@@ -293,7 +303,7 @@ class _ControlBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black87,
+      color: HelixScrimColors.barrierStrong,
       padding: HelixInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -322,7 +332,7 @@ class _ControlBar extends StatelessWidget {
             icon: Icons.call_end,
             label: 'Leave',
             onTap: onLeave,
-            color: Colors.red,
+            color: HelixCallColors.endCall,
           ),
         ],
       ),
@@ -347,7 +357,11 @@ class _ControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = color ?? (active ? Colors.white24 : Colors.white12);
+    final bg =
+        color ??
+        (active
+            ? HelixScrimColors.onBackdropSubtle
+            : HelixScrimColors.controlSurface);
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -358,14 +372,19 @@ class _ControlButton extends StatelessWidget {
             backgroundColor: bg,
             child: Icon(
               icon,
-              color: color != null ? Colors.white : Colors.white,
+              color: color != null
+                  ? HelixScrimColors.onBackdrop
+                  : HelixScrimColors.onBackdrop,
               size: 24,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(color: Colors.white70, fontSize: 11),
+            style: const TextStyle(
+              color: HelixScrimColors.onBackdropMuted,
+              fontSize: 11,
+            ),
           ),
         ],
       ),

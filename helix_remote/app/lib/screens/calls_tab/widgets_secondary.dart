@@ -150,10 +150,26 @@ class _QuickContactCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _PopupAction(icon: Icons.chat_bubble_outline, onTap: onMessage),
-                _PopupAction(icon: Icons.call_outlined, onTap: onAudio),
-                _PopupAction(icon: Icons.videocam_outlined, onTap: onVideo),
-                _PopupAction(icon: Icons.info_outline, onTap: onInfo),
+                _PopupAction(
+                  icon: Icons.chat_bubble_outline,
+                  label: 'Message',
+                  onTap: onMessage,
+                ),
+                _PopupAction(
+                  icon: Icons.call_outlined,
+                  label: 'Audio call',
+                  onTap: onAudio,
+                ),
+                _PopupAction(
+                  icon: Icons.videocam_outlined,
+                  label: 'Video call',
+                  onTap: onVideo,
+                ),
+                _PopupAction(
+                  icon: Icons.info_outline,
+                  label: 'Call info',
+                  onTap: onInfo,
+                ),
               ],
             ),
           ),
@@ -164,14 +180,24 @@ class _QuickContactCard extends StatelessWidget {
 }
 
 class _PopupAction extends StatelessWidget {
-  const _PopupAction({required this.icon, required this.onTap});
+  const _PopupAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
+
+  /// Required rather than optional: this widget renders an icon with no text,
+  /// so without a label a screen reader announces only "button". Making it a
+  /// required parameter means a new action cannot be added unlabelled.
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
+      tooltip: label,
       icon: Icon(icon),
       iconSize: 28,
       color: Theme.of(context).colorScheme.primary,

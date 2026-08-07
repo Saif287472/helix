@@ -17,7 +17,11 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const Icon(
+                Icons.error_outline,
+                size: 64,
+                color: HelixStatusColors.danger,
+              ),
               const SizedBox(height: 16),
               Text(
                 'Failed to start',
@@ -56,7 +60,11 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.warning_amber, size: 64, color: Colors.orange),
+                const Icon(
+                  Icons.warning_amber,
+                  size: 64,
+                  color: HelixStatusColors.caution,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Database key is missing',

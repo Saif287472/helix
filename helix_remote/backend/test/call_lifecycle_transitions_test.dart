@@ -274,7 +274,7 @@ void main() {
     // catch-all and report a server fault for what is a client ordering
     // mistake.
     final handler = withAppErrorHandling((_) async {
-      throw RemoteIllegalStatusTransitionException(
+      throw const RemoteIllegalStatusTransitionException(
         'Illegal call room status transition: ENDED → ACTIVE',
         from: 'ENDED',
         to: 'ACTIVE',

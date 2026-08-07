@@ -435,7 +435,10 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
               // belong above the ordinary toggles.
               Card(
                 child: ListTile(
-                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  leading: const Icon(
+                    Icons.delete_forever,
+                    color: HelixStatusColors.danger,
+                  ),
                   title: const Text('Delete account'),
                   subtitle: const Text(
                     'Permanently delete your account and all its data',
@@ -500,7 +503,9 @@ class _ConfirmDeleteDialogState extends State<_ConfirmDeleteDialog> {
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, _controller.text.trim()),
-          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          style: FilledButton.styleFrom(
+            backgroundColor: HelixStatusColors.danger,
+          ),
           child: const Text('Delete'),
         ),
       ],

@@ -94,7 +94,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
     final isMine = message.senderAccountId == _model.currentAccountId;
     showDialog<void>(
       context: context,
-      barrierColor: Colors.black54,
+      barrierColor: HelixScrimColors.barrier,
       barrierDismissible: true,
       builder: (ctx) {
         final screen = MediaQuery.of(ctx).size;
@@ -107,7 +107,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
           VoidCallback fn, {
           Color? color,
         }) {
-          final c = color ?? Colors.white;
+          final c = color ?? HelixScrimColors.onBackdrop;
           return InkWell(
             onTap: fn,
             child: Padding(
@@ -152,7 +152,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
                     borderRadius: BorderRadius.circular(32),
                     boxShadow: const [
                       BoxShadow(
-                        color: Colors.black38,
+                        color: HelixScrimColors.barrierSoft,
                         blurRadius: 10,
                         spreadRadius: 1,
                       ),
@@ -179,14 +179,17 @@ extension _ConversationMessageActions on _ConversationScreenState {
                             ),
                           ),
                         ),
-                      const VerticalDivider(width: 16, color: Colors.white24),
+                      const VerticalDivider(
+                        width: 16,
+                        color: HelixScrimColors.onBackdropSubtle,
+                      ),
                       GestureDetector(
                         onTap: () => Navigator.pop(ctx),
                         child: Padding(
                           padding: HelixInsets.all(6),
                           child: const Icon(
                             Icons.add_reaction_outlined,
-                            color: Colors.white70,
+                            color: HelixScrimColors.onBackdropMuted,
                             size: 22,
                           ),
                         ),
@@ -228,7 +231,10 @@ extension _ConversationMessageActions on _ConversationScreenState {
                           _exitSelectionMode();
                           _editMessage(message);
                         }),
-                      const Divider(height: 1, color: Colors.white12),
+                      const Divider(
+                        height: 1,
+                        color: HelixScrimColors.controlSurface,
+                      ),
                       actionItem(
                         Icons.delete_outline,
                         'Delete for me',

@@ -1,6 +1,7 @@
 part of '../remote_messaging_service.dart';
 
-mixin RemoteMessageDecryption on RemoteMessagingServiceBase, RemoteMessageCrypto {
+mixin RemoteMessageDecryption
+    on RemoteMessagingServiceBase, RemoteMessageCrypto {
   /// Decrypts a message ciphertext, routing to the correct handler based on
   /// the envelope version field:
   ///   v=1  X3DH packed envelope (initial message from a peer device)
@@ -253,4 +254,5 @@ mixin RemoteMessageDecryption on RemoteMessagingServiceBase, RemoteMessageCrypto
     );
 
     return utf8.decode(decrypted);
-  }}
+  }
+}

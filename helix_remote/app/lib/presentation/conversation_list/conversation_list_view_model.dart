@@ -27,24 +27,34 @@ class ConversationListViewModel {
       _messaging.conversationListByKind('custom', listId: listId);
   String? peerDisplayName(String conversationId) =>
       _messaging.peerDisplayName(conversationId);
-  void markRead(String conversationId) => _messaging.markConversationRead(conversationId);
-  void pin(String conversationId) => _messaging.pinConversation(conversationId, pinned: true);
-  void mute(String conversationId) => _messaging.muteConversation(conversationId, muted: true);
-  void lock(String conversationId) =>
-      _messaging.db.setConversationLocked(conversationId, locked: true, hidden: false);
+  void markRead(String conversationId) =>
+      _messaging.markConversationRead(conversationId);
+  void pin(String conversationId) =>
+      _messaging.pinConversation(conversationId, pinned: true);
+  void mute(String conversationId) =>
+      _messaging.muteConversation(conversationId, muted: true);
+  void lock(String conversationId) => _messaging.db.setConversationLocked(
+    conversationId,
+    locked: true,
+    hidden: false,
+  );
   void favorite(String conversationId) =>
       _messaging.favoriteConversation(conversationId, favorite: true);
-  void createQuickList(String listId) => _messaging.createCustomConversationList(
+  void createQuickList(String listId) =>
+      _messaging.createCustomConversationList(
         listId: listId,
         name: 'Quick list',
         sortOrder: 0,
       );
-  void addToList({required String listId, required String conversationId, required int sortOrder}) =>
-      _messaging.addConversationToCustomList(
-        listId: listId,
-        conversationId: conversationId,
-        sortOrder: sortOrder,
-      );
+  void addToList({
+    required String listId,
+    required String conversationId,
+    required int sortOrder,
+  }) => _messaging.addConversationToCustomList(
+    listId: listId,
+    conversationId: conversationId,
+    sortOrder: sortOrder,
+  );
   void clearChat(String conversationId) => _messaging.clearChat(conversationId);
   void deleteConversation(String conversationId) =>
       _messaging.deleteConversation(conversationId);

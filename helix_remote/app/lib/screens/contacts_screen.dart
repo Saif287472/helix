@@ -393,7 +393,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: HelixStatusColors.danger,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Remove'),
           ),

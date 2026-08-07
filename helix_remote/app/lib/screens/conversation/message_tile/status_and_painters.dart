@@ -148,33 +148,49 @@ class _MessageStatusIcon extends StatelessWidget {
   (IconData, Color, String) _resolve(String status) {
     switch (status) {
       case 'PENDING':
-        return (Icons.schedule, Colors.grey, 'Queued');
+        return (Icons.schedule, HelixStatusColors.neutral, 'Queued');
       case 'SENT':
-        return (Icons.done, Colors.grey, 'Sent');
+        return (Icons.done, HelixStatusColors.neutral, 'Sent');
       case 'DELIVERED':
-        return (Icons.done_all, Colors.grey, 'Delivered');
+        return (Icons.done_all, HelixStatusColors.neutral, 'Delivered');
       case 'READ':
         return (Icons.done_all, readColor, 'Read');
       case 'RETRYING':
-        return (Icons.autorenew, Colors.orange, 'Retrying');
+        return (Icons.autorenew, HelixStatusColors.caution, 'Retrying');
       case 'FAILED':
-        return (Icons.error_outline, Colors.red, 'Failed to send');
+        return (
+          Icons.error_outline,
+          HelixStatusColors.danger,
+          'Failed to send',
+        );
       case 'SECURE_SESSION_UNAVAILABLE':
-        return (Icons.lock_open, Colors.red, 'Secure session unavailable');
+        return (
+          Icons.lock_open,
+          HelixStatusColors.danger,
+          'Secure session unavailable',
+        );
       case 'EDITED':
-        return (Icons.edit, Colors.grey, 'Edited');
+        return (Icons.edit, HelixStatusColors.neutral, 'Edited');
       case 'DELETED':
-        return (Icons.delete_outline, Colors.grey, 'Deleted');
+        return (Icons.delete_outline, HelixStatusColors.neutral, 'Deleted');
       case 'TOMBSTONED':
-        return (Icons.delete_forever, Colors.grey, 'Deleted for everyone');
+        return (
+          Icons.delete_forever,
+          HelixStatusColors.neutral,
+          'Deleted for everyone',
+        );
       case 'OFFLINE':
-        return (Icons.cloud_off, Colors.grey, 'Offline');
+        return (Icons.cloud_off, HelixStatusColors.neutral, 'Offline');
       case 'KEY_CHANGED':
-        return (Icons.warning_amber, Colors.orange, 'Safety key changed');
+        return (
+          Icons.warning_amber,
+          HelixStatusColors.caution,
+          'Safety key changed',
+        );
       case 'REVOKED_DEVICE':
-        return (Icons.no_accounts, Colors.red, 'Device revoked');
+        return (Icons.no_accounts, HelixStatusColors.danger, 'Device revoked');
       default:
-        return (Icons.help_outline, Colors.grey, status);
+        return (Icons.help_outline, HelixStatusColors.neutral, status);
     }
   }
 }

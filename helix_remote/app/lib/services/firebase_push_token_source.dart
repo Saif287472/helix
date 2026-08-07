@@ -47,7 +47,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       );
     } else {
       await LocalNotificationService.showMessage(
-        notificationKey: message.data['message_id'] as String? ??
+        notificationKey:
+            message.data['message_id'] as String? ??
             message.messageId ??
             'message',
       );
@@ -151,7 +152,7 @@ class FirebasePushTokenSource implements PushTokenSource {
     AppLogger.instance.info(
       'push',
       'foreground message received id=${message.messageId} '
-      'type=$type call_id=$shortCallId',
+          'type=$type call_id=$shortCallId',
     );
     try {
       if (type == 'incoming_call' && callId != null && callId.isNotEmpty) {
@@ -162,7 +163,8 @@ class FirebasePushTokenSource implements PushTokenSource {
         );
       } else if (type == 'new_message') {
         await LocalNotificationService.showMessage(
-          notificationKey: message.data['message_id'] as String? ??
+          notificationKey:
+              message.data['message_id'] as String? ??
               message.messageId ??
               'message',
         );
@@ -171,7 +173,7 @@ class FirebasePushTokenSource implements PushTokenSource {
       AppLogger.instance.warn(
         'push',
         'foreground notification failed type=$type call_id=$callId '
-        'error=${error.runtimeType}',
+            'error=${error.runtimeType}',
       );
     }
   }

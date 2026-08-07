@@ -19,9 +19,20 @@ class HelixEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
+          // The icon restates the title and nothing more, so announcing it
+          // would just make a screen reader say the same thing twice.
+          ExcludeSemantics(
+            child: Icon(
+              icon,
+              size: 48,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
           const SizedBox(height: HelixSpace.md),
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          Semantics(
+            header: true,
+            child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+          ),
           if (message != null) ...[
             const SizedBox(height: HelixSpace.xs),
             Text(message!, textAlign: TextAlign.center),
@@ -41,13 +52,19 @@ class HelixErrorState extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
   @override
-  Widget build(BuildContext context) => HelixEmptyState(
-    icon: Icons.error_outline,
-    title: 'Something went wrong',
-    message: message,
-    action: onRetry == null
-        ? null
-        : FilledButton.tonal(onPressed: onRetry, child: const Text('Retry')),
+  Widget build(BuildContext context) => Semantics(
+    // A failure replacing content is exactly the case a live region exists
+    // for: a sighted user sees the panel change, and without this a screen
+    // reader user is told nothing at all.
+    liveRegion: true,
+    child: HelixEmptyState(
+      icon: Icons.error_outline,
+      title: 'Something went wrong',
+      message: message,
+      action: onRetry == null
+          ? null
+          : FilledButton.tonal(onPressed: onRetry, child: const Text('Retry')),
+    ),
   );
 }
 
@@ -62,12 +79,18 @@ class HelixSkeleton extends StatelessWidget {
   final double height;
   final Radius radius;
   @override
-  Widget build(BuildContext context) => Container(
-    width: width,
-    height: height,
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.all(radius),
+  // Purely decorative. A skeleton stands in for content that is not there
+  // yet, and a screen full of them would otherwise announce one meaningless
+  // node per placeholder. HelixAsyncPanel announces the loading state once,
+  // for the whole panel, which is what a screen-reader user needs to hear.
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.all(radius),
+      ),
     ),
   );
 }
@@ -88,7 +111,13 @@ class HelixAsyncPanel extends StatelessWidget {
   final Widget? skeleton;
   @override
   Widget build(BuildContext context) => loading
-      ? (skeleton ?? const Center(child: HelixSkeleton(width: 180, height: 24)))
+      ? Semantics(
+          label: 'Loading',
+          liveRegion: true,
+          child:
+              skeleton ??
+              const Center(child: HelixSkeleton(width: 180, height: 24)),
+        )
       : error != null
       ? HelixErrorState(message: error!, onRetry: onRetry)
       : child;

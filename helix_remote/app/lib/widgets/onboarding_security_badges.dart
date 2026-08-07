@@ -58,17 +58,17 @@ class OtpPlaceholderNotice extends StatelessWidget {
     return Container(
       padding: HelixInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.12),
+        color: HelixStatusColors.caution.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.shade700),
+        border: Border.all(color: HelixStatusColors.onCautionContainer),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
+          const Icon(
             Icons.warning_amber_rounded,
             size: 18,
-            color: Colors.amber.shade800,
+            color: HelixStatusColors.onCautionContainer,
           ),
           const SizedBox(width: 8),
           Expanded(

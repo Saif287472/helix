@@ -124,12 +124,15 @@ class _ScheduledCallCard extends StatelessWidget {
                   Container(
                     padding: HelixInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.15),
+                      color: HelixStatusColors.caution.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Text(
                       'Starting soon',
-                      style: TextStyle(fontSize: 11, color: Colors.orange),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: HelixStatusColors.caution,
+                      ),
                     ),
                   ),
               ],
@@ -137,18 +140,32 @@ class _ScheduledCallCard extends StatelessWidget {
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.schedule, size: 14, color: Colors.grey),
+                const Icon(
+                  Icons.schedule,
+                  size: 14,
+                  color: HelixStatusColors.neutral,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   timeLabel,
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: const TextStyle(
+                    color: HelixStatusColors.neutral,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                const Icon(Icons.people, size: 14, color: Colors.grey),
+                const Icon(
+                  Icons.people,
+                  size: 14,
+                  color: HelixStatusColors.neutral,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   '${call.attendees.length} attendee${call.attendees.length == 1 ? '' : 's'}',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: const TextStyle(
+                    color: HelixStatusColors.neutral,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -159,9 +176,9 @@ class _ScheduledCallCard extends StatelessWidget {
                 spacing: 6,
                 children: call.attendees.map((a) {
                   final color = switch (a.rsvpStatus) {
-                    RsvpStatus.yes => Colors.green,
-                    RsvpStatus.no => Colors.red,
-                    RsvpStatus.pending => Colors.grey,
+                    RsvpStatus.yes => HelixStatusColors.positive,
+                    RsvpStatus.no => HelixStatusColors.danger,
+                    RsvpStatus.pending => HelixStatusColors.neutral,
                   };
                   return Chip(
                     label: Text(
@@ -198,14 +215,18 @@ class _ScheduledCallCard extends StatelessWidget {
                   TextButton.icon(
                     icon: const Icon(Icons.close, size: 16),
                     label: const Text('Decline'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    style: TextButton.styleFrom(
+                      foregroundColor: HelixStatusColors.danger,
+                    ),
                     onPressed: () => onRsvp!(call.scheduledCallId, 'NO'),
                   ),
                 const Spacer(),
                 // Host cancel
                 if (_isHost && onCancel != null)
                   TextButton(
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    style: TextButton.styleFrom(
+                      foregroundColor: HelixStatusColors.danger,
+                    ),
                     onPressed: () => _confirmCancel(context),
                     child: const Text('Cancel'),
                   ),
@@ -236,7 +257,9 @@ class _ScheduledCallCard extends StatelessWidget {
             child: const Text('Keep'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: HelixStatusColors.danger,
+            ),
             onPressed: () {
               Navigator.of(ctx).pop();
               onCancel!(call.scheduledCallId);

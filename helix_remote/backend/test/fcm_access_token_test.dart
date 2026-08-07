@@ -114,7 +114,7 @@ void main() {
       final source = build(
         exchange: (_) async {
           attempt++;
-          if (attempt == 1) throw SocketException('network down');
+          if (attempt == 1) throw const SocketException('network down');
           return FcmAccessToken(
             value: 'recovered',
             expiresAt: now.add(const Duration(hours: 1)),
@@ -139,7 +139,7 @@ void main() {
               expiresAt: now.add(const Duration(hours: 1)),
             );
           }
-          throw SocketException('network down');
+          throw const SocketException('network down');
         },
       );
 

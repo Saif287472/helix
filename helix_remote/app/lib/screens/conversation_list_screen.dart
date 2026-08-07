@@ -389,7 +389,9 @@ class _ConversationListScreenState extends State<ConversationListScreen>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: HelixStatusColors.danger,
+            ),
             child: const Text('Clear'),
           ),
         ],
@@ -419,7 +421,9 @@ class _ConversationListScreenState extends State<ConversationListScreen>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: HelixStatusColors.danger,
+            ),
             child: const Text('Delete'),
           ),
         ],

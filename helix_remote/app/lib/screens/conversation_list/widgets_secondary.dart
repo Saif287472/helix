@@ -36,12 +36,18 @@ class ContactTile extends StatelessWidget {
         children: [
           IconButton(
             tooltip: 'Accept request',
-            icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+            icon: const Icon(
+              Icons.check_circle_outline,
+              color: HelixStatusColors.positive,
+            ),
             onPressed: onAccept,
           ),
           IconButton(
             tooltip: 'Reject request',
-            icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+            icon: const Icon(
+              Icons.cancel_outlined,
+              color: HelixStatusColors.danger,
+            ),
             onPressed: onReject,
           ),
           if (onRemove != null) _MoreMenu(onRemove: onRemove!),
@@ -119,9 +125,15 @@ class _MoreMenu extends StatelessWidget {
           value: 'remove',
           child: Row(
             children: [
-              Icon(Icons.person_remove_outlined, color: Colors.red),
+              Icon(
+                Icons.person_remove_outlined,
+                color: HelixStatusColors.danger,
+              ),
               SizedBox(width: 8),
-              Text('Remove contact', style: TextStyle(color: Colors.red)),
+              Text(
+                'Remove contact',
+                style: TextStyle(color: HelixStatusColors.danger),
+              ),
             ],
           ),
         ),
@@ -163,7 +175,7 @@ class _Avatar extends StatelessWidget {
       child: Text(
         _initials(),
         style: TextStyle(
-          color: Colors.white,
+          color: HelixScrimColors.onBackdrop,
           fontSize: size * 0.35,
           fontWeight: FontWeight.bold,
         ),
@@ -243,6 +255,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
                   ),
                   const Spacer(),
                   IconButton(
+                    tooltip: 'Close search',
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.of(context).pop(),
                   ),

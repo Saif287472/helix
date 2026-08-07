@@ -299,7 +299,7 @@ class _CategoryIcon extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-      child: Icon(icon, color: Colors.white, size: 23),
+      child: Icon(icon, color: HelixScrimColors.onBackdrop, size: 23),
     );
   }
 }

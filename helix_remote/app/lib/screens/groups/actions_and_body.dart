@@ -138,11 +138,19 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.check, color: Colors.green),
+                            tooltip: 'Approve join request',
+                            icon: const Icon(
+                              Icons.check,
+                              color: HelixStatusColors.positive,
+                            ),
                             onPressed: () => _approveJoinRequest(req, true),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red),
+                            tooltip: 'Decline join request',
+                            icon: const Icon(
+                              Icons.close,
+                              color: HelixStatusColors.danger,
+                            ),
                             onPressed: () => _approveJoinRequest(req, false),
                           ),
                         ],
@@ -166,11 +174,19 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.check, color: Colors.green),
+                            tooltip: 'Accept invitation',
+                            icon: const Icon(
+                              Icons.check,
+                              color: HelixStatusColors.positive,
+                            ),
                             onPressed: () => _respondToInvite(inv, true),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red),
+                            tooltip: 'Decline invitation',
+                            icon: const Icon(
+                              Icons.close,
+                              color: HelixStatusColors.danger,
+                            ),
                             onPressed: () => _respondToInvite(inv, false),
                           ),
                         ],
@@ -203,14 +219,14 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                                   child: Container(
                                     padding: HelixInsets.all(2),
                                     decoration: const BoxDecoration(
-                                      color: Colors.red,
+                                      color: HelixStatusColors.danger,
                                       shape: BoxShape.circle,
                                     ),
                                     child: Text(
                                       '${group.unreadMentionCount}',
                                       style: const TextStyle(
                                         fontSize: 9,
-                                        color: Colors.white,
+                                        color: HelixScrimColors.onBackdrop,
                                       ),
                                     ),
                                   ),
@@ -228,7 +244,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                                       ? Icons.volume_off
                                       : Icons.notifications_none,
                                   size: 14,
-                                  color: Colors.grey,
+                                  color: HelixStatusColors.neutral,
                                 ),
                             ],
                           ),
@@ -330,11 +346,13 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                                   child: ListTile(
                                     leading: Icon(
                                       Icons.delete_forever,
-                                      color: Colors.red,
+                                      color: HelixStatusColors.danger,
                                     ),
                                     title: Text(
                                       'Delete group',
-                                      style: TextStyle(color: Colors.red),
+                                      style: TextStyle(
+                                        color: HelixStatusColors.danger,
+                                      ),
                                     ),
                                   ),
                                 ),

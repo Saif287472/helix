@@ -190,7 +190,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (savedPath != null) ...[
                 SelectableText(
                   'Saved to:\n$savedPath',
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: HelixStatusColors.neutral,
+                  ),
                 ),
                 const SizedBox(height: 8),
               ],

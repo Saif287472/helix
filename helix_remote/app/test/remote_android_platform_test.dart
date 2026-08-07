@@ -37,23 +37,19 @@ void main() {
       expect(manifest, contains('android.permission.CAMERA'));
     });
 
-    test('declares FOREGROUND_SERVICE permission', () {
-      expect(manifest, contains('android.permission.FOREGROUND_SERVICE'));
-    });
-
-    test(
-      'declares typed foreground-service permissions for camera and microphone',
-      () {
-        expect(
-          manifest,
-          contains('android.permission.FOREGROUND_SERVICE_CAMERA'),
-        );
-        expect(
-          manifest,
-          contains('android.permission.FOREGROUND_SERVICE_MICROPHONE'),
-        );
-      },
-    );
+    // Superseded (2026-08-07) by LOW-4. Two tests here asserted that
+    // FOREGROUND_SERVICE and its typed camera/microphone variants were
+    // declared. They were — and nothing ever used them: the app declares no
+    // service element, the merged plugin manifests contribute only
+    // firebase_messaging's background JobService and MESSAGING_EVENT service
+    // (neither a foreground service), and no Dart code calls
+    // flutter_local_notifications' startForegroundService.
+    //
+    // The permissions are gone; the paired assertion that keeps them gone
+    // lives in android_manifest_security_test.dart, which ties them to the
+    // presence of a service element rather than asserting either state
+    // outright. Recorded rather than deleted, because "the manifest used to
+    // declare this" is the question a future reader will have.
   });
 
   group('RP6-009: Activity lifecycle and navigation configuration', () {

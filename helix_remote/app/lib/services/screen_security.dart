@@ -66,11 +66,13 @@ class ScreenSecurity {
       await override(secure: secure);
       return;
     }
-    // Android is the only platform with this flag. Windows would need
-    // SetWindowDisplayAffinity through the runner; until that exists, calling
-    // out on other platforms would just throw MissingPluginException on every
-    // sensitive screen.
-    if (!Platform.isAndroid) return;
+    // Android sets FLAG_SECURE; Windows sets display affinity to
+    // WDA_EXCLUDEFROMCAPTURE in the runner (`windows/runner/screen_security.cpp`).
+    // Both serve the same channel and method name, so this side does not care
+    // which one answers. Any other platform has no handler registered, and
+    // calling out would only throw MissingPluginException on every sensitive
+    // screen.
+    if (!Platform.isAndroid && !Platform.isWindows) return;
     try {
       await channel.invokeMethod<void>('setSecure', {'secure': secure});
     } on PlatformException {

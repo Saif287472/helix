@@ -47,7 +47,10 @@ Future<void> main(List<String> arguments) async {
   latencies.sort();
   final p50 = latencies[(latencies.length * .50).floor()];
   final p95 =
-      latencies[(latencies.length * .95).floor().clamp(0, latencies.length - 1)];
+      latencies[(latencies.length * .95).floor().clamp(
+        0,
+        latencies.length - 1,
+      )];
   stdout.writeln(
     'load-smoke url=$uri requests=${latencies.length} clients=$clients '
     'failures=$failures p50_ms=$p50 p95_ms=$p95',

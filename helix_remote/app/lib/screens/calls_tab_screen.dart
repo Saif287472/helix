@@ -202,7 +202,9 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: HelixStatusColors.danger,
+            ),
             child: const Text('Clear'),
           ),
         ],
@@ -545,7 +547,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
   void _showQuickContactPopup(_CallHistoryRow row) {
     showDialog<void>(
       context: context,
-      barrierColor: Colors.black.withAlpha(120),
+      barrierColor: HelixScrimColors.barrierSoft,
       builder: (ctx) => Dialog(
         insetPadding: HelixInsets.symmetric(horizontal: 60),
         alignment: Alignment.center,

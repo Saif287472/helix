@@ -88,6 +88,125 @@ abstract final class HelixColorTokens {
   static const cFFFFE0CC = Color(0xFFFFE0CC);
 }
 
+/// The scrim ladder: colours for content drawn over a dark backdrop.
+///
+/// Used by every surface that dims what is behind it — the in-call screen,
+/// the message-action bar, media previews, modal barriers. Deliberately
+/// theme-independent: these surfaces are dark in light mode too, because they
+/// sit over video or photos and must not tint them.
+///
+/// The ladder is the load-bearing part. [onBackdrop] is for primary labels,
+/// [onBackdropMuted] for supporting text, [onBackdropSubtle] for chrome that
+/// must be visible without competing. Contrast against [backdrop] is what
+/// makes each rung legal, so add a rung here rather than inventing an opacity
+/// at a call site — three screens each picking their own "white-ish" is how
+/// the product ended up with three slightly different action bars.
+abstract final class HelixScrimColors {
+  /// The backdrop itself.
+  static const backdrop = Color(0xFF000000);
+
+  /// Primary text and icons on [backdrop].
+  static const onBackdrop = Color(0xFFFFFFFF);
+
+  /// Supporting text — call duration, participant status, captions.
+  static const onBackdropMuted = Color(0xB3FFFFFF);
+
+  /// De-emphasised content that is still meant to be read.
+  static const onBackdropFaint = Color(0x8AFFFFFF);
+
+  /// Dividers, borders, and inactive control outlines.
+  static const onBackdropSubtle = Color(0x3DFFFFFF);
+
+  /// Fill behind an idle round control button.
+  static const controlSurface = Color(0x1FFFFFFF);
+
+  /// Modal barrier over the app. [barrierSoft] for a transient sheet,
+  /// [barrierStrong] where the content behind must not be legible.
+  static const barrierSoft = Color(0x61000000);
+  static const barrier = Color(0x8A000000);
+  static const barrierStrong = Color(0xDD000000);
+
+  /// Depth cues on light surfaces — bubble shadows and pressed states, which
+  /// are a translucent black rather than a grey so they compose over whatever
+  /// is beneath them.
+  static const shadowSoft = Color(0x10000000);
+  static const shadow = Color(0x12000000);
+  static const shadowStrong = Color(0x1C000000);
+
+  /// Pressed/selected wash on a dark surface.
+  static const highlightOnDark = Color(0x10FFFFFF);
+}
+
+/// Fixed neutral fills for chrome that must not follow the colour scheme.
+///
+/// Small on purpose. Anything that *can* come from `Theme.of(context)
+/// .colorScheme` should — these are the few places where it cannot, because
+/// they sit under media or need to look identical in both themes.
+abstract final class HelixNeutralColors {
+  /// Chip and pill backgrounds on a light sheet.
+  static const subtle = Color(0xFFF5F5F5);
+
+  /// Drag handles and hairline dividers on a light sheet.
+  static const divider = Color(0xFFE0E0E0);
+
+  /// Behind a video tile before the first frame arrives. Near-black rather
+  /// than black so the tile edge stays visible against the call backdrop.
+  static const videoPlaceholder = Color(0xFF212121);
+}
+
+/// Call-specific colours that are about meaning rather than depth.
+abstract final class HelixCallColors {
+  /// Hang up, decline, and the recording indicator.
+  static const endCall = Color(0xFFF44336);
+
+  /// Answer, and the connected indicator.
+  static const answerCall = Color(0xFF4CAF50);
+
+  /// A control that cannot be actioned yet — distinct from an idle one, so
+  /// "not available" never reads as "available but unlit".
+  static const controlDisabled = Color(0xFF9E9E9E);
+
+  /// Ring around the participant tile that currently has the floor.
+  static const activeSpeaker = Color(0xFF69F0AE);
+
+  /// Participant is muted.
+  static const participantMuted = Color(0xFFFF5252);
+
+  /// Participant is sharing their screen.
+  static const participantSharing = Color(0xFF448AFF);
+}
+
+/// Severity colours for status affordances — message delivery state, group
+/// join requests, connection banners.
+///
+/// Separate from the colour scheme's `error` because the ladder has four
+/// rungs, not one. Delivery state is the reason: "queued", "sent" and
+/// "delivered" are all [neutral], and letting each tile pick its own grey is
+/// what makes a tick row look inconsistent between messages.
+///
+/// The `*Container` pairs are for filled banners, and are the only place a
+/// status colour should appear as a background.
+abstract final class HelixStatusColors {
+  /// In progress, or complete and unremarkable. The default.
+  static const neutral = Color(0xFF9E9E9E);
+
+  /// Succeeded in a way worth confirming: approved, connected, verified.
+  static const positive = Color(0xFF4CAF50);
+
+  /// Needs attention but is not a failure: retrying, safety key changed.
+  static const caution = Color(0xFFFF9800);
+  static const cautionContainer = Color(0xFFFFE0B2);
+  static const onCautionContainer = Color(0xFFE65100);
+
+  /// Failed, revoked, or refused.
+  static const danger = Color(0xFFF44336);
+  static const dangerContainer = Color(0xFFFFCDD2);
+  static const onDangerContainer = Color(0xFFD32F2F);
+
+  /// A quoted or highlighted message.
+  static const highlight = Color(0xFF2196F3);
+}
+
 abstract final class HelixSpace {
   static const xxs = 4.0;
   static const xs = 8.0;

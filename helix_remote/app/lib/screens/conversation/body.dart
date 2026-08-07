@@ -46,6 +46,7 @@ extension _ConversationBody on _ConversationScreenState {
             ),
           ),
           IconButton(
+            tooltip: 'Cancel reply',
             icon: const Icon(Icons.close, size: 20),
             onPressed: () => _update(() => _replyTo = null),
           ),
@@ -184,7 +185,11 @@ extension _ConversationBody on _ConversationScreenState {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: HelixStatusColors.danger,
+                ),
                 const SizedBox(height: 8),
                 Text(_errorMessage!, textAlign: TextAlign.center),
               ],
@@ -392,7 +397,7 @@ extension _ConversationBody on _ConversationScreenState {
                     mini: true,
                     elevation: 2,
                     backgroundColor: palette.accent,
-                    foregroundColor: Colors.black,
+                    foregroundColor: HelixScrimColors.backdrop,
                     child: Icon(hasText ? Icons.send : Icons.mic),
                   ),
                 );
@@ -424,8 +429,8 @@ class _ChatWallpaper extends StatelessWidget {
       child: CustomPaint(
         painter: _ChatWallpaperPainter(
           color: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white.withAlpha(16)
-              : Colors.black.withAlpha(18),
+              ? HelixScrimColors.highlightOnDark
+              : HelixScrimColors.shadow,
         ),
         child: child,
       ),
@@ -484,11 +489,11 @@ class _DateChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: palette.dateChip,
             borderRadius: BorderRadius.circular(9),
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(
-                color: Colors.black.withAlpha(16),
+                color: HelixScrimColors.shadowSoft,
                 blurRadius: 1.5,
-                offset: const Offset(0, 1),
+                offset: Offset(0, 1),
               ),
             ],
           ),

@@ -43,7 +43,7 @@ class CallLinkSheet extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: HelixNeutralColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -55,21 +55,28 @@ class CallLinkSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           if (expired)
-            const _Badge(label: 'Expired', color: Colors.red)
+            const _Badge(label: 'Expired', color: HelixCallColors.endCall)
           else
             _Badge(
               label: daysLeft == 0 ? 'Expires today' : 'Expires in $daysLeft d',
-              color: daysLeft <= 1 ? Colors.orange : Colors.green,
+              color: daysLeft <= 1
+                  ? HelixStatusColors.caution
+                  : HelixCallColors.answerCall,
             ),
           if (link.requiresApproval) ...[
             const SizedBox(height: 4),
-            const _Badge(label: 'Requires approval', color: Colors.blueGrey),
+            const _Badge(
+              label: 'Requires approval',
+              color: HelixStatusColors.neutral,
+            ),
           ],
           if (link.maxUses > 0) ...[
             const SizedBox(height: 4),
             _Badge(
               label: '${link.useCount}/${link.maxUses} uses',
-              color: link.isExhausted ? Colors.red : Colors.teal,
+              color: link.isExhausted
+                  ? HelixCallColors.endCall
+                  : HelixStatusColors.positive,
             ),
           ],
           const SizedBox(height: 20),
@@ -77,7 +84,7 @@ class CallLinkSheet extends StatelessWidget {
           Container(
             padding: HelixInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: HelixNeutralColors.subtle,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -112,7 +119,9 @@ class CallLinkSheet extends StatelessWidget {
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.link_off),
                 label: const Text('Revoke link'),
-                style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: HelixCallColors.endCall,
+                ),
                 onPressed: () {
                   Navigator.of(context).pop();
                   onRevoke!();

@@ -130,7 +130,10 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
           ),
         );
       case _InviteCheckState.valid:
-        return const Icon(Icons.check_circle, color: Colors.green);
+        return const Icon(
+          Icons.check_circle,
+          color: HelixStatusColors.positive,
+        );
       case _InviteCheckState.invalid:
         // Builder gives the onPressed callback a context from *inside* the
         // MaterialApp this State builds - `this.context` (the State's own

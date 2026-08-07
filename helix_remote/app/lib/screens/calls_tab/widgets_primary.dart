@@ -269,6 +269,7 @@ class _CallInfoScreen extends StatelessWidget {
         foregroundColor: cs.onSurface,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Back',
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),

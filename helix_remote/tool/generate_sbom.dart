@@ -23,7 +23,10 @@ void main(List<String> args) {
     final foundVersion = RegExp(r'^    version: "?([^"\s]+)').firstMatch(line);
     if (foundVersion != null && name != null) version = foundVersion.group(1)!;
   }
-  if (name != null && version != null) components.add(_component(name, version));
+  // The last package in the file has no following blank line to flush it.
+  if (name != null && version != null) {
+    components.add(_component(name, version));
+  }
   output.parent.createSync(recursive: true);
   output.writeAsStringSync(
     const JsonEncoder.withIndent('  ').convert({
@@ -33,7 +36,9 @@ void main(List<String> args) {
       'components': components,
     }),
   );
-  stdout.writeln('Wrote ${components.length} resolved packages to ${output.path}');
+  stdout.writeln(
+    'Wrote ${components.length} resolved packages to ${output.path}',
+  );
 }
 
 Map<String, String> _component(String name, String version) => {

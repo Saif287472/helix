@@ -15,7 +15,9 @@ void main() {
   ];
   final missing = requiredMetrics.where((metric) => !budget.contains(metric));
   if (missing.isNotEmpty) {
-    stderr.writeln('Performance budget contract is incomplete: ${missing.join(', ')}');
+    stderr.writeln(
+      'Performance budget contract is incomplete: ${missing.join(', ')}',
+    );
     exitCode = 1;
     return;
   }
