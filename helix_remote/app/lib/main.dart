@@ -15,6 +15,7 @@ import 'package:helix_remote/app/remote_error_copy.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/screens/home_screen.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
+import 'package:helix_remote/screens/setup/setup_screen.dart';
 import 'package:helix_remote/services/android_call_runtime_service.dart';
 import 'package:helix_remote/services/app_logger.dart';
 import 'package:helix_remote/services/firebase_push_token_source.dart';

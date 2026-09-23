@@ -186,7 +186,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
           body: Center(child: HelixSkeleton(width: 192, height: 24)),
         );
       case _BootState.needsServerChoice:
-        return _ServerChoiceHost(onChoice: _onServerChoiceMade);
+        return SetupScreen(onChoice: _onServerChoiceMade);
       case _BootState.offline:
         return _OfflineShellScreen(
           onServerChoiceMade: _onServerChoiceMade,

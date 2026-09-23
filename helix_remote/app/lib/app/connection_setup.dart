@@ -51,7 +51,7 @@ class _OfflineShellScreen extends StatelessWidget {
   Future<void> _connect(BuildContext context) async {
     final result = await Navigator.of(
       context,
-    ).pushNamed<Object?>(RemoteRoutes.serverChoice);
+    ).pushNamed<Object?>(RemoteRoutes.setup);
     onServerChoiceMade(result);
   }
 
