@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/screens/server_choice_screen.dart';
-import 'state/onboarding_notifier.dart';
-import 'state/onboarding_state.dart';
-import 'steps/splash_step.dart';
-import 'steps/server_selection_step.dart';
-import 'steps/global_phone_step.dart';
-import 'steps/global_otp_step.dart';
-import 'steps/global_name_step.dart';
-import 'steps/others_hub_step.dart';
-import 'steps/host_guide_step.dart';
-import 'steps/code_entry_step.dart';
-import 'steps/personal_verify_step.dart';
+import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
+import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
+import 'package:helix_remote/screens/setup/steps/splash_step.dart';
+import 'package:helix_remote/screens/setup/steps/server_selection_step.dart';
+import 'package:helix_remote/screens/setup/steps/global_phone_step.dart';
+import 'package:helix_remote/screens/setup/steps/global_otp_step.dart';
+import 'package:helix_remote/screens/setup/steps/global_name_step.dart';
+import 'package:helix_remote/screens/setup/steps/others_hub_step.dart';
+import 'package:helix_remote/screens/setup/steps/host_guide_step.dart';
+import 'package:helix_remote/screens/setup/steps/code_entry_step.dart';
+import 'package:helix_remote/screens/setup/steps/personal_verify_step.dart';
 
 class SetupScreen extends StatefulWidget {
   const SetupScreen({
@@ -70,7 +69,6 @@ class _SetupScreenState extends State<SetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isWide = MediaQuery.sizeOf(context).width > 760;
 
     return Scaffold(

@@ -58,6 +58,7 @@ class RecordingPushProvider implements PushProvider {
   Future<void> deliver({
     required String token,
     required Map<String, dynamic> data,
+    String? tokenType,
   }) async {
     deliveries.add((token: token, data: Map.of(data)));
   }

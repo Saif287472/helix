@@ -817,7 +817,6 @@ void main() {
 
     test('DoubleRatchetSession symmetric chain stepping, skipped keys, and persistence round-trip', () async {
       final rootKeyBytes = List<int>.generate(32, (i) => i * 3);
-      final rootKey = crypto.SecretKey(rootKeyBytes);
       final initialSendBytes = List<int>.generate(32, (i) => i + 10);
       final initialRecvBytes = List<int>.generate(32, (i) => i + 20);
 

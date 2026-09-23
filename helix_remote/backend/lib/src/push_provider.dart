@@ -121,7 +121,7 @@ final class ApnsPushProvider implements PushProvider {
     required this.tokenSource,
     this.isProduction = false,
     Uri? endpoint,
-    HttpClient? httpClient,
+    this.httpClient,
   }) : endpoint =
            endpoint ??
            Uri.https(
@@ -129,8 +129,7 @@ final class ApnsPushProvider implements PushProvider {
                  ? 'api.push.apple.com'
                  : 'api.development.push.apple.com',
              '',
-           ),
-       _httpClient = httpClient;
+           );
 
   ApnsPushProvider.staticToken({
     required String teamId,
@@ -156,7 +155,7 @@ final class ApnsPushProvider implements PushProvider {
   final ApnsTokenSource tokenSource;
   final bool isProduction;
   final Uri endpoint;
-  final HttpClient? _httpClient;
+  final HttpClient? httpClient;
 
   @override
   bool get isConfigured =>
@@ -202,7 +201,7 @@ final class ApnsPushProvider implements PushProvider {
 
     final bearer = await tokenSource.bearerToken();
     final url = endpoint.resolve('/3/device/$token');
-    final http = _httpClient ?? HttpClient();
+    final http = httpClient ?? HttpClient();
     try {
       final req = await http.postUrl(url);
       req.headers
@@ -230,7 +229,7 @@ final class ApnsPushProvider implements PushProvider {
       }
       throw ApnsDeliveryException(res.statusCode, resBody);
     } finally {
-      if (_httpClient == null) {
+      if (httpClient == null) {
         http.close(force: true);
       }
     }

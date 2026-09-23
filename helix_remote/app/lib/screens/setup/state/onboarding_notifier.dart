@@ -4,9 +4,8 @@ import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
-import 'package:helix_remote/screens/server_choice_screen.dart';
 import 'package:helix_remote/services/local_notification_service.dart';
-import 'onboarding_state.dart';
+import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
 class OnboardingNotifier extends ChangeNotifier {
   OnboardingNotifier({

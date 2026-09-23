@@ -273,6 +273,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       // not a correctness requirement, and must never run inside this
       // transaction (see _deleteMessagesChunked's doc comment).
       for (final table in [
+        'audit_logs',
         'group_creation_log',
         'turn_credential_log',
         'pending_device_links',
@@ -287,16 +288,6 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
           [accountId, accountId],
         );
       }
-
-      // Redact audit logs for privacy while preserving forensic trail
-      final auditStmt = _db.prepare('''
-        UPDATE audit_logs 
-        SET client_ip = 'redacted',
-            user_agent = 'deleted_account'
-        WHERE account_id = ?;
-      ''');
-      auditStmt.execute([accountId]);
-      auditStmt.close();
 
       // Clean outbox jobs targeting or originating from this account using precise JSON extraction
       _db.execute('''

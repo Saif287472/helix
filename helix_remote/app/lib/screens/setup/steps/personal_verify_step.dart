@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import '../state/onboarding_state.dart';
+import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
 class PersonalVerifyStep extends StatefulWidget {
   const PersonalVerifyStep({

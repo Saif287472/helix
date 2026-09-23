@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import '../state/onboarding_state.dart';
+import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
 class ServerSelectionStep extends StatelessWidget {
   const ServerSelectionStep({
@@ -102,7 +102,7 @@ class ServerSelectionStep extends StatelessWidget {
             crossFadeState: selectedType == ServerType.global
                 ? CrossFadeState.showFirst
                 : CrossFadeState.showSecond,
-            firstChild: _ServerInfoCard(
+            firstChild: const _ServerInfoCard(
               title: 'Connected to Helix Global Server',
               description:
                   'Connect directly to official Helix secure nodes. Free, encrypted messaging with zero server configuration needed.',

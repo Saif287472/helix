@@ -9,12 +9,12 @@ import 'package:helix_remote_backend/src/server_log.dart';
 /// with an in-memory TTL cache to eliminate redundant remote network calls.
 class FederationDomainVerifier {
   FederationDomainVerifier({
-    HttpClient? httpClient,
+    this.httpClient,
     this.allowLoopback = true,
     this.cacheDuration = const Duration(hours: 24),
-  }) : _httpClient = httpClient;
+  });
 
-  final HttpClient? _httpClient;
+  final HttpClient? httpClient;
   final bool allowLoopback;
   final Duration cacheDuration;
 
@@ -96,8 +96,8 @@ class FederationDomainVerifier {
     required String expectedPublicKeyB64,
     String? expectedServerId,
   }) async {
-    final client = _httpClient ?? HttpClient();
-    final shouldClose = _httpClient == null;
+    final client = httpClient ?? HttpClient();
+    final shouldClose = httpClient == null;
 
     try {
       final uri = Uri.https(domain, '/.well-known/helix/server.json');

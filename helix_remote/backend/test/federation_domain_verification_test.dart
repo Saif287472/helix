@@ -39,6 +39,7 @@ void main() {
           expectedPublicKeyB64: expectedKey,
           expectedServerId: expectedServerId,
         );
+        expect(valid, isFalse);
         // Note: verifyDomainKey calls Uri.https(domain, ...).
         // Since test server is HTTP on localhost, let's verify loopback bypass and error handling.
       } finally {

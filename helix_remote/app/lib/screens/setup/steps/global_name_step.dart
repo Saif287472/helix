@@ -42,16 +42,16 @@ class GlobalNameStep extends StatelessWidget {
                 color: HelixColorTokens.success.withValues(alpha: 0.3),
               ),
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.check_circle_outline,
                   size: 16,
                   color: HelixColorTokens.success,
                 ),
-                const SizedBox(width: 8),
-                const Flexible(
+                SizedBox(width: 8),
+                Flexible(
                   child: Text(
                     "Phone Number Verified",
                     style: TextStyle(

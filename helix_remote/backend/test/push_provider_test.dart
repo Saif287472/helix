@@ -113,7 +113,9 @@ void main() {
       expect(requestHeaders['apns-priority'], '10');
 
       final bodyJson = jsonDecode(requestBody) as Map<String, dynamic>;
-      expect(bodyJson['aps']['alert']['body'], 'You have a new message');
+      final aps = bodyJson['aps'] as Map<String, dynamic>;
+      final alert = aps['alert'] as Map<String, dynamic>;
+      expect(alert['body'], 'You have a new message');
       expect(bodyJson['conversation_id'], 'conv-123');
     } finally {
       await subscription.cancel();
