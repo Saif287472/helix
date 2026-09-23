@@ -168,6 +168,23 @@ mixin RemoteMessageDecryption
       senderDeviceId,
       recipientDeviceId,
     );
+    final hkdf = crypto.Hkdf(
+      hmac: crypto.Hmac(crypto.Sha256()),
+      outputLength: 32,
+    );
+    final sendKey = await hkdf.deriveKey(
+      secretKey: crypto.SecretKey(masterKeyBytes),
+      nonce: const [2],
+      info: utf8.encode('helix-chain-recv'),
+    );
+    final recvKey = await hkdf.deriveKey(
+      secretKey: crypto.SecretKey(masterKeyBytes),
+      nonce: const [1],
+      info: utf8.encode('helix-chain-send'),
+    );
+    final sendKeyB64 = base64Url.encode(await sendKey.extractBytes());
+    final recvKeyB64 = base64Url.encode(await recvKey.extractBytes());
+
     final now = DateTime.now().millisecondsSinceEpoch;
     db.upsertCryptoSession(
       sessionId: sessionId,
@@ -176,8 +193,8 @@ mixin RemoteMessageDecryption
       role: 'receiver',
       protocolVersion: 1,
       rootKey: base64Url.encode(masterKeyBytes),
-      sendingChainKey: '',
-      receivingChainKey: '',
+      sendingChainKey: sendKeyB64,
+      receivingChainKey: recvKeyB64,
       sendCount: 0,
       receiveCount: (aadMap['counter'] as int? ?? 0) + 1,
       createdAt: now,
@@ -187,11 +204,9 @@ mixin RemoteMessageDecryption
     return utf8.decode(decrypted);
   }
 
-  // Decrypts a v=2 session-reuse envelope. Looks up the session by 'sid' and
-  // re-derives the per-message key from the root key using HKDF. X3DH does
-  // not repeat. Throws [StateError] if no matching session is found â€” this
-  // indicates the v=1 establishing message was never processed, which cannot
-  // happen under normal sequential delivery.
+  // Decrypts a v=2 session-reuse envelope. Consumes or steps the receiving chain
+  // in DoubleRatchetSession, supporting out-of-order delivery via skipped keys,
+  // and falls back to root key derivation for legacy sessions.
   Future<String> _decryptSessionEnvelope(Map<String, dynamic> envelope) async {
     final sessionId = envelope['sid'] as String;
     final counter = envelope['mc'] as int;
@@ -203,19 +218,11 @@ mixin RemoteMessageDecryption
       throw StateError('No persisted session for id=$sessionId');
     }
 
-    final rootKeyBytes = _b64d(session['root_key'] as String);
-    final messageId = aadMap['message_id'] as String? ?? '';
-    final msgKey = await _deriveMessageKey(
-      rootKeyBytes,
-      counter,
-      sessionId,
-      messageId,
-    );
-
     final rawCt = _b64d(innerCiphertext);
     final nonce = rawCt.sublist(0, 12);
     final mac = rawCt.sublist(rawCt.length - 16);
     final body = rawCt.sublist(12, rawCt.length - 16);
+    final messageId = aadMap['message_id'] as String? ?? '';
 
     final aad = _messageAad(
       messageId: messageId,
@@ -229,26 +236,59 @@ mixin RemoteMessageDecryption
       counter: counter,
     );
 
-    final decrypted = await crypto.AesGcm.with256bits().decrypt(
-      crypto.SecretBox(body, nonce: nonce, mac: crypto.Mac(mac)),
-      secretKey: msgKey,
-      aad: aad,
-    );
+    final ratchetSession = await DoubleRatchetSession.fromStoredSession(session);
+    List<int>? decrypted;
+    try {
+      final msgKey = await ratchetSession.ratchetReceivingChain(counter);
+      decrypted = await crypto.AesGcm.with256bits().decrypt(
+        crypto.SecretBox(body, nonce: nonce, mac: crypto.Mac(mac)),
+        secretKey: msgKey,
+        aad: aad,
+      );
+    } catch (_) {
+      // Fallback for legacy static sessions: derive key from rootKey via old method
+      final rootKeyBytes = _b64d(session['root_key'] as String);
+      final legacyKey = await _deriveMessageKey(
+        rootKeyBytes,
+        counter,
+        sessionId,
+        messageId,
+      );
+      decrypted = await crypto.AesGcm.with256bits().decrypt(
+        crypto.SecretBox(body, nonce: nonce, mac: crypto.Mac(mac)),
+        secretKey: legacyKey,
+        aad: aad,
+      );
+    }
 
-    // Update receive counter so skipped-message detection can work later.
     final now = DateTime.now().millisecondsSinceEpoch;
+    final recvKeyBytes = ratchetSession.ckRecv != null
+        ? await ratchetSession.ckRecv!.extractBytes()
+        : <int>[];
+    final sendKeyBytes = ratchetSession.ckSend != null
+        ? await ratchetSession.ckSend!.extractBytes()
+        : <int>[];
+
     db.upsertCryptoSession(
       sessionId: sessionId,
       conversationId: aadMap['conversation_id'] as String? ?? '',
       peerDeviceId: session['peer_device_id'] as String?,
       peerAccountId: session['peer_account_id'] as String?,
       role: session['role'] as String? ?? 'receiver',
-      protocolVersion: session['protocol_version'] as int? ?? 1,
+      protocolVersion: _kSessionMsgVersion,
       rootKey: session['root_key'] as String,
-      sendingChainKey: session['sending_chain_key'] as String? ?? '',
-      receivingChainKey: session['receiving_chain_key'] as String? ?? '',
+      sendingChainKey: sendKeyBytes.isNotEmpty
+          ? base64Url.encode(sendKeyBytes)
+          : session['sending_chain_key'] as String? ?? '',
+      receivingChainKey: recvKeyBytes.isNotEmpty
+          ? base64Url.encode(recvKeyBytes)
+          : session['receiving_chain_key'] as String? ?? '',
       sendCount: session['send_count'] as int? ?? 0,
-      receiveCount: counter + 1,
+      receiveCount: ratchetSession.nr > (session['receive_count'] as int? ?? 0)
+          ? ratchetSession.nr
+          : (session['receive_count'] as int? ?? 0),
+      previousChainLength: ratchetSession.pn,
+      skippedKeysJson: await ratchetSession.exportSkippedKeysJson(),
       createdAt: session['created_at'] as int? ?? now,
       updatedAt: now,
     );

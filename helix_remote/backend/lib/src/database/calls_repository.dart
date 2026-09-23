@@ -245,14 +245,38 @@ extension BackendCallsRepository on BackendDatabase {
   }
 
   int purgeTerminalPendingCalls(int olderThan) {
-    final stmt = _db.prepare('''
-      DELETE FROM pending_calls
-      WHERE status NOT IN ('RINGING', 'ANSWERED') AND expires_at < ?;
-    ''');
-    stmt.execute([olderThan]);
-    final count = _db.updatedRows;
-    stmt.close();
-    return count;
+    return transaction<int>(() {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      // 1. Transition expired ringing calls to TIMED_OUT
+      final ringStmt = _db.prepare('''
+        UPDATE pending_calls 
+        SET status = 'TIMED_OUT' 
+        WHERE status = 'RINGING' AND expires_at < ?;
+      ''');
+      ringStmt.execute([now]);
+      ringStmt.close();
+
+      // 2. Transition stale answered calls older than 24 hours to COMPLETED
+      final oneDayAgo = now - const Duration(hours: 24).inMilliseconds;
+      final ansStmt = _db.prepare('''
+        UPDATE pending_calls 
+        SET status = 'COMPLETED' 
+        WHERE status = 'ANSWERED' AND created_at < ?;
+      ''');
+      ansStmt.execute([oneDayAgo]);
+      ansStmt.close();
+
+      // 3. Purge terminal records older than threshold
+      final stmt = _db.prepare('''
+        DELETE FROM pending_calls
+        WHERE status NOT IN ('RINGING', 'ANSWERED')
+          AND (expires_at < ? OR created_at < ?);
+      ''');
+      stmt.execute([olderThan, olderThan]);
+      final count = _db.updatedRows;
+      stmt.close();
+      return count;
+    });
   }
 
   bool rememberCallSignalRequest({

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -9,6 +10,7 @@ import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
 import 'package:helix_remote_backend/src/phone_hash.dart' as phone_hash;
+import 'package:helix_remote_backend/src/rate_limiter.dart';
 import 'package:helix_remote_backend/src/reserved_identifiers.dart';
 import 'package:helix_remote_backend/src/server_name.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
@@ -29,6 +31,7 @@ abstract class AuthModuleBase {
   DateTime Function() get _now;
   Map<String, _LoginChallenge> get _challenges;
   crypto.Ed25519 get _ed25519;
+  RateLimiter get lookupRateLimiter;
 
   /// Server-side audience for signed challenges. When set, it takes
   /// precedence over the client-controlled Host header.
@@ -99,6 +102,8 @@ class AuthModule extends AuthModuleBase
   final bool globalInstanceMode;
   @override
   final SmsProvider smsProvider;
+  @override
+  final RateLimiter lookupRateLimiter;
 
   AuthModule(
     this.db,
@@ -109,7 +114,11 @@ class AuthModule extends AuthModuleBase
     this.publicBaseUrl = '',
     this.globalInstanceMode = false,
     this.smsProvider = const NoopSmsProvider(),
-  }) : _now = now ?? DateTime.now;
+    RateLimiter? lookupRateLimiter,
+  }) : _now = now ?? DateTime.now,
+       lookupRateLimiter =
+           lookupRateLimiter ??
+           RateLimiter(maxTokens: 60, refillRatePerSecond: 1.0);
 
   Handler get router {
     final router = Router();

@@ -345,17 +345,23 @@ extension BackendContactsRepository on BackendDatabase {
       LEFT JOIN account_privacy p ON p.account_id = a.account_id
       WHERE a.account_id != ?
         AND (p.search_discoverable IS NULL OR p.search_discoverable = 1)
-        AND TRIM(ap.display_name) != '';
+        AND TRIM(ap.display_name) != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM contacts b 
+          WHERE ((b.account_id = a.account_id AND b.peer_account_id = ?)
+             OR (b.account_id = ? AND b.peer_account_id = a.account_id))
+            AND b.status = 'BLOCKED'
+        );
     ''');
-    final res = stmt.select([requesterAccountId]);
+    final res = stmt.select([
+      requesterAccountId,
+      requesterAccountId,
+      requesterAccountId,
+    ]);
     stmt.close();
     final matches = <Map<String, dynamic>>[];
     for (final row in res) {
       final accountId = row['account_id'] as String;
-      if (isBlocked(accountId, requesterAccountId) ||
-          isBlocked(requesterAccountId, accountId)) {
-        continue;
-      }
       final displayName = (row['display_name'] as String?) ?? '';
       if (displayName.isEmpty) continue;
       final similarity = _displayNameSimilarity(normalizedQuery, displayName);

@@ -221,11 +221,23 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
       });
 
       String groupKeyProvider(String groupId, int epoch) {
+        final existing = db.getGroupEpochKey(groupId, epoch);
+        if (existing != null) {
+          return existing['key_material'] as String;
+        }
         final bytes = List<int>.generate(
           32,
           (_) => math.Random.secure().nextInt(256),
         );
-        return _base64Url(bytes);
+        final keyMaterial = _base64Url(bytes);
+        db.upsertGroupEpochKey(
+          groupId: groupId,
+          epoch: epoch,
+          keyId: 'epoch-$epoch',
+          keyMaterial: keyMaterial,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        );
+        return keyMaterial;
       }
 
       _groupService = RemoteGroupService(

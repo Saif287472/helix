@@ -116,8 +116,7 @@ extension BackendMessagingRepository on BackendDatabase {
     required String recipientDeviceId,
     required String ciphertext,
   }) {
-    _db.execute('BEGIN TRANSACTION;');
-    try {
+    return transaction<int>(() {
       // 1. Get and increment last_sequence for the conversation
       final seqStmt = _db.prepare(
         'SELECT last_sequence FROM conversations WHERE conversation_id = ?;',
@@ -154,12 +153,8 @@ extension BackendMessagingRepository on BackendDatabase {
       ]);
       msgStmt.close();
 
-      _db.execute('COMMIT;');
       return nextSeq;
-    } catch (e) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
+    });
   }
 
   Map<String, dynamic>? getMessage(String messageId) {
@@ -275,8 +270,7 @@ extension BackendMessagingRepository on BackendDatabase {
     required String eventType,
     required String payload,
   }) {
-    _db.execute('BEGIN TRANSACTION;');
-    try {
+    return transaction<int>(() {
       final seqStmt = _db.prepare(
         'SELECT COALESCE(MAX(device_sequence), 0) + 1 FROM device_events WHERE recipient_device_id = ?;',
       );
@@ -298,12 +292,8 @@ extension BackendMessagingRepository on BackendDatabase {
         payload,
       ]);
       stmt.close();
-      _db.execute('COMMIT;');
       return nextSeq;
-    } catch (e) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
+    });
   }
 
   List<Map<String, dynamic>> getDeviceEvents(

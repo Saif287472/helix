@@ -6,6 +6,8 @@ mixin AuthInviteHandlers on AuthModuleBase {
 
   final Map<String, List<int>> _globalAutoIssueAttempts = {};
 
+  RateLimiter get _lookupRateLimiter => lookupRateLimiter;
+
   /// Validates an invite code without consuming it, so the client can fail
   /// fast on a bad/expired code before starting the phone+OTP signup flow.
   /// On failure, `reason` distinguishes *why* (not_found / already_used /
@@ -21,6 +23,11 @@ mixin AuthInviteHandlers on AuthModuleBase {
   /// client that predates this change keeps working, and should be removed
   /// once none remain in the field.
   Future<Response> _lookupInviteHandler(Request request) async {
+    final clientIp = request.context['client_ip'] as String? ?? 'unknown';
+    if (!_lookupRateLimiter.isAllowed('invite_lookup:$clientIp')) {
+      throw AppError.tooManyRequests('Too many invite lookup attempts');
+    }
+
     String? code;
     if (request.method == 'POST') {
       final raw = await request.readAsString();

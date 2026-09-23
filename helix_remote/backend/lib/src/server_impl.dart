@@ -18,6 +18,7 @@ import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 import 'package:helix_remote_backend/src/federation.dart';
+import 'package:helix_remote_backend/src/federation_verifier.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 import 'package:helix_remote_backend/src/modules/auth.dart';
 import 'package:helix_remote_backend/src/modules/prekeys.dart';
@@ -470,10 +471,14 @@ class BackendServer {
     if (!trustedProxyAddresses.contains(immediatePeerIp)) {
       return immediatePeerIp;
     }
-    final candidate =
-        (forwardedFor?.split(',').first.trim().isNotEmpty ?? false)
-        ? forwardedFor!.split(',').first.trim()
-        : realIp?.trim();
+    // When behind a trusted single proxy (e.g. Caddy), X-Real-IP is authoritative.
+    // If using X-Forwarded-For, the rightmost entry appended by our trusted proxy
+    // is the genuine client IP, not the attacker-controlled first element.
+    final candidate = realIp?.trim().isNotEmpty == true
+        ? realIp!.trim()
+        : (forwardedFor != null && forwardedFor.trim().isNotEmpty
+            ? forwardedFor.split(',').last.trim()
+            : null);
     if (candidate == null || candidate.isEmpty) {
       return immediatePeerIp;
     }
@@ -635,6 +640,8 @@ class BackendServer {
 
   Middleware _s2sAuthMiddleware() {
     final ed25519 = crypto.Ed25519();
+    final processedSignatures = <String, int>{};
+    final domainVerifier = FederationDomainVerifier();
     return (Handler innerHandler) {
       return (Request request) async {
         final path = request.url.path;
@@ -678,6 +685,17 @@ class BackendServer {
             headers: {'Content-Type': 'application/json'},
           );
         }
+
+        // Replay defense: check if this signature was already processed within the window
+        processedSignatures.removeWhere((_, exp) => now > exp);
+        if (processedSignatures.containsKey(signatureB64)) {
+          return Response(
+            401,
+            body: jsonEncode({'error': 'Unauthorized: S2S request replayed'}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+        processedSignatures[signatureB64] = now + 300000;
 
         final bodyStr = await request.readAsString();
         final bodyHash = crypto_pkg.sha256
@@ -731,10 +749,27 @@ class BackendServer {
         }
 
         if (db.getFederationServerById(senderId) == null) {
+          if (senderId.contains('.') && !domainVerifier.isLoopbackOrTest(senderId)) {
+            final isDomainVerified = await domainVerifier.verifyDomainKey(
+              domain: senderId,
+              expectedPublicKeyB64: pubKeyB64,
+              expectedServerId: senderId,
+            );
+            if (!isDomainVerified) {
+              return Response(
+                403,
+                body: jsonEncode({
+                  'error':
+                      'Forbidden: Cryptographic domain ownership verification failed for $senderId',
+                }),
+                headers: {'Content-Type': 'application/json'},
+              );
+            }
+          }
           db.upsertFederationServer(
             serverId: senderId,
             publicKey: pubKeyB64,
-            trustSource: 's2s_handshake',
+            trustSource: senderId.contains('.') ? 'verified_domain' : 's2s_handshake',
           );
         }
 

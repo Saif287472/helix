@@ -237,6 +237,7 @@ class DoubleRatchetSession {
     if (isNewDh) {
       final ratchetResult = await _dhRatchetStep(
         peerPublicKey: peerPublicKey,
+        currentDhp: candidateDhp ?? peerPublicKey,
         currentDhk: candidateDhk!,
         currentRk: candidateRk,
         currentPn: candidatePn,
@@ -300,7 +301,7 @@ class DoubleRatchetSession {
   }
 
   // Symmetric ratchet derived from current codebase
-  Future<_RatchetStepResult> _ratchetSymmetric(
+  Future<RatchetStepResult> _ratchetSymmetric(
     crypto.SecretKey chainKey,
     String info,
   ) async {
@@ -314,7 +315,145 @@ class DoubleRatchetSession {
       nonce: List.filled(32, 0),
       info: '$info-next-ck'.codeUnits,
     );
-    return _RatchetStepResult(messageKey: mk, nextChainKey: nextCk);
+    return RatchetStepResult(messageKey: mk, nextChainKey: nextCk);
+  }
+
+  /// Advances the sending chain forward by 1 step.
+  /// Increments [ns], updates [ckSend], and returns the derived message key and next chain key.
+  Future<RatchetStepResult> ratchetSendingChain() async {
+    if (ckSend == null) {
+      throw StateError('Cannot ratchet: sending chain key is null');
+    }
+    final derived = await _ratchetSymmetric(ckSend!, 'sending-message-key');
+    ckSend = derived.nextChainKey;
+    ns++;
+    return derived;
+  }
+
+  /// Advances the receiving chain forward to [counter] or consumes a skipped key.
+  /// If [counter] < [nr], looks up the message key in [skippedMessageKeys].
+  /// If [counter] > [nr], skips and buffers intermediate keys in [skippedMessageKeys],
+  /// then steps to [counter].
+  /// Updates [ckRecv], sets [nr = counter + 1], and returns the derived message key.
+  Future<crypto.SecretKey> ratchetReceivingChain(int counter) async {
+    final skippedKey = '$counter';
+    if (skippedMessageKeys.containsKey(skippedKey)) {
+      return skippedMessageKeys.remove(skippedKey)!;
+    }
+
+    if (counter < nr) {
+      throw StateError(
+        'Duplicate or expired message key for counter=$counter (current nr=$nr)',
+      );
+    }
+
+    if (ckRecv == null) {
+      throw StateError('Cannot ratchet: receiving chain key is null');
+    }
+
+    // Skip any missed keys up to counter (bound to 1000 to prevent DoS)
+    if (counter > nr) {
+      final gap = counter - nr;
+      if (gap > 1000) {
+        throw StateError('Too many skipped messages ($gap)');
+      }
+      while (nr < counter) {
+        final step = await _ratchetSymmetric(ckRecv!, 'sending-message-key');
+        ckRecv = step.nextChainKey;
+        skippedMessageKeys['$nr'] = step.messageKey;
+        nr++;
+      }
+    }
+
+    final step = await _ratchetSymmetric(ckRecv!, 'sending-message-key');
+    ckRecv = step.nextChainKey;
+    nr = counter + 1;
+    return step.messageKey;
+  }
+
+  /// Exports skipped message keys as a JSON string for persistence.
+  Future<String> exportSkippedKeysJson() async {
+    final Map<String, String> b64Map = {};
+    for (final entry in skippedMessageKeys.entries) {
+      final bytes = await entry.value.extractBytes();
+      b64Map[entry.key] = base64Url.encode(bytes);
+    }
+    return jsonEncode(b64Map);
+  }
+
+  /// Imports skipped message keys from a JSON string.
+  static Map<String, crypto.SecretKey> importSkippedKeysJson(String jsonStr) {
+    if (!jsonStr.startsWith('{')) return {};
+    try {
+      final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final result = <String, crypto.SecretKey>{};
+      for (final entry in decoded.entries) {
+        result[entry.key] = crypto.SecretKey(_b64Decode(entry.value as String));
+      }
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Uint8List _b64Decode(String s) {
+    var norm = s.replaceAll('-', '+').replaceAll('_', '/');
+    while (norm.length % 4 != 0) {
+      norm += '=';
+    }
+    return base64Decode(norm);
+  }
+
+  /// Reconstructs a [DoubleRatchetSession] from persisted SQLite storage.
+  /// If chain keys are empty (e.g. from a legacy session), seeds them
+  /// deterministically from [root_key] via HKDF.
+  static Future<DoubleRatchetSession> fromStoredSession(
+    Map<String, dynamic> sessionMap,
+  ) async {
+    final rootKeyRaw = sessionMap['root_key'] as String;
+    final rootKeyBytes = _b64Decode(rootKeyRaw);
+    final rootKey = crypto.SecretKey(rootKeyBytes);
+
+    var sendKeyRaw = sessionMap['sending_chain_key'] as String? ?? '';
+    var recvKeyRaw = sessionMap['receiving_chain_key'] as String? ?? '';
+
+    if (sendKeyRaw.isEmpty || recvKeyRaw.isEmpty) {
+      final role = sessionMap['role'] as String? ?? 'sender';
+      final isSender = role == 'sender';
+      final hkdf = crypto.Hkdf(
+        hmac: crypto.Hmac(crypto.Sha256()),
+        outputLength: 32,
+      );
+      final derivedSend = await hkdf.deriveKey(
+        secretKey: rootKey,
+        nonce: [isSender ? 1 : 2],
+        info: utf8.encode(isSender ? 'helix-chain-send' : 'helix-chain-recv'),
+      );
+      final derivedRecv = await hkdf.deriveKey(
+        secretKey: rootKey,
+        nonce: [isSender ? 2 : 1],
+        info: utf8.encode(isSender ? 'helix-chain-recv' : 'helix-chain-send'),
+      );
+      sendKeyRaw = base64Url.encode(await derivedSend.extractBytes());
+      recvKeyRaw = base64Url.encode(await derivedRecv.extractBytes());
+    }
+
+    final ckSend = crypto.SecretKey(_b64Decode(sendKeyRaw));
+    final ckRecv = crypto.SecretKey(_b64Decode(recvKeyRaw));
+
+    final skippedKeysJson = sessionMap['skipped_keys_json'] as String? ?? '[]';
+    final skippedKeys = importSkippedKeysJson(skippedKeysJson);
+
+    final session = DoubleRatchetSession(
+      rootKey: rootKey,
+      sendingChainKey: ckSend,
+      receivingChainKey: ckRecv,
+      ns: sessionMap['send_count'] as int? ?? 0,
+      nr: sessionMap['receive_count'] as int? ?? 0,
+      pn: sessionMap['previous_chain_length'] as int? ?? 0,
+    );
+    session.skippedMessageKeys.addAll(skippedKeys);
+    return session;
   }
 
   // Compatibility getters/setters for old tests
@@ -389,6 +528,7 @@ class DoubleRatchetSession {
 
   static Future<_DhRatchetResult> _dhRatchetStep({
     required crypto.SimplePublicKey peerPublicKey,
+    required crypto.SimplePublicKey currentDhp,
     required crypto.SimpleKeyPair currentDhk,
     required crypto.SecretKey currentRk,
     required int currentPn,
@@ -404,12 +544,13 @@ class DoubleRatchetSession {
     final nextNr = 0;
     final nextDhp = peerPublicKey;
 
-    // Skip any remaining keys in current receiving chain before updating keys
+    // Skip any remaining keys in current receiving chain before updating keys.
+    // Must be indexed under currentDhp (the epoch being completed), NOT nextDhp.
     await _skipMessageKeysStep(
       until: headerPn,
       currentNr: currentNr,
       currentCkRecv: currentCkRecv,
-      currentDhp: nextDhp,
+      currentDhp: currentDhp,
       skippedKeys: skippedKeys,
     );
 
@@ -462,8 +603,8 @@ class DoubleRatchetSession {
   }
 }
 
-class _RatchetStepResult {
-  const _RatchetStepResult({
+class RatchetStepResult {
+  const RatchetStepResult({
     required this.messageKey,
     required this.nextChainKey,
   });

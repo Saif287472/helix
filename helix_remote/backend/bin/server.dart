@@ -200,6 +200,9 @@ Future<void> _run(ServerLogSink logSink) async {
 
   print('Starting Helix Remote backend database at: $dbPath');
   final sqliteDb = sqlite3.open(dbPath);
+  sqliteDb.execute('PRAGMA journal_mode = WAL;');
+  sqliteDb.execute('PRAGMA busy_timeout = 5000;');
+  sqliteDb.execute('PRAGMA synchronous = NORMAL;');
 
   print('Initializing server configuration...');
   final server = BackendServer.create(

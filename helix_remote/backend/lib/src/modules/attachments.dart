@@ -168,6 +168,22 @@ class AttachmentsModule {
     // Content-addressed: file_id is derived from file_hash
     final fileId = fileHash;
 
+    final existing = db.getAttachment(fileId);
+    if (existing != null && existing['status'] == 'COMPLETED') {
+      // Content already exists and is complete: grant access and deduplicate
+      db.grantAttachmentAccess(fileId: fileId, accountId: accountId);
+      final uploadUrl = '/api/v1/attachments/upload/file/$fileId';
+      return Response.ok(
+        jsonEncode({
+          'file_id': fileId,
+          'upload_url': uploadUrl,
+          'status': 'COMPLETED',
+          'headers': {'Content-Type': 'application/octet-stream'},
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+
     db.createAttachment(
       fileId: fileId,
       accountId: accountId,
@@ -366,6 +382,9 @@ class AttachmentsModule {
     IOSink sink;
 
     if (offset == 0) {
+      if (attachment['status'] == 'COMPLETED') {
+        throw AppError.badRequest('Attachment is already completed');
+      }
       if (await file.exists()) {
         await file.delete();
       }
@@ -392,17 +411,22 @@ class AttachmentsModule {
     }
 
     try {
-      await sink.addStream(request.read());
+      final expectedSize = attachment['file_size'] as int;
+      var bytesReceived = offset;
+
+      await for (final chunk in request.read()) {
+        bytesReceived += chunk.length;
+        if (bytesReceived > expectedSize) {
+          await sink.close();
+          if (await file.exists()) await file.delete();
+          db.updateAttachmentProgress(fileId, 0, 'FAILED');
+          throw AppError.badRequest('Uploaded file size exceeds expected size');
+        }
+        sink.add(chunk);
+      }
       await sink.close();
 
       final finalSize = await file.length();
-      final expectedSize = attachment['file_size'] as int;
-
-      if (finalSize > expectedSize) {
-        await file.delete();
-        db.updateAttachmentProgress(fileId, 0, 'FAILED');
-        throw AppError.badRequest('Uploaded file size exceeds expected size');
-      }
 
       if (finalSize == expectedSize) {
         // Verify hash

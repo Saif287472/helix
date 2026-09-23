@@ -374,6 +374,20 @@ void main() {
         await globalServer.stop();
       }
     });
+
+    test('invite lookup is rate-limited per IP (429 Too Many Requests)', () async {
+      var rateLimited = false;
+      for (var i = 0; i < 70; i++) {
+        final res = await getJson(
+          '/api/v1/accounts/invite/lookup?invite_code=ratelimit_test',
+        );
+        if (res.statusCode == 429) {
+          rateLimited = true;
+          break;
+        }
+      }
+      expect(rateLimited, isTrue);
+    });
   });
 }
 

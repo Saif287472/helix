@@ -264,8 +264,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     );
     await _deleteMessagesChunked('sender_account_id = ?', [accountId]);
 
-    _db.execute('BEGIN TRANSACTION;');
-    try {
+    transaction(() {
       // No explicit message cleanup here: `messages.recipient_device_id`
       // cascades from `devices`, which cascades from `accounts` (foreign_keys
       // is ON), so the DELETE FROM accounts below already removes every
@@ -274,7 +273,6 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       // not a correctness requirement, and must never run inside this
       // transaction (see _deleteMessagesChunked's doc comment).
       for (final table in [
-        'audit_logs',
         'group_creation_log',
         'turn_credential_log',
         'pending_device_links',
@@ -289,16 +287,28 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
           [accountId, accountId],
         );
       }
-      _deleteWhere('outbox', 'payload LIKE ?', ['%$accountId%']);
+
+      // Redact audit logs for privacy while preserving forensic trail
+      final auditStmt = _db.prepare('''
+        UPDATE audit_logs 
+        SET client_ip = 'redacted',
+            user_agent = 'deleted_account'
+        WHERE account_id = ?;
+      ''');
+      auditStmt.execute([accountId]);
+      auditStmt.close();
+
+      // Clean outbox jobs targeting or originating from this account using precise JSON extraction
+      _db.execute('''
+        DELETE FROM outbox 
+        WHERE json_extract(payload, '\$.recipient_account_id') = ?
+           OR json_extract(payload, '\$.sender_account_id') = ?;
+      ''', [accountId, accountId]);
 
       final stmt = _db.prepare('DELETE FROM accounts WHERE account_id = ?;');
       stmt.execute([accountId]);
       stmt.close();
-      _db.execute('COMMIT;');
-    } catch (_) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
+    });
   }
 
   // Phone-number blocking - permanently bans a phone_hash from ever
@@ -803,8 +813,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     required String signature,
     required List<Map<String, dynamic>> oneTimePrekeys,
   }) {
-    _db.execute('BEGIN TRANSACTION;');
-    try {
+    transaction(() {
       final signedStmt = _db.prepare('''
         INSERT OR REPLACE INTO signed_prekeys (account_id, device_id, key_id, public_key, signature)
         VALUES (?, ?, ?, ?, ?);
@@ -838,12 +847,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
         ]);
       }
       otkStmt.close();
-
-      _db.execute('COMMIT;');
-    } catch (e) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
+    });
   }
 
   Map<String, dynamic>? getPrekeyBundleForDevice(
@@ -873,33 +877,26 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     final spkRow = spkRes.first;
 
     // 4. Get one OTK (atomic retrieval - fetch and delete)
-    Map<String, dynamic>? otkData;
-    _db.execute('BEGIN TRANSACTION;');
-    try {
+    final otkData = transaction<Map<String, dynamic>?>(() {
       final otkStmt = _db.prepare(
         'SELECT * FROM one_time_prekeys WHERE account_id = ? AND device_id = ? LIMIT 1;',
       );
       final otkRes = otkStmt.select([accountId, deviceId]);
       otkStmt.close();
 
-      if (otkRes.isNotEmpty) {
-        final otkRow = otkRes.first;
-        otkData = {
-          'key_id': otkRow['key_id'],
-          'public_key': otkRow['public_key'],
-        };
-        // Delete this OTK
-        final delStmt = _db.prepare(
-          'DELETE FROM one_time_prekeys WHERE account_id = ? AND device_id = ? AND key_id = ?;',
-        );
-        delStmt.execute([accountId, deviceId, otkRow['key_id']]);
-        delStmt.close();
-      }
-      _db.execute('COMMIT;');
-    } catch (e) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
+      if (otkRes.isEmpty) return null;
+      final otkRow = otkRes.first;
+      final delStmt = _db.prepare(
+        'DELETE FROM one_time_prekeys WHERE account_id = ? AND device_id = ? AND key_id = ?;',
+      );
+      delStmt.execute([accountId, deviceId, otkRow['key_id']]);
+      delStmt.close();
+
+      return {
+        'key_id': otkRow['key_id'],
+        'public_key': otkRow['public_key'],
+      };
+    });
 
     return {
       'identity_key': acc['identity_public_key'],

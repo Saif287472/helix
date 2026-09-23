@@ -746,6 +746,50 @@ void main() {
     );
   });
 
+  test('crypto_sessions persist and round-trip through backup snapshot', () {
+    db.upsertCryptoSession(
+      sessionId: 'sess_1',
+      conversationId: 'conv_1',
+      role: 'initiator',
+      protocolVersion: 1,
+      rootKey: 'root_key_base64',
+      sendingChainKey: 'send_key',
+      receivingChainKey: 'recv_key',
+      createdAt: 1000,
+      updatedAt: 1000,
+      peerAccountId: 'alice',
+      peerDeviceId: 'alice_device',
+    );
+
+    expect(db.getCryptoSession('sess_1'), isNotNull);
+    expect(db.getCryptoSession('sess_1')!['root_key'], equals('root_key_base64'));
+
+    final restored = HelixRemoteDatabase(File(':memory:'));
+    restored.initialize();
+    addTearDown(restored.close);
+    restored.restoreBackupSnapshot(db.exportBackupSnapshot());
+
+    final restoredSession = restored.getCryptoSession('sess_1');
+    expect(restoredSession, isNotNull);
+    expect(restoredSession!['conversation_id'], equals('conv_1'));
+    expect(restoredSession['root_key'], equals('root_key_base64'));
+    expect(restoredSession['peer_account_id'], equals('alice'));
+  });
+
+  test('upsertGroupEpochKey persists epoch key correctly', () {
+    db.upsertGroupEpochKey(
+      groupId: 'grp_upsert',
+      epoch: 2,
+      keyId: 'epoch-2',
+      keyMaterial: 'sec_key_material',
+      createdAt: 5000,
+    );
+    final fetched = db.getGroupEpochKey('grp_upsert', 2);
+    expect(fetched, isNotNull);
+    expect(fetched!['key_material'], equals('sec_key_material'));
+    expect(fetched['key_id'], equals('epoch-2'));
+  });
+
   test('F4 unread state, lists, search index, media clearing, and links', () {
     db.upsertConversation(
       RemoteConversation(

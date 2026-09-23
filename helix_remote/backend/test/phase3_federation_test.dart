@@ -199,6 +199,37 @@ void main() {
       }
     },
   );
+
+  test(
+    'directory rejects domain re-registration with mismatched public key (409 Conflict)',
+    () async {
+      final clientA = FederationClient(
+        db: serverA.db,
+        identity: identityA,
+        directoryUrl: 'http://127.0.0.1:$directoryPort',
+      );
+      await clientA.registerDirectory(
+        domain: 'hijack.test',
+        address: 'http://127.0.0.1:$portA',
+        users: ['user_a'],
+      );
+
+      // Server B attempts to hijack 'hijack.test' with identity B's public key
+      final clientB = FederationClient(
+        db: serverB.db,
+        identity: identityB,
+        directoryUrl: 'http://127.0.0.1:$directoryPort',
+      );
+      expect(
+        () => clientB.registerDirectory(
+          domain: 'hijack.test',
+          address: 'http://127.0.0.1:$portB',
+          users: ['user_b'],
+        ),
+        throwsA(anything),
+      );
+    },
+  );
 }
 
 Future<void> _registerServer({

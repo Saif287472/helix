@@ -3,6 +3,9 @@ part of '../database.dart';
 extension BackendDatabaseMigrations on BackendDatabase {
   void _initializeSchema() {
     _db.execute('PRAGMA foreign_keys = ON;');
+    _db.execute('PRAGMA journal_mode = WAL;');
+    _db.execute('PRAGMA busy_timeout = 5000;');
+    _db.execute('PRAGMA synchronous = NORMAL;');
 
     final versionRow = _db.select('PRAGMA user_version;');
     final version = versionRow.first.columnAt(0) as int;

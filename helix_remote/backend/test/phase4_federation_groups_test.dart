@@ -633,6 +633,48 @@ void main() {
       }
     },
   );
+
+  test(
+    'a sending server cannot proxy group actions for an account from another domain',
+    () async {
+      final client = HttpClient();
+      try {
+        final alice = await _register(client, portA, serverA.db, 'alice');
+        await _postJson(client, portA, '/api/v1/groups/create', {
+          'group_id': 'grp_spoof',
+          'name': 'Spoof action test',
+          'encryption_key_id': 'ek_spoof',
+          'initial_member_ids': const [],
+        }, token: alice.token);
+
+        // Server B (b.test) attempts to proxy an action claiming to act on behalf
+        // of carol@c.test (a different domain). Server A must reject with 401.
+        final body = jsonEncode({
+          'action': 'leave',
+          'group_id': 'grp_spoof',
+          'acting_account_id': 'carol@c.test',
+          'payload': <String, dynamic>{},
+        });
+        final uri = Uri.parse(
+          'http://127.0.0.1:$portA',
+        ).resolve('/api/v1/s2s/groups/action');
+        final headers = await S2SSignatures.signHeaders(
+          identity: identityB,
+          path: uri.path,
+          body: body,
+        );
+        final request = await client.postUrl(uri);
+        request.headers.contentType = ContentType.json;
+        headers.forEach(request.headers.set);
+        request.write(body);
+        final response = await request.close();
+        await response.drain<void>();
+        expect(response.statusCode, equals(401));
+      } finally {
+        client.close(force: true);
+      }
+    },
+  );
 }
 
 class _RegisteredUser {

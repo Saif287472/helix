@@ -56,12 +56,22 @@ class AdminPairingModule {
   }
 
   Response _generate(Request request) {
+    // Require that the originating client IP (after proxy resolution) is loopback,
+    // AND that the direct peer connection is also loopback.
     final connInfo = request.context['shelf.io.connection_info'];
     final peer = connInfo is HttpConnectionInfo ? connInfo.remoteAddress : null;
-    final isLoopback =
+    final clientIp =
+        request.context['client_ip'] as String? ?? peer?.address ?? '';
+    final clientAddress = InternetAddress.tryParse(clientIp);
+    final isDirectLoopback =
         peer != null &&
         (peer.isLoopback || peer.address == _dockerHostGateway());
-    if (!isLoopback) {
+    final isClientLoopback =
+        clientAddress != null &&
+        (clientAddress.isLoopback ||
+            clientAddress.address == _dockerHostGateway());
+
+    if (!isDirectLoopback || !isClientLoopback) {
       return _json({
         'error':
             'This endpoint only accepts connections from the server itself.',

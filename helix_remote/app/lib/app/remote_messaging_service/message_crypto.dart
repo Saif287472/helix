@@ -372,8 +372,24 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
           ),
         );
 
-        // Persist the derived master key so subsequent messages skip X3DH.
-        // counter=0 is consumed by this v=1 message; next send starts at 1.
+        // Seed initial sending and receiving chain keys from masterKeyBytes via HKDF
+        final hkdf = crypto.Hkdf(
+          hmac: crypto.Hmac(crypto.Sha256()),
+          outputLength: 32,
+        );
+        final sendKey = await hkdf.deriveKey(
+          secretKey: crypto.SecretKey(masterKeyBytes),
+          nonce: const [1],
+          info: utf8.encode('helix-chain-send'),
+        );
+        final recvKey = await hkdf.deriveKey(
+          secretKey: crypto.SecretKey(masterKeyBytes),
+          nonce: const [2],
+          info: utf8.encode('helix-chain-recv'),
+        );
+        final sendKeyB64 = base64Url.encode(await sendKey.extractBytes());
+        final recvKeyB64 = base64Url.encode(await recvKey.extractBytes());
+
         final now = DateTime.now().millisecondsSinceEpoch;
         db.upsertCryptoSession(
           sessionId: sessionId,
@@ -383,8 +399,8 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
           role: 'sender',
           protocolVersion: 1,
           rootKey: base64Url.encode(masterKeyBytes),
-          sendingChainKey: '',
-          receivingChainKey: '',
+          sendingChainKey: sendKeyB64,
+          receivingChainKey: recvKeyB64,
           sendCount: 1,
           receiveCount: 0,
           createdAt: now,
@@ -401,10 +417,9 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
     return envelopes;
   }
 
-  // Encrypts [plaintext] using an existing persisted session, atomically
-  // increments the send counter before any async operation, and returns
-  // a v=2 packed envelope. Counter is read-then-written synchronously so
-  // rapid parallel sends each get a unique counter slot.
+  // Encrypts [plaintext] using DoubleRatchetSession chain key advancement,
+  // atomically ratchets the sending chain key forward, and returns
+  // a v=2 packed envelope.
   Future<String> _encryptWithSession({
     required Map<String, dynamic> session,
     required String sessionId,
@@ -416,41 +431,48 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
     required String plaintext,
   }) async {
     final rootKeyB64 = session['root_key'] as String;
-    final counter = session['send_count'] as int;
-
     final rootKeyBytes = _b64d(rootKeyB64);
     if (rootKeyBytes.isEmpty) {
       // Corrupt session: the stored root key decoded to zero bytes.
       // Delete it so the next sendText triggers a fresh X3DH exchange.
       db.deleteCryptoSession(sessionId);
       throw SecureSessionUnavailableException(
-        'corrupt session (empty root key) for $recipientDeviceId â€” session cleared',
+        'corrupt session (empty root key) for $recipientDeviceId — session cleared',
       );
     }
 
-    // Synchronous counter increment â€” no await between read and write.
+    // Reconstruct DoubleRatchetSession from database state
+    final ratchetSession = await DoubleRatchetSession.fromStoredSession(session);
+
+    // Atomically ratchet sending chain forward by 1 step
+    final sendCount = session['send_count'] as int;
+    final derived = await ratchetSession.ratchetSendingChain();
+    final msgKey = derived.messageKey;
+
     final now = DateTime.now().millisecondsSinceEpoch;
+    final sendKeyBytes = await ratchetSession.ckSend!.extractBytes();
+    final recvKeyBytes = ratchetSession.ckRecv != null
+        ? await ratchetSession.ckRecv!.extractBytes()
+        : <int>[];
+
     db.upsertCryptoSession(
       sessionId: sessionId,
       conversationId: conversationId,
       peerAccountId: peerAccountId,
       peerDeviceId: recipientDeviceId,
       role: session['role'] as String? ?? 'sender',
-      protocolVersion: session['protocol_version'] as int? ?? 1,
+      protocolVersion: _kSessionMsgVersion,
       rootKey: rootKeyB64,
-      sendingChainKey: session['sending_chain_key'] as String? ?? '',
-      receivingChainKey: session['receiving_chain_key'] as String? ?? '',
-      sendCount: counter + 1,
+      sendingChainKey: base64Url.encode(sendKeyBytes),
+      receivingChainKey: recvKeyBytes.isNotEmpty
+          ? base64Url.encode(recvKeyBytes)
+          : session['receiving_chain_key'] as String? ?? '',
+      sendCount: sendCount + 1,
       receiveCount: session['receive_count'] as int? ?? 0,
+      previousChainLength: ratchetSession.pn,
+      skippedKeysJson: await ratchetSession.exportSkippedKeysJson(),
       createdAt: session['created_at'] as int? ?? now,
       updatedAt: now,
-    );
-
-    final msgKey = await _deriveMessageKey(
-      rootKeyBytes,
-      counter,
-      sessionId,
-      messageId,
     );
 
     final nonce = Uint8List.fromList(
@@ -463,7 +485,7 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
       recipientDeviceId: recipientDeviceId,
       protocolVersion: _kSessionMsgVersion,
       contentType: RemoteCapability.contentEnvelopeV1,
-      counter: counter,
+      counter: sendCount,
     );
     final encrypted = await crypto.AesGcm.with256bits().encrypt(
       utf8.encode(plaintext),
@@ -482,7 +504,7 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
         jsonEncode({
           'v': _kSessionMsgVersion,
           'sid': sessionId,
-          'mc': counter,
+          'mc': sendCount,
           'ct': base64Url.encode(ctBytes.toBytes()),
           'aad': {
             'message_id': messageId,
@@ -490,7 +512,7 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
             'sender_device_id': senderDeviceId,
             'recipient_device_id': recipientDeviceId,
             'content_type': RemoteCapability.contentEnvelopeV1,
-            'counter': counter,
+            'counter': sendCount,
           },
         }),
       ),

@@ -70,6 +70,7 @@ class RemoteRuntimeCoordinator {
   RemoteRuntimeState _state = RemoteRuntimeState.offline;
   Future<void>? _startup;
   Future<int>? _outboxDrain;
+  Future<void>? _inboundCatchUp;
   Timer? _reconnectTimer;
   Timer? _periodicSyncTimer;
   bool _disposed = false;
@@ -155,19 +156,31 @@ class RemoteRuntimeCoordinator {
     });
   }
 
-  Future<void> handleRealtimeGap() async {
-    if (_disposed) return;
-    _setState(RemoteRuntimeState.syncing);
-    try {
-      await _catchUpInbound();
-      await drainOutbox();
-      if (!_disposed) {
-        _setState(RemoteRuntimeState.ready);
+  Future<void> handleRealtimeGap() {
+    if (_disposed) return Future.value();
+    final inFlight = _inboundCatchUp;
+    if (inFlight != null) return inFlight;
+
+    final catchUp = () async {
+      _setState(RemoteRuntimeState.syncing);
+      try {
+        await _catchUpInbound();
+        await drainOutbox();
+        if (!_disposed) {
+          _setState(RemoteRuntimeState.ready);
+        }
+      } catch (e) {
+        _lastError = e.toString();
+        if (!_disposed) _scheduleReconnect();
       }
-    } catch (e) {
-      _lastError = e.toString();
-      if (!_disposed) _scheduleReconnect();
-    }
+    }();
+
+    _inboundCatchUp = catchUp;
+    return catchUp.whenComplete(() {
+      if (identical(_inboundCatchUp, catchUp)) {
+        _inboundCatchUp = null;
+      }
+    });
   }
 
   /// Silently catches up inbound events without changing coordinator state.

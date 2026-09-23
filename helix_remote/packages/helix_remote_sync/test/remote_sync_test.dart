@@ -536,29 +536,40 @@ void main() {
       expect(db.hasProcessedEventId('event_sequence_regression'), isFalse);
     });
 
-    test('Inbound sequence gap fails closed and leaves cursor unchanged', () {
-      final gapGateway = _StaticFetchGateway([
-        RemoteRealtimeEnvelope(
-          eventId: 'event_sequence_gap',
-          serverSequence: 2,
-          schemaVersion: 1,
-          timestamp: DateTime.now().millisecondsSinceEpoch,
-          type: 'chat_message',
-          payload: {
-            'message_id': 'msg_gap',
-            'conversation_id': 'conv_123',
-            'sender_account_id': 'alice',
-            'sender_device_id': 'device1',
-            'ciphertext': 'must-not-apply',
-          },
-        ),
-      ]);
+    test(
+      'Inbound sequence gap records diagnostic and advances cursor without stalling',
+      () async {
+        final diagnostics = <String>[];
+        engine = RemoteSyncEngine(db, diagnostics: diagnostics.add);
+        final gapGateway = _StaticFetchGateway([
+          RemoteRealtimeEnvelope(
+            eventId: 'event_sequence_gap',
+            serverSequence: 2,
+            schemaVersion: 1,
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            type: 'chat_message',
+            payload: {
+              'message_id': 'msg_gap',
+              'conversation_id': 'conv_123',
+              'sender_account_id': 'alice',
+              'sender_device_id': 'device1',
+              'ciphertext': 'applied',
+            },
+          ),
+        ]);
 
-      expect(() => engine.syncInbound(gapGateway), throwsA(isA<StateError>()));
-      expect(db.getSyncCursor('__remote_global_stream__'), equals(0));
-      expect(db.getMessages('conv_123'), isEmpty);
-      expect(db.hasProcessedEventId('event_sequence_gap'), isFalse);
-    });
+        await expectLater(engine.syncInbound(gapGateway), completes);
+        expect(db.getSyncCursor('__remote_global_stream__'), equals(2));
+        expect(db.getMessages('conv_123'), hasLength(1));
+        expect(db.hasProcessedEventId('event_sequence_gap'), isTrue);
+        expect(
+          diagnostics.any(
+            (d) => d.contains('Remote sync sequence gap in batch'),
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('Realtime sequence gap does not advance cursor', () {
       final diagnostics = <String>[];

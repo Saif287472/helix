@@ -98,6 +98,22 @@ void main() {
     });
 
     test(
+      'generate rejects a non-loopback originating client even if proxy peer is loopback',
+      () async {
+        final module = AdminPairingModule(db: db);
+        final response = await module.router.call(
+          _request(
+            'POST',
+            '/generate',
+            peer: InternetAddress.loopbackIPv4,
+            clientIp: '203.0.113.195',
+          ),
+        );
+        expect(response.statusCode, equals(403));
+      },
+    );
+
+    test(
       'generate accepts a loopback caller and returns a 16-digit code',
       () async {
         final module = AdminPairingModule(db: db);

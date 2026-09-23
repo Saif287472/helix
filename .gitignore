@@ -70,6 +70,9 @@ firebase_options.dart
 secrets/
 private/
 local.properties
+ADMIN_TOKEN.txt
+**/ADMIN_TOKEN.txt
+commands.txt
 
 # Generated codebase extracts (large AI-readable dumps, regenerate with tool/extract_*.dart)
 docs/codebase/

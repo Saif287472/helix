@@ -30,6 +30,33 @@ class BackendDatabase {
     _initializeSchema();
   }
 
+  T transaction<T>(T Function() action) {
+    if (_transactionDepth == 0) {
+      _db.execute('BEGIN TRANSACTION;');
+    } else {
+      _db.execute('SAVEPOINT sp_$_transactionDepth;');
+    }
+    _transactionDepth++;
+    try {
+      final result = action();
+      _transactionDepth--;
+      if (_transactionDepth == 0) {
+        _db.execute('COMMIT;');
+      } else {
+        _db.execute('RELEASE SAVEPOINT sp_$_transactionDepth;');
+      }
+      return result;
+    } catch (_) {
+      _transactionDepth--;
+      if (_transactionDepth == 0) {
+        _db.execute('ROLLBACK;');
+      } else {
+        _db.execute('ROLLBACK TO SAVEPOINT sp_$_transactionDepth;');
+      }
+      rethrow;
+    }
+  }
+
   void close() {
     _db.close();
   }

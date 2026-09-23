@@ -578,7 +578,7 @@ class OperabilityModule {
     });
   }
 
-  Response _backup(Request request) {
+  Future<Response> _backup(Request request) async {
     if (!_isAdmin(request)) {
       throw AppError.forbidden('Admin privileges required');
     }
@@ -592,6 +592,7 @@ class OperabilityModule {
       final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
       final backupPath = 'backups/backup_$timestamp.db';
 
+      await Future<void>.delayed(Duration.zero);
       db.vacuumInto(backupPath);
 
       return _json({

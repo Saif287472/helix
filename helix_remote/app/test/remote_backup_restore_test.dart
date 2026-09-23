@@ -96,14 +96,15 @@ void main() {
           'groups',
           'group_epoch_keys',
           'group_invites',
+          'crypto_sessions',
           'call_history',
           'tombstones',
           'attachment_manifest',
         ]),
       );
-      // crypto_sessions stores device-local history seeds; intentionally excluded
-      // so that a restore to a new device starts fresh per-conversation seeds.
-      expect(decoded.keys, isNot(contains('crypto_sessions')));
+      // crypto_sessions must be preserved across backup/restore so restored
+      // history remains decryptable.
+      expect(decoded.keys, contains('crypto_sessions'));
     },
   );
 

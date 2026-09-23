@@ -33,6 +33,8 @@ void main() {
       expect(salt, isNotEmpty);
       // Must decode as valid base64 of 32 bytes.
       expect(base64.decode(salt).length, 32);
+      expect(body['algorithm'], 'hardened_hmac_sha256');
+      expect(body['iterations'], 10000);
     },
   );
 
@@ -49,6 +51,30 @@ void main() {
     final first = await fetchSalt();
     final second = await fetchSalt();
     expect(first, second);
+  });
+
+  test('discovery salt enforces IP rate limit when flooded', () async {
+    final ip = '198.51.100.42';
+    // Consume quota up to limit
+    for (var i = 0; i < ContactsModule.discoverySaltMinuteLimit; i++) {
+      final res = await contacts.router.call(
+        Request(
+          'GET',
+          Uri.parse('http://localhost/discovery-salt'),
+          headers: {'x-forwarded-for': ip},
+        ),
+      );
+      expect(res.statusCode, 200);
+    }
+    // Next request must be rate limited (429)
+    final blocked = await contacts.router.call(
+      Request(
+        'GET',
+        Uri.parse('http://localhost/discovery-salt'),
+        headers: {'x-forwarded-for': ip},
+      ),
+    );
+    expect(blocked.statusCode, 429);
   });
 
   test(
@@ -70,5 +96,25 @@ void main() {
     final hashOne = phoneHash(saltOne, '+15551234567');
     final hashTwo = phoneHash(saltTwo, '+15551234567');
     expect(hashOne, isNot(equals(hashTwo)));
+  });
+
+  test('phoneHashHardened provides iterative key stretching', () {
+    final salt = generateDiscoverySalt();
+    final number = '+15551234567';
+    final legacy = phoneHash(salt, number);
+    final hardened = phoneHashHardened(salt, number, iterations: 100);
+    expect(hardened, isNot(equals(legacy)));
+    expect(hardened, equals(phoneHashHardened(salt, number, iterations: 100)));
+  });
+
+  test('verifyPhoneHash supports both hardened and legacy hashes', () {
+    final salt = generateDiscoverySalt();
+    final number = '+15551234567';
+    final legacy = phoneHash(salt, number);
+    final hardened = phoneHashHardened(salt, number, iterations: 50);
+
+    expect(verifyPhoneHash(salt, number, legacy), isTrue);
+    expect(verifyPhoneHash(salt, number, hardened, iterations: 50), isTrue);
+    expect(verifyPhoneHash(salt, '+15559999999', legacy), isFalse);
   });
 }

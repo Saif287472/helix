@@ -85,6 +85,7 @@ class RemoteSyncEngine {
   // called again, so the loop re-checks after the current pass rather than
   // exiting and missing the newly enqueued operation.
   bool _outboundDirty = false;
+  final _outOfOrderBuffer = <int, RemoteRealtimeEnvelope>{};
 
   /// The highest inbound sequence number successfully applied via HTTP or WebSocket.
   /// Pass this to the WebSocket connection so the server only replays new events.
@@ -124,12 +125,13 @@ class RemoteSyncEngine {
             'Remote sync sequence regression for unseen event type=${env.type}',
           );
         }
-        if (seq != expectedSeq) {
-          // P4-04: gap in sequence — quarantine gap marker and stop processing
-          // so upstream can trigger a REST catch-up before continuing.
-          throw StateError(
-            'Remote sync sequence gap: expected $expectedSeq but received $seq',
+        if (seq > expectedSeq) {
+          // Sequence gap encountered in batch: record diagnostic, advance expectedSeq
+          // to continue processing valid remaining events rather than stalling indefinitely.
+          diagnostics?.call(
+            'Remote sync sequence gap in batch: expected $expectedSeq, jumped to $seq',
           );
+          expectedSeq = seq;
         }
 
         // Call signals are ephemeral: deliver via callback, never write to DB.
@@ -219,6 +221,11 @@ class RemoteSyncEngine {
         'Remote realtime sequence gap: expected ${lastSeq + 1} '
         'but received $seq',
       );
+      _outOfOrderBuffer[seq] = env;
+      if (_outOfOrderBuffer.length > 200) {
+        final lowest = _outOfOrderBuffer.keys.reduce((a, b) => a < b ? a : b);
+        _outOfOrderBuffer.remove(lowest);
+      }
       return false;
     }
 
@@ -229,6 +236,7 @@ class RemoteSyncEngine {
         if (seq > lastSeq) {
           db.updateSyncCursor(_globalSyncCursorId, seq);
         }
+        _drainBufferedEnvelopes(seq);
         return true;
       }
 
@@ -239,6 +247,7 @@ class RemoteSyncEngine {
         if (seq > lastSeq) {
           db.updateSyncCursor(_globalSyncCursorId, seq);
         }
+        _drainBufferedEnvelopes(seq);
         return false;
       }
 
@@ -247,6 +256,7 @@ class RemoteSyncEngine {
         if (seq > lastSeq) {
           db.updateSyncCursor(_globalSyncCursorId, seq);
         }
+        _drainBufferedEnvelopes(seq);
         return true;
       }
 
@@ -270,6 +280,7 @@ class RemoteSyncEngine {
           }
         }
       }
+      _drainBufferedEnvelopes(seq);
       return applied;
     } catch (e) {
       // P4-04: quarantine the envelope; advance cursor past it to avoid
@@ -285,6 +296,16 @@ class RemoteSyncEngine {
         'sequence=$seq',
       );
       return false;
+    }
+  }
+
+  void _drainBufferedEnvelopes(int seq) {
+    if (_outOfOrderBuffer.isEmpty) return;
+    var nextExpected = seq + 1;
+    while (_outOfOrderBuffer.containsKey(nextExpected)) {
+      final bufferedEnv = _outOfOrderBuffer.remove(nextExpected)!;
+      handleIncomingEnvelope(bufferedEnv);
+      nextExpected++;
     }
   }
 

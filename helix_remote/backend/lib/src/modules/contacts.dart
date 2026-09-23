@@ -11,8 +11,10 @@ class ContactsModule {
   final void Function(String deviceId, Map<String, dynamic> payload)?
   notifyDevice;
   final Map<String, List<int>> _searchAttempts = {};
+  final Map<String, List<int>> _discoverySaltAttempts = {};
   static const int contactRequestDailyLimit = 20;
   static const int accountSearchMinuteLimit = 30;
+  static const int discoverySaltMinuteLimit = 60;
 
   /// Distinct phone hashes an account may look up per rolling 24h.
   ///
@@ -65,12 +67,25 @@ class ContactsModule {
   /// contacts-sync flow. Self-heals on first call; never rotated afterward,
   /// since that would silently invalidate every existing phone-hash match.
   Future<Response> _discoverySaltHandler(Request request) async {
+    final clientIp = (request.context['client_ip'] as String?) ??
+        request.headers['x-forwarded-for']?.split(',').first.trim() ??
+        '127.0.0.1';
+    if (!_allowDiscoverySalt(clientIp)) {
+      throw AppError.tooManyRequests('Discovery salt request quota exceeded');
+    }
+
     var salt = db.getServerConfig(discoverySaltConfigKey);
     if (salt == null) {
       salt = generateDiscoverySalt();
       db.setServerConfig(discoverySaltConfigKey, salt);
     }
-    return Response.ok(jsonEncode({'salt': salt}));
+    return Response.ok(
+      jsonEncode({
+        'salt': salt,
+        'algorithm': defaultHashAlgorithm,
+        'iterations': defaultHashIterations,
+      }),
+    );
   }
 
   Future<Response> _listHandler(Request request) async {
@@ -374,6 +389,19 @@ class ContactsModule {
     final attempts = _searchAttempts.putIfAbsent(accountId, () => <int>[]);
     attempts.removeWhere((timestamp) => timestamp < cutoff);
     if (attempts.length >= accountSearchMinuteLimit) return false;
+    attempts.add(now);
+    return true;
+  }
+
+  bool _allowDiscoverySalt(String clientIp) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cutoff = now - const Duration(minutes: 1).inMilliseconds;
+    final attempts = _discoverySaltAttempts.putIfAbsent(
+      clientIp,
+      () => <int>[],
+    );
+    attempts.removeWhere((timestamp) => timestamp < cutoff);
+    if (attempts.length >= discoverySaltMinuteLimit) return false;
     attempts.add(now);
     return true;
   }

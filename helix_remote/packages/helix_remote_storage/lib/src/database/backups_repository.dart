@@ -18,11 +18,11 @@ mixin RemoteBackupsRepository on HelixRemoteDatabaseBase {
     'groups',
     'group_epoch_keys',
     'group_invites',
+    'crypto_sessions',
     'call_history',
     'tombstones',
   ];
   static const List<String> _excludedTables = [
-    'crypto_sessions',
     'local_prekeys',
     'trusted_devices',
     'sync_cursors',
@@ -66,6 +66,7 @@ mixin RemoteBackupsRepository on HelixRemoteDatabaseBase {
       'groups': _selectAll('groups'),
       'group_epoch_keys': _selectAll('group_epoch_keys'),
       'group_invites': _selectAll('group_invites'),
+      'crypto_sessions': _selectAll('crypto_sessions'),
       'call_history': _selectAll('call_history'),
       'tombstones': _selectAll('tombstones'),
       'attachment_manifest': _attachmentManifest(),
@@ -129,6 +130,10 @@ mixin RemoteBackupsRepository on HelixRemoteDatabaseBase {
       _restoreRows(
         'group_invites',
         decoded['group_invites'] as List? ?? const [],
+      );
+      _restoreRows(
+        'crypto_sessions',
+        decoded['crypto_sessions'] as List? ?? const [],
       );
       _restoreRows(
         'call_history',
@@ -315,6 +320,7 @@ mixin RemoteBackupsRepository on HelixRemoteDatabaseBase {
       'group_epoch_keys',
       'group_invites',
       'groups',
+      'crypto_sessions',
       'call_history',
       'attachments',
       'contact_requests',

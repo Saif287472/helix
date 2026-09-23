@@ -124,6 +124,25 @@ void main() {
       expect(r.json['status'], 'registered');
     });
 
+    test('registers APNS and APNS_VOIP push tokens successfully', () async {
+      final alice = _Client(base(), tokenAlice);
+      final r1 = await alice.post('/calls/push-token', {
+        'push_token': 'apns-token-alice-001',
+        'token_type': 'APNS',
+      });
+      expect(r1.status, 200);
+      expect(r1.json['token_type'], 'APNS');
+
+      final r2 = await alice.post('/calls/push-token', {
+        'push_token': 'voip-token-alice-001',
+        'token_type': 'APNS_VOIP',
+      });
+      expect(r2.status, 200);
+      expect(r2.json['token_type'], 'APNS_VOIP');
+      final token = server.db.getPushTokenForDevice('alice_device1');
+      expect(token?['token_type'], 'APNS_VOIP');
+    });
+
     test('upserts replace previous token for same device', () async {
       final alice = _Client(base(), tokenAlice);
       await alice.post('/calls/push-token', {

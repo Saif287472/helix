@@ -406,6 +406,48 @@ void main() {
         expect(d3, p3);
       },
     );
+
+    test(
+      'Out-of-order message delivery across DH ratchet step decrypts with skipped keys indexed under previous Dhp',
+      () async {
+        final x25519 = crypto.X25519();
+        final bobIdentityKey = await x25519.newKeyPair();
+        final bobIdentityPublic = await bobIdentityKey.extractPublicKey();
+
+        final sharedSecret = crypto.SecretKey(List.generate(32, (i) => i));
+
+        final alice = await DoubleRatchetSession.initiate(
+          sharedKey: sharedSecret,
+          peerPublicKey: bobIdentityPublic,
+        );
+        final bob = await DoubleRatchetSession.receive(
+          sharedKey: sharedSecret,
+          localKeyPair: bobIdentityKey,
+        );
+
+        // 1. Initial exchange
+        final m0 = Uint8List.fromList('init'.codeUnits);
+        final c0 = await alice.encrypt(m0);
+        expect(await bob.decrypt(c0), m0);
+
+        // 2. Bob replies to Alice
+        final r0 = Uint8List.fromList('bob-reply'.codeUnits);
+        final cr0 = await bob.encrypt(r0);
+        expect(await alice.decrypt(cr0), r0);
+
+        // 3. Alice sends multiple messages in her new sending chain: msg1, msg2
+        final m1 = Uint8List.fromList('m1'.codeUnits);
+        final m2 = Uint8List.fromList('m2'.codeUnits);
+        final c1 = await alice.encrypt(m1);
+        final c2 = await alice.encrypt(m2);
+
+        // Deliver c2 first to Bob (skipping c1)
+        expect(await bob.decrypt(c2), m2);
+
+        // Now deliver late arrival c1
+        expect(await bob.decrypt(c1), m1);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -771,6 +813,82 @@ void main() {
         ),
       );
       expect(valid, isTrue);
+    });
+
+    test('DoubleRatchetSession symmetric chain stepping, skipped keys, and persistence round-trip', () async {
+      final rootKeyBytes = List<int>.generate(32, (i) => i * 3);
+      final rootKey = crypto.SecretKey(rootKeyBytes);
+      final initialSendBytes = List<int>.generate(32, (i) => i + 10);
+      final initialRecvBytes = List<int>.generate(32, (i) => i + 20);
+
+      final senderSessionMap = <String, dynamic>{
+        'root_key': base64Url.encode(rootKeyBytes),
+        'sending_chain_key': base64Url.encode(initialSendBytes),
+        'receiving_chain_key': base64Url.encode(initialRecvBytes),
+        'send_count': 0,
+        'receive_count': 0,
+        'role': 'sender',
+        'skipped_keys_json': '[]',
+      };
+
+      final receiverSessionMap = <String, dynamic>{
+        'root_key': base64Url.encode(rootKeyBytes),
+        'sending_chain_key': base64Url.encode(initialRecvBytes),
+        'receiving_chain_key': base64Url.encode(initialSendBytes),
+        'send_count': 0,
+        'receive_count': 0,
+        'role': 'receiver',
+        'skipped_keys_json': '[]',
+      };
+
+      final sender = await DoubleRatchetSession.fromStoredSession(senderSessionMap);
+      final receiver = await DoubleRatchetSession.fromStoredSession(receiverSessionMap);
+
+      // 1. Sender ratchets 3 sequential message keys
+      final step1 = await sender.ratchetSendingChain();
+      final step2 = await sender.ratchetSendingChain();
+      final step3 = await sender.ratchetSendingChain();
+
+      final mk1Bytes = await step1.messageKey.extractBytes();
+      final mk2Bytes = await step2.messageKey.extractBytes();
+      final mk3Bytes = await step3.messageKey.extractBytes();
+
+      // Ensure every message key is unique and independent
+      expect(mk1Bytes, isNot(equals(mk2Bytes)));
+      expect(mk2Bytes, isNot(equals(mk3Bytes)));
+      expect(sender.ns, equals(3));
+
+      // 2. Out-of-order receive: Receiver gets message 2 (counter 2) before 0 and 1
+      final recvKey2 = await receiver.ratchetReceivingChain(2);
+      expect(await recvKey2.extractBytes(), equals(mk3Bytes));
+      expect(receiver.nr, equals(3));
+      expect(receiver.skippedMessageKeys.containsKey('0'), isTrue);
+      expect(receiver.skippedMessageKeys.containsKey('1'), isTrue);
+
+      // 3. Export skipped keys to JSON and restore in fresh receiver session
+      final skippedJson = await receiver.exportSkippedKeysJson();
+      receiverSessionMap['skipped_keys_json'] = skippedJson;
+      receiverSessionMap['receiving_chain_key'] = base64Url.encode(await receiver.ckRecv!.extractBytes());
+      receiverSessionMap['receive_count'] = receiver.nr;
+
+      final restoredReceiver = await DoubleRatchetSession.fromStoredSession(receiverSessionMap);
+
+      // 4. Delayed delivery: Message 0 arrives
+      final recvKey0 = await restoredReceiver.ratchetReceivingChain(0);
+      expect(await recvKey0.extractBytes(), equals(mk1Bytes));
+      expect(restoredReceiver.skippedMessageKeys.containsKey('0'), isFalse);
+      expect(restoredReceiver.skippedMessageKeys.containsKey('1'), isTrue);
+
+      // 5. Delayed delivery: Message 1 arrives
+      final recvKey1 = await restoredReceiver.ratchetReceivingChain(1);
+      expect(await recvKey1.extractBytes(), equals(mk2Bytes));
+      expect(restoredReceiver.skippedMessageKeys.containsKey('1'), isFalse);
+
+      // 6. Replay attack: Message 1 arrives again -> must throw
+      expect(
+        () => restoredReceiver.ratchetReceivingChain(1),
+        throwsA(isA<StateError>()),
+      );
     });
   });
 }

@@ -12,6 +12,7 @@ abstract interface class PushProvider {
   Future<void> deliver({
     required String token,
     required Map<String, dynamic> data,
+    String? tokenType,
   });
 }
 
@@ -26,22 +27,258 @@ final class NoopPushProvider implements PushProvider {
   Future<void> deliver({
     required String token,
     required Map<String, dynamic> data,
+    String? tokenType,
   }) {
     throw UnsupportedError('No push provider configured.');
   }
 }
 
+/// Abstract base exception for expired, uninstalled, or invalid push tokens
+/// across both FCM and APNs providers.
+abstract class PushTokenNotFoundException extends AppError {
+  PushTokenNotFoundException(
+    super.message, {
+    super.statusCode = 502,
+    super.code = RemoteErrorCode.pushTokenNotFound,
+  });
+}
+
+/// FCM returned 404: the device token is no longer registered.
+class FcmTokenNotFoundException extends PushTokenNotFoundException {
+  FcmTokenNotFoundException(this.body)
+    : super('Push token is no longer registered');
+
+  final String body;
+
+  @override
+  String toString() => 'FcmTokenNotFoundException: $body';
+}
+
+/// FCM returned a non-200 status that is not a missing-token error.
+class FcmDeliveryException extends AppError {
+  FcmDeliveryException(this.upstreamStatusCode, this.body)
+    : super(
+        'Push delivery failed',
+        statusCode: 502,
+        code: RemoteErrorCode.pushDeliveryFailed,
+      );
+
+  final int upstreamStatusCode;
+  final String body;
+
+  @override
+  String toString() => 'FcmDeliveryException($upstreamStatusCode): $body';
+}
+
+/// APNs source for obtaining or refreshing authentication bearer tokens (JWTs).
+abstract interface class ApnsTokenSource {
+  Future<String> bearerToken();
+}
+
+/// Fixed static APNs token for tests and local setups.
+final class StaticApnsAccessToken implements ApnsTokenSource {
+  const StaticApnsAccessToken(this.token);
+  final String token;
+
+  @override
+  Future<String> bearerToken() async => token;
+}
+
+/// APNs returned 410 (Unregistered) or 400 (BadDeviceToken).
+class ApnsTokenNotFoundException extends PushTokenNotFoundException {
+  ApnsTokenNotFoundException(this.body)
+    : super('APNs device token is unregistered or invalid');
+
+  final String body;
+
+  @override
+  String toString() => 'ApnsTokenNotFoundException: $body';
+}
+
+/// APNs returned a non-200 status that is not a token unregistered error.
+class ApnsDeliveryException extends AppError {
+  ApnsDeliveryException(this.upstreamStatusCode, this.body)
+    : super(
+        'APNs push delivery failed',
+        statusCode: 502,
+        code: RemoteErrorCode.pushDeliveryFailed,
+      );
+
+  final int upstreamStatusCode;
+  final String body;
+
+  @override
+  String toString() => 'ApnsDeliveryException($upstreamStatusCode): $body';
+}
+
+/// Native APNs HTTP/2 push provider supporting standard iOS push alerts and
+/// PushKit VoIP incoming call wake-ups.
+final class ApnsPushProvider implements PushProvider {
+  ApnsPushProvider({
+    required this.teamId,
+    required this.keyId,
+    required this.bundleId,
+    required this.tokenSource,
+    this.isProduction = false,
+    Uri? endpoint,
+    HttpClient? httpClient,
+  }) : endpoint =
+           endpoint ??
+           Uri.https(
+             isProduction
+                 ? 'api.push.apple.com'
+                 : 'api.development.push.apple.com',
+             '',
+           ),
+       _httpClient = httpClient;
+
+  ApnsPushProvider.staticToken({
+    required String teamId,
+    required String keyId,
+    required String bundleId,
+    required String accessToken,
+    bool isProduction = false,
+    Uri? endpoint,
+    HttpClient? httpClient,
+  }) : this(
+         teamId: teamId,
+         keyId: keyId,
+         bundleId: bundleId,
+         tokenSource: StaticApnsAccessToken(accessToken),
+         isProduction: isProduction,
+         endpoint: endpoint,
+         httpClient: httpClient,
+       );
+
+  final String teamId;
+  final String keyId;
+  final String bundleId;
+  final ApnsTokenSource tokenSource;
+  final bool isProduction;
+  final Uri endpoint;
+  final HttpClient? _httpClient;
+
+  @override
+  bool get isConfigured =>
+      teamId.isNotEmpty && keyId.isNotEmpty && bundleId.isNotEmpty;
+
+  @override
+  Future<void> deliver({
+    required String token,
+    required Map<String, dynamic> data,
+    String? tokenType,
+  }) async {
+    final isVoip =
+        tokenType == 'APNS_VOIP' ||
+        data['notification_type'] == 'incoming_call';
+    final topic = isVoip ? '$bundleId.voip' : bundleId;
+    final pushType = isVoip ? 'voip' : 'alert';
+    final priority = '10'; // High priority for calls and alerts
+
+    final String payloadJson;
+    if (isVoip) {
+      // VoIP PushKit payload: dictionary passed to PKPushRegistry
+      payloadJson = jsonEncode({
+        'aps': <String, dynamic>{},
+        for (final e in data.entries) e.key: '${e.value}',
+      });
+    } else {
+      final notificationType = data['notification_type']?.toString();
+      final title = 'Helix Remote';
+      final body = switch (notificationType) {
+        'new_message' => 'You have a new message',
+        'group_invite' => 'You have a new group invitation',
+        _ => 'You have a new notification',
+      };
+      payloadJson = jsonEncode({
+        'aps': {
+          'alert': {'title': title, 'body': body},
+          'sound': 'default',
+          'badge': 1,
+        },
+        for (final e in data.entries) e.key: '${e.value}',
+      });
+    }
+
+    final bearer = await tokenSource.bearerToken();
+    final url = endpoint.resolve('/3/device/$token');
+    final http = _httpClient ?? HttpClient();
+    try {
+      final req = await http.postUrl(url);
+      req.headers
+        ..set('authorization', 'bearer $bearer')
+        ..set('apns-topic', topic)
+        ..set('apns-push-type', pushType)
+        ..set('apns-priority', priority)
+        ..set(
+          'apns-expiration',
+          isVoip
+              ? '0'
+              : '${(DateTime.now().millisecondsSinceEpoch ~/ 1000) + 86400}',
+        )
+        ..set('content-type', 'application/json; charset=utf-8');
+      req.write(payloadJson);
+
+      final res = await req.close();
+      final resBody = await res.transform(utf8.decoder).join();
+
+      if (res.statusCode == 200) return;
+
+      if (res.statusCode == 410 ||
+          (res.statusCode == 400 && resBody.contains('BadDeviceToken'))) {
+        throw ApnsTokenNotFoundException(resBody);
+      }
+      throw ApnsDeliveryException(res.statusCode, resBody);
+    } finally {
+      if (_httpClient == null) {
+        http.close(force: true);
+      }
+    }
+  }
+}
+
+/// Composite push provider that routes notifications to FCM or APNs based on
+/// token type or token pattern.
+final class CompositePushProvider implements PushProvider {
+  CompositePushProvider({required this.fcm, required this.apns});
+
+  final PushProvider fcm;
+  final PushProvider apns;
+
+  @override
+  bool get isConfigured => fcm.isConfigured || apns.isConfigured;
+
+  @override
+  Future<void> deliver({
+    required String token,
+    required Map<String, dynamic> data,
+    String? tokenType,
+  }) async {
+    final isApns =
+        tokenType == 'APNS' ||
+        tokenType == 'APNS_VOIP' ||
+        _looksLikeApnsToken(token);
+    if (isApns) {
+      if (!apns.isConfigured) {
+        throw UnsupportedError('APNs push provider is not configured.');
+      }
+      return apns.deliver(token: token, data: data, tokenType: tokenType);
+    } else {
+      if (!fcm.isConfigured) {
+        throw UnsupportedError('FCM push provider is not configured.');
+      }
+      return fcm.deliver(token: token, data: data, tokenType: tokenType);
+    }
+  }
+
+  static bool _looksLikeApnsToken(String token) {
+    // APNs device tokens are standard 64 hex characters (32 bytes).
+    return token.length == 64 && RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(token);
+  }
+}
+
 /// FCM HTTP v1 push provider. Requires a GCP project ID
 /// (HELIX_REMOTE_FCM_PROJECT_ID) and a token source.
-///
-/// The token is fetched per delivery rather than held as a field, because
-/// FCM access tokens last an hour and a server outlives that many times
-/// over. [ServiceAccountFcmAccessToken] caches and refreshes, so this is a
-/// field read in the common case rather than a round trip.
-///
-/// The minimal payload (notification_type, call_id, target_device_id) is sent
-/// as FCM data-only message with high Android priority so the app can handle
-/// it without displaying a system notification.
 final class FcmPushProvider implements PushProvider {
   FcmPushProvider({
     required this.projectId,
@@ -54,8 +291,6 @@ final class FcmPushProvider implements PushProvider {
              '/v1/projects/$projectId/messages:send',
            );
 
-  /// A fixed, already-obtained token. Expires within the hour and cannot be
-  /// renewed — for tests and one-off manual checks, not a deployment.
   FcmPushProvider.staticToken({
     required String projectId,
     required String accessToken,
@@ -75,6 +310,7 @@ final class FcmPushProvider implements PushProvider {
   Future<void> deliver({
     required String token,
     required Map<String, dynamic> data,
+    String? tokenType,
   }) async {
     final stringData = {for (final e in data.entries) e.key: '${e.value}'};
     final notificationType = data['notification_type']?.toString();
@@ -104,8 +340,6 @@ final class FcmPushProvider implements PushProvider {
       },
     });
 
-    // Before opening the connection, so a refresh failure surfaces as itself
-    // rather than as a delivery error against a half-built request.
     final accessToken = await tokenSource.bearerToken();
 
     final http = HttpClient();
@@ -121,8 +355,6 @@ final class FcmPushProvider implements PushProvider {
 
       if (res.statusCode == 200) return;
 
-      // 401/403 = auth issue (caller should rotate token); 404 = bad FCM token
-      // (device unregistered — caller should complete-and-drop the notification)
       if (res.statusCode == 404) {
         throw FcmTokenNotFoundException(resBody);
       }
@@ -141,42 +373,4 @@ final class FcmPushProvider implements PushProvider {
     }
     return 'Unknown caller';
   }
-}
-
-/// FCM returned 404: the device token is no longer registered.
-///
-/// Extends [AppError] so the one exit shape holds even if a push failure
-/// escapes to the HTTP boundary; callers that can do better still catch it
-/// by type (the outbox worker completes the event, the call path prunes the
-/// stale token). 502 rather than FCM's own status: the caller's request was
-/// fine, our upstream was not.
-class FcmTokenNotFoundException extends AppError {
-  FcmTokenNotFoundException(this.body)
-    : super(
-        'Push token is no longer registered',
-        statusCode: 502,
-        code: RemoteErrorCode.pushTokenNotFound,
-      );
-
-  final String body;
-
-  @override
-  String toString() => 'FcmTokenNotFoundException: $body';
-}
-
-/// FCM returned a non-200 status that is not a missing-token error.
-class FcmDeliveryException extends AppError {
-  FcmDeliveryException(this.upstreamStatusCode, this.body)
-    : super(
-        'Push delivery failed',
-        statusCode: 502,
-        code: RemoteErrorCode.pushDeliveryFailed,
-      );
-
-  /// FCM's status, not ours - see [statusCode] for what a client would see.
-  final int upstreamStatusCode;
-  final String body;
-
-  @override
-  String toString() => 'FcmDeliveryException($upstreamStatusCode): $body';
 }

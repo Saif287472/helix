@@ -101,10 +101,31 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
       );
     }
 
+    // In production without SMS provider configured, reject request instead of leaking OTP.
+    if (!smsProvider.isConfigured) {
+      final isDevOrTest =
+          Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1' ||
+          Platform.environment.containsKey('FLUTTER_TEST') ||
+          Platform.script.path.contains('test');
+      if (isDevOrTest) {
+        return Response.ok(
+          jsonEncode({
+            'challenge_id': challengeId,
+            'code': code,
+            'expires_at': now + _otpTtl.inMilliseconds,
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      throw AppError(
+        'SMS verification service is currently unavailable',
+        statusCode: 503,
+        code: RemoteErrorCode.smsDeliveryFailed,
+      );
+    }
     return Response.ok(
       jsonEncode({
         'challenge_id': challengeId,
-        'code': code,
         'expires_at': now + _otpTtl.inMilliseconds,
       }),
       headers: {'Content-Type': 'application/json'},

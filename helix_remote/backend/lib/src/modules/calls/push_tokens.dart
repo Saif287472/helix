@@ -17,8 +17,8 @@ mixin CallsPushTokenHandlers on CallsModuleBase {
         pushToken.length > _maxPushTokenLength) {
       throw AppError.badRequest('push_token is required (max 4096 chars)');
     }
-    if (tokenType != 'FCM' && tokenType != 'APNS') {
-      throw AppError.badRequest('token_type must be FCM or APNS');
+    if (tokenType != 'FCM' && tokenType != 'APNS' && tokenType != 'APNS_VOIP') {
+      throw AppError.badRequest('token_type must be FCM, APNS, or APNS_VOIP');
     }
     final accountId = auth['account_id'] as String;
     final deviceId = auth['device_id'] as String;

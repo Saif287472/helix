@@ -5,8 +5,14 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_backend/src/federation.dart';
+import 'package:helix_remote_backend/src/federation_verifier.dart';
 
 class FederationDirectoryServer {
+  FederationDirectoryServer({
+    FederationDomainVerifier? verifier,
+  }) : _verifier = verifier ?? FederationDomainVerifier();
+
+  final FederationDomainVerifier _verifier;
   final Map<String, Map<String, dynamic>> _servers = {}; // key: domain
   final Map<String, String> _userDomains =
       {}; // key: user@domain, value: domain
@@ -99,6 +105,33 @@ class FederationDirectoryServer {
     if (domain == null || address == null) {
       return Response.badRequest(
         body: jsonEncode({'error': 'Missing domain or address'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+
+    final isDomainVerified = await _verifier.verifyDomainKey(
+      domain: domain,
+      expectedPublicKeyB64: pubKeyB64,
+      expectedServerId: senderId,
+    );
+    if (!isDomainVerified) {
+      return Response(
+        403,
+        body: jsonEncode({
+          'error': 'Forbidden: Cryptographic domain ownership verification failed for $domain',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+
+    final existing = _servers[domain];
+    if (existing != null && existing['server_public_key'] != pubKeyB64) {
+      return Response(
+        409,
+        body: jsonEncode({
+          'error':
+              'Conflict: Domain already registered with a different public key',
+        }),
         headers: {'Content-Type': 'application/json'},
       );
     }

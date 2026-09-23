@@ -83,7 +83,7 @@ void main() {
         port,
         '/api/v1/ops/metrics',
         token: adminToken,
-        headers: {'X-Forwarded-For': '203.0.113.42, 10.0.0.2'},
+        headers: {'X-Forwarded-For': '10.0.0.2, 203.0.113.42'},
       );
       expect(metrics.statusCode, equals(200));
       final audit = server.db.getAuditLogs(accountId: 'ops1').first;

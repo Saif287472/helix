@@ -14,8 +14,16 @@ extension BackendAttachmentsRepository on BackendDatabase {
   }) {
     final time = createdAt ?? DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO attachments (file_id, account_id, file_size, file_hash, uploaded_bytes, status, created_at)
-      VALUES (?, ?, ?, ?, 0, 'PENDING', ?);
+      INSERT INTO attachments (file_id, account_id, file_size, file_hash, uploaded_bytes, status, created_at)
+      VALUES (?, ?, ?, ?, 0, 'PENDING', ?)
+      ON CONFLICT(file_id) DO UPDATE SET
+        account_id = excluded.account_id,
+        file_size = excluded.file_size,
+        file_hash = excluded.file_hash,
+        uploaded_bytes = 0,
+        status = 'PENDING',
+        created_at = excluded.created_at
+      WHERE attachments.status != 'COMPLETED';
     ''');
     stmt.execute([fileId, accountId, fileSize, fileHash, time]);
     stmt.close();

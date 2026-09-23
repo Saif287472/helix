@@ -208,11 +208,12 @@ class MessagingModule {
     final processedEnvelopes = <Map<String, dynamic>>[];
     final federatedResults = <Map<String, dynamic>>[];
 
+    // Pre-flight validation: verify recipients, blocking, and device quotas before mutating state
+    final validTargets = <({String recipientDeviceId, String recipientAccountId, String ciphertext})>[];
     for (final entry in envelopeByDeviceId.entries) {
       final recipientDeviceId = entry.key;
       final ciphertext = entry.value['ciphertext'] as String;
 
-      // We'll query devices table for the owner of recipientDeviceId
       final ownerRows = db.getDevicesOfDevice(recipientDeviceId);
       if (ownerRows.isEmpty) {
         continue; // Device not found
@@ -221,7 +222,7 @@ class MessagingModule {
 
       // Check blocking enforcement
       if (db.isBlocked(recipientAccountId, senderAccountId)) {
-        // Sender is blocked by recipient, ignore/silent drop this envelope for security/privacy
+        // Sender is blocked by recipient, silent drop
         continue;
       }
 
@@ -234,63 +235,81 @@ class MessagingModule {
         );
       }
 
-      // Save envelope
-      allocatedSeq = db.saveMessage(
-        messageId: messageId,
-        conversationId: conversationId,
-        senderAccountId: senderAccountId,
-        senderDeviceId: senderDeviceId,
+      validTargets.add((
         recipientDeviceId: recipientDeviceId,
+        recipientAccountId: recipientAccountId,
         ciphertext: ciphertext,
-      );
+      ));
+    }
 
-      // Write device event for cursor-based catch-up
+    final pendingRelays = <({String deviceId, Map<String, dynamic> envelope})>[];
+    db.transaction(() {
       final now = DateTime.now().millisecondsSinceEpoch;
-      final eventId = 'evt_${messageId}_$recipientDeviceId';
-      final deviceSeq = db.writeDeviceEvent(
-        eventId: eventId,
-        recipientDeviceId: recipientDeviceId,
-        eventType: 'chat_message',
-        payload: jsonEncode({
-          'message_id': messageId,
-          'conversation_id': conversationId,
-          'sender_account_id': senderAccountId,
-          'sender_device_id': senderDeviceId,
-          'ciphertext': ciphertext,
-        }),
-      );
+      for (final target in validTargets) {
+        // Save envelope
+        allocatedSeq = db.saveMessage(
+          messageId: messageId,
+          conversationId: conversationId,
+          senderAccountId: senderAccountId,
+          senderDeviceId: senderDeviceId,
+          recipientDeviceId: target.recipientDeviceId,
+          ciphertext: target.ciphertext,
+        );
 
-      final envelopePayload = {
-        'event_id': eventId,
-        'schema_version': 1,
-        'timestamp': now,
-        'type': 'chat_message',
-        'payload': {
-          'message_id': messageId,
-          'conversation_id': conversationId,
-          'sender_account_id': senderAccountId,
-          'sender_device_id': senderDeviceId,
-          'ciphertext': ciphertext,
-        },
-        'server_sequence': deviceSeq,
-      };
+        // Write device event for cursor-based catch-up
+        final eventId = 'evt_${messageId}_${target.recipientDeviceId}';
+        final deviceSeq = db.writeDeviceEvent(
+          eventId: eventId,
+          recipientDeviceId: target.recipientDeviceId,
+          eventType: 'chat_message',
+          payload: jsonEncode({
+            'message_id': messageId,
+            'conversation_id': conversationId,
+            'sender_account_id': senderAccountId,
+            'sender_device_id': senderDeviceId,
+            'ciphertext': target.ciphertext,
+          }),
+        );
 
-      // Enqueue transaction outbox for push notification worker
-      db.enqueueOutbox(
-        'outbox_${messageId}_$recipientDeviceId',
-        'PUSH_NOTIFICATION',
-        jsonEncode({
-          'notification_type': 'new_message',
-          'recipient_account_id': recipientAccountId,
-          'recipient_device_id': recipientDeviceId,
-          'message_id': messageId,
-          'conversation_id': conversationId,
-        }),
-      );
+        final envelopePayload = {
+          'event_id': eventId,
+          'schema_version': 1,
+          'timestamp': now,
+          'type': 'chat_message',
+          'payload': {
+            'message_id': messageId,
+            'conversation_id': conversationId,
+            'sender_account_id': senderAccountId,
+            'sender_device_id': senderDeviceId,
+            'ciphertext': target.ciphertext,
+          },
+          'server_sequence': deviceSeq,
+        };
 
-      // Relay ciphertext message over WebSocket immediately if online
-      relay.sendToDevice(recipientDeviceId, envelopePayload);
-      processedEnvelopes.add(envelopePayload);
+        // Enqueue transaction outbox for push notification worker
+        db.enqueueOutbox(
+          'outbox_${messageId}_${target.recipientDeviceId}',
+          'PUSH_NOTIFICATION',
+          jsonEncode({
+            'notification_type': 'new_message',
+            'recipient_account_id': target.recipientAccountId,
+            'recipient_device_id': target.recipientDeviceId,
+            'message_id': messageId,
+            'conversation_id': conversationId,
+          }),
+        );
+
+        processedEnvelopes.add(envelopePayload);
+        pendingRelays.add((
+          deviceId: target.recipientDeviceId,
+          envelope: envelopePayload,
+        ));
+      }
+    });
+
+    // Relay ciphertext message over WebSocket immediately if online (post-commit)
+    for (final relayItem in pendingRelays) {
+      relay.sendToDevice(relayItem.deviceId, relayItem.envelope);
     }
 
     if (federatedEnvelopes.isNotEmpty) {

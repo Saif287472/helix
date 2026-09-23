@@ -812,4 +812,54 @@ void main() {
 
     client.close();
   });
+
+  test('streaming upload aborts immediately when bytes exceed expected size', () async {
+    final client = HttpClient();
+    final bytes = List<int>.generate(1024, (i) => i % 256);
+    final fileHash = sha256.convert(bytes).toString();
+
+    final initReq = await client.post(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload',
+    );
+    initReq.headers.set('Authorization', 'Bearer $token');
+    initReq.headers.set('Content-Type', 'application/json');
+    initReq.add(
+      utf8.encode(
+        jsonEncode({'file_size': 1024, 'file_hash': fileHash}),
+      ),
+    );
+    final initResp = await initReq.close();
+    expect(initResp.statusCode, equals(200));
+    await initResp.drain();
+
+    // Stream 2048 bytes (> 1024)
+    final uploadReq = await client.put(
+      '127.0.0.1',
+      port,
+      '/api/v1/attachments/upload/file/$fileHash?offset=0',
+    );
+    uploadReq.headers.set('Authorization', 'Bearer $token');
+    uploadReq.add(List<int>.generate(2048, (i) => i % 256));
+    try {
+      final uploadResp = await uploadReq.close();
+      expect(uploadResp.statusCode, equals(400));
+      final body = jsonDecode(await uploadResp.transform(utf8.decoder).join())
+          as Map<String, dynamic>;
+      expect(body['error'], contains('exceeds expected size'));
+    } on HttpException catch (_) {
+      // Aborted immediately by server on exceeding size
+    }
+
+    // Partial file must be deleted from disk immediately
+    final storedFile = File('${tempStorageDir.path}/$fileHash');
+    expect(storedFile.existsSync(), isFalse);
+
+    // Database record marked FAILED
+    final record = server.db.getAttachment(fileHash);
+    expect(record?['status'], equals('FAILED'));
+
+    client.close();
+  });
 }

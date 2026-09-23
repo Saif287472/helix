@@ -519,15 +519,17 @@ class S2SModule {
       // Defense-in-depth: if we already know the sender's domain, the
       // acting account must belong to it (a server may only proxy actions
       // for its own local users).
-      final senderDomain = senderId == null
-          ? null
-          : db.getFederationServerById(senderId)?['domain'] as String?;
+      final senderRecord =
+          senderId == null ? null : db.getFederationServerById(senderId);
+      final senderDomain = senderRecord?['domain'] as String?;
       final actingDomain = FederationClient.domainOf(actingAccountId);
-      if (senderDomain != null &&
-          actingDomain != null &&
+
+      // S2S actions require an established, verified server domain.
+      if (senderDomain == null ||
+          actingDomain == null ||
           senderDomain != actingDomain) {
         throw AppError.unauthorized(
-          'Acting account does not belong to the sending server',
+          'Acting account domain ($actingDomain) does not match verified sending server domain ($senderDomain)',
         );
       }
       return await groupsModule!.applyRemoteAction(

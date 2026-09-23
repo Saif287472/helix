@@ -423,12 +423,16 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
         _db.execute(
           'ALTER TABLE conversations ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;',
         );
-      } catch (_) {}
+      } catch (e) {
+        if (!e.toString().toLowerCase().contains('duplicate column')) rethrow;
+      }
       try {
         _db.execute(
           'ALTER TABLE conversations ADD COLUMN is_muted INTEGER NOT NULL DEFAULT 0;',
         );
-      } catch (_) {}
+      } catch (e) {
+        if (!e.toString().toLowerCase().contains('duplicate column')) rethrow;
+      }
       _db.execute('PRAGMA user_version = 13;');
     }
     if (version < 14) {

@@ -214,6 +214,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
     // F7: attempt immediate push delivery via stored token when configured.
     if (pushProvider.isConfigured && tokenPresent) {
       final token = tokenRow['push_token'] as String;
+      final tokenType = tokenRow['token_type'] as String?;
       logServerInfo(
         '[CALL_PUSH] immediate_attempt call_id=$callId device=$targetDeviceId '
         'event=$eventId',
@@ -221,6 +222,7 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
       pushProvider
           .deliver(
             token: token,
+            tokenType: tokenType,
             data: {
               'notification_type': 'incoming_call',
               'call_id': callId,
@@ -237,8 +239,8 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
             );
           })
           .catchError((Object e) {
-            if (e is FcmTokenNotFoundException) {
-              // Token is stale — prune it so we stop wasting FCM quota.
+            if (e is PushTokenNotFoundException) {
+              // Token is stale — prune it so we stop wasting push quota.
               db.deletePushToken(deviceId: targetDeviceId);
               db.updateOutboxStatus(eventId, 'COMPLETED', 0);
               logServerWarning(

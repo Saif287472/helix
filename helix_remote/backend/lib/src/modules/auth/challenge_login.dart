@@ -20,6 +20,15 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
     final challengeBytes = List<int>.generate(32, (i) => random.nextInt(256));
     final issuedAt = _now();
     final expiresAt = issuedAt.add(const Duration(minutes: 5));
+
+    // Evict expired challenges to prevent unbounded memory growth
+    _challenges.removeWhere((_, c) => issuedAt.isAfter(c.expiresAt));
+
+    // Hard ceiling on active unconsumed challenges
+    if (_challenges.length >= 10000) {
+      throw AppError.tooManyRequests('Too many pending login challenges');
+    }
+
     final challenge = _LoginChallenge(
       accountId: accountId,
       deviceId: deviceId,

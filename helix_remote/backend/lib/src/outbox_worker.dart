@@ -33,9 +33,11 @@ class OutboxWorker {
   FederationClient? federationClient;
 
   bool get pushProviderConfigured => _pushProvider.isConfigured;
+  bool _isProcessing = false;
 
   void start() {
     _timer = Timer.periodic(interval, (_) {
+      if (_isProcessing) return;
       processOnce().catchError((Object e) {
         logServerError('[OutboxWorker] timer error: $e');
         return <String, int>{'completed': 0, 'failed': 0, 'dlq': 0};
@@ -45,9 +47,14 @@ class OutboxWorker {
 
   void stop() {
     _timer?.cancel();
+    _isProcessing = false;
   }
 
   Future<Map<String, int>> processOnce() async {
+    if (_isProcessing) {
+      return const {'completed': 0, 'failed': 0, 'dlq': 0};
+    }
+    _isProcessing = true;
     final processed = <String, int>{'completed': 0, 'failed': 0, 'dlq': 0};
     try {
       final items = db.getPendingOutbox();
@@ -94,6 +101,8 @@ class OutboxWorker {
       db.purgeTerminalPendingCalls(tenMinutesAgo);
     } catch (e) {
       logServerError('[OutboxWorker] processOnce error: $e');
+    } finally {
+      _isProcessing = false;
     }
     return processed;
   }
@@ -117,7 +126,10 @@ class OutboxWorker {
     }
 
     // Look up push token at delivery time — never stored in the outbox payload.
-    final pushToken = db.getDevicePushToken(targetDeviceId);
+    final tokenRecord = db.getPushTokenForDevice(targetDeviceId);
+    final pushToken = (tokenRecord?['push_token'] as String?) ??
+        db.getDevicePushToken(targetDeviceId);
+    final tokenType = tokenRecord?['token_type'] as String?;
 
     if (pushToken == null || pushToken.isEmpty) {
       logServerWarning(
@@ -133,7 +145,7 @@ class OutboxWorker {
       logServerWarning(
         '[PUSH] outbox_skipped event=$eventId reason=provider_unconfigured',
       );
-      // FCM not configured — complete silently rather than filling the DLQ
+      // Push provider not configured — complete silently rather than filling the DLQ
       // with entries that can never succeed.
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);
       processed['completed'] = processed['completed']! + 1;
@@ -149,18 +161,23 @@ class OutboxWorker {
       logServerInfo(
         '[PUSH] outbox_attempt event=$eventId device=$targetDeviceId',
       );
-      await _pushProvider.deliver(token: pushToken, data: payload);
+      await _pushProvider.deliver(
+        token: pushToken,
+        data: payload,
+        tokenType: tokenType,
+      );
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);
       processed['completed'] = processed['completed']! + 1;
       logServerInfo(
         '[PUSH] outbox_delivered event=$eventId device=$targetDeviceId',
       );
-    } on FcmTokenNotFoundException {
+    } on PushTokenNotFoundException {
       // Token is stale — silently complete (device will re-register or not).
+      db.deletePushToken(deviceId: targetDeviceId);
       db.updateOutboxStatus(eventId, 'COMPLETED', retries);
       processed['completed'] = processed['completed']! + 1;
     } catch (e) {
-      logServerError('[OutboxWorker] FCM delivery error event=$eventId: $e');
+      logServerError('[OutboxWorker] Push delivery error event=$eventId: $e');
       _failOrDlq(eventId, retries, processed);
     }
   }

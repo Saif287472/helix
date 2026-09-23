@@ -63,6 +63,21 @@ mixin RemoteGroupsRepository on HelixRemoteDatabaseBase {
     stmt.close();
   }
 
+  void upsertGroupEpochKey({
+    required String groupId,
+    required int epoch,
+    required String keyId,
+    required String keyMaterial,
+    required int createdAt,
+  }) =>
+      saveGroupEpochKey(
+        groupId: groupId,
+        epoch: epoch,
+        keyId: keyId,
+        keyMaterial: keyMaterial,
+        createdAt: createdAt,
+      );
+
   Map<String, dynamic>? getGroupEpochKey(String groupId, int epoch) {
     final stmt = _db.prepare('''
       SELECT * FROM group_epoch_keys
