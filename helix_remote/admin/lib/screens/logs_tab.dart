@@ -86,20 +86,33 @@ class _LogsTabState extends State<LogsTab> {
   Widget build(BuildContext context) {
     final lines = _visibleLines;
     return Card(
-      color: HelixColorTokens.cFF08080C,
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
       child: Padding(
-        padding: HelixInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(context),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             _buildFilterField(context),
-            const Divider(),
+            const SizedBox(height: 14),
             Expanded(
-              child: lines.isEmpty
-                  ? _buildEmptyState(context)
-                  : _buildLineList(lines),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                padding: const EdgeInsets.all(12),
+                child: lines.isEmpty
+                    ? _buildEmptyState(context)
+                    : _buildLineList(lines),
+              ),
             ),
             if (!_followTail && lines.isNotEmpty)
               Align(
@@ -125,26 +138,80 @@ class _LogsTabState extends State<LogsTab> {
       children: [
         Row(
           children: [
-            const Expanded(
-              child: Text(
-                'Live Server Console Logs',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Expanded(
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 10,
+                runSpacing: 6,
+                children: [
+                  const Text(
+                    'Live Log Streamer Console',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: widget.autoRefreshEnabled
+                          ? const Color(0xFFDCFCE7)
+                          : const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: widget.autoRefreshEnabled
+                            ? const Color(0xFFBBF7D0)
+                            : const Color(0xFFFDE68A),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: widget.autoRefreshEnabled
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFFD97706),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          widget.autoRefreshEnabled
+                              ? 'LIVE STREAM ACTIVE'
+                              : 'STREAM PAUSED',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: widget.autoRefreshEnabled
+                                ? const Color(0xFF166534)
+                                : const Color(0xFFB45309),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
             if (widget.onAutoRefreshChanged != null) ...[
-              Text(
+              const Text(
                 'Live',
-                style: TextStyle(fontSize: 12, color: context.textSecondary),
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
               ),
               Switch(
                 value: widget.autoRefreshEnabled,
+                activeColor: const Color(0xFF2563EB),
                 onChanged: widget.onAutoRefreshChanged,
               ),
             ],
             IconButton(
-              icon: const Icon(Icons.copy_all),
+              icon: const Icon(Icons.copy_all, size: 20),
               tooltip: 'Copy all',
+              color: const Color(0xFF64748B),
               onPressed: widget.logs.isEmpty
                   ? null
                   : () async {
@@ -158,8 +225,9 @@ class _LogsTabState extends State<LogsTab> {
                     },
             ),
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh, size: 20),
               tooltip: 'Refresh',
+              color: const Color(0xFF64748B),
               onPressed: widget.onRefresh,
             ),
           ],
@@ -167,21 +235,14 @@ class _LogsTabState extends State<LogsTab> {
         const SizedBox(height: 4),
         Row(
           children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: widget.autoRefreshEnabled ? const Color(0xFF059669) : Colors.grey,
-                shape: BoxShape.circle,
-              ),
-            ),
+            const Icon(Icons.terminal, size: 14, color: Color(0xFF94A3B8)),
             const SizedBox(width: 6),
             Text(
               widget.logs.filePath ?? 'tail -f /var/log/helix/server.log',
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 11,
-                color: context.textFaint,
+                color: Color(0xFF64748B),
               ),
             ),
           ],
@@ -193,12 +254,27 @@ class _LogsTabState extends State<LogsTab> {
   Widget _buildFilterField(BuildContext context) {
     return TextField(
       onChanged: (value) => setState(() => _filter = value),
-      style: const TextStyle(fontSize: 13),
+      style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
       decoration: InputDecoration(
         isDense: true,
-        prefixIcon: const Icon(Icons.search, size: 18),
+        prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF64748B)),
         hintText: 'Filter lines',
-        hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFF2563EB)),
+        ),
       ),
     );
   }
@@ -210,13 +286,14 @@ class _LogsTabState extends State<LogsTab> {
       itemBuilder: (context, index) {
         final line = lines[index];
         return Padding(
-          padding: HelixInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: 2.5),
           child: SelectableText(
             line,
             style: TextStyle(
               fontFamily: 'monospace',
-              fontSize: 13,
+              fontSize: 12.5,
               color: _colorFor(line),
+              height: 1.4,
             ),
           ),
         );
@@ -224,12 +301,12 @@ class _LogsTabState extends State<LogsTab> {
     );
   }
 
-  /// Errors and warnings are worth spotting at a glance in a wall of
-  /// green monospace.
+  /// Errors, warnings, and info are visually distinguished matching console
   Color _colorFor(String line) {
-    if (line.contains('[ERROR]')) return HelixColorTokens.cFFFF6B6B;
-    if (line.contains('[WARN]')) return HelixColorTokens.cFFFFC107;
-    return Colors.greenAccent;
+    if (line.contains('[ERROR]')) return const Color(0xFFDC2626);
+    if (line.contains('[WARN]')) return const Color(0xFFD97706);
+    if (line.contains('[OK]')) return const Color(0xFF16A34A);
+    return const Color(0xFF2563EB);
   }
 
   Widget _buildEmptyState(BuildContext context) {
