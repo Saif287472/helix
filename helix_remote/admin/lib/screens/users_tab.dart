@@ -88,7 +88,10 @@ class _UsersTabState extends State<UsersTab> {
     setState(() => _busyAccountId = accountId);
     try {
       final result = await widget.client.generateRecoveryCode(accountId);
-      final code = result['code'] as String? ?? '';
+      final code = result['opaque_code'] as String? ??
+          result['code'] as String? ??
+          result['recovery_code'] as String? ??
+          '';
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -97,7 +100,12 @@ class _UsersTabState extends State<UsersTab> {
             children: [
               Icon(Icons.key, size: 22),
               SizedBox(width: 8),
-              Text('Account Recovery Code'),
+              Expanded(
+                child: Text(
+                  'Account Recovery Code',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           content: Column(
@@ -111,6 +119,7 @@ class _UsersTabState extends State<UsersTab> {
               ),
               const SizedBox(height: 16),
               Container(
+                width: double.infinity,
                 padding: HelixInsets.all(12),
                 decoration: BoxDecoration(
                   color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),

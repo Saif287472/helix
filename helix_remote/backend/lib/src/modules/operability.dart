@@ -820,6 +820,7 @@ class OperabilityModule {
       'account_id': accountId,
       'recovery_code': recoveryCode,
       'opaque_code': opaqueCode,
+      'code': opaqueCode,
       'expires_at': expiresAt,
     });
   }
