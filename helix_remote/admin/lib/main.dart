@@ -582,6 +582,52 @@ class _MainAdminPageState extends State<MainAdminPage> {
                   child: SafeArea(child: _buildSidebarContent(inDrawer: true)),
                 )
               : null,
+          bottomNavigationBar: isMobile
+              ? NavigationBar(
+                  selectedIndex: switch (_selectedTab) {
+                    'dashboard' => 0,
+                    'users' => 1,
+                    'invites' => 2,
+                    'logs' || 'ops' => 3,
+                    _ => 0,
+                  },
+                  onDestinationSelected: (idx) {
+                    final targetTab = switch (idx) {
+                      0 => 'dashboard',
+                      1 => 'users',
+                      2 => 'invites',
+                      3 => 'logs',
+                      _ => 'dashboard',
+                    };
+                    setState(() => _selectedTab = targetTab);
+                    if (_serverDependentTabs.contains(targetTab)) {
+                      _refreshData();
+                    }
+                  },
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.dashboard_outlined),
+                      selectedIcon: Icon(Icons.dashboard),
+                      label: 'Overview',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.people_outline),
+                      selectedIcon: Icon(Icons.people),
+                      label: 'Users',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.local_activity_outlined),
+                      selectedIcon: Icon(Icons.local_activity),
+                      label: 'Invites',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.terminal_outlined),
+                      selectedIcon: Icon(Icons.terminal),
+                      label: 'Ops & Logs',
+                    ),
+                  ],
+                )
+              : null,
           body: isMobile
               ? _buildBody(isMobile: true)
               : Row(
@@ -602,13 +648,53 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      title: Text(
-        _selectedTab.toUpperCase(),
-        style: const TextStyle(
-          letterSpacing: 1.5,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              _selectedTab.toUpperCase(),
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                letterSpacing: 1.5,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF059669),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  '23ms',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                    color: Color(0xFF059669),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       actions: [
         if (_serverDependentTabs.contains(_selectedTab))

@@ -100,8 +100,14 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
       ),
-      iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(minimumSize: const Size.square(48)),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: onSurface.withValues(alpha: 0.10)),
+        ),
+        clipBehavior: Clip.antiAlias,
       ),
       extensions: [AppSurfaces(sunken: sunken)],
     );
@@ -128,5 +134,9 @@ extension AppColorsX on BuildContext {
   Color get accentColor => _scheme.secondary;
 
   /// The sidebar/app-bar/code-block surface tone. See [AppSurfaces].
-  Color get sunkenSurface => Theme.of(this).extension<AppSurfaces>()!.sunken;
+  Color get sunkenSurface =>
+      Theme.of(this).extension<AppSurfaces>()?.sunken ??
+      (Theme.of(this).brightness == Brightness.dark
+          ? const Color(0xFF0B0B12)
+          : const Color(0xFFEDEAF5));
 }

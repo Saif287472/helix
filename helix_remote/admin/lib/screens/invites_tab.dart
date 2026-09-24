@@ -1,14 +1,12 @@
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 import '../admin_client.dart';
 import '../helix_code.dart';
 import '../theme/app_theme.dart';
 
-/// Invite-credential issuance and audit history. Locked like Dashboard/
-/// Config until a server is connected. Generated codes are clipboard-only
-/// for v1 (decision: no new share_plus dependency) and shown exactly once,
-/// since the server never persists the raw code - only its hash.
+/// Invite-credential issuance and audit history.
+/// Converted to mobile-first cardlet and touch-card system from the Helix Admin demo.
 class InvitesTab extends StatefulWidget {
   const InvitesTab({super.key, required this.client});
 
@@ -85,8 +83,6 @@ class _InvitesTabState extends State<InvitesTab> {
     }
   }
 
-  /// Resolves the opaque shareable invite code (HLX-INV-...) concealing
-  /// the server address so it is never exposed in the invite string.
   String _resolveShareableCode(Map<String, dynamic> result) {
     final shareableCode = result['shareable_code'] as String?;
     if (shareableCode != null && isHelixInviteCode(shareableCode)) {
@@ -112,9 +108,9 @@ class _InvitesTabState extends State<InvitesTab> {
 
   void _copyToClipboard(String value) {
     Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Copied to clipboard')),
+    );
   }
 
   @override
@@ -123,24 +119,44 @@ class _InvitesTabState extends State<InvitesTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Generator Cardlet
           Card(
             child: Padding(
               padding: HelixInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Generate Invite',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Invitation System',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: context.accentColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: context.accentColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          'Single-Use (7 Days)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: context.accentColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
-                    'Single-use, expires in 7 days. Send this invite code '
-                    'to the new user. The server address is shielded.',
-                    style: TextStyle(
-                      color: context.textSecondary,
-                      fontSize: 13,
-                    ),
+                    'Generate single-use shielded invite codes for onboarding new users.',
+                    style: TextStyle(color: context.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
@@ -159,9 +175,12 @@ class _InvitesTabState extends State<InvitesTab> {
                       _generating ? 'Generating…' : 'Generate Invite',
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: HelixColorTokens.cFF8A2BE2,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
                       foregroundColor: Colors.white,
-                      padding: HelixInsets.symmetric(vertical: 16),
+                      padding: HelixInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                   if (_lastShareableCode != null) ...[
@@ -170,7 +189,7 @@ class _InvitesTabState extends State<InvitesTab> {
                       padding: HelixInsets.all(16),
                       decoration: BoxDecoration(
                         color: context.sunkenSurface,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: context.accentColor.withValues(alpha: 0.4),
                         ),
@@ -178,27 +197,37 @@ class _InvitesTabState extends State<InvitesTab> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: SelectableText(
-                              _lastShareableCode!,
-                              style: TextStyle(
-                                fontFamily: 'monospace',
-                                color: context.accentColor,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Latest Generated Invite Code',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                SelectableText(
+                                  _lastShareableCode!,
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    color: context.accentColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.copy),
+                            icon: const Icon(Icons.copy, size: 20),
                             tooltip: 'Copy code',
-                            onPressed: () =>
-                                _copyToClipboard(_lastShareableCode!),
+                            onPressed: () => _copyToClipboard(_lastShareableCode!),
                           ),
                         ],
                       ),
                     ),
                   ],
                   if (_error != null) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     Text(
                       _error!,
                       style: TextStyle(
@@ -211,7 +240,9 @@ class _InvitesTabState extends State<InvitesTab> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+
+          // Invites List Card
           Card(
             child: Padding(
               padding: HelixInsets.all(24),
@@ -222,8 +253,7 @@ class _InvitesTabState extends State<InvitesTab> {
                     children: [
                       const Expanded(
                         child: Text(
-                          'Invite History',
-                          overflow: TextOverflow.ellipsis,
+                          'Active & Recent Invites',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -237,12 +267,17 @@ class _InvitesTabState extends State<InvitesTab> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Audit trail of issued invites, redemption states, and expiration.',
+                    style: TextStyle(color: context.textSecondary, fontSize: 13),
+                  ),
                   const SizedBox(height: 16),
                   if (_loading)
-                    Center(
+                    const Center(
                       child: Padding(
-                        padding: HelixInsets.all(24),
-                        child: const CircularProgressIndicator(),
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: CircularProgressIndicator(),
                       ),
                     )
                   else if (_invites.isEmpty)
@@ -254,7 +289,11 @@ class _InvitesTabState extends State<InvitesTab> {
                       ),
                     )
                   else
-                    _buildTable(),
+                    Column(
+                      children: [
+                        for (final invite in _invites) _buildInviteCard(invite),
+                      ],
+                    ),
                   if (!_loading && (_invites.isNotEmpty || _offset > 0)) ...[
                     const SizedBox(height: 16),
                     Row(
@@ -291,53 +330,106 @@ class _InvitesTabState extends State<InvitesTab> {
     );
   }
 
-  Widget _buildTable() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columns: const [
-          DataColumn(label: Text('Issuer')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Issued')),
-          DataColumn(label: Text('Expires')),
-          DataColumn(label: Text('Redeemed By')),
-          DataColumn(label: Text('Actions')),
+  Widget _buildInviteCard(Map<String, dynamic> invite) {
+    final inviteId = invite['invite_id'] as String? ?? '';
+    final status = invite['status'] as String? ?? 'unknown';
+    final isPending = status == 'PENDING';
+    final isBusy = _busyInviteId == inviteId;
+    final isRedeemed = status == 'REDEEMED';
+    final redeemedBy = invite['redeemed_by_account_id'] as String?;
+    final issuer = invite['issuer_type'] as String? ?? 'ADMIN';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.sunkenSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Row(
+        children: [
+          // Icon Avatar
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isRedeemed
+                  ? Colors.green.withValues(alpha: 0.15)
+                  : (isPending
+                      ? context.accentColor.withValues(alpha: 0.15)
+                      : Colors.red.withValues(alpha: 0.15)),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isRedeemed
+                  ? Icons.check
+                  : (isPending ? Icons.local_activity_outlined : Icons.close),
+              size: 20,
+              color: isRedeemed
+                  ? Colors.green
+                  : (isPending ? context.accentColor : Colors.red),
+            ),
+          ),
+          const SizedBox(width: 14),
+
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      inviteId,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      issuer,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.textFaint,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  isRedeemed && redeemedBy != null
+                      ? 'Redeemed by $redeemedBy • ${_formatTimestamp(invite['redeemed_at'] ?? invite['created_at'])}'
+                      : 'Issued ${_formatTimestamp(invite['created_at'])} • Expires ${_formatTimestamp(invite['expires_at'])}',
+                  style: TextStyle(fontSize: 12, color: context.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Status & Action
+          _statusChip(status),
+          const SizedBox(width: 8),
+
+          if (isBusy)
+            const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (isPending)
+            IconButton(
+              icon: Icon(
+                Icons.cancel_outlined,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              tooltip: 'Cancel invite',
+              onPressed: () => _cancelInvite(inviteId),
+            ),
         ],
-        rows: _invites.map((invite) {
-          final inviteId = invite['invite_id'] as String? ?? '';
-          final status = invite['status'] as String? ?? 'unknown';
-          final isPending = status == 'PENDING';
-          final isBusy = _busyInviteId == inviteId;
-          return DataRow(
-            cells: [
-              DataCell(Text(invite['issuer_type'] as String? ?? 'unknown')),
-              DataCell(_statusChip(status)),
-              DataCell(Text(_formatTimestamp(invite['created_at']))),
-              DataCell(Text(_formatTimestamp(invite['expires_at']))),
-              DataCell(
-                Text(invite['redeemed_by_account_id'] as String? ?? '—'),
-              ),
-              DataCell(
-                isBusy
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : isPending
-                    ? IconButton(
-                        icon: Icon(
-                          Icons.cancel_outlined,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        tooltip: 'Cancel invite',
-                        onPressed: () => _cancelInvite(inviteId),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          );
-        }).toList(),
       ),
     );
   }
@@ -349,14 +441,23 @@ class _InvitesTabState extends State<InvitesTab> {
         color = Colors.green;
       case 'EXPIRED':
         color = Colors.orange;
+      case 'CANCELLED':
+        color = Colors.red;
       default:
         color = context.accentColor;
     }
     return Chip(
-      label: Text(status, style: const TextStyle(fontSize: 12)),
-      backgroundColor: color.withValues(alpha: 0.15),
-      side: BorderSide(color: color.withValues(alpha: 0.4)),
-      labelStyle: TextStyle(color: color),
+      label: Text(
+        status,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.35)),
+      padding: EdgeInsets.zero,
     );
   }
 

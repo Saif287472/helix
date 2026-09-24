@@ -120,44 +120,71 @@ class _LogsTabState extends State<LogsTab> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
-          child: Text(
-            'Live Server Console Logs',
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Live Server Console Logs',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+            if (widget.onAutoRefreshChanged != null) ...[
+              Text(
+                'Live',
+                style: TextStyle(fontSize: 12, color: context.textSecondary),
+              ),
+              Switch(
+                value: widget.autoRefreshEnabled,
+                onChanged: widget.onAutoRefreshChanged,
+              ),
+            ],
+            IconButton(
+              icon: const Icon(Icons.copy_all),
+              tooltip: 'Copy all',
+              onPressed: widget.logs.isEmpty
+                  ? null
+                  : () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: widget.logs.lines.join('\n')),
+                      );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Logs copied to clipboard.')),
+                      );
+                    },
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+              onPressed: widget.onRefresh,
+            ),
+          ],
         ),
-        if (widget.onAutoRefreshChanged != null) ...[
-          Text(
-            'Live',
-            style: TextStyle(fontSize: 12, color: context.textSecondary),
-          ),
-          Switch(
-            value: widget.autoRefreshEnabled,
-            onChanged: widget.onAutoRefreshChanged,
-          ),
-        ],
-        IconButton(
-          icon: const Icon(Icons.copy_all),
-          tooltip: 'Copy all',
-          onPressed: widget.logs.isEmpty
-              ? null
-              : () async {
-                  await Clipboard.setData(
-                    ClipboardData(text: widget.logs.lines.join('\n')),
-                  );
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logs copied to clipboard.')),
-                  );
-                },
-        ),
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          tooltip: 'Refresh',
-          onPressed: widget.onRefresh,
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: widget.autoRefreshEnabled ? const Color(0xFF059669) : Colors.grey,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              widget.logs.filePath ?? 'tail -f /var/log/helix/server.log',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: context.textFaint,
+              ),
+            ),
+          ],
         ),
       ],
     );
