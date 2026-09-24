@@ -14,6 +14,7 @@ import 'screens/reports_tab.dart';
 import 'screens/lock_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/logs_tab.dart';
+import 'screens/ops_tab.dart';
 import 'screens/settings_tab.dart';
 import 'services/admin_preferences.dart';
 import 'theme/app_theme.dart';
@@ -64,6 +65,7 @@ const _serverDependentTabs = {
   'invites',
   'users',
   'reports',
+  'ops',
 };
 const _defaultServerUrl = 'https://helix.agiletechbd.com';
 
@@ -588,7 +590,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
                     'dashboard' => 0,
                     'users' => 1,
                     'invites' => 2,
-                    'logs' || 'ops' => 3,
+                    'ops' || 'logs' || 'reports' || 'config' || 'backup' => 3,
                     _ => 0,
                   },
                   onDestinationSelected: (idx) {
@@ -596,7 +598,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
                       0 => 'dashboard',
                       1 => 'users',
                       2 => 'invites',
-                      3 => 'logs',
+                      3 => 'ops',
                       _ => 'dashboard',
                     };
                     setState(() => _selectedTab = targetTab);
@@ -854,6 +856,21 @@ class _MainAdminPageState extends State<MainAdminPage> {
     switch (_selectedTab) {
       case 'dashboard':
         return DashboardTab(metrics: _metrics);
+      case 'ops':
+        return OpsTab(
+          client: _client!,
+          logs: _logs,
+          onRefreshLogs: _refreshLogs,
+          autoRefreshLogs: _logAutoRefresh,
+          onAutoRefreshLogsChanged: _setLogAutoRefresh,
+          config: _config,
+          onSetWorldwideMode: _setWorldwideMode,
+          onSaveServerName: _saveServerName,
+          serverHost: Uri.tryParse(_urlController.text)?.host,
+          isLoading: _isLoading,
+          onTriggerBackup: _triggerBackup,
+          initialSubTab: 'reports',
+        );
       case 'config':
         return ConfigTab(
           config: _config,

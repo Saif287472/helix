@@ -432,63 +432,10 @@ class _ReportsTabState extends State<ReportsTab> {
                       ),
                     )
                   else
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('Report ID')),
-                          DataColumn(label: Text('Reported User')),
-                          DataColumn(label: Text('Reporter')),
-                          DataColumn(label: Text('Reason')),
-                          DataColumn(label: Text('Date')),
-                          DataColumn(label: Text('Status')),
-                          DataColumn(label: Text('Actions')),
-                        ],
-                        rows: filtered.map((report) {
-                          final reportId = report['id'] as String;
-                          final status = report['status'] as String;
-                          final isBusy = _actioningReportId == reportId;
-
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(reportId)),
-                              DataCell(Text('${report['reported_user']} (${report['reported_account_id']})')),
-                              DataCell(Text(report['reporter'] as String)),
-                              DataCell(Text(report['reason'] as String)),
-                              DataCell(Text(_formatTimestamp(report['created_at']))),
-                              DataCell(_statusChip(status)),
-                              DataCell(
-                                isBusy
-                                    ? const SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.visibility_outlined, size: 20),
-                                            tooltip: 'View details & investigate',
-                                            onPressed: () => _showReportDetails(report),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.check, size: 20, color: Colors.green),
-                                            tooltip: 'Mark resolved',
-                                            onPressed: () => _resolveReport(reportId),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.close, size: 20, color: Colors.grey),
-                                            tooltip: 'Dismiss report',
-                                            onPressed: () => _dismissReport(reportId),
-                                          ),
-                                        ],
-                                      ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                    Column(
+                      children: [
+                        for (final report in filtered) _buildReportCard(report),
+                      ],
                     ),
 
                   if (!_loading && (_reports.isNotEmpty || _offset > 0)) ...[
@@ -514,6 +461,154 @@ class _ReportsTabState extends State<ReportsTab> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportCard(Map<String, dynamic> report) {
+    final reportId = report['id'] as String;
+    final status = report['status'] as String;
+    final isBusy = _actioningReportId == reportId;
+    final reason = report['reason'] as String;
+    final reportedUser = report['reported_user'] as String;
+    final reporter = report['reporter'] as String;
+    final details = report['details'] as String;
+    final isPending = status == 'Pending';
+    final isResolved = status == 'Resolved';
+
+    final Color iconColor = isResolved
+        ? const Color(0xFF059669)
+        : (reason.toLowerCase().contains('spam')
+            ? const Color(0xFF2563EB)
+            : const Color(0xFFD97706));
+    final IconData icon = isResolved
+        ? Icons.check_circle_outline
+        : (reason.toLowerCase().contains('spam')
+            ? Icons.search
+            : Icons.warning_amber_rounded);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            reason,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                        _statusChip(status),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Target: $reportedUser',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Reported by: $reporter • ${_formatTimestamp(report['created_at'])}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (details.isNotEmpty && details != 'No additional details provided.') ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Text(
+                details,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.info_outline, size: 20),
+                tooltip: 'Investigate details',
+                onPressed: () => _showReportDetails(report),
+              ),
+              const SizedBox(width: 8),
+              if (isPending) ...[
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF64748B),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    minimumSize: Size.zero,
+                  ),
+                  onPressed: isBusy ? null : () => _dismissReport(reportId),
+                  child: const Text('Dismiss', style: TextStyle(fontSize: 12)),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    minimumSize: Size.zero,
+                  ),
+                  onPressed: isBusy ? null : () => _resolveReport(reportId),
+                  child: isBusy
+                      ? const SizedBox(
+                          height: 14,
+                          width: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Resolve', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ],
           ),
         ],
       ),

@@ -119,10 +119,58 @@ class _InvitesTabState extends State<InvitesTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Generator Cardlet
+          // Page Header Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Invitation System',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: _generating ? null : _generateInvite,
+                icon: _generating
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.add, size: 18),
+                label: Text(
+                  _generating ? 'Generating…' : 'Generate Invite',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Latest Generated Invite Card
           Card(
+            elevation: 0,
+            margin: HelixInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            color: Colors.white,
             child: Padding(
-              padding: HelixInsets.all(24),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -130,102 +178,100 @@ class _InvitesTabState extends State<InvitesTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Invitation System',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        'Latest Generated Invite',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: context.accentColor.withValues(alpha: 0.12),
+                          color: const Color(0xFFFFFBEB),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: context.accentColor.withValues(alpha: 0.3),
-                          ),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
                         ),
-                        child: Text(
-                          'Single-Use (7 Days)',
+                        child: const Text(
+                          'SINGLE-USE (7 DAYS)',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: context.accentColor,
+                            color: Color(0xFFD97706),
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    'Generate single-use shielded invite codes for onboarding new users.',
-                    style: TextStyle(color: context.textSecondary, fontSize: 13),
+                  const Text(
+                    'Share this cryptographically signed token with the intended user.',
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
                   ),
                   const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _generating ? null : _generateInvite,
-                    icon: _generating
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.add_link),
-                    label: Text(
-                      _generating ? 'Generating…' : 'Generate Invite',
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: HelixInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                  if (_lastShareableCode != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: HelixInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: context.sunkenSurface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: context.accentColor.withValues(alpha: 0.4),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Latest Generated Invite Code',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    child: _lastShareableCode != null
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SelectableText(
+                                _lastShareableCode!,
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  color: Color(0xFF0F172A),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  letterSpacing: 1.0,
                                 ),
-                                const SizedBox(height: 4),
-                                SelectableText(
-                                  _lastShareableCode!,
-                                  style: TextStyle(
-                                    fontFamily: 'monospace',
-                                    color: context.accentColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF334155),
+                                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      minimumSize: Size.zero,
+                                    ),
+                                    icon: const Icon(Icons.copy, size: 16),
+                                    label: const Text('Copy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                    onPressed: () => _copyToClipboard(_lastShareableCode!),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 8),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF334155),
+                                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      minimumSize: Size.zero,
+                                    ),
+                                    icon: const Icon(Icons.share, size: 16),
+                                    label: const Text('Share', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                    onPressed: () => _copyToClipboard(_lastShareableCode!),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          )
+                        : const Text(
+                            'Click "+ Generate Invite" to create a fresh secure onboarding token.',
+                            style: TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 13,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.copy, size: 20),
-                            tooltip: 'Copy code',
-                            onPressed: () => _copyToClipboard(_lastShareableCode!),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                   if (_error != null) ...[
                     const SizedBox(height: 14),
                     Text(
