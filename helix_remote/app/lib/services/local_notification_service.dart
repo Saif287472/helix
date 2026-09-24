@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -54,6 +55,7 @@ class LocalNotificationService {
   );
 
   static Future<void> init() async {
+    if (!Platform.isAndroid) return;
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
     await _plugin.initialize(
@@ -101,6 +103,7 @@ class LocalNotificationService {
   /// Ensures that notification permission is granted. If the user previously
   /// did not allow notifications, prompts them again.
   static Future<bool> ensureNotificationPermission() async {
+    if (!Platform.isAndroid) return true;
     try {
       final android = _plugin
           .resolvePlatformSpecificImplementation<
@@ -125,12 +128,12 @@ class LocalNotificationService {
   }
 
   static Future<void> cancelAll() async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     await _plugin.cancelAll();
   }
 
   static Future<void> showContactRequest(String peerAccountId) async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     final androidDetails = AndroidNotificationDetails(
       _contactChannel.id,
       _contactChannel.name,
@@ -154,7 +157,7 @@ class LocalNotificationService {
   /// genuine out-of-band channel. Not called when the server did send a
   /// real SMS (see `RemoteCompositionRegistration.requestOtp`).
   static Future<void> showVerificationCode({required String code}) async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     final androidDetails = AndroidNotificationDetails(
       _verificationChannel.id,
       _verificationChannel.name,
@@ -173,7 +176,7 @@ class LocalNotificationService {
 
   /// Self-fired for Helix Global's auto-issued signup invite.
   static Future<void> showInviteCode({required String code}) async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     final androidDetails = AndroidNotificationDetails(
       _verificationChannel.id,
       _verificationChannel.name,
@@ -196,7 +199,7 @@ class LocalNotificationService {
     required bool isVideo,
     bool fullScreenIntent = false,
   }) async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     final androidDetails = AndroidNotificationDetails(
       _incomingCallChannel.id,
       _incomingCallChannel.name,
@@ -231,7 +234,7 @@ class LocalNotificationService {
     required String callerDisplayName,
     required bool isVideo,
   }) async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     final androidDetails = AndroidNotificationDetails(
       _activeCallChannel.id,
       _activeCallChannel.name,
@@ -258,7 +261,7 @@ class LocalNotificationService {
     String title = 'Helix Remote',
     String body = 'You have a new message',
   }) async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     final androidDetails = AndroidNotificationDetails(
       _messageChannel.id,
       _messageChannel.name,
@@ -276,12 +279,12 @@ class LocalNotificationService {
   }
 
   static Future<void> cancelIncomingCall(String callId) async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     await _plugin.cancel(callId.hashCode & 0x7fffffff);
   }
 
   static Future<void> cancelOngoingCall() async {
-    if (!_ready) return;
+    if (!Platform.isAndroid || !_ready) return;
     await _plugin.cancel(_ongoingCallNotificationId);
   }
 

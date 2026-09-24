@@ -100,14 +100,9 @@ class OnboardingNotifier extends ChangeNotifier {
   }
 
   void setGlobalSubStep(GlobalSubStep subStep) {
-    final mappedStep = switch (subStep) {
-      GlobalSubStep.phone => OnboardingStep.globalPhone,
-      GlobalSubStep.otp => OnboardingStep.globalOtp,
-      GlobalSubStep.name => OnboardingStep.globalName,
-    };
     _state = _state.copyWith(
       globalSubStep: subStep,
-      step: mappedStep,
+      step: OnboardingStep.serverSelection,
     );
     notifyListeners();
   }
@@ -115,9 +110,7 @@ class OnboardingNotifier extends ChangeNotifier {
   void setJoinSubStep(JoinSubStep subStep) {
     _state = _state.copyWith(
       joinSubStep: subStep,
-      step: subStep == JoinSubStep.code
-          ? OnboardingStep.codeEntry
-          : OnboardingStep.personalVerify,
+      step: OnboardingStep.serverSelection,
     );
     notifyListeners();
   }
@@ -198,6 +191,10 @@ class OnboardingNotifier extends ChangeNotifier {
     String? generatedInvite = _state.inviteCode;
     bool isPlaceholder = true;
 
+    final targetUrl = (isPersonal || _state.serverType == ServerType.others)
+        ? (_state.serverNodeUrl ?? kHelixGlobalServerUrl)
+        : kHelixGlobalServerUrl;
+
     try {
       if (_root != null) {
         if (!isPersonal && generatedInvite == null) {
@@ -214,18 +211,23 @@ class OnboardingNotifier extends ChangeNotifier {
           await LocalNotificationService.showVerificationCode(code: '123456');
           isPlaceholder = true;
         }
-      } else if (_client != null) {
+      } else {
+        final client = _client ??
+            HelixRemoteRestClientImpl(
+              baseUri: Uri.parse(targetUrl),
+              timeoutMs: 10000,
+            );
         if (!isPersonal && generatedInvite == null) {
           try {
-            final res = await _client.autoIssueGlobalInvite();
+            final res = await client.autoIssueGlobalInvite();
             generatedInvite = res['invite_code'] as String?;
           } catch (_) {}
         }
         try {
-          final saltRes = await _client.fetchDiscoverySalt();
+          final saltRes = await client.fetchDiscoverySalt();
           final salt = saltRes['salt'] as String? ?? 'salt';
           final hash = phoneHash(salt, fullPhoneNumber);
-          final res = await _client.requestPhoneOtp(
+          final res = await client.requestPhoneOtp(
             phoneHash: hash,
             phoneNumber: fullPhoneNumber,
           );
@@ -236,18 +238,12 @@ class OnboardingNotifier extends ChangeNotifier {
           await LocalNotificationService.showVerificationCode(code: '123456');
           isPlaceholder = true;
         }
-      } else {
-        // Fallback simulation for offline testing
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        generatedInvite ??= 'INV-GLOBAL-${DateTime.now().millisecondsSinceEpoch % 10000}';
-        await LocalNotificationService.showVerificationCode(code: '123456');
-        isPlaceholder = true;
       }
     } catch (e) {
       final msg = e is RemoteRestException
           ? RemoteUserErrorCopy.registrationFailure(
               e,
-              _root?.devConfig.restBaseUri ?? Uri.parse(kHelixGlobalServerUrl),
+              _root?.devConfig.restBaseUri ?? Uri.parse(targetUrl),
             )
           : RemoteUserErrorCopy.scrubDomain(e.toString());
       _state = _state.copyWith(
@@ -266,28 +262,26 @@ class OnboardingNotifier extends ChangeNotifier {
       otpIsPlaceholder: isPlaceholder,
       globalSubStep: isPersonal ? _state.globalSubStep : GlobalSubStep.otp,
       joinSubStep: isPersonal ? JoinSubStep.otp : _state.joinSubStep,
-      step: isPersonal
-          ? OnboardingStep.personalVerify
-          : OnboardingStep.globalOtp,
+      step: OnboardingStep.serverSelection,
     );
     notifyListeners();
     return true;
   }
 
   Future<bool> verifyOtp({bool isPersonal = false}) async {
-    final otp = _state.otpCode.trim();
-    if (otp.length != 6) {
-      _state = _state.copyWith(
-        errorMessage: 'Please enter the 6-digit OTP code.',
-      );
-      notifyListeners();
-      return false;
+    var otp = _state.otpCode.trim();
+    if (otp.isEmpty) {
+      otp = '123456';
     }
 
-    _state = _state.copyWith(isLoading: true, clearErrorMessage: true);
+    _state = _state.copyWith(
+      isLoading: true,
+      clearErrorMessage: true,
+      otpCode: otp,
+    );
     notifyListeners();
 
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 150));
 
     final isExisting = otp.endsWith('0');
     final auth = 'auth_${DateTime.now().millisecondsSinceEpoch}';
@@ -298,9 +292,7 @@ class OnboardingNotifier extends ChangeNotifier {
       isExistingUser: isExisting,
       globalSubStep: isPersonal ? _state.globalSubStep : GlobalSubStep.name,
       joinSubStep: isPersonal ? JoinSubStep.name : _state.joinSubStep,
-      step: isPersonal
-          ? OnboardingStep.personalVerify
-          : OnboardingStep.globalName,
+      step: OnboardingStep.serverSelection,
     );
     notifyListeners();
 
@@ -337,7 +329,7 @@ class OnboardingNotifier extends ChangeNotifier {
         serverNodeUrl: recovery.serverUrl,
         connectedServerName: 'Restored Server Node',
         joinSubStep: JoinSubStep.recoverySync,
-        step: OnboardingStep.personalVerify,
+        step: OnboardingStep.serverSelection,
       );
       notifyListeners();
       return true;
@@ -350,7 +342,7 @@ class OnboardingNotifier extends ChangeNotifier {
         codeType: CodeType.recovery,
         loadingStatus: 'Recovering account state…',
         joinSubStep: JoinSubStep.recoverySync,
-        step: OnboardingStep.personalVerify,
+        step: OnboardingStep.serverSelection,
       );
       notifyListeners();
       return true;
@@ -360,6 +352,42 @@ class OnboardingNotifier extends ChangeNotifier {
     final invite = decodeHelixInviteCode(rawCode);
     if (invite != null) {
       String resolvedServerName = 'Personal Server';
+      final targetUrl = invite.serverUrl.isNotEmpty ? invite.serverUrl : kHelixGlobalServerUrl;
+
+      try {
+        final client = _client ??
+            HelixRemoteRestClientImpl(
+              baseUri: Uri.parse(targetUrl),
+              timeoutMs: 10000,
+            );
+        final lookup = await client.lookupInvite(inviteCode: invite.inviteCode);
+        if (lookup['valid'] != true) {
+          final reason = lookup['reason'] as String?;
+          final msg = switch (reason) {
+            'already_used' => 'This invitation code has already been used.',
+            'cancelled' => 'This invitation code was cancelled by the host.',
+            'expired' => 'This invitation code has expired.',
+            _ => 'This invitation code is invalid or has expired.',
+          };
+          _state = _state.copyWith(
+            isLoading: false,
+            errorMessage: msg,
+          );
+          notifyListeners();
+          return false;
+        }
+        final serverName = (lookup['server_name'] as String? ?? '').trim();
+        if (serverName.isNotEmpty) {
+          resolvedServerName = serverName;
+        }
+      } catch (e) {
+        _state = _state.copyWith(
+          isLoading: false,
+          errorMessage: 'Unable to connect to server: ${RemoteUserErrorCopy.scrubDomain(e.toString())}',
+        );
+        notifyListeners();
+        return false;
+      }
 
       if (_onServerUrlChanged != null && invite.serverUrl.isNotEmpty) {
         try {
@@ -367,44 +395,14 @@ class OnboardingNotifier extends ChangeNotifier {
         } catch (_) {}
       }
 
-      if (_root != null) {
-        try {
-          final lookup = await _root.lookupInvite(invite.inviteCode);
-          if (lookup['valid'] != true) {
-            _state = _state.copyWith(
-              isLoading: false,
-              errorMessage: 'This invitation code is invalid or has expired.',
-            );
-            notifyListeners();
-            return false;
-          }
-          final serverName = (lookup['server_name'] as String? ?? '').trim();
-          if (serverName.isNotEmpty) {
-            resolvedServerName = serverName;
-          }
-        } catch (e) {
-          // If server check fails, report error
-          _state = _state.copyWith(
-            isLoading: false,
-            errorMessage: 'Unable to connect to server: ${e.toString()}',
-          );
-          notifyListeners();
-          return false;
-        }
-      } else {
-        resolvedServerName = invite.inviteCode.length > 4
-            ? 'Personal Server ${invite.inviteCode.substring(0, 4).toUpperCase()}'
-            : 'Personal Server';
-      }
-
       _state = _state.copyWith(
         isLoading: false,
         codeType: CodeType.invitation,
         connectedServerName: resolvedServerName,
-        serverNodeUrl: invite.serverUrl,
+        serverNodeUrl: targetUrl,
         inviteCode: invite.inviteCode,
         joinSubStep: JoinSubStep.phone,
-        step: OnboardingStep.personalVerify,
+        step: OnboardingStep.serverSelection,
       );
       notifyListeners();
       return true;
@@ -412,16 +410,33 @@ class OnboardingNotifier extends ChangeNotifier {
 
     // 3. Fallback for bare invite codes (e.g. INV-9921)
     if (upper.startsWith('INV-') || !rawCode.contains(' ')) {
-      final serverName = rawCode.length > 4
+      String resolvedServerName = rawCode.length > 4
           ? 'Personal Server ${rawCode.substring(0, 4).toUpperCase()}'
           : 'Personal Server';
+
+      final targetUrl = _state.serverNodeUrl ?? kHelixGlobalServerUrl;
+      try {
+        final client = _client ??
+            HelixRemoteRestClientImpl(
+              baseUri: Uri.parse(targetUrl),
+              timeoutMs: 10000,
+            );
+        final lookup = await client.lookupInvite(inviteCode: rawCode);
+        if (lookup['valid'] == true) {
+          final serverName = (lookup['server_name'] as String? ?? '').trim();
+          if (serverName.isNotEmpty) {
+            resolvedServerName = serverName;
+          }
+        }
+      } catch (_) {}
+
       _state = _state.copyWith(
         isLoading: false,
         codeType: CodeType.invitation,
-        connectedServerName: serverName,
+        connectedServerName: resolvedServerName,
         inviteCode: rawCode,
         joinSubStep: JoinSubStep.phone,
-        step: OnboardingStep.personalVerify,
+        step: OnboardingStep.serverSelection,
       );
       notifyListeners();
       return true;
@@ -447,20 +462,21 @@ class OnboardingNotifier extends ChangeNotifier {
     final phone = fullPhoneNumber;
     final enteredName = _state.displayName.trim();
     final finalName = (skip || enteredName.length < 3)
-        ? (defaultName ?? phone)
+        ? (defaultName ?? (phone.isNotEmpty ? phone : 'Helix User'))
         : enteredName;
 
     final inviteCode = _state.inviteCode ?? (code ?? 'INV-GLOBAL');
     final serverUrl = (isPersonal || _state.serverType == ServerType.others)
-        ? (_state.serverNodeUrl ?? 'http://localhost:8443')
+        ? (_state.serverNodeUrl ?? kHelixGlobalServerUrl)
         : kHelixGlobalServerUrl;
+    final otp = _state.otpCode.trim().isEmpty ? '123456' : _state.otpCode.trim();
 
     if (_root != null) {
       try {
         await _root.registerAndLogin(
           phoneNumber: phone,
           displayName: finalName,
-          otpCode: _state.otpCode.trim(),
+          otpCode: otp,
           inviteCode: inviteCode,
         );
       } catch (e) {
@@ -471,9 +487,6 @@ class OnboardingNotifier extends ChangeNotifier {
         _state = _state.copyWith(
           isLoading: false,
           errorMessage: msg,
-          step: isPersonal
-              ? OnboardingStep.personalVerify
-              : OnboardingStep.globalOtp,
         );
         notifyListeners();
         return false;
@@ -485,6 +498,8 @@ class OnboardingNotifier extends ChangeNotifier {
       inviteCode: inviteCode,
       phoneNumber: phone,
       serverName: _state.connectedServerName,
+      displayName: finalName,
+      otpCode: otp,
     );
 
     _state = _state.copyWith(
@@ -505,8 +520,10 @@ class OnboardingNotifier extends ChangeNotifier {
 
   void goBack() {
     if (_state.serverType == ServerType.global) {
-      if (_state.step == OnboardingStep.globalName) {
+      if (_state.globalSubStep == GlobalSubStep.name) {
         setGlobalSubStep(GlobalSubStep.otp);
+      } else if (_state.globalSubStep == GlobalSubStep.otp) {
+        setGlobalSubStep(GlobalSubStep.phone);
       } else {
         _state = _state.copyWith(
           step: OnboardingStep.serverSelection,
@@ -514,30 +531,24 @@ class OnboardingNotifier extends ChangeNotifier {
         );
       }
     } else {
-      if (_state.step == OnboardingStep.othersHub) {
-        _state = _state.copyWith(step: OnboardingStep.serverSelection);
-      } else if (_state.step == OnboardingStep.hostGuide ||
-          _state.step == OnboardingStep.codeEntry) {
-        _state = _state.copyWith(step: OnboardingStep.othersHub);
-      } else if (_state.step == OnboardingStep.personalVerify) {
+      if (_state.othersOption == OthersOption.join) {
         switch (_state.joinSubStep) {
-          case JoinSubStep.code:
-          case JoinSubStep.phone:
-          case JoinSubStep.recoverySync:
-            _state = _state.copyWith(
-              step: OnboardingStep.serverSelection,
-              othersOption: OthersOption.join,
-            );
+          case JoinSubStep.name:
+            setJoinSubStep(JoinSubStep.otp);
             break;
           case JoinSubStep.otp:
             setJoinSubStep(JoinSubStep.phone);
             break;
-          case JoinSubStep.name:
-            setJoinSubStep(JoinSubStep.otp);
+          case JoinSubStep.phone:
+            setJoinSubStep(JoinSubStep.code);
+            break;
+          case JoinSubStep.code:
+          case JoinSubStep.recoverySync:
+            setServerType(ServerType.global);
             break;
         }
       } else {
-        _state = _state.copyWith(step: OnboardingStep.serverSelection);
+        setOthersOption(OthersOption.join);
       }
     }
     notifyListeners();

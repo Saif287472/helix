@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import 'package:helix_remote/app/helix_code.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
 class ServerSelectionStep extends StatefulWidget {
@@ -15,6 +14,14 @@ class ServerSelectionStep extends StatefulWidget {
     this.onCountryCodeChanged,
     this.onPhoneChanged,
     this.onRequestOtp,
+    this.otpCode = '',
+    this.onOtpChanged,
+    this.onVerifyOtp,
+    this.displayName = '',
+    this.onDisplayNameChanged,
+    this.onCompleteSetup,
+    this.rememberDevice = false,
+    this.onRememberDeviceChanged,
     this.codeString = '',
     this.showInfoPopover = false,
     this.onCodeChanged,
@@ -26,6 +33,9 @@ class ServerSelectionStep extends StatefulWidget {
     this.errorMessage,
     this.onProceed,
     required this.onContinueOffline,
+    this.globalSubStep = GlobalSubStep.phone,
+    this.joinSubStep = JoinSubStep.code,
+    this.connectedServerName,
   });
 
   final ServerType selectedType;
@@ -37,6 +47,14 @@ class ServerSelectionStep extends StatefulWidget {
   final ValueChanged<String>? onCountryCodeChanged;
   final ValueChanged<String>? onPhoneChanged;
   final VoidCallback? onRequestOtp;
+  final String otpCode;
+  final ValueChanged<String>? onOtpChanged;
+  final VoidCallback? onVerifyOtp;
+  final String displayName;
+  final ValueChanged<String>? onDisplayNameChanged;
+  final void Function({bool skip})? onCompleteSetup;
+  final bool rememberDevice;
+  final ValueChanged<bool>? onRememberDeviceChanged;
   final String codeString;
   final bool showInfoPopover;
   final ValueChanged<String>? onCodeChanged;
@@ -48,6 +66,9 @@ class ServerSelectionStep extends StatefulWidget {
   final String? errorMessage;
   final VoidCallback? onProceed;
   final VoidCallback onContinueOffline;
+  final GlobalSubStep globalSubStep;
+  final JoinSubStep joinSubStep;
+  final String? connectedServerName;
 
   @override
   State<ServerSelectionStep> createState() => _ServerSelectionStepState();
@@ -56,6 +77,10 @@ class ServerSelectionStep extends StatefulWidget {
 class _ServerSelectionStepState extends State<ServerSelectionStep> {
   late final TextEditingController _phoneController;
   late final TextEditingController _codeController;
+  late final TextEditingController _otpController;
+  late final TextEditingController _nameController;
+  late final List<TextEditingController> _otpDigitControllers;
+  late final List<FocusNode> _otpFocusNodes;
 
   static const List<Map<String, String>> _countries = [
     {'code': '+880', 'label': '+880 (BD)'},
@@ -73,6 +98,13 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
     super.initState();
     _phoneController = TextEditingController(text: widget.phoneNumber);
     _codeController = TextEditingController(text: widget.codeString);
+    _otpController = TextEditingController(text: widget.otpCode);
+    _nameController = TextEditingController(text: widget.displayName);
+    _otpDigitControllers = List.generate(6, (i) {
+      final char = i < widget.otpCode.length ? widget.otpCode[i] : '';
+      return TextEditingController(text: char);
+    });
+    _otpFocusNodes = List.generate(6, (_) => FocusNode());
   }
 
   @override
@@ -86,25 +118,61 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
         widget.codeString != _codeController.text) {
       _codeController.text = widget.codeString;
     }
+    if (widget.otpCode != oldWidget.otpCode) {
+      if (widget.otpCode != _otpController.text) {
+        _otpController.text = widget.otpCode;
+      }
+      for (var i = 0; i < 6; i++) {
+        final char = i < widget.otpCode.length ? widget.otpCode[i] : '';
+        if (_otpDigitControllers[i].text != char) {
+          _otpDigitControllers[i].text = char;
+        }
+      }
+    }
+    if (widget.displayName != oldWidget.displayName &&
+        widget.displayName != _nameController.text) {
+      _nameController.text = widget.displayName;
+    }
   }
 
   @override
   void dispose() {
     _phoneController.dispose();
     _codeController.dispose();
+    _otpController.dispose();
+    _nameController.dispose();
+    for (final c in _otpDigitControllers) {
+      c.dispose();
+    }
+    for (final f in _otpFocusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
-  void _handleCodeChanged(String value) {
-    final decoded = decodeHelixInviteCode(value);
-    if (decoded != null && decoded.inviteCode != value) {
-      _codeController.text = decoded.inviteCode;
-      _codeController.selection =
-          TextSelection.collapsed(offset: decoded.inviteCode.length);
-      widget.onCodeChanged?.call(decoded.inviteCode);
-    } else {
-      widget.onCodeChanged?.call(value);
+  void _onOtpDigitChanged(int index, String value) {
+    if (value.isNotEmpty) {
+      if (value.length > 1) {
+        final digitsOnly = value.replaceAll(RegExp(r'[^\d]'), '');
+        final chars = digitsOnly.split('');
+        for (var j = 0; j < 6; j++) {
+          if (j < chars.length) {
+            _otpDigitControllers[j].text = chars[j];
+          }
+        }
+        final nextIndex = (chars.length).clamp(0, 5);
+        _otpFocusNodes[nextIndex].requestFocus();
+      } else if (index < 5) {
+        _otpFocusNodes[index + 1].requestFocus();
+      }
     }
+    final combined = _otpDigitControllers.map((c) => c.text).join();
+    _otpController.text = combined;
+    widget.onOtpChanged?.call(combined);
+  }
+
+  void _handleCodeChanged(String value) {
+    widget.onCodeChanged?.call(value);
   }
 
   @override
@@ -118,58 +186,47 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
           // Centered Header with Shield Icon
           Center(
             child: Container(
-              width: 58,
-              height: 58,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFFEFF6FF),
-                border: Border.all(color: const Color(0xFFDBEAFE), width: 1.5),
+                border: Border.all(color: const Color(0xFFDBEAFE)),
               ),
               child: const Icon(
-                Icons.shield,
-                size: 34,
-                color: Color(0xFF3B82F6),
+                Icons.shield_outlined,
+                color: Color(0xFF2563EB),
+                size: 28,
               ),
             ),
           ),
           const SizedBox(height: HelixSpace.sm),
           Text(
-            "Helix",
+            "Connect to Helix",
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: 22,
               color: const Color(0xFF0F172A),
             ),
           ),
           const SizedBox(height: HelixSpace.xxs),
           Text(
-            "The privacy you deserve",
+            "Choose a server to connect to",
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              fontSize: 15,
+              fontSize: 14,
               color: const Color(0xFF64748B),
             ),
           ),
           const SizedBox(height: HelixSpace.md),
-          Text(
-            "How do you want to proceed?",
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF334155),
-            ),
-          ),
-          const SizedBox(height: HelixSpace.md),
 
-          // Primary Segmented Tabs: Helix Global Server | Others
+          // Main Tabs: Helix Global Server | Others
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Row(
@@ -191,29 +248,34 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
               ],
             ),
           ),
-          const SizedBox(height: HelixSpace.lg),
+          const SizedBox(height: HelixSpace.md),
 
-          // Error banner if any
-          if (widget.errorMessage != null) ...[
+          // Active Panel Content
+          if (widget.selectedType == ServerType.global)
+            _buildGlobalContent(context)
+          else
+            _buildOthersContent(context),
+
+          // Error Message Banner (if any)
+          if (widget.errorMessage != null && widget.errorMessage!.isNotEmpty) ...[
+            const SizedBox(height: HelixSpace.sm),
             Container(
-              padding: HelixInsets.all(HelixSpace.sm),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
+                color: const Color(0xFFFEF2F2),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: theme.colorScheme.error.withValues(alpha: 0.4),
-                ),
+                border: Border.all(color: const Color(0xFFFECACA)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.error_outline,
-                      size: 20, color: theme.colorScheme.error),
+                  const Icon(Icons.error_outline, size: 18, color: Color(0xFFDC2626)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       widget.errorMessage!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.error,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFFB91C1C),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -221,208 +283,59 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
                 ],
               ),
             ),
-            const SizedBox(height: HelixSpace.md),
           ],
 
-          // Content based on Selected Server Type
-          if (widget.selectedType == ServerType.global)
-            _buildGlobalServerContent(context)
-          else
-            _buildOthersContent(context),
-
+          const SizedBox(height: HelixSpace.md),
+          const Divider(color: Color(0xFFE2E8F0), height: 1),
           const SizedBox(height: HelixSpace.sm),
-          TextButton(
-            onPressed: widget.onContinueOffline,
-            child: const Text(
-              "Continue offline for now",
-              style: TextStyle(color: Color(0xFF64748B)),
+
+          // Continue Offline Button
+          Center(
+            child: TextButton(
+              onPressed: widget.onContinueOffline,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+              child: const Text(
+                "Continue offline for now",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
+                ),
+              ),
             ),
           ),
+
+          // Legal Footer
+          const SizedBox(height: HelixSpace.xs),
+          const Text(
+            "By continuing, you agree to Helix Terms of Service and Privacy Policy.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              color: Color(0xFF94A3B8),
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: HelixSpace.md),
         ],
       ),
     );
   }
 
   // ===========================================================================
-  // PANEL 1: HELIX GLOBAL SERVER CONTENT
+  // PANEL 1: GLOBAL SERVER INLINE CONTENT
   // ===========================================================================
-  Widget _buildGlobalServerContent(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Connected to Helix Global Server Banner
-        Container(
-          padding: HelixInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFECFDF5),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFA7F3D0)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFF10B981),
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Flexible(
-                child: Text(
-                  "Connected to Helix Global Server",
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF059669),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: HelixSpace.md),
-        Text(
-          "Please enter your phone number",
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: 17,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
-        const SizedBox(height: HelixSpace.xxs),
-        Text(
-          "We'll send a one-time verification code via SMS.",
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontSize: 14,
-            color: const Color(0xFF64748B),
-          ),
-        ),
-        const SizedBox(height: HelixSpace.md),
-        const Text(
-          "PHONE NUMBER",
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-            color: Color(0xFF94A3B8),
-          ),
-        ),
-        const SizedBox(height: HelixSpace.xxs),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: HelixInsets.symmetric(horizontal: 10, vertical: 2),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _countries.any((c) => c['code'] == widget.countryCode)
-                      ? widget.countryCode
-                      : '+880',
-                  items: _countries.map((c) {
-                    return DropdownMenuItem<String>(
-                      value: c['code'],
-                      child: Text(
-                        c['label']!,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      widget.onCountryCodeChanged?.call(val);
-                    }
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(width: HelixSpace.xs),
-            Expanded(
-              child: TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                autofillHints: const [AutofillHints.telephoneNumber],
-                decoration: InputDecoration(
-                  hintText: '1700 000000',
-                  filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
-                  errorMaxLines: 3,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                        color: Color(0xFF2563EB), width: 1.5),
-                  ),
-                ),
-                onChanged: widget.onPhoneChanged,
-                onFieldSubmitted: (_) {
-                  if (widget.onRequestOtp != null) {
-                    widget.onRequestOtp!();
-                  } else {
-                    widget.onProceed?.call();
-                  }
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: HelixSpace.lg),
-        FilledButton(
-          onPressed: widget.isLoading
-              ? null
-              : () {
-                  if (widget.onRequestOtp != null) {
-                    widget.onRequestOtp!();
-                  } else {
-                    widget.onProceed?.call();
-                  }
-                },
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF2563EB),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            elevation: 1,
-          ),
-          child: widget.isLoading
-              ? const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Text(
-                  "Request OTP",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-        ),
-      ],
-    );
+  Widget _buildGlobalContent(BuildContext context) {
+    switch (widget.globalSubStep) {
+      case GlobalSubStep.phone:
+        return _buildPhoneInputSection(context, isPersonal: false);
+      case GlobalSubStep.otp:
+        return _buildOtpInputSection(context, isPersonal: false);
+      case GlobalSubStep.name:
+        return _buildNameInputSection(context, isPersonal: false);
+    }
   }
 
   // ===========================================================================
@@ -432,7 +345,6 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Prompt
         const Text(
           "Choose a custom server option:",
           textAlign: TextAlign.center,
@@ -484,8 +396,91 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
     );
   }
 
-  // Sub-panel: Join a Personal Server (Code Entry)
   Widget _buildJoinSubPanel(BuildContext context) {
+    switch (widget.joinSubStep) {
+      case JoinSubStep.code:
+        return _buildJoinCodeContent(context);
+      case JoinSubStep.phone:
+        return _buildPhoneInputSection(context, isPersonal: true);
+      case JoinSubStep.otp:
+        return _buildOtpInputSection(context, isPersonal: true);
+      case JoinSubStep.name:
+        return _buildNameInputSection(context, isPersonal: true);
+      case JoinSubStep.recoverySync:
+        return _buildJoinRecoveryContent(context);
+    }
+  }
+
+  // ===========================================================================
+  // SUB-STEP BUILDERS
+  // ===========================================================================
+
+  Widget _buildConnectedServerBanner(String serverName) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFF10B981),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              "Connected to $serverName",
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF059669),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhoneVerifiedBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle, size: 16, color: Color(0xFF16A34A)),
+          SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              "Phone Number Verified",
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF15803D),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 1. Code Entry Section
+  Widget _buildJoinCodeContent(BuildContext context) {
     final theme = Theme.of(context);
     final upper = widget.codeString.trim().toUpperCase();
     final isRecovery = upper.startsWith('HLX-REC-') ||
@@ -534,11 +529,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
           ],
         ),
 
-        // Collapsible Info Popover Box
         if (widget.showInfoPopover) ...[
           const SizedBox(height: HelixSpace.sm),
           Container(
-            padding: HelixInsets.all(HelixSpace.sm),
+            padding: const EdgeInsets.all(HelixSpace.sm),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(12),
@@ -608,7 +602,7 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             color: Color(0xFF0F172A),
           ),
           decoration: InputDecoration(
-            hintText: 'INV-8829-X OR REC-9912-K',
+            hintText: 'HLX-INV-ey... OR REC-9912-K',
             hintStyle: const TextStyle(
               fontFamily: 'monospace',
               color: Color(0xFF94A3B8),
@@ -617,7 +611,6 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             ),
             filled: true,
             fillColor: const Color(0xFFF8FAFC),
-            errorMaxLines: 3,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
             border: OutlineInputBorder(
@@ -630,8 +623,8 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: Color(0xFF2563EB), width: 1.5),
+              borderSide:
+                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
             ),
           ),
           onChanged: _handleCodeChanged,
@@ -724,10 +717,452 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
     );
   }
 
+  // 2. Phone Input Section
+  Widget _buildPhoneInputSection(BuildContext context, {required bool isPersonal}) {
+    final theme = Theme.of(context);
+    final serverName = isPersonal
+        ? (widget.connectedServerName ?? 'Personal Server')
+        : 'Helix Global Server';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildConnectedServerBanner(serverName),
+        const SizedBox(height: HelixSpace.md),
+        Text(
+          "Please enter your phone number",
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.xxs),
+        Text(
+          "We'll send a one-time verification code via SMS.",
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            color: const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.md),
+        const Text(
+          "PHONE NUMBER",
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+            color: Color(0xFF94A3B8),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.xxs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _countries.any((c) => c['code'] == widget.countryCode)
+                      ? widget.countryCode
+                      : '+880',
+                  items: _countries.map((c) {
+                    return DropdownMenuItem<String>(
+                      value: c['code'],
+                      child: Text(
+                        c['label']!,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      widget.onCountryCodeChanged?.call(val);
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: HelixSpace.xs),
+            Expanded(
+              child: TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                decoration: InputDecoration(
+                  hintText: '1700 000000',
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                        color: Color(0xFF2563EB), width: 1.5),
+                  ),
+                ),
+                onChanged: widget.onPhoneChanged,
+                onFieldSubmitted: (_) => widget.onRequestOtp?.call(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: HelixSpace.md),
+        Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: widget.rememberDevice,
+                onChanged: (val) =>
+                    widget.onRememberDeviceChanged?.call(val ?? false),
+                activeColor: const Color(0xFF2563EB),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => widget.onRememberDeviceChanged
+                  ?.call(!widget.rememberDevice),
+              child: const Text(
+                "Remember this device",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF334155),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: HelixSpace.lg),
+        FilledButton(
+          onPressed: widget.isLoading ? null : widget.onRequestOtp,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 1,
+          ),
+          child: widget.isLoading
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  "Request OTP",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  // 3. OTP Input Section
+  Widget _buildOtpInputSection(BuildContext context, {required bool isPersonal}) {
+    final theme = Theme.of(context);
+    final serverName = isPersonal
+        ? (widget.connectedServerName ?? 'Personal Server')
+        : 'Helix Global Server';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildConnectedServerBanner(serverName),
+        const SizedBox(height: HelixSpace.md),
+        Text(
+          "Enter verification code",
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.xxs),
+        Text(
+          "We've sent a 6-digit verification code to ${widget.countryCode} ${widget.phoneNumber}.",
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            color: const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.md),
+        const Text(
+          "VERIFICATION CODE",
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+            color: Color(0xFF94A3B8),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.xxs),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(6, (index) {
+            return SizedBox(
+              width: 44,
+              height: 52,
+              child: TextField(
+                controller: _otpDigitControllers[index],
+                focusNode: _otpFocusNodes[index],
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                maxLength: 1,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                ),
+                decoration: InputDecoration(
+                  counterText: '',
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                        color: Color(0xFF2563EB), width: 1.5),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                ),
+                onChanged: (val) => _onOtpDigitChanged(index, val),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: HelixSpace.xs),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: widget.isLoading ? null : widget.onRequestOtp,
+            child: const Text(
+              "Didn't receive code? Resend",
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2563EB),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.sm),
+        FilledButton(
+          onPressed: widget.isLoading ? null : widget.onVerifyOtp,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 1,
+          ),
+          child: widget.isLoading
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  "Verify",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  // 4. Name Input Section
+  Widget _buildNameInputSection(BuildContext context, {required bool isPersonal}) {
+    final theme = Theme.of(context);
+    final serverName = isPersonal
+        ? (widget.connectedServerName ?? 'Personal Server')
+        : 'Helix Global Server';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildConnectedServerBanner(serverName),
+        const SizedBox(height: HelixSpace.xs),
+        _buildPhoneVerifiedBanner(),
+        const SizedBox(height: HelixSpace.md),
+        Text(
+          "Complete your profile",
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.xxs),
+        Text(
+          "Please enter your name to finish setting up your account.",
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            color: const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.md),
+        const Text(
+          "DISPLAY NAME",
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+            color: Color(0xFF94A3B8),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.xxs),
+        TextFormField(
+          controller: _nameController,
+          decoration: InputDecoration(
+            hintText: 'e.g. Alex Miller',
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+            ),
+          ),
+          onChanged: widget.onDisplayNameChanged,
+          onFieldSubmitted: (_) =>
+              widget.onCompleteSetup?.call(skip: false),
+        ),
+        const SizedBox(height: HelixSpace.lg),
+        FilledButton(
+          onPressed: widget.isLoading
+              ? null
+              : () => widget.onCompleteSetup?.call(skip: false),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 1,
+          ),
+          child: widget.isLoading
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  "Proceed to Helix",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+        ),
+        const SizedBox(height: HelixSpace.xs),
+        TextButton(
+          onPressed: widget.isLoading
+              ? null
+              : () => widget.onCompleteSetup?.call(skip: true),
+          child: const Text(
+            "Skip",
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 5. Recovery Section
+  Widget _buildJoinRecoveryContent(BuildContext context) {
+    final theme = Theme.of(context);
+    final serverName = widget.connectedServerName ?? 'Personal Server';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildConnectedServerBanner(serverName),
+        const SizedBox(height: HelixSpace.md),
+        Text(
+          "Restoring your account",
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.xxs),
+        const Text(
+          "We are restoring your keys and connecting to your server.",
+          style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+        ),
+        const SizedBox(height: HelixSpace.xl),
+        const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFF2563EB),
+          ),
+        ),
+        const SizedBox(height: HelixSpace.xl),
+      ],
+    );
+  }
+
   // Sub-panel: Host your own server (Guide)
   Widget _buildHostSubPanel(BuildContext context) {
     return Container(
-      padding: HelixInsets.all(HelixSpace.md),
+      padding: const EdgeInsets.all(HelixSpace.md),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),

@@ -11,6 +11,8 @@ class ServerInviteChoice {
     required this.inviteCode,
     this.phoneNumber,
     this.serverName,
+    this.displayName,
+    this.otpCode,
   });
 
   final String serverUrl;
@@ -23,6 +25,12 @@ class ServerInviteChoice {
   /// E.164 phone number, or null for the Helix Global path (which doesn't
   /// collect one here - there's no "which server" step to attach it to).
   final String? phoneNumber;
+
+  /// Display name entered during registration.
+  final String? displayName;
+
+  /// OTP code entered or bypassed during registration.
+  final String? otpCode;
 }
 
 /// "Personal server" entry screen. Wraps [SetupScreen] pre-configured

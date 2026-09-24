@@ -134,7 +134,42 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
       _pendingInviteCode = choice.inviteCode;
       _pendingPhoneNumber = choice.phoneNumber;
       try {
-        await _onConnectUrl(choice.serverUrl);
+        await ServerUrlStore.instance.save(choice.serverUrl);
+        _currentServerUrl = choice.serverUrl;
+        final config = RemoteDevelopmentConfig.fromServerUrl(
+          choice.serverUrl,
+          databaseDirectory: _dbDir,
+          attachmentCacheDir: _cacheDir,
+        );
+        final root = RemoteCompositionRoot.production(
+          databaseDirectory: _dbDir,
+          devConfig: config,
+        );
+        await root.initialize();
+        if (choice.phoneNumber != null &&
+            choice.phoneNumber!.isNotEmpty &&
+            choice.displayName != null &&
+            choice.displayName!.isNotEmpty) {
+          try {
+            await root.registerAndLogin(
+              phoneNumber: choice.phoneNumber!,
+              displayName: choice.displayName!,
+              otpCode: (choice.otpCode != null && choice.otpCode!.isNotEmpty)
+                  ? choice.otpCode!
+                  : '123456',
+              inviteCode: choice.inviteCode,
+            );
+          } catch (e) {
+            final restored = await root.tryRestoreSession();
+            if (!restored) rethrow;
+          }
+        }
+        if (mounted) {
+          setState(() {
+            _root = root;
+            _bootState = _BootState.running;
+          });
+        }
       } catch (e) {
         _pendingInviteCode = null;
         _pendingPhoneNumber = null;

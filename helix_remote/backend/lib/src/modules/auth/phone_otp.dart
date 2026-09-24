@@ -156,6 +156,13 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
     required String code,
   }) {
     final challenge = db.getLatestOtpChallenge(phoneHash);
+    // When SMS provider is not configured, totally bypass OTP verification.
+    if (!smsProvider.isConfigured) {
+      if (challenge != null) {
+        return (challengeId: challenge['challenge_id'] as String, error: null);
+      }
+      return (challengeId: 'bypass_challenge', error: null);
+    }
     if (challenge == null) {
       return (challengeId: null, error: 'No verification code was requested');
     }
@@ -170,9 +177,6 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
       return (challengeId: null, error: 'Too many incorrect attempts');
     }
     if (challenge['code_hash'] != _hashOtpCode(code)) {
-      if (!smsProvider.isConfigured && (code == '123456' || code == '000000')) {
-        return (challengeId: challenge['challenge_id'] as String, error: null);
-      }
       db.incrementOtpAttempts(challenge['challenge_id'] as String);
       return (challengeId: null, error: 'Incorrect verification code');
     }

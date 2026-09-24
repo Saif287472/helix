@@ -106,7 +106,9 @@ class _SetupScreenState extends State<SetupScreen> {
                 builder: (context, _) {
                   final state = _notifier.state;
                   final showBack = state.step != OnboardingStep.splash &&
-                      state.step != OnboardingStep.serverSelection;
+                      (state.step != OnboardingStep.serverSelection ||
+                       (state.serverType == ServerType.global && state.globalSubStep != GlobalSubStep.phone) ||
+                       (state.serverType == ServerType.others && state.othersOption == OthersOption.join && state.joinSubStep != JoinSubStep.code));
 
                   return Column(
                     children: [
@@ -144,6 +146,8 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Widget _buildStepContent(BuildContext context, OnboardingState state) {
+    final isPersonal = state.serverType == ServerType.others;
+
     switch (state.step) {
       case OnboardingStep.splash:
         return SplashStep(statusText: state.loadingStatus);
@@ -158,7 +162,16 @@ class _SetupScreenState extends State<SetupScreen> {
           phoneNumber: state.phoneNumber,
           onCountryCodeChanged: _notifier.updateCountryCode,
           onPhoneChanged: _notifier.updatePhoneNumber,
-          onRequestOtp: () => _notifier.requestOtp(),
+          onRequestOtp: () => _notifier.requestOtp(isPersonal: isPersonal),
+          otpCode: state.otpCode,
+          onOtpChanged: _notifier.updateOtpCode,
+          onVerifyOtp: () => _notifier.verifyOtp(isPersonal: isPersonal),
+          displayName: state.displayName,
+          onDisplayNameChanged: _notifier.updateDisplayName,
+          onCompleteSetup: ({bool skip = false}) =>
+              _notifier.completeSetup(skip: skip, isPersonal: isPersonal),
+          rememberDevice: state.rememberDevice,
+          onRememberDeviceChanged: _notifier.toggleRememberDevice,
           codeString: state.codeString,
           showInfoPopover: state.showCodeInfoPopover,
           onCodeChanged: _notifier.updateCodeString,
@@ -170,6 +183,9 @@ class _SetupScreenState extends State<SetupScreen> {
           errorMessage: state.errorMessage,
           onProceed: _notifier.proceedFromServerSelection,
           onContinueOffline: _notifier.chooseOffline,
+          globalSubStep: state.globalSubStep,
+          joinSubStep: state.joinSubStep,
+          connectedServerName: state.connectedServerName,
         );
 
       case OnboardingStep.globalPhone:

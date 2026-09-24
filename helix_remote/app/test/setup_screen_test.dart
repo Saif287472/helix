@@ -23,7 +23,7 @@ void main() {
       notifier.updateState((s) => s.copyWith(step: OnboardingStep.serverSelection));
 
       notifier.proceedFromServerSelection();
-      expect(notifier.state.step, OnboardingStep.globalPhone);
+      expect(notifier.state.globalSubStep, GlobalSubStep.phone);
 
       // Validation failure on short phone
       notifier.updatePhoneNumber('12');
@@ -35,18 +35,13 @@ void main() {
       notifier.updatePhoneNumber('1712345678');
       final successOtp = await notifier.requestOtp();
       expect(successOtp, isTrue);
-      expect(notifier.state.step, OnboardingStep.globalOtp);
+      expect(notifier.state.globalSubStep, GlobalSubStep.otp);
 
-      // OTP validation failure
+      // OTP verification bypass - allows any code or empty
       notifier.updateOtpCode('123');
-      final failVerify = await notifier.verifyOtp();
-      expect(failVerify, isFalse);
-
-      // Valid OTP for new user (doesn't end with 0)
-      notifier.updateOtpCode('123456');
-      final successVerify = await notifier.verifyOtp();
-      expect(successVerify, isTrue);
-      expect(notifier.state.step, OnboardingStep.globalName);
+      final bypassVerify = await notifier.verifyOtp();
+      expect(bypassVerify, isTrue);
+      expect(notifier.state.globalSubStep, GlobalSubStep.name);
 
       // Complete setup
       notifier.updateDisplayName('Alice');
@@ -64,41 +59,39 @@ void main() {
         serverType: ServerType.others,
       ));
 
-      notifier.proceedFromServerSelection();
-      expect(notifier.state.step, OnboardingStep.othersHub);
-
-      // Host guide
+      // Sub-tab Host guide
       notifier.setOthersOption(OthersOption.host);
-      expect(notifier.state.step, OnboardingStep.hostGuide);
+      expect(notifier.state.othersOption, OthersOption.host);
       expect(notifier.state.hostGuideStep, 0);
 
       notifier.updateHostGuideStep(2);
       expect(notifier.state.hostGuideStep, 2);
 
-      // Back to options
-      notifier.goBack();
-      expect(notifier.state.step, OnboardingStep.othersHub);
-
-      // Join personal server
+      // Sub-tab Join personal server
       notifier.setOthersOption(OthersOption.join);
-      expect(notifier.state.step, OnboardingStep.codeEntry);
+      expect(notifier.state.othersOption, OthersOption.join);
+      expect(notifier.state.joinSubStep, JoinSubStep.code);
 
       notifier.updateCodeString('INV-9921');
       final ok = await notifier.resolveCode();
       expect(ok, isTrue);
       expect(notifier.state.codeType, CodeType.invitation);
-      expect(notifier.state.step, OnboardingStep.personalVerify);
+      expect(notifier.state.joinSubStep, JoinSubStep.phone);
     });
 
     test('Recovery code routing', () async {
       final notifier = OnboardingNotifier(autoStartLaunch: false);
-      notifier.updateState((s) => s.copyWith(step: OnboardingStep.codeEntry));
+      notifier.updateState((s) => s.copyWith(
+        step: OnboardingStep.serverSelection,
+        serverType: ServerType.others,
+        othersOption: OthersOption.join,
+      ));
 
       notifier.updateCodeString('REC-1122-RESTORE');
       final ok = await notifier.resolveCode();
       expect(ok, isTrue);
       expect(notifier.state.codeType, CodeType.recovery);
-      expect(notifier.state.step, OnboardingStep.personalVerify);
+      expect(notifier.state.joinSubStep, JoinSubStep.recoverySync);
     });
 
     test('continue offline choice', () {
@@ -196,7 +189,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
 
-      expect(find.text('How do you want to proceed?'), findsOneWidget);
+      expect(find.text('Please enter your phone number'), findsOneWidget);
     });
 
     testWidgets('renders Others tab with segmented sub-tabs and code entry', (
