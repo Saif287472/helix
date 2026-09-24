@@ -22,7 +22,7 @@ class LoginScreen extends StatefulWidget {
   final bool needsSetup;
   final VoidCallback onSignIn;
   final ValueChanged<String>? onSetupPassword;
-  final VoidCallback? onCheckUrl;
+  final Future<void> Function()? onCheckUrl;
   final VoidCallback onOpenGuide;
 
   @override
