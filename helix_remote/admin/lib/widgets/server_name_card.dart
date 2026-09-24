@@ -1,8 +1,6 @@
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 
 import '../admin_client.dart';
-import '../theme/app_theme.dart';
 
 /// Editor for the server's display name - the one setting on the Config
 /// screen that the server's own users actually see.

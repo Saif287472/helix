@@ -204,7 +204,7 @@ class _LogsTabState extends State<LogsTab> {
               ),
               Switch(
                 value: widget.autoRefreshEnabled,
-                activeColor: const Color(0xFF2563EB),
+                activeThumbColor: const Color(0xFF2563EB),
                 onChanged: widget.onAutoRefreshChanged,
               ),
             ],

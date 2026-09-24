@@ -172,7 +172,7 @@ class _ConfigTabState extends State<ConfigTab> {
                     ),
                     Switch(
                       value: worldwideEnabled,
-                      activeColor: const Color(0xFF2563EB),
+                      activeThumbColor: const Color(0xFF2563EB),
                       onChanged: widget.onSetWorldwideMode,
                     ),
                   ],
@@ -254,7 +254,7 @@ class _ConfigTabState extends State<ConfigTab> {
                     ),
                     Switch(
                       value: _appLockEnabled,
-                      activeColor: const Color(0xFF2563EB),
+                      activeThumbColor: const Color(0xFF2563EB),
                       onChanged: (val) {
                         setState(() => _appLockEnabled = val);
                         widget.onAppLockChanged?.call(val);
@@ -462,7 +462,7 @@ class _ConfigTabState extends State<ConfigTab> {
                     ),
                     Switch(
                       value: _maintenanceMode,
-                      activeColor: const Color(0xFFD97706),
+                      activeThumbColor: const Color(0xFFD97706),
                       onChanged: (val) =>
                           setState(() => _maintenanceMode = val),
                     ),
