@@ -134,30 +134,22 @@ class _OpsTabState extends State<OpsTab> {
                 autoRefreshEnabled: widget.autoRefreshLogs,
                 onAutoRefreshChanged: widget.onAutoRefreshLogsChanged,
               ),
-            'config' => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ConfigTab(
-                    config: widget.config,
-                    federationDomainController: TextEditingController(
-                      text: widget.config?['federation']?['domain'] ?? '',
-                    ),
-                    federationAddressController: TextEditingController(
-                      text: widget.config?['federation']?['address'] ?? '',
-                    ),
-                    federationDirectoryController: TextEditingController(
-                      text: widget.config?['federation']?['directory_url'] ?? '',
-                    ),
-                    onSetWorldwideMode: widget.onSetWorldwideMode,
-                    onSaveServerName: widget.onSaveServerName,
-                    serverHost: widget.serverHost,
-                  ),
-                  const SizedBox(height: 16),
-                  BackupTab(
-                    isLoading: widget.isLoading,
-                    onTriggerBackup: widget.onTriggerBackup,
-                  ),
-                ],
+            'config' => ConfigTab(
+                config: widget.config,
+                federationDomainController: TextEditingController(
+                  text: widget.config?['federation']?['domain'] ?? '',
+                ),
+                federationAddressController: TextEditingController(
+                  text: widget.config?['federation']?['address'] ?? '',
+                ),
+                federationDirectoryController: TextEditingController(
+                  text: widget.config?['federation']?['directory_url'] ?? '',
+                ),
+                onSetWorldwideMode: widget.onSetWorldwideMode,
+                onSaveServerName: widget.onSaveServerName,
+                serverHost: widget.serverHost,
+                isLoading: widget.isLoading,
+                onTriggerBackup: widget.onTriggerBackup,
               ),
             _ => ReportsTab(client: widget.client),
           },
