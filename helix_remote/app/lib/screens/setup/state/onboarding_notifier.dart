@@ -32,7 +32,7 @@ class OnboardingNotifier extends ChangeNotifier {
   Timer? _launchTimer;
 
   OnboardingState get state => _state;
-  ServerInviteChoice? completedChoice;
+  Object? completedChoice;
   bool continueOfflineChosen = false;
 
   @override
@@ -296,13 +296,6 @@ class OnboardingNotifier extends ChangeNotifier {
     );
     notifyListeners();
 
-    if (isExisting && _root == null) {
-      return await completeSetup(
-        defaultName: 'Helix User',
-        isPersonal: isPersonal,
-      );
-    }
-
     return true;
   }
 
@@ -323,7 +316,7 @@ class OnboardingNotifier extends ChangeNotifier {
     final recovery = decodeHelixRecoveryCode(rawCode);
     if (recovery != null) {
       _state = _state.copyWith(
-        isLoading: false,
+        isLoading: true,
         codeType: CodeType.recovery,
         loadingStatus: 'Recovering account state…',
         serverNodeUrl: recovery.serverUrl,
@@ -332,7 +325,47 @@ class OnboardingNotifier extends ChangeNotifier {
         step: OnboardingStep.serverSelection,
       );
       notifyListeners();
-      return true;
+
+      if (_root != null) {
+        try {
+          await _root.recoverAccount(
+            accountId: recovery.accountId,
+            recoveryCode: recovery.recoveryCode,
+          );
+          completedChoice = ServerRecoveryChoice(
+            serverUrl: recovery.serverUrl,
+            accountId: recovery.accountId,
+            recoveryCode: recovery.recoveryCode,
+          );
+          _state = _state.copyWith(
+            isLoading: false,
+            isComplete: true,
+          );
+          notifyListeners();
+          return true;
+        } catch (e) {
+          _state = _state.copyWith(
+            isLoading: false,
+            errorMessage:
+                'Account recovery failed: ${RemoteUserErrorCopy.scrubDomain(e.toString())}',
+            joinSubStep: JoinSubStep.code,
+          );
+          notifyListeners();
+          return false;
+        }
+      } else {
+        completedChoice = ServerRecoveryChoice(
+          serverUrl: recovery.serverUrl,
+          accountId: recovery.accountId,
+          recoveryCode: recovery.recoveryCode,
+        );
+        _state = _state.copyWith(
+          isLoading: false,
+          isComplete: true,
+        );
+        notifyListeners();
+        return true;
+      }
     }
 
     final upper = rawCode.toUpperCase();

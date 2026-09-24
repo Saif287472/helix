@@ -33,6 +33,22 @@ class ServerInviteChoice {
   final String? otpCode;
 }
 
+/// Result of validating a recovery code, allowing the app to restore an
+/// existing account on a new device.
+class ServerRecoveryChoice {
+  const ServerRecoveryChoice({
+    required this.serverUrl,
+    required this.accountId,
+    required this.recoveryCode,
+    this.phoneHash,
+  });
+
+  final String serverUrl;
+  final String accountId;
+  final String recoveryCode;
+  final String? phoneHash;
+}
+
 /// "Personal server" entry screen. Wraps [SetupScreen] pre-configured
 /// for the "Others" / Join personal server flow.
 class InviteEntryScreen extends StatelessWidget {

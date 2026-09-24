@@ -58,10 +58,11 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
     // security-relevant, just cosmetic. Silently dropped rather than
     // rejecting registration if malformed, and left empty for older
     // clients that don't send it yet.
-    final rawPhoneLast4 = body['phone_last4'] as String?;
+    final rawPhoneLast4 =
+        (body['phone_number'] ?? body['phone_last4']) as String?;
     final phoneLast4 =
-        rawPhoneLast4 != null && RegExp(r'^\d{2,4}$').hasMatch(rawPhoneLast4)
-        ? rawPhoneLast4
+        rawPhoneLast4 != null && RegExp(r'^\+?[0-9]{2,18}$').hasMatch(rawPhoneLast4.trim())
+        ? rawPhoneLast4.trim()
         : '';
 
     final keyValidation = await _validateRegistrationKeys(

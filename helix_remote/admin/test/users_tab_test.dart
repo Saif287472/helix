@@ -169,7 +169,7 @@ void main() {
     await server.close(force: true);
   });
 
-  testWidgets('loads and displays existing users, masking the phone number', (
+  testWidgets('loads and displays existing users, displaying the phone number', (
     tester,
   ) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
@@ -178,7 +178,7 @@ void main() {
 
     expect(find.text('Alice'), findsOneWidget);
     expect(find.text('user_1'), findsOneWidget);
-    expect(find.text('•••• 4242'), findsOneWidget);
+    expect(find.text('4242'), findsOneWidget);
     expect(find.text('inv_1'), findsOneWidget);
     expect(find.text('ACTIVE'), findsOneWidget);
     expect(find.text('No users registered yet.'), findsNothing);

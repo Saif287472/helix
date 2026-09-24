@@ -10,6 +10,7 @@ import 'screens/dashboard_tab.dart';
 import 'screens/guide/guide_wizard.dart';
 import 'screens/invites_tab.dart';
 import 'screens/users_tab.dart';
+import 'screens/reports_tab.dart';
 import 'screens/lock_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/logs_tab.dart';
@@ -62,6 +63,7 @@ const _serverDependentTabs = {
   'backup',
   'invites',
   'users',
+  'reports',
 };
 const _defaultServerUrl = 'https://helix.agiletechbd.com';
 
@@ -635,6 +637,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
         ),
         _sidebarItem(Icons.mail_outline, 'Invites', 'invites', selectTab),
         _sidebarItem(Icons.people_outline, 'Users', 'users', selectTab),
+        _sidebarItem(Icons.flag_outlined, 'Reports', 'reports', selectTab),
         _sidebarItem(Icons.menu_book, 'Self-Hosting Guide', 'guide', selectTab),
         _sidebarItem(Icons.tune, 'Settings', 'settings', selectTab),
         const Spacer(),
@@ -754,6 +757,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
         return InvitesTab(client: _client!);
       case 'users':
         return UsersTab(client: _client!);
+      case 'reports':
+        return ReportsTab(client: _client!);
       case 'guide':
         return GuideWizard(initialPage: _guideInitialPage);
       case 'settings':

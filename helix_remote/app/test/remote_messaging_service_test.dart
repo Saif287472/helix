@@ -81,6 +81,23 @@ class _FakeRestClient implements HelixRemoteRestClient {
   @override
   Future<Map<String, dynamic>> fetchDiscoverySalt() async => {};
   @override
+  Future<Map<String, dynamic>> redeemRecovery({
+    required String accountId,
+    required String recoveryCode,
+    required String deviceId,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceName,
+    String? accountIdentityPublicKey,
+    String? phoneHash,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> fetchProfile() async => {};
+  @override
+  Future<List<Map<String, dynamic>>> fetchContacts() async => [];
+  @override
+  Future<List<Map<String, dynamic>>> fetchContactRequests() async => [];
+  @override
   Future<Map<String, dynamic>> requestPhoneOtp({
     required String phoneHash,
     required String phoneNumber,

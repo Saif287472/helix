@@ -308,6 +308,50 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   );
 
   @override
+  Future<Map<String, dynamic>> redeemRecovery({
+    required String accountId,
+    required String recoveryCode,
+    required String deviceId,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceName,
+    String? accountIdentityPublicKey,
+    String? phoneHash,
+  }) => _request(
+    'POST',
+    'accounts/recovery/redeem',
+    body: {
+      'account_id': accountId,
+      'recovery_code': recoveryCode,
+      'device_id': deviceId,
+      'device_signing_public_key': deviceSigningPublicKey,
+      'device_agreement_public_key': deviceAgreementPublicKey,
+      'device_name': deviceName,
+      if (accountIdentityPublicKey != null && accountIdentityPublicKey.isNotEmpty)
+        'account_identity_public_key': accountIdentityPublicKey,
+      if (phoneHash != null && phoneHash.isNotEmpty) 'phone_hash': phoneHash,
+    },
+  );
+
+  @override
+  Future<Map<String, dynamic>> fetchProfile() =>
+      _request('GET', 'accounts/profile');
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchContacts() async {
+    final res = await _request('GET', 'contacts');
+    final list = res['contacts'] as List<dynamic>? ?? [];
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchContactRequests() async {
+    final res = await _request('GET', 'contacts/requests');
+    final list = res['requests'] as List<dynamic>? ?? [];
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  @override
   Future<Map<String, dynamic>> fetchDiscoverySalt() =>
       _request('GET', 'contacts/discovery-salt');
 

@@ -182,6 +182,41 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
       }
       return;
     }
+    if (choice is ServerRecoveryChoice) {
+      try {
+        await ServerUrlStore.instance.save(choice.serverUrl);
+        _currentServerUrl = choice.serverUrl;
+        final config = RemoteDevelopmentConfig.fromServerUrl(
+          choice.serverUrl,
+          databaseDirectory: _dbDir,
+          attachmentCacheDir: _cacheDir,
+        );
+        final root = RemoteCompositionRoot.production(
+          databaseDirectory: _dbDir,
+          devConfig: config,
+        );
+        await root.initialize();
+        await root.recoverAccount(
+          accountId: choice.accountId,
+          recoveryCode: choice.recoveryCode,
+          phoneHash: choice.phoneHash,
+        );
+        if (mounted) {
+          setState(() {
+            _root = root;
+            _bootState = _BootState.running;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _initialUrlError = RemoteUserErrorCopy.scrubDomain(e.toString());
+            _bootState = _BootState.offline;
+          });
+        }
+      }
+      return;
+    }
     if (mounted) setState(() => _bootState = _BootState.offline);
   }
 

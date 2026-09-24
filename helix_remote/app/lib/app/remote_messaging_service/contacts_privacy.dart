@@ -12,6 +12,10 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
     _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts}));
   }
 
+  void notifyContactsChanged() {
+    _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts}));
+  }
+
   void sendContactRequest({
     required String peerAccountId,
     String nickname = '',

@@ -65,6 +65,14 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     stmt.close();
   }
 
+  void updateAccountIdentityKey(String accountId, String identityPublicKey) {
+    final stmt = _db.prepare(
+      'UPDATE accounts SET identity_public_key = ? WHERE account_id = ?;',
+    );
+    stmt.execute([identityPublicKey, accountId]);
+    stmt.close();
+  }
+
   bool isAccountSuspended(String accountId) {
     final stmt = _db.prepare('''
       SELECT 1 FROM accounts WHERE account_id = ? AND status = 'SUSPENDED';

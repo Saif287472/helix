@@ -76,7 +76,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
     // first await, so starting it here directly would mark the element
     // dirty while it is still being built.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _maybeAutoRefresh();
+      if (mounted) {
+        _maybeAutoRefresh();
+        unawaited(widget.root.reconcileContactsAndRequests().then((_) {
+          if (mounted) _reload();
+        }));
+      }
     });
   }
 
@@ -455,6 +460,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Future<void> _sync() async {
     try {
       await widget.root.runtimeCoordinator.softSync();
+      await widget.root.reconcileContactsAndRequests();
     } catch (e) {
       AppLogger.instance.warn('contacts', 'sync failed: \$e');
     }

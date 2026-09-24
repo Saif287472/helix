@@ -108,41 +108,43 @@ class _UsersTabState extends State<UsersTab> {
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Send this recovery code to $displayLabel. They can enter it on a new '
-                'device to restore their account access. The server address is '
-                'shielded inside this code.',
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: HelixInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(ctx).colorScheme.outlineVariant.withValues(alpha: 0.5),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Send this recovery code to $displayLabel. They can enter it on a new '
+                  'device to restore their account access. The server address is '
+                  'shielded inside this code.',
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: HelixInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(ctx).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: SelectableText(
+                    code,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-                child: SelectableText(
-                  code,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  '• Single-use only\n• Expires in 48 hours\n• Lost/old devices will be revoked',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                '• Single-use only\n• Expires in 48 hours\n• Lost/old devices will be revoked',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -371,7 +373,7 @@ class _UsersTabState extends State<UsersTab> {
             cells: [
               DataCell(Text(displayName.isEmpty ? '—' : displayName)),
               DataCell(Text(accountId)),
-              DataCell(Text(_maskedPhone(user['phone_last4'] as String?))),
+              DataCell(Text(_formatPhone(user['phone_last4'] as String?))),
               DataCell(Text(user['invite_id'] as String? ?? '—')),
               DataCell(Text(_formatTimestamp(user['created_at']))),
               DataCell(_statusChip(isSuspended)),
@@ -451,12 +453,9 @@ class _UsersTabState extends State<UsersTab> {
     );
   }
 
-  /// The server only ever stores the last 2-4 digits (see
-  /// AuthRegistrationHandlers) - there's no full phone number to unmask,
-  /// this is simply how that hint is displayed.
-  String _maskedPhone(String? last4) {
-    if (last4 == null || last4.isEmpty) return '—';
-    return '•••• $last4';
+  String _formatPhone(String? phone) {
+    if (phone == null || phone.isEmpty) return '—';
+    return phone;
   }
 
   String _formatTimestamp(dynamic value) {

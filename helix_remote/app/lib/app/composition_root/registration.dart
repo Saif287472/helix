@@ -133,9 +133,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
       // normalizedPhone is always '+' followed only by digits (see
       // RemoteAccountValidation.normalizePhoneNumber), so its last 4
       // characters are always digits.
-      phoneLast4: normalizedPhone.length >= 4
-          ? normalizedPhone.substring(normalizedPhone.length - 4)
-          : '',
+      phoneLast4: normalizedPhone,
     );
 
     final challengeResp = await rest.getChallenge(
@@ -202,6 +200,186 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     await _clearPendingRegistration(store);
     setAuthenticated(accessToken);
     await startRuntime();
+    await reconcileContactsAndRequests();
+  }
+
+  Future<void> recoverAccount({
+    required String accountId,
+    required String recoveryCode,
+    String? phoneHash,
+  }) async {
+    final rest = _requireReady(_restClient, 'restClient');
+    final store = _requireReady(_keyValue, 'keyValue');
+    final ms = _requireReady(_messagingService, 'messagingService');
+
+    final ed25519 = crypto_pkg.Ed25519();
+    final identityKeyPair = await ed25519.newKeyPair();
+    final identityPubKey = await identityKeyPair.extractPublicKey();
+
+    final deviceSigningKeyPair = await ed25519.newKeyPair();
+    final deviceSigningPubKey = await deviceSigningKeyPair.extractPublicKey();
+
+    final x25519 = crypto_pkg.X25519();
+    final deviceAgreementKeyPair = await x25519.newKeyPair();
+    final deviceAgreementPubKey =
+        await deviceAgreementKeyPair.extractPublicKey();
+
+    final deviceIdStr =
+        'dev_${_bytesToHex(deviceSigningPubKey.bytes.sublist(0, 4))}';
+    final deviceName = 'Dev ${deviceIdStr.substring(0, 8)}';
+
+    final identityPubKeyStr = _base64Url(identityPubKey.bytes);
+    final identityPrivStr = _base64Url(
+      await identityKeyPair.extractPrivateKeyBytes(),
+    );
+    final deviceSigningPubKeyStr = _base64Url(deviceSigningPubKey.bytes);
+    final deviceSigningPrivStr = _base64Url(
+      await deviceSigningKeyPair.extractPrivateKeyBytes(),
+    );
+    final deviceAgreementPubKeyStr = _base64Url(deviceAgreementPubKey.bytes);
+    final deviceAgreementPrivStr = _base64Url(
+      await deviceAgreementKeyPair.extractPrivateKeyBytes(),
+    );
+    final deviceAgreementPrivBytes =
+        await deviceAgreementKeyPair.extractPrivateKeyBytes();
+    final deviceAgreementPubKeyBytes = deviceAgreementPubKey.bytes;
+
+    final redeemResp = await rest.redeemRecovery(
+      accountId: accountId,
+      recoveryCode: recoveryCode,
+      deviceId: deviceIdStr,
+      deviceSigningPublicKey: deviceSigningPubKeyStr,
+      deviceAgreementPublicKey: deviceAgreementPubKeyStr,
+      deviceName: deviceName,
+      accountIdentityPublicKey: identityPubKeyStr,
+      phoneHash: phoneHash,
+    );
+
+    final accessToken = redeemResp['access_token'] as String;
+    final refreshToken = redeemResp['refresh_token'] as String? ?? '';
+    final displayName = redeemResp['display_name'] as String? ?? 'Helix User';
+    rest.accessToken = accessToken;
+
+    await store.write('access_token', accessToken);
+    await store.write('refresh_token', refreshToken);
+    await store.write('account_id', accountId);
+    if (phoneHash != null && phoneHash.isNotEmpty) {
+      await store.write('phone_hash', phoneHash);
+    }
+    await store.write('identity_public_key', identityPubKeyStr);
+    await store.write('identity_private_key', identityPrivStr);
+    await store.write('device_id', deviceIdStr);
+    await store.write('device_signing_public_key', deviceSigningPubKeyStr);
+    await store.write('device_signing_private_key', deviceSigningPrivStr);
+    await store.write('device_agreement_public_key', deviceAgreementPubKeyStr);
+    await store.write('device_agreement_private_key', deviceAgreementPrivStr);
+
+    await _publishInitialPrekeys(
+      rest: rest,
+      secureKeys: _requireReady(_keyStorage, 'keyStorage'),
+      accountIdentityKeyPair: identityKeyPair,
+      deviceId: deviceIdStr,
+    );
+
+    ms.setCryptoKeys(
+      devicePrivateKey: Uint8List.fromList(deviceAgreementPrivBytes),
+      devicePublicKey: Uint8List.fromList(deviceAgreementPubKeyBytes),
+    );
+
+    ms.setupAccount(
+      account: RemoteAccount(
+        accountId: accountId,
+        identityPublicKey: identityPubKeyStr,
+        createdAt: DateTime.now(),
+      ),
+      device: RemoteDevice(
+        deviceId: deviceIdStr,
+        deviceName: deviceName,
+        deviceSigningPublicKey: deviceSigningPubKeyStr,
+        deviceAgreementPublicKey: deviceAgreementPubKeyStr,
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    ms.setDisplayName(displayName);
+    await _clearPendingRegistration(store);
+    setAuthenticated(accessToken);
+    await startRuntime();
+    await reconcileContactsAndRequests();
+  }
+
+  Future<void> reconcileContactsAndRequests() async {
+    final rest = _restClient;
+    final ms = _messagingService;
+    if (rest == null || ms == null) return;
+    try {
+      final contacts = await rest.fetchContacts();
+      for (final c in contacts) {
+        final peerAccountId = c['account_id'] as String?;
+        if (peerAccountId == null || peerAccountId.isEmpty) continue;
+        final nickname =
+            c['nickname'] as String? ?? c['display_name'] as String? ?? '';
+        final status = (c['status'] as String? ?? 'Accepted').toLowerCase();
+        final effectiveStatus = status == 'accepted'
+            ? 'Accepted'
+            : (status == 'pending_received'
+                ? 'PendingReceived'
+                : 'PendingSent');
+        ms.db.upsertContact(
+          RemoteContact(
+            peerAccountId: peerAccountId,
+            nickname: nickname,
+            status: effectiveStatus,
+          ),
+        );
+      }
+
+      final requests = await rest.fetchContactRequests();
+      final myAccountId = await _keyValue?.read('account_id');
+      for (final r in requests) {
+        final reqId = r['request_id'] as String? ?? '';
+        final fromId = r['from_account_id'] as String? ?? '';
+        final toId = r['to_account_id'] as String? ?? '';
+        final rawStatus = (r['status'] as String? ?? 'PENDING').toUpperCase();
+        final isSent = fromId == myAccountId;
+        final peerId = isSent ? toId : fromId;
+        if (peerId.isEmpty) continue;
+
+        final effectiveStatus = rawStatus == 'ACCEPTED'
+            ? 'Accepted'
+            : (rawStatus == 'REJECTED'
+                ? 'Rejected'
+                : (rawStatus == 'CANCELLED' ? 'Cancelled' : 'Pending'));
+
+        ms.db.upsertContactRequest(
+          RemoteContactRequest(
+            requestId: reqId,
+            peerAccountId: peerId,
+            direction: isSent ? 'sent' : 'received',
+            status: effectiveStatus,
+            updatedAt: r['updated_at'] as int? ??
+                DateTime.now().millisecondsSinceEpoch,
+            nickname: r['nickname'] as String? ?? '',
+          ),
+        );
+
+        if (rawStatus == 'ACCEPTED') {
+          final existing = ms.db.getContact(peerId);
+          ms.db.upsertContact(
+            RemoteContact(
+              peerAccountId: peerId,
+              nickname:
+                  existing?.nickname ?? r['nickname'] as String? ?? '',
+              status: 'Accepted',
+            ),
+          );
+        }
+      }
+
+      ms.notifyContactsChanged();
+    } catch (e) {
+      AppLogger.instance.warn('reconcileContacts', 'Failed: $e');
+    }
   }
 
   Future<_PendingRegistration> _loadOrCreatePendingRegistration({

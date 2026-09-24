@@ -17,7 +17,6 @@ mixin AuthRecoveryHandlers on AuthModuleBase {
 
     if (accountId == null ||
         recoveryCode == null ||
-        phoneHash == null ||
         deviceId == null ||
         deviceSigningPublicKey == null ||
         deviceAgreementPublicKey == null) {
@@ -36,7 +35,7 @@ mixin AuthRecoveryHandlers on AuthModuleBase {
       throw AppError.unauthorized('Invalid or expired recovery code');
     }
 
-    // 2. Verify account exists, is active (or re-activatable), and phoneHash matches
+    // 2. Verify account exists, is active (or re-activatable), and phoneHash matches if provided
     final account = db.getAccount(accountId);
     if (account == null) {
       throw AppError.notFound('Account not found');
@@ -44,7 +43,7 @@ mixin AuthRecoveryHandlers on AuthModuleBase {
     if (account['status'] == 'BLOCKED') {
       throw AppError.forbidden('Account is blocked');
     }
-    if (account['phone_hash'] != phoneHash) {
+    if (phoneHash != null && phoneHash.isNotEmpty && account['phone_hash'] != phoneHash) {
       throw AppError.forbidden('Phone number does not match account');
     }
 
@@ -61,6 +60,13 @@ mixin AuthRecoveryHandlers on AuthModuleBase {
     }
 
     // 5. Register the new active device
+    final accountIdentityPublicKey =
+        body['account_identity_public_key'] as String?;
+    if (accountIdentityPublicKey != null &&
+        accountIdentityPublicKey.isNotEmpty) {
+      db.updateAccountIdentityKey(accountId, accountIdentityPublicKey);
+    }
+
     db.registerDevice(
       deviceId,
       accountId,
@@ -117,6 +123,9 @@ mixin AuthRecoveryHandlers on AuthModuleBase {
         'refresh_token': refreshToken,
         'token_type': 'Bearer',
         'expires_in': 3600,
+        'display_name': account['username'] ?? '',
+        'identity_public_key': accountIdentityPublicKey ??
+            (account['identity_public_key'] as String? ?? ''),
       }),
       headers: {'Content-Type': 'application/json'},
     );

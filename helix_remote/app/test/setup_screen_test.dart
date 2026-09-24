@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
+import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/screens/server_choice_screen.dart';
 import 'package:helix_remote/screens/setup/setup_screen.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
@@ -48,8 +49,9 @@ void main() {
       final complete = await notifier.completeSetup();
       expect(complete, isTrue);
       expect(notifier.state.isComplete, isTrue);
-      expect(notifier.completedChoice?.serverUrl, kHelixGlobalServerUrl);
-      expect(notifier.completedChoice?.phoneNumber, contains('1712345678'));
+      final choice = notifier.completedChoice as ServerInviteChoice?;
+      expect(choice?.serverUrl, kHelixGlobalServerUrl);
+      expect(choice?.phoneNumber, contains('1712345678'));
     });
 
     test('Path B: Others option navigation (Host & Join)', () async {

@@ -168,6 +168,21 @@ abstract class HelixRemoteRestClient {
   /// that is no longer signed in.
   Future<Map<String, dynamic>> deregisterPushToken();
 
+  Future<Map<String, dynamic>> redeemRecovery({
+    required String accountId,
+    required String recoveryCode,
+    required String deviceId,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceName,
+    String? accountIdentityPublicKey,
+    String? phoneHash,
+  });
+
+  Future<Map<String, dynamic>> fetchProfile();
+  Future<List<Map<String, dynamic>>> fetchContacts();
+  Future<List<Map<String, dynamic>>> fetchContactRequests();
+
   set accessToken(String? token);
 
   Future<void> close();
