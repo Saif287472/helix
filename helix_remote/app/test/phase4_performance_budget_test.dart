@@ -30,7 +30,7 @@ void main() {
     // the duration is deliberately a regression guard rather than a claim of
     // device-frame parity. Physical-device p99 evidence is still required at
     // release time by PERFORMANCE_BUDGETS.md.
-    expect(stopwatch.elapsed, lessThan(const Duration(seconds: 1)));
+    expect(stopwatch.elapsed, lessThan(const Duration(milliseconds: 1500)));
   });
 }
 

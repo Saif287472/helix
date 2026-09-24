@@ -9,6 +9,7 @@ class GlobalOtpStep extends StatefulWidget {
     required this.rememberDevice,
     required this.isLoading,
     this.errorMessage,
+    this.otpIsPlaceholder = false,
     required this.onOtpChanged,
     required this.onRememberDeviceChanged,
     required this.onSubmit,
@@ -20,6 +21,7 @@ class GlobalOtpStep extends StatefulWidget {
   final bool rememberDevice;
   final bool isLoading;
   final String? errorMessage;
+  final bool otpIsPlaceholder;
   final ValueChanged<String> onOtpChanged;
   final ValueChanged<bool> onRememberDeviceChanged;
   final VoidCallback onSubmit;
@@ -44,6 +46,19 @@ class _GlobalOtpStepState extends State<GlobalOtpStep> {
   }
 
   @override
+  void didUpdateWidget(covariant GlobalOtpStep oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.otpCode != oldWidget.otpCode) {
+      for (var i = 0; i < 6; i++) {
+        final char = i < widget.otpCode.length ? widget.otpCode[i] : '';
+        if (_controllers[i].text != char) {
+          _controllers[i].text = char;
+        }
+      }
+    }
+  }
+
+  @override
   void dispose() {
     for (final c in _controllers) {
       c.dispose();
@@ -57,17 +72,20 @@ class _GlobalOtpStepState extends State<GlobalOtpStep> {
   void _onDigitChanged(int index, String value) {
     if (value.isNotEmpty) {
       if (value.length > 1) {
-        // Multi-character paste
-        final chars = value.trim().split('');
+        // Multi-character paste (e.g. from notification or clipboard)
+        final digitsOnly = value.replaceAll(RegExp(r'[^\d]'), '');
+        final chars = digitsOnly.split('');
         for (var j = 0; j < 6; j++) {
-          if (index + j < 6 && j < chars.length) {
-            _controllers[index + j].text = chars[j];
+          if (j < chars.length) {
+            _controllers[j].text = chars[j];
           }
         }
-        final nextIndex = (index + chars.length).clamp(0, 5);
+        final nextIndex = (chars.length).clamp(0, 5);
         _focusNodes[nextIndex].requestFocus();
-      } else if (index < 5) {
-        _focusNodes[index + 1].requestFocus();
+      } else {
+        if (index < 5) {
+          _focusNodes[index + 1].requestFocus();
+        }
       }
     } else if (value.isEmpty && index > 0) {
       _focusNodes[index - 1].requestFocus();
@@ -112,7 +130,37 @@ class _GlobalOtpStepState extends State<GlobalOtpStep> {
               ],
             ),
           ),
-          const SizedBox(height: HelixSpace.xl),
+          const SizedBox(height: HelixSpace.md),
+          if (widget.otpIsPlaceholder) ...[
+            Container(
+              padding: HelixInsets.all(HelixSpace.sm),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: theme.colorScheme.tertiary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.notifications_active_outlined,
+                      size: 20, color: theme.colorScheme.tertiary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "SMS service is currently unavailable. A one-time verification code has been sent to your device notifications.",
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onTertiaryContainer,
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: HelixSpace.md),
+          ],
           // 6-digit OTP Box Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -129,6 +177,7 @@ class _GlobalOtpStepState extends State<GlobalOtpStep> {
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
                   ),
                   decoration: InputDecoration(
                     counterText: '',
@@ -155,7 +204,7 @@ class _GlobalOtpStepState extends State<GlobalOtpStep> {
           CheckboxListTile(
             value: widget.rememberDevice,
             onChanged: (val) => widget.onRememberDeviceChanged(val ?? true),
-            title: const Text("Remember me on this device"),
+            title: const Text("Remember me on this device", style: TextStyle(fontSize: 13)),
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
           ),

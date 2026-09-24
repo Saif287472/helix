@@ -130,6 +130,7 @@ class GlobalPhoneStep extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     errorText: errorMessage,
+                    errorMaxLines: 3,
                     prefixIcon: const Icon(Icons.phone_outlined),
                   ),
                   onChanged: onPhoneChanged,

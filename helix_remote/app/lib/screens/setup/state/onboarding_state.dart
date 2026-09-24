@@ -18,6 +18,10 @@ enum ServerType { global, others }
 
 enum OthersOption { host, join }
 
+enum GlobalSubStep { phone, otp, name }
+
+enum JoinSubStep { code, phone, otp, name, recoverySync }
+
 enum CodeType { invitation, recovery }
 
 @immutable
@@ -25,7 +29,9 @@ class OnboardingState {
   const OnboardingState({
     this.step = OnboardingStep.splash,
     this.serverType = ServerType.global,
-    this.othersOption,
+    this.othersOption = OthersOption.join,
+    this.globalSubStep = GlobalSubStep.phone,
+    this.joinSubStep = JoinSubStep.code,
     this.countryCode = '+880',
     this.phoneNumber = '',
     this.otpCode = '',
@@ -33,7 +39,7 @@ class OnboardingState {
     this.displayName = '',
     this.codeString = '',
     this.codeType,
-    this.connectedServerName,
+    this.connectedServerName = 'Helix Global Server',
     this.serverNodeUrl,
     this.inviteCode,
     this.sessionToken,
@@ -45,11 +51,14 @@ class OnboardingState {
     this.hostGuideStep = 0,
     this.showCodeInfoPopover = false,
     this.isComplete = false,
+    this.otpIsPlaceholder = false,
   });
 
   final OnboardingStep step;
   final ServerType serverType;
   final OthersOption? othersOption;
+  final GlobalSubStep globalSubStep;
+  final JoinSubStep joinSubStep;
   final String countryCode;
   final String phoneNumber;
   final String otpCode;
@@ -69,11 +78,14 @@ class OnboardingState {
   final int hostGuideStep;
   final bool showCodeInfoPopover;
   final bool isComplete;
+  final bool otpIsPlaceholder;
 
   OnboardingState copyWith({
     OnboardingStep? step,
     ServerType? serverType,
     OthersOption? othersOption,
+    GlobalSubStep? globalSubStep,
+    JoinSubStep? joinSubStep,
     String? countryCode,
     String? phoneNumber,
     String? otpCode,
@@ -94,11 +106,14 @@ class OnboardingState {
     int? hostGuideStep,
     bool? showCodeInfoPopover,
     bool? isComplete,
+    bool? otpIsPlaceholder,
   }) {
     return OnboardingState(
       step: step ?? this.step,
       serverType: serverType ?? this.serverType,
       othersOption: othersOption ?? this.othersOption,
+      globalSubStep: globalSubStep ?? this.globalSubStep,
+      joinSubStep: joinSubStep ?? this.joinSubStep,
       countryCode: countryCode ?? this.countryCode,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       otpCode: otpCode ?? this.otpCode,
@@ -118,6 +133,7 @@ class OnboardingState {
       hostGuideStep: hostGuideStep ?? this.hostGuideStep,
       showCodeInfoPopover: showCodeInfoPopover ?? this.showCodeInfoPopover,
       isComplete: isComplete ?? this.isComplete,
+      otpIsPlaceholder: otpIsPlaceholder ?? this.otpIsPlaceholder,
     );
   }
 }

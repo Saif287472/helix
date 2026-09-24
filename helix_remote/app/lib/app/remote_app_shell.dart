@@ -26,76 +26,23 @@ class HelixRemoteApp extends StatefulWidget {
   State<HelixRemoteApp> createState() => _HelixRemoteAppState();
 }
 
-enum _CreateAccountStep { enterDetails, enterOtp, enterDisplayName }
-
-/// Result of the last invite-code auto-validation (see `_validateInviteCode`
-/// on the invite code field's focus loss). `null` means "not checked yet" -
-/// distinct from a checked-and-failed state, so no icon shows until the
-/// user has actually had a chance to enter something.
-enum _InviteCheckState { checking, valid, invalid }
-
 class _HelixRemoteAppState extends State<HelixRemoteApp>
     with WidgetsBindingObserver {
   RemoteStartupState _startupState = RemoteStartupState.idle;
   String? _errorMessage;
-  String? _registrationError;
-  String? _displayNameError;
-  String? _phoneError;
-  String? _inviteError;
-  String? _otpError;
   bool _initializing = false;
-  bool _registering = false;
-  bool _sendingCode = false;
-
-  /// Whether the last OTP request came back as a placeholder code (shown
-  /// via local notification) rather than a real SMS - see
-  /// `RemoteCompositionRegistration.requestOtp`. Defaults to true so the
-  /// placeholder notice stays visible until a request actually completes.
-  bool _otpIsPlaceholder = true;
-  _CreateAccountStep _createAccountStep = _CreateAccountStep.enterDetails;
-
-  /// Result of the last invite-code auto-validation, or null if the field
-  /// hasn't been checked yet (e.g. still empty, or never blurred).
-  _InviteCheckState? _inviteCheckState;
-  String? _inviteCheckReason;
-  Country _selectedCountry = kDefaultCountry;
-  bool _prefilledInviteChecked = false;
   RemoteCallStatus? _activeCallStatus;
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _nationalNumberController =
-      TextEditingController();
-  final TextEditingController _inviteController = TextEditingController();
-  final FocusNode _inviteFocusNode = FocusNode();
-  final TextEditingController _otpController = TextEditingController();
-  final TextEditingController _displayNameController = TextEditingController();
   StreamSubscription<RemoteStartupState>? _stateSub;
   StreamSubscription<RemoteCallStatus?>? _callSub;
   // _activeCallStatus is updated without setState to avoid recreating HomeScreen
   // on every call state change (which caused a double call-screen push bug).
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   String? _lastConnectivitySignature;
-  String? _serverName;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadServerName();
-    _nationalNumberController.addListener(_syncPhoneController);
-    final initialInvite = widget.initialInviteCode;
-    if (initialInvite != null && initialInvite.isNotEmpty) {
-      _inviteController.text = initialInvite;
-    }
-    final initialPhoneNumber = widget.initialPhoneNumber;
-    if (initialPhoneNumber != null && initialPhoneNumber.isNotEmpty) {
-      final split = splitE164PhoneNumber(initialPhoneNumber);
-      _selectedCountry = split.country;
-      _nationalNumberController.text = split.nationalNumber;
-      _syncPhoneController();
-    }
-    _inviteFocusNode.addListener(() {
-      if (!_inviteFocusNode.hasFocus) _validateInviteCode();
-    });
     _stateSub = widget.root.startupStateChanges.listen((state) {
       if (!mounted) return;
       setState(() {
@@ -121,15 +68,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
       _onConnectivityChanged,
     );
     _startBoot();
-  }
-
-  Future<void> _loadServerName() async {
-    try {
-      final info = await widget.root.restClient.getServerInfo();
-      final name = (info['server_name'] as String? ?? '').trim();
-      if (!mounted || name.isEmpty) return;
-      setState(() => _serverName = name);
-    } catch (_) {}
   }
 
   void _onConnectivityChanged(List<ConnectivityResult> results) {
@@ -190,18 +128,16 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     }
   }
 
+  void _clearErrorMessage() {
+    setState(() => _errorMessage = null);
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stateSub?.cancel();
     _callSub?.cancel();
     _connectivitySub?.cancel();
-    _phoneController.dispose();
-    _nationalNumberController.dispose();
-    _inviteController.dispose();
-    _inviteFocusNode.dispose();
-    _otpController.dispose();
-    _displayNameController.dispose();
     widget.root.dispose().ignore();
     AndroidCallRuntimeService.setCallActive(
       active: false,
@@ -210,20 +146,6 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
     super.dispose();
   }
 
-  /// This widget is always a page *below* [HelixRemoteAppShell], never its own
-  /// application.
-  ///
-  /// It used to wrap itself in a shell when constructed standalone, which only
-  /// widget tests ever did. That stopped being workable once screens read
-  /// their copy through `HelixLocalizations.of(context)`: a State's `context`
-  /// is its own element's, so a shell returned from here sits *below* the
-  /// context those screens resolve against, and every lookup missed the
-  /// Localizations scope. Wrapping the result in a `Builder` does not help
-  /// either — `_buildBaseScreen` uses `State.context`, not the builder's.
-  ///
-  /// Rather than thread a context through every screen builder to support a
-  /// path production never took, the flag is gone. Callers wrap, which is what
-  /// `bootstrap.dart` already did.
   @override
   Widget build(BuildContext context) => _buildBaseScreen();
 
@@ -235,10 +157,23 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
       case RemoteStartupState.firstRunInitialization:
       case RemoteStartupState.openingDatabase:
       case RemoteStartupState.restoringSession:
-        return _buildLoadingScreen();
+        return const Scaffold(
+          body: Center(
+            child: SplashStep(statusText: 'Deploying Helix…'),
+          ),
+        );
 
       case RemoteStartupState.unauthenticated:
-        return _buildCreateAccountScreen();
+        return SetupScreen(
+          root: widget.root,
+          onChangeServerUrl: widget.onChangeServerUrl != null
+              ? (url) async {
+                  await widget.onChangeServerUrl!();
+                }
+              : null,
+          initialInviteCode: widget.initialInviteCode,
+          initialPhoneNumber: widget.initialPhoneNumber,
+        );
 
       case RemoteStartupState.authenticatedAndSyncing:
       case RemoteStartupState.ready:
@@ -251,99 +186,4 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
         return _buildResetScreen();
     }
   }
-
-  Widget _buildLoadingScreen() {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.root.config.displayName)),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const HelixSkeleton(width: 192, height: 24),
-            const SizedBox(height: 16),
-            Text(HelixLocalizations.of(context).startingHelixRemote),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCreateAccountScreen() {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(HelixLocalizations.of(context).createAccount),
-        leading: switch (_createAccountStep) {
-          // Entry point of the (now single, deterministic) onboarding flow -
-          // nothing to go back to. "Change server" lives in the body instead
-          // of being conflated with the back gesture (see below).
-          _CreateAccountStep.enterDetails => null,
-          _CreateAccountStep.enterOtp => BackButton(
-            onPressed: () {
-              _unfocusForStepChange();
-              setState(() {
-                _createAccountStep = _CreateAccountStep.enterDetails;
-                _otpController.clear();
-                _otpError = null;
-              });
-            },
-          ),
-          _CreateAccountStep.enterDisplayName => BackButton(
-            onPressed: () {
-              _unfocusForStepChange();
-              setState(() => _createAccountStep = _CreateAccountStep.enterOtp);
-            },
-          ),
-        },
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Padding(
-                padding: HelixInsets.all(24),
-                child: _buildCreateAccountStepSafely(),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Wraps step construction in a try/catch so a bug in one of these steps
-  /// shows an actual (if ugly) error on screen instead of a silent blank
-  /// page - release builds strip the framework's own red error screen, so
-  /// without this a thrown exception here is otherwise invisible.
-  Widget _buildCreateAccountStepSafely() {
-    try {
-      return switch (_createAccountStep) {
-        _CreateAccountStep.enterDetails => _buildAccountDetailsStep(),
-        _CreateAccountStep.enterOtp => _buildOtpStep(),
-        _CreateAccountStep.enterDisplayName => _buildDisplayNameStep(),
-      };
-    } catch (e, st) {
-      AppLogger.instance.error('registration_ui', '$e', st);
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            HelixLocalizations.of(context).somethingWentWrongLoadingScreen,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          SelectableText('$e'),
-          const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: () =>
-                setState(() => _createAccountStep = _createAccountStep),
-            child: Text(HelixLocalizations.of(context).retry),
-          ),
-        ],
-      );
-    }
-  }
-
-  void _update(VoidCallback change) => setState(change);
 }

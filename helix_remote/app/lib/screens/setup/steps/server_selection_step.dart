@@ -161,6 +161,7 @@ class _SegmentTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
+        constraints: const BoxConstraints(minHeight: 48),
         padding: HelixInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
           color: isSelected

@@ -86,13 +86,14 @@ class _PersonalVerifyStepState extends State<PersonalVerifyStep> {
   void _onDigitChanged(int index, String value) {
     if (value.isNotEmpty) {
       if (value.length > 1) {
-        final chars = value.trim().split('');
+        final digitsOnly = value.replaceAll(RegExp(r'[^\d]'), '');
+        final chars = digitsOnly.split('');
         for (var j = 0; j < 6; j++) {
-          if (index + j < 6 && j < chars.length) {
-            _otpControllers[index + j].text = chars[j];
+          if (j < chars.length) {
+            _otpControllers[j].text = chars[j];
           }
         }
-        final nextIndex = (index + chars.length).clamp(0, 5);
+        final nextIndex = (chars.length).clamp(0, 5);
         _otpFocusNodes[nextIndex].requestFocus();
       } else if (index < 5) {
         _otpFocusNodes[index + 1].requestFocus();
@@ -287,6 +288,7 @@ class _PersonalVerifyStepState extends State<PersonalVerifyStep> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 errorText: widget.errorMessage,
+                errorMaxLines: 3,
                 prefixIcon: const Icon(Icons.phone_outlined),
               ),
               onChanged: widget.onPhoneChanged,
@@ -383,6 +385,7 @@ class _PersonalVerifyStepState extends State<PersonalVerifyStep> {
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
               ),
               decoration: InputDecoration(
                 counterText: '',
@@ -526,7 +529,7 @@ class _PersonalVerifyStepState extends State<PersonalVerifyStep> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              "Skip for now",
+              "Skip",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             Text(

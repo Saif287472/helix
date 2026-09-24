@@ -1,20 +1,12 @@
-// Phase 06 — first-launch server-choice screen and invite entry.
-//
-// Covers the four tiles rendering, the "continue offline" pop result, and
-// invite-link parsing/validation feedback. The Global/Global-invite and
-// personal-server invite-lookup network calls are intentionally not
-// exercised here (they hit real HTTP), only the offline-safe parsing and
-// navigation paths are.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/screens/server_choice_screen.dart';
+import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
 
 void main() {
   group('ServerChoiceScreen', () {
-    testWidgets('renders all four first-launch options', (tester) async {
+    testWidgets('renders first-launch options matching welcome flow', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           localizationsDelegates: HelixLocalizations.localizationsDelegates,
@@ -23,10 +15,9 @@ void main() {
         ),
       );
 
-      expect(find.text('Helix Global'), findsOneWidget);
-      expect(find.text('Join a personal server'), findsOneWidget);
-      expect(find.text('Host your own server'), findsOneWidget);
-      expect(find.text('Continue offline'), findsOneWidget);
+      expect(find.text('Helix Global Server'), findsOneWidget);
+      expect(find.text('Others'), findsOneWidget);
+      expect(find.text('Continue offline for now'), findsOneWidget);
     });
 
     testWidgets('continue offline pops a ContinueOfflineChoice', (
@@ -52,14 +43,14 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Continue offline'));
-      await tester.tap(find.text('Continue offline'));
+      await tester.ensureVisible(find.text('Continue offline for now'));
+      await tester.tap(find.text('Continue offline for now'));
       await tester.pumpAndSettle();
 
       expect(popped, isA<ContinueOfflineChoice>());
     });
 
-    testWidgets('host your own opens an informational screen with a way back', (
+    testWidgets('navigating to Others displays custom server options', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -70,66 +61,22 @@ void main() {
         ),
       );
 
-      await tester.ensureVisible(find.text('Host your own server'));
-      await tester.tap(find.text('Host your own server'));
+      await tester.ensureVisible(find.text('Others'));
+      await tester.tap(find.text('Others'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Run your own Helix Remote server'), findsOneWidget);
-      expect(find.text('Back'), findsOneWidget);
-
-      await tester.ensureVisible(find.text('Back'));
-      await tester.tap(find.text('Back'));
+      // Tap Continue to enter Others Hub
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Welcome to Helix Remote'), findsOneWidget);
-    });
-
-    testWidgets('join a personal server navigates to InviteEntryScreen', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: ServerChoiceScreen(),
-        ),
-      );
-
-      await tester.ensureVisible(find.text('Join a personal server'));
-      await tester.tap(find.text('Join a personal server'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(InviteEntryScreen), findsOneWidget);
+      expect(find.text('Join a personal server'), findsOneWidget);
+      expect(find.text('Host your own server'), findsOneWidget);
     });
   });
 
   group('InviteEntryScreen', () {
-    testWidgets(
-      'rejects a link missing an invite code without any network call',
-      (tester) async {
-        await tester.pumpWidget(
-          const MaterialApp(
-            localizationsDelegates: HelixLocalizations.localizationsDelegates,
-            supportedLocales: HelixLocalizations.supportedLocales,
-            home: InviteEntryScreen(),
-          ),
-        );
-
-        await tester.enterText(
-          find.byType(TextField).first,
-          'https://server.example/join',
-        );
-        await tester.tap(find.text('Continue'));
-        await tester.pump();
-
-        expect(
-          find.textContaining('Paste the full link your admin shared'),
-          findsOneWidget,
-        );
-      },
-    );
-
-    testWidgets('rejects an empty field', (tester) async {
+    testWidgets('renders code entry step', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           localizationsDelegates: HelixLocalizations.localizationsDelegates,
@@ -138,13 +85,8 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-
-      expect(
-        find.textContaining('Paste the full link your admin shared'),
-        findsOneWidget,
-      );
+      expect(find.text('Enter invitation or recovery code'), findsOneWidget);
+      expect(find.text('Verify & Connect'), findsOneWidget);
     });
   });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/screens/server_choice_screen.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
@@ -18,10 +19,18 @@ class SetupScreen extends StatefulWidget {
     super.key,
     this.onChoice,
     this.notifier,
+    this.root,
+    this.onChangeServerUrl,
+    this.initialInviteCode,
+    this.initialPhoneNumber,
   });
 
   final void Function(Object? choice)? onChoice;
   final OnboardingNotifier? notifier;
+  final RemoteCompositionRoot? root;
+  final Future<void> Function(String url)? onChangeServerUrl;
+  final String? initialInviteCode;
+  final String? initialPhoneNumber;
 
   @override
   State<SetupScreen> createState() => _SetupScreenState();
@@ -38,9 +47,20 @@ class _SetupScreenState extends State<SetupScreen> {
     if (widget.notifier != null) {
       _notifier = widget.notifier!;
     } else {
-      _notifier = OnboardingNotifier();
+      _notifier = OnboardingNotifier(
+        root: widget.root,
+        onServerUrlChanged: widget.onChangeServerUrl,
+      );
       _createdLocalNotifier = true;
     }
+
+    if (widget.initialInviteCode != null && widget.initialInviteCode!.isNotEmpty) {
+      _notifier.updateCodeString(widget.initialInviteCode!);
+    }
+    if (widget.initialPhoneNumber != null && widget.initialPhoneNumber!.isNotEmpty) {
+      _notifier.updatePhoneNumber(widget.initialPhoneNumber!);
+    }
+
     _notifier.addListener(_onNotifierUpdate);
   }
 
@@ -154,6 +174,7 @@ class _SetupScreenState extends State<SetupScreen> {
           rememberDevice: state.rememberDevice,
           isLoading: state.isLoading,
           errorMessage: state.errorMessage,
+          otpIsPlaceholder: state.otpIsPlaceholder,
           onOtpChanged: _notifier.updateOtpCode,
           onRememberDeviceChanged: _notifier.toggleRememberDevice,
           onSubmit: () => _notifier.verifyOtp(),
@@ -165,8 +186,8 @@ class _SetupScreenState extends State<SetupScreen> {
           isLoading: state.isLoading,
           errorMessage: state.errorMessage,
           onNameChanged: _notifier.updateDisplayName,
-          onSubmit: () => _notifier.completeSetup(),
-          onSkip: () => _notifier.completeSetup(),
+          onSubmit: () => _notifier.completeSetup(skip: false),
+          onSkip: () => _notifier.completeSetup(skip: true),
         );
 
       case OnboardingStep.othersHub:

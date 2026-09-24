@@ -31,8 +31,8 @@ void main() {
       HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
     );
 
-    expect(find.text('Helix Remote'), findsOneWidget);
-    expect(find.text('Starting Helix Remote...'), findsOneWidget);
+    expect(find.text('HELIX'), findsOneWidget);
+    expect(find.text('Deploying Helix…'), findsOneWidget);
 
     root.dispose();
   });

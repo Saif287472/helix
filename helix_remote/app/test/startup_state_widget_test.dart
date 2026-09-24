@@ -145,7 +145,7 @@ void main() {
       // widget assertion does not depend on live runtime I/O.
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
+        if (find.text('Helix Global Server').evaluate().isNotEmpty) break;
       }
       root.setAuthenticated('tok-w02');
       await tester.pump();
@@ -157,7 +157,7 @@ void main() {
 
       // authenticatedAndSyncing now shows HomeScreen immediately (offline-first
       // design, _buildSyncingScreen removed). The setup screen must be gone.
-      expect(find.text('Server invitation code'), findsNothing);
+      expect(find.text('Helix Global Server'), findsNothing);
       // HomeScreen bottom nav is visible with its tab labels.
       expect(find.text('Chats'), findsOneWidget);
 
@@ -167,8 +167,7 @@ void main() {
   );
 
   testWidgets(
-    'P05-W01: no restore-account UI exists, and Request OTP starts disabled '
-    'until an invite is entered',
+    'P05-W01: unauthenticated state renders new Welcome SetupScreen and no legacy screens',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p05_w01_');
       addTearDown(() {
@@ -190,25 +189,23 @@ void main() {
       );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
+        if (find.text('Helix Global Server').evaluate().isNotEmpty) break;
       }
 
-      // The old "Create new account / Restore existing account" chooser is
-      // gone entirely - onboarding is a single, deterministic flow now, not
-      // a disabled-but-visible restore option.
-      expect(find.text('Server invitation code'), findsOneWidget);
+      // The new welcome flow is rendered
+      expect(find.text('Helix Global Server'), findsOneWidget);
+      expect(find.text('Others'), findsOneWidget);
+      expect(find.text('Continue'), findsOneWidget);
+      expect(find.text('Continue offline for now'), findsOneWidget);
+
+      // Legacy screens are gone entirely
+      expect(find.text('Server invitation code'), findsNothing);
       expect(find.text('Restore existing account'), findsNothing);
       expect(find.text('Restore account'), findsNothing);
       expect(find.text('Restore code'), findsNothing);
       expect(find.text('Enter your restore code'), findsNothing);
       expect(find.text('Unavailable'), findsNothing);
 
-      // No invite code entered yet - Request OTP must stay disabled so an
-      // unvalidated invitation can never reach the OTP request.
-      final requestOtpButton = tester.widget<FilledButton>(
-        find.byType(FilledButton),
-      );
-      expect(requestOtpButton.onPressed, isNull);
       expect(root.startupState, RemoteStartupState.unauthenticated);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -217,8 +214,7 @@ void main() {
   );
 
   testWidgets(
-    'P05-W02: tapping the invalid invite icon shows a snackbar with the '
-    'reason',
+    'P05-W02: invalid code in CodeEntryStep displays validation error',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p05_w02_');
       addTearDown(() {
@@ -240,23 +236,22 @@ void main() {
       );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
+        if (find.text('Others').evaluate().isNotEmpty) break;
       }
 
-      await tester.enterText(find.byType(TextField).first, 'BADCODE123');
-      // Move focus to the phone field to trigger blur-validation, same as a
-      // real device.
-      await tester.tap(find.byType(TextField).last);
-      await tester.pump();
-      for (var i = 0; i < 20; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-        if (find.byIcon(Icons.error).evaluate().isNotEmpty) break;
-      }
-      expect(find.byIcon(Icons.error), findsOneWidget);
+      await tester.tap(find.text('Others'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.error));
-      await tester.pump();
-      expect(find.byType(SnackBar), findsOneWidget);
+      await tester.tap(find.text('Join a personal server'));
+      await tester.pumpAndSettle();
+
+      // Submit empty code to trigger validation error
+      await tester.tap(find.text('Verify & Connect'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Please enter a code or link.'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -264,8 +259,7 @@ void main() {
   );
 
   testWidgets(
-    'P05-W03: pasting a full join link into the invite field extracts the '
-    'bare code',
+    'P05-W03: pasting a full join link into the code entry field extracts the bare code',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p05_w03_');
       addTearDown(() {
@@ -287,14 +281,21 @@ void main() {
       );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
+        if (find.text('Others').evaluate().isNotEmpty) break;
       }
 
+      await tester.tap(find.text('Others'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Join a personal server'));
+      await tester.pumpAndSettle();
+
       await tester.enterText(
-        find.byType(TextField).first,
+        find.byType(TextFormField).first,
         'https://hr.agiletechbd.com/join?invite=UiFzSP3Vgp6XA7fEby6-IPb5i',
       );
-      await tester.tap(find.byType(TextField).last);
       await tester.pump();
 
       expect(find.text('UiFzSP3Vgp6XA7fEby6-IPb5i'), findsOneWidget);
@@ -306,8 +307,7 @@ void main() {
   );
 
   testWidgets(
-    'P05-W04: the phone field allows multi-line error text instead of '
-    'truncating it',
+    'P05-W04: the phone field allows multi-line error text instead of truncating it',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p05_w04_');
       addTearDown(() {
@@ -329,10 +329,16 @@ void main() {
       );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Server invitation code').evaluate().isNotEmpty) break;
+        if (find.text('Continue').evaluate().isNotEmpty) break;
       }
 
-      final phoneField = tester.widget<TextField>(find.byType(TextField).last);
+      // Tap Continue to enter GlobalPhoneStep
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      final phoneField = tester.widget<TextField>(
+        find.byType(TextField).first,
+      );
       // InputDecoration.errorMaxLines defaults to null, which truncates
       // errorText to a single line with an ellipsis - a long server error
       // (e.g. "Failed to send verification SMS: ...") would be cut off.

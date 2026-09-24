@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/app/helix_code.dart';
 
-class CodeEntryStep extends StatelessWidget {
+class CodeEntryStep extends StatefulWidget {
   const CodeEntryStep({
     super.key,
     required this.codeString,
@@ -22,9 +23,49 @@ class CodeEntryStep extends StatelessWidget {
   final VoidCallback onSubmit;
 
   @override
+  State<CodeEntryStep> createState() => _CodeEntryStepState();
+}
+
+class _CodeEntryStepState extends State<CodeEntryStep> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.codeString);
+  }
+
+  @override
+  void didUpdateWidget(CodeEntryStep oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.codeString != oldWidget.codeString &&
+        widget.codeString != _controller.text) {
+      _controller.text = widget.codeString;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleChanged(String value) {
+    final decoded = decodeHelixInviteCode(value);
+    if (decoded != null && decoded.inviteCode != value) {
+      _controller.text = decoded.inviteCode;
+      _controller.selection =
+          TextSelection.collapsed(offset: decoded.inviteCode.length);
+      widget.onCodeChanged(decoded.inviteCode);
+    } else {
+      widget.onCodeChanged(value);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final upper = codeString.trim().toUpperCase();
+    final upper = widget.codeString.trim().toUpperCase();
     final isRecovery = upper.startsWith('HLX-REC-') ||
         upper.startsWith('REC-') ||
         upper.contains('RECOVERY');
@@ -46,11 +87,13 @@ class CodeEntryStep extends StatelessWidget {
               ),
               IconButton(
                 icon: Icon(
-                  showInfoPopover ? Icons.cancel_outlined : Icons.info_outline,
+                  widget.showInfoPopover
+                      ? Icons.cancel_outlined
+                      : Icons.info_outline,
                   color: theme.colorScheme.primary,
                 ),
                 tooltip: 'Code details',
-                onPressed: onToggleInfo,
+                onPressed: widget.onToggleInfo,
               ),
             ],
           ),
@@ -62,7 +105,7 @@ class CodeEntryStep extends StatelessWidget {
             ),
           ),
           // Info popover banner
-          if (showInfoPopover) ...[
+          if (widget.showInfoPopover) ...[
             const SizedBox(height: HelixSpace.md),
             Container(
               padding: HelixInsets.all(HelixSpace.md),
@@ -105,19 +148,19 @@ class CodeEntryStep extends StatelessWidget {
           ],
           const SizedBox(height: HelixSpace.lg),
           TextFormField(
-            initialValue: codeString,
+            controller: _controller,
             autofocus: true,
             decoration: InputDecoration(
               labelText: 'Code or Link',
               hintText: 'e.g. HLX-INV-… or HLX-REC-…',
               prefixIcon: const Icon(Icons.qr_code),
-              errorText: errorMessage,
+              errorText: widget.errorMessage,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onChanged: onCodeChanged,
-            onFieldSubmitted: (_) => onSubmit(),
+            onChanged: _handleChanged,
+            onFieldSubmitted: (_) => widget.onSubmit(),
           ),
           if (upper.isNotEmpty) ...[
             const SizedBox(height: HelixSpace.sm),
@@ -159,21 +202,21 @@ class CodeEntryStep extends StatelessWidget {
           ],
           const SizedBox(height: HelixSpace.xl),
           FilledButton.icon(
-            onPressed: isLoading ? null : onSubmit,
+            onPressed: widget.isLoading ? null : widget.onSubmit,
             style: FilledButton.styleFrom(
               padding: HelixInsets.all(HelixSpace.md),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            icon: isLoading
+            icon: widget.isLoading
                 ? const SizedBox.square(
                     dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.link),
             label: Text(
-              isLoading ? "Verifying…" : "Verify & Connect",
+              widget.isLoading ? "Verifying…" : "Verify & Connect",
               style: const TextStyle(fontSize: 16),
             ),
           ),

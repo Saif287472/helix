@@ -36,7 +36,7 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () {
-                  _update(() => _errorMessage = null);
+                  _clearErrorMessage();
                   _startBoot();
                 },
                 icon: const Icon(Icons.refresh),

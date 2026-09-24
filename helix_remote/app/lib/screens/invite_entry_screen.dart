@@ -1,11 +1,7 @@
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:helix_remote/app/helix_code.dart';
-import 'package:helix_remote/app/remote_account_validation.dart';
-import 'package:helix_remote/app/remote_config.dart';
-import 'package:helix_remote/app/remote_rest_client.dart';
-import 'package:helix_remote/widgets/country_code_picker.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
+import 'package:helix_remote/screens/setup/setup_screen.dart';
+import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
+import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
 /// Result of successfully validating a personal server + invite combo, with
 /// the phone number collected alongside it on the same screen.
@@ -29,236 +25,24 @@ class ServerInviteChoice {
   final String? phoneNumber;
 }
 
-/// "Personal server" first-launch path: the admin who invited you shares a
-/// single combined `<server_address>/join?invite=<code>` link, and this is
-/// also the only screen that ever needs to ask "which server" - so the
-/// phone number is collected here too, rather than asking for the invite
-/// code a second time on a later screen.
-class InviteEntryScreen extends StatefulWidget {
+/// "Personal server" entry screen. Wraps [SetupScreen] pre-configured
+/// for the "Others" / Join personal server flow.
+class InviteEntryScreen extends StatelessWidget {
   const InviteEntryScreen({super.key});
 
   @override
-  State<InviteEntryScreen> createState() => _InviteEntryScreenState();
-}
-
-class _InviteEntryScreenState extends State<InviteEntryScreen> {
-  final _linkController = TextEditingController();
-  final _nationalNumberController = TextEditingController();
-  Country _selectedCountry = kDefaultCountry;
-  bool _checking = false;
-  String? _error;
-  String? _phoneError;
-
-  @override
-  void dispose() {
-    _linkController.dispose();
-    _nationalNumberController.dispose();
-    super.dispose();
-  }
-
-  ({String serverUrl, String inviteCode})? _parse(String raw) {
-    return decodeHelixInviteCode(raw);
-  }
-
-  /// Combines [_selectedCountry]'s dial code with the entered national
-  /// digits into an E.164 number, stripping a leading `0` (the common
-  /// local-dialing prefix, e.g. "01712345678") that must not appear after
-  /// the country code.
-  String get _phoneNumber {
-    final digits = _nationalNumberController.text.replaceAll(
-      RegExp(r'[^\d]'),
-      '',
-    );
-    final national = digits.startsWith('0') ? digits.substring(1) : digits;
-    return '${_selectedCountry.dialCode}$national';
-  }
-
-  Future<void> _continue() async {
-    if (_checking) return;
-    final parsed = _parse(_linkController.text);
-    final phoneNumber = _phoneNumber;
-    final phoneError = RemoteAccountValidation.phoneNumberError(phoneNumber);
-    if (parsed == null || phoneError != null) {
-      setState(() {
-        _error = parsed == null
-            ? 'Paste the full link your admin shared, or the invitation code (starts with HLX-INV-).'
-            : null;
-        _phoneError = phoneError;
-      });
-      return;
-    }
-
-    setState(() {
-      _checking = true;
-      _error = null;
-      _phoneError = null;
-    });
-
-    HelixRemoteRestClientImpl? client;
-    try {
-      final restBaseUri = RemoteDevelopmentConfig.restBaseUriFromServerUrl(
-        parsed.serverUrl,
-      );
-      client = HelixRemoteRestClientImpl(
-        baseUri: restBaseUri,
-        timeoutMs: 15000,
-      );
-      final lookup = await client.lookupInvite(inviteCode: parsed.inviteCode);
-      if (lookup['valid'] != true) {
-        if (mounted) {
-          setState(
-            () => _error =
-                'That invite code is invalid or has expired. Ask your '
-                'admin for a new one.',
-          );
-        }
-        return;
-      }
-      if (!mounted) return;
-
-      // When the admin has named their server, confirm which one this
-      // invite is for before joining - the name is the whole reason they
-      // set one, and a link pasted from a chat is worth double-checking.
-      // Servers with no name behave exactly as before and join straight
-      // through.
-      final serverName = (lookup['server_name'] as String? ?? '').trim();
-      if (serverName.isNotEmpty) {
-        final confirmed = await _confirmJoin(serverName);
-        if (!confirmed || !mounted) return;
-      }
-
-      if (mounted) {
-        Navigator.of(context).pop(
-          ServerInviteChoice(
-            serverUrl: parsed.serverUrl,
-            inviteCode: parsed.inviteCode,
-            phoneNumber: phoneNumber,
-            serverName: serverName.isEmpty ? null : serverName,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      client?.close();
-      if (mounted) setState(() => _checking = false);
-    }
-  }
-
-  /// Names the server the invite belongs to and asks the user to confirm.
-  Future<bool> _confirmJoin(String serverName) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).joinServer),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              serverName,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Text(HelixLocalizations.of(context).inviteServerOnlyContinueIf),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(HelixLocalizations.of(context).cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(HelixLocalizations.of(context).join),
-          ),
-        ],
-      ),
-    );
-    return confirmed ?? false;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(HelixLocalizations.of(context).connectPersonalServer),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Padding(
-                padding: HelixInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.link, size: 64),
-                    const SizedBox(height: 16),
-                    Text(
-                      HelixLocalizations.of(context).pasteInviteLink,
-                      style: theme.textTheme.headlineSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      HelixLocalizations.of(
-                        context,
-                      ).adminServerYoureJoiningShares,
-                      style: theme.textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-                    TextField(
-                      controller: _linkController,
-                      enabled: !_checking,
-                      decoration: InputDecoration(
-                        labelText: 'Invitation code',
-                        hintText: 'HLX-INV-…',
-                        border: const OutlineInputBorder(),
-                        errorText: _error,
-                        errorMaxLines: 4,
-                      ),
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 16),
-                    PhoneNumberInput(
-                      country: _selectedCountry,
-                      onCountryChanged: (country) =>
-                          setState(() => _selectedCountry = country),
-                      numberController: _nationalNumberController,
-                      enabled: !_checking,
-                      errorText: _phoneError,
-                      errorMaxLines: 3,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _continue(),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _checking ? null : _continue,
-                        icon: _checking
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.arrow_forward),
-                        label: Text(_checking ? 'Checking…' : 'Continue'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    final notifier = OnboardingNotifier(autoStartLaunch: false)
+      ..setServerType(ServerType.others)
+      ..setOthersOption(OthersOption.join);
+
+    return SetupScreen(
+      notifier: notifier,
+      onChoice: (choice) {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop(choice);
+        }
+      },
     );
   }
 }

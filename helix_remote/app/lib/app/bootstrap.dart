@@ -160,7 +160,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
     await ServerUrlStore.instance.clear();
     if (mounted) {
       setState(() {
-        _bootState = _BootState.needsUrl;
+        _bootState = _BootState.needsServerChoice;
         _initialUrlError = null;
       });
     }
@@ -186,17 +186,12 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
           body: Center(child: HelixSkeleton(width: 192, height: 24)),
         );
       case _BootState.needsServerChoice:
+      case _BootState.needsUrl:
         return SetupScreen(onChoice: _onServerChoiceMade);
       case _BootState.offline:
         return _OfflineShellScreen(
           onServerChoiceMade: _onServerChoiceMade,
           connectError: _initialUrlError,
-        );
-      case _BootState.needsUrl:
-        return _ServerUrlEntryScreen(
-          onConnect: _onConnectUrl,
-          initialError: _initialUrlError,
-          initialUrl: _currentServerUrl,
         );
       case _BootState.running:
         // Handled above before reaching this switch.
