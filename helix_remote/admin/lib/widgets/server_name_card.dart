@@ -118,22 +118,31 @@ class _ServerNameCardState extends State<ServerNameCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
       child: Padding(
-        padding: HelixInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
               'Server Name',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Shown to everyone on this server - on the join screen when '
-              'they use your invite, and in their app settings afterwards.',
               style: TextStyle(
-                color: context.textSecondary,
-                fontSize: 13,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Shown to everyone on this server - on the join screen when they use your invite, and in their app settings afterwards.',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 12,
                 height: 1.4,
               ),
             ),
@@ -148,7 +157,8 @@ class _ServerNameCardState extends State<ServerNameCard> {
               },
               decoration: InputDecoration(
                 labelText: 'Server name',
-                hintText: 'Unnamed - users see ${widget.fallbackName ?? (widget.serverHost != null && widget.serverHost!.isNotEmpty ? widget.serverHost! : "Private Server")}',
+                hintText:
+                    'Unnamed - users see ${widget.fallbackName ?? (widget.serverHost != null && widget.serverHost!.isNotEmpty ? widget.serverHost! : "Private Server")}',
                 errorText: _error,
                 helperText: _justSaved
                     ? 'Saved. Users will see this name from now on.'
@@ -156,18 +166,46 @@ class _ServerNameCardState extends State<ServerNameCard> {
                 helperStyle: _justSaved
                     ? const TextStyle(color: Colors.green)
                     : null,
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                ),
               ),
             ),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
                 onPressed: _isDirty && !_isSaving ? _save : null,
                 icon: _isSaving
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Icon(Icons.save_outlined, size: 18),
                 label: Text(_isSaving ? 'Saving...' : 'Save name'),
