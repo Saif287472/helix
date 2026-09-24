@@ -40,7 +40,6 @@ extension _SettingsActions on _SettingsScreenState {
     final defaultDisappearing = _viewModel.defaultDisappearingSeconds;
     final previewsOn = _viewModel.notificationPreviewsEnabled;
     final silenceUnknown = _viewModel.silenceUnknownCallers;
-    final host = serverUri.host.isEmpty ? serverUri.toString() : serverUri.host;
 
     // Nine rows used to lead to this same privacy screen and twelve more
     // led nowhere at all. Rows that shared a destination are collapsed into
@@ -158,12 +157,7 @@ extension _SettingsActions on _SettingsScreenState {
             icon: Icons.dns_outlined,
             color: HelixColorTokens.cFF4F46E5,
             title: 'Server connection',
-            // The admin's name for the server when they set one, with the
-            // host kept alongside it - the name is friendlier, but the
-            // address is what actually identifies where data goes.
-            subtitle: _serverName == null
-                ? host
-                : '$_serverName  \u00b7  $host',
+            subtitle: _serverName ?? 'Private Server',
             onTap: widget.onChangeServerUrl == null
                 ? _showServerInfo
                 : _confirmChangeServer,
@@ -249,7 +243,7 @@ extension _SettingsActions on _SettingsScreenState {
             _ProfileCard(
               displayName: displayName,
               accountId: accountId,
-              serverUri: serverUri,
+              serverName: _serverName,
               onTap: _openProfile,
               onQrTap: () => _showAccountCode(displayName),
               onEditTap: _openProfile,

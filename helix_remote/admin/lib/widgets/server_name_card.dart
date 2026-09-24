@@ -12,6 +12,7 @@ class ServerNameCard extends StatefulWidget {
     required this.initialName,
     required this.maxLength,
     required this.onSave,
+    this.fallbackName,
     this.serverHost,
   });
 
@@ -25,8 +26,10 @@ class ServerNameCard extends StatefulWidget {
   /// server rejects it.
   final Future<String> Function(String name) onSave;
 
-  /// What users see when no name is set, shown as the placeholder so the
-  /// fallback isn't a mystery.
+  /// Fallback name shown to users when no custom display name is configured.
+  final String? fallbackName;
+
+  /// Host users connect to (internal fallback).
   final String? serverHost;
 
   @override
@@ -114,7 +117,6 @@ class _ServerNameCardState extends State<ServerNameCard> {
 
   @override
   Widget build(BuildContext context) {
-    final host = widget.serverHost;
     return Card(
       child: Padding(
         padding: HelixInsets.all(24),
@@ -146,13 +148,11 @@ class _ServerNameCardState extends State<ServerNameCard> {
               },
               decoration: InputDecoration(
                 labelText: 'Server name',
-                hintText: host == null || host.isEmpty
-                    ? 'e.g. Rahman Family Server'
-                    : 'Unnamed - users see $host',
+                hintText: 'Unnamed - users see ${widget.fallbackName ?? (widget.serverHost != null && widget.serverHost!.isNotEmpty ? widget.serverHost! : "Private Server")}',
                 errorText: _error,
                 helperText: _justSaved
                     ? 'Saved. Users will see this name from now on.'
-                    : 'Leave empty to show the server address instead.',
+                    : 'Leave empty to show the default name instead.',
                 helperStyle: _justSaved
                     ? const TextStyle(color: Colors.green)
                     : null,

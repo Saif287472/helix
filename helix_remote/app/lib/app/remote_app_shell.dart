@@ -74,11 +74,13 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   // on every call state change (which caused a double call-screen push bug).
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   String? _lastConnectivitySignature;
+  String? _serverName;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadServerName();
     _nationalNumberController.addListener(_syncPhoneController);
     final initialInvite = widget.initialInviteCode;
     if (initialInvite != null && initialInvite.isNotEmpty) {
@@ -119,6 +121,15 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
       _onConnectivityChanged,
     );
     _startBoot();
+  }
+
+  Future<void> _loadServerName() async {
+    try {
+      final info = await widget.root.restClient.getServerInfo();
+      final name = (info['server_name'] as String? ?? '').trim();
+      if (!mounted || name.isEmpty) return;
+      setState(() => _serverName = name);
+    } catch (_) {}
   }
 
   void _onConnectivityChanged(List<ConnectivityResult> results) {

@@ -92,7 +92,7 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    widget.root.devConfig.restBaseUri.authority,
+                    _serverName ?? 'Private Server',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline,
                     ),
@@ -176,6 +176,10 @@ extension _RemoteAppRegistration on _HelixRemoteAppState {
   /// paste) full links here too even though only the bare code is normally
   /// expected. Returns [raw] unchanged if it doesn't look like a link.
   String _extractInviteCode(String raw) {
+    if (isHelixInviteCode(raw)) {
+      final decoded = decodeHelixInviteCode(raw);
+      if (decoded != null) return decoded.inviteCode;
+    }
     if (!raw.contains('invite=')) return raw;
     final withScheme = raw.startsWith('http://') || raw.startsWith('https://')
         ? raw

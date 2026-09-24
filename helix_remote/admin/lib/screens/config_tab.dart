@@ -42,6 +42,7 @@ class ConfigTab extends StatelessWidget {
             initialName: config['server_name'] as String? ?? '',
             maxLength: config['max_server_name_length'] as int? ?? 60,
             onSave: onSaveServerName,
+            fallbackName: config['default_server_name'] as String?,
             serverHost: serverHost,
           ),
           const SizedBox(height: 16),
@@ -60,6 +61,19 @@ class ConfigTab extends StatelessWidget {
                     context,
                     'Server ID',
                     config['server_id'] ?? 'unknown',
+                  ),
+                  _configField(
+                    context,
+                    'Default Fallback Name',
+                    config['default_server_name'] ?? 'Private Server',
+                  ),
+                  _configField(
+                    context,
+                    'Public Domain / Address',
+                    (config['public_base_url'] != null &&
+                            config['public_base_url'].toString().isNotEmpty)
+                        ? config['public_base_url'].toString()
+                        : (serverHost ?? 'unknown'),
                   ),
                   _configField(
                     context,

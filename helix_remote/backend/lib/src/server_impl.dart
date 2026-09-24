@@ -545,6 +545,7 @@ class BackendServer {
             path.endsWith('/accounts/phone/otp/request') ||
             path.endsWith('/accounts/invite/lookup') ||
             path.endsWith('/accounts/invite/auto-issue') ||
+            path.endsWith('/accounts/recovery/redeem') ||
             path.endsWith('/contacts/discovery-salt') ||
             path.endsWith('/devices/link/request-new') ||
             path.endsWith('/devices/link/complete-new') ||

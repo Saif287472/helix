@@ -278,6 +278,22 @@ class AdminClient {
     }
   }
 
+  /// Generates a single-use 48-hour account recovery code (HLX-REC-...)
+  /// for a user to restore access on a new device.
+  Future<Map<String, dynamic>> generateRecoveryCode(String accountId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/recovery-code'),
+      headers: _headers,
+    );
+    final body = _decodeOrNull(response.body);
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        body?['error'] as String? ?? 'Failed to generate recovery code.',
+      );
+    }
+    return body ?? {};
+  }
+
   /// Permanent revoke: irreversibly deletes the account and all of its
   /// data (messages, devices, contacts referencing it, etc.). The phone
   /// number itself is left free - a new account can register it again.

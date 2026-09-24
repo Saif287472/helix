@@ -7,6 +7,7 @@ import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/feature_flags.dart';
+import 'package:helix_remote_backend/src/helix_code.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
@@ -108,10 +109,16 @@ class OperabilityModule {
   }
 
   Response _serverInfo(Request request) {
+    final configuredName = db.getServerConfig(serverNameConfigKey);
+    final serverId =
+        serverIdentity?.serverId ?? db.getServerConfig('server_id') ?? '';
+    final effectiveName =
+        (configuredName != null && configuredName.trim().isNotEmpty)
+            ? configuredName.trim()
+            : defaultServerName(serverId);
+
     return _json({
-      // Empty means the admin never named this server; clients fall back
-      // to showing the hostname they connected to.
-      'server_name': db.getServerConfig(serverNameConfigKey) ?? '',
+      'server_name': effectiveName,
       // Attachment limits live here so an operator can change them in .env
       // without an app release, and so the client's error message can never
       // disagree with what this server will actually accept. Both are
@@ -214,6 +221,7 @@ class OperabilityModule {
     router.post('/users/<accountId>/unsuspend', _unsuspendUser);
     router.post('/users/<accountId>/delete', _deleteUser);
     router.post('/users/<accountId>/block', _blockUser);
+    router.post('/users/<accountId>/recovery-code', _generateUserRecoveryCode);
     router.get('/logs', _logs);
     router.post('/invites', _createInvite);
     router.get('/invites', _listInvites);
@@ -443,7 +451,9 @@ class OperabilityModule {
       // Empty when the admin has not named the server; the admin console
       // shows the placeholder and clients fall back to the hostname.
       'server_name': db.getServerConfig(serverNameConfigKey) ?? '',
+      'default_server_name': defaultServerName(serverId),
       'max_server_name_length': maxServerNameLength,
+      'public_base_url': publicBaseUrl,
       'port': Platform.environment['HELIX_REMOTE_PORT'] ?? '8080',
       'host': Platform.environment['HELIX_REMOTE_HOST'] ?? '127.0.0.1',
       'dev_mode': Platform.environment['HELIX_REMOTE_DEV_MODE'] == '1',
@@ -762,6 +772,58 @@ class OperabilityModule {
     return _json({'account_id': accountId, 'blocked': true, 'deleted': true});
   }
 
+  /// Generates a single-use, 48-hour recovery code for an existing user account.
+  /// Conceals the server's raw domain and port inside an opaque HLX-REC-... token.
+  Future<Response> _generateUserRecoveryCode(
+    Request request,
+    String accountId,
+  ) async {
+    if (!_isAdmin(request)) {
+      throw AppError.forbidden('Admin privileges required');
+    }
+    final account = db.getAccount(accountId);
+    if (account == null) {
+      throw AppError.notFound('Account not found');
+    }
+    if (account['status'] == 'BLOCKED') {
+      throw AppError.forbidden('Cannot generate recovery code for a blocked user');
+    }
+
+    final recoveryCode = 'rec_${generatePasswordSalt()}';
+    final salt = generatePasswordSalt();
+    final codeHash = hashAdminPassword(recoveryCode, salt);
+    final now = _now().millisecondsSinceEpoch;
+    final expiresAt = now + const Duration(hours: 48).inMilliseconds;
+    final recoveryId = generateUuidV4();
+
+    db.createRecoveryCode(
+      recoveryId: recoveryId,
+      accountId: accountId,
+      codeHash: codeHash,
+      salt: salt,
+      createdAt: now,
+      expiresAt: expiresAt,
+    );
+
+    _auditAdminWrite(
+      request,
+      'ADMIN_USER_RECOVERY_ISSUED',
+    );
+
+    final opaqueCode = encodeHelixRecoveryCode(
+      serverUrl: publicBaseUrl,
+      accountId: accountId,
+      recoveryCode: recoveryCode,
+    );
+
+    return _json({
+      'account_id': accountId,
+      'recovery_code': recoveryCode,
+      'opaque_code': opaqueCode,
+      'expires_at': expiresAt,
+    });
+  }
+
   Future<Response> _cancelInvite(Request request, String inviteId) async {
     if (!_isAdmin(request)) {
       throw AppError.forbidden('Admin privileges required');
@@ -810,6 +872,10 @@ class OperabilityModule {
     return _json({
       'invite_id': inviteId,
       'invite_code': code,
+      'shareable_code': encodeHelixInviteCode(
+        serverUrl: publicBaseUrl,
+        inviteCode: code,
+      ),
       'shareable_url': '$publicBaseUrl/join?invite=$code',
       'expires_at': expiresAt,
     });

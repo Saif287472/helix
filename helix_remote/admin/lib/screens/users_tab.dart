@@ -1,5 +1,6 @@
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../admin_client.dart';
 import '../theme/app_theme.dart';
 
@@ -75,6 +76,86 @@ class _UsersTabState extends State<UsersTab> {
     try {
       await widget.client.unsuspendUser(accountId);
       await _loadUsers(offset: _offset);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyAccountId = null);
+    }
+  }
+
+  Future<void> _issueRecoveryCode(String accountId, String displayLabel) async {
+    setState(() => _busyAccountId = accountId);
+    try {
+      final result = await widget.client.generateRecoveryCode(accountId);
+      final code = result['code'] as String? ?? '';
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.key, size: 22),
+              SizedBox(width: 8),
+              Text('Account Recovery Code'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Send this recovery code to $displayLabel. They can enter it on a new '
+                'device to restore their account access. The server address is '
+                'shielded inside this code.',
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: HelixInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(ctx).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                child: SelectableText(
+                  code,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '• Single-use only\n• Expires in 48 hours\n• Lost/old devices will be revoked',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.copy, size: 16),
+              label: const Text('Copy Code'),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: code));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Recovery code copied to clipboard'),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -295,6 +376,14 @@ class _UsersTabState extends State<UsersTab> {
                     : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          IconButton(
+                            icon: const Icon(Icons.key_outlined),
+                            tooltip: 'Issue recovery code',
+                            onPressed: () => _issueRecoveryCode(
+                              accountId,
+                              displayName.isEmpty ? accountId : displayName,
+                            ),
+                          ),
                           IconButton(
                             icon: Icon(
                               isSuspended

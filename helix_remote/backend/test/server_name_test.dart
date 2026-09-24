@@ -288,7 +288,7 @@ void main() {
       expect(lookup.json['server_name'], 'Rahman Family Server');
     });
 
-    test('invite lookup returns an empty name when none is set', () async {
+    test('invite lookup returns the default server name when none is set', () async {
       final created = await send(
         'POST',
         '/api/v1/ops/invites',
@@ -302,7 +302,7 @@ void main() {
       );
 
       expect(lookup.json['valid'], isTrue);
-      expect(lookup.json['server_name'], '');
+      expect(lookup.json['server_name'], startsWith('Private Server #'));
     });
 
     test('setting the name is recorded in the audit log', () async {

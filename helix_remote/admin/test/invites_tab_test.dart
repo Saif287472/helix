@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/admin_client.dart';
+import 'package:helix_admin/helix_code.dart';
 import 'package:helix_admin/screens/invites_tab.dart';
 import 'package:helix_admin/theme/app_theme.dart';
 
@@ -162,7 +163,7 @@ void main() {
     expect(find.text('No invites issued yet.'), findsNothing);
   });
 
-  testWidgets('generating an invite shows the shareable link once', (
+  testWidgets('generating an invite shows the shareable code once', (
     tester,
   ) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
@@ -172,7 +173,17 @@ void main() {
     await tester.tap(find.widgetWithText(ElevatedButton, 'Generate Invite'));
     await _settleWithRealIO(tester);
 
-    expect(find.textContaining('/join?invite=code_1'), findsOneWidget);
+    final inviteCodeFinder = find.byWidgetPredicate(
+      (w) =>
+          w is SelectableText &&
+          w.data != null &&
+          w.data!.startsWith('HLX-INV-'),
+    );
+    expect(inviteCodeFinder, findsOneWidget);
+    final textWidget = tester.widget<SelectableText>(inviteCodeFinder);
+    final decoded = decodeHelixInviteCode(textWidget.data!);
+    expect(decoded, isNotNull);
+    expect(decoded!.inviteCode, equals('code_1'));
     expect(createCalls, equals(1));
     // The new invite is reflected in the refreshed history table too.
     expect(find.text('PENDING'), findsNWidgets(2));
@@ -180,7 +191,7 @@ void main() {
 
   testWidgets(
     'a schemeless shareable_url from the server (missing '
-    'HELIX_REMOTE_PUBLIC_BASE_URL) is repaired using the connected base URL',
+    'HELIX_REMOTE_PUBLIC_BASE_URL) is repaired using the connected base URL into an opaque code',
     (tester) async {
       serverOmitsShareableUrlHost = true;
       final client = AdminClient(baseUrl: baseUrl(), token: 't');
@@ -190,14 +201,18 @@ void main() {
       await tester.tap(find.widgetWithText(ElevatedButton, 'Generate Invite'));
       await _settleWithRealIO(tester);
 
-      expect(
-        find.text('${baseUrl()}/join?invite=code_1'),
-        findsOneWidget,
-        reason:
-            'a bare /join?invite=CODE link is useless once pasted '
-            'elsewhere - it must be completed with the server address the '
-            'admin console is already connected to',
+      final inviteCodeFinder = find.byWidgetPredicate(
+        (w) =>
+            w is SelectableText &&
+            w.data != null &&
+            w.data!.startsWith('HLX-INV-'),
       );
+      expect(inviteCodeFinder, findsOneWidget);
+      final textWidget = tester.widget<SelectableText>(inviteCodeFinder);
+      final decoded = decodeHelixInviteCode(textWidget.data!);
+      expect(decoded, isNotNull);
+      expect(decoded!.serverUrl, equals(baseUrl()));
+      expect(decoded.inviteCode, equals('code_1'));
     },
   );
 

@@ -2,6 +2,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../admin_client.dart';
+import '../helix_code.dart';
 import '../theme/app_theme.dart';
 
 /// Invite-credential issuance and audit history. Locked like Dashboard/
@@ -26,7 +27,7 @@ class _InvitesTabState extends State<InvitesTab> {
   bool _loading = false;
   bool _generating = false;
   String? _error;
-  String? _lastShareableUrl;
+  String? _lastShareableCode;
   String? _busyInviteId;
 
   @override
@@ -71,7 +72,7 @@ class _InvitesTabState extends State<InvitesTab> {
       final result = await widget.client.createInvite();
       if (!mounted) return;
       setState(() {
-        _lastShareableUrl = _resolveShareableUrl(result);
+        _lastShareableCode = _resolveShareableCode(result);
         _generating = false;
       });
       await _loadInvites(offset: 0);
@@ -84,21 +85,16 @@ class _InvitesTabState extends State<InvitesTab> {
     }
   }
 
-  /// The server includes `shareable_url`, but it's only a full link when
-  /// HELIX_REMOTE_PUBLIC_BASE_URL was set at deploy time - a step many
-  /// self-hosters miss, which otherwise leaves it schemeless/host-less
-  /// (e.g. `/join?invite=CODE`, unusable when pasted elsewhere). Fall back
-  /// to building the link from the address this admin console is already
-  /// connected to, which is always a real, reachable URL.
-  String _resolveShareableUrl(Map<String, dynamic> result) {
-    final serverUrl = result['shareable_url'] as String?;
-    if (serverUrl != null &&
-        (serverUrl.startsWith('http://') || serverUrl.startsWith('https://'))) {
-      return serverUrl;
+  /// Resolves the opaque shareable invite code (HLX-INV-...) concealing
+  /// the server address so it is never exposed in the invite string.
+  String _resolveShareableCode(Map<String, dynamic> result) {
+    final shareableCode = result['shareable_code'] as String?;
+    if (shareableCode != null && isHelixInviteCode(shareableCode)) {
+      return shareableCode;
     }
     final inviteCode = result['invite_code'] as String;
     final base = widget.client.baseUrl.replaceAll(RegExp(r'/+$'), '');
-    return '$base/join?invite=$inviteCode';
+    return encodeHelixInviteCode(serverUrl: base, inviteCode: inviteCode);
   }
 
   Future<void> _cancelInvite(String inviteId) async {
@@ -139,8 +135,8 @@ class _InvitesTabState extends State<InvitesTab> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Single-use, expires in 7 days. The code is shown once '
-                    '- copy it now.',
+                    'Single-use, expires in 7 days. Send this invite code '
+                    'to the new user. The server address is shielded.',
                     style: TextStyle(
                       color: context.textSecondary,
                       fontSize: 13,
@@ -168,7 +164,7 @@ class _InvitesTabState extends State<InvitesTab> {
                       padding: HelixInsets.symmetric(vertical: 16),
                     ),
                   ),
-                  if (_lastShareableUrl != null) ...[
+                  if (_lastShareableCode != null) ...[
                     const SizedBox(height: 16),
                     Container(
                       padding: HelixInsets.all(16),
@@ -183,18 +179,19 @@ class _InvitesTabState extends State<InvitesTab> {
                         children: [
                           Expanded(
                             child: SelectableText(
-                              _lastShareableUrl!,
+                              _lastShareableCode!,
                               style: TextStyle(
                                 fontFamily: 'monospace',
                                 color: context.accentColor,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
                           IconButton(
                             icon: const Icon(Icons.copy),
-                            tooltip: 'Copy link',
+                            tooltip: 'Copy code',
                             onPressed: () =>
-                                _copyToClipboard(_lastShareableUrl!),
+                                _copyToClipboard(_lastShareableCode!),
                           ),
                         ],
                       ),

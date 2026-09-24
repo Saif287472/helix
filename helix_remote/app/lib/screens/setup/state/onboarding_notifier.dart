@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
+import 'package:helix_remote/app/helix_code.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
@@ -226,8 +227,23 @@ class OnboardingNotifier extends ChangeNotifier {
     notifyListeners();
 
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    final upper = code.toUpperCase();
 
+    // Try HLX-REC- recovery code first
+    final recovery = decodeHelixRecoveryCode(code);
+    if (recovery != null) {
+      _state = _state.copyWith(
+        isLoading: false,
+        codeType: CodeType.recovery,
+        loadingStatus: 'Recovering account state…',
+        serverNodeUrl: recovery.serverUrl,
+        step: OnboardingStep.personalVerify,
+      );
+      notifyListeners();
+      return true;
+    }
+
+    // Also detect legacy REC- prefix
+    final upper = code.toUpperCase();
     if (upper.startsWith('REC-') || upper.contains('RECOVERY')) {
       _state = _state.copyWith(
         isLoading: false,
@@ -237,38 +253,51 @@ class OnboardingNotifier extends ChangeNotifier {
       );
       notifyListeners();
       return true;
-    } else {
-      // Parse invite or server link
-      String serverUrl = 'http://localhost:8443';
-      String inviteCode = code;
+    }
 
-      final withScheme = code.startsWith('http://') || code.startsWith('https://')
-          ? code
-          : 'https://$code';
-      final uri = Uri.tryParse(withScheme);
-      if (uri != null && uri.host.isNotEmpty) {
-        final queryInvite = uri.queryParameters['invite'];
-        if (queryInvite != null && queryInvite.isNotEmpty) {
-          inviteCode = queryInvite;
-          serverUrl = uri.replace(path: '', query: '', fragment: '').toString();
-        }
-      }
-
-      final serverName = inviteCode.length > 4
-          ? 'CipherNode ${inviteCode.substring(0, 4).toUpperCase()}'
-          : 'Personal Node';
+    // Try HLX-INV- invite code or legacy URL
+    final invite = decodeHelixInviteCode(code);
+    if (invite != null) {
+      final serverName = invite.inviteCode.length > 4
+          ? 'Private Server ${invite.inviteCode.substring(0, 4).toUpperCase()}'
+          : 'Private Server';
 
       _state = _state.copyWith(
         isLoading: false,
         codeType: CodeType.invitation,
         connectedServerName: serverName,
-        serverNodeUrl: serverUrl,
-        inviteCode: inviteCode,
+        serverNodeUrl: invite.serverUrl,
+        inviteCode: invite.inviteCode,
         step: OnboardingStep.personalVerify,
       );
       notifyListeners();
       return true;
     }
+
+    // Fallback for bare invite codes (e.g. INV-9921 or testing)
+    if (upper.startsWith('INV-') || !code.contains(' ')) {
+      final serverName = code.length > 4
+          ? 'Private Server ${code.substring(0, 4).toUpperCase()}'
+          : 'Private Server';
+      _state = _state.copyWith(
+        isLoading: false,
+        codeType: CodeType.invitation,
+        connectedServerName: serverName,
+        serverNodeUrl: 'http://localhost:8443',
+        inviteCode: code,
+        step: OnboardingStep.personalVerify,
+      );
+      notifyListeners();
+      return true;
+    }
+
+    // Nothing matched
+    _state = _state.copyWith(
+      isLoading: false,
+      errorMessage: 'Invalid code. Paste the HLX-INV- or HLX-REC- code your admin shared.',
+    );
+    notifyListeners();
+    return false;
   }
 
   Future<bool> completeSetup({

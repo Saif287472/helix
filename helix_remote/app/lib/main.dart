@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:helix_remote/app/helix_remote_app_shell.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/deep_link.dart';
+import 'package:helix_remote/app/helix_code.dart';
 import 'package:helix_remote/app/routes.dart';
 import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_config.dart';

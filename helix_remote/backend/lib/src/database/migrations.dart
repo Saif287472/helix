@@ -1364,5 +1364,26 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 41;');
     }
+
+    if (version < 42) {
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS account_recovery_codes (
+          recovery_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          code_hash TEXT NOT NULL,
+          salt TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          redeemed_at INTEGER,
+          FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE
+        );
+      ''');
+      _db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_recovery_account
+        ON account_recovery_codes(account_id, expires_at);
+      ''');
+
+      _db.execute('PRAGMA user_version = 42;');
+    }
   }
 }

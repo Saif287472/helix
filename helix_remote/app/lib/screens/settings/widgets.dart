@@ -50,7 +50,7 @@ class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.displayName,
     required this.accountId,
-    required this.serverUri,
+    this.serverName,
     required this.onTap,
     required this.onQrTap,
     required this.onEditTap,
@@ -58,7 +58,7 @@ class _ProfileCard extends StatelessWidget {
 
   final String displayName;
   final String accountId;
-  final Uri serverUri;
+  final String? serverName;
   final VoidCallback onTap;
   final VoidCallback onQrTap;
   final VoidCallback onEditTap;
@@ -70,9 +70,7 @@ class _ProfileCard extends StatelessWidget {
     final accountLabel = accountId.isNotEmpty
         ? _shortId(accountId)
         : 'Helix account';
-    final serverLabel = serverUri.host.isNotEmpty
-        ? serverUri.host
-        : serverUri.toString();
+    final serverLabel = serverName ?? 'Private Server';
 
     return Material(
       color: _settingsCardColor(theme, cs),

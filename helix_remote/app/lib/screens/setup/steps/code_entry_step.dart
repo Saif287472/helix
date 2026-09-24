@@ -25,7 +25,9 @@ class CodeEntryStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final upper = codeString.trim().toUpperCase();
-    final isRecovery = upper.startsWith('REC-') || upper.contains('RECOVERY');
+    final isRecovery = upper.startsWith('HLX-REC-') ||
+        upper.startsWith('REC-') ||
+        upper.contains('RECOVERY');
 
     return SingleChildScrollView(
       child: Column(
@@ -54,7 +56,7 @@ class CodeEntryStep extends StatelessWidget {
           ),
           const SizedBox(height: HelixSpace.xs),
           Text(
-            "Paste your private server invitation link, invite code, or seed recovery key.",
+            "Paste the code your admin shared to join a private server or recover your account.",
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -89,12 +91,12 @@ class CodeEntryStep extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "• Invitation Codes (INV-xxxx or link): Connects to a private server and verifies your device.",
+                    "• Invitation Codes (HLX-INV-… or link): Connects to a private server and verifies your device.",
                     style: theme.textTheme.bodySmall?.copyWith(height: 1.3),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "• Recovery Codes (REC-xxxx): Instantly restores your existing Helix identity and chat keys.",
+                    "• Recovery Codes (HLX-REC-…): Instantly restores your existing Helix identity and chat keys.",
                     style: theme.textTheme.bodySmall?.copyWith(height: 1.3),
                   ),
                 ],
@@ -107,7 +109,7 @@ class CodeEntryStep extends StatelessWidget {
             autofocus: true,
             decoration: InputDecoration(
               labelText: 'Code or Link',
-              hintText: 'e.g. INV-8829-X, REC-9912-K, or https://...',
+              hintText: 'e.g. HLX-INV-… or HLX-REC-…',
               prefixIcon: const Icon(Icons.qr_code),
               errorText: errorMessage,
               border: OutlineInputBorder(

@@ -265,14 +265,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _confirmChangeServer() async {
-    final serverHost = widget.root.devConfig.restBaseUri.host;
+    final serverName = _serverName ?? 'Private Server';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(HelixLocalizations.of(context).changeServerUrl),
         content: Text(
-          'Currently connected to $serverHost.\n\n'
-          'This will disconnect and let you enter a new server URL. '
+          'Currently connected to $serverName.\n\n'
+          'This will disconnect and let you enter a new server code or URL. '
           'Your local account data is kept.',
         ),
         actions: [
@@ -405,7 +405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showServerInfo() {
-    final serverUri = widget.root.devConfig.restBaseUri;
+    final serverName = _serverName ?? 'Private Server';
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -414,14 +414,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_serverName != null) ...[
-              Text(
-                _serverName!,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-            ],
-            Text('${serverUri.scheme}://${serverUri.host}'),
+            Text(
+              serverName,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
           ],
         ),
         actions: [

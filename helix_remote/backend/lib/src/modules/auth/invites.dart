@@ -69,15 +69,18 @@ mixin AuthInviteHandlers on AuthModuleBase {
       );
     }
 
+    final configuredName = db.getServerConfig(serverNameConfigKey);
+    final serverId = db.getServerConfig('server_id') ?? '';
+    final effectiveName =
+        (configuredName != null && configuredName.trim().isNotEmpty)
+            ? configuredName.trim()
+            : defaultServerName(serverId);
+
     return Response.ok(
       jsonEncode({
         'valid': true,
-        'server_address': invite['server_address'],
         'issuer_type': invite['issuer_type'],
-        // Lets the join screen say which server the invite is for by the
-        // name its admin chose, instead of only by hostname. Empty when
-        // unnamed - the client falls back to the host.
-        'server_name': db.getServerConfig(serverNameConfigKey) ?? '',
+        'server_name': effectiveName,
       }),
       headers: {'Content-Type': 'application/json'},
     );

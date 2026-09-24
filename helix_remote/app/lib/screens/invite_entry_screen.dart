@@ -1,5 +1,6 @@
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:helix_remote/app/helix_code.dart';
 import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
@@ -56,18 +57,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
   }
 
   ({String serverUrl, String inviteCode})? _parse(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return null;
-    final withScheme =
-        trimmed.startsWith('http://') || trimmed.startsWith('https://')
-        ? trimmed
-        : 'https://$trimmed';
-    final uri = Uri.tryParse(withScheme);
-    if (uri == null || uri.host.isEmpty) return null;
-    final inviteCode = uri.queryParameters['invite'];
-    if (inviteCode == null || inviteCode.isEmpty) return null;
-    final serverUrl = uri.replace(path: '', query: '', fragment: '').toString();
-    return (serverUrl: serverUrl, inviteCode: inviteCode);
+    return decodeHelixInviteCode(raw);
   }
 
   /// Combines [_selectedCountry]'s dial code with the entered national
@@ -91,8 +81,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
     if (parsed == null || phoneError != null) {
       setState(() {
         _error = parsed == null
-            ? 'Paste the full link your admin shared, e.g. '
-                  'https://your-server.example/join?invite=CODE.'
+            ? 'Paste the full link your admin shared, or the invitation code (starts with HLX-INV-).'
             : null;
         _phoneError = phoneError;
       });
@@ -134,7 +123,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
       // through.
       final serverName = (lookup['server_name'] as String? ?? '').trim();
       if (serverName.isNotEmpty) {
-        final confirmed = await _confirmJoin(serverName, parsed.serverUrl);
+        final confirmed = await _confirmJoin(serverName);
         if (!confirmed || !mounted) return;
       }
 
@@ -157,8 +146,7 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
   }
 
   /// Names the server the invite belongs to and asks the user to confirm.
-  Future<bool> _confirmJoin(String serverName, String serverUrl) async {
-    final host = Uri.tryParse(serverUrl)?.host ?? serverUrl;
+  Future<bool> _confirmJoin(String serverName) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -170,14 +158,6 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
             Text(
               serverName,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              host,
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(dialogContext).hintColor,
-              ),
             ),
             const SizedBox(height: 16),
             Text(HelixLocalizations.of(context).inviteServerOnlyContinueIf),
@@ -235,9 +215,8 @@ class _InviteEntryScreenState extends State<InviteEntryScreen> {
                       controller: _linkController,
                       enabled: !_checking,
                       decoration: InputDecoration(
-                        labelText: 'Server invitation code',
-                        hintText:
-                            'https://your-server.example/join?invite=CODE',
+                        labelText: 'Invitation code',
+                        hintText: 'HLX-INV-…',
                         border: const OutlineInputBorder(),
                         errorText: _error,
                         errorMaxLines: 4,

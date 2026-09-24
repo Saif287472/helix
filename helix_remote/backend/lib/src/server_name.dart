@@ -12,6 +12,18 @@ library;
 
 const serverNameConfigKey = 'server_name';
 
+/// Derives a clean, consistent 4-digit identifier and default display name
+/// for a server from its UUID, e.g. "Private Server #3538".
+String defaultServerName(String serverId) {
+  final cleanId = serverId.replaceAll('-', '');
+  final hexSlice = cleanId.length >= 6
+      ? cleanId.substring(cleanId.length - 6)
+      : (cleanId.isEmpty ? '123456' : cleanId);
+  final numVal = int.tryParse(hexSlice, radix: 16) ?? 1000;
+  final code = 1000 + (numVal % 9000);
+  return 'Private Server #$code';
+}
+
 /// Longest name accepted. Long enough for "The Rahman Family's Server",
 /// short enough to fit a Settings row and a join-screen heading on a
 /// narrow phone without truncation.

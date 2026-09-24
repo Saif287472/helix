@@ -5,6 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:crypto/crypto.dart' as crypto_pkg;
+import 'package:helix_remote_backend/src/admin_password.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
@@ -20,6 +21,7 @@ part 'auth/devices.dart';
 part 'auth/invites.dart';
 part 'auth/phone_otp.dart';
 part 'auth/profile.dart';
+part 'auth/recovery.dart';
 part 'auth/refresh.dart';
 part 'auth/registration.dart';
 
@@ -79,6 +81,7 @@ class AuthModule extends AuthModuleBase
         AuthInviteHandlers,
         AuthPhoneOtpHandlers,
         AuthProfileHandlers,
+        AuthRecoveryHandlers,
         AuthRefreshHandlers,
         AuthRegistrationHandlers {
   @override
@@ -134,6 +137,7 @@ class AuthModule extends AuthModuleBase
     router.get('/challenge', _challengeHandler);
     router.post('/login', _loginHandler);
     router.post('/refresh', _refreshHandler);
+    router.post('/recovery/redeem', _redeemRecoveryHandler);
 
     // Auth routes (enforced by middleware in main, but we can verify here too)
     router.get('/devices', _listDevicesHandler);
