@@ -195,7 +195,7 @@ void main() {
       // The new welcome flow is rendered
       expect(find.text('Helix Global Server'), findsOneWidget);
       expect(find.text('Others'), findsOneWidget);
-      expect(find.text('Continue'), findsOneWidget);
+      expect(find.text('Request OTP'), findsOneWidget);
       expect(find.text('Continue offline for now'), findsOneWidget);
 
       // Legacy screens are gone entirely
@@ -241,13 +241,9 @@ void main() {
 
       await tester.tap(find.text('Others'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Join a personal server'));
-      await tester.pumpAndSettle();
 
       // Submit empty code to trigger validation error
+      await tester.ensureVisible(find.text('Verify & Connect'));
       await tester.tap(find.text('Verify & Connect'));
       await tester.pumpAndSettle();
 
@@ -286,12 +282,8 @@ void main() {
 
       await tester.tap(find.text('Others'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Join a personal server'));
-      await tester.pumpAndSettle();
-
+      await tester.ensureVisible(find.byType(TextFormField).first);
       await tester.enterText(
         find.byType(TextFormField).first,
         'https://hr.agiletechbd.com/join?invite=UiFzSP3Vgp6XA7fEby6-IPb5i',
@@ -329,12 +321,8 @@ void main() {
       );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Continue').evaluate().isNotEmpty) break;
+        if (find.text('Request OTP').evaluate().isNotEmpty) break;
       }
-
-      // Tap Continue to enter GlobalPhoneStep
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
 
       final phoneField = tester.widget<TextField>(
         find.byType(TextField).first,

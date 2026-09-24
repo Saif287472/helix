@@ -153,7 +153,7 @@ void main() {
 
       expect(find.text('Helix Global Server'), findsOneWidget);
       expect(find.text('Others'), findsOneWidget);
-      expect(find.text('Continue'), findsOneWidget);
+      expect(find.text('Request OTP'), findsOneWidget);
       expect(find.text('Continue offline for now'), findsOneWidget);
 
       await tester.ensureVisible(find.text('Continue offline for now'));
@@ -163,13 +163,14 @@ void main() {
       expect(choice, isA<ContinueOfflineChoice>());
     });
 
-    testWidgets('advances to phone step and handles back button', (
+    testWidgets('advances to otp step on request and handles back button', (
       tester,
     ) async {
       final notifier = OnboardingNotifier(autoStartLaunch: false);
       notifier.updateState((s) => s.copyWith(
         step: OnboardingStep.serverSelection,
         serverType: ServerType.global,
+        phoneNumber: '1712345678',
       ));
 
       await tester.pumpWidget(
@@ -180,13 +181,15 @@ void main() {
         ),
       );
 
-      // Tap Continue to go to global phone
-      await tester.ensureVisible(find.text('Continue'));
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
-
       expect(find.text('Please enter your phone number'), findsOneWidget);
       expect(find.text('Request OTP'), findsOneWidget);
+
+      // Tap Request OTP to go to global otp
+      await tester.ensureVisible(find.text('Request OTP'));
+      await tester.tap(find.text('Request OTP'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter verification code'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back), findsOneWidget);
 
       // Tap back button
@@ -194,6 +197,32 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('How do you want to proceed?'), findsOneWidget);
+    });
+
+    testWidgets('renders Others tab with segmented sub-tabs and code entry', (
+      tester,
+    ) async {
+      final notifier = OnboardingNotifier(autoStartLaunch: false);
+      notifier.updateState((s) => s.copyWith(
+        step: OnboardingStep.serverSelection,
+        serverType: ServerType.others,
+        othersOption: OthersOption.join,
+      ));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
+          home: SetupScreen(notifier: notifier),
+        ),
+      );
+
+      expect(find.text('Choose a custom server option:'), findsOneWidget);
+      expect(find.text('Join a personal server'), findsOneWidget);
+      expect(find.text('Host your own server'), findsOneWidget);
+      expect(find.text('Enter invitation or recovery code'), findsOneWidget);
+      expect(find.text('CODE INPUT'), findsOneWidget);
+      expect(find.text('Verify & Connect'), findsOneWidget);
     });
   });
 }

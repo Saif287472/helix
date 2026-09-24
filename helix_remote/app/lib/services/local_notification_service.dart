@@ -98,6 +98,26 @@ class LocalNotificationService {
     _ready = true;
   }
 
+  /// Ensures that notification permission is granted. If the user previously
+  /// did not allow notifications, prompts them again.
+  static Future<bool> ensureNotificationPermission() async {
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android == null) return true;
+      final enabled = await android.areNotificationsEnabled();
+      if (enabled != true) {
+        final granted = await android.requestNotificationsPermission();
+        return granted ?? false;
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   static void setCallActionHandler(
     void Function(LocalNotificationCallAction action, String callId)? handler,
   ) {

@@ -151,7 +151,23 @@ class _SetupScreenState extends State<SetupScreen> {
       case OnboardingStep.serverSelection:
         return ServerSelectionStep(
           selectedType: state.serverType,
+          othersOption: state.othersOption ?? OthersOption.join,
           onSelectType: _notifier.setServerType,
+          onSelectOthersOption: _notifier.setOthersOption,
+          countryCode: state.countryCode,
+          phoneNumber: state.phoneNumber,
+          onCountryCodeChanged: _notifier.updateCountryCode,
+          onPhoneChanged: _notifier.updatePhoneNumber,
+          onRequestOtp: () => _notifier.requestOtp(),
+          codeString: state.codeString,
+          showInfoPopover: state.showCodeInfoPopover,
+          onCodeChanged: _notifier.updateCodeString,
+          onToggleInfo: _notifier.toggleCodeInfoPopover,
+          onVerifyCode: () => _notifier.resolveCode(),
+          hostGuideStep: state.hostGuideStep,
+          onHostStepChanged: _notifier.updateHostGuideStep,
+          isLoading: state.isLoading,
+          errorMessage: state.errorMessage,
           onProceed: _notifier.proceedFromServerSelection,
           onContinueOffline: _notifier.chooseOffline,
         );

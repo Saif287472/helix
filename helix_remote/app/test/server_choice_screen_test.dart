@@ -65,11 +65,6 @@ void main() {
       await tester.tap(find.text('Others'));
       await tester.pumpAndSettle();
 
-      // Tap Continue to enter Others Hub
-      await tester.ensureVisible(find.text('Continue'));
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
-
       expect(find.text('Join a personal server'), findsOneWidget);
       expect(find.text('Host your own server'), findsOneWidget);
     });

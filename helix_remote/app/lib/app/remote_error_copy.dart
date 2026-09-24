@@ -13,12 +13,23 @@ class RemoteUserErrorCopy {
       final decoded = jsonDecode(error.message);
       if (decoded is Map<String, dynamic>) {
         final value = decoded['error'];
-        if (value is String && value.isNotEmpty) return value;
+        if (value is String && value.isNotEmpty) return scrubDomain(value);
       }
     } catch (_) {
       // Not JSON (e.g. a proxy error page) - fall through to generic copy.
     }
     return null;
+  }
+
+  /// Scrubs explicit URLs and domain references so server hostnames/domains
+  /// are never shown to the user in Helix Remote.
+  static String scrubDomain(String text) {
+    return text
+        .replaceAll(RegExp(r'https?://[a-zA-Z0-9.\-_:]+'), 'the server')
+        .replaceAll(
+          RegExp(r'\b[a-zA-Z0-9.-]+\.agiletechbd\.com\b', caseSensitive: false),
+          'the server',
+        );
   }
 
   static String refreshFailure(RemoteRestException error, Uri backend) {
@@ -36,7 +47,7 @@ class RemoteUserErrorCopy {
     switch (error.statusCode) {
       case 400:
         return 'The saved session request was invalid. Sign in again or '
-            'change the server URL if this keeps happening.';
+            'try again later if this keeps happening.';
       case 409:
         return 'Your session state changed on another device. Tap Retry to '
             'sync the latest account state.';
@@ -57,12 +68,12 @@ class RemoteUserErrorCopy {
   static String registrationFailure(RemoteRestException error, Uri backend) {
     switch (error.failureKind) {
       case RemoteRestFailureKind.serverDown:
-        return 'Could not reach Helix Remote backend at $backend. '
+        return 'Could not reach the Helix Remote backend. '
             '${serverHint(backend)}';
       case RemoteRestFailureKind.noInternet:
         return networkUnavailable().replaceFirst('tap Retry', 'try again');
       case RemoteRestFailureKind.timeout:
-        return 'Helix Remote backend did not respond in time at $backend. '
+        return 'Helix Remote backend did not respond in time. '
             'Check the connection and try again.';
       case RemoteRestFailureKind.http:
         switch (error.statusCode) {
@@ -90,7 +101,7 @@ class RemoteUserErrorCopy {
   }
 
   static String serverUnavailable(Uri backend) {
-    return 'Helix Remote server is unreachable at $backend. '
+    return 'Helix Remote server is unreachable. '
         '${serverHint(backend)}';
   }
 
@@ -101,18 +112,16 @@ class RemoteUserErrorCopy {
     }
     if (host == 'localhost' || host == '127.0.0.1') {
       return 'On a physical Android device, localhost points to the phone. '
-          'Restart with --dart-define=HELIX_REMOTE_HOST=<your PC LAN IP> '
-          'and make sure the backend is running.';
+          'Make sure the backend is running.';
     }
-    return 'Start the Helix Remote backend, then tap Retry. If it is already '
-        'running, check the server URL and firewall.';
+    return 'Check your network connection and tap Retry.';
   }
 
   static String networkUnavailable() =>
       'Network unavailable. Reconnect to Wi-Fi or mobile data, then tap Retry.';
 
   static String timeout(Uri backend) =>
-      'Helix Remote server did not respond in time at $backend. Check the '
+      'Helix Remote server did not respond in time. Check the '
       'connection and tap Retry.';
 
   static String authExpired() =>
@@ -121,11 +130,10 @@ class RemoteUserErrorCopy {
 
   static String unknownStartup() =>
       'Helix Remote could not finish startup because of an unexpected error. '
-      'Tap Retry, or change the server URL if it keeps happening.';
+      'Tap Retry, or try again later if it keeps happening.';
 
   static String unknownRegistration() =>
-      'Registration failed because of an unexpected error. Try again, or '
-      'change the server URL if it keeps happening.';
+      'Registration failed because of an unexpected error. Try again later.';
 
   static String profileUpdateFailure(RemoteRestException error) {
     switch (error.failureKind) {
