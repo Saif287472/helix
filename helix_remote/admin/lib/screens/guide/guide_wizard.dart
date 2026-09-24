@@ -59,13 +59,21 @@ class _GuideWizardState extends State<GuideWizard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _buildHeader(),
+        const SizedBox(height: 12),
         _buildProgressBar(),
         const SizedBox(height: 16),
         Expanded(
           child: SingleChildScrollView(
             child: Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
               child: Padding(
-                padding: HelixInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: IndexedStack(index: _pageIndex, children: _pages),
               ),
             ),
@@ -73,6 +81,62 @@ class _GuideWizardState extends State<GuideWizard> {
         ),
         const SizedBox(height: 16),
         _buildNavRow(),
+      ],
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.public, color: Color(0xFF2563EB), size: 20),
+              const SizedBox(width: 8),
+              const Flexible(
+                child: Text(
+                  'Self-Hosting Guide',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Text(
+                  'STEP ${_pageIndex + 1} OF ${_pages.length}',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2563EB),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          },
+        ),
       ],
     );
   }
@@ -86,21 +150,19 @@ class _GuideWizardState extends State<GuideWizard> {
           child: LinearProgressIndicator(
             key: const Key('guide_progress_bar'),
             value: (_pageIndex + 1) / _pages.length,
-            minHeight: 6,
-            backgroundColor: context.sunkenSurface,
-            valueColor: const AlwaysStoppedAnimation(
-              HelixColorTokens.cFF8A2BE2,
-            ),
+            minHeight: 5,
+            backgroundColor: const Color(0xFFE2E8F0),
+            valueColor: const AlwaysStoppedAnimation(Color(0xFF2563EB)),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
               for (var i = 0; i < _pageTitles.length; i++)
                 Padding(
-                  padding: HelixInsets.only(right: 8),
+                  padding: const EdgeInsets.only(right: 8),
                   child: _pageChip(i),
                 ),
             ],
@@ -114,27 +176,23 @@ class _GuideWizardState extends State<GuideWizard> {
     final selected = index == _pageIndex;
     return InkWell(
       key: Key('guide_page_chip_$index'),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       onTap: () => _goTo(index),
       child: Container(
-        padding: HelixInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: selected
-              ? HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.2)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          color: selected ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected
-                ? HelixColorTokens.cFF8A2BE2
-                : context.textPrimary.withValues(alpha: 0.24),
+            color: selected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Text(
           '${index + 1}. ${_pageTitles[index]}',
           style: TextStyle(
             fontSize: 12,
-            color: selected ? context.textPrimary : context.textTertiary,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+            color: selected ? Colors.white : const Color(0xFF475569),
+            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
           ),
         ),
       ),
@@ -147,29 +205,39 @@ class _GuideWizardState extends State<GuideWizard> {
     final backButton = OutlinedButton.icon(
       key: const Key('guide_back_button'),
       onPressed: isFirst ? null : () => _goTo(_pageIndex - 1),
-      icon: const Icon(Icons.arrow_back),
+      icon: const Icon(Icons.arrow_back, size: 16),
       label: const Text('Back'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF334155),
+        side: const BorderSide(color: Color(0xFFCBD5E1)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
     );
     final stepText = Text(
       'Step ${_pageIndex + 1} of ${_pages.length}',
-      style: TextStyle(color: context.textTertiary, fontSize: 12),
+      style: const TextStyle(
+        color: Color(0xFF64748B),
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+      ),
     );
     final nextButton = ElevatedButton.icon(
       key: const Key('guide_next_button'),
       onPressed: isLast ? null : () => _goTo(_pageIndex + 1),
-      icon: const Icon(Icons.arrow_forward),
-      label: const Text('Next'),
+      icon: const Icon(Icons.arrow_forward, size: 16),
+      label: const Text('Next Step →'),
       style: ElevatedButton.styleFrom(
-        backgroundColor: HelixColorTokens.cFF8A2BE2,
+        backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        elevation: 0,
       ),
     );
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Back + Step X of Y + Next don't fit on one line on narrow phones -
-        // stack the buttons on their own row with the step label centered
-        // below instead of letting the row overflow off-screen.
         if (constraints.maxWidth < 420) {
           return Column(
             mainAxisSize: MainAxisSize.min,
