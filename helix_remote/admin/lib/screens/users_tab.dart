@@ -384,11 +384,11 @@ class _UsersTabState extends State<UsersTab> {
 
   Widget _buildSheetModal(Map<String, dynamic> user) {
     return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: HelixInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -396,17 +396,28 @@ class _UsersTabState extends State<UsersTab> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: context.textFaint,
-                    borderRadius: BorderRadius.circular(2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const SizedBox(width: 40),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    color: const Color(0xFF64748B),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
+              const SizedBox(height: 12),
               _buildDetailPaneContent(user, inSheet: true),
             ],
           ),
@@ -885,11 +896,11 @@ class _UsersTabState extends State<UsersTab> {
       children: [
         // Cardlet 1: User Identity & State
         Container(
-          padding: HelixInsets.all(16),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: context.sunkenSurface,
+            color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Theme.of(context).dividerColor),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -898,8 +909,13 @@ class _UsersTabState extends State<UsersTab> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'User Identity & State',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    'USER IDENTITY & STATE',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF64748B),
+                      letterSpacing: 0.5,
+                    ),
                   ),
                   _statusChip(isSuspended),
                 ],
@@ -908,29 +924,45 @@ class _UsersTabState extends State<UsersTab> {
               Row(
                 children: [
                   CircleAvatar(
-                    radius: 20,
-                    backgroundColor: context.accentColor.withValues(alpha: 0.15),
+                    radius: 22,
+                    backgroundColor: const Color(0xFFEFF6FF),
                     child: Text(
                       displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-                      style: TextStyle(color: context.accentColor, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Color(0xFF2563EB),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           displayName.isNotEmpty ? displayName : 'Unnamed User',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Color(0xFF0F172A),
+                          ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          'Phone: $phone',
-                          style: TextStyle(fontSize: 12, color: context.textSecondary),
+                          phone == '—' ? 'No phone bound' : phone,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF475569),
+                          ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          'Joined: $joined',
-                          style: TextStyle(fontSize: 11, color: context.textFaint),
+                          'Joined $joined',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF94A3B8),
+                          ),
                         ),
                       ],
                     ),
@@ -942,13 +974,13 @@ class _UsersTabState extends State<UsersTab> {
         ),
         const SizedBox(height: 14),
 
-        // Cardlet 2: Registered Devices
+        // Cardlet 2: Active Sessions / Devices
         Container(
-          padding: HelixInsets.all(16),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: context.sunkenSurface,
+            color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Theme.of(context).dividerColor),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -957,22 +989,31 @@ class _UsersTabState extends State<UsersTab> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Registered Devices',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    'ACTIVE SESSIONS / DEVICES',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF64748B),
+                      letterSpacing: 0.5,
+                    ),
                   ),
                   Text(
                     '${devices.length} Active',
-                    style: TextStyle(fontSize: 11, color: context.textSecondary),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               if (devices.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     'No active devices registered.',
-                    style: TextStyle(color: context.textFaint, fontSize: 12),
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                   ),
                 )
               else
@@ -981,24 +1022,42 @@ class _UsersTabState extends State<UsersTab> {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       children: [
-                        const Icon(Icons.phone_android, size: 16),
+                        const Icon(Icons.phone_android, size: 16, color: Color(0xFF64748B)),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            dev['device_name'] ?? dev['device_id'] ?? 'Device',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                dev['device_name'] ?? dev['device_id'] ?? 'Device',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1E293B),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                'ID: ${dev['device_id'] ?? 'unknown'}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontFamily: 'monospace',
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         if (dev['status'] == 'REVOKED')
-                          const Text('Revoked', style: TextStyle(color: Colors.red, fontSize: 11))
+                          const Text('Revoked', style: TextStyle(color: Color(0xFFDC2626), fontSize: 11))
                         else
                           OutlinedButton(
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: const BorderSide(color: Colors.red),
+                              foregroundColor: const Color(0xFFDC2626),
+                              side: const BorderSide(color: Color(0xFFFCA5A5)),
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               minimumSize: Size.zero,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                             onPressed: () async {
                               await widget.client.revokeDevice(accountId, dev['device_id']);
@@ -1016,29 +1075,47 @@ class _UsersTabState extends State<UsersTab> {
 
         // Cardlet 3: Administrative Actions
         Container(
-          padding: HelixInsets.all(16),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: context.sunkenSurface,
+            color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Theme.of(context).dividerColor),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Safe Administrative Actions',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                'ADMINISTRATIVE ACTIONS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF64748B),
+                  letterSpacing: 0.5,
+                ),
               ),
               const SizedBox(height: 12),
               FilledButton.icon(
                 icon: const Icon(Icons.key, size: 16),
                 label: const Text('Issue 48h Recovery Key'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
                 onPressed: () => _issueRecoveryCode(accountId, displayName.isEmpty ? accountId : displayName),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 icon: const Icon(Icons.copy, size: 16),
-                label: const Text('Copy Account ID'),
+                label: const Text('Copy User ID'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF334155),
+                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: accountId));
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1053,44 +1130,56 @@ class _UsersTabState extends State<UsersTab> {
 
         // Cardlet 4: Danger Zone
         Container(
-          padding: HelixInsets.all(16),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.05),
+            color: const Color(0xFFFEF2F2),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+            border: Border.all(color: const Color(0xFFFECACA)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Danger Zone (Account Moderation)',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red),
+                'DANGER ZONE',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFDC2626),
+                  letterSpacing: 0.5,
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.orange,
-                  side: const BorderSide(color: Colors.orange),
+                  foregroundColor: const Color(0xFFD97706),
+                  side: const BorderSide(color: Color(0xFFF59E0B)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: Icon(isSuspended ? Icons.play_circle : Icons.pause_circle, size: 16),
+                icon: Icon(isSuspended ? Icons.play_circle_outline : Icons.pause_circle_outline, size: 16),
                 label: Text(isSuspended ? 'Restore Account' : 'Suspend Account'),
                 onPressed: () => isSuspended ? _unsuspend(accountId) : _suspend(accountId),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  side: const BorderSide(color: Colors.red),
+                  foregroundColor: const Color(0xFFDC2626),
+                  side: const BorderSide(color: Color(0xFFEF4444)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.delete_forever, size: 16),
+                icon: const Icon(Icons.delete_outline, size: 16),
                 label: const Text('Delete User Data'),
                 onPressed: () => _confirmDelete(accountId, displayName.isEmpty ? accountId : displayName),
               ),
               const SizedBox(height: 8),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF7F1D1D),
+                  backgroundColor: const Color(0xFF991B1B),
                   foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
                 ),
                 icon: const Icon(Icons.block, size: 16),
                 label: const Text('Permanent Block Phone'),
@@ -1099,21 +1188,37 @@ class _UsersTabState extends State<UsersTab> {
             ],
           ),
         ),
+
+        if (inSheet) ...[
+          const SizedBox(height: 16),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF334155),
+              side: const BorderSide(color: Color(0xFFCBD5E1)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
       ],
     );
   }
 
   Widget _statusChip(bool isSuspended) {
-    final color = isSuspended ? Colors.orange : Colors.green;
+    final bg = isSuspended ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7);
+    final fg = isSuspended ? const Color(0xFFB45309) : const Color(0xFF166534);
+    final border = isSuspended ? const Color(0xFFFDE68A) : const Color(0xFFBBF7D0);
     return Chip(
       label: Text(
         isSuspended ? 'SUSPENDED' : 'ACTIVE',
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
       ),
-      backgroundColor: color.withValues(alpha: 0.12),
-      side: BorderSide(color: color.withValues(alpha: 0.35)),
-      labelStyle: TextStyle(color: color),
+      backgroundColor: bg,
+      side: BorderSide(color: border),
       padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
     );
   }
 
