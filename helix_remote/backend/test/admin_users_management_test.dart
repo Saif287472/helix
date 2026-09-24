@@ -12,16 +12,17 @@ void main() {
   late BackendServer server;
   late HttpClient client;
   late int port;
-  late ServerIdentity identity;
+  const adminToken = 'admin_test_password';
 
   setUp(() async {
     server = BackendServer.create(
       sqliteDb: sqlite3.openInMemory(),
       jwtSecret: 'admin_users_test_secret_at_least_32_bytes',
+      adminPasswordOverride: adminToken,
       rateLimitMaxTokens: 1000,
       rateLimitRefillRate: 1000,
     );
-    identity = await ServerIdentity.loadOrCreate(server.db);
+    await ServerIdentity.loadOrCreate(server.db);
     await server.start('127.0.0.1', 0);
     port = server.httpServer!.port;
     client = HttpClient();
@@ -89,7 +90,7 @@ void main() {
     final inviteCreate = await postJson(
       '/api/v1/ops/invites',
       null,
-      token: identity.adminToken,
+      token: adminToken,
     );
     final inviteCode =
         (jsonDecode(inviteCreate.body) as Map<String, dynamic>)['invite_code']
@@ -137,7 +138,7 @@ void main() {
 
       final list = await getJson(
         '/api/v1/ops/users?limit=50&offset=0',
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(list.statusCode, equals(200));
       final users =
@@ -161,7 +162,7 @@ void main() {
 
     final list = await getJson(
       '/api/v1/ops/users?limit=50&offset=0',
-      token: identity.adminToken,
+      token: adminToken,
     );
     final users =
         (jsonDecode(list.body) as Map<String, dynamic>)['users'] as List;
@@ -244,7 +245,7 @@ void main() {
       final suspend = await postJson(
         '/api/v1/ops/users/suspend_user/suspend',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(suspend.statusCode, equals(200));
       expect(
@@ -275,7 +276,7 @@ void main() {
       final unsuspend = await postJson(
         '/api/v1/ops/users/suspend_user/unsuspend',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(unsuspend.statusCode, equals(200));
       expect(
@@ -295,7 +296,7 @@ void main() {
       final suspend = await postJson(
         '/api/v1/ops/users/does_not_exist/suspend',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(suspend.statusCode, equals(404));
     });
@@ -318,7 +319,7 @@ void main() {
         final delete = await postJson(
           '/api/v1/ops/users/delete_user/delete',
           null,
-          token: identity.adminToken,
+          token: adminToken,
         );
         expect(delete.statusCode, equals(200));
         expect(
@@ -340,7 +341,7 @@ void main() {
 
         final list = await getJson(
           '/api/v1/ops/users?limit=50&offset=0',
-          token: identity.adminToken,
+          token: adminToken,
         );
         final users =
             (jsonDecode(list.body) as Map<String, dynamic>)['users'] as List;
@@ -357,7 +358,7 @@ void main() {
       final delete = await postJson(
         '/api/v1/ops/users/does_not_exist/delete',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(delete.statusCode, equals(404));
     });
@@ -379,7 +380,7 @@ void main() {
       final block = await postJson(
         '/api/v1/ops/users/block_user/block',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(block.statusCode, equals(200));
       final blockBody = jsonDecode(block.body) as Map<String, dynamic>;
@@ -394,7 +395,7 @@ void main() {
       expect(afterBlock.statusCode, equals(401));
       final list = await getJson(
         '/api/v1/ops/users?limit=50&offset=0',
-        token: identity.adminToken,
+        token: adminToken,
       );
       final users =
           (jsonDecode(list.body) as Map<String, dynamic>)['users'] as List;
@@ -428,7 +429,7 @@ void main() {
       final inviteCreate = await postJson(
         '/api/v1/ops/invites',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       final inviteCode =
           (jsonDecode(inviteCreate.body) as Map<String, dynamic>)['invite_code']
@@ -456,7 +457,7 @@ void main() {
       final block = await postJson(
         '/api/v1/ops/users/does_not_exist/block',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(block.statusCode, equals(404));
     });
@@ -471,7 +472,7 @@ void main() {
       final delete = await postJson(
         '/api/v1/ops/users/delete_free_user/delete',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(delete.statusCode, equals(200));
 
@@ -490,7 +491,7 @@ void main() {
       final create = await postJson(
         '/api/v1/ops/invites',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       final createBody = jsonDecode(create.body) as Map<String, dynamic>;
       final inviteId = createBody['invite_id'] as String;
@@ -499,7 +500,7 @@ void main() {
       final cancel = await postJson(
         '/api/v1/ops/invites/$inviteId/cancel',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(cancel.statusCode, equals(200));
       expect(
@@ -538,7 +539,7 @@ void main() {
 
       final list = await getJson(
         '/api/v1/ops/invites?limit=50&offset=0',
-        token: identity.adminToken,
+        token: adminToken,
       );
       final invites =
           (jsonDecode(list.body) as Map<String, dynamic>)['invites'] as List;
@@ -552,7 +553,7 @@ void main() {
       final create = await postJson(
         '/api/v1/ops/invites',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       final createBody = jsonDecode(create.body) as Map<String, dynamic>;
       final inviteId = createBody['invite_id'] as String;
@@ -581,7 +582,7 @@ void main() {
       final cancel = await postJson(
         '/api/v1/ops/invites/$inviteId/cancel',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(cancel.statusCode, equals(409));
     });
@@ -590,7 +591,7 @@ void main() {
       final cancel = await postJson(
         '/api/v1/ops/invites/not_a_real_invite_id/cancel',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(cancel.statusCode, equals(409));
     });
@@ -599,7 +600,7 @@ void main() {
       final create = await postJson(
         '/api/v1/ops/invites',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       final inviteId =
           (jsonDecode(create.body) as Map<String, dynamic>)['invite_id']

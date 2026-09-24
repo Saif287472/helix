@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:helix_remote_backend/src/env_sanitize.dart';
+import 'package:path/path.dart' as p;
 
 /// A feature whose environment variables must be either all set or all
 /// unset. A partial set (one present, one missing) is never intentional -
@@ -137,4 +139,62 @@ StartupEnvResult validateStartupEnv(
   }
 
   return StartupEnvResult(fatalErrors: fatal, warnings: warnings);
+}
+
+/// Loads effective environment by combining process environment variables with
+/// key-value pairs from any discovered `.env` file.
+///
+/// Explicit process environment variables take precedence over `.env`.
+/// Discovers `.env` by searching:
+/// 1. [searchDir] or `Directory.current`
+/// 2. `backend/` relative to current directory
+/// 3. `helix_remote/backend/` relative to current directory
+/// 4. Script directory or script parent directory
+Map<String, String> loadEffectiveEnv({
+  Map<String, String>? baseEnv,
+  Directory? searchDir,
+}) {
+  final env = Map<String, String>.from(baseEnv ?? Platform.environment);
+  final startPath = (searchDir ?? Directory.current).path;
+
+  final candidates = <File>[
+    File(p.join(startPath, '.env')),
+    File(p.join(startPath, 'backend', '.env')),
+    File(p.join(startPath, 'helix_remote', 'backend', '.env')),
+  ];
+
+  try {
+    final scriptPath = Platform.script.toFilePath();
+    final scriptDir = p.dirname(scriptPath);
+    candidates.add(File(p.join(scriptDir, '.env')));
+    candidates.add(File(p.join(scriptDir, '..', '.env')));
+    candidates.add(File(p.join(scriptDir, '..', '..', '.env')));
+  } catch (_) {}
+
+  for (final file in candidates) {
+    if (file.existsSync()) {
+      try {
+        final lines = file.readAsLinesSync();
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+          final eqIndex = trimmed.indexOf('=');
+          if (eqIndex > 0) {
+            final key = trimmed.substring(0, eqIndex).trim();
+            var value = trimmed.substring(eqIndex + 1).trim();
+            if ((value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'"))) {
+              value = value.substring(1, value.length - 1);
+            }
+            if (!env.containsKey(key) || env[key]!.isEmpty) {
+              env[key] = value;
+            }
+          }
+        }
+        break;
+      } catch (_) {}
+    }
+  }
+
+  return env;
 }

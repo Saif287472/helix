@@ -1,10 +1,3 @@
-// Admin token recovery flow (bin/reset_admin_token.dart's DB-level logic):
-// clearing 'admin_token_hash' and calling ServerIdentity.loadOrCreate again
-// must mint a fresh token WITHOUT regenerating the server's identity/keypair
-// (which would break federation trust with any peer that already has this
-// server's public key), and the old token must stop authenticating while
-// the new one starts working.
-
 import 'dart:convert';
 import 'dart:io';
 
@@ -34,61 +27,144 @@ Future<_Response> _getJson(
   return _Response(response.statusCode, body);
 }
 
+Future<_Response> _postJson(
+  HttpClient client,
+  int port,
+  String path, {
+  Map<String, dynamic>? body,
+  String? token,
+}) async {
+  final request = await client.postUrl(Uri.parse('http://127.0.0.1:$port$path'));
+  request.headers.set('Content-Type', 'application/json');
+  if (token != null) {
+    request.headers.set('Authorization', 'Bearer $token');
+  }
+  if (body != null) {
+    request.write(jsonEncode(body));
+  }
+  final response = await request.close();
+  final resBody = await response.transform(utf8.decoder).join();
+  return _Response(response.statusCode, resBody);
+}
+
 void main() {
-  test('clearing admin_token_hash and reloading identity mints a new token, '
-      'preserves the server id/keypair, and immediately supersedes the old '
-      'token for admin auth', () async {
+  test('Admin password 3-step check: setup-status, in-app setup, and .env priority', () async {
     final sqliteDb = sqlite3.openInMemory();
     final server = BackendServer.create(
       sqliteDb: sqliteDb,
-      jwtSecret: 'test_jwt_secret_for_admin_token_reset_flow',
+      jwtSecret: 'test_jwt_secret_for_admin_password_setup',
       rateLimitMaxTokens: 1000,
       rateLimitRefillRate: 1000,
     );
 
-    // First boot: identity + admin token both freshly generated.
-    final before = await ServerIdentity.loadOrCreate(server.db);
-    expect(before.adminToken, isNotNull);
-    final oldToken = before.adminToken!;
-
-    // Simulate bin/reset_admin_token.dart: clear just the token hash.
-    server.db.deleteServerConfig('admin_token_hash');
-    final after = await ServerIdentity.loadOrCreate(server.db);
-
-    expect(after.adminToken, isNotNull);
-    final newToken = after.adminToken!;
-    expect(newToken, isNot(equals(oldToken)));
-
-    // Server identity (id + federation keypair) must be untouched.
-    expect(after.serverId, equals(before.serverId));
-    final beforePub = await before.serverKeyPair.extractPublicKey();
-    final afterPub = await after.serverKeyPair.extractPublicKey();
-    expect(afterPub.bytes, equals(beforePub.bytes));
-
-    server.serverIdentity = after;
+    await ServerIdentity.loadOrCreate(server.db);
     await server.start('127.0.0.1', 0);
     final port = server.httpServer!.port;
-    final client = HttpClient();
-    try {
-      final withOld = await _getJson(
-        client,
-        port,
-        '/api/v1/ops/config',
-        token: oldToken,
-      );
-      expect(withOld.statusCode, equals(401));
+    final httpClient = HttpClient();
 
-      final withNew = await _getJson(
-        client,
+    try {
+      // 1. Initial state: No .env password, no DB password -> needs_setup: true
+      final initialStatus = await _getJson(httpClient, port, '/api/v1/ops/setup-status');
+      expect(initialStatus.statusCode, 200);
+      final initialJson = jsonDecode(initialStatus.body) as Map<String, dynamic>;
+      expect(initialJson['needs_setup'], isTrue);
+
+      // Attempting to access protected ops endpoint with random password fails
+      final unauthorizedRes = await _getJson(
+        httpClient,
         port,
         '/api/v1/ops/config',
-        token: newToken,
+        token: 'random_attempt',
       );
-      expect(withNew.statusCode, equals(200));
-      final body = jsonDecode(withNew.body) as Map<String, dynamic>;
-      expect(body['server_id'], equals(after.serverId));
+      expect(unauthorizedRes.statusCode, 401);
+
+      // 2. In-App Setup: Submit new admin password via POST /api/v1/ops/setup-admin-password
+      final setupTooShort = await _postJson(
+        httpClient,
+        port,
+        '/api/v1/ops/setup-admin-password',
+        body: {'password': '123'},
+      );
+      expect(setupTooShort.statusCode, 400);
+
+      const chosenPassword = 'my_super_secure_admin_password_123';
+      final setupSuccess = await _postJson(
+        httpClient,
+        port,
+        '/api/v1/ops/setup-admin-password',
+        body: {'password': chosenPassword},
+      );
+      expect(setupSuccess.statusCode, 200);
+
+      // 3. Server is now initialized: setup-status reports needs_setup: false
+      final postSetupStatus = await _getJson(httpClient, port, '/api/v1/ops/setup-status');
+      expect(postSetupStatus.statusCode, 200);
+      final postJson = jsonDecode(postSetupStatus.body) as Map<String, dynamic>;
+      expect(postJson['needs_setup'], isFalse);
+
+      // Subsequent setup attempts are rejected with 409 Conflict
+      final repeatSetup = await _postJson(
+        httpClient,
+        port,
+        '/api/v1/ops/setup-admin-password',
+        body: {'password': 'another_password'},
+      );
+      expect(repeatSetup.statusCode, 409);
+
+      // 4. Authenticating with chosenPassword works and grants ops:* access
+      final authorizedRes = await _getJson(
+        httpClient,
+        port,
+        '/api/v1/ops/config',
+        token: chosenPassword,
+      );
+      expect(authorizedRes.statusCode, 200);
+
+      // 5. Database reset: clearing password hash returns server to setup mode
+      server.db.deleteServerConfig('admin_password_hash');
+      server.db.deleteServerConfig('admin_password_salt');
+      expect(server.needsAdminSetup, isTrue);
+
+      final resetStatus = await _getJson(httpClient, port, '/api/v1/ops/setup-status');
+      expect((jsonDecode(resetStatus.body) as Map<String, dynamic>)['needs_setup'], isTrue);
     } finally {
-      client.close(force: true);
+      httpClient.close(force: true);
+      await server.stop();
+    }
+  });
+
+  test('.env password override takes precedence over database password and skips setup', () async {
+    final sqliteDb = sqlite3.openInMemory();
+    const envPassword = 'env_master_password_override';
+    final server = BackendServer.create(
+      sqliteDb: sqliteDb,
+      jwtSecret: 'test_jwt_secret_for_admin_env_priority',
+      adminPasswordOverride: envPassword,
+      rateLimitMaxTokens: 1000,
+      rateLimitRefillRate: 1000,
+    );
+
+    await ServerIdentity.loadOrCreate(server.db);
+    await server.start('127.0.0.1', 0);
+    final port = server.httpServer!.port;
+    final httpClient = HttpClient();
+
+    try {
+      // With envPassword, needs_setup is false immediately
+      final status = await _getJson(httpClient, port, '/api/v1/ops/setup-status');
+      expect(status.statusCode, 200);
+      expect((jsonDecode(status.body) as Map<String, dynamic>)['needs_setup'], isFalse);
+
+      // Authenticates with envPassword
+      final authorizedRes = await _getJson(
+        httpClient,
+        port,
+        '/api/v1/ops/config',
+        token: envPassword,
+      );
+      expect(authorizedRes.statusCode, 200);
+    } finally {
+      httpClient.close(force: true);
       await server.stop();
     }
   });

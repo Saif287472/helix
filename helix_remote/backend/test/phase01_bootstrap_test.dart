@@ -10,9 +10,15 @@ void main() {
       final tempDir = Directory.systemTemp.createTempSync(
         'helix_phase01_backend_',
       );
-      addTearDown(() {
-        if (tempDir.existsSync()) {
-          tempDir.deleteSync(recursive: true);
+      addTearDown(() async {
+        if (!tempDir.existsSync()) return;
+        for (var i = 0; i < 5; i++) {
+          try {
+            tempDir.deleteSync(recursive: true);
+            break;
+          } catch (_) {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+          }
         }
       });
 

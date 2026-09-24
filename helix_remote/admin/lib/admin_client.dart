@@ -54,11 +54,81 @@ class ServerLogs {
   bool get isEmpty => lines.isEmpty;
 }
 
+class SetupStatus {
+  final bool needsSetup;
+  final String serverId;
+  const SetupStatus({required this.needsSetup, required this.serverId});
+}
+
 class AdminClient {
   AdminClient({required this.baseUrl, required this.token});
 
   final String baseUrl;
   final String token;
+
+  /// Checks if the backend server requires first-time admin password setup.
+  static Future<SetupStatus> checkSetupStatus(
+    String baseUrl, {
+    http.Client? httpClient,
+  }) async {
+    final client = httpClient ?? http.Client();
+    final shouldClose = httpClient == null;
+    try {
+      final sanitized = baseUrl.endsWith('/')
+          ? baseUrl.substring(0, baseUrl.length - 1)
+          : baseUrl;
+      final response = await client.get(
+        Uri.parse('$sanitized/api/v1/ops/setup-status'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return SetupStatus(
+          needsSetup: data['needs_setup'] == true,
+          serverId: data['server_id'] as String? ?? '',
+        );
+      }
+      return const SetupStatus(needsSetup: false, serverId: '');
+    } catch (_) {
+      return const SetupStatus(needsSetup: false, serverId: '');
+    } finally {
+      if (shouldClose) client.close();
+    }
+  }
+
+  /// Sets the initial master admin password on a fresh, uninitialized server.
+  static Future<void> setupAdminPassword(
+    String baseUrl,
+    String password, {
+    http.Client? httpClient,
+  }) async {
+    final client = httpClient ?? http.Client();
+    final shouldClose = httpClient == null;
+    try {
+      final sanitized = baseUrl.endsWith('/')
+          ? baseUrl.substring(0, baseUrl.length - 1)
+          : baseUrl;
+      final response = await client.post(
+        Uri.parse('$sanitized/api/v1/ops/setup-admin-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'password': password}),
+      );
+      if (response.statusCode != 200) {
+        Map<String, dynamic> errorBody = {};
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            errorBody = decoded;
+          }
+        } catch (_) {}
+        throw AdminRequestException(
+          errorBody['error'] as String? ??
+              'Failed to configure password (${response.statusCode})',
+        );
+      }
+    } finally {
+      if (shouldClose) client.close();
+    }
+  }
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $token',
@@ -291,24 +361,4 @@ class AdminClient {
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
-}
-
-/// Exchanges a short-lived pairing code (see the backend's
-/// AdminPairingModule) for a freshly-rotated admin token. Unlike [AdminClient]
-/// this needs no token itself - the code is the credential, and the server
-/// only accepts each one once.
-Future<String> redeemPairingCode({
-  required String baseUrl,
-  required String code,
-}) async {
-  final response = await http.post(
-    Uri.parse('$baseUrl/api/v1/admin-pairing/redeem'),
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({'code': code}),
-  );
-  if (response.statusCode != 200) {
-    throw Exception('Invalid or expired code.');
-  }
-  final body = jsonDecode(response.body) as Map<String, dynamic>;
-  return body['admin_token'] as String;
 }

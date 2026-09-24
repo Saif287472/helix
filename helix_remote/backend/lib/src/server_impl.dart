@@ -29,7 +29,7 @@ import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/modules/groups.dart';
 import 'package:helix_remote_backend/src/modules/group_calls.dart';
-import 'package:helix_remote_backend/src/modules/admin_pairing.dart';
+import 'package:helix_remote_backend/src/admin_password.dart';
 import 'package:helix_remote_backend/src/modules/operability.dart';
 import 'package:helix_remote_backend/src/modules/privacy_compliance.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
@@ -55,8 +55,20 @@ class BackendServer {
   final Set<String> trustedProxyAddresses;
   final DateTime Function() now;
   final String? logFilePath;
-  final String? adminTokenOverride;
+  final String? adminPasswordOverride;
+  String? get adminTokenOverride => adminPasswordOverride;
   ServerIdentity? serverIdentity;
+
+  bool get hasDatabaseAdminPassword {
+    final dbHash = db.getServerConfig('admin_password_hash');
+    return dbHash != null && dbHash.isNotEmpty;
+  }
+
+  bool get needsAdminSetup {
+    final hasEnv = adminPasswordOverride != null && adminPasswordOverride!.isNotEmpty;
+    if (hasEnv) return false;
+    return !hasDatabaseAdminPassword;
+  }
   final String? federationDomain;
   final String federationDirectoryUrl;
   final String publicBaseUrl;
@@ -86,7 +98,7 @@ class BackendServer {
     this.trustedProxyAddresses = const {'127.0.0.1', '::1'},
     required this.now,
     this.logFilePath,
-    this.adminTokenOverride,
+    this.adminPasswordOverride,
     this.serverIdentity,
     this.federationDomain,
     required this.federationDirectoryUrl,
@@ -115,6 +127,7 @@ class BackendServer {
     int wsReconnectsPerMinute = 30,
     DateTime Function()? now,
     String? logFilePath,
+    String? adminPasswordOverride,
     String? adminTokenOverride,
     ServerIdentity? serverIdentity,
     String? federationDomain,
@@ -163,8 +176,10 @@ class BackendServer {
       trustedProxyAddresses: trustedProxyAddresses,
       now: now ?? DateTime.now,
       logFilePath: logFilePath ?? Platform.environment['HELIX_REMOTE_LOG_FILE'],
-      adminTokenOverride:
+      adminPasswordOverride:
+          adminPasswordOverride ??
           adminTokenOverride ??
+          Platform.environment['HELIX_REMOTE_ADMIN_PASSWORD'] ??
           Platform.environment['HELIX_REMOTE_ADMIN_TOKEN'],
       serverIdentity: serverIdentity,
       federationDomain:
@@ -263,7 +278,6 @@ class BackendServer {
     );
     final groupCallsModule = GroupCallsModule(db, wsRelay);
     final privacyComplianceModule = PrivacyComplianceModule(db);
-    final adminPairingModule = AdminPairingModule(db: db, now: now);
     final operabilityModule = OperabilityModule(
       db: db,
       rateLimiter: rateLimiter,
@@ -280,6 +294,7 @@ class BackendServer {
       federationDomain: federationDomain,
       federationDirectoryUrl: federationDirectoryUrl,
       publicBaseUrl: publicBaseUrl,
+      getNeedsAdminSetup: () => needsAdminSetup,
       now: now,
     );
 
@@ -288,7 +303,6 @@ class BackendServer {
     router.mount('/api/v1/ops', operabilityModule.opsRouter.call);
     router.mount('/api/v1/server', operabilityModule.serverRouter.call);
     router.mount('/api/v1/telemetry', operabilityModule.telemetryRouter.call);
-    router.mount('/api/v1/admin-pairing', adminPairingModule.router.call);
     router.mount('/api/v1/accounts', authModule.router.call);
     router.mount('/api/v1/devices', authModule.router.call);
     router.mount('/api/v1/prekeys', prekeysModule.router.call);
@@ -488,38 +502,34 @@ class BackendServer {
   }
 
   Map<String, dynamic>? _adminClaimsForToken(String token) {
-    // Constant-time throughout: `==` on the raw override compared a bearer
-    // token character by character with an early return, which is a direct
-    // timing oracle on the operator credential.
-    if (adminTokenOverride != null && adminTokenOverride!.isNotEmpty) {
-      return constantTimeStringEqual(token, adminTokenOverride!)
+    // Priority 1: .env password override
+    if (adminPasswordOverride != null && adminPasswordOverride!.isNotEmpty) {
+      return constantTimeStringEqual(token, adminPasswordOverride!)
           ? {
               'account_id': kAdminTokenAccountId,
               'device_id': 'admin_break_glass',
               'is_admin': true,
               'admin_scopes': const ['ops:*'],
-              'admin_credential': 'environment_break_glass',
+              'admin_credential': 'environment_password',
             }
           : null;
     }
-    final dbHash = db.getServerConfig('admin_token_hash');
-    if (dbHash == null) return null;
-    final inputHash = crypto_pkg.sha256.convert(utf8.encode(token)).toString();
-    if (!constantTimeStringEqual(inputHash, dbHash)) return null;
-    final expiry = int.tryParse(
-      db.getServerConfig('admin_token_expires_at') ?? '',
-    );
-    if (expiry == null || now().millisecondsSinceEpoch > expiry) return null;
-    final scopes = (db.getServerConfig('admin_token_scopes') ?? '').split(' ')
-      ..removeWhere((scope) => scope.isEmpty);
-    if (scopes.isEmpty) return null;
-    return {
-      'account_id': kAdminTokenAccountId,
-      'device_id': 'admin_device',
-      'is_admin': true,
-      'admin_scopes': scopes,
-      'admin_credential': 'paired_expiring',
-    };
+
+    // Priority 2: Database password
+    final dbHash = db.getServerConfig('admin_password_hash');
+    final dbSalt = db.getServerConfig('admin_password_salt');
+    if (dbHash != null && dbSalt != null && dbHash.isNotEmpty) {
+      if (verifyAdminPassword(token, dbSalt, dbHash)) {
+        return {
+          'account_id': kAdminTokenAccountId,
+          'device_id': 'admin_device',
+          'is_admin': true,
+          'admin_scopes': const ['ops:*'],
+          'admin_credential': 'database_password',
+        };
+      }
+    }
+    return null;
   }
 
   Middleware _authMiddleware() {
@@ -541,7 +551,8 @@ class BackendServer {
             path.endsWith('/health/live') ||
             path.endsWith('/health/ready') ||
             path.contains('/s2s/') ||
-            path.contains('/admin-pairing/') ||
+            path.endsWith('/ops/setup-status') ||
+            path.endsWith('/ops/setup-admin-password') ||
             path.endsWith('/ws')) {
           return innerHandler(request);
         }

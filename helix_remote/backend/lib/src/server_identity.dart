@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:cryptography/cryptography.dart' as crypto;
-import 'package:crypto/crypto.dart' as crypto_pkg;
 import 'package:helix_remote_backend/src/database.dart';
 
 String generateUuidV4() {
@@ -26,16 +25,11 @@ String generateUuidV4() {
 class ServerIdentity {
   final String serverId;
   final crypto.SimpleKeyPair serverKeyPair;
-  final String? adminToken; // Set only if generated on first boot
 
   ServerIdentity({
     required this.serverId,
     required this.serverKeyPair,
-    this.adminToken,
   });
-
-  static const adminCredentialLifetime = Duration(hours: 12);
-  static const adminCredentialScopes = 'ops:*';
 
   static Future<ServerIdentity> loadOrCreate(
     BackendDatabase db, {
@@ -77,68 +71,9 @@ class ServerIdentity {
       keyPair = newKeyPair;
     }
 
-    // Admin token generation is intentionally independent of server identity
-    // (above): it fires whenever no token hash is on record, regardless of
-    // whether the server identity itself is new or pre-existing. This lets
-    // an operator who lost their token recover by clearing just
-    // 'admin_token_hash' (e.g. via bin/reset_admin_token.dart) without
-    // regenerating the server's federation identity/keypair as a side
-    // effect.
-    String? generatedAdminToken;
-    if (db.getServerConfig('admin_token_hash') == null) {
-      final random = Random.secure();
-      final tokenBytes = List<int>.generate(24, (i) => random.nextInt(256));
-      generatedAdminToken = base64UrlEncodeNoPadding(tokenBytes);
-      final hash = crypto_pkg.sha256
-          .convert(utf8.encode(generatedAdminToken))
-          .toString();
-      db.setServerConfig('admin_token_hash', hash);
-      db.setServerConfig(
-        'admin_token_expires_at',
-        (now ?? DateTime.now)()
-            .add(adminCredentialLifetime)
-            .millisecondsSinceEpoch
-            .toString(),
-      );
-      db.setServerConfig('admin_token_scopes', adminCredentialScopes);
-    } else if (db.getServerConfig('admin_token_expires_at') == null) {
-      // A pre-Phase-9 token is upgraded at the next boot rather than being
-      // silently perpetual. It remains usable for one normal operator shift,
-      // giving the owner time to pair the admin console again.
-      db.setServerConfig(
-        'admin_token_expires_at',
-        (now ?? DateTime.now)()
-            .add(adminCredentialLifetime)
-            .millisecondsSinceEpoch
-            .toString(),
-      );
-      db.setServerConfig('admin_token_scopes', adminCredentialScopes);
-    }
-
     return ServerIdentity(
       serverId: resolvedServerId,
       serverKeyPair: keyPair,
-      adminToken: generatedAdminToken,
     );
   }
-
-  static String base64UrlEncodeNoPadding(List<int> bytes) {
-    return base64Url.encode(bytes).replaceAll('=', '');
-  }
-}
-
-/// Invalidates the current admin token and mints a fresh one. Safe to call
-/// on a live, running server - it's a single DB write, no restart needed -
-/// as well as offline (bin/reset_admin_token.dart uses this too). The
-/// server's federation identity/keypair is untouched either way. The
-/// returned identity's `adminToken` is always non-null (the token hash was
-/// just cleared above, so loadOrCreate always regenerates one).
-Future<ServerIdentity> rotateAdminToken(
-  BackendDatabase db, {
-  DateTime Function()? now,
-}) async {
-  db.deleteServerConfig('admin_token_hash');
-  db.deleteServerConfig('admin_token_expires_at');
-  db.deleteServerConfig('admin_token_scopes');
-  return ServerIdentity.loadOrCreate(db, now: now);
 }

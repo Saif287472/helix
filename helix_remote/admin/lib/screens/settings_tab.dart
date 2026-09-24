@@ -3,31 +3,14 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_group_card.dart';
 
-/// App-level preferences plus a status card that hands off to the
-/// connection screen (owned by the caller - see [onOpenConnectServer]).
-/// Kept deliberately short and grouped - the connection mechanics (scan/
-/// pairing/manual entry, URL, token) live on their own screen so a
-/// first-time self-hoster isn't handed a wall of buttons and fields the
-/// moment they open Settings.
-///
-/// [onOpenConnectServer] is a plain callback rather than this widget
-/// pushing a route itself: the connect screen needs to keep reflecting
-/// live isConnected/isConnecting/errorMessage as they change (e.g. right
-/// after Connect succeeds), and a route pushed via Navigator.push captures
-/// whatever values were passed in at push time - it does not get rebuilt
-/// just because this widget's parent rebuilds with new ones. The caller
-/// (MainAdminPage) instead shows the connect screen as part of its own
-/// build(), the same way it already does for the lock screen and intro
-/// screen, so it always renders current state.
+/// App-level preferences and server status card for Helix Admin.
 class SettingsTab extends StatelessWidget {
   const SettingsTab({
     super.key,
     required this.isDarkMode,
     required this.onDarkModeChanged,
-    required this.urlController,
-    required this.isConnected,
-    required this.onOpenConnectServer,
-    required this.onDisconnect,
+    required this.serverUrl,
+    required this.onSignOut,
     required this.onOpenConnectGuide,
     this.appLockEnabled = false,
     this.onAppLockChanged,
@@ -35,10 +18,8 @@ class SettingsTab extends StatelessWidget {
 
   final bool isDarkMode;
   final ValueChanged<bool> onDarkModeChanged;
-  final TextEditingController urlController;
-  final bool isConnected;
-  final VoidCallback onOpenConnectServer;
-  final VoidCallback onDisconnect;
+  final String serverUrl;
+  final VoidCallback onSignOut;
   final VoidCallback onOpenConnectGuide;
 
   /// Whether a device unlock (biometrics or PIN/pattern/password) is
@@ -47,9 +28,9 @@ class SettingsTab extends StatelessWidget {
   final ValueChanged<bool>? onAppLockChanged;
 
   String get _connectedHost {
-    final url = urlController.text.trim();
-    if (url.isEmpty) return '';
-    return Uri.tryParse(url)?.host ?? url;
+    final trimmed = serverUrl.trim();
+    if (trimmed.isEmpty) return 'Connected Server';
+    return Uri.tryParse(trimmed)?.host ?? trimmed;
   }
 
   @override
@@ -66,10 +47,8 @@ class SettingsTab extends StatelessWidget {
           const SizedBox(height: 20),
           _ConnectionStatusCard(
             key: const Key('settings_connection_status_card'),
-            isConnected: isConnected,
             host: _connectedHost,
-            onTap: onOpenConnectServer,
-            onDisconnect: onDisconnect,
+            onSignOut: onSignOut,
           ),
           const SizedBox(height: 20),
           SettingsSectionCard(
@@ -119,7 +98,7 @@ class SettingsTab extends StatelessWidget {
                 icon: Icons.menu_book,
                 iconColor: HelixColorTokens.cFF4F46E5,
                 title: 'Self-Hosting Guide',
-                subtitle: 'Setup walkthrough and connection help',
+                subtitle: 'Setup walkthrough and server help',
                 onTap: onOpenConnectGuide,
               ),
             ],
@@ -133,98 +112,78 @@ class SettingsTab extends StatelessWidget {
 class _ConnectionStatusCard extends StatelessWidget {
   const _ConnectionStatusCard({
     super.key,
-    required this.isConnected,
     required this.host,
-    required this.onTap,
-    required this.onDisconnect,
+    required this.onSignOut,
   });
 
-  final bool isConnected;
   final String host;
-  final VoidCallback onTap;
-  final VoidCallback onDisconnect;
+  final VoidCallback onSignOut;
 
   @override
   Widget build(BuildContext context) {
-    // The Disconnect button is a sibling of the navigate-to-connect-screen
-    // InkWell below, not nested inside it - nesting two tappables invites
-    // ambiguous gesture-arena resolution where a tap on the inner button
-    // could also fire the outer card's onTap.
     return Material(
       color: Theme.of(context).cardColor,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: onTap,
-              child: Padding(
-                padding: HelixInsets.symmetric(horizontal: 16, vertical: 16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isConnected
-                            ? HelixColorTokens.cFF2FA84F
-                            : HelixColorTokens.cFF3A3A46,
-                      ),
-                      child: Icon(
-                        isConnected ? Icons.cloud_done : Icons.cloud_off,
-                        color: Colors.white,
-                        size: 22,
-                      ),
+      child: Padding(
+        padding: HelixInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: HelixColorTokens.cFF2FA84F,
+              ),
+              child: const Icon(
+                Icons.cloud_done,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Connected',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isConnected ? 'Connected' : 'Not connected',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            isConnected
-                                ? host.isEmpty
-                                      ? 'Tap to manage this connection'
-                                      : host
-                                : 'Connect your self-hosted Helix server to '
-                                      'get started',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: context.textTertiary,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    host,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontSize: 13,
                     ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.chevron_right, color: context.textFaint),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              key: const Key('settings_sign_out_button'),
+              onPressed: onSignOut,
+              icon: const Icon(Icons.logout, size: 16),
+              label: const Text('Sign Out'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: HelixColorTokens.cFFFF3366,
+                side: BorderSide(
+                  color: HelixColorTokens.cFFFF3366.withValues(alpha: 0.5),
                 ),
+                padding: HelixInsets.symmetric(horizontal: 12, vertical: 8),
               ),
             ),
-          ),
-          if (isConnected)
-            Padding(
-              padding: HelixInsets.only(right: 8),
-              child: IconButton(
-                tooltip: 'Disconnect',
-                onPressed: onDisconnect,
-                icon: Icon(Icons.link_off, color: context.textTertiary),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

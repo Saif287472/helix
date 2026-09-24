@@ -17,7 +17,7 @@ void main() {
   late BackendServer server;
   late HttpClient client;
   late int port;
-  late ServerIdentity identity;
+  const adminToken = 'admin_test_password';
   var now = DateTime.utc(2026, 6, 20, 0, 0);
 
   setUp(() async {
@@ -25,11 +25,12 @@ void main() {
     server = BackendServer.create(
       sqliteDb: sqlite3.openInMemory(),
       jwtSecret: 'profile_display_name_test_secret_at_least_32_bytes',
+      adminPasswordOverride: adminToken,
       rateLimitMaxTokens: 1000,
       rateLimitRefillRate: 1000,
       now: () => now,
     );
-    identity = await ServerIdentity.loadOrCreate(server.db);
+    await ServerIdentity.loadOrCreate(server.db);
     await server.start('127.0.0.1', 0);
     port = server.httpServer!.port;
     client = HttpClient();
@@ -95,7 +96,7 @@ void main() {
     final inviteCreate = await postJson(
       '/api/v1/ops/invites',
       null,
-      token: identity.adminToken,
+      token: adminToken,
     );
     final inviteCode =
         (jsonDecode(inviteCreate.body) as Map<String, dynamic>)['invite_code']

@@ -12,6 +12,7 @@ void main() {
   late int port;
   late ServerIdentity identity;
   late File tempLogFile;
+  const adminToken = 'ops_admin_test_password';
 
   setUp(() async {
     // Setup temporary log file
@@ -25,6 +26,7 @@ void main() {
     server = BackendServer.create(
       sqliteDb: sqliteDb,
       jwtSecret: 'test_jwt_secret_min_32_bytes_ops_admin',
+      adminPasswordOverride: adminToken,
       rateLimitMaxTokens: 1000,
       rateLimitRefillRate: 1000,
       wsReconnectsPerMinute: 2,
@@ -33,10 +35,6 @@ void main() {
 
     // Initialise identity
     identity = await ServerIdentity.loadOrCreate(server.db);
-
-    // Since we're in in-memory DB, adminToken will be returned by loadOrCreate because it is first boot.
-    // However, it is a base64 encoded token. If we generate a hash in the database, the raw token is returned by loadOrCreate.
-    expect(identity.adminToken, isNotNull);
 
     // Register a dummy user to verify paginated list
     server.db.createAccount('user1', 'user_one', 'user_key');
@@ -60,7 +58,7 @@ void main() {
       httpClient,
       port,
       '/api/v1/ops/config',
-      token: identity.adminToken,
+      token: adminToken,
     );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -93,7 +91,7 @@ void main() {
     );
 
     // Initialise identity
-    final overrideIdentity = await ServerIdentity.loadOrCreate(
+    await ServerIdentity.loadOrCreate(
       overrideServer.db,
     );
 
@@ -115,7 +113,7 @@ void main() {
         httpClient,
         overridePort,
         '/api/v1/ops/config',
-        token: overrideIdentity.adminToken,
+        token: 'wrong_token',
       );
       expect(resOld.statusCode, equals(401));
     } finally {
@@ -128,7 +126,7 @@ void main() {
       httpClient,
       port,
       '/api/v1/ops/users?limit=10&offset=0',
-      token: identity.adminToken,
+      token: adminToken,
     );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -144,7 +142,7 @@ void main() {
       httpClient,
       port,
       '/api/v1/ops/backup',
-      token: identity.adminToken,
+      token: adminToken,
     );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -166,7 +164,7 @@ void main() {
       httpClient,
       port,
       '/api/v1/ops/logs',
-      token: identity.adminToken,
+      token: adminToken,
     );
     expect(res.statusCode, equals(200));
     final body = jsonDecode(res.body) as Map<String, dynamic>;

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:helix_remote_domain/models.dart';
+import 'package:helix_remote_backend/src/admin_password.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/federation.dart';
@@ -35,10 +36,12 @@ class OperabilityModule {
     this.federationDomain,
     this.federationDirectoryUrl = '',
     this.publicBaseUrl = '',
+    this.getNeedsAdminSetup,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
   final BackendDatabase db;
+  final bool Function()? getNeedsAdminSetup;
   final RateLimiter rateLimiter;
   final WebSocketRelay wsRelay;
   final OutboxWorker outboxWorker;
@@ -219,7 +222,40 @@ class OperabilityModule {
     router.post('/federation/worldwide', _setWorldwideMode);
     router.get('/feature-flags', _featureFlagsSnapshot);
     router.post('/feature-flags/<name>', _setFeatureFlag);
+    router.get('/setup-status', _setupStatus);
+    router.post('/setup-admin-password', _setupAdminPassword);
     return withAppErrorHandling(router.call);
+  }
+
+  bool get _needsAdminSetup => getNeedsAdminSetup?.call() ?? false;
+
+  Response _setupStatus(Request request) {
+    return _json({
+      'needs_setup': _needsAdminSetup,
+      'server_id': serverIdentity?.serverId ?? db.getServerConfig('server_id') ?? '',
+    });
+  }
+
+  Future<Response> _setupAdminPassword(Request request) async {
+    if (!_needsAdminSetup) {
+      throw AppError.conflict('Admin password has already been configured.');
+    }
+    final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      throw AppError.badRequest('Invalid JSON body');
+    }
+    final password = body['password'] as String?;
+    if (password == null || password.trim().length < 6) {
+      throw AppError.badRequest('Password must be at least 6 characters long');
+    }
+    final salt = generatePasswordSalt();
+    final hash = hashAdminPassword(password.trim(), salt);
+    db.setServerConfig('admin_password_salt', salt);
+    db.setServerConfig('admin_password_hash', hash);
+    logServerWarning('Admin password configured via first-time setup prompt.');
+    return _json({'success': true});
   }
 
   Response _live(Request request) {

@@ -22,36 +22,28 @@ class GuideConnectAdminPage extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         const GuideDetailExpansion(
-          title: 'Easiest: get a pairing code (works any time)',
+          title: 'Option 1: In-App First-Time Setup',
           detail:
-              'In Settings, tap the connection card, then "Get a Pairing '
-              'Code from the Server", then run the curl command it shows '
-              'over SSH/Termius on the server - while it\'s already '
-              'running, no restart needed. It prints a 16-digit code, '
-              'valid for 10 minutes and usable once; entering it in the '
-              'app exchanges it for a fresh admin token automatically.',
+              'If you start the backend without setting an admin password in '
+              '.env, opening this app and connecting to your server URL '
+              'will automatically show the "Create First Admin Password" prompt.\n\n'
+              'Enter your chosen master password to initialize and secure your '
+              'server immediately.',
         ),
         const GuideDetailExpansion(
-          title: 'On first boot: scan the QR code or read ADMIN_TOKEN.txt',
+          title: 'Option 2: Pre-Configuring in .env',
           detail:
-              'The server also prints its admin token - and a QR code '
-              'encoding it - once, the first time it boots, and saves the '
-              'token to ADMIN_TOKEN.txt next to the database. "Scan Token '
-              'from Server Terminal" on the connection screen reads that '
-              'QR code directly. Missed both and the server won\'t '
-              'restart fresh? Run bin/reset_admin_token.dart on the '
-              'server (with the server stopped) to mint a new one - or '
-              'use the pairing code above instead, which needs no '
-              'downtime.',
+              'In your backend .env file, you can set a password before starting:\n\n'
+              'HELIX_REMOTE_ADMIN_PASSWORD=your_secure_password\n\n'
+              'This acts as your master password to sign in from '
+              'the Helix Admin app. It never expires unless you change it in .env.',
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Text(
-          'Go to Settings in the sidebar and tap the connection card at '
-          'the top, then enter your server\'s URL and admin token and tap '
-          'Connect. Once connected, the token is saved securely on this '
-          'device so you won\'t need to re-enter it next time - '
-          'optionally turn on App Lock in Settings to require your '
-          'device unlock before it\'s used.',
+          'On the sign-in screen, enter your server URL (e.g. '
+          'https://helix.yourdomain.com or http://127.0.0.1:8080) and your '
+          'Admin Password, then tap Sign In. Once signed in, your session is '
+          'saved securely on this device so you stay logged in indefinitely.',
           style: TextStyle(
             fontSize: 13,
             color: context.textTertiary,

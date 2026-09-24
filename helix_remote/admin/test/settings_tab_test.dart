@@ -5,21 +5,17 @@ import 'package:helix_admin/screens/settings_tab.dart';
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 SettingsTab _settingsTab({
-  TextEditingController? urlController,
+  String serverUrl = 'https://helix.example.com',
   VoidCallback? onOpenConnectGuide,
-  VoidCallback? onOpenConnectServer,
-  VoidCallback? onDisconnect,
-  bool isConnected = false,
+  VoidCallback? onSignOut,
   bool appLockEnabled = false,
   ValueChanged<bool>? onAppLockChanged,
 }) {
   return SettingsTab(
     isDarkMode: true,
     onDarkModeChanged: (_) {},
-    urlController: urlController ?? TextEditingController(),
-    isConnected: isConnected,
-    onOpenConnectServer: onOpenConnectServer ?? () {},
-    onDisconnect: onDisconnect ?? () {},
+    serverUrl: serverUrl,
+    onSignOut: onSignOut ?? () {},
     onOpenConnectGuide: onOpenConnectGuide ?? () {},
     appLockEnabled: appLockEnabled,
     onAppLockChanged: onAppLockChanged,
@@ -28,37 +24,14 @@ SettingsTab _settingsTab({
 
 void main() {
   testWidgets(
-    'the connection status card shows "Not connected" and reports a tap',
+    'the connection status card shows the connected host, with a sign out action',
     (tester) async {
-      var opened = false;
-      await tester.pumpWidget(
-        _wrap(_settingsTab(onOpenConnectServer: () => opened = true)),
-      );
-
-      expect(find.text('Not connected'), findsOneWidget);
-
-      await tester.tap(
-        find.byKey(const Key('settings_connection_status_card')),
-      );
-      await tester.pump();
-
-      expect(opened, isTrue);
-    },
-  );
-
-  testWidgets(
-    'the connection status card shows the connected host, with a quick '
-    'disconnect action',
-    (tester) async {
-      var disconnected = false;
+      var signedOut = false;
       await tester.pumpWidget(
         _wrap(
           _settingsTab(
-            isConnected: true,
-            urlController: TextEditingController(
-              text: 'https://helix.example.com',
-            ),
-            onDisconnect: () => disconnected = true,
+            serverUrl: 'https://helix.example.com',
+            onSignOut: () => signedOut = true,
           ),
         ),
       );
@@ -66,10 +39,10 @@ void main() {
       expect(find.text('Connected'), findsOneWidget);
       expect(find.text('helix.example.com'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Disconnect'));
+      await tester.tap(find.byKey(const Key('settings_sign_out_button')));
       await tester.pump();
 
-      expect(disconnected, isTrue);
+      expect(signedOut, isTrue);
     },
   );
 
@@ -82,10 +55,8 @@ void main() {
         SettingsTab(
           isDarkMode: true,
           onDarkModeChanged: (v) => toggledTo = v,
-          urlController: TextEditingController(),
-          isConnected: false,
-          onOpenConnectServer: () {},
-          onDisconnect: () {},
+          serverUrl: 'https://helix.example.com',
+          onSignOut: () {},
           onOpenConnectGuide: () {},
         ),
       ),

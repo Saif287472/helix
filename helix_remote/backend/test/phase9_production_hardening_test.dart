@@ -68,34 +68,43 @@ void main() {
     expect(second.isAllowed('ip:198.51.100.10'), isFalse);
   });
 
-  test('P9 paired admin credentials are scoped and expire', () async {
-    var now = DateTime.utc(2026, 8, 7);
+  test('P9 admin credentials grant ops:* scope with persistent password', () async {
+    const adminPassword = 'p9_admin_password_key_123';
     final sqliteDb = sqlite3.openInMemory();
     final server = BackendServer.create(
       sqliteDb: sqliteDb,
       jwtSecret: 'test_jwt_secret_that_is_long_enough_for_phase_nine',
-      now: () => now,
+      adminPasswordOverride: adminPassword,
     );
     addTearDown(server.stop);
-    final identity = await ServerIdentity.loadOrCreate(
-      server.db,
-      now: () => now,
-    );
+    final identity = await ServerIdentity.loadOrCreate(server.db);
     server.serverIdentity = identity;
-    final token = identity.adminToken!;
-    expect(server.getHandler(), isNotNull);
-    final expiry = int.parse(
-      server.db.getServerConfig('admin_token_expires_at')!,
-    );
-    expect(server.db.getServerConfig('admin_token_scopes'), equals('ops:*'));
 
-    now = DateTime.fromMillisecondsSinceEpoch(expiry + 1, isUtc: true);
-    // The auth middleware must no longer turn the expired raw token into an
-    // administrator; a normal protected request gets the standard 401.
-    final response = await server.getHandler().call(
-      _requestWithBearer('/api/v1/ops/metrics', token),
+    expect(server.getHandler(), isNotNull);
+
+    // Authorized request with password gets 200
+    final okResponse = await server.getHandler().call(
+      _requestWithBearer('/api/v1/ops/config', adminPassword),
     );
-    expect(response.statusCode, equals(401));
+    expect(okResponse.statusCode, equals(200));
+
+    // Wrong password gets 401
+    final badResponse = await server.getHandler().call(
+      _requestWithBearer('/api/v1/ops/config', 'wrong_password'),
+    );
+    expect(badResponse.statusCode, equals(401));
+  });
+
+  test('P9 ServerIdentity preserves server identity across multiple loadOrCreate calls', () async {
+    final sqliteDb = sqlite3.openInMemory();
+    final db = BackendDatabase(sqliteDb);
+    addTearDown(db.close);
+
+    final firstBoot = await ServerIdentity.loadOrCreate(db);
+    expect(firstBoot.serverId, isNotEmpty);
+
+    final secondBoot = await ServerIdentity.loadOrCreate(db);
+    expect(secondBoot.serverId, equals(firstBoot.serverId));
   });
 
   test('P9 feature flags are allow-listed and default closed', () {

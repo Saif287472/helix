@@ -195,14 +195,15 @@ void main() {
     late BackendServer server;
     late HttpClient httpClient;
     late int port;
-    late ServerIdentity identity;
     late Directory tempDir;
+
+    const adminToken = 'admin_test_password';
 
     Future<Map<String, dynamic>> getLogs({String query = ''}) async {
       final request = await httpClient.getUrl(
         Uri.parse('http://127.0.0.1:$port/api/v1/ops/logs$query'),
       );
-      request.headers.set('Authorization', 'Bearer ${identity.adminToken}');
+      request.headers.set('Authorization', 'Bearer $adminToken');
       final response = await request.close();
       final body = await response.transform(utf8.decoder).join();
       return jsonDecode(body) as Map<String, dynamic>;
@@ -212,11 +213,12 @@ void main() {
       server = BackendServer.create(
         sqliteDb: sqlite3.openInMemory(),
         jwtSecret: 'test_jwt_secret_min_32_bytes_server_log',
+        adminPasswordOverride: adminToken,
         rateLimitMaxTokens: 1000,
         rateLimitRefillRate: 1000,
         logFilePath: logFilePath,
       );
-      identity = await ServerIdentity.loadOrCreate(server.db);
+      await ServerIdentity.loadOrCreate(server.db);
       await server.start('127.0.0.1', 0);
       port = server.httpServer!.port;
       httpClient = HttpClient();
@@ -336,7 +338,7 @@ void main() {
       final request = await httpClient.getUrl(
         Uri.parse('http://127.0.0.1:$port/api/v1/ops/logs?limit=0'),
       );
-      request.headers.set('Authorization', 'Bearer ${identity.adminToken}');
+      request.headers.set('Authorization', 'Bearer $adminToken');
       final response = await request.close();
       await response.drain<void>();
 

@@ -62,17 +62,17 @@ void main() {
       );
     });
 
-    test('admin token comparison is constant time', () {
+    test('admin password and token comparison is constant time', () {
       final server = File('lib/src/server_impl.dart').readAsStringSync();
+      final adminPassword = File('lib/src/admin_password.dart').readAsStringSync();
 
-      // Both the raw bearer token and its stored hash.
       expect(
-        'constantTimeStringEqual'.allMatches(server).length,
-        greaterThanOrEqualTo(2),
+        server.contains('constantTimeStringEqual(token, adminPasswordOverride!)'),
+        isTrue,
       );
       expect(
-        RegExp(r'token\s*==\s*adminTokenOverride').hasMatch(server),
-        isFalse,
+        adminPassword.contains('constantTimeStringEqual(computed, expectedHash)'),
+        isTrue,
       );
     });
   });

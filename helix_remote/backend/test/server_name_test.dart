@@ -84,18 +84,19 @@ void main() {
     late BackendServer server;
     late HttpClient httpClient;
     late int port;
-    late ServerIdentity identity;
+    const adminToken = 'admin_test_password';
     late String userToken;
 
     setUp(() async {
       server = BackendServer.create(
         sqliteDb: sqlite3.openInMemory(),
         jwtSecret: 'test_jwt_secret_min_32_bytes_server_name',
+        adminPasswordOverride: adminToken,
         rateLimitMaxTokens: 1000,
         rateLimitRefillRate: 1000,
         publicBaseUrl: 'https://hr.example.com',
       );
-      identity = await ServerIdentity.loadOrCreate(server.db);
+      await ServerIdentity.loadOrCreate(server.db);
       await server.start('127.0.0.1', 0);
       port = server.httpServer!.port;
       httpClient = HttpClient();
@@ -142,7 +143,7 @@ void main() {
         send(
           'POST',
           '/api/v1/ops/config/server-name',
-          token: identity.adminToken,
+          token: adminToken,
           body: {'server_name': name},
         );
 
@@ -154,7 +155,7 @@ void main() {
       final config = await send(
         'GET',
         '/api/v1/ops/config',
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(config.json['server_name'], 'Rahman Family Server');
       expect(config.json['max_server_name_length'], maxServerNameLength);
@@ -164,7 +165,7 @@ void main() {
       final config = await send(
         'GET',
         '/api/v1/ops/config',
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(config.json['server_name'], '');
     });
@@ -178,7 +179,7 @@ void main() {
       final config = await send(
         'GET',
         '/api/v1/ops/config',
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(config.json['server_name'], '');
     });
@@ -196,7 +197,7 @@ void main() {
       final result = await send(
         'POST',
         '/api/v1/ops/config/server-name',
-        token: identity.adminToken,
+        token: adminToken,
         body: {'server_name': 42},
       );
       expect(result.status, 400);
@@ -207,7 +208,7 @@ void main() {
         'http://127.0.0.1:$port/api/v1/ops/config/server-name',
       );
       final request = await httpClient.postUrl(uri);
-      request.headers.set('Authorization', 'Bearer ${identity.adminToken}');
+      request.headers.set('Authorization', 'Bearer $adminToken');
       request.headers.set('Content-Type', 'application/json');
       request.write('this is not json');
       final response = await request.close();
@@ -273,7 +274,7 @@ void main() {
       final created = await send(
         'POST',
         '/api/v1/ops/invites',
-        token: identity.adminToken,
+        token: adminToken,
       );
       final code = created.json['invite_code'] as String;
 
@@ -291,7 +292,7 @@ void main() {
       final created = await send(
         'POST',
         '/api/v1/ops/invites',
-        token: identity.adminToken,
+        token: adminToken,
       );
       final code = created.json['invite_code'] as String;
 

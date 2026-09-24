@@ -13,7 +13,7 @@ void main() {
   late BackendServer server;
   late HttpClient client;
   late int port;
-  late ServerIdentity identity;
+  const adminToken = 'admin_test_password';
   var now = DateTime.utc(2026, 6, 20, 0, 0);
 
   setUp(() async {
@@ -21,11 +21,12 @@ void main() {
     server = BackendServer.create(
       sqliteDb: sqlite3.openInMemory(),
       jwtSecret: 'invites_test_secret_at_least_32_bytes',
+      adminPasswordOverride: adminToken,
       rateLimitMaxTokens: 1000,
       rateLimitRefillRate: 1000,
       now: () => now,
     );
-    identity = await ServerIdentity.loadOrCreate(server.db);
+    await ServerIdentity.loadOrCreate(server.db);
     await server.start('127.0.0.1', 0);
     port = server.httpServer!.port;
     client = HttpClient();
@@ -105,7 +106,7 @@ void main() {
     final create = await postJson(
       '/api/v1/ops/invites',
       null,
-      token: identity.adminToken,
+      token: adminToken,
     );
     expect(create.statusCode, equals(200));
     final createBody = jsonDecode(create.body) as Map<String, dynamic>;
@@ -177,7 +178,7 @@ void main() {
     final create = await postJson(
       '/api/v1/ops/invites',
       null,
-      token: identity.adminToken,
+      token: adminToken,
     );
     final inviteCode =
         (jsonDecode(create.body) as Map<String, dynamic>)['invite_code']
@@ -213,13 +214,13 @@ void main() {
       final pendingCreate = await postJson(
         '/api/v1/ops/invites',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
 
       final redeemedCreate = await postJson(
         '/api/v1/ops/invites',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       final redeemedCode =
           (jsonDecode(redeemedCreate.body)
@@ -234,13 +235,13 @@ void main() {
       final expiredCreate = await postJson(
         '/api/v1/ops/invites',
         null,
-        token: identity.adminToken,
+        token: adminToken,
       );
       now = now.add(const Duration(days: 8));
 
       final list = await getJson(
         '/api/v1/ops/invites?limit=50&offset=0',
-        token: identity.adminToken,
+        token: adminToken,
       );
       expect(list.statusCode, equals(200));
       final invites =
