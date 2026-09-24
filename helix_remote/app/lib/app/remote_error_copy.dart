@@ -25,9 +25,9 @@ class RemoteUserErrorCopy {
   /// are never shown to the user in Helix Remote.
   static String scrubDomain(String text) {
     return text
-        .replaceAll(RegExp(r'https?://[a-zA-Z0-9.\-_:]+'), 'the server')
+        .replaceAll(RegExp(r'https?://[^\s,\)\]"\x27]+'), 'the server')
         .replaceAll(
-          RegExp(r'\b[a-zA-Z0-9.-]+\.agiletechbd\.com\b', caseSensitive: false),
+          RegExp(r'\b[a-zA-Z0-9.-]+\.agiletechbd\.com(:\d+)?\b', caseSensitive: false),
           'the server',
         );
   }

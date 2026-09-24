@@ -88,7 +88,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
       AppLogger.instance.error('bootstrap', '$e', st);
       if (mounted) {
         setState(() {
-          _initialUrlError = e.toString();
+          _initialUrlError = RemoteUserErrorCopy.scrubDomain(e.toString());
           _bootState = _BootState.needsServerChoice;
         });
       }
@@ -175,7 +175,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         _pendingPhoneNumber = null;
         if (mounted) {
           setState(() {
-            _initialUrlError = e.toString();
+            _initialUrlError = RemoteUserErrorCopy.scrubDomain(e.toString());
             _bootState = _BootState.offline;
           });
         }

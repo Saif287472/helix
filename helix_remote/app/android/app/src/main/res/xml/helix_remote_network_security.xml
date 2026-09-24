@@ -8,6 +8,7 @@
     <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="false">hr.agiletechbd.com</domain>
+        <domain includeSubdomains="false">helix.agiletechbd.com</domain>
         <pin-set expiration="2027-05-01">
             <pin digest="SHA-256">fjt5zE6K0c3n1+uhpv6oLsJ+ksWtV511oiwSd79rpzs=</pin>
         </pin-set>

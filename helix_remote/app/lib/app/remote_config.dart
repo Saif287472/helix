@@ -5,7 +5,7 @@ import 'package:helix_remote_calls/helix_remote_calls.dart';
 /// The free, shared Helix Remote server offered as a first-launch option.
 /// Auto-issues its own invites (server-side gated by `global_instance_mode`)
 /// so users don't need an admin-issued invite to join it.
-const kHelixGlobalServerUrl = 'https://hr.agiletechbd.com';
+const kHelixGlobalServerUrl = 'https://helix.agiletechbd.com';
 
 enum RemoteRuntimeProfile {
   production,

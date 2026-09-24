@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/app/helix_code.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
 class ServerSelectionStep extends StatefulWidget {
@@ -172,7 +173,15 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
   }
 
   void _handleCodeChanged(String value) {
-    widget.onCodeChanged?.call(value);
+    final decoded = decodeHelixInviteCode(value);
+    if (decoded != null && decoded.inviteCode != value) {
+      _codeController.text = decoded.inviteCode;
+      _codeController.selection =
+          TextSelection.collapsed(offset: decoded.inviteCode.length);
+      widget.onCodeChanged?.call(decoded.inviteCode);
+    } else {
+      widget.onCodeChanged?.call(value);
+    }
   }
 
   @override
@@ -796,6 +805,7 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
                 autofillHints: const [AutofillHints.telephoneNumber],
                 decoration: InputDecoration(
                   hintText: '1700 000000',
+                  errorMaxLines: 3,
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                   contentPadding:

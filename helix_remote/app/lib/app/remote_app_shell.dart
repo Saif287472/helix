@@ -28,7 +28,7 @@ class HelixRemoteApp extends StatefulWidget {
 
 class _HelixRemoteAppState extends State<HelixRemoteApp>
     with WidgetsBindingObserver {
-  RemoteStartupState _startupState = RemoteStartupState.idle;
+  late RemoteStartupState _startupState;
   String? _errorMessage;
   bool _initializing = false;
   RemoteCallStatus? _activeCallStatus;
@@ -42,6 +42,8 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   @override
   void initState() {
     super.initState();
+    _startupState = widget.root.startupState;
+    _errorMessage = widget.root.lastError;
     WidgetsBinding.instance.addObserver(this);
     _stateSub = widget.root.startupStateChanges.listen((state) {
       if (!mounted) return;
@@ -68,6 +70,24 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
       _onConnectivityChanged,
     );
     _startBoot();
+  }
+
+  @override
+  void didUpdateWidget(HelixRemoteApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.root != widget.root) {
+      _stateSub?.cancel();
+      _startupState = widget.root.startupState;
+      _errorMessage = widget.root.lastError;
+      _stateSub = widget.root.startupStateChanges.listen((state) {
+        if (!mounted) return;
+        setState(() {
+          _startupState = state;
+          _errorMessage = widget.root.lastError;
+        });
+      });
+      _startBoot();
+    }
   }
 
   void _onConnectivityChanged(List<ConnectivityResult> results) {
@@ -109,6 +129,13 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
 
   Future<void> _startBoot() async {
     if (_initializing) return;
+    if (widget.root.startupState == RemoteStartupState.ready ||
+        widget.root.startupState == RemoteStartupState.authenticatedAndSyncing) {
+      if (mounted && _startupState != widget.root.startupState) {
+        setState(() => _startupState = widget.root.startupState);
+      }
+      return;
+    }
     _initializing = true;
     try {
       await widget.root.initialize();
@@ -117,6 +144,9 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
       if (!mounted) return;
       if (restored) {
         await widget.root.startRuntime();
+      }
+      if (mounted) {
+        setState(() => _startupState = widget.root.startupState);
       }
     } catch (e, st) {
       AppLogger.instance.error('boot', '$e', st);

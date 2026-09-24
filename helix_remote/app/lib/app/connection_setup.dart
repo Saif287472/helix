@@ -58,7 +58,7 @@ class _OfflineShellScreen extends StatelessWidget {
                     if (connectError != null) ...[
                       const SizedBox(height: 16),
                       Text(
-                        connectError!,
+                        RemoteUserErrorCopy.scrubDomain(connectError!),
                         style: TextStyle(color: theme.colorScheme.error),
                         textAlign: TextAlign.center,
                       ),
