@@ -19,56 +19,114 @@ class _ReportsTabState extends State<ReportsTab> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  // Sample/placeholder reports data for preview and demonstration
-  late List<Map<String, dynamic>> _reports;
+  List<Map<String, dynamic>> _reports = [];
+  bool _loading = false;
+  String? _error;
+  int _offset = 0;
+  static const int _pageSize = 50;
+  bool _hasMore = false;
+  String? _actioningReportId;
 
   @override
   void initState() {
     super.initState();
-    _reports = [
-      {
-        'id': 'rep_001',
-        'reported_user': 'SpamBot99',
-        'reported_account_id': '8f12a34b',
-        'reporter': 'Alice Miller',
-        'reporter_account_id': '4c3d2e1f',
-        'reason': 'Spam / Advertising',
-        'details':
-            'Sending repeated unsolicited phishing links to multiple members in private chat.',
-        'created_at': DateTime.now().subtract(const Duration(hours: 2)).millisecondsSinceEpoch,
-        'status': 'Pending',
-      },
-      {
-        'id': 'rep_002',
-        'reported_user': 'UnknownSender',
-        'reported_account_id': 'a7b8c9d0',
-        'reporter': 'Bob Vance',
-        'reporter_account_id': '1b2c3d4e',
-        'reason': 'Harassment / Abuse',
-        'details':
-            'Inappropriate language and persistent unsolicited messages after being asked to stop.',
-        'created_at': DateTime.now().subtract(const Duration(days: 1)).millisecondsSinceEpoch,
-        'status': 'Under Review',
-      },
-      {
-        'id': 'rep_003',
-        'reported_user': 'FakeSupport',
-        'reported_account_id': '33aa44bb',
-        'reporter': 'Charlie Day',
-        'reporter_account_id': '55cc66dd',
-        'reason': 'Impersonation',
-        'details':
-            'Claiming to be an official Helix server admin requesting account recovery keys.',
-        'created_at': DateTime.now().subtract(const Duration(days: 3)).millisecondsSinceEpoch,
-        'status': 'Resolved',
-      },
-    ];
+    _loadReports();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadReports({int offset = 0}) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final raw = await widget.client.getReports(limit: _pageSize, offset: offset);
+      final mapped = raw.map((r) {
+        final rawStatus = (r['status'] as String? ?? 'PENDING').toUpperCase();
+        final displayStatus = switch (rawStatus) {
+          'PENDING' => 'Pending',
+          'ACTIONED' => 'Actioned',
+          'RESOLVED' => 'Resolved',
+          'DISMISSED' => 'Dismissed',
+          _ => rawStatus.substring(0, 1) + rawStatus.substring(1).toLowerCase(),
+        };
+
+        return {
+          'id': (r['report_id'] ?? r['id'] ?? '').toString(),
+          'reported_user': (r['subject_display_name'] ?? r['reported_user'] ?? r['subject_account_id'] ?? 'Unknown').toString(),
+          'reported_account_id': (r['subject_account_id'] ?? r['reported_account_id'] ?? '').toString(),
+          'reporter': (r['reporter_display_name'] ?? r['reporter'] ?? r['reporter_account_id'] ?? 'Anonymous').toString(),
+          'reporter_account_id': (r['reporter_account_id'] ?? '').toString(),
+          'reason': (r['category'] ?? r['reason'] ?? 'Report').toString(),
+          'details': (r['context_hash'] ?? r['details'] ?? r['reason_code'] ?? 'No additional details provided.').toString(),
+          'created_at': r['created_at'] is int
+              ? r['created_at']
+              : (DateTime.tryParse(r['created_at']?.toString() ?? '')?.millisecondsSinceEpoch ?? 0),
+          'status': displayStatus,
+        };
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _reports = mapped;
+        _offset = offset;
+        _hasMore = mapped.length == _pageSize;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _resolveReport(String reportId) async {
+    setState(() => _actioningReportId = reportId);
+    try {
+      await widget.client.resolveReport(reportId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report marked as Resolved')),
+        );
+      }
+      await _loadReports(offset: _offset);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to resolve report: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _actioningReportId = null);
+    }
+  }
+
+  Future<void> _dismissReport(String reportId) async {
+    setState(() => _actioningReportId = reportId);
+    try {
+      await widget.client.dismissReport(reportId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report dismissed')),
+        );
+      }
+      await _loadReports(offset: _offset);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to dismiss report: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _actioningReportId = null);
+    }
   }
 
   List<Map<String, dynamic>> get _filteredReports {
@@ -92,6 +150,7 @@ class _ReportsTabState extends State<ReportsTab> {
   }
 
   void _showReportDetails(Map<String, dynamic> report) {
+    final reportId = report['id'] as String;
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -112,7 +171,7 @@ class _ReportsTabState extends State<ReportsTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _detailRow('Report ID', report['id'] as String),
+              _detailRow('Report ID', reportId),
               const SizedBox(height: 8),
               _detailRow('Reported User', '${report['reported_user']} (${report['reported_account_id']})'),
               const SizedBox(height: 8),
@@ -152,25 +211,15 @@ class _ReportsTabState extends State<ReportsTab> {
           ),
           OutlinedButton(
             onPressed: () {
-              setState(() {
-                report['status'] = 'Dismissed';
-              });
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Report dismissed')),
-              );
+              _dismissReport(reportId);
             },
             child: const Text('Dismiss'),
           ),
           FilledButton(
             onPressed: () {
-              setState(() {
-                report['status'] = 'Resolved';
-              });
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Report marked as Resolved')),
-              );
+              _resolveReport(reportId);
             },
             child: const Text('Resolve'),
           ),
@@ -207,7 +256,7 @@ class _ReportsTabState extends State<ReportsTab> {
   Widget build(BuildContext context) {
     final filtered = _filteredReports;
     final pendingCount = _reports.where((r) => r['status'] == 'Pending').length;
-    final reviewCount = _reports.where((r) => r['status'] == 'Under Review').length;
+    final actionedCount = _reports.where((r) => r['status'] == 'Actioned').length;
     final resolvedCount = _reports.where((r) => r['status'] == 'Resolved').length;
 
     return SingleChildScrollView(
@@ -235,7 +284,7 @@ class _ReportsTabState extends State<ReportsTab> {
                       IconButton(
                         tooltip: 'Refresh reports',
                         icon: const Icon(Icons.refresh),
-                        onPressed: () => setState(() {}),
+                        onPressed: () => _loadReports(offset: _offset),
                       ),
                     ],
                   ),
@@ -264,8 +313,8 @@ class _ReportsTabState extends State<ReportsTab> {
                         color: Colors.amber.shade800,
                       ),
                       _StatBadge(
-                        label: 'Under Review',
-                        count: reviewCount,
+                        label: 'Actioned',
+                        count: actionedCount,
                         icon: Icons.search,
                         color: Colors.purple,
                       ),
@@ -326,7 +375,7 @@ class _ReportsTabState extends State<ReportsTab> {
                   // Filter Chips
                   Wrap(
                     spacing: 8,
-                    children: ['All', 'Pending', 'Under Review', 'Resolved', 'Dismissed']
+                    children: ['All', 'Pending', 'Actioned', 'Resolved', 'Dismissed']
                         .map(
                           (filter) => ChoiceChip(
                             label: Text(filter),
@@ -342,7 +391,25 @@ class _ReportsTabState extends State<ReportsTab> {
                   ),
                   const SizedBox(height: 20),
 
-                  if (filtered.isEmpty)
+                  if (_loading)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 13,
+                        ),
+                      ),
+                    )
+                  else if (filtered.isEmpty)
                     Padding(
                       padding: HelixInsets.all(32),
                       child: Center(
@@ -355,7 +422,9 @@ class _ReportsTabState extends State<ReportsTab> {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              'No reports matching current filter.',
+                              _reports.isEmpty
+                                  ? 'No reports submitted yet.'
+                                  : 'No reports matching current filter.',
                               style: TextStyle(color: context.textFaint),
                             ),
                           ],
@@ -376,42 +445,72 @@ class _ReportsTabState extends State<ReportsTab> {
                           DataColumn(label: Text('Actions')),
                         ],
                         rows: filtered.map((report) {
+                          final reportId = report['id'] as String;
                           final status = report['status'] as String;
+                          final isBusy = _actioningReportId == reportId;
+
                           return DataRow(
                             cells: [
-                              DataCell(Text(report['id'] as String)),
+                              DataCell(Text(reportId)),
                               DataCell(Text('${report['reported_user']} (${report['reported_account_id']})')),
                               DataCell(Text(report['reporter'] as String)),
                               DataCell(Text(report['reason'] as String)),
                               DataCell(Text(_formatTimestamp(report['created_at']))),
                               DataCell(_statusChip(status)),
                               DataCell(
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.visibility_outlined, size: 20),
-                                      tooltip: 'View details & investigate',
-                                      onPressed: () => _showReportDetails(report),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.check, size: 20, color: Colors.green),
-                                      tooltip: 'Mark resolved',
-                                      onPressed: () {
-                                        setState(() => report['status'] = 'Resolved');
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Report marked as Resolved')),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
+                                isBusy
+                                    ? const SizedBox(
+                                        height: 18,
+                                        width: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.visibility_outlined, size: 20),
+                                            tooltip: 'View details & investigate',
+                                            onPressed: () => _showReportDetails(report),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.check, size: 20, color: Colors.green),
+                                            tooltip: 'Mark resolved',
+                                            onPressed: () => _resolveReport(reportId),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.close, size: 20, color: Colors.grey),
+                                            tooltip: 'Dismiss report',
+                                            onPressed: () => _dismissReport(reportId),
+                                          ),
+                                        ],
+                                      ),
                               ),
                             ],
                           );
                         }).toList(),
                       ),
                     ),
+
+                  if (!_loading && (_reports.isNotEmpty || _offset > 0)) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: _offset > 0
+                              ? () => _loadReports(offset: (_offset - _pageSize).clamp(0, 1 << 30))
+                              : null,
+                          child: const Text('Previous'),
+                        ),
+                        TextButton(
+                          onPressed: _hasMore
+                              ? () => _loadReports(offset: _offset + _pageSize)
+                              : null,
+                          child: const Text('Next'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -424,7 +523,7 @@ class _ReportsTabState extends State<ReportsTab> {
   Widget _statusChip(String status) {
     final (Color color, Color bg) = switch (status) {
       'Pending' => (Colors.amber.shade900, Colors.amber.withValues(alpha: 0.15)),
-      'Under Review' => (Colors.purple, Colors.purple.withValues(alpha: 0.15)),
+      'Actioned' => (Colors.purple, Colors.purple.withValues(alpha: 0.15)),
       'Resolved' => (Colors.green, Colors.green.withValues(alpha: 0.15)),
       'Dismissed' => (Colors.grey, Colors.grey.withValues(alpha: 0.15)),
       _ => (Colors.blue, Colors.blue.withValues(alpha: 0.15)),

@@ -259,6 +259,101 @@ class _UsersTabState extends State<UsersTab> {
     }
   }
 
+  Future<void> _manageDevices(Map<String, dynamic> user) async {
+    final accountId = user['account_id'] as String? ?? '';
+    final displayName = user['display_name'] as String? ?? accountId;
+    final devices = (user['devices'] as List? ?? []).cast<Map<String, dynamic>>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.devices, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Devices for $displayName',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 400,
+            child: devices.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text('No active devices registered for this user.'),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: devices.length,
+                    separatorBuilder: (_, _) => const Divider(),
+                    itemBuilder: (ctx, i) {
+                      final dev = devices[i];
+                      final devId = dev['device_id'] as String? ?? '';
+                      final devName = dev['device_name'] as String? ?? devId;
+                      final isRevoked = dev['status'] == 'REVOKED';
+
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.phone_android, size: 24),
+                        title: Text(devName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(
+                          devId,
+                          style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                        ),
+                        trailing: isRevoked
+                            ? const Text(
+                                'Revoked',
+                                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                              )
+                            : OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  side: const BorderSide(color: Colors.red),
+                                ),
+                                onPressed: () async {
+                                  try {
+                                    await widget.client.revokeDevice(accountId, devId);
+                                    setDialogState(() {
+                                      dev['status'] = 'REVOKED';
+                                    });
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Access revoked for $devName')),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Failed to revoke device: $e')),
+                                      );
+                                    }
+                                  }
+                                },
+                                child: const Text('Revoke'),
+                              ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -387,6 +482,11 @@ class _UsersTabState extends State<UsersTab> {
                     : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          IconButton(
+                            icon: const Icon(Icons.devices_outlined),
+                            tooltip: 'Manage devices',
+                            onPressed: () => _manageDevices(user),
+                          ),
                           IconButton(
                             icon: const Icon(Icons.key_outlined),
                             tooltip: 'Issue recovery code',

@@ -755,6 +755,14 @@ extension BackendContactsRepository on BackendDatabase {
     }
   }
 
+  void updateReportStatus(String reportId, String status) {
+    final stmt = _db.prepare(
+      'UPDATE reports SET status = ? WHERE report_id = ?;',
+    );
+    stmt.execute([status, reportId]);
+    stmt.close();
+  }
+
   void _ensurePrivacyRow(String accountId) {
     final stmt = _db.prepare('''
       INSERT OR IGNORE INTO account_privacy (account_id)

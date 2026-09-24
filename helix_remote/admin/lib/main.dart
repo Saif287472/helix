@@ -113,6 +113,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   /// Polls the Logs screen while it's live.
   Timer? _logPollTimer;
+  StreamSubscription<String>? _logStreamSub;
   bool _logAutoRefresh = false;
 
   @override
@@ -246,6 +247,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
     _urlDebounce?.cancel();
     _urlController.removeListener(_onUrlChanged);
     _logPollTimer?.cancel();
+    _logStreamSub?.cancel();
     _urlController.dispose();
     _passwordController.dispose();
     _federationDomainController.dispose();
@@ -259,8 +261,38 @@ class _MainAdminPageState extends State<MainAdminPage> {
   void _setLogAutoRefresh(bool enabled) {
     setState(() => _logAutoRefresh = enabled);
     _logPollTimer?.cancel();
+    _logStreamSub?.cancel();
+    _logStreamSub = null;
     if (!enabled) return;
-    _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
+
+    final client = _client;
+    if (client != null) {
+      try {
+        final stream = client.streamLogs();
+        _logStreamSub = stream.listen(
+          (line) {
+            if (!mounted) return;
+            setState(() {
+              _logs = ServerLogs(
+                lines: [..._logs.lines, line],
+                source: _logs.source,
+                message: _logs.message,
+                filePath: _logs.filePath,
+              );
+            });
+          },
+          onError: (_) {
+            if (_logPollTimer == null && _logAutoRefresh) {
+              _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
+            }
+          },
+        );
+      } catch (_) {
+        _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
+      }
+    } else {
+      _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
+    }
     _refreshLogs();
   }
 
@@ -350,6 +382,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
   void _disconnect() {
     unawaited(_prefs?.clearAdminToken());
     _logPollTimer?.cancel();
+    _logStreamSub?.cancel();
+    _logStreamSub = null;
     _logAutoRefresh = false;
     _passwordController.clear();
     setState(() {

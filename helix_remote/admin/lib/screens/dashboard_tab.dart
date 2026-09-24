@@ -55,6 +55,43 @@ class DashboardTab extends StatelessWidget {
       ),
     ];
 
+    if (metrics.containsKey('push_provider')) {
+      final push = metrics['push_provider'] as Map? ?? {};
+      final ok = push['configured'] == true && push['available'] == true;
+      tiles.add(
+        _Metric(
+          'FCM Push Service',
+          ok ? 'ACTIVE' : 'INACTIVE',
+          Icons.notifications_active,
+          ok ? Colors.green : Colors.grey,
+        ),
+      );
+    }
+    if (metrics.containsKey('turn')) {
+      final turn = metrics['turn'] as Map? ?? {};
+      final ok = turn['configured'] == true;
+      tiles.add(
+        _Metric(
+          'TURN Relay Server',
+          ok ? 'ACTIVE' : 'INACTIVE',
+          Icons.cell_tower,
+          ok ? Colors.green : Colors.grey,
+        ),
+      );
+    }
+    if (metrics.containsKey('sms') || metrics.containsKey('sms_gateway')) {
+      final sms = metrics['sms'] as Map? ?? metrics['sms_gateway'] as Map? ?? {};
+      final ok = sms['configured'] == true;
+      tiles.add(
+        _Metric(
+          'SMS OTP Gateway',
+          ok ? 'ACTIVE' : 'INACTIVE',
+          Icons.sms,
+          ok ? Colors.green : Colors.grey,
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;

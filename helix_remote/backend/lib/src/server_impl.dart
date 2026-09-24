@@ -295,12 +295,15 @@ class BackendServer {
       federationDirectoryUrl: federationDirectoryUrl,
       publicBaseUrl: publicBaseUrl,
       getNeedsAdminSetup: () => needsAdminSetup,
+      jwt: jwt,
+      adminPasswordOverride: adminPasswordOverride,
       now: now,
     );
 
     // Map modules
     router.mount('/api/v1/health', operabilityModule.healthRouter.call);
     router.mount('/api/v1/ops', operabilityModule.opsRouter.call);
+    router.mount('/api/v1/admin', operabilityModule.adminRouter.call);
     router.mount('/api/v1/server', operabilityModule.serverRouter.call);
     router.mount('/api/v1/telemetry', operabilityModule.telemetryRouter.call);
     router.mount('/api/v1/accounts', authModule.router.call);
@@ -529,6 +532,19 @@ class BackendServer {
         };
       }
     }
+
+    // Priority 3: Signed admin JWT
+    final adminJwt = jwt.verifyToken(token, expect: ExpectedTokenType.admin);
+    if (adminJwt != null && adminJwt['is_admin'] == true) {
+      return {
+        'account_id': kAdminTokenAccountId,
+        'device_id': adminJwt['device_id'] as String? ?? 'admin_jwt_session',
+        'is_admin': true,
+        'admin_scopes': const ['ops:*', 'admin:*'],
+        'admin_credential': 'admin_jwt',
+      };
+    }
+
     return null;
   }
 
@@ -554,6 +570,9 @@ class BackendServer {
             path.contains('/s2s/') ||
             path.endsWith('/ops/setup-status') ||
             path.endsWith('/ops/setup-admin-password') ||
+            path.endsWith('/admin/auth/login') ||
+            path.endsWith('/admin/logs/stream') ||
+            path.endsWith('/ops/logs/stream') ||
             path.endsWith('/ws')) {
           return innerHandler(request);
         }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Outcome of checking whether a token is still good against a server.
 /// Kept distinct from a plain bool so callers can tell "the server said no"
@@ -125,6 +126,51 @@ class AdminClient {
               'Failed to configure password (${response.statusCode})',
         );
       }
+    } finally {
+      if (shouldClose) client.close();
+    }
+  }
+
+  /// Authenticates using master admin password against /api/v1/admin/auth/login,
+  /// falling back to verification against /api/v1/ops/config.
+  static Future<Map<String, dynamic>> loginWithPassword(
+    String baseUrl,
+    String password, {
+    http.Client? httpClient,
+  }) async {
+    final client = httpClient ?? http.Client();
+    final shouldClose = httpClient == null;
+    try {
+      final sanitized = baseUrl.endsWith('/')
+          ? baseUrl.substring(0, baseUrl.length - 1)
+          : baseUrl;
+
+      try {
+        final res = await client.post(
+          Uri.parse('$sanitized/api/v1/admin/auth/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'password': password}),
+        );
+        if (res.statusCode == 200) {
+          return jsonDecode(res.body) as Map<String, dynamic>;
+        }
+      } catch (_) {}
+
+      final fallbackRes = await client.get(
+        Uri.parse('$sanitized/api/v1/ops/config'),
+        headers: {
+          'Authorization': 'Bearer $password',
+          'Content-Type': 'application/json',
+        },
+      );
+      if (fallbackRes.statusCode == 200) {
+        final data = jsonDecode(fallbackRes.body) as Map<String, dynamic>;
+        return {
+          'token': password,
+          'server_name': data['server_name'] as String? ?? '',
+        };
+      }
+      throw const AdminRequestException('Invalid master admin password');
     } finally {
       if (shouldClose) client.close();
     }
@@ -376,5 +422,92 @@ class AdminClient {
       throw Exception('Failed to load invites: ${response.body}');
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Revokes an individual device access token.
+  Future<void> revokeDevice(String accountId, String deviceId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/users/$accountId/devices/$deviceId/revoke'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      final fallbackRes = await http.post(
+        Uri.parse('$baseUrl/api/v1/ops/users/$accountId/devices/$deviceId/revoke'),
+        headers: _headers,
+      );
+      if (fallbackRes.statusCode != 200) {
+        throw Exception('Failed to revoke device: ${response.body}');
+      }
+    }
+  }
+
+  /// Fetches user reports for moderation.
+  Future<List<Map<String, dynamic>>> getReports({int? limit, int? offset}) async {
+    final params = <String>[];
+    if (limit != null) params.add('limit=$limit');
+    if (offset != null) params.add('offset=$offset');
+    final query = params.isNotEmpty ? '?${params.join('&')}' : '';
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/admin/reports$query'),
+        headers: _headers,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final list = body['reports'] as List? ?? [];
+        return list.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Resolves a user safety or abuse report.
+  Future<void> resolveReport(String reportId) async {
+    await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/reports/$reportId/resolve'),
+      headers: _headers,
+    );
+  }
+
+  /// Dismisses a user report.
+  Future<void> dismissReport(String reportId) async {
+    await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/reports/$reportId/dismiss'),
+      headers: _headers,
+    );
+  }
+
+  /// Fetches administrative audit stream logs.
+  Future<List<Map<String, dynamic>>> getAuditLogs({String? accountId}) async {
+    final q = accountId != null ? '?account_id=$accountId' : '';
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/admin/audit$q'),
+        headers: _headers,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final list = body['logs'] as List? ?? [];
+        return list.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Opens a live WebSocket stream of server logs.
+  Stream<String> streamLogs() {
+    final wsProto = baseUrl.startsWith('https') ? 'wss' : 'ws';
+    final host = baseUrl.replaceFirst(RegExp(r'^https?://'), '');
+    final uri = Uri.parse('$wsProto://$host/api/v1/admin/logs/stream?token=$token');
+    final channel = WebSocketChannel.connect(uri);
+    return channel.stream.map((event) {
+      try {
+        final data = jsonDecode(event as String);
+        if (data is Map && data.containsKey('line')) {
+          return data['line'] as String;
+        }
+      } catch (_) {}
+      return event.toString();
+    });
   }
 }

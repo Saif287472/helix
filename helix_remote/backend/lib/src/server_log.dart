@@ -50,6 +50,11 @@ class ServerLogSink {
   final IOSink _stderr;
 
   final Queue<String> _buffer = Queue<String>();
+  final StreamController<String> _streamController =
+      StreamController<String>.broadcast();
+
+  /// Real-time stream of incoming server log lines.
+  Stream<String> get onLine => _streamController.stream;
 
   /// Set once the file turns out to be unwritable (read-only volume, bad
   /// path, permissions). Reported through [fileError] so the admin console
@@ -111,6 +116,7 @@ class ServerLogSink {
       _buffer.removeFirst();
     }
     _writeToFile(line);
+    _streamController.add(line);
   }
 
   /// The most recent [limit] lines, oldest first.
