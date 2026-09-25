@@ -11,10 +11,8 @@ abstract interface class SmsProvider {
   Future<void> send({required String phoneNumber, required String message});
 }
 
-/// Used when no SMS provider is configured. Delivery always fails - callers
-/// (see `AuthPhoneOtpHandlers._requestPhoneOtpHandler`) check
-/// [isConfigured] first and fall back to returning the code directly in the
-/// response instead of calling [send] at all.
+/// Used when no SMS provider is configured. The OTP handler checks
+/// [isConfigured] and returns a 503 error, so [send] should never be called.
 final class NoopSmsProvider implements SmsProvider {
   const NoopSmsProvider();
 

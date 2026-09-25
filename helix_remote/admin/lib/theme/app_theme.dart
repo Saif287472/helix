@@ -35,24 +35,16 @@ class AppTheme {
 
   static const _primary = HelixColorTokens.cFF8A2BE2;
 
-  static final ThemeData dark = _build(
-    brightness: Brightness.dark,
-    background: HelixColorTokens.cFF0F0F16,
-    surface: HelixColorTokens.cFF161624,
-    sunken: HelixColorTokens.cFF0B0B12,
-    onSurface: Colors.white,
-    accent: HelixColorTokens.cFF00E5FF,
-    error: HelixColorTokens.cFFFF3366,
-  );
+  static final ThemeData dark = light;
 
   static final ThemeData light = _build(
     brightness: Brightness.light,
-    background: HelixColorTokens.cFFF5F3FA,
+    background: const Color(0xFFF1F5F9),
     surface: Colors.white,
-    sunken: HelixColorTokens.cFFEDEAF5,
-    onSurface: HelixColorTokens.cFF1A1A2E,
-    accent: HelixColorTokens.cFF0077B6,
-    error: HelixColorTokens.cFFC2185B,
+    sunken: const Color(0xFFE2E8F0),
+    onSurface: const Color(0xFF1E293B),
+    accent: const Color(0xFF2563EB),
+    error: const Color(0xFFDC2626),
   );
 
   static ThemeData _build({

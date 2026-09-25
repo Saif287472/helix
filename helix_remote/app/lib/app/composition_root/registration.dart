@@ -19,13 +19,10 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     return salt;
   }
 
-  /// Requests a one-time verification code for [phoneNumber]. When the
-  /// server has real SMS delivery configured, the code is texted and this
-  /// returns `false`. Otherwise (no SMS provider configured - local dev, or
-  /// a self-host without SMS credentials set - an explicit, documented
-  /// placeholder) the server returns the code directly in the response and
-  /// this fires a local notification displaying it, returning `true`.
-  Future<bool> requestOtp(String phoneNumber) async {
+  /// Requests a one-time verification code for [phoneNumber]. The server
+  /// sends the code via SMS (BulkSMSBD). If SMS delivery is not configured
+  /// on the server, the request will fail with a 503.
+  Future<void> requestOtp(String phoneNumber) async {
     final rest = _requireReady(_restClient, 'restClient');
     final store = _requireReady(_keyValue, 'keyValue');
     final normalizedPhone = RemoteAccountValidation.normalizePhoneNumber(
@@ -33,13 +30,10 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     );
     final salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
     final hash = phoneHash(salt, normalizedPhone);
-    final response = await rest.requestPhoneOtp(
+    await rest.requestPhoneOtp(
       phoneHash: hash,
       phoneNumber: normalizedPhone,
     );
-    final code = (response['code'] as String?) ?? '123456';
-    await LocalNotificationService.showVerificationCode(code: code);
-    return true;
   }
 
   /// Validates an invite code without consuming it, so the UI can fail fast

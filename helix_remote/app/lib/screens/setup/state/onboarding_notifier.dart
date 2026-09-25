@@ -8,7 +8,6 @@ import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_error_copy.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
-import 'package:helix_remote/services/local_notification_service.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
 class OnboardingNotifier extends ChangeNotifier {
@@ -182,14 +181,10 @@ class OnboardingNotifier extends ChangeNotifier {
       return false;
     }
 
-    // Always re-prompt notification permissions if not previously allowed
-    await LocalNotificationService.ensureNotificationPermission();
-
     _state = _state.copyWith(isLoading: true, clearErrorMessage: true);
     notifyListeners();
 
     String? generatedInvite = _state.inviteCode;
-    bool isPlaceholder = true;
 
     final targetUrl = (isPersonal || _state.serverType == ServerType.others)
         ? (_state.serverNodeUrl ?? kHelixGlobalServerUrl)
@@ -204,13 +199,7 @@ class OnboardingNotifier extends ChangeNotifier {
             generatedInvite = 'INV-GLOBAL-AUTO';
           }
         }
-        try {
-          isPlaceholder = await _root.requestOtp(fullPhoneNumber);
-        } catch (_) {
-          // Fallback to local notification delivery when SMS provider is not active
-          await LocalNotificationService.showVerificationCode(code: '123456');
-          isPlaceholder = true;
-        }
+        await _root.requestOtp(fullPhoneNumber);
       } else {
         final client = _client ??
             HelixRemoteRestClientImpl(
@@ -223,21 +212,13 @@ class OnboardingNotifier extends ChangeNotifier {
             generatedInvite = res['invite_code'] as String?;
           } catch (_) {}
         }
-        try {
-          final saltRes = await client.fetchDiscoverySalt();
+        final saltRes = await client.fetchDiscoverySalt();
           final salt = saltRes['salt'] as String? ?? 'salt';
           final hash = phoneHash(salt, fullPhoneNumber);
-          final res = await client.requestPhoneOtp(
+          await client.requestPhoneOtp(
             phoneHash: hash,
             phoneNumber: fullPhoneNumber,
           );
-          final code = (res['code'] as String?) ?? '123456';
-          await LocalNotificationService.showVerificationCode(code: code);
-          isPlaceholder = true;
-        } catch (_) {
-          await LocalNotificationService.showVerificationCode(code: '123456');
-          isPlaceholder = true;
-        }
       }
     } catch (e) {
       final msg = e is RemoteRestException
@@ -259,7 +240,7 @@ class OnboardingNotifier extends ChangeNotifier {
       isLoading: false,
       sessionToken: session,
       inviteCode: generatedInvite ?? _state.inviteCode,
-      otpIsPlaceholder: isPlaceholder,
+      otpIsPlaceholder: false,
       globalSubStep: isPersonal ? _state.globalSubStep : GlobalSubStep.otp,
       joinSubStep: isPersonal ? JoinSubStep.otp : _state.joinSubStep,
       step: OnboardingStep.serverSelection,
@@ -271,7 +252,11 @@ class OnboardingNotifier extends ChangeNotifier {
   Future<bool> verifyOtp({bool isPersonal = false}) async {
     var otp = _state.otpCode.trim();
     if (otp.isEmpty) {
-      otp = '123456';
+      _state = _state.copyWith(
+        errorMessage: 'Please enter the verification code sent to your phone.',
+      );
+      notifyListeners();
+      return false;
     }
 
     _state = _state.copyWith(

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_theme.dart';
-import 'guide_widgets.dart';
 
 class GuideConnectAdminPage extends StatelessWidget {
   const GuideConnectAdminPage({super.key});
@@ -10,47 +8,71 @@ class GuideConnectAdminPage extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const GuidePageTitle('Connect Helix Admin'),
-        Text(
-          'Once the server is up, this app can manage it directly - no '
-          'separate install needed on the server side.',
-          style: TextStyle(
-            fontSize: 14,
-            color: context.textSecondary,
-            height: 1.6,
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
           ),
-        ),
-        const SizedBox(height: 16),
-        const GuideDetailExpansion(
-          title: 'Option 1: In-App First-Time Setup',
-          detail:
-              'If you start the backend without setting an admin password in '
-              '.env, opening this app and connecting to your server URL '
-              'will automatically show the "Create First Admin Password" prompt.\n\n'
-              'Enter your chosen master password to initialize and secure your '
-              'server immediately.',
-        ),
-        const GuideDetailExpansion(
-          title: 'Option 2: Pre-Configuring in .env',
-          detail:
-              'In your backend .env file, you can set a password before starting:\n\n'
-              'HELIX_REMOTE_ADMIN_PASSWORD=your_secure_password\n\n'
-              'This acts as your master password to sign in from '
-              'the Helix Admin app. It never expires unless you change it in .env.',
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '🔑 Password Initialization & Login',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF2563EB)),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Authenticate your Helix Admin console to receive a cryptographically signed session token.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF1E293B), height: 1.4),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
-        Text(
-          'On the sign-in screen, enter your server URL (e.g. '
-          'https://helix.yourdomain.com or http://127.0.0.1:8080) and your '
-          'Admin Password, then tap Sign In. Once signed in, your session is '
-          'saved securely on this device so you stay logged in indefinitely.',
-          style: TextStyle(
-            fontSize: 13,
-            color: context.textTertiary,
-            height: 1.5,
-          ),
+
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 480;
+            if (isWide) {
+              return Row(
+                children: [
+                  Expanded(child: _optionCard('Option 1: In-App First Time Wizard', 'Boot container without setting a password. Launch Helix Admin, type your URL, and create your master password in the setup dialog.')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _optionCard('Option 2: .env Pre-Configuration', 'Define HELIX_REMOTE_ADMIN_PASSWORD=your_password in your environment file before container boot.')),
+                ],
+              );
+            }
+            return Column(
+              children: [
+                _optionCard('Option 1: In-App First Time Wizard', 'Boot container without setting a password. Launch Helix Admin, type your URL, and create your master password in the setup dialog.'),
+                const SizedBox(height: 10),
+                _optionCard('Option 2: .env Pre-Configuration', 'Define HELIX_REMOTE_ADMIN_PASSWORD=your_password in your environment file before container boot.'),
+              ],
+            );
+          },
         ),
       ],
+    );
+  }
+
+  Widget _optionCard(String title, String description) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+          const SizedBox(height: 6),
+          Text(description, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4)),
+        ],
+      ),
     );
   }
 }

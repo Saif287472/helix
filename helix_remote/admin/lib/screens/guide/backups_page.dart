@@ -1,58 +1,109 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_theme.dart';
-import 'guide_widgets.dart';
+import 'package:flutter/services.dart';
 
 class GuideBackupsPage extends StatelessWidget {
   const GuideBackupsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    const cronCmd = '0 3 * * * rsync -avz /var/helix/backups/ backup-server:/storage/helix-backups/';
+    const updateCmd = 'docker compose pull && docker compose up -d';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const GuidePageTitle('Backups and maintenance'),
-        Text(
-          'The Maintenance & Backups tab triggers a clean database '
-          'snapshot on demand (SQLite "VACUUM INTO"), saved next to the '
-          'main database file.',
-          style: TextStyle(
-            fontSize: 14,
-            color: context.textSecondary,
-            height: 1.6,
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '💾 Maintenance, Backups & Container Upgrades',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Ensure uninterrupted node uptime with hot SQLite snapshots and automated offsite backups.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        const GuideDetailExpansion(
-          title: 'Automating it',
-          detail:
-              'A cron job that calls the backup endpoint (or copies the '
-              'snapshot file to off-server storage) on a schedule is the '
-              'usual setup - Helix doesn\'t schedule this for you, it '
-              'just gives you a reliable, consistent snapshot on request.',
+        const SizedBox(height: 12),
+
+        const Text('Nightly Offsite Backup Cron Example:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              const Expanded(
+                child: SelectableText(
+                  cronCmd,
+                  style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                ),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.copy, size: 14),
+                label: const Text('Copy Cron', style: TextStyle(fontSize: 11)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2563EB),
+                  side: const BorderSide(color: Color(0xFFBFDBFE)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: Size.zero,
+                ),
+                onPressed: () {
+                  Clipboard.setData(const ClipboardData(text: cronCmd));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cron backup command copied')));
+                },
+              ),
+            ],
+          ),
         ),
-        const GuideDetailExpansion(
-          title: 'Keeping the server updated',
-          detail:
-              'Pull the latest image and recreate the container '
-              '(docker compose pull && docker compose up -d) '
-              'periodically. Your data volume is untouched by image '
-              'updates.',
-        ),
-        const AiAssistantTip(
-          suggestion:
-              'Ask: "Write a cron job that calls my Helix backup '
-              'endpoint nightly and copies the resulting snapshot to '
-              '[off-server location]."',
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'That\'s the whole path from nothing to a self-hosted, '
-          'connected server. Jump back to any page any time from the '
-          'progress bar.',
-          style: TextStyle(
-            fontSize: 13,
-            color: context.textTertiary,
-            height: 1.5,
+        const SizedBox(height: 12),
+
+        const Text('Updating Server Container (Zero Data Loss):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              const Expanded(
+                child: SelectableText(
+                  updateCmd,
+                  style: TextStyle(fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                ),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.copy, size: 14),
+                label: const Text('Copy Command', style: TextStyle(fontSize: 11)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2563EB),
+                  side: const BorderSide(color: Color(0xFFBFDBFE)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: Size.zero,
+                ),
+                onPressed: () {
+                  Clipboard.setData(const ClipboardData(text: updateCmd));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Container update command copied')));
+                },
+              ),
+            ],
           ),
         ),
       ],

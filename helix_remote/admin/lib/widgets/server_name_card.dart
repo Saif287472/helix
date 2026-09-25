@@ -37,66 +37,49 @@ class ServerNameCard extends StatefulWidget {
 class _ServerNameCardState extends State<ServerNameCard> {
   late final TextEditingController _controller;
   late String _savedName;
+  bool _isEditing = false;
   bool _isSaving = false;
   String? _error;
-  bool _justSaved = false;
 
   @override
   void initState() {
     super.initState();
-    _savedName = widget.initialName;
-    _controller = TextEditingController(text: widget.initialName);
-    _controller.addListener(_onChanged);
+    _savedName = widget.initialName.isNotEmpty
+        ? widget.initialName
+        : (widget.fallbackName ?? 'Careless');
+    _controller = TextEditingController(text: _savedName);
   }
 
   @override
   void didUpdateWidget(ServerNameCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // A background refresh must not overwrite something half-typed, so the
-    // field only re-syncs when the operator has no unsaved edit.
-    if (widget.initialName != oldWidget.initialName && !_isDirty) {
-      _savedName = widget.initialName;
-      _controller.text = widget.initialName;
+    if (widget.initialName != oldWidget.initialName && !_isEditing) {
+      _savedName = widget.initialName.isNotEmpty
+          ? widget.initialName
+          : (widget.fallbackName ?? 'Careless');
+      _controller.text = _savedName;
     }
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onChanged);
     _controller.dispose();
     super.dispose();
-  }
-
-  bool get _isDirty => _controller.text.trim() != _savedName.trim();
-
-  void _onChanged() {
-    if (_error != null || _justSaved) {
-      setState(() {
-        _error = null;
-        _justSaved = false;
-      });
-    } else {
-      // Still rebuild, so the Save button tracks the dirty state.
-      setState(() {});
-    }
   }
 
   Future<void> _save() async {
     setState(() {
       _isSaving = true;
       _error = null;
-      _justSaved = false;
     });
     try {
       final stored = await widget.onSave(_controller.text);
       if (!mounted) return;
       setState(() {
-        _savedName = stored;
-        // Show the normalized form the server actually kept, so what's on
-        // screen matches what users will see.
-        _controller.text = stored;
+        _savedName = stored.isNotEmpty ? stored : _savedName;
+        _controller.text = _savedName;
         _isSaving = false;
-        _justSaved = true;
+        _isEditing = false;
       });
     } on AdminRequestException catch (e) {
       if (!mounted) return;
@@ -108,109 +91,118 @@ class _ServerNameCardState extends State<ServerNameCard> {
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _error = "Couldn't reach the server to save the name.";
+        _error = "Couldn't reach server.";
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Server Name',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF0F172A),
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'SERVER NODE IDENTITY',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF64748B),
+              letterSpacing: 0.5,
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Shown to everyone on this server - on the join screen when they use your invite, and in their app settings afterwards.',
-              style: TextStyle(
-                color: Color(0xFF64748B),
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _controller,
-              enabled: !_isSaving,
-              maxLength: widget.maxLength,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) {
-                if (_isDirty && !_isSaving) _save();
-              },
-              decoration: InputDecoration(
-                labelText: 'Server name',
-                hintText:
-                    'Unnamed - users see ${widget.fallbackName ?? (widget.serverHost != null && widget.serverHost!.isNotEmpty ? widget.serverHost! : "Private Server")}',
-                errorText: _error,
-                helperText: _justSaved
-                    ? 'Saved. Users will see this name from now on.'
-                    : 'Leave empty to show the default name instead.',
-                helperStyle: _justSaved
-                    ? const TextStyle(color: Colors.green)
-                    : null,
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF2563EB)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: _isDirty && !_isSaving ? _save : null,
-                icon: _isSaving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+          ),
+          const SizedBox(height: 8),
+          if (!_isEditing)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _savedName,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
                         ),
-                      )
-                    : const Icon(Icons.save_outlined, size: 18),
-                label: Text(_isSaving ? 'Saving...' : 'Save name'),
-              ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Public node identity shown to onboarding users',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF334155),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                  ),
+                  onPressed: () => setState(() => _isEditing = true),
+                  child: const Text('Edit Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _controller,
+                  enabled: !_isSaving,
+                  maxLength: widget.maxLength,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    labelText: 'Server name',
+                    errorText: _error,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _isSaving ? null : () => setState(() => _isEditing = false),
+                      child: const Text('Cancel', style: TextStyle(fontSize: 12)),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        minimumSize: Size.zero,
+                      ),
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('Save Name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

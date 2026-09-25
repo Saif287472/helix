@@ -379,6 +379,7 @@ class OperabilityModule {
       'schema_version': db.schemaVersion,
       'capabilities': RemoteCapabilityRegistry.current().toJson(),
       'database_quick_check_ok': db.quickCheckOk(),
+      'database_bytes': db.getDatabaseSizeBytes(),
       'table_counts': db.getOperationalTableCounts(),
       'mailbox': db.getOperationalMailboxStats(),
       'attachments': db.getOperationalAttachmentStats(),
@@ -653,9 +654,18 @@ class OperabilityModule {
     if (!_isAdmin(request)) {
       throw AppError.forbidden('Admin privileges required');
     }
-    _auditAdminRead(request, 'ADMIN_AUDIT_LOGS_READ');
+    final includeRead = request.url.queryParameters['include_read'] == 'true';
     final accountId = request.url.queryParameters['account_id'];
-    final logs = db.getAuditLogs(accountId: accountId);
+    var logs = db.getAuditLogs(accountId: accountId);
+    if (!includeRead) {
+      logs = logs.where((l) {
+        final act = (l['action'] as String? ?? '').toUpperCase();
+        return !act.endsWith('_READ') &&
+            !act.endsWith('_POLL') &&
+            !act.contains('METRICS_READ') &&
+            !act.contains('AUDIT_LOGS_READ');
+      }).toList();
+    }
     return _json({'logs': logs});
   }
 

@@ -9,15 +9,13 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
 
   /// Issues a short-lived one-time code for a phone number, identified in
   /// the OTP challenge only by its salted hash (see `phone_hash.dart`) — the
-  /// server never *stores* a raw phone number. When [smsProvider] is
-  /// configured, the raw `phone_number` the client also sends is used
-  /// transiently to deliver the code by real SMS and is never persisted;
-  /// the response then omits the code. When no SMS provider is configured
-  /// (e.g. local dev, or a self-host without SMS credentials set), this
-  /// falls back to the original placeholder behavior: the code is returned
-  /// directly in the response and the client self-fires a local
-  /// notification with it - an explicit, documented placeholder, not a
-  /// secure out-of-band channel.
+  /// server never *stores* a raw phone number. The raw `phone_number` the
+  /// client sends is used transiently to deliver the code by real SMS
+  /// (BulkSMSBD) and is never persisted; the response omits the code.
+  ///
+  /// Requires [smsProvider] to be configured. Returns 503 if SMS delivery
+  /// is not available — the server never returns the OTP code in the
+  /// response body.
   Future<Response> _requestPhoneOtpHandler(Request request) async {
     final body =
         jsonDecode(await request.readAsString()) as Map<String, dynamic>;
@@ -80,12 +78,6 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
       } on Object catch (e) {
         // ignore: avoid_print
         print('OTP SMS delivery failed: $e');
-        // The gateway's own rejection reason is surfaced to the client on
-        // purpose (bad API key, unapproved sender ID, insufficient balance)
-        // rather than a generic message - the provider's error text has
-        // never included the API key. Thrown rather than returned so it
-        // leaves through the same middleware as every other error, and so
-        // it carries a code the client can branch on.
         throw AppError(
           'Failed to send verification SMS: $e',
           statusCode: 502,
@@ -101,23 +93,14 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
       );
     }
 
-    // When SMS provider is not configured, return OTP code in response for app notification delivery.
-    if (!smsProvider.isConfigured) {
-      return Response.ok(
-        jsonEncode({
-          'challenge_id': challengeId,
-          'code': code,
-          'expires_at': now + _otpTtl.inMilliseconds,
-        }),
-        headers: {'Content-Type': 'application/json'},
-      );
-    }
-    return Response.ok(
-      jsonEncode({
-        'challenge_id': challengeId,
-        'expires_at': now + _otpTtl.inMilliseconds,
-      }),
-      headers: {'Content-Type': 'application/json'},
+    // No SMS provider configured — refuse to issue OTP codes. A deployment
+    // must configure BulkSMSBD (or another provider) before phone
+    // verification can work. Returning the code in the response was an
+    // intentional dev placeholder that must never ship to production.
+    throw AppError(
+      'SMS delivery is not configured on this server',
+      statusCode: 503,
+      code: RemoteErrorCode.smsDeliveryFailed,
     );
   }
 
@@ -156,13 +139,6 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
     required String code,
   }) {
     final challenge = db.getLatestOtpChallenge(phoneHash);
-    // When SMS provider is not configured, totally bypass OTP verification.
-    if (!smsProvider.isConfigured) {
-      if (challenge != null) {
-        return (challengeId: challenge['challenge_id'] as String, error: null);
-      }
-      return (challengeId: 'bypass_challenge', error: null);
-    }
     if (challenge == null) {
       return (challengeId: null, error: 'No verification code was requested');
     }

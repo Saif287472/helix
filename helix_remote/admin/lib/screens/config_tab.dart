@@ -90,7 +90,7 @@ class _ConfigTabState extends State<ConfigTab> {
                   _propItem(
                     label: 'DEFAULT FALLBACK NAME',
                     val: config['default_server_name']?.toString() ??
-                        'Helix CipherNode Alpha',
+                        'Private Server #9608',
                   ),
                   _propItem(
                     label: 'HOST & PORT',

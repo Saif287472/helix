@@ -8,16 +8,16 @@ import 'server_config_page.dart';
 import 'sizing_page.dart';
 import 'welcome_page.dart';
 
-/// Self-Hosting Guide, rewritten as a navigable wizard (Phase 11) in place
-/// of the old static 4-step page. Always reachable with no server
-/// connected - callers must never wrap this in a LockedTabPlaceholder
-/// guard, and it must not gate progress on anything actually connecting.
+/// Self-Hosting Guide Wizard matching demo specification in helix_admin.
 class GuideWizard extends StatefulWidget {
-  const GuideWizard({super.key, this.initialPage = 0});
+  const GuideWizard({
+    super.key,
+    this.initialPage = 0,
+    this.onClose,
+  });
 
-  /// Page to open on first build, e.g. jumping straight to "Connect Admin"
-  /// from Settings' "Where do I find this?" link.
   final int initialPage;
+  final VoidCallback? onClose;
 
   @override
   State<GuideWizard> createState() => _GuideWizardState();
@@ -25,14 +25,14 @@ class GuideWizard extends StatefulWidget {
 
 class _GuideWizardState extends State<GuideWizard> {
   static const _pageTitles = [
-    'Welcome',
-    'Sizing',
-    'Hosting',
-    'Docker',
-    'Configuration',
-    'Domain & SSL',
-    'Connect Admin',
-    'Backups',
+    '1. Architecture',
+    '2. Sizing',
+    '3. Hosting',
+    '4. Docker',
+    '5. Config & Env',
+    '6. Domain & SSL',
+    '7. Admin Connect',
+    '8. Maintenance',
   ];
 
   static const _pages = <Widget>[
@@ -46,38 +46,83 @@ class _GuideWizardState extends State<GuideWizard> {
     GuideBackupsPage(),
   ];
 
-  late int _pageIndex = widget.initialPage.clamp(0, _pages.length - 1);
+  late int _pageIndex;
+  late final PageController _pageController;
+  final ScrollController _stepPillScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _pageIndex = widget.initialPage.clamp(0, _pages.length - 1);
+    _pageController = PageController(initialPage: _pageIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToPill(_pageIndex));
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _stepPillScrollController.dispose();
+    super.dispose();
+  }
 
   void _goTo(int index) {
-    setState(() => _pageIndex = index.clamp(0, _pages.length - 1));
+    final clamped = index.clamp(0, _pages.length - 1);
+    if (clamped == _pageIndex) return;
+    setState(() => _pageIndex = clamped);
+    _pageController.animateToPage(
+      clamped,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+    _scrollToPill(clamped);
+  }
+
+  void _scrollToPill(int index) {
+    if (!_stepPillScrollController.hasClients) return;
+    const approxItemWidth = 110.0;
+    final targetOffset = (index * approxItemWidth) - 80.0;
+    final clamped = targetOffset.clamp(
+      0.0,
+      _stepPillScrollController.position.maxScrollExtent,
+    );
+    _stepPillScrollController.animateTo(
+      clamped,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildHeader(),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         _buildProgressBar(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        _buildStepPills(),
+        const SizedBox(height: 12),
         Expanded(
-          child: SingleChildScrollView(
-            child: Card(
-              elevation: 0,
+          child: Container(
+            decoration: BoxDecoration(
               color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: IndexedStack(index: _pageIndex, children: _pages),
-              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: (index) {
+                setState(() => _pageIndex = index);
+                _scrollToPill(index);
+              },
+              children: _pages,
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         _buildNavRow(),
       ],
     );
@@ -86,41 +131,47 @@ class _GuideWizardState extends State<GuideWizard> {
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.public, color: Color(0xFF2563EB), size: 20),
-              const SizedBox(width: 8),
-              const Flexible(
-                child: Text(
-                  'Self-Hosting Guide',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '🌐 Self-Hosting Guide',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Text(
+                      'STEP ${_pageIndex + 1} OF ${_pages.length}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2563EB),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFBFDBFE)),
-                ),
-                child: Text(
-                  'STEP ${_pageIndex + 1} OF ${_pages.length}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2563EB),
-                    letterSpacing: 0.5,
-                  ),
-                ),
+              const SizedBox(height: 2),
+              const Text(
+                'Complete 8-Step Blueprint for Deploying Your Node',
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
               ),
             ],
           ),
@@ -130,7 +181,9 @@ class _GuideWizardState extends State<GuideWizard> {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () {
-            if (Navigator.canPop(context)) {
+            if (widget.onClose != null) {
+              widget.onClose!();
+            } else if (Navigator.canPop(context)) {
               Navigator.pop(context);
             }
           },
@@ -140,59 +193,51 @@ class _GuideWizardState extends State<GuideWizard> {
   }
 
   Widget _buildProgressBar() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            key: const Key('guide_progress_bar'),
-            value: (_pageIndex + 1) / _pages.length,
-            minHeight: 5,
-            backgroundColor: const Color(0xFFE2E8F0),
-            valueColor: const AlwaysStoppedAnimation(Color(0xFF2563EB)),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (var i = 0; i < _pageTitles.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _pageChip(i),
-                ),
-            ],
-          ),
-        ),
-      ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: LinearProgressIndicator(
+        value: (_pageIndex + 1) / _pages.length,
+        minHeight: 4,
+        backgroundColor: const Color(0xFFE2E8F0),
+        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+      ),
     );
   }
 
-  Widget _pageChip(int index) {
-    final selected = index == _pageIndex;
-    return InkWell(
-      key: Key('guide_page_chip_$index'),
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => _goTo(index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: Text(
-          '${index + 1}. ${_pageTitles[index]}',
-          style: TextStyle(
-            fontSize: 12,
-            color: selected ? Colors.white : const Color(0xFF475569),
-            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-          ),
-        ),
+  Widget _buildStepPills() {
+    return SingleChildScrollView(
+      controller: _stepPillScrollController,
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: List.generate(_pageTitles.length, (i) {
+          final isSelected = i == _pageIndex;
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: InkWell(
+              onTap: () => _goTo(i),
+              borderRadius: BorderRadius.circular(20),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(20),
+                  border: isSelected
+                      ? Border.all(color: const Color(0xFF2563EB))
+                      : Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Text(
+                  _pageTitles[i],
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    color: isSelected ? Colors.white : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -200,63 +245,44 @@ class _GuideWizardState extends State<GuideWizard> {
   Widget _buildNavRow() {
     final isFirst = _pageIndex == 0;
     final isLast = _pageIndex == _pages.length - 1;
-    final backButton = OutlinedButton.icon(
-      key: const Key('guide_back_button'),
-      onPressed: isFirst ? null : () => _goTo(_pageIndex - 1),
-      icon: const Icon(Icons.arrow_back, size: 16),
-      label: const Text('Back'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF334155),
-        side: const BorderSide(color: Color(0xFFCBD5E1)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-    );
-    final stepText = Text(
-      'Step ${_pageIndex + 1} of ${_pages.length}',
-      style: const TextStyle(
-        color: Color(0xFF64748B),
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-      ),
-    );
-    final nextButton = ElevatedButton.icon(
-      key: const Key('guide_next_button'),
-      onPressed: isLast ? null : () => _goTo(_pageIndex + 1),
-      icon: const Icon(Icons.arrow_forward, size: 16),
-      label: const Text('Next Step →'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        elevation: 0,
-      ),
-    );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 420) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: backButton),
-                  const SizedBox(width: 12),
-                  Expanded(child: nextButton),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Center(child: stepText),
-            ],
-          );
-        }
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [backButton, stepText, nextButton],
-        );
-      },
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        OutlinedButton.icon(
+          icon: const Icon(Icons.arrow_back, size: 16),
+          label: const Text('Back'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF334155),
+            side: const BorderSide(color: Color(0xFFCBD5E1)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: isFirst ? null : () => _goTo(_pageIndex - 1),
+        ),
+        FilledButton.icon(
+          icon: Icon(isLast ? Icons.check : Icons.arrow_forward, size: 16),
+          label: Text(isLast ? 'Finish' : 'Next Step →'),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            elevation: 0,
+          ),
+          onPressed: () {
+            if (isLast) {
+              if (widget.onClose != null) {
+                widget.onClose!();
+              } else if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
+            } else {
+              _goTo(_pageIndex + 1);
+            }
+          },
+        ),
+      ],
     );
   }
 }

@@ -35,7 +35,7 @@ void main() {
 
   // The reported problem: on a phone each metric occupied about 150dp, so
   // six numbers took roughly a metre of scrolling.
-  testWidgets('metric rows stay compact on a phone-width screen', (
+  testWidgets('metric cards render in a 2-column grid on a phone-width screen', (
     tester,
   ) async {
     await _pumpAt(tester, const Size(411, 915));
@@ -43,14 +43,12 @@ void main() {
     final cards = find.byType(Card);
     expect(cards, findsNWidgets(6));
 
-    for (var i = 0; i < 6; i++) {
-      final height = tester.getSize(cards.at(i)).height;
-      expect(
-        height,
-        lessThan(90),
-        reason: 'metric card $i is $height tall; phone rows should be compact',
-      );
-    }
+    final gridFinder = find.byType(GridView);
+    expect(gridFinder, findsOneWidget);
+    final grid = tester.widget<GridView>(gridFinder);
+    final delegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 2);
   });
 
   testWidgets('all six metrics fit on one phone screen without scrolling', (
@@ -58,9 +56,8 @@ void main() {
   ) async {
     await _pumpAt(tester, const Size(411, 915));
 
-    final listFinder = find.byType(ListView);
-    final scrollable = tester.widget<ListView>(listFinder);
-    expect(scrollable.scrollDirection, Axis.vertical);
+    final gridFinder = find.byType(GridView);
+    expect(gridFinder, findsOneWidget);
 
     final last = find.text('Database Status Check');
     expect(last, findsOneWidget);

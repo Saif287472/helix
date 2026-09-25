@@ -134,8 +134,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         displayName: displayName,
         now: _now(),
       );
-      if (otpResult.challengeId != null &&
-          otpResult.challengeId != 'bypass_challenge') {
+      if (otpResult.challengeId != null) {
         db.markOtpConsumed(otpResult.challengeId!, now);
       }
       db.logAudit(

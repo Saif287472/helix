@@ -257,18 +257,59 @@ void main() {
       expect(logs.any((line) => line.contains('monolith is online')), isTrue);
     });
 
-    test('logs each request with method, path and status', () async {
+    test('logs non-GET and error requests while filtering routine GET 200 data fetches', () async {
       installServerLog(
         ServerLogSink(stdoutSink: _nullSink(), stderrSink: _nullSink()),
       );
       await startServer();
 
-      await getLogs();
+      final request = await httpClient.postUrl(
+        Uri.parse('http://127.0.0.1:$port/api/v1/ops/invalid'),
+      );
+      request.headers.set('Authorization', 'Bearer $adminToken');
+      final response = await request.close();
+      await response.drain<void>();
+
       final logs = ((await getLogs())['logs'] as List).cast<String>();
 
       expect(
-        logs.any((line) => line.contains('GET /api/v1/ops/logs 200')),
+        logs.any((line) => line.contains('POST /api/v1/ops/invalid 404')),
         isTrue,
+      );
+      expect(
+        logs.any((line) => line.contains('GET /api/v1/ops/logs 200')),
+        isFalse,
+      );
+    });
+
+    test('filters out routine high-frequency polling logs (metrics, health)', () async {
+      installServerLog(
+        ServerLogSink(stdoutSink: _nullSink(), stderrSink: _nullSink()),
+      );
+      await startServer();
+
+      final metricsReq = await httpClient.getUrl(
+        Uri.parse('http://127.0.0.1:$port/api/v1/ops/metrics'),
+      );
+      metricsReq.headers.set('Authorization', 'Bearer $adminToken');
+      final metricsResp = await metricsReq.close();
+      await metricsResp.drain<void>();
+
+      final healthReq = await httpClient.getUrl(
+        Uri.parse('http://127.0.0.1:$port/api/v1/health/live'),
+      );
+      final healthResp = await healthReq.close();
+      await healthResp.drain<void>();
+
+      final logs = ((await getLogs())['logs'] as List).cast<String>();
+
+      expect(
+        logs.any((line) => line.contains('GET /api/v1/ops/metrics 200')),
+        isFalse,
+      );
+      expect(
+        logs.any((line) => line.contains('GET /api/v1/health/live 200')),
+        isFalse,
       );
     });
 

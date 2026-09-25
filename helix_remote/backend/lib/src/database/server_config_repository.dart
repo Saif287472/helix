@@ -89,6 +89,8 @@ extension BackendServerConfigRepository on BackendDatabase {
             'account_id': row['account_id'] as String,
             'created_at': row['created_at'] as int,
             'status': row['status'] as String,
+            'phone': row['phone_last4'] as String? ?? '',
+            'phone_number': row['phone_last4'] as String? ?? '',
             'phone_last4': row['phone_last4'] as String? ?? '',
             'display_name': row['display_name'] as String? ?? '',
             'invite_id': row['invite_id'] as String?,

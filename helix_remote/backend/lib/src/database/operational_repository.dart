@@ -38,6 +38,16 @@ extension BackendOperationalRepository on BackendDatabase {
     return rows.isNotEmpty && rows.first.columnAt(0) == 'ok';
   }
 
+  int getDatabaseSizeBytes() {
+    try {
+      final pageCount = _db.select('PRAGMA page_count;').first.columnAt(0) as int;
+      final pageSize = _db.select('PRAGMA page_size;').first.columnAt(0) as int;
+      return pageCount * pageSize;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Map<String, int> getOperationalTableCounts() {
     const tables = [
       'accounts',

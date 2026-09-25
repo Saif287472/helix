@@ -76,7 +76,27 @@ class _UsersTabState extends State<UsersTab> {
   }
 
   Future<void> _suspend(String accountId) async {
-    setState(() => _busyAccountId = accountId);
+    setState(() {
+      _busyAccountId = accountId;
+      for (final u in _users) {
+        if (u['account_id'] == accountId) {
+          u['status'] = 'SUSPENDED';
+        }
+      }
+      if (_selectedUser?['account_id'] == accountId) {
+        _selectedUser!['status'] = 'SUSPENDED';
+      }
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account suspended successfully'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
     try {
       await widget.client.suspendUser(accountId);
       await _loadUsers(offset: _offset);
@@ -89,7 +109,27 @@ class _UsersTabState extends State<UsersTab> {
   }
 
   Future<void> _unsuspend(String accountId) async {
-    setState(() => _busyAccountId = accountId);
+    setState(() {
+      _busyAccountId = accountId;
+      for (final u in _users) {
+        if (u['account_id'] == accountId) {
+          u['status'] = 'ACTIVE';
+        }
+      }
+      if (_selectedUser?['account_id'] == accountId) {
+        _selectedUser!['status'] = 'ACTIVE';
+      }
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account restored successfully'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
     try {
       await widget.client.unsuspendUser(accountId);
       await _loadUsers(offset: _offset);
@@ -259,7 +299,6 @@ class _UsersTabState extends State<UsersTab> {
     );
     if (confirmed != true) return;
 
-    setState(() => _busyAccountId = accountId);
     try {
       await widget.client.blockUser(accountId);
       if (_selectedUser?['account_id'] == accountId) {
@@ -269,104 +308,7 @@ class _UsersTabState extends State<UsersTab> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _busyAccountId = null);
     }
-  }
-
-  Future<void> _manageDevices(Map<String, dynamic> user) async {
-    final accountId = user['account_id'] as String? ?? '';
-    final displayName = user['display_name'] as String? ?? accountId;
-    final devices = (user['devices'] as List? ?? []).cast<Map<String, dynamic>>();
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.devices, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Devices for $displayName',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 400,
-            child: devices.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text('No active devices registered for this user.'),
-                    ),
-                  )
-                : ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: devices.length,
-                    separatorBuilder: (_, _) => const Divider(),
-                    itemBuilder: (ctx, i) {
-                      final dev = devices[i];
-                      final devId = dev['device_id'] as String? ?? '';
-                      final devName = dev['device_name'] as String? ?? devId;
-                      final isRevoked = dev['status'] == 'REVOKED';
-
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.phone_android, size: 24),
-                        title: Text(devName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text(
-                          devId,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                        ),
-                        trailing: isRevoked
-                            ? const Text(
-                                'Revoked',
-                                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                              )
-                            : OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                  side: const BorderSide(color: Colors.red),
-                                ),
-                                onPressed: () async {
-                                  try {
-                                    await widget.client.revokeDevice(accountId, devId);
-                                    setDialogState(() {
-                                      dev['status'] = 'REVOKED';
-                                    });
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Access revoked for $devName')),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Failed to revoke device: $e')),
-                                      );
-                                    }
-                                  }
-                                },
-                                child: const Text('Revoke'),
-                              ),
-                      );
-                    },
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _openUserSheet(Map<String, dynamic> user) {
@@ -453,98 +395,82 @@ class _UsersTabState extends State<UsersTab> {
     final filtered = _filteredUsers;
 
     return SingleChildScrollView(
-      child: Card(
-        child: Padding(
-          padding: HelixInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Users & Devices',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Reload users',
-                    icon: const Icon(Icons.refresh),
-                    onPressed: () => _loadUsers(offset: _offset),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Registered members, linked devices, and security controls.',
-                style: TextStyle(color: context.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header matching right demo image
+          const Text(
+            'Users & Devices',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 16),
 
-              // Search Bar & Filter Chips
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search by name, phone number, or ID…',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
-                    ),
-                  ),
-                ],
+          // Search Bar (Stadium pill shape)
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search by name, phone number, or ID...',
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+              prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF94A3B8)),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18, color: Color(0xFF94A3B8)),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
               ),
-              const SizedBox(height: 12),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: const BorderSide(color: Color(0xFF2563EB)),
+              ),
+            ),
+            onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+          ),
+          const SizedBox(height: 14),
 
-              Wrap(
-                spacing: 8,
-                children: [
-                  ChoiceChip(
-                    label: Text('All Users (${_users.length})'),
-                    selected: _filterStatus == 'ALL',
-                    onSelected: (s) {
-                      if (s) setState(() => _filterStatus = 'ALL');
-                    },
-                  ),
-                  ChoiceChip(
-                    label: Text('Active ($activeCount)'),
-                    selected: _filterStatus == 'ACTIVE',
-                    onSelected: (s) {
-                      if (s) setState(() => _filterStatus = 'ACTIVE');
-                    },
-                  ),
-                  ChoiceChip(
-                    label: Text('Suspended ($suspendedCount)'),
-                    selected: _filterStatus == 'SUSPENDED',
-                    onSelected: (s) {
-                      if (s) setState(() => _filterStatus = 'SUSPENDED');
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
+          // Filter Pills (No checkmark icon)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterPill(
+                  label: 'All Users (${_users.length})',
+                  isSelected: _filterStatus == 'ALL',
+                  onTap: () => setState(() => _filterStatus = 'ALL'),
+                ),
+                const SizedBox(width: 8),
+                _buildFilterPill(
+                  label: 'Active ($activeCount)',
+                  isSelected: _filterStatus == 'ACTIVE',
+                  onTap: () => setState(() => _filterStatus = 'ACTIVE'),
+                ),
+                const SizedBox(width: 8),
+                _buildFilterPill(
+                  label: 'Suspended ($suspendedCount)',
+                  isSelected: _filterStatus == 'SUSPENDED',
+                  onTap: () => setState(() => _filterStatus = 'SUSPENDED'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
 
               if (_loading)
                 Center(
@@ -687,35 +613,34 @@ class _UsersTabState extends State<UsersTab> {
               ],
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 
   Widget _buildUserCard(Map<String, dynamic> user, {required bool isSelected}) {
     final accountId = user['account_id'] as String? ?? '';
     final status = user['status'] as String? ?? 'ACTIVE';
     final isSuspended = status == 'SUSPENDED';
-    final isBusy = _busyAccountId == accountId;
     final displayName = user['display_name'] as String? ?? '';
-    final phone = _formatPhone(user['phone_last4'] as String?);
-    final inviteId = user['invite_id'] as String? ?? '—';
+    final phone = _formatPhone(user);
     final joined = _formatTimestamp(user['created_at']);
+    final devices = (user['devices'] as List? ?? []).cast<Map<String, dynamic>>();
+    final devicesCount = devices.isEmpty ? (user['device_count'] ?? 1) : devices.length;
     final initial = displayName.isNotEmpty
         ? displayName[0].toUpperCase()
         : (accountId.isNotEmpty ? accountId[0].toUpperCase() : 'U');
+    final isBusy = _busyAccountId == accountId;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: isSelected
-            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.05)
-            : Theme.of(context).cardColor,
+            ? const Color(0xFFEFF6FF)
+            : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).dividerColor,
+              ? const Color(0xFF2563EB)
+              : const Color(0xFFE2E8F0),
           width: isSelected ? 1.5 : 1,
         ),
       ),
@@ -723,28 +648,36 @@ class _UsersTabState extends State<UsersTab> {
         borderRadius: BorderRadius.circular(12),
         onTap: () => _openUserSheet(user),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.all(14),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Avatar circle
               Container(
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: context.accentColor.withValues(alpha: 0.12),
+                  color: const Color(0xFFEFF6FF),
                   shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  initial,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: context.accentColor,
-                  ),
-                ),
+                child: isBusy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        initial,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
 
               // Info Group
               Expanded(
@@ -752,129 +685,53 @@ class _UsersTabState extends State<UsersTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(
+                        Expanded(
                           child: Text(
-                            displayName.isEmpty ? '—' : displayName,
+                            displayName.isEmpty ? 'User ($accountId)' : displayName,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
                             ),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          accountId,
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11,
-                            color: context.textFaint,
-                          ),
-                        ),
+                        _statusChip(isSuspended),
                       ],
                     ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Text(
-                          phone,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          inviteId,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: context.textFaint,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          joined,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: context.textFaint,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 2),
+                    Text(
+                      phone,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF475569),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$devicesCount Device${devicesCount == 1 ? '' : 's'} Connected • Joined $joined',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-
-              // Status Chip
-              _statusChip(isSuspended),
               const SizedBox(width: 8),
-
-              // Row Actions
-              if (isBusy)
-                const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.devices_outlined, size: 20),
-                      tooltip: 'Manage devices',
-                      onPressed: () => _manageDevices(user),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.key_outlined, size: 20),
-                      tooltip: 'Issue recovery code',
-                      onPressed: () => _issueRecoveryCode(
-                        accountId,
-                        displayName.isEmpty ? accountId : displayName,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        isSuspended
-                            ? Icons.play_circle_outline
-                            : Icons.pause_circle_outline,
-                        size: 20,
-                      ),
-                      tooltip: isSuspended
-                          ? 'Restore access'
-                          : 'Suspend access (temporary)',
-                      onPressed: () => isSuspended
-                          ? _unsuspend(accountId)
-                          : _suspend(accountId),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.delete_forever_outlined,
-                        size: 20,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      tooltip: 'Delete permanently',
-                      onPressed: () => _confirmDelete(
-                        accountId,
-                        displayName.isEmpty ? accountId : displayName,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.block,
-                        size: 20,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      tooltip: 'Block (delete + ban phone number)',
-                      onPressed: () => _confirmBlock(
-                        accountId,
-                        displayName.isEmpty ? accountId : displayName,
-                      ),
-                    ),
-                  ],
-                ),
+              const Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: Color(0xFF94A3B8),
+              ),
             ],
           ),
         ),
@@ -885,11 +742,20 @@ class _UsersTabState extends State<UsersTab> {
   Widget _buildDetailPaneContent(Map<String, dynamic> user, {required bool inSheet}) {
     final accountId = user['account_id'] as String? ?? '';
     final displayName = user['display_name'] as String? ?? '';
-    final phone = _formatPhone(user['phone_last4'] as String?);
+    final phone = _formatPhone(user);
     final status = user['status'] as String? ?? 'ACTIVE';
     final isSuspended = status == 'SUSPENDED';
+    final isBusy = _busyAccountId == accountId;
     final joined = _formatTimestamp(user['created_at']);
-    final devices = (user['devices'] as List? ?? []).cast<Map<String, dynamic>>();
+    final rawDevices = user['devices'];
+    final List<Map<String, dynamic>> devices = [];
+    if (rawDevices is List) {
+      for (final item in rawDevices) {
+        if (item is Map) {
+          devices.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -998,7 +864,7 @@ class _UsersTabState extends State<UsersTab> {
                     ),
                   ),
                   Text(
-                    '${devices.length} Active',
+                    '${devices.where((d) => (d['status'] as String? ?? 'ACTIVE').toUpperCase() == 'ACTIVE').length} Active',
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -1093,40 +959,48 @@ class _UsersTabState extends State<UsersTab> {
                   letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                icon: const Icon(Icons.key, size: 16),
-                label: const Text('Issue 48h Recovery Key'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                onPressed: () => _issueRecoveryCode(accountId, displayName.isEmpty ? accountId : displayName),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.copy, size: 16),
-                label: const Text('Copy User ID'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF334155),
-                  side: const BorderSide(color: Color(0xFFCBD5E1)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: accountId));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Account ID copied')),
-                  );
-                },
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.key, size: 15),
+                      label: const Text('Issue 48h Key', style: TextStyle(fontSize: 12)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      onPressed: () => _issueRecoveryCode(accountId, displayName.isEmpty ? accountId : displayName),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.copy, size: 15),
+                      label: const Text('Copy User ID', style: TextStyle(fontSize: 12)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF334155),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: accountId));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Account ID copied')),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
 
         // Cardlet 4: Danger Zone
         Container(
@@ -1148,41 +1022,58 @@ class _UsersTabState extends State<UsersTab> {
                   letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFD97706),
-                  side: const BorderSide(color: Color(0xFFF59E0B)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: Icon(isSuspended ? Icons.play_circle_outline : Icons.pause_circle_outline, size: 16),
-                label: Text(isSuspended ? 'Restore Account' : 'Suspend Account'),
-                onPressed: () => isSuspended ? _unsuspend(accountId) : _suspend(accountId),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFDC2626),
-                  side: const BorderSide(color: Color(0xFFEF4444)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.delete_outline, size: 16),
-                label: const Text('Delete User Data'),
-                onPressed: () => _confirmDelete(accountId, displayName.isEmpty ? accountId : displayName),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFD97706),
+                        side: const BorderSide(color: Color(0xFFF59E0B)),
+                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: isBusy
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFD97706)),
+                            )
+                          : Icon(isSuspended ? Icons.play_circle_outline : Icons.pause_circle_outline, size: 15),
+                      label: Text(
+                        isSuspended ? 'Restore' : 'Suspend',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      onPressed: isBusy ? null : () => isSuspended ? _unsuspend(accountId) : _suspend(accountId),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(color: Color(0xFFEF4444)),
+                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 15),
+                      label: const Text('Delete Data', style: TextStyle(fontSize: 12)),
+                      onPressed: () => _confirmDelete(accountId, displayName.isEmpty ? accountId : displayName),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF991B1B),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   elevation: 0,
                 ),
-                icon: const Icon(Icons.block, size: 16),
-                label: const Text('Permanent Block Phone'),
+                icon: const Icon(Icons.block, size: 15),
+                label: const Text('Permanent Block Phone', style: TextStyle(fontSize: 12)),
                 onPressed: () => _confirmBlock(accountId, displayName.isEmpty ? accountId : displayName),
               ),
             ],
@@ -1190,48 +1081,88 @@ class _UsersTabState extends State<UsersTab> {
         ),
 
         if (inSheet) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF334155),
               side: const BorderSide(color: Color(0xFFCBD5E1)),
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           ),
         ],
       ],
     );
   }
 
-  Widget _statusChip(bool isSuspended) {
-    final bg = isSuspended ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7);
-    final fg = isSuspended ? const Color(0xFFB45309) : const Color(0xFF166534);
-    final border = isSuspended ? const Color(0xFFFDE68A) : const Color(0xFFBBF7D0);
-    return Chip(
-      label: Text(
-        isSuspended ? 'SUSPENDED' : 'ACTIVE',
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
+  Widget _buildFilterPill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF2563EB) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected
+              ? Border.all(color: const Color(0xFF2563EB))
+              : Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
       ),
-      backgroundColor: bg,
-      side: BorderSide(color: border),
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
     );
   }
 
-  String _formatPhone(String? phone) {
-    if (phone == null || phone.isEmpty) return '—';
-    return phone;
+  Widget _statusChip(bool isSuspended) {
+    final bg = isSuspended ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5);
+    final fg = isSuspended ? const Color(0xFFDC2626) : const Color(0xFF059669);
+    final border = isSuspended ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        isSuspended ? 'SUSPENDED' : 'ACTIVE',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: fg,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  String _formatPhone(Map<String, dynamic> user) {
+    final rawPhone = user['phone'] as String? ??
+        user['phone_number'] as String? ??
+        user['phone_last4'] as String? ??
+        user['mobile'] as String?;
+    if (rawPhone == null || rawPhone.trim().isEmpty) return '—';
+    return rawPhone.trim();
   }
 
   String _formatTimestamp(dynamic value) {
     if (value is! int || value == 0) return '—';
-    final dt = DateTime.fromMillisecondsSinceEpoch(value);
-    return '${dt.year}-${_pad2(dt.month)}-${_pad2(dt.day)}';
+    final dt = DateTime.fromMillisecondsSinceEpoch(value, isUtc: true).toLocal();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${months[dt.month - 1]} ${dt.day}';
   }
-
-  String _pad2(int n) => n.toString().padLeft(2, '0');
 }

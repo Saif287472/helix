@@ -412,20 +412,31 @@ class BackendServer {
         try {
           final response = await innerHandler(request);
           watch.stop();
-          final line =
-              '${request.method} /${request.url.path} '
-              '${response.statusCode} ${watch.elapsedMilliseconds}ms '
-              'correlation=${request.context['correlation_id'] ?? 'none'}';
-          if (response.statusCode >= 500) {
-            sink.error(line);
-          } else if (response.statusCode >= 400) {
-            sink.warn(line);
-          } else {
-            sink.info(line);
+
+          // Filter out routine successful (2xx/3xx) GET data fetches to keep the console log focused on real events and anomalies
+          final isRoutineGetFetch = request.method == 'GET' && response.statusCode < 400;
+
+          if (!isRoutineGetFetch) {
+            final path = request.url.path;
+            final line =
+                '${request.method} /$path '
+                '${response.statusCode} ${watch.elapsedMilliseconds}ms '
+                'correlation=${request.context['correlation_id'] ?? 'none'}';
+            if (response.statusCode >= 500) {
+              sink.error(line);
+            } else if (response.statusCode >= 400) {
+              sink.warn(line);
+            } else {
+              sink.info(line);
+            }
           }
           return response;
         } catch (e) {
           watch.stop();
+          if (e.runtimeType.toString() == 'HijackedException' || e.toString().contains('hijacked')) {
+            // Standard Shelf control flow for WebSockets and SSE streams; not an actual error.
+            rethrow;
+          }
           sink.error(
             '${request.method} /${request.url.path} threw after '
             '${watch.elapsedMilliseconds}ms: $e',

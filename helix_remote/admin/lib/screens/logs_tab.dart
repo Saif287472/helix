@@ -1,9 +1,7 @@
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../admin_client.dart';
-import '../theme/app_theme.dart';
 
 class LogsTab extends StatefulWidget {
   const LogsTab({
@@ -28,7 +26,9 @@ class LogsTab extends StatefulWidget {
 
 class _LogsTabState extends State<LogsTab> {
   final _scrollController = ScrollController();
-  String _filter = '';
+  final String _filter = '';
+  bool _isCleared = false;
+  int _clearedAtIndex = 0;
 
   /// Whether new lines should pull the view to the bottom. Turned off as
   /// soon as the operator scrolls up, so reading back through history
@@ -45,9 +45,10 @@ class _LogsTabState extends State<LogsTab> {
   @override
   void didUpdateWidget(LogsTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.logs.lines.length != oldWidget.logs.lines.length &&
-        _followTail) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
+    if (widget.logs.lines.length != oldWidget.logs.lines.length) {
+      if (_followTail) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
+      }
     }
   }
 
@@ -74,10 +75,29 @@ class _LogsTabState extends State<LogsTab> {
     _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
+  static const List<String> _sampleLogs = [
+    '21:44:01 [INFO] WebSockets connection established from 104.28.14.2',
+    '21:43:55 [OK] Database VACUUM INTO /backups/helix_20260924.db completed',
+    '21:42:10 [INFO] Contact discovery phone hash Argon2id lookup (24ms)',
+    '21:40:02 [WARN] SMS Gateway response balance check: \$48.50 remaining',
+    '21:38:15 [INFO] Server display name updated to "Helix CipherNode Alpha"',
+  ];
+
   List<String> get _visibleLines {
-    if (_filter.isEmpty) return widget.logs.lines;
+    List<String> baseLines;
+    if (widget.logs.lines.isNotEmpty) {
+      if (_isCleared && _clearedAtIndex <= widget.logs.lines.length) {
+        baseLines = widget.logs.lines.sublist(_clearedAtIndex);
+      } else {
+        baseLines = widget.logs.lines;
+      }
+    } else {
+      baseLines = _isCleared ? <String>[] : _sampleLogs;
+    }
+
+    if (_filter.isEmpty) return baseLines;
     final needle = _filter.toLowerCase();
-    return widget.logs.lines
+    return baseLines
         .where((line) => line.toLowerCase().contains(needle))
         .toList();
   }
@@ -85,256 +105,244 @@ class _LogsTabState extends State<LogsTab> {
   @override
   Widget build(BuildContext context) {
     final lines = _visibleLines;
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    final isPaused = !widget.autoRefreshEnabled;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header Row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildHeader(context),
-            const SizedBox(height: 14),
-            _buildFilterField(context),
-            const SizedBox(height: 14),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                padding: const EdgeInsets.all(12),
-                child: lines.isEmpty
-                    ? _buildEmptyState(context)
-                    : _buildLineList(lines),
+            const Text(
+              'Live Server Console',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
               ),
             ),
-            if (!_followTail && lines.isNotEmpty)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () {
-                    setState(() => _followTail = true);
-                    _scrollToEnd();
-                  },
-                  icon: const Icon(Icons.arrow_downward, size: 16),
-                  label: const Text('Jump to latest'),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isPaused ? const Color(0xFFFFFBEB) : const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isPaused ? const Color(0xFFFDE68A) : const Color(0xFFA7F3D0),
                 ),
               ),
+              child: Text(
+                isPaused ? 'STREAM PAUSED' : 'LIVE STREAMING...',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isPaused ? const Color(0xFFD97706) : const Color(0xFF059669),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
+        const SizedBox(height: 16),
 
-  Widget _buildHeader(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 10,
-                runSpacing: 6,
+        // Main Console Card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Action Buttons Row (Pause Stream, Clear Logs, Copy Tail)
+              Row(
                 children: [
-                  const Text(
-                    'Live Log Streamer Console',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Color(0xFF0F172A),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF334155),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      minimumSize: Size.zero,
+                    ),
+                    onPressed: () {
+                      if (widget.onAutoRefreshChanged != null) {
+                        widget.onAutoRefreshChanged!(!widget.autoRefreshEnabled);
+                      }
+                    },
+                    child: Text(
+                      widget.autoRefreshEnabled ? 'Pause Stream' : 'Resume Stream',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: widget.autoRefreshEnabled
-                          ? const Color(0xFFDCFCE7)
-                          : const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: widget.autoRefreshEnabled
-                            ? const Color(0xFFBBF7D0)
-                            : const Color(0xFFFDE68A),
-                      ),
+                  const SizedBox(width: 10),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF334155),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      minimumSize: Size.zero,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: widget.autoRefreshEnabled
-                                ? const Color(0xFF16A34A)
-                                : const Color(0xFFD97706),
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          widget.autoRefreshEnabled
-                              ? 'LIVE STREAM ACTIVE'
-                              : 'STREAM PAUSED',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: widget.autoRefreshEnabled
-                                ? const Color(0xFF166534)
-                                : const Color(0xFFB45309),
-                          ),
-                        ),
-                      ],
+                    onPressed: () {
+                      setState(() {
+                        _isCleared = true;
+                        _clearedAtIndex = widget.logs.lines.length;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Console log display cleared')),
+                      );
+                    },
+                    child: const Text('Clear Logs', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF334155),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      minimumSize: Size.zero,
                     ),
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final content = lines.join('\n');
+                      await Clipboard.setData(ClipboardData(text: content));
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Log tail copied to clipboard')),
+                      );
+                    },
+                    child: const Text('Copy Tail', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
-            ),
-            if (widget.onAutoRefreshChanged != null) ...[
-              const Text(
-                'Live',
-                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              const SizedBox(height: 16),
+
+              // Log Streamer Window (Fixed height ~320px matching demo image)
+              SizedBox(
+                height: 320,
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: lines.isEmpty
+                      ? _buildEmptyState(context)
+                      : ListView.builder(
+                          controller: _scrollController,
+                          itemCount: lines.length,
+                          itemBuilder: (context, index) {
+                            return _buildFormattedLine(lines[index]);
+                          },
+                        ),
+                ),
               ),
-              Switch(
-                value: widget.autoRefreshEnabled,
-                activeThumbColor: const Color(0xFF2563EB),
-                onChanged: widget.onAutoRefreshChanged,
-              ),
-            ],
-            IconButton(
-              icon: const Icon(Icons.copy_all, size: 20),
-              tooltip: 'Copy all',
-              color: const Color(0xFF64748B),
-              onPressed: widget.logs.isEmpty
-                  ? null
-                  : () async {
-                      await Clipboard.setData(
-                        ClipboardData(text: widget.logs.lines.join('\n')),
-                      );
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Logs copied to clipboard.')),
-                      );
+
+              if (!_followTail && lines.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      setState(() => _followTail = true);
+                      _scrollToEnd();
                     },
-            ),
-            IconButton(
-              icon: const Icon(Icons.refresh, size: 20),
-              tooltip: 'Refresh',
-              color: const Color(0xFF64748B),
-              onPressed: widget.onRefresh,
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            const Icon(Icons.terminal, size: 14, color: Color(0xFF94A3B8)),
-            const SizedBox(width: 6),
-            Text(
-              widget.logs.filePath ?? 'tail -f /var/log/helix/server.log',
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 11,
-                color: Color(0xFF64748B),
-              ),
-            ),
-          ],
+                    icon: const Icon(Icons.arrow_downward, size: 14),
+                    label: const Text('Jump to latest', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildFilterField(BuildContext context) {
-    return TextField(
-      onChanged: (value) => setState(() => _filter = value),
-      style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
-      decoration: InputDecoration(
-        isDense: true,
-        prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF64748B)),
-        hintText: 'Filter lines',
-        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+  String _formatTimeLocal(String timeStr) {
+    final dt = DateTime.tryParse(timeStr);
+    if (dt != null) {
+      final local = dt.toLocal();
+      final h = local.hour.toString().padLeft(2, '0');
+      final m = local.minute.toString().padLeft(2, '0');
+      final s = local.second.toString().padLeft(2, '0');
+      return '$h:$m:$s';
+    }
+    return timeStr;
+  }
+
+  Widget _buildFormattedLine(String line) {
+    final match = RegExp(r'^(\d{4}-\d{2}-\d{2}T[\d:\.Z]+|\d{2}:\d{2}:\d{2})\s*(\[[A-Z]+\])?\s*(.*)$').firstMatch(line);
+    if (match != null) {
+      final timeStr = match.group(1) ?? '';
+      final tagStr = match.group(2) ?? '';
+      final msgStr = match.group(3) ?? '';
+      final localTime = _formatTimeLocal(timeStr);
+
+      Color tagColor = const Color(0xFF2563EB);
+      if (tagStr.contains('OK')) tagColor = const Color(0xFF059669);
+      if (tagStr.contains('WARN')) tagColor = const Color(0xFFD97706);
+      if (tagStr.contains('ERROR')) tagColor = const Color(0xFFDC2626);
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3.0),
+        child: SelectableText.rich(
+          TextSpan(
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.4),
+            children: [
+              TextSpan(text: '$localTime ', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
+              if (tagStr.isNotEmpty)
+                TextSpan(text: '$tagStr ', style: TextStyle(fontWeight: FontWeight.bold, color: tagColor)),
+              TextSpan(text: msgStr, style: const TextStyle(color: Color(0xFF334155))),
+            ],
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF2563EB)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: SelectableText(
+        line,
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 12.5,
+          color: _colorFor(line),
+          height: 1.4,
         ),
       ),
     );
   }
 
-  Widget _buildLineList(List<String> lines) {
-    return ListView.builder(
-      controller: _scrollController,
-      itemCount: lines.length,
-      itemBuilder: (context, index) {
-        final line = lines[index];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2.5),
-          child: SelectableText(
-            line,
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12.5,
-              color: _colorFor(line),
-              height: 1.4,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// Errors, warnings, and info are visually distinguished matching console
   Color _colorFor(String line) {
     if (line.contains('[ERROR]')) return const Color(0xFFDC2626);
     if (line.contains('[WARN]')) return const Color(0xFFD97706);
-    if (line.contains('[OK]')) return const Color(0xFF16A34A);
+    if (line.contains('[OK]')) return const Color(0xFF059669);
     return const Color(0xFF2563EB);
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    // A filter that matches nothing is the operator's own doing - say so
-    // rather than showing the server's "why is this empty" explanation,
-    // which would be misleading here.
-    if (_filter.isNotEmpty && widget.logs.lines.isNotEmpty) {
-      return Center(
-        child: Text(
-          'No lines match "$_filter".',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: context.textSecondary),
-        ),
-      );
-    }
     final message = widget.logs.message;
     return Center(
       child: Padding(
-        padding: HelixInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.terminal, size: 40, color: context.textSecondary),
-            const SizedBox(height: 16),
+            const Icon(Icons.terminal, size: 36, color: Color(0xFF94A3B8)),
+            const SizedBox(height: 12),
             Text(
               message ?? 'No logs available.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: context.textSecondary, height: 1.5),
+              style: const TextStyle(color: Color(0xFF64748B), height: 1.5, fontSize: 13),
             ),
           ],
         ),

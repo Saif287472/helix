@@ -1,6 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:retry/retry.dart';
+
+Future<T> _retry<T>(Future<T> Function() fn) async {
+  return retry<T>(fn, maxAttempts: 5, delayFactor: const Duration(seconds: 1));
+}
 
 /// Outcome of checking whether a token is still good against a server.
 /// Kept distinct from a plain bool so callers can tell "the server said no"
@@ -183,10 +188,10 @@ class AdminClient {
 
   Future<AdminLoginStatus> verifyLoginDetailed() async {
     try {
-      final response = await http.get(
+      final response = await _retry(() => http.get(
         Uri.parse('$baseUrl/api/v1/ops/config'),
         headers: _headers,
-      );
+      ));
       if (response.statusCode == 200) return AdminLoginStatus.ok;
       if (response.statusCode == 401 || response.statusCode == 403) {
         return AdminLoginStatus.unauthorized;
@@ -201,10 +206,10 @@ class AdminClient {
       (await verifyLoginDetailed()) == AdminLoginStatus.ok;
 
   Future<Map<String, dynamic>> getMetrics() async {
-    final response = await http.get(
+    final response = await _retry(() => http.get(
       Uri.parse('$baseUrl/api/v1/ops/metrics'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to load metrics: ${response.body}');
     }
@@ -212,10 +217,10 @@ class AdminClient {
   }
 
   Future<Map<String, dynamic>> getConfig() async {
-    final response = await http.get(
+    final response = await _retry(() => http.get(
       Uri.parse('$baseUrl/api/v1/ops/config'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to load config: ${response.body}');
     }
@@ -231,11 +236,11 @@ class AdminClient {
   /// validation failure, so the field can show why rather than a generic
   /// error.
   Future<String> setServerName(String name) async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/config/server-name'),
       headers: _headers,
       body: jsonEncode({'server_name': name}),
-    );
+    ));
     final body = _decodeOrNull(response.body);
     if (response.statusCode != 200) {
       throw AdminRequestException(
@@ -260,7 +265,7 @@ class AdminClient {
     required String address,
     required String directoryUrl,
   }) async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/federation/worldwide'),
       headers: _headers,
       body: jsonEncode({
@@ -269,7 +274,7 @@ class AdminClient {
         'address': address,
         'directory_url': directoryUrl,
       }),
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to update federation: ${response.body}');
     }
@@ -277,10 +282,10 @@ class AdminClient {
   }
 
   Future<Map<String, dynamic>> triggerBackup() async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/backup'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Backup failed: ${response.body}');
     }
@@ -291,10 +296,10 @@ class AdminClient {
     int limit = 50,
     int offset = 0,
   }) async {
-    final response = await http.get(
+    final response = await _retry(() => http.get(
       Uri.parse('$baseUrl/api/v1/ops/users?limit=$limit&offset=$offset'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to load users: ${response.body}');
     }
@@ -305,20 +310,20 @@ class AdminClient {
   /// and every authenticated request in between, but can be restored with
   /// [unsuspendUser] - no re-registration needed.
   Future<void> suspendUser(String accountId) async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/users/$accountId/suspend'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to suspend user: ${response.body}');
     }
   }
 
   Future<void> unsuspendUser(String accountId) async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/users/$accountId/unsuspend'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to unsuspend user: ${response.body}');
     }
@@ -327,10 +332,10 @@ class AdminClient {
   /// Generates a single-use 48-hour account recovery code (HLX-REC-...)
   /// for a user to restore access on a new device.
   Future<Map<String, dynamic>> generateRecoveryCode(String accountId) async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/users/$accountId/recovery-code'),
       headers: _headers,
-    );
+    ));
     final body = _decodeOrNull(response.body);
     if (response.statusCode != 200) {
       throw AdminRequestException(
@@ -345,10 +350,10 @@ class AdminClient {
   /// number itself is left free - a new account can register it again.
   /// Use [blockUser] instead to also refuse that.
   Future<void> deleteUser(String accountId) async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/users/$accountId/delete'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to delete user: ${response.body}');
     }
@@ -357,10 +362,10 @@ class AdminClient {
   /// Deletes the account like [deleteUser], and additionally bans its
   /// phone number from ever registering again on this server.
   Future<void> blockUser(String accountId) async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/users/$accountId/block'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to block user: ${response.body}');
     }
@@ -369,20 +374,20 @@ class AdminClient {
   /// Cancels an invite that hasn't been redeemed yet. Fails (409) if it's
   /// already been used or cancelled.
   Future<void> cancelInvite(String inviteId) async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/invites/$inviteId/cancel'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to cancel invite: ${response.body}');
     }
   }
 
   Future<ServerLogs> getLogs({int limit = 200}) async {
-    final response = await http.get(
+    final response = await _retry(() => http.get(
       Uri.parse('$baseUrl/api/v1/ops/logs?limit=$limit'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to load logs: ${response.body}');
     }
@@ -400,10 +405,10 @@ class AdminClient {
   /// `shareable_url`) is returned exactly once here and never persisted
   /// server-side - only its hash is kept.
   Future<Map<String, dynamic>> createInvite() async {
-    final response = await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/ops/invites'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to create invite: ${response.body}');
     }
@@ -414,10 +419,10 @@ class AdminClient {
     int limit = 50,
     int offset = 0,
   }) async {
-    final response = await http.get(
+    final response = await _retry(() => http.get(
       Uri.parse('$baseUrl/api/v1/ops/invites?limit=$limit&offset=$offset'),
       headers: _headers,
-    );
+    ));
     if (response.statusCode != 200) {
       throw Exception('Failed to load invites: ${response.body}');
     }

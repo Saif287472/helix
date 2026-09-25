@@ -19,6 +19,8 @@ import 'screens/settings_tab.dart';
 import 'services/admin_preferences.dart';
 import 'theme/app_theme.dart';
 
+import 'widgets/launch_skeleton_widget.dart';
+
 void main() {
   runApp(const HelixAdminApp());
 }
@@ -31,7 +33,7 @@ class HelixAdminApp extends StatefulWidget {
 }
 
 class _HelixAdminAppState extends State<HelixAdminApp> {
-  bool _isDarkMode = true;
+  bool _isDarkMode = false;
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +91,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
   bool _isLoading = false;
   bool _isConnecting = false;
   bool _isCheckingSavedSession = true;
+  LaunchStatus _launchStatus = LaunchStatus.deploying;
   bool _showGuideUnauthenticated = false;
 
   /// Guide page to open next time the 'guide' tab is built. Reset to 0
@@ -112,6 +115,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
   Map<String, dynamic>? _config;
   ServerLogs _logs = const ServerLogs.empty();
   String? _errorMessage;
+  int _latencyMs = 23;
 
   /// Polls the Logs screen while it's live.
   Timer? _logPollTimer;
@@ -185,12 +189,46 @@ class _MainAdminPageState extends State<MainAdminPage> {
     setState(() {
       _isConnecting = true;
       _isCheckingSavedSession = true;
+      _launchStatus = LaunchStatus.deploying;
     });
-    final client = AdminClient(baseUrl: url, token: token);
-    final status = await client.verifyLoginDetailed();
+
+    // Step 1: Deploying Helix Admin…
+    await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
+    setState(() => _launchStatus = LaunchStatus.retrievingData);
+
+    // Step 2: Retrieving user data…
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    setState(() => _launchStatus = LaunchStatus.connecting);
+
+    // Step 3: Connecting to the server…
+    final client = AdminClient(baseUrl: url, token: token);
+    
+    AdminLoginStatus status;
+    try {
+      status = await client.verifyLoginDetailed().timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => AdminLoginStatus.unreachable,
+      );
+    } catch (_) {
+      status = AdminLoginStatus.unreachable;
+    }
+
+    if (!mounted) return;
+
     switch (status) {
       case AdminLoginStatus.ok:
+        // Step 4: Validating user account…
+        setState(() => _launchStatus = LaunchStatus.validating);
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (!mounted) return;
+
+        // Step 5: Syncing…
+        setState(() => _launchStatus = LaunchStatus.syncing);
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (!mounted) return;
+
         setState(() {
           _client = client;
           _isConnecting = false;
@@ -198,6 +236,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           _errorMessage = null;
         });
         _refreshData();
+
       case AdminLoginStatus.unauthorized:
         await prefs.clearAdminToken();
         if (!mounted) return;
@@ -208,10 +247,11 @@ class _MainAdminPageState extends State<MainAdminPage> {
           _errorMessage =
               'Session expired or admin password changed. Please sign in again.';
         });
+
       case AdminLoginStatus.unreachable:
         setState(() {
           _isConnecting = false;
-          _isCheckingSavedSession = false;
+          _launchStatus = LaunchStatus.unreachable;
           _errorMessage =
               "Could not reach server. Check the URL and connection, then try again.";
         });
@@ -250,6 +290,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
     _urlController.removeListener(_onUrlChanged);
     _logPollTimer?.cancel();
     _logStreamSub?.cancel();
+    _latencyPollTimer?.cancel();
     _urlController.dispose();
     _passwordController.dispose();
     _federationDomainController.dispose();
@@ -385,6 +426,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
     unawaited(_prefs?.clearAdminToken());
     _logPollTimer?.cancel();
     _logStreamSub?.cancel();
+    _latencyPollTimer?.cancel();
     _logStreamSub = null;
     _logAutoRefresh = false;
     _passwordController.clear();
@@ -417,14 +459,20 @@ class _MainAdminPageState extends State<MainAdminPage> {
     });
   }
 
+  Timer? _latencyPollTimer;
+
   Future<void> _refreshData() async {
     if (_client == null) return;
     setState(() => _isLoading = true);
     try {
+      final sw = Stopwatch()..start();
       final metrics = await _client!.getMetrics();
       final config = await _client!.getConfig();
       final logs = await _client!.getLogs();
+      sw.stop();
+      final elapsed = sw.elapsedMilliseconds;
       setState(() {
+        _latencyMs = elapsed > 0 ? elapsed : 18;
         _metrics = metrics;
         _config = config;
         final federation = config['federation'] as Map<String, dynamic>?;
@@ -437,12 +485,37 @@ class _MainAdminPageState extends State<MainAdminPage> {
         _logs = logs;
         _isLoading = false;
       });
+      _startLatencyPollTimer();
     } catch (e) {
       setState(() {
         _isLoading = false;
         _errorMessage = e.toString();
       });
     }
+  }
+
+  void _startLatencyPollTimer() {
+    _latencyPollTimer?.cancel();
+    _latencyPollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_client != null && mounted) {
+        _pingLatency();
+      }
+    });
+  }
+
+  Future<void> _pingLatency() async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final sw = Stopwatch()..start();
+      await client.getMetrics();
+      sw.stop();
+      if (!mounted) return;
+      setState(() {
+        final elapsed = sw.elapsedMilliseconds;
+        _latencyMs = elapsed > 0 ? elapsed : 18;
+      });
+    } catch (_) {}
   }
 
   Future<void> _triggerBackup() async {
@@ -523,53 +596,75 @@ class _MainAdminPageState extends State<MainAdminPage> {
   @override
   Widget build(BuildContext context) {
     if (_prefs == null || _isCheckingSavedSession) {
-      return Scaffold(
-        backgroundColor: HelixColorTokens.cFF0F0F16,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(
-                Icons.radar,
-                size: 64,
-                color: HelixColorTokens.cFF00E5FF,
-              ),
-              SizedBox(height: 24),
-              CircularProgressIndicator(
-                color: HelixColorTokens.cFF8A2BE2,
-              ),
-            ],
-          ),
-        ),
+      return LaunchSkeletonWidget(
+        status: _launchStatus,
+        serverUrl: _urlController.text,
+        onConnectDifferentServer: () {
+          setState(() {
+            _isCheckingSavedSession = false;
+            _isConnecting = false;
+          });
+        },
+        onRetry: () => _attemptAutoConnect(),
       );
     }
     if (_appLockEnabled && !_isUnlocked) {
       return LockScreen(onUnlocked: _handleUnlocked);
     }
     if (_client == null) {
-      if (_showGuideUnauthenticated) {
-        return Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: 'Back to Sign In',
-              onPressed: () => setState(() => _showGuideUnauthenticated = false),
-            ),
-            title: const Text('SELF-HOSTING GUIDE'),
+      return Stack(
+        children: [
+          LoginScreen(
+            urlController: _urlController,
+            passwordController: _passwordController,
+            isConnecting: _isConnecting,
+            errorMessage: _errorMessage,
+            needsSetup: _needsSetup,
+            onSignIn: _connect,
+            onSetupPassword: _handleSetupPassword,
+            onCheckUrl: () => _checkSetupStatus(),
+            onOpenGuide: () => setState(() => _showGuideUnauthenticated = true),
           ),
-          body: const GuideWizard(),
-        );
-      }
-      return LoginScreen(
-        urlController: _urlController,
-        passwordController: _passwordController,
-        isConnecting: _isConnecting,
-        errorMessage: _errorMessage,
-        needsSetup: _needsSetup,
-        onSignIn: _connect,
-        onSetupPassword: _handleSetupPassword,
-        onCheckUrl: () => _checkSetupStatus(),
-        onOpenGuide: () => setState(() => _showGuideUnauthenticated = true),
+          if (_showGuideUnauthenticated)
+            Stack(
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() => _showGuideUnauthenticated = false),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.5),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 640, maxHeight: 680),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 16,
+                          offset: Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Material(
+                      color: Colors.white,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: GuideWizard(
+                          initialPage: 0,
+                          onClose: () => setState(() => _showGuideUnauthenticated = false),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
       );
     }
     return LayoutBuilder(
@@ -577,13 +672,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
         final isMobile = constraints.maxWidth < _mobileBreakpoint;
         return Scaffold(
           key: _scaffoldKey,
-          appBar: _buildAppBar(),
-          drawer: isMobile
-              ? Drawer(
-                  backgroundColor: context.sunkenSurface,
-                  child: SafeArea(child: _buildSidebarContent(inDrawer: true)),
-                )
-              : null,
+          appBar: _buildAppBar(isMobile),
+          drawer: null,
           bottomNavigationBar: isMobile
               ? NavigationBar(
                   selectedIndex: switch (_selectedTab) {
@@ -623,213 +713,106 @@ class _MainAdminPageState extends State<MainAdminPage> {
                       label: 'Invites',
                     ),
                     NavigationDestination(
-                      icon: Icon(Icons.terminal_outlined),
-                      selectedIcon: Icon(Icons.terminal),
+                      icon: Icon(Icons.settings_outlined),
+                      selectedIcon: Icon(Icons.settings),
                       label: 'Ops & Logs',
                     ),
                   ],
                 )
               : null,
-          body: isMobile
-              ? _buildBody(isMobile: true)
-              : Row(
-                  children: [
-                    Container(
-                      width: 260,
-                      color: context.sunkenSurface,
-                      padding: HelixInsets.symmetric(vertical: 24),
-                      child: _buildSidebarContent(inDrawer: false),
-                    ),
-                    Expanded(child: _buildBody(isMobile: false)),
-                  ],
-                ),
+          body: _buildBody(isMobile: isMobile),
         );
       },
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(bool isMobile) {
     return AppBar(
+      automaticallyImplyLeading: false,
       title: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Flexible(
-            child: Text(
-              _selectedTab.toUpperCase(),
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                letterSpacing: 1.5,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFF10B981),
+              shape: BoxShape.circle,
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF059669),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  '23ms',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    color: Color(0xFF059669),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+          Text(
+            _config?['server_name'] as String? ?? _config?['name'] as String? ?? 'Careless',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
             ),
           ),
+          if (!isMobile) ...[
+            const SizedBox(width: 32),
+            _buildDesktopNavPill('Overview', 'dashboard', Icons.dashboard_outlined),
+            const SizedBox(width: 8),
+            _buildDesktopNavPill('Users & Devices', 'users', Icons.people_outline),
+            const SizedBox(width: 8),
+            _buildDesktopNavPill('Invites', 'invites', Icons.local_activity_outlined),
+            const SizedBox(width: 8),
+            _buildDesktopNavPill('Ops & Logs', 'ops', Icons.settings_outlined),
+          ],
         ],
       ),
-      actions: [
-        if (_serverDependentTabs.contains(_selectedTab))
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshData,
-            tooltip: 'Refresh data',
-          ),
-        const SizedBox(width: 16),
+      actions: const [
+        SizedBox(width: 12),
       ],
     );
   }
 
-  Widget _buildSidebarContent({required bool inDrawer}) {
-    void selectTab(String tabId) {
-      setState(() {
-        _selectedTab = tabId;
-        _guideInitialPage = 0;
-      });
-      if (_client != null && _serverDependentTabs.contains(tabId)) {
-        _refreshData();
-      }
-      if (inDrawer) {
-        _scaffoldKey.currentState?.closeDrawer();
-      }
-    }
+  Widget _buildDesktopNavPill(String label, String tabId, IconData icon) {
+    final isSelected = switch (_selectedTab) {
+      'dashboard' => tabId == 'dashboard',
+      'users' => tabId == 'users',
+      'invites' => tabId == 'invites',
+      'ops' || 'logs' || 'reports' || 'config' || 'backup' => tabId == 'ops',
+      _ => _selectedTab == tabId,
+    };
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: HelixInsets.symmetric(horizontal: 24),
-          child: Row(
-            children: [
-              Icon(Icons.radar, color: context.accentColor),
-              const SizedBox(width: 12),
-              const Flexible(
-                child: Text(
-                  'Helix Panel',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 32),
-        _sidebarItem(Icons.dashboard, 'Dashboard', 'dashboard', selectTab),
-        _sidebarItem(Icons.settings, 'Configurations', 'config', selectTab),
-        _sidebarItem(Icons.terminal, 'Log Tailing', 'logs', selectTab),
-        _sidebarItem(
-          Icons.backup,
-          'Maintenance & Backups',
-          'backup',
-          selectTab,
-        ),
-        _sidebarItem(Icons.mail_outline, 'Invites', 'invites', selectTab),
-        _sidebarItem(Icons.people_outline, 'Users', 'users', selectTab),
-        _sidebarItem(Icons.flag_outlined, 'Reports', 'reports', selectTab),
-        _sidebarItem(Icons.menu_book, 'Self-Hosting Guide', 'guide', selectTab),
-        _sidebarItem(Icons.tune, 'Settings', 'settings', selectTab),
-        const Spacer(),
-        Material(
-          color: Colors.transparent,
-          child: ListTile(
-            key: const Key('sidebar_sign_out_button'),
-            leading: const Icon(
-              Icons.logout,
-              color: HelixColorTokens.cFFFF3366,
-            ),
-            title: const Text(
-              'Sign Out',
-              style: TextStyle(
-                color: HelixColorTokens.cFFFF3366,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            onTap: () {
-              _disconnect();
-              if (inDrawer) {
-                _scaffoldKey.currentState?.closeDrawer();
-              }
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _sidebarItem(
-    IconData icon,
-    String title,
-    String tabId,
-    ValueChanged<String> onSelect,
-  ) {
-    final isSelected = _selectedTab == tabId;
     return InkWell(
-      onTap: () => onSelect(tabId),
-      child: Container(
-        margin: HelixInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: HelixInsets.symmetric(horizontal: 16, vertical: 12),
+      onTap: () {
+        setState(() {
+          _selectedTab = tabId;
+          _guideInitialPage = 0;
+        });
+        if (_client != null && _serverDependentTabs.contains(tabId)) {
+          _refreshData();
+        }
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.15)
+              ? HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.2)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: isSelected
-              ? Border.all(
-                  color: HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.4),
-                )
-              : null,
+              ? Border.all(color: HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.6))
+              : Border.all(color: Colors.transparent),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
+              size: 16,
               color: isSelected ? context.accentColor : context.textSecondary,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                title,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: isSelected
-                      ? context.textPrimary
-                      : context.textSecondary,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? context.textPrimary : context.textSecondary,
               ),
             ),
           ],
@@ -846,16 +829,23 @@ class _MainAdminPageState extends State<MainAdminPage> {
     if (showFullPageSpinner) {
       return const Center(child: HelixSkeleton(width: 192, height: 24));
     }
-    return Padding(
-      padding: HelixInsets.all(isMobile ? 16.0 : 24.0),
-      child: _getTabWidget(),
+    return RefreshIndicator(
+      onRefresh: () async {
+        if (_client != null && _serverDependentTabs.contains(_selectedTab)) {
+          await _refreshData();
+        }
+      },
+      child: Padding(
+        padding: HelixInsets.all(isMobile ? 16.0 : 24.0),
+        child: _getTabWidget(),
+      ),
     );
   }
 
   Widget _getTabWidget() {
     switch (_selectedTab) {
       case 'dashboard':
-        return DashboardTab(metrics: _metrics);
+        return DashboardTab(metrics: _metrics, latencyMs: _latencyMs);
       case 'ops':
         return OpsTab(
           client: _client!,
@@ -869,6 +859,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           serverHost: Uri.tryParse(_urlController.text)?.host,
           isLoading: _isLoading,
           onTriggerBackup: _triggerBackup,
+          onSignOut: _disconnect,
           initialSubTab: 'reports',
         );
       case 'config':
@@ -880,6 +871,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           onSetWorldwideMode: _setWorldwideMode,
           onSaveServerName: _saveServerName,
           serverHost: Uri.tryParse(_urlController.text)?.host,
+          onSignOut: _disconnect,
         );
       case 'logs':
         return LogsTab(

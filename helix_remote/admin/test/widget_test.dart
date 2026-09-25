@@ -54,7 +54,7 @@ void main() {
       await tester.tap(find.byKey(const Key('login_guide_button')));
       await tester.pumpAndSettle();
 
-      expect(find.text('SELF-HOSTING GUIDE'), findsOneWidget);
+      expect(find.text('Self-Hosting Guide'), findsOneWidget);
       expect(
         find.textContaining('Welcome to self-hosting Helix'),
         findsOneWidget,
@@ -249,7 +249,7 @@ void main() {
     expect(find.byIcon(Icons.menu), findsNothing);
   });
 
-  testWidgets('a narrow phone viewport moves navigation into a Drawer behind a hamburger menu', (
+  testWidgets('a narrow phone viewport moves navigation into a Bottom Navigation Bar', (
     tester,
   ) async {
     late HttpServer server;
@@ -275,13 +275,12 @@ void main() {
     await _settleWithRealIO(tester);
     await _settleWithRealIO(tester);
 
-    expect(find.byIcon(Icons.menu), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Helix Panel'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byIcon(Icons.menu), findsNothing);
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Users'), findsOneWidget);
+    expect(find.text('Invites'), findsOneWidget);
+    expect(find.text('Ops & Logs'), findsOneWidget);
   });
 
   testWidgets(

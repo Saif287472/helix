@@ -1,164 +1,104 @@
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../../theme/app_theme.dart';
-import 'guide_widgets.dart';
 
-enum _HostingMode { vps, homePc }
-
-/// Toggle banner switching between "rented VPS" (provider links, plain
-/// outbound only, explicitly unordered) and "my own PC" sub-views. The
-/// toggle is switchable at any time, not a one-way choice.
-class GuideHostingChoicePage extends StatefulWidget {
+class GuideHostingChoicePage extends StatelessWidget {
   const GuideHostingChoicePage({super.key});
 
   @override
-  State<GuideHostingChoicePage> createState() => _GuideHostingChoicePageState();
-}
-
-class _GuideHostingChoicePageState extends State<GuideHostingChoicePage> {
-  _HostingMode _mode = _HostingMode.vps;
-
-  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const GuidePageTitle('Where will this run?'),
-        _toggleBanner(),
-        const SizedBox(height: 20),
-        _mode == _HostingMode.vps ? _vpsView() : _homePcView(),
-      ],
-    );
-  }
-
-  Widget _toggleBanner() {
-    return Container(
-      padding: HelixInsets.all(4),
-      decoration: BoxDecoration(
-        color: context.sunkenSurface,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _toggleButton('Rented VPS', _HostingMode.vps)),
-          Expanded(child: _toggleButton('My own PC', _HostingMode.homePc)),
-        ],
-      ),
-    );
-  }
-
-  Widget _toggleButton(String label, _HostingMode mode) {
-    final selected = _mode == mode;
-    return GestureDetector(
-      key: Key('hosting_toggle_${mode.name}'),
-      onTap: () => setState(() => _mode = mode),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: HelixInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? HelixColorTokens.cFF8A2BE2 : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? context.textPrimary : context.textTertiary,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _vpsView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Rent a small Virtual Private Server and run Helix there. '
-          'Providers below, in no particular order:',
-          style: TextStyle(
-            fontSize: 14,
-            color: context.textSecondary,
-            height: 1.6,
-          ),
-        ),
-        const SizedBox(height: 16),
-        const _ProviderLink(
-          name: 'DigitalOcean',
-          url: 'https://www.digitalocean.com',
-        ),
-        const _ProviderLink(name: 'Hetzner', url: 'https://www.hetzner.com'),
-        const _ProviderLink(
-          name: 'Linode (Akamai)',
-          url: 'https://www.linode.com',
-        ),
-        const _ProviderLink(name: 'Vultr', url: 'https://www.vultr.com'),
-        const _ProviderLink(
-          name: 'AWS Lightsail',
-          url: 'https://aws.amazon.com/lightsail',
-        ),
-      ],
-    );
-  }
-
-  Widget _homePcView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Run Helix on a spare PC, mini PC, or a machine like a '
-          'Raspberry Pi 4/5 at home. You\'ll need to keep it powered on '
-          'and forward a port on your router (or use a tunnel service) so '
-          'people outside your network can reach it.',
-          style: TextStyle(
-            fontSize: 14,
-            color: context.textSecondary,
-            height: 1.6,
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '☁️ Infrastructure & Hosting Choice',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Select between a cloud VPS for maximum uptime or home hardware for total physical custody.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
-        Text(
-          'Trade-off versus a VPS: no monthly fee, but your home IP '
-          'address, uptime, and bandwidth become part of the equation.',
-          style: TextStyle(
-            fontSize: 13,
-            color: context.textTertiary,
-            height: 1.5,
+
+        // Option A Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border(left: const BorderSide(color: Color(0xFF2563EB), width: 4), top: const BorderSide(color: Color(0xFFE2E8F0)), right: const BorderSide(color: Color(0xFFE2E8F0)), bottom: const BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Option A: Rented VPS (Recommended)',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFA7F3D0))),
+                    child: const Text('99.9% Uptime', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text('Providers: DigitalOcean, Hetzner, Linode, Vultr, or AWS Lightsail.', style: TextStyle(fontSize: 12, color: Color(0xFF475569))),
+              const SizedBox(height: 6),
+              const Text('✓ Dedicated static public IPv4, unmetered high-speed uplink, independent of home network.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF059669))),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Option B Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border(left: const BorderSide(color: Color(0xFFD97706), width: 4), top: const BorderSide(color: Color(0xFFE2E8F0)), right: const BorderSide(color: Color(0xFFE2E8F0)), bottom: const BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Option B: Home Hardware (PC / Mini-PC / Pi 4/5)',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
+                    child: const Text('\$0 Monthly Cost', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text('Total physical control over hardware. Must remain powered 24/7.', style: TextStyle(fontSize: 12, color: Color(0xFF475569))),
+              const SizedBox(height: 6),
+              const Text('Requires router port-forwarding (80/443/8080) or an encrypted tunnel (Cloudflare Tunnel / Tailscale / WireGuard), plus Dynamic DNS (DDNS).', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+            ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ProviderLink extends StatelessWidget {
-  const _ProviderLink({required this.name, required this.url});
-
-  final String name;
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: HelixInsets.only(bottom: 8),
-      child: InkWell(
-        key: Key('provider_link_$name'),
-        onTap: () => launchUrl(Uri.parse(url)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.open_in_new, size: 16, color: context.accentColor),
-            const SizedBox(width: 8),
-            Text(
-              name,
-              style: TextStyle(fontSize: 14, color: context.accentColor),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

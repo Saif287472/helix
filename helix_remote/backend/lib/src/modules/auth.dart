@@ -48,10 +48,8 @@ abstract class AuthModuleBase {
   /// this and bypass their own invite-only registration requirement.
   bool get globalInstanceMode;
 
-  /// Delivers OTP codes by real SMS when configured. When
-  /// [SmsProvider.isConfigured] is false (no deployment credentials set),
-  /// `_requestPhoneOtpHandler` falls back to returning the code directly in
-  /// the response instead of calling this - see that handler's doc comment.
+  /// Delivers OTP codes by real SMS. When [SmsProvider.isConfigured] is
+  /// false, `_requestPhoneOtpHandler` refuses the request with a 503.
   SmsProvider get smsProvider;
 
   /// Verifies (without consuming) that `code` matches the latest,
