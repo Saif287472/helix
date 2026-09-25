@@ -13,6 +13,8 @@ class ServerInviteChoice {
     this.serverName,
     this.displayName,
     this.otpCode,
+    this.tosAccepted = false,
+    this.tosVersion = '',
   });
 
   final String serverUrl;
@@ -31,6 +33,10 @@ class ServerInviteChoice {
 
   /// OTP code entered or bypassed during registration.
   final String? otpCode;
+
+  /// Whether the user explicitly accepted the Global legal documents.
+  final bool tosAccepted;
+  final String tosVersion;
 }
 
 /// Result of validating a recovery code, allowing the app to restore an

@@ -14,6 +14,7 @@ import 'package:helix_remote_backend/src/rate_limiter.dart';
 import 'package:helix_remote_backend/src/reserved_identifiers.dart';
 import 'package:helix_remote_backend/src/server_name.dart';
 import 'package:helix_remote_backend/src/sms_provider.dart';
+import 'package:helix_remote_domain/models.dart';
 
 part 'auth/challenge_login.dart';
 part 'auth/devices.dart';

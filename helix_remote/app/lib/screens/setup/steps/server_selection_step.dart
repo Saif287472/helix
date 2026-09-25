@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote/app/helix_code.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
+import 'package:helix_remote/screens/setup/steps/legal_documents_sheet.dart';
 
 class ServerSelectionStep extends StatefulWidget {
   const ServerSelectionStep({
@@ -20,6 +22,8 @@ class ServerSelectionStep extends StatefulWidget {
     this.onVerifyOtp,
     this.displayName = '',
     this.onDisplayNameChanged,
+    this.tosAccepted = false,
+    this.onTosAcceptedChanged,
     this.onCompleteSetup,
     this.rememberDevice = false,
     this.onRememberDeviceChanged,
@@ -53,6 +57,8 @@ class ServerSelectionStep extends StatefulWidget {
   final VoidCallback? onVerifyOtp;
   final String displayName;
   final ValueChanged<String>? onDisplayNameChanged;
+  final bool tosAccepted;
+  final ValueChanged<bool>? onTosAcceptedChanged;
   final void Function({bool skip})? onCompleteSetup;
   final bool rememberDevice;
   final ValueChanged<bool>? onRememberDeviceChanged;
@@ -176,8 +182,9 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
     final decoded = decodeHelixInviteCode(value);
     if (decoded != null && decoded.inviteCode != value) {
       _codeController.text = decoded.inviteCode;
-      _codeController.selection =
-          TextSelection.collapsed(offset: decoded.inviteCode.length);
+      _codeController.selection = TextSelection.collapsed(
+        offset: decoded.inviteCode.length,
+      );
       widget.onCodeChanged?.call(decoded.inviteCode);
     } else {
       widget.onCodeChanged?.call(value);
@@ -187,6 +194,7 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = HelixLocalizations.of(context);
 
     return SingleChildScrollView(
       child: Column(
@@ -266,7 +274,8 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             _buildOthersContent(context),
 
           // Error Message Banner (if any)
-          if (widget.errorMessage != null && widget.errorMessage!.isNotEmpty) ...[
+          if (widget.errorMessage != null &&
+              widget.errorMessage!.isNotEmpty) ...[
             const SizedBox(height: HelixSpace.sm),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -277,7 +286,11 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, size: 18, color: Color(0xFFDC2626)),
+                  const Icon(
+                    Icons.error_outline,
+                    size: 18,
+                    color: Color(0xFFDC2626),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -303,7 +316,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             child: TextButton(
               onPressed: widget.onContinueOffline,
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
               ),
               child: const Text(
                 "Continue offline for now",
@@ -318,10 +334,12 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
 
           // Legal Footer
           const SizedBox(height: HelixSpace.xs),
-          const Text(
-            "By continuing, you agree to Helix Terms of Service and Privacy Policy.",
+          Text(
+            widget.selectedType == ServerType.global
+                ? l10n.reviewGlobalLegalDocuments
+                : l10n.personalServerOperatorPolicies,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 11,
               color: Color(0xFF94A3B8),
               height: 1.3,
@@ -379,16 +397,16 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
                 child: _SegmentTab(
                   label: 'Join a personal server',
                   isSelected: widget.othersOption == OthersOption.join,
-                  onTap: () => widget.onSelectOthersOption
-                      ?.call(OthersOption.join),
+                  onTap: () =>
+                      widget.onSelectOthersOption?.call(OthersOption.join),
                 ),
               ),
               Expanded(
                 child: _SegmentTab(
                   label: 'Host your own server',
                   isSelected: widget.othersOption == OthersOption.host,
-                  onTap: () => widget.onSelectOthersOption
-                      ?.call(OthersOption.host),
+                  onTap: () =>
+                      widget.onSelectOthersOption?.call(OthersOption.host),
                 ),
               ),
             ],
@@ -492,7 +510,8 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
   Widget _buildJoinCodeContent(BuildContext context) {
     final theme = Theme.of(context);
     final upper = widget.codeString.trim().toUpperCase();
-    final isRecovery = upper.startsWith('HLX-REC-') ||
+    final isRecovery =
+        upper.startsWith('HLX-REC-') ||
         upper.startsWith('REC-') ||
         upper.contains('RECOVERY');
 
@@ -521,7 +540,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: const Color(0xFFEFF6FF),
-                  border: Border.all(color: const Color(0xFF3B82F6), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFF3B82F6),
+                    width: 1.5,
+                  ),
                 ),
                 child: const Center(
                   child: Text(
@@ -565,7 +587,11 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
                       onTap: widget.onToggleInfo,
                       child: const Padding(
                         padding: EdgeInsets.all(2.0),
-                        child: Icon(Icons.close, size: 16, color: Color(0xFF64748B)),
+                        child: Icon(
+                          Icons.close,
+                          size: 16,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
                     ),
                   ],
@@ -620,8 +646,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             ),
             filled: true,
             fillColor: const Color(0xFFF8FAFC),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 15,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -632,8 +660,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+              borderSide: const BorderSide(
+                color: Color(0xFF2563EB),
+                width: 1.5,
+              ),
             ),
           ),
           onChanged: _handleCodeChanged,
@@ -727,7 +757,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
   }
 
   // 2. Phone Input Section
-  Widget _buildPhoneInputSection(BuildContext context, {required bool isPersonal}) {
+  Widget _buildPhoneInputSection(
+    BuildContext context, {
+    required bool isPersonal,
+  }) {
     final theme = Theme.of(context);
     final serverName = isPersonal
         ? (widget.connectedServerName ?? 'Personal Server')
@@ -808,8 +841,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
                   errorMaxLines: 3,
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -821,7 +856,9 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
-                        color: Color(0xFF2563EB), width: 1.5),
+                      color: Color(0xFF2563EB),
+                      width: 1.5,
+                    ),
                   ),
                 ),
                 onChanged: widget.onPhoneChanged,
@@ -848,8 +885,8 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => widget.onRememberDeviceChanged
-                  ?.call(!widget.rememberDevice),
+              onTap: () =>
+                  widget.onRememberDeviceChanged?.call(!widget.rememberDevice),
               child: const Text(
                 "Remember this device",
                 style: TextStyle(
@@ -894,7 +931,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
   }
 
   // 3. OTP Input Section
-  Widget _buildOtpInputSection(BuildContext context, {required bool isPersonal}) {
+  Widget _buildOtpInputSection(
+    BuildContext context, {
+    required bool isPersonal,
+  }) {
     final theme = Theme.of(context);
     final serverName = isPersonal
         ? (widget.connectedServerName ?? 'Personal Server')
@@ -963,7 +1003,9 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(
-                        color: Color(0xFF2563EB), width: 1.5),
+                      color: Color(0xFF2563EB),
+                      width: 1.5,
+                    ),
                   ),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
@@ -1021,8 +1063,13 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
   }
 
   // 4. Name Input Section
-  Widget _buildNameInputSection(BuildContext context, {required bool isPersonal}) {
+  Widget _buildNameInputSection(
+    BuildContext context, {
+    required bool isPersonal,
+  }) {
     final theme = Theme.of(context);
+    final l10n = HelixLocalizations.of(context);
+    final canSubmit = isPersonal || widget.tosAccepted;
     final serverName = isPersonal
         ? (widget.connectedServerName ?? 'Personal Server')
         : 'Helix Global Server';
@@ -1067,8 +1114,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             hintText: 'e.g. Alex Miller',
             filled: true,
             fillColor: const Color(0xFFF8FAFC),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -1079,17 +1128,67 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+              borderSide: const BorderSide(
+                color: Color(0xFF2563EB),
+                width: 1.5,
+              ),
             ),
           ),
           onChanged: widget.onDisplayNameChanged,
-          onFieldSubmitted: (_) =>
-              widget.onCompleteSetup?.call(skip: false),
+          onFieldSubmitted: (_) {
+            if (canSubmit && !widget.isLoading) {
+              widget.onCompleteSetup?.call(skip: false);
+            }
+          },
         ),
+        if (!isPersonal) ...[
+          const SizedBox(height: HelixSpace.lg),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CheckboxListTile(
+                    value: widget.tosAccepted,
+                    onChanged: widget.isLoading
+                        ? null
+                        : (value) =>
+                              widget.onTosAcceptedChanged?.call(value ?? false),
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(
+                      l10n.agreeTermsAndPrivacy,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: widget.isLoading
+                          ? null
+                          : () => showLegalDocumentsSheet(context),
+                      icon: const Icon(Icons.menu_book_outlined, size: 18),
+                      label: Text(l10n.readLegalDocuments),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: HelixSpace.lg),
         FilledButton(
-          onPressed: widget.isLoading
+          onPressed: widget.isLoading || !canSubmit
               ? null
               : () => widget.onCompleteSetup?.call(skip: false),
           style: FilledButton.styleFrom(
@@ -1119,7 +1218,7 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
         ),
         const SizedBox(height: HelixSpace.xs),
         TextButton(
-          onPressed: widget.isLoading
+          onPressed: widget.isLoading || !canSubmit
               ? null
               : () => widget.onCompleteSetup?.call(skip: true),
           child: const Text(
@@ -1160,9 +1259,7 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
         ),
         const SizedBox(height: HelixSpace.xl),
         const Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFF2563EB),
-          ),
+          child: CircularProgressIndicator(color: Color(0xFF2563EB)),
         ),
         const SizedBox(height: HelixSpace.xl),
       ],
@@ -1203,22 +1300,26 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
           const SizedBox(height: HelixSpace.md),
           _buildGuideStepRow(
             stepNumber: "1",
-            text: "Install Helix Admin on the machine that will run your server.",
+            text:
+                "Install Helix Admin on the machine that will run your server.",
           ),
           const SizedBox(height: 8),
           _buildGuideStepRow(
             stepNumber: "2",
-            text: "Follow its Self-Hosting Guide to install and configure the backend.",
+            text:
+                "Follow its Self-Hosting Guide to install and configure the backend.",
           ),
           const SizedBox(height: 8),
           _buildGuideStepRow(
             stepNumber: "3",
-            text: "Once it's running, Helix Admin gives you a shareable invite link.",
+            text:
+                "Once it's running, Helix Admin gives you a shareable invite link.",
           ),
           const SizedBox(height: 8),
           _buildGuideStepRow(
             stepNumber: "4",
-            text: "Come back here and choose \"Join a personal server\" with that link.",
+            text:
+                "Come back here and choose \"Join a personal server\" with that link.",
           ),
           const SizedBox(height: HelixSpace.lg),
           OutlinedButton(
@@ -1245,7 +1346,10 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
     );
   }
 
-  Widget _buildGuideStepRow({required String stepNumber, required String text}) {
+  Widget _buildGuideStepRow({
+    required String stepNumber,
+    required String text,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -66,6 +66,19 @@ enum RemoteErrorCode {
   /// The SMS gateway rejected or failed to submit a message.
   smsDeliveryFailed('sms_delivery_failed'),
 
+  /// A phone hash already belongs to an account. This is deliberately more
+  /// specific than [conflict] so a client can offer the account-recovery path
+  /// without parsing the human-readable error message.
+  phoneAlreadyRegistered('phone_already_registered'),
+
+  /// Global registration cannot proceed until the current Terms of Service
+  /// have been explicitly accepted.
+  termsAcceptanceRequired('terms_acceptance_required'),
+
+  /// The client displayed a different legal-document version than the server
+  /// currently requires.
+  termsVersionOutdated('terms_version_outdated'),
+
   internalError('internal_error');
 
   const RemoteErrorCode(this.wire);

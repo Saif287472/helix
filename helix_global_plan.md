@@ -15,46 +15,26 @@
 
 ### 1. One Account Per Phone — Recovery Guidance
 
-**What already exists:** The backend already enforces this in [`registration.dart#L97-98`](file:///j:/Projects/helix/helix_remote/backend/lib/src/modules/auth/registration.dart#L97-L98):
-```dart
-if (phoneOwner != null) {
-  throw AppError.conflict('Phone number is already registered');
-}
-```
+**Implemented:** The backend now returns HTTP 409 with `code: "phone_already_registered"` for a new account using an existing phone hash. The app parses the code and shows a recovery prompt. The prompt routes the user to the existing recovery-code flow; it does not claim that a phone number alone can restore an account.
 
-**What needs to change:**
+The backend check remains in [`registration.dart`](file:///j:/Projects/helix/helix_remote/backend/lib/src/modules/auth/registration.dart), backed by the unique `accounts.phone_hash` index.
 
-- **Backend**: Return a distinct error code (e.g. `phone_already_registered`) so the client can differentiate this from a generic conflict and show a recovery prompt instead of a dead-end error.
-- **Client (onboarding)**: Catch this specific error code and show a dialog like:
-  > *"This phone number is already registered. Would you like to recover your existing account?"*
-  >
-  > **[Recover Account]** · **[Cancel]**
-  
-  Tapping "Recover Account" navigates to the existing recovery flow (which already exists via recovery codes).
+The implemented dialog is:
+> *This phone number already has a Helix account. Would you like to enter a recovery code and restore that account?*
+>
+> **[Enter recovery code]** · **[Cancel]**
 
 ### 2. Server Name = "Helix Global"
 
-**No code change.** Just set in the admin console or directly in the database via the admin API. The app already reads `server_name` from `/api/v1/server/info` and displays it.
-
-Alternatively, add to `.env` or set once the server starts.
+**Deployment configuration remains.** The admin API/database already supports setting and serving `server_name`; no application code change is needed. The local backend database was configured to `Helix Global` and migrated to schema version 43; production deployments should set the same value from the admin console or `POST /api/v1/ops/config/server-name`.
 
 ### 3. Terms of Service at Registration
 
-**Backend changes:**
-- Add a `tos_accepted_at` column to the `accounts` table (migration).
-- Add a `tos_version` field so future ToS revisions can be tracked.
-- Require `tos_accepted: true` in the registration request body. Reject registration without it.
-- Store the acceptance timestamp alongside the account row.
+**Implemented:** The Global registration contract now includes `tos_accepted` and `tos_version`. Migration 43 adds nullable `tos_accepted_at` and `tos_version` columns to `accounts`. Global registrations require explicit acceptance of the current version; personal-server registrations remain backward-compatible.
 
-**Client changes:**
-- Add a ToS screen/sheet shown before the final registration step.
-- Include a checkbox: *"I agree to the Terms of Service and Privacy Policy"*
-- Link to the actual ToS/Privacy Policy text (can be a URL or embedded markdown).
-- Pass `tos_accepted: true` in the registration payload.
-- Only applicable when connecting to a Global server (personal servers don't need it).
+The versioned Terms of Service and Privacy Policy live in [`packages/helix_remote_domain/lib/domain/legal_documents.dart`](file:///j:/Projects/helix/helix_remote/packages/helix_remote_domain/lib/domain/legal_documents.dart), with reviewable Markdown copies in [`docs/legal`](file:///j:/Projects/helix/helix_remote/docs/legal/). The app presents them in a scrollable legal-documents sheet and requires the checkbox before the final Global registration step.
 
-**Backend endpoint:**
-- Optional: `GET /api/v1/server/tos` returns the current ToS text and version, so the client can show it dynamically.
+A public `GET /api/v1/server/tos` endpoint returns the current text, effective date, and versions.
 
 ### 4. Enable Global Mode
 
@@ -68,20 +48,21 @@ HELIX_REMOTE_GLOBAL_INSTANCE_MODE=true
 ## Implementation Checklist
 
 ### Backend
-- [ ] Add error code `phone_already_registered` to the existing phone-hash conflict check
-- [ ] Add DB migration: `tos_accepted_at INTEGER`, `tos_version TEXT` columns on `accounts`
-- [ ] Registration handler: require `tos_accepted: true` when `globalInstanceMode` is on
-- [ ] Store `tos_accepted_at` and `tos_version` on account creation
-- [ ] Optional: `GET /server/tos` endpoint returning ToS text + version
-- [ ] Set `HELIX_REMOTE_GLOBAL_INSTANCE_MODE=true` in `.env`
-- [ ] Set server name to `"Helix Global"` via admin console or config
+- [x] Add error code `phone_already_registered` to the existing phone-hash conflict check
+- [x] Add DB migration: `tos_accepted_at INTEGER`, `tos_version TEXT` columns on `accounts`
+- [x] Registration handler: require `tos_accepted: true` when `globalInstanceMode` is on
+- [x] Store `tos_accepted_at` and `tos_version` on account creation
+- [x] Add public `GET /server/tos` endpoint returning ToS/Privacy text + version
+- [x] Set `HELIX_REMOTE_GLOBAL_INSTANCE_MODE=true` in the local backend `.env` and document it in `.env.example`
+- [x] Set the local Global server name to `"Helix Global"` via the server configuration database; repeat through the admin console/API for production
 
 ### Client (App)
-- [ ] Handle `phone_already_registered` error → show recovery prompt dialog
-- [ ] Add ToS screen/bottom sheet before final registration (Global flow only)
-- [ ] Add "I agree to Terms of Service" checkbox
-- [ ] Pass `tos_accepted: true` in registration request
-- [ ] Link to ToS/Privacy Policy content
+- [x] Handle `phone_already_registered` error → show recovery prompt dialog
+- [x] Add ToS screen/bottom sheet before final registration (Global flow only)
+- [x] Add "I agree to the Terms of Service and Privacy Policy" checkbox
+- [x] Pass `tos_accepted` and `tos_version` in registration requests
+- [x] Link to embedded ToS/Privacy Policy content
+- [x] Add CLI/API support for explicit Global ToS acceptance
 
 ### Not Needed (Deferred)
 - ~~Storage quota changes~~ (same as personal)

@@ -3,6 +3,11 @@
 Status: Phase 18 draft for product/release review  
 Date: 2026-06-19
 
+> The canonical, versioned Helix Global Privacy Policy is maintained at
+> [`docs/legal/privacy_policy.md`](../legal/privacy_policy.md). This document
+> remains an implementation-evidence checklist for the product and is not the
+> text shown to Global registrants.
+
 Helix Remote is a persistent internet messenger. This policy describes the
 current implementation evidence in this repository. It is not a substitute for
 jurisdiction-specific legal review before public launch.

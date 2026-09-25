@@ -30,10 +30,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     );
     final salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
     final hash = phoneHash(salt, normalizedPhone);
-    await rest.requestPhoneOtp(
-      phoneHash: hash,
-      phoneNumber: normalizedPhone,
-    );
+    await rest.requestPhoneOtp(phoneHash: hash, phoneNumber: normalizedPhone);
   }
 
   /// Validates an invite code without consuming it, so the UI can fail fast
@@ -58,6 +55,8 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     required String displayName,
     required String otpCode,
     required String inviteCode,
+    bool tosAccepted = false,
+    String tosVersion = '',
   }) async {
     if (_state != RemoteStartupState.unauthenticated) {
       throw StateError('Cannot register in state $_state');
@@ -114,6 +113,10 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
       otpCode: otpCode,
       inviteCode: inviteCode,
       displayName: normalizedDisplayName,
+      tosAccepted: tosAccepted,
+      tosVersion: tosVersion.trim().isEmpty
+          ? HelixLegalDocuments.termsVersion
+          : tosVersion.trim(),
       accountIdentityPublicKey: pubKeyStr,
       deviceId: deviceIdStr,
       deviceSigningPublicKey: deviceSigningPubKeyStr,
@@ -215,8 +218,8 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
 
     final x25519 = crypto_pkg.X25519();
     final deviceAgreementKeyPair = await x25519.newKeyPair();
-    final deviceAgreementPubKey =
-        await deviceAgreementKeyPair.extractPublicKey();
+    final deviceAgreementPubKey = await deviceAgreementKeyPair
+        .extractPublicKey();
 
     final deviceIdStr =
         'dev_${_bytesToHex(deviceSigningPubKey.bytes.sublist(0, 4))}';
@@ -234,8 +237,8 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     final deviceAgreementPrivStr = _base64Url(
       await deviceAgreementKeyPair.extractPrivateKeyBytes(),
     );
-    final deviceAgreementPrivBytes =
-        await deviceAgreementKeyPair.extractPrivateKeyBytes();
+    final deviceAgreementPrivBytes = await deviceAgreementKeyPair
+        .extractPrivateKeyBytes();
     final deviceAgreementPubKeyBytes = deviceAgreementPubKey.bytes;
 
     final redeemResp = await rest.redeemRecovery(
@@ -317,8 +320,8 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
         final effectiveStatus = status == 'accepted'
             ? 'Accepted'
             : (status == 'pending_received'
-                ? 'PendingReceived'
-                : 'PendingSent');
+                  ? 'PendingReceived'
+                  : 'PendingSent');
         ms.db.upsertContact(
           RemoteContact(
             peerAccountId: peerAccountId,
@@ -342,8 +345,8 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
         final effectiveStatus = rawStatus == 'ACCEPTED'
             ? 'Accepted'
             : (rawStatus == 'REJECTED'
-                ? 'Rejected'
-                : (rawStatus == 'CANCELLED' ? 'Cancelled' : 'Pending'));
+                  ? 'Rejected'
+                  : (rawStatus == 'CANCELLED' ? 'Cancelled' : 'Pending'));
 
         ms.db.upsertContactRequest(
           RemoteContactRequest(
@@ -351,7 +354,8 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
             peerAccountId: peerId,
             direction: isSent ? 'sent' : 'received',
             status: effectiveStatus,
-            updatedAt: r['updated_at'] as int? ??
+            updatedAt:
+                r['updated_at'] as int? ??
                 DateTime.now().millisecondsSinceEpoch,
             nickname: r['nickname'] as String? ?? '',
           ),
@@ -362,8 +366,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
           ms.db.upsertContact(
             RemoteContact(
               peerAccountId: peerId,
-              nickname:
-                  existing?.nickname ?? r['nickname'] as String? ?? '',
+              nickname: existing?.nickname ?? r['nickname'] as String? ?? '',
               status: 'Accepted',
             ),
           );

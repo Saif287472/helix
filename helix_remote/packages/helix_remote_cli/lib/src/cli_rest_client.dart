@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:helix_remote_domain/models.dart';
+
 class CliRestClient {
   CliRestClient({required this.baseUrl, this.accessToken});
 
@@ -80,6 +82,8 @@ class CliRestClient {
     required String otpCode,
     required String inviteCode,
     required String displayName,
+    bool tosAccepted = false,
+    String tosVersion = '',
     required String accountIdentityPublicKey,
     required String deviceId,
     required String deviceSigningPublicKey,
@@ -94,6 +98,11 @@ class CliRestClient {
       'otp_code': otpCode,
       'invite_code': inviteCode,
       'display_name': displayName,
+      if (tosAccepted) 'tos_accepted': true,
+      if (tosAccepted)
+        'tos_version': tosVersion.trim().isEmpty
+            ? HelixLegalDocuments.termsVersion
+            : tosVersion.trim(),
       'account_identity_public_key': accountIdentityPublicKey,
       'device_id': deviceId,
       'device_signing_public_key': deviceSigningPublicKey,

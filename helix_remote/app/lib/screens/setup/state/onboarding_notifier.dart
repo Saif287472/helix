@@ -16,9 +16,9 @@ class OnboardingNotifier extends ChangeNotifier {
     HelixRemoteRestClient? client,
     bool autoStartLaunch = true,
     Future<void> Function(String url)? onServerUrlChanged,
-  })  : _root = root,
-        _client = client,
-        _onServerUrlChanged = onServerUrlChanged {
+  }) : _root = root,
+       _client = client,
+       _onServerUrlChanged = onServerUrlChanged {
     if (autoStartLaunch) {
       Future.microtask(_runLaunchSequence);
     }
@@ -88,8 +88,8 @@ class OnboardingNotifier extends ChangeNotifier {
     final nextStep = _state.step == OnboardingStep.serverSelection
         ? OnboardingStep.serverSelection
         : (option == OthersOption.host
-            ? OnboardingStep.hostGuide
-            : OnboardingStep.codeEntry);
+              ? OnboardingStep.hostGuide
+              : OnboardingStep.codeEntry);
     _state = _state.copyWith(
       othersOption: option,
       step: nextStep,
@@ -148,6 +148,38 @@ class OnboardingNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setTosAccepted(bool value) {
+    _state = _state.copyWith(tosAccepted: value, clearErrorMessage: true);
+    notifyListeners();
+  }
+
+  /// Moves a duplicate-phone registration into the existing recovery-code
+  /// flow. The backend never returns an account id for this conflict, so the
+  /// user must present a code issued by an administrator or the account's
+  /// authorized recovery process.
+  void beginPhoneRecovery({String? serverUrl}) {
+    _state = _state.copyWith(
+      serverType: ServerType.others,
+      othersOption: OthersOption.join,
+      step: OnboardingStep.codeEntry,
+      joinSubStep: JoinSubStep.code,
+      serverNodeUrl: serverUrl ?? _state.serverNodeUrl,
+      codeType: CodeType.recovery,
+      codeString: '',
+      showPhoneRecoveryPrompt: false,
+      clearErrorMessage: true,
+    );
+    notifyListeners();
+  }
+
+  void dismissPhoneRecoveryPrompt() {
+    _state = _state.copyWith(
+      showPhoneRecoveryPrompt: false,
+      clearErrorMessage: true,
+    );
+    notifyListeners();
+  }
+
   void updateDisplayName(String name) {
     _state = _state.copyWith(displayName: name);
     notifyListeners();
@@ -159,9 +191,7 @@ class OnboardingNotifier extends ChangeNotifier {
   }
 
   void toggleCodeInfoPopover() {
-    _state = _state.copyWith(
-      showCodeInfoPopover: !_state.showCodeInfoPopover,
-    );
+    _state = _state.copyWith(showCodeInfoPopover: !_state.showCodeInfoPopover);
     notifyListeners();
   }
 
@@ -201,7 +231,8 @@ class OnboardingNotifier extends ChangeNotifier {
         }
         await _root.requestOtp(fullPhoneNumber);
       } else {
-        final client = _client ??
+        final client =
+            _client ??
             HelixRemoteRestClientImpl(
               baseUri: Uri.parse(targetUrl),
               timeoutMs: 10000,
@@ -213,12 +244,12 @@ class OnboardingNotifier extends ChangeNotifier {
           } catch (_) {}
         }
         final saltRes = await client.fetchDiscoverySalt();
-          final salt = saltRes['salt'] as String? ?? 'salt';
-          final hash = phoneHash(salt, fullPhoneNumber);
-          await client.requestPhoneOtp(
-            phoneHash: hash,
-            phoneNumber: fullPhoneNumber,
-          );
+        final salt = saltRes['salt'] as String? ?? 'salt';
+        final hash = phoneHash(salt, fullPhoneNumber);
+        await client.requestPhoneOtp(
+          phoneHash: hash,
+          phoneNumber: fullPhoneNumber,
+        );
       }
     } catch (e) {
       final msg = e is RemoteRestException
@@ -227,10 +258,7 @@ class OnboardingNotifier extends ChangeNotifier {
               _root?.devConfig.restBaseUri ?? Uri.parse(targetUrl),
             )
           : RemoteUserErrorCopy.scrubDomain(e.toString());
-      _state = _state.copyWith(
-        isLoading: false,
-        errorMessage: msg,
-      );
+      _state = _state.copyWith(isLoading: false, errorMessage: msg);
       notifyListeners();
       return false;
     }
@@ -322,10 +350,7 @@ class OnboardingNotifier extends ChangeNotifier {
             accountId: recovery.accountId,
             recoveryCode: recovery.recoveryCode,
           );
-          _state = _state.copyWith(
-            isLoading: false,
-            isComplete: true,
-          );
+          _state = _state.copyWith(isLoading: false, isComplete: true);
           notifyListeners();
           return true;
         } catch (e) {
@@ -344,10 +369,7 @@ class OnboardingNotifier extends ChangeNotifier {
           accountId: recovery.accountId,
           recoveryCode: recovery.recoveryCode,
         );
-        _state = _state.copyWith(
-          isLoading: false,
-          isComplete: true,
-        );
+        _state = _state.copyWith(isLoading: false, isComplete: true);
         notifyListeners();
         return true;
       }
@@ -370,10 +392,13 @@ class OnboardingNotifier extends ChangeNotifier {
     final invite = decodeHelixInviteCode(rawCode);
     if (invite != null) {
       String resolvedServerName = 'Personal Server';
-      final targetUrl = invite.serverUrl.isNotEmpty ? invite.serverUrl : kHelixGlobalServerUrl;
+      final targetUrl = invite.serverUrl.isNotEmpty
+          ? invite.serverUrl
+          : kHelixGlobalServerUrl;
 
       try {
-        final client = _client ??
+        final client =
+            _client ??
             HelixRemoteRestClientImpl(
               baseUri: Uri.parse(targetUrl),
               timeoutMs: 10000,
@@ -387,10 +412,7 @@ class OnboardingNotifier extends ChangeNotifier {
             'expired' => 'This invitation code has expired.',
             _ => 'This invitation code is invalid or has expired.',
           };
-          _state = _state.copyWith(
-            isLoading: false,
-            errorMessage: msg,
-          );
+          _state = _state.copyWith(isLoading: false, errorMessage: msg);
           notifyListeners();
           return false;
         }
@@ -401,7 +423,8 @@ class OnboardingNotifier extends ChangeNotifier {
       } catch (e) {
         _state = _state.copyWith(
           isLoading: false,
-          errorMessage: 'Unable to connect to server: ${RemoteUserErrorCopy.scrubDomain(e.toString())}',
+          errorMessage:
+              'Unable to connect to server: ${RemoteUserErrorCopy.scrubDomain(e.toString())}',
         );
         notifyListeners();
         return false;
@@ -434,7 +457,8 @@ class OnboardingNotifier extends ChangeNotifier {
 
       final targetUrl = _state.serverNodeUrl ?? kHelixGlobalServerUrl;
       try {
-        final client = _client ??
+        final client =
+            _client ??
             HelixRemoteRestClientImpl(
               baseUri: Uri.parse(targetUrl),
               timeoutMs: 10000,
@@ -462,7 +486,8 @@ class OnboardingNotifier extends ChangeNotifier {
 
     _state = _state.copyWith(
       isLoading: false,
-      errorMessage: 'Invalid code. Paste the HLX-INV- or HLX-REC- code your admin shared.',
+      errorMessage:
+          'Invalid code. Paste the HLX-INV- or HLX-REC- code your admin shared.',
     );
     notifyListeners();
     return false;
@@ -474,7 +499,21 @@ class OnboardingNotifier extends ChangeNotifier {
     bool isPersonal = false,
     bool skip = false,
   }) async {
-    _state = _state.copyWith(isLoading: true, clearErrorMessage: true);
+    final requiresTos = !isPersonal && _state.serverType == ServerType.global;
+    if (requiresTos && !_state.tosAccepted) {
+      _state = _state.copyWith(
+        errorMessage:
+            'Please read and accept the Terms of Service and Privacy Policy before continuing.',
+      );
+      notifyListeners();
+      return false;
+    }
+
+    _state = _state.copyWith(
+      isLoading: true,
+      clearErrorMessage: true,
+      showPhoneRecoveryPrompt: false,
+    );
     notifyListeners();
 
     final phone = fullPhoneNumber;
@@ -487,7 +526,9 @@ class OnboardingNotifier extends ChangeNotifier {
     final serverUrl = (isPersonal || _state.serverType == ServerType.others)
         ? (_state.serverNodeUrl ?? kHelixGlobalServerUrl)
         : kHelixGlobalServerUrl;
-    final otp = _state.otpCode.trim().isEmpty ? '123456' : _state.otpCode.trim();
+    final otp = _state.otpCode.trim().isEmpty
+        ? '123456'
+        : _state.otpCode.trim();
 
     if (_root != null) {
       try {
@@ -496,15 +537,22 @@ class OnboardingNotifier extends ChangeNotifier {
           displayName: finalName,
           otpCode: otp,
           inviteCode: inviteCode,
+          tosAccepted: requiresTos && _state.tosAccepted,
+          tosVersion: _state.tosVersion,
         );
       } catch (e) {
         final backend = _root.devConfig.restBaseUri;
+        final isPhoneConflict =
+            e is RemoteRestException &&
+            e.serverCode == RemoteApiErrorCodes.phoneAlreadyRegistered;
         final msg = e is RemoteRestException
             ? RemoteUserErrorCopy.registrationFailure(e, backend)
             : RemoteUserErrorCopy.unknownRegistration();
         _state = _state.copyWith(
           isLoading: false,
-          errorMessage: msg,
+          errorMessage: isPhoneConflict ? null : msg,
+          clearErrorMessage: isPhoneConflict,
+          showPhoneRecoveryPrompt: isPhoneConflict,
         );
         notifyListeners();
         return false;
@@ -518,6 +566,8 @@ class OnboardingNotifier extends ChangeNotifier {
       serverName: _state.connectedServerName,
       displayName: finalName,
       otpCode: otp,
+      tosAccepted: requiresTos && _state.tosAccepted,
+      tosVersion: _state.tosVersion,
     );
 
     _state = _state.copyWith(

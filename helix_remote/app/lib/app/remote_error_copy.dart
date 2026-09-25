@@ -27,7 +27,10 @@ class RemoteUserErrorCopy {
     return text
         .replaceAll(RegExp(r'https?://[^\s,\)\]"\x27]+'), 'the server')
         .replaceAll(
-          RegExp(r'\b[a-zA-Z0-9.-]+\.agiletechbd\.com(:\d+)?\b', caseSensitive: false),
+          RegExp(
+            r'\b[a-zA-Z0-9.-]+\.agiletechbd\.com(:\d+)?\b',
+            caseSensitive: false,
+          ),
           'the server',
         );
   }
@@ -78,9 +81,23 @@ class RemoteUserErrorCopy {
       case RemoteRestFailureKind.http:
         switch (error.statusCode) {
           case 400:
+            if (error.serverCode ==
+                RemoteApiErrorCodes.termsAcceptanceRequired) {
+              return 'Please read and accept the Terms of Service and Privacy '
+                  'Policy before creating your account.';
+            }
+            if (error.serverCode == RemoteApiErrorCodes.termsVersionOutdated) {
+              return 'The Terms of Service were updated. Review the current '
+                  'documents and try again.';
+            }
             return 'Account details were not accepted by this server. '
                 'Check the phone number and try again.';
           case 409:
+            if (error.serverCode ==
+                RemoteApiErrorCodes.phoneAlreadyRegistered) {
+              return 'This phone number already has a Helix account. Enter a '
+                  'recovery code to restore it.';
+            }
             return 'That phone number or device is already registered. Use '
                 'a different number, or sign in with an existing device.';
           case 429:
@@ -112,7 +129,8 @@ class RemoteUserErrorCopy {
     }
     if (host == 'localhost' || host == '127.0.0.1') {
       return 'On a physical Android device, localhost points to the phone. '
-          'Make sure the backend is running.';
+          'Make sure the backend is running and HELIX_REMOTE_HOST points to '
+          'this PC.';
     }
     return 'Check your network connection and tap Retry.';
   }

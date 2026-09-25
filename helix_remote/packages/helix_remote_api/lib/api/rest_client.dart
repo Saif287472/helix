@@ -7,6 +7,8 @@ abstract class HelixRemoteRestClient {
     required String otpCode,
     required String inviteCode,
     required String displayName,
+    bool tosAccepted = false,
+    String tosVersion = '',
     required String accountIdentityPublicKey,
     required String deviceId,
     required String deviceSigningPublicKey,

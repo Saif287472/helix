@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/screens/server_choice_screen.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
@@ -23,6 +24,9 @@ class SetupScreen extends StatefulWidget {
     this.onChangeServerUrl,
     this.initialInviteCode,
     this.initialPhoneNumber,
+    this.autoStartLaunch = true,
+    this.initialRecoveryMode = false,
+    this.initialServerUrl,
   });
 
   final void Function(Object? choice)? onChoice;
@@ -31,6 +35,9 @@ class SetupScreen extends StatefulWidget {
   final Future<void> Function(String url)? onChangeServerUrl;
   final String? initialInviteCode;
   final String? initialPhoneNumber;
+  final bool autoStartLaunch;
+  final bool initialRecoveryMode;
+  final String? initialServerUrl;
 
   @override
   State<SetupScreen> createState() => _SetupScreenState();
@@ -40,6 +47,8 @@ class _SetupScreenState extends State<SetupScreen> {
   late final OnboardingNotifier _notifier;
   bool _createdLocalNotifier = false;
   bool _handledCompletion = false;
+  bool _phoneRecoveryDialogScheduled = false;
+  bool _phoneRecoveryDialogOpen = false;
 
   @override
   void initState() {
@@ -49,19 +58,25 @@ class _SetupScreenState extends State<SetupScreen> {
     } else {
       _notifier = OnboardingNotifier(
         root: widget.root,
+        autoStartLaunch: widget.autoStartLaunch,
         onServerUrlChanged: widget.onChangeServerUrl,
       );
       _createdLocalNotifier = true;
     }
 
-    if (widget.initialInviteCode != null && widget.initialInviteCode!.isNotEmpty) {
+    if (widget.initialInviteCode != null &&
+        widget.initialInviteCode!.isNotEmpty) {
       _notifier.updateCodeString(widget.initialInviteCode!);
     }
-    if (widget.initialPhoneNumber != null && widget.initialPhoneNumber!.isNotEmpty) {
+    if (widget.initialPhoneNumber != null &&
+        widget.initialPhoneNumber!.isNotEmpty) {
       _notifier.updatePhoneNumber(widget.initialPhoneNumber!);
     }
 
     _notifier.addListener(_onNotifierUpdate);
+    if (widget.initialRecoveryMode) {
+      _notifier.beginPhoneRecovery(serverUrl: widget.initialServerUrl);
+    }
   }
 
   @override
@@ -74,7 +89,17 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   void _onNotifierUpdate() {
-    if (_handledCompletion || !mounted) return;
+    if (!mounted) return;
+    if (_notifier.state.showPhoneRecoveryPrompt &&
+        !_phoneRecoveryDialogScheduled &&
+        !_phoneRecoveryDialogOpen) {
+      _phoneRecoveryDialogScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        _phoneRecoveryDialogScheduled = false;
+        await _showPhoneRecoveryDialog();
+      });
+    }
+    if (_handledCompletion) return;
     if (_notifier.state.isComplete) {
       _handledCompletion = true;
       final choice = _notifier.continueOfflineChosen
@@ -84,6 +109,38 @@ class _SetupScreenState extends State<SetupScreen> {
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).maybePop(choice);
       }
+    }
+  }
+
+  Future<void> _showPhoneRecoveryDialog() async {
+    if (!mounted || _phoneRecoveryDialogOpen) return;
+    _phoneRecoveryDialogOpen = true;
+    final l10n = HelixLocalizations.of(context);
+    final recover = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(l10n.phoneAlreadyRegistered),
+          content: Text(l10n.phoneAlreadyRegisteredRecoveryMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.enterRecoveryCode),
+            ),
+          ],
+        );
+      },
+    );
+    _phoneRecoveryDialogOpen = false;
+    if (!mounted) return;
+    if (recover == true) {
+      _notifier.beginPhoneRecovery();
+    } else {
+      _notifier.dismissPhoneRecoveryPrompt();
     }
   }
 
@@ -105,10 +162,14 @@ class _SetupScreenState extends State<SetupScreen> {
                 listenable: _notifier,
                 builder: (context, _) {
                   final state = _notifier.state;
-                  final showBack = state.step != OnboardingStep.splash &&
+                  final showBack =
+                      state.step != OnboardingStep.splash &&
                       (state.step != OnboardingStep.serverSelection ||
-                       (state.serverType == ServerType.global && state.globalSubStep != GlobalSubStep.phone) ||
-                       (state.serverType == ServerType.others && state.othersOption == OthersOption.join && state.joinSubStep != JoinSubStep.code));
+                          (state.serverType == ServerType.global &&
+                              state.globalSubStep != GlobalSubStep.phone) ||
+                          (state.serverType == ServerType.others &&
+                              state.othersOption == OthersOption.join &&
+                              state.joinSubStep != JoinSubStep.code));
 
                   return Column(
                     children: [
@@ -117,7 +178,9 @@ class _SetupScreenState extends State<SetupScreen> {
                           alignment: Alignment.centerLeft,
                           child: IconButton(
                             icon: const Icon(Icons.arrow_back),
-                            onPressed: state.isLoading ? null : _notifier.goBack,
+                            onPressed: state.isLoading
+                                ? null
+                                : _notifier.goBack,
                             tooltip: 'Back',
                           ),
                         ),
@@ -168,6 +231,8 @@ class _SetupScreenState extends State<SetupScreen> {
           onVerifyOtp: () => _notifier.verifyOtp(isPersonal: isPersonal),
           displayName: state.displayName,
           onDisplayNameChanged: _notifier.updateDisplayName,
+          tosAccepted: state.tosAccepted,
+          onTosAcceptedChanged: _notifier.setTosAccepted,
           onCompleteSetup: ({bool skip = false}) =>
               _notifier.completeSetup(skip: skip, isPersonal: isPersonal),
           rememberDevice: state.rememberDevice,
@@ -215,6 +280,8 @@ class _SetupScreenState extends State<SetupScreen> {
       case OnboardingStep.globalName:
         return GlobalNameStep(
           displayName: state.displayName,
+          tosAccepted: state.tosAccepted,
+          onTosAcceptedChanged: _notifier.setTosAccepted,
           isLoading: state.isLoading,
           errorMessage: state.errorMessage,
           onNameChanged: _notifier.updateDisplayName,
@@ -223,9 +290,7 @@ class _SetupScreenState extends State<SetupScreen> {
         );
 
       case OnboardingStep.othersHub:
-        return OthersHubStep(
-          onSelectOption: _notifier.setOthersOption,
-        );
+        return OthersHubStep(onSelectOption: _notifier.setOthersOption);
 
       case OnboardingStep.hostGuide:
         return HostGuideStep(

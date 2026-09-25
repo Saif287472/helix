@@ -244,5 +244,16 @@
   "waitingOtherPersonAcceptRequest": "Waiting for the other person to accept your request.",
   "welcomeHelixRemote": "Welcome to Helix Remote",
   "whatShouldPeopleSeeName": "What should people see as your name?",
+  "agreeTermsAndPrivacy": "I agree to the Terms of Service and Privacy Policy",
+  "legalVersionLabel": "Version",
+  "enterRecoveryCode": "Enter recovery code",
+  "legalEffectiveLabel": "Effective",
+  "personalServerOperatorPolicies": "Personal servers are governed by their own operator policies.",
+  "phoneAlreadyRegistered": "Phone number already registered",
+  "phoneAlreadyRegisteredRecoveryMessage": "This phone number already has a Helix account. Would you like to enter a recovery code and restore that account?",
+  "privacy": "Privacy",
+  "readLegalDocuments": "Read the legal documents",
+  "reviewGlobalLegalDocuments": "Review the legal documents before creating a Global account.",
+  "terms": "Terms",
   "willPermanentlyDeleteAllLocal": "This will permanently delete all local account data, the encrypted database, and all stored keys. This cannot be undone."
 }

@@ -177,6 +177,8 @@ class HelixCliClient {
     required String inviteCode,
     required String deviceId,
     required String deviceName,
+    bool tosAccepted = false,
+    String tosVersion = '',
   }) async {
     final saltResult = await restClient.fetchDiscoverySalt();
     final phoneHash = _phoneHash(saltResult['salt'] as String, phoneNumber);
@@ -245,6 +247,10 @@ class HelixCliClient {
       otpCode: otpCode,
       inviteCode: inviteCode,
       displayName: displayName,
+      tosAccepted: tosAccepted,
+      tosVersion: tosVersion.trim().isEmpty
+          ? HelixLegalDocuments.termsVersion
+          : tosVersion.trim(),
       accountIdentityPublicKey: pubIdentity,
       deviceId: deviceId,
       deviceSigningPublicKey: pubDevSigning,

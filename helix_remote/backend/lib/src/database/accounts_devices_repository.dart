@@ -16,11 +16,23 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     String identityPublicKey, {
     String? phoneHash,
     String phoneLast4 = '',
+    int? tosAcceptedAt,
+    String? tosVersion,
   }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final stmt = _db.prepare('''
-      INSERT INTO accounts (account_id, username, identity_public_key, phone_hash, phone_last4, created_at, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE');
+      INSERT INTO accounts (
+        account_id,
+        username,
+        identity_public_key,
+        phone_hash,
+        phone_last4,
+        tos_accepted_at,
+        tos_version,
+        created_at,
+        status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE');
     ''');
     stmt.execute([
       accountId,
@@ -28,6 +40,8 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       identityPublicKey,
       phoneHash,
       phoneLast4,
+      tosAcceptedAt,
+      tosVersion,
       now,
     ]);
     stmt.close();
@@ -44,6 +58,8 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       'username': row['username'],
       'phone_hash': row['phone_hash'],
       'phone_last4': row['phone_last4'],
+      'tos_accepted_at': row['tos_accepted_at'],
+      'tos_version': row['tos_version'],
       'identity_public_key': row['identity_public_key'],
       'created_at': row['created_at'],
       'status': row['status'],
@@ -135,6 +151,8 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       'account_id': row['account_id'],
       'username': row['username'],
       'phone_hash': row['phone_hash'],
+      'tos_accepted_at': row['tos_accepted_at'],
+      'tos_version': row['tos_version'],
       'identity_public_key': row['identity_public_key'],
       'created_at': row['created_at'],
       'status': row['status'],
@@ -298,11 +316,14 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       }
 
       // Clean outbox jobs targeting or originating from this account using precise JSON extraction
-      _db.execute('''
+      _db.execute(
+        '''
         DELETE FROM outbox 
         WHERE json_extract(payload, '\$.recipient_account_id') = ?
            OR json_extract(payload, '\$.sender_account_id') = ?;
-      ''', [accountId, accountId]);
+      ''',
+        [accountId, accountId],
+      );
 
       final stmt = _db.prepare('DELETE FROM accounts WHERE account_id = ?;');
       stmt.execute([accountId]);
@@ -397,15 +418,13 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     if (list.isEmpty) {
       final account = getAccount(accountId);
       if (account != null) {
-        final now = account['created_at'] as int? ?? DateTime.now().millisecondsSinceEpoch;
-        final devId = 'dev_${accountId.length > 8 ? accountId.substring(0, 8) : accountId}';
+        final now =
+            account['created_at'] as int? ??
+            DateTime.now().millisecondsSinceEpoch;
+        final devId =
+            'dev_${accountId.length > 8 ? accountId.substring(0, 8) : accountId}';
         final key = account['identity_public_key'] as String? ?? 'pk_default';
-        registerDevice(
-          devId,
-          accountId,
-          key,
-          'Primary Registered Device',
-        );
+        registerDevice(devId, accountId, key, 'Primary Registered Device');
         return [
           {
             'device_id': devId,
@@ -417,7 +436,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
             'push_token': null,
             'created_at': now,
             'last_seen_at': now,
-          }
+          },
         ];
       }
     }
@@ -922,10 +941,7 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       delStmt.execute([accountId, deviceId, otkRow['key_id']]);
       delStmt.close();
 
-      return {
-        'key_id': otkRow['key_id'],
-        'public_key': otkRow['public_key'],
-      };
+      return {'key_id': otkRow['key_id'], 'public_key': otkRow['public_key']};
     });
 
     return {

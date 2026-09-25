@@ -10,6 +10,7 @@ import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/deep_link.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_error_copy.dart';
+import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/app/routes.dart';
 import 'package:helix_remote/screens/home_screen.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';

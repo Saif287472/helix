@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/l10n/helix_localizations.dart';
+import 'package:helix_remote/screens/setup/steps/legal_documents_sheet.dart';
 
 class GlobalNameStep extends StatelessWidget {
   const GlobalNameStep({
     super.key,
     required this.displayName,
+    this.tosAccepted = false,
+    this.onTosAcceptedChanged,
     required this.isLoading,
     this.errorMessage,
     required this.onNameChanged,
@@ -13,6 +17,8 @@ class GlobalNameStep extends StatelessWidget {
   });
 
   final String displayName;
+  final bool tosAccepted;
+  final ValueChanged<bool>? onTosAcceptedChanged;
   final bool isLoading;
   final String? errorMessage;
   final ValueChanged<String> onNameChanged;
@@ -24,6 +30,7 @@ class GlobalNameStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = HelixLocalizations.of(context);
     final initial = displayName.trim().isEmpty
         ? '?'
         : displayName.trim().characters.first.toUpperCase();
@@ -112,12 +119,56 @@ class GlobalNameStep extends StatelessWidget {
             ),
             onChanged: onNameChanged,
             onFieldSubmitted: (_) {
-              if (_isValid && !isLoading) onSubmit();
+              if (_isValid && !isLoading && tosAccepted) onSubmit();
             },
           ),
-          const SizedBox(height: HelixSpace.xl),
+          const SizedBox(height: HelixSpace.lg),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CheckboxListTile(
+                    value: tosAccepted,
+                    onChanged: isLoading
+                        ? null
+                        : (value) => onTosAcceptedChanged?.call(value ?? false),
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(
+                      l10n.agreeTermsAndPrivacy,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: isLoading
+                          ? null
+                          : () => showLegalDocumentsSheet(context),
+                      icon: const Icon(Icons.menu_book_outlined, size: 18),
+                      label: Text(l10n.readLegalDocuments),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: HelixSpace.lg),
           FilledButton(
-            onPressed: (_isValid && !isLoading) ? onSubmit : null,
+            onPressed: (_isValid && !isLoading && tosAccepted)
+                ? onSubmit
+                : null,
             style: FilledButton.styleFrom(
               padding: HelixInsets.all(HelixSpace.md),
               shape: RoundedRectangleBorder(
@@ -131,7 +182,7 @@ class GlobalNameStep extends StatelessWidget {
           ),
           const SizedBox(height: HelixSpace.sm),
           OutlinedButton(
-            onPressed: isLoading ? null : onSkip,
+            onPressed: isLoading || !tosAccepted ? null : onSkip,
             style: OutlinedButton.styleFrom(
               padding: HelixInsets.symmetric(vertical: 12, horizontal: 16),
               shape: RoundedRectangleBorder(

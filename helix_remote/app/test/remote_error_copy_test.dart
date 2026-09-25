@@ -86,10 +86,18 @@ void main() {
 
       expect(
         RemoteUserErrorCopy.registrationFailure(
-          failure(RemoteRestFailureKind.http, statusCode: 409),
+          RemoteRestException(
+            message:
+                '{"error":"Phone number is already registered",'
+                '"code":"phone_already_registered"}',
+            uri: emulatorBackend,
+            statusCode: 409,
+            serverCode: RemoteApiErrorCodes.phoneAlreadyRegistered,
+            failureKind: RemoteRestFailureKind.http,
+          ),
           emulatorBackend,
         ),
-        contains('already registered'),
+        contains('recovery code'),
       );
 
       expect(

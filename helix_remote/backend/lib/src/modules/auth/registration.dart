@@ -37,6 +37,31 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       throw AppError.badRequest('Missing required fields');
     }
 
+    // Global registration requires an explicit acceptance of the current
+    // Terms of Service. Personal/self-hosted servers retain their existing
+    // invite-only flow and do not require this field.
+    if (globalInstanceMode && body['tos_accepted'] != true) {
+      throw AppError.badRequest(
+        'Terms of Service acceptance is required',
+        code: RemoteErrorCode.termsAcceptanceRequired,
+      );
+    }
+    if (globalInstanceMode) {
+      final requestedTosVersion = body['tos_version'];
+      if (requestedTosVersion == null) {
+        throw AppError.badRequest(
+          'The current Terms of Service version is required',
+          code: RemoteErrorCode.termsAcceptanceRequired,
+        );
+      }
+      if (requestedTosVersion != HelixLegalDocuments.termsVersion) {
+        throw AppError.badRequest(
+          'The Terms of Service have been updated; review them and try again',
+          code: RemoteErrorCode.termsVersionOutdated,
+        );
+      }
+    }
+
     // account_id is client-chosen, and the registration transcript is signed
     // with the registrant's own key - so the signature proves the client
     // committed to this id, never that the id is rightfully theirs. Reject
@@ -61,7 +86,8 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
     final rawPhoneLast4 =
         (body['phone_number'] ?? body['phone_last4']) as String?;
     final phoneLast4 =
-        rawPhoneLast4 != null && RegExp(r'^\+?[0-9]{2,18}$').hasMatch(rawPhoneLast4.trim())
+        rawPhoneLast4 != null &&
+            RegExp(r'^\+?[0-9]{2,18}$').hasMatch(rawPhoneLast4.trim())
         ? rawPhoneLast4.trim()
         : '';
 
@@ -95,7 +121,10 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       // account, and both the invite and the OTP just requested for it
       // must check out before we create anything.
       if (phoneOwner != null) {
-        throw AppError.conflict('Phone number is already registered');
+        throw AppError.conflict(
+          'Phone number is already registered',
+          code: RemoteErrorCode.phoneAlreadyRegistered,
+        );
       }
 
       final now = _now().millisecondsSinceEpoch;
@@ -128,6 +157,10 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         identityPublicKey,
         phoneHash: phoneHash,
         phoneLast4: phoneLast4,
+        tosAcceptedAt: globalInstanceMode ? now : null,
+        tosVersion: globalInstanceMode
+            ? HelixLegalDocuments.termsVersion
+            : null,
       );
       db.upsertAccountProfile(
         accountId: accountId,

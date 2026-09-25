@@ -65,10 +65,12 @@ class BackendServer {
   }
 
   bool get needsAdminSetup {
-    final hasEnv = adminPasswordOverride != null && adminPasswordOverride!.isNotEmpty;
+    final hasEnv =
+        adminPasswordOverride != null && adminPasswordOverride!.isNotEmpty;
     if (hasEnv) return false;
     return !hasDatabaseAdminPassword;
   }
+
   final String? federationDomain;
   final String federationDirectoryUrl;
   final String publicBaseUrl;
@@ -414,7 +416,8 @@ class BackendServer {
           watch.stop();
 
           // Filter out routine successful (2xx/3xx) GET data fetches to keep the console log focused on real events and anomalies
-          final isRoutineGetFetch = request.method == 'GET' && response.statusCode < 400;
+          final isRoutineGetFetch =
+              request.method == 'GET' && response.statusCode < 400;
 
           if (!isRoutineGetFetch) {
             final path = request.url.path;
@@ -433,7 +436,8 @@ class BackendServer {
           return response;
         } catch (e) {
           watch.stop();
-          if (e.runtimeType.toString() == 'HijackedException' || e.toString().contains('hijacked')) {
+          if (e.runtimeType.toString() == 'HijackedException' ||
+              e.toString().contains('hijacked')) {
             // Standard Shelf control flow for WebSockets and SSE streams; not an actual error.
             rethrow;
           }
@@ -505,8 +509,8 @@ class BackendServer {
     final candidate = realIp?.trim().isNotEmpty == true
         ? realIp!.trim()
         : (forwardedFor != null && forwardedFor.trim().isNotEmpty
-            ? forwardedFor.split(',').last.trim()
-            : null);
+              ? forwardedFor.split(',').last.trim()
+              : null);
     if (candidate == null || candidate.isEmpty) {
       return immediatePeerIp;
     }
@@ -573,6 +577,8 @@ class BackendServer {
             path.endsWith('/accounts/invite/lookup') ||
             path.endsWith('/accounts/invite/auto-issue') ||
             path.endsWith('/accounts/recovery/redeem') ||
+            // Legal documents must be readable before a user has an account.
+            path.endsWith('/server/tos') ||
             path.endsWith('/contacts/discovery-salt') ||
             path.endsWith('/devices/link/request-new') ||
             path.endsWith('/devices/link/complete-new') ||
@@ -791,7 +797,8 @@ class BackendServer {
         }
 
         if (db.getFederationServerById(senderId) == null) {
-          if (senderId.contains('.') && !domainVerifier.isLoopbackOrTest(senderId)) {
+          if (senderId.contains('.') &&
+              !domainVerifier.isLoopbackOrTest(senderId)) {
             final isDomainVerified = await domainVerifier.verifyDomainKey(
               domain: senderId,
               expectedPublicKeyB64: pubKeyB64,
@@ -811,7 +818,9 @@ class BackendServer {
           db.upsertFederationServer(
             serverId: senderId,
             publicKey: pubKeyB64,
-            trustSource: senderId.contains('.') ? 'verified_domain' : 's2s_handshake',
+            trustSource: senderId.contains('.')
+                ? 'verified_domain'
+                : 's2s_handshake',
           );
         }
 

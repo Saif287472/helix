@@ -780,6 +780,43 @@ class HelixLocalizationsBn extends HelixLocalizations {
   String get whatShouldPeopleSeeName => 'What should people see as your name?';
 
   @override
+  String get agreeTermsAndPrivacy =>
+      'I agree to the Terms of Service and Privacy Policy';
+
+  @override
+  String get legalVersionLabel => 'Version';
+
+  @override
+  String get enterRecoveryCode => 'Enter recovery code';
+
+  @override
+  String get legalEffectiveLabel => 'Effective';
+
+  @override
+  String get personalServerOperatorPolicies =>
+      'Personal servers are governed by their own operator policies.';
+
+  @override
+  String get phoneAlreadyRegistered => 'Phone number already registered';
+
+  @override
+  String get phoneAlreadyRegisteredRecoveryMessage =>
+      'This phone number already has a Helix account. Would you like to enter a recovery code and restore that account?';
+
+  @override
+  String get privacy => 'Privacy';
+
+  @override
+  String get readLegalDocuments => 'Read the legal documents';
+
+  @override
+  String get reviewGlobalLegalDocuments =>
+      'Review the legal documents before creating a Global account.';
+
+  @override
+  String get terms => 'Terms';
+
+  @override
   String get willPermanentlyDeleteAllLocal =>
       'This will permanently delete all local account data, the encrypted database, and all stored keys. This cannot be undone.';
 }

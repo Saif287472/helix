@@ -18,6 +18,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
   String _dbDir = '';
   String _cacheDir = '';
   String _currentServerUrl = kHelixGlobalServerUrl;
+  bool _recoveryMode = false;
   String? _pendingInviteCode;
   String? _pendingPhoneNumber;
 
@@ -130,9 +131,15 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
   Future<void> _onServerChoiceMade(Object? choice) async {
     await OnboardingStateStore.instance.markFirstLaunchCompleted();
     _initialUrlError = null;
+    if (choice is ServerRecoveryChoice ||
+        choice is ServerInviteChoice ||
+        choice == null) {
+      _recoveryMode = false;
+    }
     if (choice is ServerInviteChoice) {
       _pendingInviteCode = choice.inviteCode;
       _pendingPhoneNumber = choice.phoneNumber;
+      RemoteCompositionRoot? root;
       try {
         await ServerUrlStore.instance.save(choice.serverUrl);
         _currentServerUrl = choice.serverUrl;
@@ -141,7 +148,7 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
           databaseDirectory: _dbDir,
           attachmentCacheDir: _cacheDir,
         );
-        final root = RemoteCompositionRoot.production(
+        root = RemoteCompositionRoot.production(
           databaseDirectory: _dbDir,
           devConfig: config,
         );
@@ -158,8 +165,14 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
                   ? choice.otpCode!
                   : '123456',
               inviteCode: choice.inviteCode,
+              tosAccepted: choice.tosAccepted,
+              tosVersion: choice.tosVersion,
             );
           } catch (e) {
+            if (e is RemoteRestException &&
+                e.serverCode == RemoteApiErrorCodes.phoneAlreadyRegistered) {
+              rethrow;
+            }
             final restored = await root.tryRestoreSession();
             if (!restored) rethrow;
           }
@@ -171,8 +184,29 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
           });
         }
       } catch (e) {
+        await root?.dispose();
         _pendingInviteCode = null;
         _pendingPhoneNumber = null;
+        if (e is RemoteRestException &&
+            e.serverCode == RemoteApiErrorCodes.phoneAlreadyRegistered) {
+          _recoveryMode = true;
+          final recover = await _showPhoneRecoveryPrompt();
+          if (!mounted) return;
+          if (recover) {
+            setState(() {
+              _initialUrlError = null;
+              _bootState = _BootState.needsServerChoice;
+            });
+          } else {
+            setState(() {
+              _initialUrlError =
+                  'This phone number is already registered. Use a recovery '
+                  'code to restore the account.';
+              _bootState = _BootState.offline;
+            });
+          }
+          return;
+        }
         if (mounted) {
           setState(() {
             _initialUrlError = RemoteUserErrorCopy.scrubDomain(e.toString());
@@ -220,11 +254,37 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
     if (mounted) setState(() => _bootState = _BootState.offline);
   }
 
+  Future<bool> _showPhoneRecoveryPrompt() async {
+    if (!mounted) return false;
+    final l10n = HelixLocalizations.of(context);
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(l10n.phoneAlreadyRegistered),
+          content: Text(l10n.phoneAlreadyRegisteredRecoveryMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.enterRecoveryCode),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
+  }
+
   Future<void> _onChangeServerUrl() async {
     final oldRoot = _root;
     setState(() {
       _root = null;
       _bootState = _BootState.loading;
+      _recoveryMode = false;
     });
     await oldRoot?.dispose();
     await ServerUrlStore.instance.clear();
@@ -257,7 +317,19 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         );
       case _BootState.needsServerChoice:
       case _BootState.needsUrl:
-        return SetupScreen(onChoice: _onServerChoiceMade);
+        // The first-launch setup is returned directly as the boot home. A
+        // key change is required when a duplicate-phone conflict switches it
+        // into recovery mode; otherwise Flutter would reuse the completed
+        // SetupScreen state and never start at the recovery-code step.
+        return SetupScreen(
+          key: ValueKey<String>(
+            'server-setup-${_recoveryMode ? 'recovery' : 'standard'}',
+          ),
+          onChoice: _onServerChoiceMade,
+          autoStartLaunch: !_recoveryMode,
+          initialRecoveryMode: _recoveryMode,
+          initialServerUrl: _recoveryMode ? _currentServerUrl : null,
+        );
       case _BootState.offline:
         return _OfflineShellScreen(
           onServerChoiceMade: _onServerChoiceMade,

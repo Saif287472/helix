@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:helix_remote_domain/models.dart';
 
 enum OnboardingStep {
   splash,
@@ -37,6 +38,8 @@ class OnboardingState {
     this.otpCode = '',
     this.rememberDevice = true,
     this.displayName = '',
+    this.tosAccepted = false,
+    this.tosVersion = HelixLegalDocuments.termsVersion,
     this.codeString = '',
     this.codeType,
     this.connectedServerName = 'Helix Global Server',
@@ -47,6 +50,7 @@ class OnboardingState {
     this.isExistingUser = false,
     this.isLoading = false,
     this.errorMessage,
+    this.showPhoneRecoveryPrompt = false,
     this.loadingStatus = 'Deploying Helix…',
     this.hostGuideStep = 0,
     this.showCodeInfoPopover = false,
@@ -64,6 +68,8 @@ class OnboardingState {
   final String otpCode;
   final bool rememberDevice;
   final String displayName;
+  final bool tosAccepted;
+  final String tosVersion;
   final String codeString;
   final CodeType? codeType;
   final String? connectedServerName;
@@ -74,6 +80,7 @@ class OnboardingState {
   final bool isExistingUser;
   final bool isLoading;
   final String? errorMessage;
+  final bool showPhoneRecoveryPrompt;
   final String loadingStatus;
   final int hostGuideStep;
   final bool showCodeInfoPopover;
@@ -91,6 +98,8 @@ class OnboardingState {
     String? otpCode,
     bool? rememberDevice,
     String? displayName,
+    bool? tosAccepted,
+    String? tosVersion,
     String? codeString,
     CodeType? codeType,
     String? connectedServerName,
@@ -101,6 +110,7 @@ class OnboardingState {
     bool? isExistingUser,
     bool? isLoading,
     String? errorMessage,
+    bool? showPhoneRecoveryPrompt,
     bool clearErrorMessage = false,
     String? loadingStatus,
     int? hostGuideStep,
@@ -119,6 +129,8 @@ class OnboardingState {
       otpCode: otpCode ?? this.otpCode,
       rememberDevice: rememberDevice ?? this.rememberDevice,
       displayName: displayName ?? this.displayName,
+      tosAccepted: tosAccepted ?? this.tosAccepted,
+      tosVersion: tosVersion ?? this.tosVersion,
       codeString: codeString ?? this.codeString,
       codeType: codeType ?? this.codeType,
       connectedServerName: connectedServerName ?? this.connectedServerName,
@@ -128,7 +140,11 @@ class OnboardingState {
       authToken: authToken ?? this.authToken,
       isExistingUser: isExistingUser ?? this.isExistingUser,
       isLoading: isLoading ?? this.isLoading,
-      errorMessage: clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+      errorMessage: clearErrorMessage
+          ? null
+          : (errorMessage ?? this.errorMessage),
+      showPhoneRecoveryPrompt:
+          showPhoneRecoveryPrompt ?? this.showPhoneRecoveryPrompt,
       loadingStatus: loadingStatus ?? this.loadingStatus,
       hostGuideStep: hostGuideStep ?? this.hostGuideStep,
       showCodeInfoPopover: showCodeInfoPopover ?? this.showCodeInfoPopover,

@@ -115,7 +115,24 @@ class OperabilityModule {
   Handler get serverRouter {
     final router = Router();
     router.get('/info', _serverInfo);
+    router.get('/tos', _termsOfService);
     return withAppErrorHandling(router.call);
+  }
+
+  /// The current legal documents are public because a user must be able to
+  /// read and accept them before creating an account. The text is versioned
+  /// in the shared domain package so the client and registration audit record
+  /// cannot silently disagree about which document was presented.
+  Response _termsOfService(Request request) {
+    return _json({
+      'version': HelixLegalDocuments.termsVersion,
+      'effective_date': HelixLegalDocuments.effectiveDate,
+      'terms_title': HelixLegalDocuments.termsTitle,
+      'terms': HelixLegalDocuments.termsOfService,
+      'privacy_version': HelixLegalDocuments.privacyVersion,
+      'privacy_title': HelixLegalDocuments.privacyTitle,
+      'privacy_policy': HelixLegalDocuments.privacyPolicy,
+    });
   }
 
   Response _serverInfo(Request request) {
@@ -124,8 +141,8 @@ class OperabilityModule {
         serverIdentity?.serverId ?? db.getServerConfig('server_id') ?? '';
     final effectiveName =
         (configuredName != null && configuredName.trim().isNotEmpty)
-            ? configuredName.trim()
-            : defaultServerName(serverId);
+        ? configuredName.trim()
+        : defaultServerName(serverId);
 
     return _json({
       'server_name': effectiveName,
@@ -289,7 +306,8 @@ class OperabilityModule {
   Response _setupStatus(Request request) {
     return _json({
       'needs_setup': _needsAdminSetup,
-      'server_id': serverIdentity?.serverId ?? db.getServerConfig('server_id') ?? '',
+      'server_id':
+          serverIdentity?.serverId ?? db.getServerConfig('server_id') ?? '',
     });
   }
 
@@ -513,8 +531,8 @@ class OperabilityModule {
     final configuredName = db.getServerConfig(serverNameConfigKey);
     final serverName =
         (configuredName != null && configuredName.trim().isNotEmpty)
-            ? configuredName.trim()
-            : defaultServerName(serverId);
+        ? configuredName.trim()
+        : defaultServerName(serverId);
 
     String token = password;
     if (jwt != null) {
@@ -562,10 +580,7 @@ class OperabilityModule {
     final usersWithDevices = users.map((user) {
       final accountId = user['account_id'] as String;
       final devices = db.getDevices(accountId);
-      return {
-        ...user,
-        'devices': devices,
-      };
+      return {...user, 'devices': devices};
     }).toList();
 
     return _json({'users': usersWithDevices, 'limit': limit, 'offset': offset});
@@ -672,16 +687,18 @@ class OperabilityModule {
   FutureOr<Response> _logsStream(Request request) {
     final queryToken = request.url.queryParameters['token'];
     final authHeader = request.headers['authorization'];
-    final headerToken =
-        (authHeader != null && authHeader.startsWith('Bearer '))
-            ? authHeader.substring(7)
-            : null;
+    final headerToken = (authHeader != null && authHeader.startsWith('Bearer '))
+        ? authHeader.substring(7)
+        : null;
     final token = queryToken ?? headerToken;
     if (!_isValidAdminToken(token)) {
       throw AppError.forbidden('Admin authorization required');
     }
 
-    final wsHandler = webSocketHandler((WebSocketChannel socket, String? protocol) {
+    final wsHandler = webSocketHandler((
+      WebSocketChannel socket,
+      String? protocol,
+    ) {
       final initialLogs = logSink?.tail(50) ?? [];
       for (final line in initialLogs) {
         socket.sink.add(jsonEncode({'type': 'log', 'line': line}));
@@ -1070,7 +1087,9 @@ class OperabilityModule {
       throw AppError.notFound('Account not found');
     }
     if (account['status'] == 'BLOCKED') {
-      throw AppError.forbidden('Cannot generate recovery code for a blocked user');
+      throw AppError.forbidden(
+        'Cannot generate recovery code for a blocked user',
+      );
     }
 
     final recoveryCode = 'rec_${generatePasswordSalt()}';
@@ -1089,10 +1108,7 @@ class OperabilityModule {
       expiresAt: expiresAt,
     );
 
-    _auditAdminWrite(
-      request,
-      'ADMIN_USER_RECOVERY_ISSUED',
-    );
+    _auditAdminWrite(request, 'ADMIN_USER_RECOVERY_ISSUED');
 
     final opaqueCode = encodeHelixRecoveryCode(
       serverUrl: publicBaseUrl,

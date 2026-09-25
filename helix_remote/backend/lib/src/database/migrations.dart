@@ -1385,5 +1385,20 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 42;');
     }
+
+    if (version < 43) {
+      // Global registration records which version of the Terms of Service the
+      // user accepted and when. Both columns are nullable so existing
+      // personal-server accounts and pre-migration rows remain valid.
+      final accountColumns = _tableColumns('accounts');
+      if (!accountColumns.contains('tos_accepted_at')) {
+        _db.execute('ALTER TABLE accounts ADD COLUMN tos_accepted_at INTEGER;');
+      }
+      if (!accountColumns.contains('tos_version')) {
+        _db.execute('ALTER TABLE accounts ADD COLUMN tos_version TEXT;');
+      }
+
+      _db.execute('PRAGMA user_version = 43;');
+    }
   }
 }

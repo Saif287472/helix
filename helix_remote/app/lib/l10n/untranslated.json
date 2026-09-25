@@ -243,6 +243,17 @@
     "waitingOtherPersonAcceptRequest",
     "welcomeHelixRemote",
     "whatShouldPeopleSeeName",
+    "agreeTermsAndPrivacy",
+    "legalVersionLabel",
+    "enterRecoveryCode",
+    "legalEffectiveLabel",
+    "personalServerOperatorPolicies",
+    "phoneAlreadyRegistered",
+    "phoneAlreadyRegisteredRecoveryMessage",
+    "privacy",
+    "readLegalDocuments",
+    "reviewGlobalLegalDocuments",
+    "terms",
     "willPermanentlyDeleteAllLocal"
   ]
 }

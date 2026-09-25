@@ -56,6 +56,9 @@ void main() {
     expect(text, contains('otp_code:'));
     expect(text, contains('invite_code:'));
     expect(text, contains('display_name:'));
+    expect(text, contains('tos_accepted:'));
+    expect(text, contains('tos_version:'));
+    expect(text, contains('/server/tos:'));
     expect(text, contains('maxLength: 80'));
   });
 }

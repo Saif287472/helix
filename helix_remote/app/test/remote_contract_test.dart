@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
@@ -96,6 +97,21 @@ String _seedInvite(BackendDatabase db) {
   return code;
 }
 
+/// Seeds a known OTP challenge for contract tests. Production deliberately
+/// refuses to return an OTP when no SMS provider is configured; these tests
+/// exercise registration over HTTP, not SMS delivery.
+void _seedOtp(BackendDatabase db, String phoneHash) {
+  final now = DateTime.now().millisecondsSinceEpoch;
+  db.createOtpChallenge(
+    challengeId: 'contract_$phoneHash',
+    phoneHash: phoneHash,
+    codeHash: sha256.convert(utf8.encode('123456')).toString(),
+    purpose: 'REGISTRATION',
+    createdAt: now,
+    expiresAt: now + const Duration(minutes: 10).inMilliseconds,
+  );
+}
+
 Future<_RegistrationMaterial> _register(
   HelixRemoteRestClient client,
   BackendDatabase db, {
@@ -110,11 +126,8 @@ Future<_RegistrationMaterial> _register(
     deviceId: deviceId,
     deviceName: deviceName,
   );
-  final otpResult = await client.requestPhoneOtp(
-    phoneHash: phoneHash,
-    phoneNumber: '+8801000000000',
-  );
-  final otpCode = otpResult['code'] as String;
+  _seedOtp(db, phoneHash);
+  const otpCode = '123456';
   final inviteCode = _seedInvite(db);
   await client.registerAccount(
     accountId: accountId,
@@ -176,14 +189,11 @@ void main() {
           deviceId: 'test_device_1',
           deviceName: 'Test Phone',
         );
-        final otpResult = await client.requestPhoneOtp(
-          phoneHash: 'test_user_phone_hash',
-          phoneNumber: '+8801000000000',
-        );
+        _seedOtp(server.db, 'test_user_phone_hash');
         final regResult = await client.registerAccount(
           accountId: 'test_account',
           phoneHash: 'test_user_phone_hash',
-          otpCode: otpResult['code'] as String,
+          otpCode: '123456',
           inviteCode: _seedInvite(server.db),
           displayName: 'Test User',
           accountIdentityPublicKey: material.accountIdentityPublicKey,

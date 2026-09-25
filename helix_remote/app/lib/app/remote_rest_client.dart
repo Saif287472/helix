@@ -157,6 +157,8 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       return jsonDecode(respBody) as Map<String, dynamic>;
     }
 
+    final errorPayload = _decodeApiErrorBody(respBody);
+    final details = errorPayload?['details'];
     throw RemoteRestException(
       statusCode: resp.statusCode,
       // The body is kept because RemoteUserErrorCopy parses the `error` field
@@ -174,6 +176,10 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
           resp.headers.value('X-Correlation-Id') ??
           correlationId,
       retryAfter: _parseRetryAfter(resp.headers.value('retry-after')),
+      serverCode: errorPayload?['code'] is String
+          ? errorPayload!['code'] as String
+          : null,
+      serverDetails: details is Map ? Map<String, dynamic>.from(details) : null,
       failureKind: RemoteRestFailureKind.http,
     );
   }
@@ -277,6 +283,8 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required String otpCode,
     required String inviteCode,
     required String displayName,
+    bool tosAccepted = false,
+    String tosVersion = '',
     required String accountIdentityPublicKey,
     required String deviceId,
     required String deviceSigningPublicKey,
@@ -295,6 +303,11 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       'otp_code': otpCode,
       'invite_code': inviteCode,
       'display_name': displayName,
+      if (tosAccepted) 'tos_accepted': true,
+      if (tosAccepted)
+        'tos_version': tosVersion.trim().isEmpty
+            ? HelixLegalDocuments.termsVersion
+            : tosVersion.trim(),
       'account_identity_public_key': accountIdentityPublicKey,
       'device_id': deviceId,
       'device_signing_public_key': deviceSigningPublicKey,
@@ -327,7 +340,8 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       'device_signing_public_key': deviceSigningPublicKey,
       'device_agreement_public_key': deviceAgreementPublicKey,
       'device_name': deviceName,
-      if (accountIdentityPublicKey != null && accountIdentityPublicKey.isNotEmpty)
+      if (accountIdentityPublicKey != null &&
+          accountIdentityPublicKey.isNotEmpty)
         'account_identity_public_key': accountIdentityPublicKey,
       if (phoneHash != null && phoneHash.isNotEmpty) 'phone_hash': phoneHash,
     },

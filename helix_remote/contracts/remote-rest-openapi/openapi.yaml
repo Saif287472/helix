@@ -2348,6 +2348,19 @@ paths:
         '401':
           description: Unauthorized
 
+  /server/tos:
+    get:
+      summary: Return the current public legal documents
+      operationId: getTermsOfService
+      tags: [Server]
+      responses:
+        '200':
+          description: Current Terms of Service and Privacy Policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalDocumentsResponse'
+
   # ─── Telemetry ────────────────────────────────────────────────
   /telemetry/crash:
     post:
@@ -2514,6 +2527,16 @@ components:
           type: string
           minLength: 1
           maxLength: 80
+        tos_accepted:
+          type: boolean
+          description: >-
+            Required and must be true when the server runs in Global instance
+            mode. Personal/self-hosted registrations may omit it.
+        tos_version:
+          type: string
+          description: >-
+            Version of the Terms of Service presented to the user. Global
+            servers record their current authoritative version.
         account_identity_public_key:
           type: string
           description: Base64url-encoded Ed25519 account identity public key
@@ -2532,6 +2555,32 @@ components:
           type: string
           description: Ed25519 signature over the v3 registration transcript using the device signing key
         device_name:
+          type: string
+
+    LegalDocumentsResponse:
+      type: object
+      required:
+        - version
+        - effective_date
+        - terms_title
+        - terms
+        - privacy_version
+        - privacy_title
+        - privacy_policy
+      properties:
+        version:
+          type: string
+        effective_date:
+          type: string
+        terms_title:
+          type: string
+        terms:
+          type: string
+        privacy_version:
+          type: string
+        privacy_title:
+          type: string
+        privacy_policy:
           type: string
 
     LoginRequest:

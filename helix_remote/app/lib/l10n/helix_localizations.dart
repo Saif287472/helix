@@ -1562,6 +1562,72 @@ abstract class HelixLocalizations {
   /// **'What should people see as your name?'**
   String get whatShouldPeopleSeeName;
 
+  /// No description provided for @agreeTermsAndPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'I agree to the Terms of Service and Privacy Policy'**
+  String get agreeTermsAndPrivacy;
+
+  /// No description provided for @legalVersionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get legalVersionLabel;
+
+  /// No description provided for @enterRecoveryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter recovery code'**
+  String get enterRecoveryCode;
+
+  /// No description provided for @legalEffectiveLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Effective'**
+  String get legalEffectiveLabel;
+
+  /// No description provided for @personalServerOperatorPolicies.
+  ///
+  /// In en, this message translates to:
+  /// **'Personal servers are governed by their own operator policies.'**
+  String get personalServerOperatorPolicies;
+
+  /// No description provided for @phoneAlreadyRegistered.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number already registered'**
+  String get phoneAlreadyRegistered;
+
+  /// No description provided for @phoneAlreadyRegisteredRecoveryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone number already has a Helix account. Would you like to enter a recovery code and restore that account?'**
+  String get phoneAlreadyRegisteredRecoveryMessage;
+
+  /// No description provided for @privacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy'**
+  String get privacy;
+
+  /// No description provided for @readLegalDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the legal documents'**
+  String get readLegalDocuments;
+
+  /// No description provided for @reviewGlobalLegalDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the legal documents before creating a Global account.'**
+  String get reviewGlobalLegalDocuments;
+
+  /// No description provided for @terms.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms'**
+  String get terms;
+
   /// No description provided for @willPermanentlyDeleteAllLocal.
   ///
   /// In en, this message translates to:

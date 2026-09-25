@@ -9,10 +9,12 @@ void main() {
   late int port;
   var requestCount = 0;
   final seenHeaders = <String, String?>{};
+  Map<String, dynamic>? seenRegistrationBody;
 
   setUp(() async {
     requestCount = 0;
     seenHeaders.clear();
+    seenRegistrationBody = null;
     server = await HttpServer.bind('127.0.0.1', 0);
     port = server.port;
   });
@@ -58,6 +60,8 @@ void main() {
     server.listen((request) async {
       requestCount++;
       seenHeaders['idempotency'] = request.headers.value('idempotency-key');
+      final requestBody = await utf8.decodeStream(request);
+      seenRegistrationBody = jsonDecode(requestBody) as Map<String, dynamic>;
       if (requestCount == 1) {
         request.response.statusCode = 503;
         request.response.write(jsonEncode({'error': 'retry registration'}));
@@ -86,6 +90,8 @@ void main() {
       otpCode: '000000',
       inviteCode: 'test_invite',
       displayName: 'Alice',
+      tosAccepted: true,
+      tosVersion: '2026-09-25',
       accountIdentityPublicKey: 'account_pk',
       deviceId: 'device',
       deviceSigningPublicKey: 'signing_pk',
@@ -98,6 +104,8 @@ void main() {
     expect(response['account_id'], equals('account'));
     expect(requestCount, equals(2));
     expect(seenHeaders['idempotency'], equals('register:account:device'));
+    expect(seenRegistrationBody?['tos_accepted'], isTrue);
+    expect(seenRegistrationBody?['tos_version'], '2026-09-25');
   });
 
   test(
@@ -198,5 +206,34 @@ void main() {
     );
 
     expect(requestCount, greaterThanOrEqualTo(1));
+  });
+
+  test('structured API errors retain their machine-readable code', () async {
+    server.listen((request) async {
+      request.response.statusCode = 409;
+      request.response.write(
+        jsonEncode({
+          'error': 'Phone number is already registered',
+          'code': 'phone_already_registered',
+          'details': {'recovery': true},
+        }),
+      );
+      await request.response.close();
+    });
+
+    final client = HelixRemoteRestClientImpl(
+      baseUri: Uri.parse('http://127.0.0.1:$port'),
+      timeoutMs: 1000,
+    );
+    addTearDown(client.close);
+
+    try {
+      await client.lookupInvite(inviteCode: 'INV-TEST');
+      fail('lookup should have failed');
+    } on RemoteRestException catch (error) {
+      expect(error.statusCode, 409);
+      expect(error.serverCode, RemoteApiErrorCodes.phoneAlreadyRegistered);
+      expect(error.serverDetails?['recovery'], isTrue);
+    }
   });
 }
