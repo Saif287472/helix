@@ -6,9 +6,22 @@ class RemoteUserErrorCopy {
   const RemoteUserErrorCopy._();
 
   /// Pulls the `error` field out of a JSON error body, when there is one -
-  /// the server includes specific, actionable detail here (e.g. why an SMS
-  /// delivery attempt failed) that a generic "HTTP 502" message would hide.
-  static String? _serverErrorMessage(RemoteRestException error) {
+  /// the server includes specific, actionable detail here that a generic
+  /// "HTTP 502" message would hide.
+  ///
+  /// Codes in [sensitiveServerCodes] are deliberately NOT surfaced. The
+  /// backend may embed provider diagnostics in its `error` text for those,
+  /// and this string is rendered straight to the user - a gateway response
+  /// can name the configured API key or a provider-internal account id.
+  /// Those cases fall through to purpose-written copy instead.
+  static String? _serverErrorMessage(
+    RemoteRestException error, {
+    Set<String> sensitiveServerCodes = const {},
+  }) {
+    if (error.serverCode != null &&
+        sensitiveServerCodes.contains(error.serverCode)) {
+      return null;
+    }
     try {
       final decoded = jsonDecode(error.message);
       if (decoded is Map<String, dynamic>) {
@@ -112,6 +125,14 @@ class RemoteUserErrorCopy {
             return 'Too many registration attempts. Wait a moment, then try '
                 'again.';
           case 502:
+            if (error.serverCode == RemoteApiErrorCodes.smsDeliveryFailed) {
+              // Never echo the server's `error` text here: for a gateway
+              // failure it can carry provider diagnostics (including the
+              // configured API key). The operator sees the detail in the
+              // backend log; the user gets a clean, actionable retry.
+              return 'Could not send the verification code. Please try again '
+                  'in a moment.';
+            }
             return _serverErrorMessage(error) ??
                 'Failed to send the verification code. Try again in a '
                     'moment.';

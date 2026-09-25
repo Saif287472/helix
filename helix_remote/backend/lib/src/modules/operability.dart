@@ -11,6 +11,7 @@ import 'package:helix_remote_backend/src/federation.dart';
 import 'package:helix_remote_backend/src/feature_flags.dart';
 import 'package:helix_remote_backend/src/helix_code.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
+import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
 import 'package:helix_remote_backend/src/modules/attachments.dart';
 import 'package:helix_remote_backend/src/modules/calls.dart';
@@ -34,6 +35,7 @@ class OperabilityModule {
     required this.outboxWorker,
     required this.callsModule,
     this.attachmentsModule,
+    this.smsProvider,
     required this.turnSecret,
     required this.turnUrl,
     this.logFilePath,
@@ -59,6 +61,10 @@ class OperabilityModule {
   /// Optional so tests that only exercise health/ops routes need not build
   /// an attachments module; `/server/info` omits the limits when absent.
   final AttachmentsModule? attachmentsModule;
+
+  /// Optional so tests need not construct an SMS provider. When absent,
+  /// `/health` reports SMS as not configured.
+  final SmsProvider? smsProvider;
   final String turnSecret;
   final String turnUrl;
   final String? logFilePath;
@@ -453,6 +459,13 @@ class OperabilityModule {
         'capabilities': RemoteCapabilityRegistry.current().toJson(),
         'turn_url_count': turn['url_count'],
         'push_provider_configured': outboxWorker.pushProviderConfigured,
+        // Whether an SMS provider is wired up at all. This says nothing
+        // about whether the credential is *valid* - BulkSMSBD reports a
+        // rejected key with HTTP 200, so a true here can still mean every
+        // signup fails. It is the difference between "SMS was never set up"
+        // and "SMS is set up but broken", which is otherwise indistinguishable
+        // until a user hits it.
+        'sms_provider_configured': smsProvider?.isConfigured ?? false,
       },
       'metrics': {
         'calls': callsModule.metrics(),

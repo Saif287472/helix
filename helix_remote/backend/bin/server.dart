@@ -180,10 +180,12 @@ Future<void> _run(ServerLogSink logSink, [Map<String, String>? environment]) asy
     );
   }
 
-  // Bulk SMS (BulkSMSBD) — validated as a pair by validateStartupEnv above.
-  // Without it, phone verification falls back to returning the code
-  // directly in the API response (see AuthPhoneOtpHandlers) - fine for
-  // local dev, not for a real deployment.
+  // Bulk SMS (BulkSMSBD). Both values are required together. Note that
+  // "configured" only means non-empty - it does NOT mean the credential is
+  // valid. BulkSMSBD answers HTTP 200 even for a rejected key (response_code
+  // 1011 = "user id not found in this key"), so an invalid key surfaces only
+  // when the first real user requests an OTP. The warning below is the only
+  // early warning an operator gets.
   final smsApiKey = sanitizeEnvValue(
     env['HELIX_REMOTE_SMS_API_KEY'],
   );
@@ -191,11 +193,29 @@ Future<void> _run(ServerLogSink logSink, [Map<String, String>? environment]) asy
     env['HELIX_REMOTE_SMS_SENDER_ID'],
   );
   final SmsProvider smsProvider;
+  final globalInstanceMode =
+      env['HELIX_REMOTE_GLOBAL_INSTANCE_MODE'] == 'true';
   if (smsApiKey.isNotEmpty && smsSenderId.isNotEmpty) {
     smsProvider = BulkSmsBdProvider(apiKey: smsApiKey, senderId: smsSenderId);
     print('SMS delivery configured via BulkSMSBD, sender ID: $smsSenderId');
+    if (globalInstanceMode) {
+      print(
+        'WARNING: Global mode is on, so SMS is the only way users can '
+        'register. The API key has NOT been verified against BulkSMSBD - if '
+        'it is wrong, every signup fails with "Could not send the '
+        'verification code" until it is replaced. Verify it with a real OTP '
+        'request before going live.',
+      );
+    }
   } else {
     smsProvider = const NoopSmsProvider();
+    if (globalInstanceMode) {
+      print(
+        'WARNING: Global mode is on but no SMS provider is configured, so no '
+        'user can register. Set HELIX_REMOTE_SMS_API_KEY and '
+        'HELIX_REMOTE_SMS_SENDER_ID (BulkSMSBD).',
+      );
+    }
   }
 
   print('Starting Helix Remote backend database at: $dbPath');
@@ -227,7 +247,7 @@ Future<void> _run(ServerLogSink logSink, [Map<String, String>? environment]) asy
     federationDomain: env['HELIX_REMOTE_FEDERATION_DOMAIN'],
     federationDirectoryUrl: env['HELIX_REMOTE_FEDERATION_DIRECTORY_URL'],
     publicBaseUrl: env['HELIX_REMOTE_PUBLIC_BASE_URL'],
-    globalInstanceMode: env['HELIX_REMOTE_GLOBAL_INSTANCE_MODE'] == 'true',
+    globalInstanceMode: globalInstanceMode,
     serverAudience: env['HELIX_REMOTE_SERVER_AUDIENCE'],
   );
 

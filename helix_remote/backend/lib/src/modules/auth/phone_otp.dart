@@ -85,11 +85,22 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
               'Your Helix verification code is $code. It expires in '
               '${_otpTtl.inMinutes} minutes.',
         );
+      } on SmsDeliveryException catch (e) {
+        // The gateway's raw body can contain the API key, so it goes to the
+        // server log only. The client gets a stable, non-revealing message;
+        // the operator gets the actionable detail.
+        // ignore: avoid_print
+        print('OTP SMS delivery failed: ${e.operatorMessage}');
+        throw AppError(
+          'Could not send the verification code. Please try again shortly.',
+          statusCode: 502,
+          code: RemoteErrorCode.smsDeliveryFailed,
+        );
       } on Object catch (e) {
         // ignore: avoid_print
-        print('OTP SMS delivery failed: $e');
+        print('OTP SMS delivery failed unexpectedly: $e');
         throw AppError(
-          'Failed to send verification SMS: $e',
+          'Could not send the verification code. Please try again shortly.',
           statusCode: 502,
           code: RemoteErrorCode.smsDeliveryFailed,
         );

@@ -82,10 +82,19 @@ final class BulkSmsBdProvider implements SmsProvider {
       final body = await res.transform(utf8.decoder).join();
 
       if (res.statusCode != 200) {
-        throw SmsDeliveryException(res.statusCode, body);
+        throw SmsDeliveryException(
+          res.statusCode,
+          body,
+          reason: SmsFailureReason.gatewayError,
+        );
       }
-      if (_responseCode(body) != _submittedResponseCode) {
-        throw SmsDeliveryException(res.statusCode, body);
+      final responseCode = _responseCode(body);
+      if (responseCode != _submittedResponseCode) {
+        throw SmsDeliveryException(
+          res.statusCode,
+          body,
+          reason: _reasonForResponseCode(responseCode),
+        );
       }
     } finally {
       http.close(force: true);
@@ -108,24 +117,122 @@ final class BulkSmsBdProvider implements SmsProvider {
     }
     return null;
   }
+
+  /// Maps BulkSMSBD's numeric response codes onto the categories that actually
+  /// change what an operator should do.
+  ///
+  /// This distinction matters because BulkSMSBD always answers HTTP 200, so
+  /// the response code is the *only* signal available. Without it an invalid
+  /// API key is indistinguishable from a transient gateway blip, and the
+  /// operator burns time retrying a credential that can never work.
+  SmsFailureReason _reasonForResponseCode(int? code) {
+    switch (code) {
+      // 1011 = "user id not found in this key"; 1009/1010 are the other
+      // invalid-key variants BulkSMSBD returns.
+      case 1009:
+      case 1010:
+      case 1011:
+        return SmsFailureReason.invalidCredentials;
+      // Sender ID missing, not approved, or not linked to this account.
+      case 1030:
+      case 1031:
+      case 1032:
+        return SmsFailureReason.invalidSenderId;
+      // Destination number malformed or not routable.
+      case 1002:
+      case 1006:
+        return SmsFailureReason.invalidDestination;
+      default:
+        return SmsFailureReason.rejected;
+    }
+  }
+}
+
+/// Why an SMS send failed, in terms of what an operator should do about it.
+enum SmsFailureReason {
+  /// The API key is not valid for any BulkSMSBD account. Retrying cannot
+  /// help; the deployment's credential must be replaced.
+  invalidCredentials,
+
+  /// The sender ID is unknown, unapproved, or not linked to this account.
+  invalidSenderId,
+
+  /// The destination number was rejected by the gateway.
+  invalidDestination,
+
+  /// The gateway itself failed or returned something unparseable.
+  gatewayError,
+
+  /// The gateway understood the request and declined it for a reason with no
+  /// specific operator action.
+  rejected,
 }
 
 /// The SMS provider rejected the request or failed to submit it - the
 /// caller should surface a delivery-failed error rather than pretending
 /// the code went out.
 class SmsDeliveryException extends AppError {
-  SmsDeliveryException(this.upstreamStatusCode, this.body)
-    : super(
-        'Failed to send verification SMS',
-        statusCode: 502,
-        code: RemoteErrorCode.smsDeliveryFailed,
-      );
+  SmsDeliveryException(
+    this.upstreamStatusCode,
+    this.body, {
+    this.reason = SmsFailureReason.rejected,
+  }) : super(
+         'Failed to send verification SMS',
+         statusCode: 502,
+         code: RemoteErrorCode.smsDeliveryFailed,
+       );
 
   /// The gateway's status, not ours - see [statusCode] for what a client
   /// would see if this ever escaped unhandled.
   final int upstreamStatusCode;
+
+  /// The raw gateway response. Server-side only: it can echo the configured
+  /// API key back inside its own text, so it must never reach a client.
   final String body;
 
+  /// What an operator should do about it. Drives both the server log and the
+  /// deliberately vague client-facing message.
+  final SmsFailureReason reason;
+
+  /// The provider's own response code, when it sent a parseable one.
+  int? get providerResponseCode {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        final value = decoded['response_code'];
+        if (value is int) return value;
+        if (value is String) return int.tryParse(value);
+      }
+    } catch (_) {
+      return int.tryParse(body.trim());
+    }
+    return null;
+  }
+
+  /// A message safe for a server log. Names the concrete fix without
+  /// reproducing the raw body.
+  String get operatorMessage => switch (reason) {
+    SmsFailureReason.invalidCredentials =>
+      'SMS gateway rejected the API key (response code '
+          '${providerResponseCode ?? 'unknown'}). The key is not valid for any '
+          'BulkSMSBD account - replace HELIX_REMOTE_SMS_API_KEY.',
+    SmsFailureReason.invalidSenderId =>
+      'SMS gateway rejected the sender ID (response code '
+          '${providerResponseCode ?? 'unknown'}). Confirm '
+          'HELIX_REMOTE_SMS_SENDER_ID is BulkSMSBD-approved and belongs to the '
+          'same account as the API key.',
+    SmsFailureReason.invalidDestination =>
+      'SMS gateway rejected the destination number (response code '
+          '${providerResponseCode ?? 'unknown'}).',
+    SmsFailureReason.gatewayError =>
+      'SMS gateway returned HTTP $upstreamStatusCode.',
+    SmsFailureReason.rejected =>
+      'SMS gateway declined the request (response code '
+          '${providerResponseCode ?? 'unparseable'}).',
+  };
+
+  /// Never includes [body]: the gateway's text can contain the API key.
   @override
-  String toString() => 'SmsDeliveryException($upstreamStatusCode): $body';
+  String toString() =>
+      'SmsDeliveryException($upstreamStatusCode, $reason): $operatorMessage';
 }

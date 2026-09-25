@@ -287,6 +287,7 @@ class BackendServer {
       outboxWorker: outboxWorker,
       callsModule: callsModule,
       attachmentsModule: attachmentsModule,
+      smsProvider: smsProvider,
       turnSecret: turnSecret,
       turnUrl: turnUrl,
       logFilePath: logFilePath,
