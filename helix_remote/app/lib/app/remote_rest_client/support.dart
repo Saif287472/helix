@@ -30,6 +30,11 @@ abstract final class RemoteApiErrorCodes {
   static const termsAcceptanceRequired = 'terms_acceptance_required';
   static const termsVersionOutdated = 'terms_version_outdated';
   static const smsDeliveryFailed = 'sms_delivery_failed';
+
+  /// The server rejected our cached discovery salt, so the phone hash we
+  /// computed cannot be verified. Recoverable in-app: drop the cached salt,
+  /// re-fetch it, and retry the request once.
+  static const discoverySaltStale = 'discovery_salt_stale';
 }
 
 class RemoteRestException extends HttpException {

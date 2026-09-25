@@ -17,37 +17,8 @@ void main() {
 
       expect(find.text('Helix Global Server'), findsOneWidget);
       expect(find.text('Others'), findsOneWidget);
-      expect(find.text('Continue offline for now'), findsOneWidget);
-    });
-
-    testWidgets('continue offline pops a ContinueOfflineChoice', (
-      tester,
-    ) async {
-      Object? popped;
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () async {
-                popped = await Navigator.of(context).push<Object?>(
-                  MaterialPageRoute(builder: (_) => const ServerChoiceScreen()),
-                );
-              },
-              child: const Text('open'),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
-
-      await tester.ensureVisible(find.text('Continue offline for now'));
-      await tester.tap(find.text('Continue offline for now'));
-      await tester.pumpAndSettle();
-
-      expect(popped, isA<ContinueOfflineChoice>());
+      // The offline escape hatch was removed: Global signup is phone + OTP.
+      expect(find.text('Continue offline for now'), findsNothing);
     });
 
     testWidgets('navigating to Others displays custom server options', (

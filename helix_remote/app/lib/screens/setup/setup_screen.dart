@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote/app/composition_root.dart';
-import 'package:helix_remote/screens/server_choice_screen.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 import 'package:helix_remote/screens/setup/steps/splash_step.dart';
@@ -102,9 +101,7 @@ class _SetupScreenState extends State<SetupScreen> {
     if (_handledCompletion) return;
     if (_notifier.state.isComplete) {
       _handledCompletion = true;
-      final choice = _notifier.continueOfflineChosen
-          ? const ContinueOfflineChoice()
-          : _notifier.completedChoice;
+      final choice = _notifier.completedChoice;
       widget.onChoice?.call(choice);
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).maybePop(choice);
@@ -247,7 +244,6 @@ class _SetupScreenState extends State<SetupScreen> {
           isLoading: state.isLoading,
           errorMessage: state.errorMessage,
           onProceed: _notifier.proceedFromServerSelection,
-          onContinueOffline: _notifier.chooseOffline,
           globalSubStep: state.globalSubStep,
           joinSubStep: state.joinSubStep,
           connectedServerName: state.connectedServerName,

@@ -37,7 +37,6 @@ class ServerSelectionStep extends StatefulWidget {
     this.isLoading = false,
     this.errorMessage,
     this.onProceed,
-    required this.onContinueOffline,
     this.globalSubStep = GlobalSubStep.phone,
     this.joinSubStep = JoinSubStep.code,
     this.connectedServerName,
@@ -72,7 +71,6 @@ class ServerSelectionStep extends StatefulWidget {
   final bool isLoading;
   final String? errorMessage;
   final VoidCallback? onProceed;
-  final VoidCallback onContinueOffline;
   final GlobalSubStep globalSubStep;
   final JoinSubStep joinSubStep;
   final String? connectedServerName;
@@ -310,27 +308,6 @@ class _ServerSelectionStepState extends State<ServerSelectionStep> {
           const SizedBox(height: HelixSpace.md),
           const Divider(color: Color(0xFFE2E8F0), height: 1),
           const SizedBox(height: HelixSpace.sm),
-
-          // Continue Offline Button
-          Center(
-            child: TextButton(
-              onPressed: widget.onContinueOffline,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-              ),
-              child: const Text(
-                "Continue offline for now",
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-            ),
-          ),
 
           // Legal Footer
           const SizedBox(height: HelixSpace.xs),

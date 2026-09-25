@@ -82,6 +82,13 @@ enum RemoteErrorCode {
   /// currently requires.
   termsVersionOutdated('terms_version_outdated'),
 
+  /// The client's cached discovery salt does not match the server's, so the
+  /// phone hash it computed cannot be verified. Split out from [badRequest]
+  /// because the client's recovery is specific and mechanical: drop the cached
+  /// salt, re-fetch it, and retry the request once. This happens legitimately
+  /// when a deployment's salt is re-provisioned (fresh/rotated database).
+  discoverySaltStale('discovery_salt_stale'),
+
   internalError('internal_error');
 
   const RemoteErrorCode(this.wire);

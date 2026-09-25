@@ -32,7 +32,6 @@ class OnboardingNotifier extends ChangeNotifier {
 
   OnboardingState get state => _state;
   Object? completedChoice;
-  bool continueOfflineChosen = false;
 
   @override
   void dispose() {
@@ -269,17 +268,35 @@ class OnboardingNotifier extends ChangeNotifier {
               timeoutMs: 10000,
             );
         final saltResponse = await client.fetchDiscoverySalt();
-        final salt = saltResponse['salt'] as String?;
+        var salt = saltResponse['salt'] as String?;
         if (salt == null || salt.isEmpty) {
           throw StateError(
             'The Global server did not provide a phone-hash salt.',
           );
         }
-        final hash = phoneHash(salt, fullPhoneNumber);
-        final otpResponse = await client.requestPhoneOtp(
-          phoneHash: hash,
-          phoneNumber: fullPhoneNumber,
-        );
+        var hash = phoneHash(salt, fullPhoneNumber);
+        Map<String, dynamic> otpResponse;
+        try {
+          otpResponse = await client.requestPhoneOtp(
+            phoneHash: hash,
+            phoneNumber: fullPhoneNumber,
+          );
+        } on RemoteRestException catch (e) {
+          // The server could not reproduce our hash from the number we sent,
+          // so its salt has changed since we fetched it. Fetch once more and
+          // retry; this path holds no cached salt, so a second failure is
+          // genuine and the original error stands.
+          if (e.serverCode != RemoteApiErrorCodes.discoverySaltStale) rethrow;
+          final retrySalt =
+              (await client.fetchDiscoverySalt())['salt'] as String?;
+          if (retrySalt == null || retrySalt.isEmpty) rethrow;
+          salt = retrySalt;
+          hash = phoneHash(salt, fullPhoneNumber);
+          otpResponse = await client.requestPhoneOtp(
+            phoneHash: hash,
+            phoneNumber: fullPhoneNumber,
+          );
+        }
         otpRequest = RemoteOtpRequestResult(
           phoneHash: hash,
           challengeId: otpResponse['challenge_id'] as String? ?? '',
@@ -695,13 +712,6 @@ class OnboardingNotifier extends ChangeNotifier {
     );
     notifyListeners();
     return true;
-  }
-
-  void chooseOffline() {
-    continueOfflineChosen = true;
-    completedChoice = null;
-    _state = _state.copyWith(isComplete: true);
-    notifyListeners();
   }
 
   void goBack() {

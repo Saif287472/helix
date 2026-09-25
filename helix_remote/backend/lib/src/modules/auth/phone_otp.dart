@@ -43,7 +43,17 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
           'client_hash_prefix=${phoneHash.substring(0, phoneHash.length.clamp(0, 8))} '
           'server_hash_prefix=${computedHash == null ? 'n/a' : computedHash.substring(0, computedHash.length.clamp(0, 8))}',
         );
-        throw AppError.badRequest('phone_number does not match phone_hash');
+        // Deliberately distinguishable from a generic bad request: the client's
+        // fix is to discard its cached discovery salt, re-fetch it and retry
+        // once. Reporting this as a plain 400 leaves the user staring at
+        // "check the phone number" for a problem that has nothing to do with
+        // the number they typed. This is expected whenever a deployment's salt
+        // is re-provisioned (fresh or rotated database).
+        throw AppError(
+          'The discovery salt on this server has changed. Re-fetch it and retry.',
+          statusCode: 400,
+          code: RemoteErrorCode.discoverySaltStale,
+        );
       }
     }
 

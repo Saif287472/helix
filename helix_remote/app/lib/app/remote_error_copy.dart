@@ -85,6 +85,10 @@ class RemoteUserErrorCopy {
               return _serverErrorMessage(error) ??
                   'The verification code is incorrect or expired. Request a new code and try again.';
             }
+            if (error.serverCode == RemoteApiErrorCodes.discoverySaltStale) {
+              return 'This server was re-provisioned and its phone-hash salt '
+                  'changed. Please try requesting the code again.';
+            }
             if (error.serverCode ==
                 RemoteApiErrorCodes.termsAcceptanceRequired) {
               return 'Please read and accept the Terms of Service and Privacy '

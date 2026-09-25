@@ -196,7 +196,8 @@ void main() {
       expect(find.text('Helix Global Server'), findsOneWidget);
       expect(find.text('Others'), findsOneWidget);
       expect(find.text('Request OTP'), findsOneWidget);
-      expect(find.text('Continue offline for now'), findsOneWidget);
+      // The offline escape hatch was removed; Global signup is phone + OTP.
+      expect(find.text('Continue offline for now'), findsNothing);
 
       // Legacy screens are gone entirely
       expect(find.text('Server invitation code'), findsNothing);

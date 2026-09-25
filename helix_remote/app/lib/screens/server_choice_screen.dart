@@ -3,12 +3,6 @@ import 'package:helix_remote/screens/setup/setup_screen.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
-/// Returned when the user chooses to continue without connecting to a
-/// server yet.
-class ContinueOfflineChoice {
-  const ContinueOfflineChoice();
-}
-
 /// First-launch welcome and server onboarding entry point.
 /// Wraps [SetupScreen] to provide the complete, unified onboarding experience
 /// matching Helix Welcome.

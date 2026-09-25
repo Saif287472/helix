@@ -7,7 +7,6 @@ import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
-import 'package:helix_remote/screens/server_choice_screen.dart';
 import 'package:helix_remote/screens/setup/setup_screen.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
@@ -167,13 +166,6 @@ void main() {
       expect(notifier.state.codeType, CodeType.recovery);
       expect(notifier.state.joinSubStep, JoinSubStep.recoverySync);
     });
-
-    test('continue offline choice', () {
-      final notifier = OnboardingNotifier(autoStartLaunch: false);
-      notifier.chooseOffline();
-      expect(notifier.continueOfflineChosen, isTrue);
-      expect(notifier.state.isComplete, isTrue);
-    });
   });
 
   group('SetupScreen Widget', () {
@@ -199,38 +191,32 @@ void main() {
       expect(find.text('Deploying Helix…'), findsOneWidget);
     });
 
-    testWidgets(
-      'renders server selection step and responds to offline choice',
-      (tester) async {
-        final notifier = OnboardingNotifier(autoStartLaunch: false);
-        notifier.updateState(
-          (s) => s.copyWith(
-            step: OnboardingStep.serverSelection,
-            serverType: ServerType.global,
-          ),
-        );
+    testWidgets('renders server selection step for the Global path', (
+      tester,
+    ) async {
+      final notifier = OnboardingNotifier(autoStartLaunch: false);
+      notifier.updateState(
+        (s) => s.copyWith(
+          step: OnboardingStep.serverSelection,
+          serverType: ServerType.global,
+        ),
+      );
 
-        Object? choice;
-        await tester.pumpWidget(
-          MaterialApp(
-            localizationsDelegates: HelixLocalizations.localizationsDelegates,
-            supportedLocales: HelixLocalizations.supportedLocales,
-            home: SetupScreen(notifier: notifier, onChoice: (c) => choice = c),
-          ),
-        );
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: HelixLocalizations.localizationsDelegates,
+          supportedLocales: HelixLocalizations.supportedLocales,
+          home: SetupScreen(notifier: notifier, onChoice: (_) {}),
+        ),
+      );
 
-        expect(find.text('Helix Global Server'), findsOneWidget);
-        expect(find.text('Others'), findsOneWidget);
-        expect(find.text('Request OTP'), findsOneWidget);
-        expect(find.text('Continue offline for now'), findsOneWidget);
-
-        await tester.ensureVisible(find.text('Continue offline for now'));
-        await tester.tap(find.text('Continue offline for now'));
-        await tester.pumpAndSettle();
-
-        expect(choice, isA<ContinueOfflineChoice>());
-      },
-    );
+      expect(find.text('Helix Global Server'), findsOneWidget);
+      expect(find.text('Others'), findsOneWidget);
+      expect(find.text('Request OTP'), findsOneWidget);
+      // Global signup is phone + OTP only: there is no invite step and no
+      // offline escape hatch.
+      expect(find.text('Continue offline for now'), findsNothing);
+    });
 
     testWidgets('advances to otp step on request and handles back button', (
       tester,

@@ -15,14 +15,35 @@ class RemoteOtpRequestResult {
 mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
   /// Fetches and caches the per-deployment discovery salt used to hash
   /// phone numbers (see `phone_hashing.dart`). Cached hard once fetched -
-  /// this must never be re-fetched/rotated client-side, since that would
-  /// silently change every phone hash this device computes.
+  /// it must not be silently re-fetched, since that would change every phone
+  /// hash this device computes.
+  ///
+  /// The one legitimate exception is a server that reports its salt changed
+  /// (a re-provisioned deployment). [refreshDiscoverySalt] handles that
+  /// explicitly, on the server's instruction, rather than guessing.
   Future<String> _getOrFetchDiscoverySalt({
     required KeyValueStore store,
     required HelixRemoteRestClient rest,
   }) async {
     final cached = await store.read(_discoverySaltKey);
     if (cached != null && cached.isNotEmpty) return cached;
+    final response = await rest.fetchDiscoverySalt();
+    final salt = response['salt'] as String;
+    await store.write(_discoverySaltKey, salt);
+    return salt;
+  }
+
+  /// Discards the cached discovery salt and fetches the server's current one.
+  /// Called only when the server explicitly reports
+  /// `discovery_salt_stale`, meaning our hash could not be verified because
+  /// the deployment's salt is different (fresh or rotated database). Without
+  /// this, such a device could never complete signup and would only ever see
+  /// a misleading "check the phone number" error.
+  Future<String> refreshDiscoverySalt({
+    required KeyValueStore store,
+    required HelixRemoteRestClient rest,
+  }) async {
+    await store.delete(_discoverySaltKey);
     final response = await rest.fetchDiscoverySalt();
     final salt = response['salt'] as String;
     await store.write(_discoverySaltKey, salt);
@@ -38,16 +59,34 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     final normalizedPhone = RemoteAccountValidation.normalizePhoneNumber(
       phoneNumber,
     );
-    final salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
-    final hash = phoneHash(salt, normalizedPhone);
-    final response = await rest.requestPhoneOtp(
-      phoneHash: hash,
-      phoneNumber: normalizedPhone,
-    );
-    return RemoteOtpRequestResult(
-      phoneHash: hash,
-      challengeId: response['challenge_id'] as String? ?? '',
-    );
+    var salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
+    var hash = phoneHash(salt, normalizedPhone);
+    try {
+      final response = await rest.requestPhoneOtp(
+        phoneHash: hash,
+        phoneNumber: normalizedPhone,
+      );
+      return RemoteOtpRequestResult(
+        phoneHash: hash,
+        challengeId: response['challenge_id'] as String? ?? '',
+      );
+    } on RemoteRestException catch (e) {
+      // The server could not reproduce our phone hash from the number we
+      // sent, which means our cached salt is stale. Re-sync once and retry;
+      // if it still fails the salt genuinely matches and the real problem is
+      // something else, so the original error is rethrown.
+      if (e.serverCode != RemoteApiErrorCodes.discoverySaltStale) rethrow;
+      salt = await refreshDiscoverySalt(store: store, rest: rest);
+      hash = phoneHash(salt, normalizedPhone);
+      final response = await rest.requestPhoneOtp(
+        phoneHash: hash,
+        phoneNumber: normalizedPhone,
+      );
+      return RemoteOtpRequestResult(
+        phoneHash: hash,
+        challengeId: response['challenge_id'] as String? ?? '',
+      );
+    }
   }
 
   Future<void> verifyOtp({

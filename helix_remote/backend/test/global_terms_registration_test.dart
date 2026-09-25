@@ -4,11 +4,30 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
+import 'package:helix_remote_backend/src/phone_hash.dart' as phone_hash_lib;import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 import 'test_registration.dart';
+
+/// Accepts every SMS and keeps the last message, so tests can drive the real
+/// `/accounts/phone/otp/request` path (including its phone-hash/salt check)
+/// without a live BulkSMSBD gateway.
+class _RecordingSmsProvider implements SmsProvider {
+  final sent = <({String phoneNumber, String message})>[];
+
+  @override
+  bool get isConfigured => true;
+
+  @override
+  Future<void> send({
+    required String phoneNumber,
+    required String message,
+  }) async {
+    sent.add((phoneNumber: phoneNumber, message: message));
+  }
+}
 
 void main() {
   late BackendServer server;
@@ -93,6 +112,7 @@ void main() {
       rateLimitRefillRate: 1000,
       globalInstanceMode: true,
       publicBaseUrl: 'https://global.example',
+      smsProvider: _RecordingSmsProvider(),
     );
     client = HttpClient();
     await server.start('127.0.0.1', 0);
@@ -184,6 +204,45 @@ void main() {
     );
     expect(registration.statusCode, 200);
   });
+
+  test(
+    'a phone hash from a stale discovery salt is reported as such',
+    () async {
+      // The server self-provisions a salt on the first /discovery-salt call.
+      final saltResponse = await getJson('/api/v1/contacts/discovery-salt');
+      expect(saltResponse.statusCode, 200);
+      final salt = (await readJson(saltResponse))['salt'] as String;
+      expect(salt, isNotEmpty);
+
+      final phoneNumber = '+8801784251020';
+      final correctHash = phone_hash_lib.phoneHash(salt, phoneNumber);
+
+      // A hash computed with a *different* salt (what a device that cached an
+      // older salt sends) must come back as discovery_salt_stale, not a bare
+      // 400, so the client knows to re-sync and retry.
+      final stale = await postJson('/api/v1/accounts/phone/otp/request', {
+        'phone_hash': phone_hash_lib.phoneHash(
+          phone_hash_lib.generateDiscoverySalt(),
+          phoneNumber,
+        ),
+        'phone_number': phoneNumber,
+      });
+      expect(stale.statusCode, 400);
+      final staleBody = await readJson(stale);
+      expect(staleBody['code'], RemoteErrorCode.discoverySaltStale.wire);
+
+      // The freshly computed hash is accepted and the code is delivered.
+      final fresh = await postJson('/api/v1/accounts/phone/otp/request', {
+        'phone_hash': correctHash,
+        'phone_number': phoneNumber,
+      });
+      expect(fresh.statusCode, 200);
+      final freshBody = await readJson(fresh);
+      expect(freshBody['challenge_id'], isNotEmpty);
+      // The code itself is never echoed back to the caller.
+      expect(freshBody.containsKey('code'), isFalse);
+    },
+  );
 
   test(
     'Global registration rejects an outdated legal-document version',
