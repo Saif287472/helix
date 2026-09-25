@@ -63,14 +63,11 @@ void main() {
     );
   }
 
-  Future<String> requestOtp(String phoneHash) async {
-    final response = await postJson('/api/v1/accounts/phone/otp/request', {
-      'phone_hash': phoneHash,
-    });
-    expect(response.statusCode, equals(200));
-    return (jsonDecode(response.body) as Map<String, dynamic>)['code']
-        as String;
-  }
+  /// Seeds a real, verifiable OTP challenge for [phoneHash] and returns the
+  /// code. The delivery channel (BulkSMSBD) is not exercised here; only the
+  /// authoritative OTP check in registration is.
+  String requestOtp(String phoneHash) =>
+      requestTestOtp(db: server.db, phoneHash: phoneHash);
 
   /// Registers a fresh account through the real HTTP flow (real invite,
   /// real OTP, real signed transcript) and returns its login key material
@@ -95,7 +92,7 @@ void main() {
     final inviteCode =
         (jsonDecode(inviteCreate.body) as Map<String, dynamic>)['invite_code']
             as String;
-    final otpCode = await requestOtp(phoneHash);
+    final otpCode = requestOtp(phoneHash);
     final register = await postJson(
       '/api/v1/accounts/register',
       registrationBody(
@@ -522,7 +519,7 @@ void main() {
         deviceId: 'cancelled_invite_user_device',
         deviceName: 'Test Phone',
       );
-      final otpCode = await requestOtp('cancelled_invite_phone');
+      final otpCode = requestOtp('cancelled_invite_phone');
       final register = await postJson(
         '/api/v1/accounts/register',
         registrationBody(
@@ -564,7 +561,7 @@ void main() {
         deviceId: 'redeemer_device',
         deviceName: 'Test Phone',
       );
-      final otpCode = await requestOtp('redeemer_phone');
+      final otpCode = requestOtp('redeemer_phone');
       final register = await postJson(
         '/api/v1/accounts/register',
         registrationBody(

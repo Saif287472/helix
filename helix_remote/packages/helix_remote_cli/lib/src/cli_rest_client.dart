@@ -80,7 +80,8 @@ class CliRestClient {
     required String accountId,
     required String phoneHash,
     required String otpCode,
-    required String inviteCode,
+    String? otpChallengeId,
+    String? inviteCode,
     required String displayName,
     bool tosAccepted = false,
     String tosVersion = '',
@@ -96,7 +97,10 @@ class CliRestClient {
       'account_id': accountId,
       'phone_hash': phoneHash,
       'otp_code': otpCode,
-      'invite_code': inviteCode,
+      if (otpChallengeId != null && otpChallengeId.isNotEmpty)
+        'otp_challenge_id': otpChallengeId,
+      if (inviteCode != null && inviteCode.isNotEmpty)
+        'invite_code': inviteCode,
       'display_name': displayName,
       if (tosAccepted) 'tos_accepted': true,
       if (tosAccepted)

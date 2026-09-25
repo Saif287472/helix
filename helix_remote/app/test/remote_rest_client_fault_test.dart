@@ -88,6 +88,7 @@ void main() {
       accountId: 'account',
       phoneHash: 'alice_phone_hash',
       otpCode: '000000',
+      otpChallengeId: 'otp_test',
       inviteCode: 'test_invite',
       displayName: 'Alice',
       tosAccepted: true,
@@ -106,6 +107,7 @@ void main() {
     expect(seenHeaders['idempotency'], equals('register:account:device'));
     expect(seenRegistrationBody?['tos_accepted'], isTrue);
     expect(seenRegistrationBody?['tos_version'], '2026-09-25');
+    expect(seenRegistrationBody?['otp_challenge_id'], 'otp_test');
   });
 
   test(
@@ -206,6 +208,33 @@ void main() {
     );
 
     expect(requestCount, greaterThanOrEqualTo(1));
+  });
+
+  test('phone OTP verification posts the exact challenge', () async {
+    Map<String, dynamic>? seenBody;
+    server.listen((request) async {
+      seenBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, dynamic>;
+      request.response.statusCode = 200;
+      request.response.write(jsonEncode({'valid': true}));
+      await request.response.close();
+    });
+
+    final client = HelixRemoteRestClientImpl(
+      baseUri: Uri.parse('http://127.0.0.1:$port'),
+      timeoutMs: 1000,
+    );
+    addTearDown(client.close);
+
+    final response = await client.verifyPhoneOtp(
+      phoneHash: 'phone_hash',
+      otpCode: '123456',
+      challengeId: 'otp_test',
+    );
+    expect(response['valid'], isTrue);
+    expect(seenBody?['phone_hash'], 'phone_hash');
+    expect(seenBody?['otp_code'], '123456');
+    expect(seenBody?['challenge_id'], 'otp_test');
   });
 
   test('structured API errors retain their machine-readable code', () async {

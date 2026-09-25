@@ -44,7 +44,9 @@ void main() {
     required String phoneHash,
     required String deviceId,
     String? tosVersion,
+    String? otpChallengeId,
     bool includeAcceptance = true,
+    bool includeInvite = true,
   }) async {
     final material = await createTestRegistrationMaterial(
       accountId: accountId,
@@ -68,8 +70,14 @@ void main() {
       deviceName: 'Global Test Phone',
       material: material,
       otpCode: '123456',
-      inviteCode: seedTestInvite(server.db),
+      inviteCode: includeInvite ? seedTestInvite(server.db) : '',
     );
+    if (!includeInvite) {
+      body.remove('invite_code');
+    }
+    if (otpChallengeId != null && otpChallengeId.isNotEmpty) {
+      body['otp_challenge_id'] = otpChallengeId;
+    }
     if (includeAcceptance) {
       body['tos_accepted'] = true;
       body['tos_version'] = tosVersion ?? HelixLegalDocuments.termsVersion;
@@ -133,6 +141,50 @@ void main() {
     },
   );
 
+  test('Global OTP verification is public and challenge-bound', () async {
+    final phoneHash = 'otp_verify_phone';
+    final challengeId = 'otp_verify_challenge';
+    final now = DateTime.now().millisecondsSinceEpoch;
+    server.db.createOtpChallenge(
+      challengeId: challengeId,
+      phoneHash: phoneHash,
+      codeHash: sha256.convert(utf8.encode('123456')).toString(),
+      purpose: 'REGISTRATION',
+      createdAt: now,
+      expiresAt: now + const Duration(minutes: 10).inMilliseconds,
+    );
+
+    final valid = await postJson('/api/v1/accounts/phone/otp/verify', {
+      'phone_hash': phoneHash,
+      'otp_code': '123456',
+      'challenge_id': challengeId,
+    });
+    expect(valid.statusCode, 200);
+    final validBody = await readJson(valid);
+    expect(validBody['valid'], isTrue);
+    expect(validBody['challenge_id'], challengeId);
+
+    final wrong = await postJson('/api/v1/accounts/phone/otp/verify', {
+      'phone_hash': phoneHash,
+      'otp_code': '000000',
+      'challenge_id': challengeId,
+    });
+    expect(wrong.statusCode, 400);
+    final wrongBody = await readJson(wrong);
+    expect(wrongBody['code'], RemoteErrorCode.invalidOtp.wire);
+
+    final registration = await postJson(
+      '/api/v1/accounts/register',
+      await registrationBodyFor(
+        accountId: 'otp_bound_account',
+        phoneHash: phoneHash,
+        deviceId: 'otp_bound_device',
+        otpChallengeId: challengeId,
+      ),
+    );
+    expect(registration.statusCode, 200);
+  });
+
   test(
     'Global registration rejects an outdated legal-document version',
     () async {
@@ -152,7 +204,7 @@ void main() {
   );
 
   test(
-    'duplicate phone registration returns the recovery-specific code',
+    'a phone number that already owns an account signs in on the new device',
     () async {
       final first = await postJson(
         '/api/v1/accounts/register',
@@ -163,7 +215,14 @@ void main() {
         ),
       );
       expect(first.statusCode, 200);
+      final firstBody = await readJson(first);
+      expect(firstBody['existing_account'], isFalse);
+      final originalIdentityKey =
+          server.db.getAccount('phone_owner')!['identity_public_key'] as String;
 
+      // Second registration for the SAME phone hash: instead of a 409 that
+      // pushed the user into recovery, Global treats the verified OTP as a
+      // phone-authenticated login and answers with the real account id.
       final second = await postJson(
         '/api/v1/accounts/register',
         await registrationBodyFor(
@@ -172,9 +231,105 @@ void main() {
           deviceId: 'phone_replica_device',
         ),
       );
-      expect(second.statusCode, 409);
-      final body = await readJson(second);
-      expect(body['code'], RemoteErrorCode.phoneAlreadyRegistered.wire);
+      expect(second.statusCode, 200);
+      final secondBody = await readJson(second);
+      expect(secondBody['account_id'], 'phone_owner');
+      expect(secondBody['existing_account'], isTrue);
+      expect(secondBody['device_id'], 'phone_replica_device');
+
+      // The account identity key rotated to the newly linked device and the
+      // previously-registered device was revoked, exactly like recovery.
+      final devices = server.db.getDevices('phone_owner');
+      final active = devices.where((d) => d['status'] == 'ACTIVE').toList();
+      expect(active.length, 1);
+      expect(active.single['device_id'], 'phone_replica_device');
+      expect(
+        server.db.getAccount('phone_owner')!['identity_public_key'],
+        isNot(originalIdentityKey),
+      );
+    },
+  );
+
+  test(
+    'a wrong OTP never links a new device to an existing Global account',
+    () async {
+      final first = await postJson(
+        '/api/v1/accounts/register',
+        await registrationBodyFor(
+          accountId: 'otp_owner',
+          phoneHash: 'otp_guard_phone_hash',
+          deviceId: 'otp_owner_device',
+        ),
+      );
+      expect(first.statusCode, 200);
+
+      final attacker = await registrationBodyFor(
+        accountId: 'otp_attacker',
+        phoneHash: 'otp_guard_phone_hash',
+        deviceId: 'otp_attacker_device',
+      );
+      attacker['otp_code'] = '000000';
+
+      final response = await postJson('/api/v1/accounts/register', attacker);
+      expect(response.statusCode, 403);
+      final body = await readJson(response);
+      expect(body['code'], RemoteErrorCode.invalidOtp.wire);
+
+      // Nothing was created and the original device is untouched.
+      expect(server.db.getAccount('otp_attacker'), isNull);
+      final active = server
+          .db
+          .getDevices('otp_owner')
+          .where((d) => d['status'] == 'ACTIVE')
+          .toList();
+      expect(active.length, 1);
+      expect(active.single['device_id'], 'otp_owner_device');
+    },
+  );
+
+  test(
+    'Global registration does not require or consume an invite code',
+    () async {
+      final response = await postJson(
+        '/api/v1/accounts/register',
+        await registrationBodyFor(
+          accountId: 'no_invite_account',
+          phoneHash: 'no_invite_phone_hash',
+          deviceId: 'no_invite_device',
+          includeInvite: false,
+        ),
+      );
+      expect(response.statusCode, 200);
+      final body = await readJson(response);
+      expect(body['account_id'], 'no_invite_account');
+    },
+  );
+
+  test(
+    'a blocked phone number cannot sign in with a valid OTP',
+    () async {
+      final first = await postJson(
+        '/api/v1/accounts/register',
+        await registrationBodyFor(
+          accountId: 'blocked_owner',
+          phoneHash: 'blocked_phone_hash',
+          deviceId: 'blocked_owner_device',
+        ),
+      );
+      expect(first.statusCode, 200);
+
+      server.db.blockPhoneHash('blocked_phone_hash');
+
+      final response = await postJson(
+        '/api/v1/accounts/register',
+        await registrationBodyFor(
+          accountId: 'blocked_attacker',
+          phoneHash: 'blocked_phone_hash',
+          deviceId: 'blocked_attacker_device',
+        ),
+      );
+      expect(response.statusCode, 403);
+      expect(server.db.getAccount('blocked_attacker'), isNull);
     },
   );
 

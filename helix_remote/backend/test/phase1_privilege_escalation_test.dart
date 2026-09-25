@@ -473,12 +473,7 @@ Future<_Response> _register(
     deviceId: deviceId,
     deviceName: deviceId,
   );
-  final otpCode = await requestTestOtp(
-    client: client,
-    host: '127.0.0.1',
-    port: port,
-    phoneHash: username,
-  );
+  final otpCode = requestTestOtp(db: db, phoneHash: username);
   final inviteCode = seedTestInvite(db);
   return _post(
     client,
@@ -511,12 +506,7 @@ Future<_Account> _registerAndLogin(
     deviceId: deviceId,
     deviceName: deviceId,
   );
-  final otpCode = await requestTestOtp(
-    client: client,
-    host: '127.0.0.1',
-    port: port,
-    phoneHash: username,
-  );
+  final otpCode = requestTestOtp(db: db, phoneHash: username);
   final inviteCode = seedTestInvite(db);
   final registered = await _post(
     client,

@@ -10,7 +10,23 @@ paths:
   # ─── Auth: Accounts ───────────────────────────────────────────
   /accounts/register:
     post:
-      summary: Register a new account with an initial device
+      summary: >-
+        Register a new account with an initial device, or (Helix Global only)
+        sign an existing account in on a new device
+      description: >-
+        On personal/self-hosted servers this always creates a new account and
+        requires a redeemable `invite_code` plus a valid `otp_code`.
+
+        Helix Global requires no invite. After verifying the SMS OTP for
+        `phone_hash` the server decides from the phone hash alone whether the
+        number is new or already owns an account. A new number creates the
+        account and this device. An existing number does NOT create anything:
+        the request is treated as a phone-authenticated login, the account's
+        identity key rotates to this device and previously-linked devices are
+        revoked (see the account-recovery semantics), and the response carries
+        the real `account_id` with `existing_account: true`. The client must
+        use the returned `account_id` for the subsequent challenge/login calls
+        rather than the one it proposed.
       operationId: registerAccount
       tags: [Auth]
       requestBody:
@@ -34,8 +50,22 @@ paths:
                     type: string
                   device_id:
                     type: string
+                  existing_account:
+                    type: boolean
+                    description: >-
+                      True when Helix Global matched an existing account for
+                      this phone number and signed this device in instead of
+                      creating a new account.
+                  display_name:
+                    type: string
+                    description: >-
+                      Present on an existing-account login; the account's
+                      current display name, which the client should keep.
         '400':
           description: Invalid input
+        '403':
+          description: >-
+            Invite, OTP or device-link authorization failed
         '409':
           description: Account or device already exists
 
@@ -478,12 +508,9 @@ paths:
     post:
       summary: >-
         Request a one-time verification code for a phone number, identified
-        in the challenge only by its salted hash. When the server has a real
-        SMS provider configured, `phone_number` is used transiently to
-        deliver the code by SMS (never persisted) and the response omits
-        `code`. Otherwise the code is returned directly in the response and
-        the client is expected to self-fire a local notification with it -
-        an explicit placeholder, not a secure out-of-band channel.
+        in the challenge only by its salted hash. The raw `phone_number` is
+        used transiently for SMS delivery (never persisted) and the response
+        never contains the code.
       operationId: requestPhoneOtp
       tags: [Auth]
       requestBody:
@@ -504,7 +531,7 @@ paths:
                     discovery salt) to phone_hash.
       responses:
         '200':
-          description: Verification code issued (by SMS if configured, otherwise in-body)
+          description: Verification challenge issued and SMS delivery requested
           content:
             application/json:
               schema:
@@ -513,9 +540,6 @@ paths:
                 properties:
                   challenge_id:
                     type: string
-                  code:
-                    type: string
-                    description: Only present when no SMS provider is configured.
                   expires_at:
                     type: integer
         '400':
@@ -524,6 +548,48 @@ paths:
           description: Too many verification code requests
         '502':
           description: SMS provider configured but delivery failed
+        '503':
+          description: SMS delivery is not configured
+
+  /accounts/phone/otp/verify:
+    post:
+      summary: Verify a phone OTP without consuming the challenge
+      operationId: verifyPhoneOtp
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone_hash, otp_code]
+              properties:
+                phone_hash:
+                  type: string
+                otp_code:
+                  type: string
+                  minLength: 6
+                  maxLength: 6
+                challenge_id:
+                  type: string
+                  description: >-
+                    Optional challenge returned by /accounts/phone/otp/request.
+                    When supplied, registration must verify this exact challenge.
+      responses:
+        '200':
+          description: OTP is valid; registration will consume it atomically
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [valid, challenge_id]
+                properties:
+                  valid:
+                    type: boolean
+                  challenge_id:
+                    type: string
+        '400':
+          description: Invalid, expired, consumed, or exhausted OTP challenge
 
   /accounts/invite/lookup:
     get:
@@ -2489,7 +2555,6 @@ components:
         - account_id
         - phone_hash
         - otp_code
-        - invite_code
         - display_name
         - registration_version
         - account_identity_public_key
@@ -2516,13 +2581,22 @@ components:
           description: >-
             The one-time code obtained from POST /accounts/phone/otp/request
             for this phone_hash.
+        otp_challenge_id:
+          type: string
+          description: >-
+            Optional challenge identifier from the OTP request. When present,
+            registration verifies this exact challenge instead of whichever
+            challenge was issued most recently.
         invite_code:
           type: string
           description: >-
-            A redeemable invite credential (admin-issued or Helix-Global
-            auto-issued via POST /accounts/invite/auto-issue). Consumed
-            atomically alongside registration; invalid/expired/already-used
-            codes are rejected with 403.
+            A redeemable invite credential. Required by personal/self-hosted
+            servers (admin-issued), where an empty or missing value is
+            rejected with 400 and invalid/expired/already-used codes are
+            rejected with 403. Helix Global bypasses invitations entirely: this
+            field is omitted and the SMS OTP for the phone number is the sole
+            credential, for both new accounts and for signing an existing
+            account in on a new device.
         display_name:
           type: string
           minLength: 1

@@ -71,14 +71,7 @@ Future<String> _registerAndLogin(
     deviceId: deviceId,
     deviceName: '$username phone',
   );
-  final otpResponse = await _postJson(
-    '127.0.0.1',
-    port,
-    '/api/v1/accounts/phone/otp/request',
-    {'phone_hash': username},
-  );
-  final otpCode =
-      (jsonDecode(otpResponse.body) as Map<String, dynamic>)['code'] as String;
+  final otpCode = requestTestOtp(db: db, phoneHash: username);
   final inviteCode = seedTestInvite(db);
   await _postJson('127.0.0.1', port, '/api/v1/accounts/register', {
     ...registrationBody(

@@ -2,6 +2,16 @@ part of '../composition_root.dart';
 
 const _discoverySaltKey = 'contacts.discovery_salt';
 
+class RemoteOtpRequestResult {
+  const RemoteOtpRequestResult({
+    required this.phoneHash,
+    required this.challengeId,
+  });
+
+  final String phoneHash;
+  final String challengeId;
+}
+
 mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
   /// Fetches and caches the per-deployment discovery salt used to hash
   /// phone numbers (see `phone_hashing.dart`). Cached hard once fetched -
@@ -22,7 +32,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
   /// Requests a one-time verification code for [phoneNumber]. The server
   /// sends the code via SMS (BulkSMSBD). If SMS delivery is not configured
   /// on the server, the request will fail with a 503.
-  Future<void> requestOtp(String phoneNumber) async {
+  Future<RemoteOtpRequestResult> requestOtp(String phoneNumber) async {
     final rest = _requireReady(_restClient, 'restClient');
     final store = _requireReady(_keyValue, 'keyValue');
     final normalizedPhone = RemoteAccountValidation.normalizePhoneNumber(
@@ -30,7 +40,30 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     );
     final salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
     final hash = phoneHash(salt, normalizedPhone);
-    await rest.requestPhoneOtp(phoneHash: hash, phoneNumber: normalizedPhone);
+    final response = await rest.requestPhoneOtp(
+      phoneHash: hash,
+      phoneNumber: normalizedPhone,
+    );
+    return RemoteOtpRequestResult(
+      phoneHash: hash,
+      challengeId: response['challenge_id'] as String? ?? '',
+    );
+  }
+
+  Future<void> verifyOtp({
+    required String phoneHash,
+    required String otpCode,
+    String? challengeId,
+  }) async {
+    final rest = _requireReady(_restClient, 'restClient');
+    final response = await rest.verifyPhoneOtp(
+      phoneHash: phoneHash,
+      otpCode: otpCode,
+      challengeId: challengeId,
+    );
+    if (response['valid'] != true) {
+      throw StateError('The server did not accept the verification code.');
+    }
   }
 
   /// Validates an invite code without consuming it, so the UI can fail fast
@@ -40,21 +73,13 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     return rest.lookupInvite(inviteCode: inviteCode);
   }
 
-  /// Self-issues a free invite for Helix Global's signup path and fires a
-  /// local notification with the code, tappable to auto-fill.
-  Future<String> requestGlobalAutoInvite() async {
-    final rest = _requireReady(_restClient, 'restClient');
-    final response = await rest.autoIssueGlobalInvite();
-    final code = response['invite_code'] as String;
-    await LocalNotificationService.showInviteCode(code: code);
-    return code;
-  }
-
   Future<void> registerAndLogin({
     required String phoneNumber,
+    String? phoneHashOverride,
     required String displayName,
     required String otpCode,
-    required String inviteCode,
+    String? inviteCode,
+    String? otpChallengeId,
     bool tosAccepted = false,
     String tosVersion = '',
   }) async {
@@ -81,7 +106,9 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     final ms = _requireReady(_messagingService, 'messagingService');
 
     final salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
-    final normalizedPhoneHash = phoneHash(salt, normalizedPhone);
+    final normalizedPhoneHash = phoneHashOverride?.trim().isNotEmpty == true
+        ? phoneHashOverride!.trim()
+        : phoneHash(salt, normalizedPhone);
 
     final pendingRegistration = await _loadOrCreatePendingRegistration(
       store: store,
@@ -107,10 +134,11 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     final deviceAgreementPubKeyBytes =
         pendingRegistration.deviceAgreementPublicBytes;
 
-    await rest.registerAccount(
+    final registrationResponse = await rest.registerAccount(
       accountId: accountIdStr,
       phoneHash: normalizedPhoneHash,
       otpCode: otpCode,
+      otpChallengeId: otpChallengeId,
       inviteCode: inviteCode,
       displayName: normalizedDisplayName,
       tosAccepted: tosAccepted,
@@ -133,8 +161,21 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
       phoneLast4: normalizedPhone,
     );
 
+    // On Helix Global the server resolves the *effective* account: a phone
+    // number that already owns an account logs that account in on this device
+    // instead of creating a new one, so it answers with the real account id
+    // and (for an existing account) the display name to keep. Personal servers
+    // always echo back the id the client proposed.
+    final resolvedAccountId =
+        registrationResponse['account_id'] as String? ?? accountIdStr;
+    final isExistingAccount =
+        registrationResponse['existing_account'] == true;
+    final effectiveDisplayName = isExistingAccount
+        ? (registrationResponse['display_name'] as String? ?? normalizedDisplayName)
+        : normalizedDisplayName;
+
     final challengeResp = await rest.getChallenge(
-      accountId: accountIdStr,
+      accountId: resolvedAccountId,
       deviceId: deviceIdStr,
     );
     final challenge = challengeResp['challenge'] as String;
@@ -145,7 +186,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     final sigStr = _base64Url(sig.bytes);
 
     final loginResp = await rest.loginDevice(
-      accountId: accountIdStr,
+      accountId: resolvedAccountId,
       deviceId: deviceIdStr,
       signature: sigStr,
     );
@@ -156,7 +197,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
 
     await store.write('access_token', accessToken);
     await store.write('refresh_token', refreshToken);
-    await store.write('account_id', accountIdStr);
+    await store.write('account_id', resolvedAccountId);
     await store.write('phone_number', normalizedPhone);
     await store.write('identity_public_key', pubKeyStr);
     await store.write('identity_private_key', identityPrivStr);
@@ -180,7 +221,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
 
     ms.setupAccount(
       account: RemoteAccount(
-        accountId: accountIdStr,
+        accountId: resolvedAccountId,
         identityPublicKey: pubKeyStr,
         createdAt: DateTime.now(),
       ),
@@ -193,7 +234,7 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
       ),
     );
 
-    ms.setDisplayName(normalizedDisplayName);
+    ms.setDisplayName(effectiveDisplayName);
     await _clearPendingRegistration(store);
     setAuthenticated(accessToken);
     await startRuntime();

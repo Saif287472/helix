@@ -8,7 +8,8 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
     final registrationVersion = body['registration_version'];
     final phoneHash = body['phone_hash'] as String?;
     final otpCode = body['otp_code'] as String?;
-    final inviteCode = body['invite_code'] as String?;
+    final otpChallengeId = body['otp_challenge_id'] as String?;
+    final inviteCode = (body['invite_code'] as String?)?.trim() ?? '';
     final identityPublicKey = body['account_identity_public_key'] as String?;
     final deviceId = body['device_id'] as String?;
     final deviceSigningPublicKey = body['device_signing_public_key'] as String?;
@@ -20,13 +21,13 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         body['device_registration_signature'] as String?;
     final deviceName = body['device_name'] as String?;
 
+    final isGlobal = globalInstanceMode;
+
     if (registrationVersion != 3 ||
         accountId == null ||
         phoneHash == null ||
         phoneHash.isEmpty ||
         otpCode == null ||
-        inviteCode == null ||
-        inviteCode.isEmpty ||
         identityPublicKey == null ||
         deviceId == null ||
         deviceSigningPublicKey == null ||
@@ -34,6 +35,14 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         accountRegistrationSignature == null ||
         deviceRegistrationSignature == null ||
         deviceName == null) {
+      throw AppError.badRequest('Missing required fields');
+    }
+
+    // Personal/self-hosted servers keep their invite-only signup gate. Helix
+    // Global bypasses invitations entirely: a valid SMS OTP for the phone
+    // number is the only credential needed, both to create a new account and
+    // to attach a new device to an existing one.
+    if (!isGlobal && inviteCode.isEmpty) {
       throw AppError.badRequest('Missing required fields');
     }
 
@@ -108,76 +117,13 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
 
     final phoneOwner = db.getAccountByPhoneHash(phoneHash);
     final existingAccount = db.getAccount(accountId);
+    final now = _now().millisecondsSinceEpoch;
 
-    if (existingAccount == null) {
-      // A brand-new account: refuse a permanently blocked number outright
-      // (see OperabilityModule._blockUser) - checked before the invite/OTP
-      // work below since no amount of a valid invite or OTP should let a
-      // blocked number back in.
-      if (db.isPhoneHashBlocked(phoneHash)) {
-        throw AppError.forbidden('This phone number is blocked');
-      }
-      // This phone number must not already belong to a different
-      // account, and both the invite and the OTP just requested for it
-      // must check out before we create anything.
-      if (phoneOwner != null) {
-        throw AppError.conflict(
-          'Phone number is already registered',
-          code: RemoteErrorCode.phoneAlreadyRegistered,
-        );
-      }
-
-      final now = _now().millisecondsSinceEpoch;
-      final invite = db.getInviteByCodeHash(hashInviteCode(inviteCode));
-      if (invite == null ||
-          invite['status'] != 'PENDING' ||
-          (invite['expires_at'] as int) < now) {
-        throw AppError.forbidden('Invalid or expired invite code');
-      }
-
-      final otpResult = _verifyPhoneOtp(phoneHash: phoneHash, code: otpCode);
-      if (otpResult.error != null) {
-        throw AppError.forbidden(otpResult.error!);
-      }
-
-      // Redeem last, only once every other check has passed, so a wrong
-      // OTP guess never burns a scarce invite credential.
-      final redeemed = db.redeemInviteCredential(
-        inviteId: invite['invite_id'] as String,
-        accountId: accountId,
-        now: now,
-      );
-      if (!redeemed) {
-        throw AppError.forbidden('Invite code already used');
-      }
-
-      db.createAccount(
-        accountId,
-        _reservedUsername(accountId),
-        identityPublicKey,
-        phoneHash: phoneHash,
-        phoneLast4: phoneLast4,
-        tosAcceptedAt: globalInstanceMode ? now : null,
-        tosVersion: globalInstanceMode
-            ? HelixLegalDocuments.termsVersion
-            : null,
-      );
-      db.upsertAccountProfile(
-        accountId: accountId,
-        displayName: displayName,
-        now: _now(),
-      );
-      if (otpResult.challengeId != null) {
-        db.markOtpConsumed(otpResult.challengeId!, now);
-      }
-      db.logAudit(
-        accountId,
-        deviceId,
-        'ACCOUNT_REGISTERED',
-        request.context['client_ip'] as String?,
-        null,
-      );
-    } else {
+    if (existingAccount != null) {
+      // The client re-proposed an account id that already exists. This is
+      // only ever a lost-response retry of a registration this device
+      // already completed; anything else must go through the device-link
+      // path below so an attacker cannot claim somebody else's account id.
       if (_isRegistrationReplay(
         existingAccount: existingAccount,
         phoneHash: phoneHash,
@@ -193,6 +139,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
             'message': 'Registration successful',
             'account_id': accountId,
             'device_id': deviceId,
+            'existing_account': false,
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -201,6 +148,156 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         'Existing accounts must link devices from an active device',
       );
     }
+
+    // A brand-new account id was proposed, so the client believes it is
+    // signing up. Refuse a permanently blocked number outright (see
+    // OperabilityModule._blockUser) before any OTP or invite work below -
+    // no valid credential should let a blocked number back in.
+    if (db.isPhoneHashBlocked(phoneHash)) {
+      throw AppError.forbidden('This phone number is blocked');
+    }
+
+    // Decide between "this phone owns an account already" (Global passwordless
+    // device link) and "this phone is signing up for the first time". The
+    // decision is made server-side from the phone hash; the client never
+    // learns an account id from a phone number before the OTP proves control
+    // of that number.
+    final phoneAccountId = phoneOwner?['account_id'] as String?;
+    final isPhoneDeviceLink = isGlobal && phoneAccountId != null;
+
+    if (!isGlobal && phoneAccountId != null) {
+      throw AppError.conflict(
+        'Phone number is already registered',
+        code: RemoteErrorCode.phoneAlreadyRegistered,
+      );
+    }
+
+    // Invite gate: personal servers only, and only for genuinely new
+    // accounts. Looked up (not consumed) here so a wrong OTP guess below
+    // never burns a scarce invite credential.
+    Map<String, dynamic>? invite;
+    if (!isGlobal) {
+      invite = db.getInviteByCodeHash(hashInviteCode(inviteCode));
+      if (invite == null ||
+          invite['status'] != 'PENDING' ||
+          (invite['expires_at'] as int) < now) {
+        throw AppError.forbidden('Invalid or expired invite code');
+      }
+    }
+
+    // OTP gate. Required for every new account and every Global device link:
+    // this single SMS code is what authorizes both "create this account" and
+    // "attach this device to that account".
+    final otpResult = _verifyPhoneOtp(
+      phoneHash: phoneHash,
+      code: otpCode,
+      challengeId: otpChallengeId,
+    );
+    if (otpResult.error != null) {
+      throw AppError.forbidden(
+        otpResult.error!,
+        code: RemoteErrorCode.invalidOtp,
+      );
+    }
+
+    if (isPhoneDeviceLink) {
+      // Helix Global phone login: this number already owns an account, and a
+      // valid SMS OTP proves the person controls that number (and therefore
+      // the SIM, i.e. this physical device). Bring the account onto THIS
+      // device.
+      //
+      // The account has a single Ed25519 identity key that signs this
+      // account's signed prekeys, and every peer's prekey bundle is verified
+      // against the one server-side `identity_public_key`. A freshly linked
+      // device holds a new identity key pair, so it can only send/receive
+      // messages if the account key rotates to it. That rotation invalidates
+      // any previously-linked device's ability to send, so - exactly like the
+      // recovery flow in modules/auth/recovery.dart - we revoke those devices
+      // and make this device the account's active device. A phone number maps
+      // to one SIM/physical device, so this is a takeover-by-the-phone, not a
+      // silent second-device attach.
+      final linkedAccountId = phoneAccountId;
+      // An administrator can block or suspend an account; a valid phone OTP
+      // must not be a way around that. Matches the recovery flow's guards.
+      final linkedStatus = db.getAccount(linkedAccountId)?['status'] as String?;
+      if (linkedStatus == 'BLOCKED') {
+        throw AppError.forbidden('This account is blocked');
+      }
+      for (final device in db.getDevices(linkedAccountId)) {
+        final existingDeviceId = device['device_id'] as String;
+        if (existingDeviceId != deviceId &&
+            device['status'] != 'REVOKED') {
+          db.revokeDevice(linkedAccountId, existingDeviceId);
+        }
+      }
+      db.updateAccountIdentityKey(linkedAccountId, identityPublicKey);
+      db.registerDevice(
+        deviceId,
+        linkedAccountId,
+        deviceSigningPublicKey,
+        deviceAgreementPublicKey,
+        deviceName,
+      );
+      if (otpResult.challengeId != null) {
+        db.markOtpConsumed(otpResult.challengeId!, now);
+      }
+      db.logAudit(
+        linkedAccountId,
+        deviceId,
+        'DEVICE_LINKED_VIA_OTP',
+        request.context['client_ip'] as String?,
+        null,
+      );
+      final profile = db.getAccountProfile(linkedAccountId);
+      return Response.ok(
+        jsonEncode({
+          'message': 'Registration successful',
+          'account_id': linkedAccountId,
+          'device_id': deviceId,
+          'existing_account': true,
+          if (profile != null) 'display_name': profile['display_name'],
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+
+    // Genuinely new account. Personal servers redeem their invite here,
+    // after every other check has passed; Global has no invite to redeem.
+    if (invite != null) {
+      final redeemed = db.redeemInviteCredential(
+        inviteId: invite['invite_id'] as String,
+        accountId: accountId,
+        now: now,
+      );
+      if (!redeemed) {
+        throw AppError.forbidden('Invite code already used');
+      }
+    }
+
+    db.createAccount(
+      accountId,
+      _reservedUsername(accountId),
+      identityPublicKey,
+      phoneHash: phoneHash,
+      phoneLast4: phoneLast4,
+      tosAcceptedAt: isGlobal ? now : null,
+      tosVersion: isGlobal ? HelixLegalDocuments.termsVersion : null,
+    );
+    db.upsertAccountProfile(
+      accountId: accountId,
+      displayName: displayName,
+      now: _now(),
+    );
+    if (otpResult.challengeId != null) {
+      db.markOtpConsumed(otpResult.challengeId!, now);
+    }
+    db.logAudit(
+      accountId,
+      deviceId,
+      'ACCOUNT_REGISTERED',
+      request.context['client_ip'] as String?,
+      null,
+    );
 
     db.registerDevice(
       deviceId,
@@ -222,7 +319,9 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
         'message': 'Registration successful',
         'account_id': accountId,
         'device_id': deviceId,
+        'existing_account': false,
       }),
+      headers: {'Content-Type': 'application/json'},
     );
   }
 

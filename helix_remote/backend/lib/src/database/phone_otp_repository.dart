@@ -35,10 +35,41 @@ extension BackendPhoneOtpRepository on BackendDatabase {
              created_at, expires_at, consumed_at
       FROM phone_otp_challenges
       WHERE phone_hash = ?
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, rowid DESC
       LIMIT 1;
     ''');
     final result = stmt.select([phoneHash]);
+    stmt.close();
+    if (result.isEmpty) return null;
+    final row = result.first;
+    return {
+      'challenge_id': row['challenge_id'],
+      'phone_hash': row['phone_hash'],
+      'code_hash': row['code_hash'],
+      'purpose': row['purpose'],
+      'attempts': row['attempts'],
+      'created_at': row['created_at'],
+      'expires_at': row['expires_at'],
+      'consumed_at': row['consumed_at'],
+    };
+  }
+
+  /// Fetches a specific challenge only when it belongs to the supplied phone
+  /// hash. Registration may optionally bind to the challenge returned by the
+  /// OTP request, preventing a later resend from silently changing the code
+  /// being verified.
+  Map<String, dynamic>? getOtpChallenge({
+    required String challengeId,
+    required String phoneHash,
+  }) {
+    final stmt = _db.prepare('''
+      SELECT challenge_id, phone_hash, code_hash, purpose, attempts,
+             created_at, expires_at, consumed_at
+      FROM phone_otp_challenges
+      WHERE challenge_id = ? AND phone_hash = ?
+      LIMIT 1;
+    ''');
+    final result = stmt.select([challengeId, phoneHash]);
     stmt.close();
     if (result.isEmpty) return null;
     final row = result.first;

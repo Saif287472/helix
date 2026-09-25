@@ -67,6 +67,27 @@ class OnboardingNotifier extends ChangeNotifier {
   }
 
   void setServerType(ServerType type) {
+    final rootTargetsGlobal =
+        _root?.devConfig.restBaseUri.origin ==
+        Uri.parse(kHelixGlobalServerUrl).origin;
+    if (type == ServerType.global &&
+        _root != null &&
+        !rootTargetsGlobal &&
+        _onServerUrlChanged != null) {
+      // A saved personal-server root must never receive Global OTP or
+      // registration traffic. Ask the host to rebuild the unauthenticated
+      // root at the fixed Global endpoint before continuing.
+      _state = _state.copyWith(
+        serverType: type,
+        connectedServerName: 'Helix Global Server',
+        isLoading: true,
+        clearErrorMessage: true,
+      );
+      notifyListeners();
+      unawaited(_onServerUrlChanged(kHelixGlobalServerUrl));
+      return;
+    }
+
     _state = _state.copyWith(
       serverType: type,
       connectedServerName: type == ServerType.global
@@ -134,7 +155,12 @@ class OnboardingNotifier extends ChangeNotifier {
   }
 
   void updatePhoneNumber(String phone) {
-    _state = _state.copyWith(phoneNumber: phone);
+    _state = _state.copyWith(
+      phoneNumber: phone,
+      otpCode: '',
+      phoneHash: '',
+      otpChallengeId: '',
+    );
     notifyListeners();
   }
 
@@ -211,25 +237,30 @@ class OnboardingNotifier extends ChangeNotifier {
       return false;
     }
 
-    _state = _state.copyWith(isLoading: true, clearErrorMessage: true);
+    final isGlobal = !isPersonal && _state.serverType == ServerType.global;
+    _state = _state.copyWith(
+      isLoading: true,
+      clearErrorMessage: true,
+      otpCode: '',
+      phoneHash: '',
+      otpChallengeId: '',
+    );
     notifyListeners();
 
-    String? generatedInvite = _state.inviteCode;
-
+    // Helix Global does not use invitations at all: the server sends the OTP
+    // to the entered number, and whether that number is brand new or already
+    // owns an account is resolved server-side after the OTP is verified. So we
+    // never request or surface an invite code on the Global path. Personal
+    // servers keep whatever invite the user joined with.
+    final inviteCode = isGlobal ? '' : (_state.inviteCode ?? '');
     final targetUrl = (isPersonal || _state.serverType == ServerType.others)
         ? (_state.serverNodeUrl ?? kHelixGlobalServerUrl)
         : kHelixGlobalServerUrl;
 
     try {
+      final RemoteOtpRequestResult otpRequest;
       if (_root != null) {
-        if (!isPersonal && generatedInvite == null) {
-          try {
-            generatedInvite = await _root.requestGlobalAutoInvite();
-          } catch (_) {
-            generatedInvite = 'INV-GLOBAL-AUTO';
-          }
-        }
-        await _root.requestOtp(fullPhoneNumber);
+        otpRequest = await _root.requestOtp(fullPhoneNumber);
       } else {
         final client =
             _client ??
@@ -237,20 +268,42 @@ class OnboardingNotifier extends ChangeNotifier {
               baseUri: Uri.parse(targetUrl),
               timeoutMs: 10000,
             );
-        if (!isPersonal && generatedInvite == null) {
-          try {
-            final res = await client.autoIssueGlobalInvite();
-            generatedInvite = res['invite_code'] as String?;
-          } catch (_) {}
+        final saltResponse = await client.fetchDiscoverySalt();
+        final salt = saltResponse['salt'] as String?;
+        if (salt == null || salt.isEmpty) {
+          throw StateError(
+            'The Global server did not provide a phone-hash salt.',
+          );
         }
-        final saltRes = await client.fetchDiscoverySalt();
-        final salt = saltRes['salt'] as String? ?? 'salt';
         final hash = phoneHash(salt, fullPhoneNumber);
-        await client.requestPhoneOtp(
+        final otpResponse = await client.requestPhoneOtp(
           phoneHash: hash,
           phoneNumber: fullPhoneNumber,
         );
+        otpRequest = RemoteOtpRequestResult(
+          phoneHash: hash,
+          challengeId: otpResponse['challenge_id'] as String? ?? '',
+        );
       }
+
+      if (isGlobal && otpRequest.challengeId.isEmpty) {
+        throw StateError(
+          'The Global server did not return a usable OTP challenge.',
+        );
+      }
+
+      _state = _state.copyWith(
+        isLoading: false,
+        inviteCode: inviteCode,
+        phoneHash: otpRequest.phoneHash,
+        otpChallengeId: otpRequest.challengeId,
+        otpIsPlaceholder: false,
+        globalSubStep: isPersonal ? _state.globalSubStep : GlobalSubStep.otp,
+        joinSubStep: isPersonal ? JoinSubStep.otp : _state.joinSubStep,
+        step: OnboardingStep.serverSelection,
+      );
+      notifyListeners();
+      return true;
     } catch (e) {
       final msg = e is RemoteRestException
           ? RemoteUserErrorCopy.registrationFailure(
@@ -258,30 +311,29 @@ class OnboardingNotifier extends ChangeNotifier {
               _root?.devConfig.restBaseUri ?? Uri.parse(targetUrl),
             )
           : RemoteUserErrorCopy.scrubDomain(e.toString());
-      _state = _state.copyWith(isLoading: false, errorMessage: msg);
+      _state = _state.copyWith(
+        isLoading: false,
+        errorMessage: msg,
+        inviteCode: inviteCode,
+      );
       notifyListeners();
       return false;
     }
-
-    final session = 'sess_${DateTime.now().millisecondsSinceEpoch}';
-    _state = _state.copyWith(
-      isLoading: false,
-      sessionToken: session,
-      inviteCode: generatedInvite ?? _state.inviteCode,
-      otpIsPlaceholder: false,
-      globalSubStep: isPersonal ? _state.globalSubStep : GlobalSubStep.otp,
-      joinSubStep: isPersonal ? JoinSubStep.otp : _state.joinSubStep,
-      step: OnboardingStep.serverSelection,
-    );
-    notifyListeners();
-    return true;
   }
 
   Future<bool> verifyOtp({bool isPersonal = false}) async {
-    var otp = _state.otpCode.trim();
+    final otp = _state.otpCode.trim();
     if (otp.isEmpty) {
       _state = _state.copyWith(
         errorMessage: 'Please enter the verification code sent to your phone.',
+      );
+      notifyListeners();
+      return false;
+    }
+    final isGlobal = !isPersonal && _state.serverType == ServerType.global;
+    if (isGlobal && !RegExp(r'^\d{6}$').hasMatch(otp)) {
+      _state = _state.copyWith(
+        errorMessage: 'Enter the six-digit verification code from your SMS.',
       );
       notifyListeners();
       return false;
@@ -294,17 +346,65 @@ class OnboardingNotifier extends ChangeNotifier {
     );
     notifyListeners();
 
-    await Future<void>.delayed(const Duration(milliseconds: 150));
-
-    final isExisting = otp.endsWith('0');
-    final auth = 'auth_${DateTime.now().millisecondsSinceEpoch}';
+    try {
+      if (isGlobal) {
+        if (_state.phoneHash.isEmpty) {
+          throw StateError('Request a new verification code first.');
+        }
+        if (_root != null) {
+          await _root.verifyOtp(
+            phoneHash: _state.phoneHash,
+            otpCode: otp,
+            challengeId: _state.otpChallengeId,
+          );
+        } else {
+          final targetUrl = _state.serverNodeUrl ?? kHelixGlobalServerUrl;
+          final client =
+              _client ??
+              HelixRemoteRestClientImpl(
+                baseUri: Uri.parse(targetUrl),
+                timeoutMs: 10000,
+              );
+          final response = await client.verifyPhoneOtp(
+            phoneHash: _state.phoneHash,
+            otpCode: otp,
+            challengeId: _state.otpChallengeId,
+          );
+          if (response['valid'] != true) {
+            throw StateError(
+              'The server did not accept the verification code.',
+            );
+          }
+        }
+      } else {
+        // Preserve the existing personal-server behavior. Personal servers
+        // may still use the older optimistic OTP step; Global is the path
+        // that must validate before profile creation.
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+    } catch (e) {
+      final backend =
+          _root?.devConfig.restBaseUri ??
+          Uri.parse(_state.serverNodeUrl ?? kHelixGlobalServerUrl);
+      final msg = e is RemoteRestException
+          ? RemoteUserErrorCopy.registrationFailure(e, backend)
+          : RemoteUserErrorCopy.scrubDomain(e.toString());
+      _state = _state.copyWith(
+        isLoading: false,
+        errorMessage: msg,
+        globalSubStep: isGlobal ? GlobalSubStep.otp : _state.globalSubStep,
+        joinSubStep: isGlobal ? _state.joinSubStep : JoinSubStep.name,
+        step: OnboardingStep.serverSelection,
+      );
+      notifyListeners();
+      return false;
+    }
 
     _state = _state.copyWith(
       isLoading: false,
-      authToken: auth,
-      isExistingUser: isExisting,
-      globalSubStep: isPersonal ? _state.globalSubStep : GlobalSubStep.name,
-      joinSubStep: isPersonal ? JoinSubStep.name : _state.joinSubStep,
+      isExistingUser: false,
+      globalSubStep: isGlobal ? GlobalSubStep.name : _state.globalSubStep,
+      joinSubStep: isGlobal ? _state.joinSubStep : JoinSubStep.name,
       step: OnboardingStep.serverSelection,
     );
     notifyListeners();
@@ -522,7 +622,12 @@ class OnboardingNotifier extends ChangeNotifier {
         ? (defaultName ?? (phone.isNotEmpty ? phone : 'Helix User'))
         : enteredName;
 
-    final inviteCode = _state.inviteCode ?? (code ?? 'INV-GLOBAL');
+    // Helix Global signs up with no invitation code - the phone OTP is the
+    // only credential. Personal servers still require a real invite code.
+    // (`requiresTos` is true for exactly the same Global-only path.)
+    final inviteCode = requiresTos
+        ? ''
+        : (_state.inviteCode ?? (code ?? 'INV-GLOBAL'));
     final serverUrl = (isPersonal || _state.serverType == ServerType.others)
         ? (_state.serverNodeUrl ?? kHelixGlobalServerUrl)
         : kHelixGlobalServerUrl;
@@ -534,8 +639,10 @@ class OnboardingNotifier extends ChangeNotifier {
       try {
         await _root.registerAndLogin(
           phoneNumber: phone,
+          phoneHashOverride: _state.phoneHash,
           displayName: finalName,
           otpCode: otp,
+          otpChallengeId: _state.otpChallengeId,
           inviteCode: inviteCode,
           tosAccepted: requiresTos && _state.tosAccepted,
           tosVersion: _state.tosVersion,
@@ -545,6 +652,9 @@ class OnboardingNotifier extends ChangeNotifier {
         final isPhoneConflict =
             e is RemoteRestException &&
             e.serverCode == RemoteApiErrorCodes.phoneAlreadyRegistered;
+        final isOtpError =
+            e is RemoteRestException &&
+            e.serverCode == RemoteApiErrorCodes.invalidOtp;
         final msg = e is RemoteRestException
             ? RemoteUserErrorCopy.registrationFailure(e, backend)
             : RemoteUserErrorCopy.unknownRegistration();
@@ -553,6 +663,12 @@ class OnboardingNotifier extends ChangeNotifier {
           errorMessage: isPhoneConflict ? null : msg,
           clearErrorMessage: isPhoneConflict,
           showPhoneRecoveryPrompt: isPhoneConflict,
+          globalSubStep: isOtpError && requiresTos
+              ? GlobalSubStep.otp
+              : _state.globalSubStep,
+          joinSubStep: isOtpError && !requiresTos
+              ? JoinSubStep.otp
+              : _state.joinSubStep,
         );
         notifyListeners();
         return false;
@@ -566,6 +682,8 @@ class OnboardingNotifier extends ChangeNotifier {
       serverName: _state.connectedServerName,
       displayName: finalName,
       otpCode: otp,
+      phoneHash: _state.phoneHash,
+      otpChallengeId: _state.otpChallengeId,
       tosAccepted: requiresTos && _state.tosAccepted,
       tosVersion: _state.tosVersion,
     );

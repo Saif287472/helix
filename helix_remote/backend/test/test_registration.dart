@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cryptography/cryptography.dart' as crypto;
+import 'package:crypto/crypto.dart';
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
 
@@ -132,34 +133,34 @@ String registrationTranscript({
   ].join('\n');
 }
 
-/// Calls the real `/accounts/phone/otp/request` endpoint and returns the
-/// code from the response — this is the agreed placeholder delivery
-/// mechanism (no real SMS/push), so the code is simply in the response
-/// body rather than requiring a mocked notification channel in tests.
-Future<String> requestTestOtp({
-  required HttpClient client,
-  required String host,
-  required int port,
+/// Creates a pending, unconsumed OTP challenge for [phoneHash] directly in the
+/// database with a known [code], and returns that code.
+///
+/// The real `/accounts/phone/otp/request` endpoint delivers codes through a
+/// configured SMS provider (BulkSMSBD) and never returns the code in the
+/// response — that placeholder was intentionally removed. Tests therefore seed
+/// the challenge directly (mirroring how they already seed invites via
+/// [seedTestInvite]) and then exercise the real registration path, which still
+/// performs the authoritative OTP check against this challenge.
+String requestTestOtp({
+  required BackendDatabase db,
   required String phoneHash,
-}) async {
-  final request = await client.post(
-    host,
-    port,
-    '/api/v1/accounts/phone/otp/request',
+  String code = '123456',
+  Duration ttl = const Duration(minutes: 10),
+}) {
+  final now = DateTime.now().millisecondsSinceEpoch;
+  db.createOtpChallenge(
+    challengeId: 'otp_test_${_otpCounter++}',
+    phoneHash: phoneHash,
+    codeHash: sha256.convert(utf8.encode(code)).toString(),
+    purpose: 'REGISTRATION',
+    createdAt: now,
+    expiresAt: now + ttl.inMilliseconds,
   );
-  request.headers.contentType = ContentType.json;
-  request.write(jsonEncode({'phone_hash': phoneHash}));
-  final response = await request.close();
-  final body =
-      jsonDecode(await response.transform(utf8.decoder).join())
-          as Map<String, dynamic>;
-  if (response.statusCode != 200) {
-    throw StateError(
-      'OTP request failed with HTTP ${response.statusCode}: $body',
-    );
-  }
-  return body['code'] as String;
+  return code;
 }
+
+int _otpCounter = 0;
 
 /// Directly seeds a redeemable invite credential via the database, bypassing
 /// the admin-token HTTP flow (tests generally don't care who issued it, just
@@ -199,12 +200,7 @@ Future<TestRegistrationMaterial> registerTestAccount({
     deviceId: deviceId,
     deviceName: deviceName,
   );
-  final otpCode = await requestTestOtp(
-    client: client,
-    host: host,
-    port: port,
-    phoneHash: username,
-  );
+  final otpCode = requestTestOtp(db: db, phoneHash: username);
   final inviteCode = seedTestInvite(db);
   final request = await client.post(host, port, '/api/v1/accounts/register');
   request.headers.contentType = ContentType.json;

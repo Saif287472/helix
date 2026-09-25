@@ -36,6 +36,8 @@ class OnboardingState {
     this.countryCode = '+880',
     this.phoneNumber = '',
     this.otpCode = '',
+    this.phoneHash = '',
+    this.otpChallengeId = '',
     this.rememberDevice = true,
     this.displayName = '',
     this.tosAccepted = false,
@@ -66,6 +68,8 @@ class OnboardingState {
   final String countryCode;
   final String phoneNumber;
   final String otpCode;
+  final String phoneHash;
+  final String otpChallengeId;
   final bool rememberDevice;
   final String displayName;
   final bool tosAccepted;
@@ -96,6 +100,8 @@ class OnboardingState {
     String? countryCode,
     String? phoneNumber,
     String? otpCode,
+    String? phoneHash,
+    String? otpChallengeId,
     bool? rememberDevice,
     String? displayName,
     bool? tosAccepted,
@@ -127,6 +133,8 @@ class OnboardingState {
       countryCode: countryCode ?? this.countryCode,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       otpCode: otpCode ?? this.otpCode,
+      phoneHash: phoneHash ?? this.phoneHash,
+      otpChallengeId: otpChallengeId ?? this.otpChallengeId,
       rememberDevice: rememberDevice ?? this.rememberDevice,
       displayName: displayName ?? this.displayName,
       tosAccepted: tosAccepted ?? this.tosAccepted,

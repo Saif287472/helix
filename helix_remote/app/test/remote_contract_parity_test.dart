@@ -58,6 +58,8 @@ void main() {
     expect(text, contains('display_name:'));
     expect(text, contains('tos_accepted:'));
     expect(text, contains('tos_version:'));
+    expect(text, contains('/accounts/phone/otp/verify:'));
+    expect(text, contains('otp_challenge_id:'));
     expect(text, contains('/server/tos:'));
     expect(text, contains('maxLength: 80'));
   });

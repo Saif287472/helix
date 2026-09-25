@@ -71,14 +71,8 @@ void main() {
     );
   }
 
-  Future<String> requestOtp(String phoneHash) async {
-    final response = await postJson('/api/v1/accounts/phone/otp/request', {
-      'phone_hash': phoneHash,
-    });
-    expect(response.statusCode, equals(200));
-    return (jsonDecode(response.body) as Map<String, dynamic>)['code']
-        as String;
-  }
+  String requestOtp(String phoneHash) =>
+      requestTestOtp(db: server.db, phoneHash: phoneHash);
 
   /// Registers a fresh account and returns its access token, so tests can
   /// call the authenticated profile endpoint.
@@ -101,7 +95,7 @@ void main() {
     final inviteCode =
         (jsonDecode(inviteCreate.body) as Map<String, dynamic>)['invite_code']
             as String;
-    final otpCode = await requestOtp(phoneHash);
+    final otpCode = requestOtp(phoneHash);
     final register = await postJson(
       '/api/v1/accounts/register',
       registrationBody(

@@ -166,15 +166,20 @@ class HelixCliClient {
   /// Registers client identity with a remote backend server and bootstraps local storage.
   ///
   /// `phoneNumber` must already be in E.164 form (e.g. `+15551234567`);
-  /// `otpCode` comes from a prior `restClient.requestPhoneOtp()` call and
-  /// `inviteCode` from an admin-issued or Helix-Global auto-issued invite.
+  /// `otpCode` comes from a prior `restClient.requestPhoneOtp()` call.
+  ///
+  /// `inviteCode` is required by personal/self-hosted servers. Helix Global
+  /// needs no invitation - pass an empty string (or omit it) and the SMS OTP
+  /// is the only credential, both to create a new account and to sign an
+  /// existing account in on this device.
   Future<void> register({
     required CliRestClient restClient,
     required String accountId,
     required String phoneNumber,
     required String displayName,
     required String otpCode,
-    required String inviteCode,
+    String? otpChallengeId,
+    String inviteCode = '',
     required String deviceId,
     required String deviceName,
     bool tosAccepted = false,
@@ -245,6 +250,7 @@ class HelixCliClient {
       accountId: accountId,
       phoneHash: phoneHash,
       otpCode: otpCode,
+      otpChallengeId: otpChallengeId,
       inviteCode: inviteCode,
       displayName: displayName,
       tosAccepted: tosAccepted,

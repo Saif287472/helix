@@ -694,14 +694,7 @@ Future<_AuthTokens> _registerAndLogin(
     deviceId: deviceId,
     deviceName: deviceName,
   );
-  final otpResponse = await _postJson(
-    client,
-    port,
-    '/api/v1/accounts/phone/otp/request',
-    {'phone_hash': username},
-  );
-  final otpCode =
-      (jsonDecode(otpResponse.body) as Map<String, dynamic>)['code'] as String;
+  final otpCode = requestTestOtp(db: db, phoneHash: username);
   final inviteCode = seedTestInvite(db);
   final register = await _postJson(client, port, '/api/v1/accounts/register', {
     ...registrationBody(

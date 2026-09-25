@@ -412,13 +412,7 @@ _registerAndLogin(
     deviceName: deviceName,
   );
 
-  final otpResp = await _post(
-    client,
-    port,
-    '/api/v1/accounts/phone/otp/request',
-    {'phone_hash': username},
-  );
-  final otpCode = otpResp.body['code'] as String;
+  final otpCode = requestTestOtp(db: server.db, phoneHash: username);
   final inviteCode = seedTestInvite(server.db);
 
   final regResp = await _post(

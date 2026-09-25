@@ -13,6 +13,8 @@ class ServerInviteChoice {
     this.serverName,
     this.displayName,
     this.otpCode,
+    this.phoneHash = '',
+    this.otpChallengeId = '',
     this.tosAccepted = false,
     this.tosVersion = '',
   });
@@ -33,6 +35,10 @@ class ServerInviteChoice {
 
   /// OTP code entered or bypassed during registration.
   final String? otpCode;
+
+  /// The phone hash and OTP challenge used for this registration.
+  final String phoneHash;
+  final String otpChallengeId;
 
   /// Whether the user explicitly accepted the Global legal documents.
   final bool tosAccepted;

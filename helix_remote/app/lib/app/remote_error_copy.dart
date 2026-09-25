@@ -81,6 +81,10 @@ class RemoteUserErrorCopy {
       case RemoteRestFailureKind.http:
         switch (error.statusCode) {
           case 400:
+            if (error.serverCode == RemoteApiErrorCodes.invalidOtp) {
+              return _serverErrorMessage(error) ??
+                  'The verification code is incorrect or expired. Request a new code and try again.';
+            }
             if (error.serverCode ==
                 RemoteApiErrorCodes.termsAcceptanceRequired) {
               return 'Please read and accept the Terms of Service and Privacy '
@@ -107,6 +111,13 @@ class RemoteUserErrorCopy {
             return _serverErrorMessage(error) ??
                 'Failed to send the verification code. Try again in a '
                     'moment.';
+          case 503:
+            if (error.serverCode == RemoteApiErrorCodes.smsDeliveryFailed) {
+              return 'This server cannot send verification codes yet. SMS '
+                  'delivery is not configured on it.';
+            }
+            return 'The Helix Remote server is having trouble. Try again in a '
+                'moment.';
           default:
             return _serverErrorMessage(error) ??
                 'Registration failed because the server returned HTTP '

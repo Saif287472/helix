@@ -67,14 +67,8 @@ void main() {
     );
   }
 
-  Future<String> requestOtp(String phoneHash) async {
-    final response = await postJson('/api/v1/accounts/phone/otp/request', {
-      'phone_hash': phoneHash,
-    });
-    expect(response.statusCode, equals(200));
-    return (jsonDecode(response.body) as Map<String, dynamic>)['code']
-        as String;
-  }
+  String requestOtp(String phoneHash) =>
+      requestTestOtp(db: server.db, phoneHash: phoneHash);
 
   Future<_Response> registerWithInvite({
     required String accountId,
@@ -87,7 +81,7 @@ void main() {
       deviceId: '${accountId}_device',
       deviceName: 'Test Phone',
     );
-    final otpCode = await requestOtp(phoneHash);
+    final otpCode = requestOtp(phoneHash);
     return postJson(
       '/api/v1/accounts/register',
       registrationBody(

@@ -281,7 +281,8 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required String accountId,
     required String phoneHash,
     required String otpCode,
-    required String inviteCode,
+    String? otpChallengeId,
+    String? inviteCode,
     required String displayName,
     bool tosAccepted = false,
     String tosVersion = '',
@@ -301,7 +302,12 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       'account_id': accountId,
       'phone_hash': phoneHash,
       'otp_code': otpCode,
-      'invite_code': inviteCode,
+      if (otpChallengeId != null && otpChallengeId.isNotEmpty)
+        'otp_challenge_id': otpChallengeId,
+      // Helix Global does not use invitations; the field is omitted entirely
+      // so the server takes its invite-less phone-authenticated path.
+      if (inviteCode != null && inviteCode.isNotEmpty)
+        'invite_code': inviteCode,
       'display_name': displayName,
       if (tosAccepted) 'tos_accepted': true,
       if (tosAccepted)
@@ -377,6 +383,22 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     'POST',
     'accounts/phone/otp/request',
     body: {'phone_hash': phoneHash, 'phone_number': phoneNumber},
+  );
+
+  @override
+  Future<Map<String, dynamic>> verifyPhoneOtp({
+    required String phoneHash,
+    required String otpCode,
+    String? challengeId,
+  }) => _request(
+    'POST',
+    'accounts/phone/otp/verify',
+    body: {
+      'phone_hash': phoneHash,
+      'otp_code': otpCode,
+      if (challengeId != null && challengeId.isNotEmpty)
+        'challenge_id': challengeId,
+    },
   );
 
   @override

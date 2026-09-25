@@ -26,8 +26,10 @@ Map<String, dynamic>? _decodeApiErrorBody(String body) {
 /// ordinary HTTP failures rather than assuming this list is exhaustive.
 abstract final class RemoteApiErrorCodes {
   static const phoneAlreadyRegistered = 'phone_already_registered';
+  static const invalidOtp = 'invalid_otp';
   static const termsAcceptanceRequired = 'terms_acceptance_required';
   static const termsVersionOutdated = 'terms_version_outdated';
+  static const smsDeliveryFailed = 'sms_delivery_failed';
 }
 
 class RemoteRestException extends HttpException {

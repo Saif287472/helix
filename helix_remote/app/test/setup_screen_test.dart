@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote/app/remote_config.dart';
+import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/screens/server_choice_screen.dart';
@@ -48,10 +49,10 @@ void main() {
       expect(successOtp, isTrue);
       expect(notifier.state.globalSubStep, GlobalSubStep.otp);
 
-      // OTP verification bypass - allows any code or empty
-      notifier.updateOtpCode('123');
-      final bypassVerify = await notifier.verifyOtp();
-      expect(bypassVerify, isTrue);
+      // The Global path verifies the code before profile creation.
+      notifier.updateOtpCode('123456');
+      final verified = await notifier.verifyOtp();
+      expect(verified, isTrue);
       expect(notifier.state.globalSubStep, GlobalSubStep.name);
 
       // Complete setup after accepting the Global legal documents.
@@ -65,7 +66,31 @@ void main() {
       expect(choice?.phoneNumber, contains('1712345678'));
       expect(choice?.tosAccepted, isTrue);
       expect(choice?.tosVersion, isNotEmpty);
+      expect(choice?.phoneHash, isNotEmpty);
+      expect(choice?.otpChallengeId, 'otp_test');
     });
+
+    test(
+      'Global keeps the user on OTP when verification is rejected',
+      () async {
+        final notifier =
+            OnboardingNotifier(
+              autoStartLaunch: false,
+              client: _OnboardingRestClient(rejectOtp: true),
+            )..updateState(
+              (s) => s.copyWith(
+                step: OnboardingStep.serverSelection,
+                phoneNumber: '1712345678',
+              ),
+            );
+
+        expect(await notifier.requestOtp(), isTrue);
+        notifier.updateOtpCode('123456');
+        expect(await notifier.verifyOtp(), isFalse);
+        expect(notifier.state.globalSubStep, GlobalSubStep.otp);
+        expect(notifier.state.errorMessage, contains('Incorrect'));
+      },
+    );
 
     test('Global registration cannot complete before ToS acceptance', () async {
       final notifier =
@@ -316,6 +341,10 @@ void main() {
 }
 
 class _OnboardingRestClient implements HelixRemoteRestClient {
+  _OnboardingRestClient({this.rejectOtp = false});
+
+  final bool rejectOtp;
+
   @override
   Future<Map<String, dynamic>> autoIssueGlobalInvite() async => {
     'invite_code': 'INV-TEST',
@@ -330,7 +359,24 @@ class _OnboardingRestClient implements HelixRemoteRestClient {
   Future<Map<String, dynamic>> requestPhoneOtp({
     required String phoneHash,
     required String phoneNumber,
-  }) async => {};
+  }) async => {'challenge_id': 'otp_test'};
+
+  @override
+  Future<Map<String, dynamic>> verifyPhoneOtp({
+    required String phoneHash,
+    required String otpCode,
+    String? challengeId,
+  }) async {
+    if (rejectOtp) {
+      throw const RemoteRestException(
+        message: '{"error":"Incorrect verification code","code":"invalid_otp"}',
+        statusCode: 400,
+        serverCode: RemoteApiErrorCodes.invalidOtp,
+        failureKind: RemoteRestFailureKind.http,
+      );
+    }
+    return {'valid': true};
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

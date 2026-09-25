@@ -66,6 +66,9 @@ enum RemoteErrorCode {
   /// The SMS gateway rejected or failed to submit a message.
   smsDeliveryFailed('sms_delivery_failed'),
 
+  /// The supplied phone verification code is invalid, expired, or exhausted.
+  invalidOtp('invalid_otp'),
+
   /// A phone hash already belongs to an account. This is deliberately more
   /// specific than [conflict] so a client can offer the account-recovery path
   /// without parsing the human-readable error message.

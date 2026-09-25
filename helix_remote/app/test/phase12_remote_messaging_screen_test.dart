@@ -74,7 +74,8 @@ class _FakeRestClient implements HelixRemoteRestClient {
     required String accountId,
     required String phoneHash,
     required String otpCode,
-    required String inviteCode,
+    String? otpChallengeId,
+    String? inviteCode,
     required String displayName,
     bool tosAccepted = false,
     String tosVersion = '',
@@ -117,6 +118,13 @@ class _FakeRestClient implements HelixRemoteRestClient {
     required String phoneHash,
     required String phoneNumber,
   }) async => {};
+
+  @override
+  Future<Map<String, dynamic>> verifyPhoneOtp({
+    required String phoneHash,
+    required String otpCode,
+    String? challengeId,
+  }) async => {'valid': true};
 
   @override
   Future<Map<String, dynamic>> lookupInvite({

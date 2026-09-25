@@ -52,14 +52,8 @@ void main() {
       );
     }
 
-    Future<String> requestOtp(String phoneHash) async {
-      final response = await postJson('/api/v1/accounts/phone/otp/request', {
-        'phone_hash': phoneHash,
-      });
-      expect(response.statusCode, equals(200));
-      return (jsonDecode(response.body) as Map<String, dynamic>)['code']
-          as String;
-    }
+    String requestOtp(String phoneHash) =>
+        requestTestOtp(db: server.db, phoneHash: phoneHash);
 
     Future<TestRegistrationMaterial> register({
       required String accountId,
@@ -73,7 +67,7 @@ void main() {
         deviceId: deviceId,
         deviceName: deviceName,
       );
-      final otpCode = await requestOtp(username);
+      final otpCode = requestOtp(username);
       final inviteCode = seedTestInvite(server.db);
       final response = await postJson(
         '/api/v1/accounts/register',
@@ -286,7 +280,7 @@ void main() {
           deviceId: 'replay_device',
           deviceName: 'Replay Phone',
         );
-        final replayOtpCode = await requestOtp('replay_user');
+        final replayOtpCode = requestOtp('replay_user');
         final body = registrationBody(
           accountId: 'replay_account',
           username: 'replay_user',

@@ -104,6 +104,41 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
     );
   }
 
+  /// Verifies an OTP without consuming it. The registration transaction still
+  /// performs the authoritative check and consumes the challenge atomically.
+  /// This endpoint lets the client reject a bad code before asking the user
+  /// to enter a display name, while preserving the one-time challenge model.
+  Future<Response> _verifyPhoneOtpHandler(Request request) async {
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final phoneHash = body['phone_hash'] as String?;
+    final code = body['otp_code'] as String?;
+    final challengeId = body['challenge_id'] as String?;
+    if (phoneHash == null ||
+        phoneHash.isEmpty ||
+        code == null ||
+        code.isEmpty) {
+      throw AppError.badRequest('Missing phone_hash or otp_code');
+    }
+
+    final result = _verifyPhoneOtp(
+      phoneHash: phoneHash,
+      code: code,
+      challengeId: challengeId,
+    );
+    if (result.error != null) {
+      throw AppError.badRequest(
+        result.error!,
+        code: RemoteErrorCode.invalidOtp,
+      );
+    }
+
+    return Response.ok(
+      jsonEncode({'valid': true, 'challenge_id': result.challengeId}),
+      headers: {'Content-Type': 'application/json'},
+    );
+  }
+
   String _generateOtpCode() {
     final random = Random.secure();
     return List.generate(6, (_) => random.nextInt(10).toString()).join();
@@ -137,8 +172,11 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
   ({String? challengeId, String? error}) _verifyPhoneOtp({
     required String phoneHash,
     required String code,
+    String? challengeId,
   }) {
-    final challenge = db.getLatestOtpChallenge(phoneHash);
+    final challenge = challengeId == null || challengeId.isEmpty
+        ? db.getLatestOtpChallenge(phoneHash)
+        : db.getOtpChallenge(challengeId: challengeId, phoneHash: phoneHash);
     if (challenge == null) {
       return (challengeId: null, error: 'No verification code was requested');
     }

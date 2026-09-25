@@ -275,6 +275,7 @@ class _SetupScreenState extends State<SetupScreen> {
           onOtpChanged: _notifier.updateOtpCode,
           onRememberDeviceChanged: _notifier.toggleRememberDevice,
           onSubmit: () => _notifier.verifyOtp(),
+          onResendOtp: () => _notifier.requestOtp(),
         );
 
       case OnboardingStep.globalName:

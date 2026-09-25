@@ -61,6 +61,7 @@ abstract class AuthModuleBase {
   ({String? challengeId, String? error}) _verifyPhoneOtp({
     required String phoneHash,
     required String code,
+    String? challengeId,
   });
 
   String _serverAudience(Request request);
@@ -127,6 +128,7 @@ class AuthModule extends AuthModuleBase
     // Public routes
     router.post('/register', _registerHandler);
     router.post('/phone/otp/request', _requestPhoneOtpHandler);
+    router.post('/phone/otp/verify', _verifyPhoneOtpHandler);
     // POST is the current form - it keeps the invite code out of access logs
     // and proxy history. GET is retained for clients predating that change.
     router.post('/invite/lookup', _lookupInviteHandler);

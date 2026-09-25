@@ -5,7 +5,11 @@ abstract class HelixRemoteRestClient {
     required String accountId,
     required String phoneHash,
     required String otpCode,
-    required String inviteCode,
+    String? otpChallengeId,
+    // Helix Global signs up without invitations, so this is optional: when
+    // omitted the server takes its invite-less phone-authenticated path.
+    // Personal/self-hosted servers still reject an empty invite code.
+    String? inviteCode,
     required String displayName,
     bool tosAccepted = false,
     String tosVersion = '',
@@ -27,6 +31,12 @@ abstract class HelixRemoteRestClient {
   Future<Map<String, dynamic>> requestPhoneOtp({
     required String phoneHash,
     required String phoneNumber,
+  });
+
+  Future<Map<String, dynamic>> verifyPhoneOtp({
+    required String phoneHash,
+    required String otpCode,
+    String? challengeId,
   });
 
   Future<Map<String, dynamic>> lookupInvite({required String inviteCode});

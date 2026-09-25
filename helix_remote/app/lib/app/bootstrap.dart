@@ -160,10 +160,12 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
           try {
             await root.registerAndLogin(
               phoneNumber: choice.phoneNumber!,
+              phoneHashOverride: choice.phoneHash,
               displayName: choice.displayName!,
               otpCode: (choice.otpCode != null && choice.otpCode!.isNotEmpty)
                   ? choice.otpCode!
                   : '123456',
+              otpChallengeId: choice.otpChallengeId,
               inviteCode: choice.inviteCode,
               tosAccepted: choice.tosAccepted,
               tosVersion: choice.tosVersion,

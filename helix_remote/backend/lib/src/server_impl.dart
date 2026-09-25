@@ -574,6 +574,7 @@ class BackendServer {
             path.endsWith('/accounts/login') ||
             path.endsWith('/accounts/refresh') ||
             path.endsWith('/accounts/phone/otp/request') ||
+            path.endsWith('/accounts/phone/otp/verify') ||
             path.endsWith('/accounts/invite/lookup') ||
             path.endsWith('/accounts/invite/auto-issue') ||
             path.endsWith('/accounts/recovery/redeem') ||
