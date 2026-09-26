@@ -169,7 +169,6 @@ class _CallHistoryRow {
     required this.timeLabel,
     required this.durationSeconds,
     required this.durationLabel,
-    required this.mediaLabel,
     this.repeatCount = 1,
   });
 
@@ -185,7 +184,6 @@ class _CallHistoryRow {
   final String timeLabel;
   final int durationSeconds;
   final String durationLabel;
-  final String mediaLabel;
   final int repeatCount;
 
   bool get isMissed =>
@@ -217,7 +215,6 @@ class _CallHistoryRow {
       timeLabel: timeLabel,
       durationSeconds: durationSeconds,
       durationLabel: durationLabel,
-      mediaLabel: mediaLabel,
       repeatCount: repeatCount ?? this.repeatCount,
     );
   }

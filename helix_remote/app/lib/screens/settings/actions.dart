@@ -125,14 +125,6 @@ extension _SettingsActions on _SettingsScreenState {
             value: '${_groupCount()}',
             onTap: _openGroups,
           ),
-          _SettingsItem(
-            icon: Icons.palette_outlined,
-            color: HelixColorTokens.cFFEC4899,
-            title: 'Appearance',
-            subtitle: 'App theme and chat presentation',
-            value: 'System',
-            onTap: () => _showSoon('Appearance'),
-          ),
         ],
       ),
       _SettingsGroup(

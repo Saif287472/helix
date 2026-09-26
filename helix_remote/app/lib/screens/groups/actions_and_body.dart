@@ -262,6 +262,8 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                                   _showJoinLink(group.conversationId);
                                 case 'privacy':
                                   _showPrivacySettings(group.conversationId);
+                                case 'rename':
+                                  _renameGroup(group.conversationId);
                                 case 'members':
                                   _showMemberManagement(group.conversationId);
                                 case 'transfer':
@@ -321,6 +323,18 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                                       HelixLocalizations.of(
                                         context,
                                       ).groupAddPrivacy2,
+                                    ),
+                                  ),
+                                ),
+                              if (group.isAdmin)
+                                PopupMenuItem(
+                                  value: 'rename',
+                                  child: ListTile(
+                                    leading: const Icon(Icons.drive_file_rename_outline),
+                                    title: Text(
+                                      HelixLocalizations.of(
+                                        context,
+                                      ).renameGroup,
                                     ),
                                   ),
                                 ),

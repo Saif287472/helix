@@ -56,30 +56,13 @@ class _CallInfoHistoryRow extends StatelessWidget {
               ],
             ),
           ),
-          if (row.durationLabel.isNotEmpty || row.mediaLabel.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (row.durationLabel.isNotEmpty)
-                  Text(
-                    row.durationLabel,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 13,
-                    ),
-                  ),
-                if (row.mediaLabel.isNotEmpty)
-                  Padding(
-                    padding: HelixInsets.only(top: 6),
-                    child: Text(
-                      row.mediaLabel,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-              ],
+          if (row.durationLabel.isNotEmpty)
+            Text(
+              row.durationLabel,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+                fontSize: 13,
+              ),
             ),
         ],
       ),
@@ -115,9 +98,7 @@ class _QuickContactCard extends StatelessWidget {
             height: 64,
             alignment: Alignment.centerLeft,
             padding: HelixInsets.symmetric(horizontal: 16),
-            color: cs.primaryContainer.withAlpha(
-              theme.brightness == Brightness.dark ? 120 : 170,
-            ),
+            color: cs.primaryContainer.withAlpha(170),
             child: Text(
               row.peerName,
               maxLines: 1,
@@ -132,9 +113,7 @@ class _QuickContactCard extends StatelessWidget {
           Container(
             height: 416,
             alignment: Alignment.center,
-            color: cs.primaryContainer.withAlpha(
-              theme.brightness == Brightness.dark ? 80 : 120,
-            ),
+            color: cs.primaryContainer.withAlpha(120),
             child: Text(
               _initials(row.peerName),
               style: theme.textTheme.displayLarge?.copyWith(
@@ -287,9 +266,7 @@ class _CallSearchField extends StatelessWidget {
                   tooltip: 'Clear search',
                 ),
           filled: true,
-          fillColor: cs.surfaceContainerHighest.withAlpha(
-            theme.brightness == Brightness.dark ? 130 : 105,
-          ),
+          fillColor: cs.surfaceContainerHighest.withAlpha(105),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(28),
             borderSide: BorderSide.none,

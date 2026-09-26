@@ -36,23 +36,10 @@ class ConversationPalette {
 
 ConversationPalette conversationPalette(ThemeData theme) {
   final scheme = theme.colorScheme;
-  if (theme.brightness == Brightness.dark) {
-    return const ConversationPalette(
-      page: HelixColorTokens.cFF0B1417,
-      appBar: HelixColorTokens.cFF0B1114,
-      onAppBar: HelixScrimColors.onBackdrop,
-      inputBar: HelixColorTokens.cFF0B1417,
-      input: HelixColorTokens.cFF1F2C34,
-      incoming: HelixColorTokens.cFF1F2C34,
-      outgoing: HelixColorTokens.cFF005C4B,
-      incomingTime: HelixColorTokens.cFF98A4AA,
-      outgoingTime: HelixColorTokens.cFFB8D5C8,
-      dateChip: HelixColorTokens.cE61C252B,
-      dateChipText: HelixColorTokens.cFFD7DEE2,
-      accent: HelixColorTokens.cFF00A884,
-      readTick: HelixColorTokens.cFF53BDEB,
-    );
-  }
+  // Light only - see HelixThemes. The near-black chat palette that used to be
+  // returned for a dark theme is removed rather than left behind a branch
+  // nothing can reach, because these are the surfaces a conversation is read
+  // against and a stray near-black one is exactly what the product is avoiding.
   return ConversationPalette(
     page: HelixColorTokens.cFFEDE7DE,
     appBar: scheme.surface,

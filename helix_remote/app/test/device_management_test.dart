@@ -9,12 +9,13 @@ import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
+import 'support/group_call_rest_stubs.dart';
 
 // ---------------------------------------------------------------------------
 // Stub REST client
 // ---------------------------------------------------------------------------
 
-class _StubRestClient implements HelixRemoteRestClient {
+class _StubRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
   final List<RemoteDevice> devices;
   final List<String> revokedIds = [];
   final List<String> renamedIds = [];

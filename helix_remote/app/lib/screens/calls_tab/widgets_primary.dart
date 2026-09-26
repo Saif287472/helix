@@ -108,9 +108,7 @@ class _QuickActionBubble extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withAlpha(
-                  theme.brightness == Brightness.dark ? 120 : 95,
-                ),
+                color: cs.surfaceContainerHighest.withAlpha(95),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: cs.onSurface, size: 26),
@@ -162,7 +160,7 @@ class _CallHistoryTile extends StatelessWidget {
     final cs = theme.colorScheme;
     final warning = row.isMissed;
     final selectedColor = Color.alphaBlend(
-      cs.primary.withAlpha(theme.brightness == Brightness.dark ? 60 : 42),
+      cs.primary.withAlpha(42),
       cs.surface,
     );
     return InkWell(

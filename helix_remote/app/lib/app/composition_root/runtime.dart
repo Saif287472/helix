@@ -187,6 +187,80 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
     await _recoverPendingCalls(reason: 'ws_connect');
   }
 
+  /// Records a call's outcome on the server as soon as the user acts on it.
+  ///
+  /// `RemoteCallService` ends a call locally and signals the peer, but it has
+  /// no REST client, so it never told the server. The pending-call row then
+  /// stayed `PENDING` until it aged out, which meant a declined call kept
+  /// showing as ringing on the caller's other devices for the rest of the TTL,
+  /// and the caller's own "cancel" read as a timeout rather than a hang-up.
+  ///
+  /// Best-effort: the local call has already ended, so a failure here is not
+  /// worth surfacing, and the row still expires on its own. Logged rather than
+  /// swallowed, so a systematic failure (a renamed route, say) is visible.
+  Future<void> _resolvePendingCall(
+    String callId, {
+    required bool accepted,
+    required bool outgoing,
+  }) async {
+    final client = _restClient;
+    if (client == null) return;
+    try {
+      if (accepted) {
+        await client.acceptPendingCall(callId);
+      } else if (outgoing) {
+        await client.cancelPendingCall(callId);
+      } else {
+        await client.declinePendingCall(callId);
+      }
+    } catch (e) {
+      AppLogger.instance.warn(
+        'CALL_PENDING',
+        'resolve $callId accepted=$accepted outgoing=$outgoing failed: $e',
+      );
+    }
+  }
+
+  /// Accepts an incoming call and records the outcome on the server.
+  @override
+  Future<void> acceptIncomingCall() async {
+    final callId = _callService?.activeCall?.callId;
+    await _callService?.acceptIncomingCall();
+    if (callId != null) {
+      await _resolvePendingCall(callId, accepted: true, outgoing: false);
+    }
+  }
+
+  /// Declines an incoming call and records the outcome on the server.
+  @override
+  Future<void> declineIncomingCall() async {
+    // Read the id before the local end, which clears the active call.
+    final callId = _callService?.activeCall?.callId;
+    await _callService?.declineIncomingCall();
+    if (callId != null) {
+      await _resolvePendingCall(callId, accepted: false, outgoing: false);
+    }
+  }
+
+  /// Ends an ongoing call and records the outcome on the server.
+  ///
+  /// Hang-up is reported as a cancel when this device placed the call, and as
+  /// a decline otherwise, because that is the pair the server distinguishes.
+  /// Both mean the same thing locally: the call is over.
+  @override
+  Future<void> endActiveCall() async {
+    final call = _callService?.activeCall;
+    final outgoing = call?.direction == kCallDirectionOutgoing;
+    await _callService?.endActiveCall();
+    if (call != null) {
+      await _resolvePendingCall(
+        call.callId,
+        accepted: false,
+        outgoing: outgoing,
+      );
+    }
+  }
+
   Future<void> revokeCurrentDeviceAndPurgeSession() async {
     final store = _requireReady(_keyValue, 'keyValue');
     final deviceId = await store.read('device_id');

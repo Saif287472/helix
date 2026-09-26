@@ -222,11 +222,11 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
         final active = _callService?.activeCall;
         if (active == null || active.callId != callId) return;
         if (action == LocalNotificationCallAction.accept) {
-          unawaited(_callService?.acceptIncomingCall());
+          unawaited(acceptIncomingCall());
         } else if (action == LocalNotificationCallAction.decline) {
-          unawaited(_callService?.declineIncomingCall());
+          unawaited(declineIncomingCall());
         } else if (action == LocalNotificationCallAction.end) {
-          unawaited(_callService?.endActiveCall());
+          unawaited(endActiveCall());
         }
       });
 

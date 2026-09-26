@@ -253,6 +253,12 @@ class _MainAdminPageState extends State<MainAdminPage> {
       case AdminLoginStatus.unreachable:
         setState(() {
           _isConnecting = false;
+          // This was left `true`, which pinned the app to the launch skeleton
+          // forever: the operator saw "unreachable" and no way forward, because
+          // the LoginScreen - the only place to correct the URL or type a new
+          // password - was unreachable behind the splash. Both other branches
+          // clear it.
+          _isCheckingSavedSession = false;
           _launchStatus = LaunchStatus.unreachable;
           _errorMessage =
               "Could not reach server. Check the URL and connection, then try again.";
@@ -732,36 +738,72 @@ class _MainAdminPageState extends State<MainAdminPage> {
   PreferredSizeWidget _buildAppBar(bool isMobile) {
     return AppBar(
       automaticallyImplyLeading: false,
-      title: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            _config?['server_name'] as String? ?? 'Helix Server',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
-          if (!isMobile) ...[
-            const SizedBox(width: 32),
-            _buildDesktopNavPill('Overview', 'dashboard', Icons.dashboard_outlined),
-            const SizedBox(width: 8),
-            _buildDesktopNavPill('Users & Devices', 'users', Icons.people_outline),
-            const SizedBox(width: 8),
-            _buildDesktopNavPill('Invites', 'invites', Icons.local_activity_outlined),
-            const SizedBox(width: 8),
-            _buildDesktopNavPill('Ops & Logs', 'ops', Icons.settings_outlined),
-          ],
-        ],
+      // Laid out against the width the title actually gets, not the window's.
+      //
+      // The title row carries the server name and all four nav pills, and the
+      // pre-redesign sidebar meant there used to be room for them. There is not
+      // any more: at a ~1000px window the Row overflowed and painted the
+      // yellow-and-black stripes. Below the width where the four labelled
+      // pills fit, they collapse to their icons - every destination stays
+      // reachable, and each keeps its tooltip naming it.
+      title: LayoutBuilder(
+        builder: (context, constraints) {
+          final serverName = _config?['server_name'] as String? ?? 'Helix Server';
+          final pills = <({String label, String tabId, IconData icon})>[
+            (label: 'Overview', tabId: 'dashboard', icon: Icons.dashboard_outlined),
+            (label: 'Users & Devices', tabId: 'users', icon: Icons.people_outline),
+            (label: 'Invites', tabId: 'invites', icon: Icons.local_activity_outlined),
+            (label: 'Ops & Logs', tabId: 'ops', icon: Icons.settings_outlined),
+          ];
+          // The status dot, its gap, the widest plausible server name, the
+          // leading gap and the pill gaps. Anything under this and the labels
+          // cannot all fit.
+          const chrome = 8 + 8 + 220 + 32 + 8 * 3;
+          final labelledPillWidth =
+              pills.fold<int>(0, (sum, p) => sum + p.label.length * 8 + 28 + 14) +
+              6;
+          final showLabels = !isMobile && constraints.maxWidth >= chrome + labelledPillWidth;
+
+          return Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF10B981),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Flexible so a long server name gives up its space before the
+              // navigation does - the name is the first thing to truncate.
+              Flexible(
+                child: Text(
+                  serverName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              if (!isMobile) ...[
+                const SizedBox(width: 16),
+                for (var i = 0; i < pills.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  _buildDesktopNavPill(
+                    pills[i].label,
+                    pills[i].tabId,
+                    pills[i].icon,
+                    showLabel: showLabels,
+                  ),
+                ],
+              ],
+            ],
+          );
+        },
       ),
       actions: [
         // Sign Out lives here now. It used to live on a Settings tab that the
@@ -788,7 +830,12 @@ class _MainAdminPageState extends State<MainAdminPage> {
     return (host == null || host.isEmpty) ? 'this server' : host;
   }
 
-  Widget _buildDesktopNavPill(String label, String tabId, IconData icon) {
+  Widget _buildDesktopNavPill(
+    String label,
+    String tabId,
+    IconData icon, {
+    bool showLabel = true,
+  }) {
     final isSelected = switch (_selectedTab) {
       'dashboard' => tabId == 'dashboard',
       'users' => tabId == 'users',
@@ -806,36 +853,54 @@ class _MainAdminPageState extends State<MainAdminPage> {
         }
       },
       borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.2)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: isSelected
-              ? Border.all(color: HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.6))
-              : Border.all(color: Colors.transparent),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isSelected ? context.accentColor : context.textSecondary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? context.textPrimary : context.textSecondary,
+      // The tooltip is what names the destination when the label is collapsed
+      // away, so it is present either way rather than only on the icon form.
+      child: Tooltip(
+        message: label,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: EdgeInsets.symmetric(
+            horizontal: showLabel ? 14 : 10,
+            vertical: 8,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.2)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: isSelected
+                ? Border.all(
+                    color: HelixColorTokens.cFF8A2BE2.withValues(alpha: 0.6),
+                  )
+                : Border.all(color: Colors.transparent),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isSelected
+                    ? context.accentColor
+                    : context.textSecondary,
               ),
-            ),
-          ],
+              if (showLabel) ...[
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.w500,
+                    color: isSelected
+                        ? context.textPrimary
+                        : context.textSecondary,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

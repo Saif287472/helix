@@ -112,8 +112,14 @@ class _ReportsTabState extends State<ReportsTab> {
     } catch (e) {
       // A failed resolution is reported as a failure. The row is left
       // untouched so the screen cannot disagree with the server.
+      //
+      // `_error` is deliberately NOT set here. It is the load-failure field,
+      // and `build` replaces the entire report list with it - so a single
+      // refused action used to blank the moderation queue and leave the
+      // operator staring at an error page with no way back to the reports they
+      // were working through. The snackbar below is the right surface for a
+      // per-action failure.
       if (!mounted) return;
-      setState(() => _error = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Could not resolve report: $e'),
@@ -135,8 +141,9 @@ class _ReportsTabState extends State<ReportsTab> {
       );
       await _loadReports(offset: _offset);
     } catch (e) {
+      // See _resolveReport: `_error` blanks the whole list, which is wrong
+      // for a single refused action.
       if (!mounted) return;
-      setState(() => _error = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Could not dismiss report: $e'),

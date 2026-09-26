@@ -24,10 +24,13 @@ class HelixRemoteAppShell extends StatelessWidget {
       localizationsDelegates: HelixLocalizations.localizationsDelegates,
       supportedLocales: HelixLocalizations.supportedLocales,
       theme: HelixThemes.light(),
-      darkTheme: HelixThemes.dark(),
       highContrastTheme: HelixThemes.highContrastLight(),
-      highContrastDarkTheme: HelixThemes.highContrastDark(),
-      themeMode: ThemeMode.system,
+      // Light and colourful only, unconditionally. Dark mode is deferred for
+      // this product, and `ThemeMode.system` meant a user on a dark device got
+      // a near-black UI that no screen here had been visually reviewed
+      // against. With no `darkTheme` registered and the mode pinned there is
+      // no longer a path to a theme that does not exist.
+      themeMode: ThemeMode.light,
       onGenerateRoute: RemoteRouter.onGenerateRoute,
       builder: (context, child) => Shortcuts(
         shortcuts: const {

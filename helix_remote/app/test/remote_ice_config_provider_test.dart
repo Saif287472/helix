@@ -3,6 +3,7 @@ import 'package:helix_remote/app/remote_ice_config_provider.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
+import 'support/group_call_rest_stubs.dart';
 
 void main() {
   test(
@@ -141,7 +142,7 @@ RemoteIceConfigProvider _providerFor(HelixRemoteRestClient rest) =>
       ),
     );
 
-class _ThrowingRestClient implements HelixRemoteRestClient {
+class _ThrowingRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
   _ThrowingRestClient(this._error);
 
   final Object _error;
@@ -156,7 +157,7 @@ class _ThrowingRestClient implements HelixRemoteRestClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _FakeRestClient implements HelixRemoteRestClient {
+class _FakeRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
   _FakeRestClient(this._response);
 
   final Map<String, dynamic> Function() _response;

@@ -278,6 +278,100 @@ Before touching any code, you **MUST** obey these four product overrides. They s
      - **Multi-Account & Proxy Registry (F28):** `app/lib/app/account_runtime_registry.dart` (wire into `composition_root.dart` + Settings, or delete as unused).
      - **Placeholder Menu Items (F35):** Overflow/action items currently showing `"not available yet"` (Voice notes, Archive chat, Mark as unread, Export chat, Storage and data).
 
+---
+
+## DEFERRED - Group Calls & Group Epoch-Key Distribution
+
+**Decision (user, 2026-09-26):** group calls are deferred. Do not expose the UI.
+Recorded here because both are backend gaps, not client wiring, and the reason
+is not visible from the client code.
+
+### 1. Group calls cannot carry media (F4)
+
+`RemoteGroupCallService` and `GroupCallScreen` are complete, and the server
+tracks rooms, participants and room keys. What does not exist is the relay that
+carries SDP and ICE between participants:
+
+- The only signalling route is `POST /calls/signal`
+  (`backend/lib/src/modules/calls/signaling.dart:14`).
+- Its validator (`calls/validation.dart:13-18`) requires a one-to-one
+  `call_id` and a `signal_type` from `{offer, answer, ice, ...}`, and
+  `_routeOffer` (`signaling.dart:148-166`) resolves it against a **pending
+  1:1 call session**.
+- `RemoteGroupCallService` emits `{type: 'offer', sdp: ..., room_id: ...}`
+  (`remote_group_call_service.dart:263`), which that validator rejects on both
+  counts.
+- The group-calls router (`group_calls.dart:37-55`) has 15 routes and none
+  relay media.
+
+So a room can be created, joined and populated, but no two devices exchange
+audio or video. Exposing `GroupCallScreen` would ship a call UI that silently
+carries nothing.
+
+**Unblocking work (backend, needs its own review):** a room-scoped signalling
+route that verifies the sender is a JOINED participant of the named room,
+reuses the media-policy enforcement and the per-account/device/IP rate limits
+from `calls/validation.dart`, and delivers to the target device only.
+
+### 2. Group epoch keys are minted but never distributed (F30)
+
+Half the sender-key chain is missing, and the two halves are on opposite sides:
+
+- **Server has it:** `POST /groups/epoch-key/deliver` (`groups.dart:142`,
+  handler `groups/epoch_keys.dart:14`) distributes pairwise-wrapped keys and
+  emits a `group_epoch_key` frame per device.
+- **Client never calls it.** `RemoteGroupService` has no distribution method -
+  the backend handler's own doc comment points at one
+  (`epoch_keys.dart:3-4`) that was never written.
+- The inbound half now works: the `group_epoch_key` frame is recognised and
+  persisted (`sync_engine.dart`, `_GroupEpochKeyEvent`), but nothing unwraps it
+  and nothing produces one.
+
+Meanwhile `composition_root/lifecycle.dart` supplies
+`encryptionKeyProvider: groupKeyProvider`, which mints a **random 32-byte key
+per device** and stores it locally. Two devices in the same group therefore
+hold different keys for the same epoch, so a message encrypted on one device
+cannot be read on the other. This is the most severe finding in the plan: a
+shipped silent failure, not a missing feature.
+
+**Interim state:** do not present group message encryption as working. The mint
+stays in place because removing it would break membership changes
+(`_rotateEpoch` is called from `leaveGroup`, `removeMember` and invite accept),
+and a group with no local key cannot even send.
+
+**Unblocking work (client, needs a crypto decision):** fetch each member
+device's agreement public key (`getPreKeyBundle` already returns them), wrap
+the epoch key per device, deliver through the outbox, and on receipt unwrap
+with the device's agreement private key before storing. The wrapping scheme has
+to be chosen and reviewed - it is the same decision `group_calls.dart` already
+documents for room keys.
+
+### What *was* done for F30
+
+`group_epoch_key`, `group_join_request_resolved`, `group_add_policy_changed`,
+`membership_changed_admin`, `scheduled_call_invite` and
+`scheduled_call_cancelled` are now in the envelope gate and have handlers. See
+"Envelope gate parity" below - all of them were unreachable before.
+
+---
+
+## Envelope gate parity (new finding, fixed in Phase 4)
+
+`RemoteRealtimeEnvelope.fromJson` flags any type missing from its
+`supportedTypes` set as `isUnrecognized`, and that flag makes the sync engine's
+`tryParse` return `null` **before** reaching the handler written for that type.
+
+Seven types the backend emits were missing, so their handlers existed and were
+dead: `pending_device_link`, `device_linked`, `device_revoked`,
+`group_join_requested`, `group_epoch_key`, `group_add_policy_changed` and
+`group_join_request_resolved`. That is why Phase 2's device-pairing banner
+never appeared in a real build. The sync tests missed it because they build
+envelopes directly and never pass through the gate.
+
+Fixed in `helix_remote_api/lib/api/realtime_envelope.dart`, with a test
+(`serialization_test.dart`) that mirrors the backend's emissions by source file
+so the next omission is caught.
+
 **Phase 4 Verification:**
 - Run `flutter analyze` and `flutter test` across `app` and all `packages/*`.
 

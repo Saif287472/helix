@@ -113,11 +113,10 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final dark = theme.brightness == Brightness.dark;
-    final pageColor = dark
-        ? HelixColorTokens.cFF0B0B0C
-        : HelixColorTokens.cFFF4F5F7;
-    final sectionColor = dark ? HelixColorTokens.cFF171719 : cs.surface;
+    // Light only - see HelixThemes. The near-black page/section pair this
+    // used to switch between is gone, so a dark surface cannot reappear here.
+    const pageColor = HelixColorTokens.cFFF4F5F7;
+    final sectionColor = cs.surface;
 
     return Scaffold(
       backgroundColor: pageColor,

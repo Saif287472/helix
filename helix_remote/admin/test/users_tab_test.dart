@@ -18,16 +18,15 @@ Future<void> _settleWithRealIO(WidgetTester tester) async {
   }
 }
 
-/// The Users table's seven columns (plus three per-row action icons) don't
-/// fit the default 800x600 test surface - past it, `tester.tap` on a
-/// tooltip/icon there fails hit-testing since that part of the row is laid
-/// out beyond the root render tree's bounds, not merely scrolled out of
-/// view. Widened for every test here rather than only the ones that
-/// currently tap into the Actions column, so a future column/action
-/// addition doesn't silently reintroduce this for tests that happen not to
-/// interact with it yet.
+/// The Users tab is a master list plus a detail pane, not a table, and every
+/// destructive action lives in the detail pane's DANGER ZONE. It only appears
+/// once a user is selected, so every action test has to select first.
+///
+/// The default 800x600 surface is narrower than the 900px split breakpoint,
+/// which would collapse the detail pane away entirely; widened here so the
+/// split layout is the one under test.
 Future<void> _pumpUsersTab(WidgetTester tester, AdminClient client) async {
-  tester.view.physicalSize = const Size(1600, 900);
+  tester.view.physicalSize = const Size(1600, 1200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -38,10 +37,17 @@ Future<void> _pumpUsersTab(WidgetTester tester, AdminClient client) async {
   );
 }
 
+/// Selects [name] in the master list and waits for its detail pane to load.
+Future<void> _selectUser(WidgetTester tester, String name) async {
+  await tester.tap(find.text(name).first);
+  await _settleWithRealIO(tester);
+}
+
 void main() {
   late HttpServer server;
   late List<Map<String, dynamic>> users;
   late bool failListRequests;
+  late bool failSuspendRequests;
   late List<String> requestedPaths;
 
   String baseUrl() => 'http://${server.address.address}:${server.port}';
@@ -75,6 +81,7 @@ void main() {
       ),
     ];
     failListRequests = false;
+    failSuspendRequests = false;
     requestedPaths = [];
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
@@ -97,6 +104,17 @@ void main() {
         r'^/api/v1/ops/users/([^/]+)/suspend$',
       ).firstMatch(request.uri.path);
       if (request.method == 'POST' && suspendMatch != null) {
+        if (failSuspendRequests) {
+          // A 500 with a message, so the client's error path has something
+          // real to surface rather than a generic transport failure.
+          request.response.statusCode = 500;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(
+            jsonEncode({'message': 'suspend rejected by policy'}),
+          );
+          await request.response.close();
+          return;
+        }
         final accountId = suspendMatch.group(1)!;
         users = users
             .map(
@@ -176,42 +194,77 @@ void main() {
     await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
 
-    expect(find.text('Alice'), findsOneWidget);
-    expect(find.text('user_1'), findsOneWidget);
-    expect(find.text('4242'), findsOneWidget);
-    expect(find.text('inv_1'), findsOneWidget);
-    expect(find.text('ACTIVE'), findsOneWidget);
+    // The master list row carries name, phone and status.
+    expect(find.text('Alice'), findsWidgets);
+    expect(find.text('4242'), findsWidgets);
+    expect(find.text('ACTIVE'), findsWidgets);
     expect(find.text('No users registered yet.'), findsNothing);
+
+    // The detail pane is where the account id and invite live, and it only
+    // renders for the selected user.
+    await _selectUser(tester, 'Alice');
+    expect(find.text('user_1'), findsWidgets);
+    expect(find.text('inv_1'), findsWidgets);
   });
 
-  testWidgets('a user with no display name or invite shows placeholders', (
+  testWidgets('a user with no display name or phone shows placeholders', (
     tester,
   ) async {
     users = [user(accountId: 'user_2')];
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
+    await _selectUser(tester, 'User (user_2)');
 
-    expect(find.text('—'), findsNWidgets(3)); // name, phone, invite
+    // Named by account id in the list, and the phone line says there is none
+    // rather than showing a bare em dash.
+    expect(find.text('User (user_2)'), findsWidgets);
+    expect(find.text('No phone bound'), findsOneWidget);
+    // No invite was redeemed, so no invite row is claimed.
+    expect(find.text('Redeemed invite'), findsNothing);
   });
 
-  testWidgets('suspending a user toggles its status and icon', (tester) async {
+  testWidgets('suspending a user toggles its status and the action', (
+    tester,
+  ) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
+    await _selectUser(tester, 'Alice');
 
-    expect(find.text('ACTIVE'), findsOneWidget);
-    await tester.tap(find.byTooltip('Suspend access (temporary)'));
+    expect(find.text('ACTIVE'), findsWidgets);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Suspend'));
     await _settleWithRealIO(tester);
 
-    expect(find.text('SUSPENDED'), findsOneWidget);
+    expect(find.text('SUSPENDED'), findsWidgets);
     expect(requestedPaths, contains('POST /api/v1/ops/users/user_1/suspend'));
+    // The action flips to Restore, so a second tap cannot re-suspend.
+    expect(find.widgetWithText(OutlinedButton, 'Restore'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Restore access'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Restore'));
     await _settleWithRealIO(tester);
 
-    expect(find.text('ACTIVE'), findsOneWidget);
+    expect(find.text('ACTIVE'), findsWidgets);
     expect(requestedPaths, contains('POST /api/v1/ops/users/user_1/unsuspend'));
+  });
+
+  testWidgets('a failed suspend reports the error and does not claim success', (
+    tester,
+  ) async {
+    failSuspendRequests = true;
+    final client = AdminClient(baseUrl: baseUrl(), token: 't');
+    await _pumpUsersTab(tester, client);
+    await _settleWithRealIO(tester);
+    await _selectUser(tester, 'Alice');
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Suspend'));
+    await _settleWithRealIO(tester);
+
+    // The row must not flip to SUSPENDED on a failed write, and the success
+    // toast must not appear.
+    expect(find.text('SUSPENDED'), findsNothing);
+    expect(find.text('Account suspended successfully'), findsNothing);
+    expect(find.text('ACTIVE'), findsWidgets);
   });
 
   testWidgets('deleting a user requires confirmation and removes the row', (
@@ -220,8 +273,9 @@ void main() {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
+    await _selectUser(tester, 'Alice');
 
-    await tester.tap(find.byTooltip('Delete permanently'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Delete Data'));
     await tester.pumpAndSettle();
 
     expect(find.text('Delete this user?'), findsOneWidget);
@@ -229,13 +283,13 @@ void main() {
     // Cancelling the dialog must not call the delete endpoint.
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
-    expect(find.text('Alice'), findsOneWidget);
+    expect(find.text('Alice'), findsWidgets);
     expect(
       requestedPaths,
       isNot(contains('POST /api/v1/ops/users/user_1/delete')),
     );
 
-    await tester.tap(find.byTooltip('Delete permanently'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Delete Data'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Delete permanently'));
     // Not pumpAndSettle(): confirming starts a real network call and shows
@@ -244,9 +298,33 @@ void main() {
     await tester.pump();
     await _settleWithRealIO(tester);
 
-    expect(find.text('Alice'), findsNothing);
+    // The list is the source of truth for "is this account still here". The
+    // detail pane is cleared separately, so asserting on it would pass even
+    // if the row were still listed.
     expect(find.text('No users registered yet.'), findsOneWidget);
     expect(requestedPaths, contains('POST /api/v1/ops/users/user_1/delete'));
+  });
+
+  testWidgets('cancelling the block confirmation calls nothing', (
+    tester,
+  ) async {
+    final client = AdminClient(baseUrl: baseUrl(), token: 't');
+    await _pumpUsersTab(tester, client);
+    await _settleWithRealIO(tester);
+    await _selectUser(tester, 'Alice');
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Permanent Block Phone'));
+    await tester.pumpAndSettle();
+    expect(find.text('Block this user?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice'), findsWidgets);
+    expect(
+      requestedPaths,
+      isNot(contains('POST /api/v1/ops/users/user_1/block')),
+    );
   });
 
   testWidgets('blocking a user requires confirmation and removes the row', (
@@ -255,31 +333,19 @@ void main() {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await _pumpUsersTab(tester, client);
     await _settleWithRealIO(tester);
+    await _selectUser(tester, 'Alice');
 
-    await tester.tap(find.byTooltip('Block (delete + ban phone number)'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Permanent Block Phone'));
     await tester.pumpAndSettle();
-
     expect(find.text('Block this user?'), findsOneWidget);
 
-    // Cancelling the dialog must not call the block endpoint.
-    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-    await tester.pumpAndSettle();
-    expect(find.text('Alice'), findsOneWidget);
-    expect(
-      requestedPaths,
-      isNot(contains('POST /api/v1/ops/users/user_1/block')),
-    );
-
-    await tester.tap(find.byTooltip('Block (delete + ban phone number)'));
-    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Block permanently'));
     // Not pumpAndSettle(): see the matching comment in the delete test above.
     await tester.pump();
     await _settleWithRealIO(tester);
 
-    expect(find.text('Alice'), findsNothing);
-    expect(find.text('No users registered yet.'), findsOneWidget);
     expect(requestedPaths, contains('POST /api/v1/ops/users/user_1/block'));
+    expect(find.text('No users registered yet.'), findsOneWidget);
   });
 
   testWidgets('pagination controls disable at the edges', (tester) async {

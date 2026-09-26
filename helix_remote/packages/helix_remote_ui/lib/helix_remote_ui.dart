@@ -273,13 +273,22 @@ abstract final class HelixBreakpoints {
       MediaQuery.sizeOf(context).width >= expanded;
 }
 
+/// Helix's theme.
+///
+/// Light and colourful only. Dark mode is deferred for this product, so there
+/// is no `dark()` or `highContrastDark()`: the app shell pins
+/// `ThemeMode.light` and registers no dark theme, which makes a near-black
+/// surface unreachable rather than merely unused. Adding one back is a
+/// deliberate act, not something a caller can do by name.
 abstract final class HelixThemes {
-  static ThemeData light() => _theme(Brightness.light);
-  static ThemeData dark() => _theme(Brightness.dark);
+  static ThemeData light() => _theme(Brightness.light, contrast: 0);
   static ThemeData highContrastLight() => _theme(Brightness.light, contrast: 1);
-  static ThemeData highContrastDark() => _theme(Brightness.dark, contrast: 1);
 
   static ThemeData _theme(Brightness brightness, {double contrast = 0}) {
+    assert(
+      brightness == Brightness.light,
+      'Helix is light-only. Pass Brightness.light.',
+    );
     final colors = ColorScheme.fromSeed(
       seedColor: HelixColorTokens.brand,
       brightness: brightness,

@@ -338,6 +338,29 @@ mixin RemoteGroupsRepository on HelixRemoteDatabaseBase {
         .toList();
   }
 
+  /// Records the outcome of a join request an admin decided.
+  ///
+  /// The decision arrives as a `group_join_request_resolved` push, so without
+  /// this the row stays `PENDING` locally and a decided request keeps showing
+  /// in the "Join Requests" list. Only the status is written: the approval path
+  /// also relays a `membership_changed`, which is what adds the member.
+  void updateGroupJoinRequestStatus({
+    required String requestId,
+    required String status,
+  }) {
+    final stmt = _db.prepare('''
+      UPDATE group_join_requests
+      SET status = ?, updated_at = ?
+      WHERE request_id = ?;
+    ''');
+    stmt.execute([
+      status,
+      DateTime.now().millisecondsSinceEpoch,
+      requestId,
+    ]);
+    stmt.close();
+  }
+
   // ---------------------------------------------------------------------------
   // F6: Blocked members (schema v19)
   // ---------------------------------------------------------------------------

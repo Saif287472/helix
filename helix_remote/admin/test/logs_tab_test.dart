@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/admin_client.dart';
 import 'package:helix_admin/screens/logs_tab.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
-  theme: ThemeData.dark(),
   home: Scaffold(body: child),
 );
 
@@ -124,7 +124,7 @@ void main() {
     expect(find.textContaining('No lines match'), findsOneWidget);
   });
 
-  testWidgets('the live switch reports toggles to its callback', (
+  testWidgets('the stream toggle reports its new state to its callback', (
     tester,
   ) async {
     bool? reported;
@@ -137,10 +137,32 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byType(Switch));
+    // Paused by default, so the button offers to resume.
+    expect(find.text('Resume Stream'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('logs_stream_toggle_button')));
     await tester.pump();
 
     expect(reported, isTrue);
+  });
+
+  testWidgets('the stream toggle reports the opposite state when live', (
+    tester,
+  ) async {
+    bool? reported;
+    await tester.pumpWidget(
+      _wrap(
+        _logsTab(
+          logs: const ServerLogs(lines: ['[INFO] a'], source: 'memory'),
+          autoRefreshEnabled: true,
+          onAutoRefreshChanged: (value) => reported = value,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('logs_stream_toggle_button')));
+    await tester.pump();
+
+    expect(reported, isFalse);
   });
 
   testWidgets('the refresh button calls back', (tester) async {
@@ -154,13 +176,28 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.refresh));
+    // Always enabled, including while the stream is paused: with the poll off,
+    // a failed fetch would otherwise be indistinguishable from an idle server.
+    await tester.tap(find.byKey(const Key('logs_refresh_button')));
     await tester.pump();
 
     expect(refreshed, 1);
   });
 
-  testWidgets('copy is disabled when there is nothing to copy', (tester) async {
+  testWidgets('copying an empty tail copies nothing rather than failing', (
+    tester,
+  ) async {
+    // `Clipboard.setData` goes over the platform channel, which the test
+    // binding leaves unhandled - the future then never completes and the
+    // confirmation below is never reached. Mocked so the handler runs to the
+    // end.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async => null);
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
     await tester.pumpWidget(
       _wrap(
         _logsTab(
@@ -169,13 +206,37 @@ void main() {
       ),
     );
 
-    final button = tester.widget<IconButton>(
-      find.ancestor(
-        of: find.byIcon(Icons.copy_all),
-        matching: find.byType(IconButton),
+    // There is nothing to copy, so the button is a no-op rather than a
+    // disabled affordance the operator has to reason about - it stays
+    // tappable and copies an empty string.
+    await tester.tap(find.text('Copy Tail'));
+    // pumpAndSettle, not pump: the handler awaits Clipboard.setData before
+    // showing the confirmation.
+    await tester.pumpAndSettle();
+
+    expect(find.text('Log tail copied to clipboard'), findsOneWidget);
+  });
+
+  testWidgets('a filter miss offers a way back rather than a dead end', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        _logsTab(
+          logs: const ServerLogs(lines: ['[INFO] alpha'], source: 'memory'),
+        ),
       ),
     );
-    expect(button.onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pump();
+    expect(find.textContaining('No lines match'), findsOneWidget);
+
+    await tester.tap(find.text('Clear filter'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('No lines match'), findsNothing);
+    expect(find.textContaining('alpha'), findsOneWidget);
   });
 
   testWidgets('error and warning lines are coloured distinctly', (

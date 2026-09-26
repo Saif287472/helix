@@ -642,15 +642,40 @@ class OnboardingNotifier extends ChangeNotifier {
     // Helix Global signs up with no invitation code - the phone OTP is the
     // only credential. Personal servers still require a real invite code.
     // (`requiresTos` is true for exactly the same Global-only path.)
-    final inviteCode = requiresTos
-        ? ''
-        : (_state.inviteCode ?? (code ?? 'INV-GLOBAL'));
+    //
+    // No fallbacks. This used to substitute '123456' for a missing OTP and
+    // 'INV-GLOBAL' for a missing invite, so a user who skipped verification
+    // was registered against a hardcoded credential on a real server.
+    // `verifyOtp` already produces a specific message for an empty or
+    // malformed code; these guards only catch a path that reached here without
+    // going through it, and they fail loudly rather than inventing something.
+    final enteredOtp = _state.otpCode.trim();
+    if (enteredOtp.isEmpty) {
+      _state = _state.copyWith(
+        isLoading: false,
+        errorMessage:
+            'Enter the verification code sent to your phone before '
+            'continuing.',
+      );
+      notifyListeners();
+      return false;
+    }
+    final enteredInvite = _state.inviteCode ?? code;
+    if (!requiresTos && (enteredInvite == null || enteredInvite.isEmpty)) {
+      _state = _state.copyWith(
+        isLoading: false,
+        errorMessage:
+            'This server needs an invite code. Paste the HLX-INV- code your '
+            'administrator shared.',
+      );
+      notifyListeners();
+      return false;
+    }
+    final inviteCode = requiresTos ? '' : enteredInvite!;
     final serverUrl = (isPersonal || _state.serverType == ServerType.others)
         ? (_state.serverNodeUrl ?? kHelixGlobalServerUrl)
         : kHelixGlobalServerUrl;
-    final otp = _state.otpCode.trim().isEmpty
-        ? '123456'
-        : _state.otpCode.trim();
+    final otp = enteredOtp;
 
     if (_root != null) {
       try {

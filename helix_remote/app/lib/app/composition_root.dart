@@ -269,6 +269,16 @@ abstract class RemoteCompositionRootBase {
   StreamSubscription<RemoteSyncChange>? get _outboxChangeSub;
   set _outboxChangeSub(StreamSubscription<RemoteSyncChange>? value);
   StreamController<RemoteCallStatus?> get _callStatusController;
+
+  /// Accepts, declines and ends a call *and* records the outcome on the server.
+  ///
+  /// Prefer these over `callService.acceptIncomingCall()` and friends. The
+  /// service methods only end the call locally and signal the peer; without
+  /// the server call the pending-call row lingers until it expires, so a
+  /// declined call keeps ringing on the caller's other devices.
+  Future<void> acceptIncomingCall();
+  Future<void> declineIncomingCall();
+  Future<void> endActiveCall();
   Future<bool>? get _tokenRefreshInFlight;
   set _tokenRefreshInFlight(Future<bool>? value);
   Future<void>? get _disposeFuture;

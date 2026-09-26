@@ -944,6 +944,114 @@ abstract class HelixLocalizations {
   /// **'Mark as unread is not available yet'**
   String get markUnreadNotAvailableYet;
 
+  /// No description provided for @renameGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename group'**
+  String get renameGroup;
+
+  /// No description provided for @pollLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Poll'**
+  String get pollLabel;
+
+  /// No description provided for @pollClosedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Poll closed'**
+  String get pollClosedLabel;
+
+  /// No description provided for @pollNoOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'No options'**
+  String get pollNoOptions;
+
+  /// No description provided for @pollMultipleChoices.
+  ///
+  /// In en, this message translates to:
+  /// **'Multiple choices allowed'**
+  String get pollMultipleChoices;
+
+  /// No description provided for @eventLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Event'**
+  String get eventLabel;
+
+  /// No description provided for @eventCancelledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Event cancelled'**
+  String get eventCancelledLabel;
+
+  /// No description provided for @eventPlusOnes.
+  ///
+  /// In en, this message translates to:
+  /// **'Plus ones allowed'**
+  String get eventPlusOnes;
+
+  /// No description provided for @locationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get locationLabel;
+
+  /// No description provided for @liveLocationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Live location'**
+  String get liveLocationLabel;
+
+  /// No description provided for @locationAccuracyUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Accuracy unknown'**
+  String get locationAccuracyUnknown;
+
+  /// No description provided for @locationSharingStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing stopped'**
+  String get locationSharingStopped;
+
+  /// No description provided for @stickerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sticker'**
+  String get stickerLabel;
+
+  /// No description provided for @stickerImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Image sticker'**
+  String get stickerImage;
+
+  /// No description provided for @stickerVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video sticker'**
+  String get stickerVideo;
+
+  /// No description provided for @saveSticker.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get saveSticker;
+
+  /// No description provided for @renameGroupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename group'**
+  String get renameGroupTitle;
+
+  /// No description provided for @groupNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group name'**
+  String get groupNameLabel;
+
   /// No description provided for @mediaLinksDocs.
   ///
   /// In en, this message translates to:

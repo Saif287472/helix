@@ -19,12 +19,13 @@ import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as pathpkg;
 import 'package:helix_remote/l10n/helix_localizations.dart';
+import 'support/group_call_rest_stubs.dart';
 
 // ---------------------------------------------------------------------------
 // Minimal stubs
 // ---------------------------------------------------------------------------
 
-class _MinRestClient implements HelixRemoteRestClient {
+class _MinRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
   @override
   set accessToken(String? t) {}
   @override

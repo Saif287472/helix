@@ -186,9 +186,7 @@ class _OneUiSettingsCard extends StatelessWidget {
                   thickness: 1,
                   indent: 76,
                   endIndent: 28,
-                  color: cs.outlineVariant.withAlpha(
-                    theme.brightness == Brightness.dark ? 56 : 110,
-                  ),
+                  color: cs.outlineVariant.withAlpha(110),
                 ),
               _SettingsRow(item: group.items[i]),
             ],
@@ -210,7 +208,7 @@ class _SettingsRow extends StatelessWidget {
     final cs = theme.colorScheme;
     final titleColor = item.isDestructive ? cs.error : cs.onSurface;
     final subtitleColor = item.isDestructive
-        ? cs.error.withAlpha(theme.brightness == Brightness.dark ? 210 : 190)
+        ? cs.error.withAlpha(190)
         : cs.onSurfaceVariant;
 
     return InkWell(
@@ -371,19 +369,12 @@ class _SettingsItem {
   final bool isDestructive;
 }
 
+// Light only - see HelixThemes. The near-black surface blends these used to
+// switch between are gone.
 Color _settingsPageColor(ThemeData theme, ColorScheme cs) {
-  if (theme.brightness == Brightness.dark) {
-    return Color.alphaBlend(cs.surfaceTint.withAlpha(8), cs.surface);
-  }
   return Color.alphaBlend(cs.primary.withAlpha(5), cs.surfaceContainerLowest);
 }
 
 Color _settingsCardColor(ThemeData theme, ColorScheme cs) {
-  if (theme.brightness == Brightness.dark) {
-    return Color.alphaBlend(
-      cs.surfaceTint.withAlpha(14),
-      cs.surfaceContainerLow,
-    );
-  }
   return cs.surfaceContainerLowest;
 }

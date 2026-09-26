@@ -214,9 +214,9 @@ class _CallScreenWrapperState extends State<_CallScreenWrapper> {
     if (status == null) return const SizedBox.shrink();
     return CallScreen(
       callStatus: status,
-      onAccept: () => widget.root.callService.acceptIncomingCall(),
-      onDecline: () => widget.root.callService.declineIncomingCall(),
-      onEnd: () => widget.root.callService.endActiveCall(),
+      onAccept: () => widget.root.acceptIncomingCall(),
+      onDecline: () => widget.root.declineIncomingCall(),
+      onEnd: () => widget.root.endActiveCall(),
       onMute: ({required bool muted}) =>
           widget.root.callService.setMuted(muted: muted),
       onSpeaker: ({required bool enabled}) =>

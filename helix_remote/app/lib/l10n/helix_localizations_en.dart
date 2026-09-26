@@ -455,6 +455,60 @@ class HelixLocalizationsEn extends HelixLocalizations {
   String get markUnreadNotAvailableYet => 'Mark as unread is not available yet';
 
   @override
+  String get renameGroup => 'Rename group';
+
+  @override
+  String get pollLabel => 'Poll';
+
+  @override
+  String get pollClosedLabel => 'Poll closed';
+
+  @override
+  String get pollNoOptions => 'No options';
+
+  @override
+  String get pollMultipleChoices => 'Multiple choices allowed';
+
+  @override
+  String get eventLabel => 'Event';
+
+  @override
+  String get eventCancelledLabel => 'Event cancelled';
+
+  @override
+  String get eventPlusOnes => 'Plus ones allowed';
+
+  @override
+  String get locationLabel => 'Location';
+
+  @override
+  String get liveLocationLabel => 'Live location';
+
+  @override
+  String get locationAccuracyUnknown => 'Accuracy unknown';
+
+  @override
+  String get locationSharingStopped => 'Sharing stopped';
+
+  @override
+  String get stickerLabel => 'Sticker';
+
+  @override
+  String get stickerImage => 'Image sticker';
+
+  @override
+  String get stickerVideo => 'Video sticker';
+
+  @override
+  String get saveSticker => 'Save';
+
+  @override
+  String get renameGroupTitle => 'Rename group';
+
+  @override
+  String get groupNameLabel => 'Group name';
+
+  @override
   String get mediaLinksDocs => 'Media, links, and docs';
 
   @override

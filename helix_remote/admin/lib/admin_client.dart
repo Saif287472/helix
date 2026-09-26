@@ -186,12 +186,27 @@ class AdminClient {
     'Content-Type': 'application/json',
   };
 
+  /// Checks whether [token] is still good, distinguishing "the server said no"
+  /// from "couldn't tell".
+  ///
+  /// Deliberately a single attempt, not [_retry]. This is a liveness probe, and
+  /// a connection-refused answer will not change by asking again in a second:
+  /// the retry policy's five attempts with 1s base backoff cost roughly 15
+  /// seconds of spinner before the operator learns they are offline. Retries
+  /// belong on the idempotent reads that back the dashboard, where a blip is
+  /// worth absorbing; here the answer is already the answer.
+  ///
+  /// A 5xx is reported as [AdminLoginStatus.unreachable] rather than
+  /// unauthorized on purpose - the caller must not discard a token because the
+  /// server was briefly unhealthy.
   Future<AdminLoginStatus> verifyLoginDetailed() async {
     try {
-      final response = await _retry(() => http.get(
-        Uri.parse('$baseUrl/api/v1/ops/config'),
-        headers: _headers,
-      ));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/v1/ops/config'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) return AdminLoginStatus.ok;
       if (response.statusCode == 401 || response.statusCode == 403) {
         return AdminLoginStatus.unauthorized;
@@ -504,21 +519,30 @@ class AdminClient {
     }
   }
 
-  /// Fetches administrative audit stream logs.
+  /// Fetches the administrative audit trail, optionally narrowed to one
+  /// account.
+  ///
+  /// Throws [AdminRequestException] on a non-200 and lets a transport failure
+  /// propagate, rather than returning an empty list. This used to swallow both
+  /// and return `[]`, which made "no administrative actions have been taken"
+  /// indistinguishable from "the audit log could not be read" - and on an audit
+  /// view those are completely different facts for an operator. It also meant
+  /// the Ops screen's own error card could never be reached.
   Future<List<Map<String, dynamic>>> getAuditLogs({String? accountId}) async {
     final q = accountId != null ? '?account_id=$accountId' : '';
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/v1/admin/audit$q'),
-        headers: _headers,
+    final response = await _retry(() => http.get(
+      Uri.parse('$baseUrl/api/v1/admin/audit$q'),
+      headers: _headers,
+    ));
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to load the audit trail (${response.statusCode}).',
       );
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        final list = body['logs'] as List? ?? [];
-        return list.cast<Map<String, dynamic>>();
-      }
-    } catch (_) {}
-    return [];
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final list = body['logs'] as List? ?? [];
+    return list.cast<Map<String, dynamic>>();
   }
 
   /// Turns maintenance mode on or off.

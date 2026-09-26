@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:helix_remote/data/countries.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 class GlobalPhoneStep extends StatelessWidget {
@@ -21,17 +22,10 @@ class GlobalPhoneStep extends StatelessWidget {
   final ValueChanged<String> onPhoneChanged;
   final VoidCallback onSubmit;
 
-  static const List<String> _countries = [
-    '+880',
-    '+1',
-    '+44',
-    '+91',
-    '+49',
-    '+81',
-    '+33',
-    '+61',
-    '+86',
-  ];
+  /// Every country the server will accept a number from, rather than the nine
+  /// this step was redesigned with. Kept as the step's own dropdown so the
+  /// visual design is unchanged - only the list behind it grew.
+  static final List<String> _dialCodes = kCountryDialCodes;
 
   @override
   Widget build(BuildContext context) {
@@ -104,11 +98,21 @@ class GlobalPhoneStep extends StatelessWidget {
                 padding: HelixInsets.symmetric(horizontal: 12, vertical: 4),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: _countries.contains(countryCode) ? countryCode : _countries.first,
-                    items: _countries.map((c) {
+                    // A stored preference that is not in the list would make
+                    // DropdownButton assert, so an unrecognised value falls
+                    // back to the first entry rather than crashing.
+                    value: _dialCodes.contains(countryCode)
+                        ? countryCode
+                        : _dialCodes.first,
+                    isExpanded: true,
+                    items: kCountries.map((c) {
                       return DropdownMenuItem(
-                        value: c,
-                        child: Text(c, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        value: c.dialCode,
+                        child: Text(
+                          countryLabel(c),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       );
                     }).toList(),
                     onChanged: (val) {

@@ -156,15 +156,20 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
         if (choice.phoneNumber != null &&
             choice.phoneNumber!.isNotEmpty &&
             choice.displayName != null &&
-            choice.displayName!.isNotEmpty) {
+            choice.displayName!.isNotEmpty &&
+            choice.otpCode != null &&
+            choice.otpCode!.isNotEmpty) {
           try {
+            // Only reached with a real OTP. This used to fall back to
+            // '123456' when none was supplied, so a user who skipped the
+            // verification step was silently registered against a hardcoded
+            // code. Without an OTP we fall through to the restore path below,
+            // which is the honest thing to do.
             await root.registerAndLogin(
               phoneNumber: choice.phoneNumber!,
               phoneHashOverride: choice.phoneHash,
               displayName: choice.displayName!,
-              otpCode: (choice.otpCode != null && choice.otpCode!.isNotEmpty)
-                  ? choice.otpCode!
-                  : '123456',
+              otpCode: choice.otpCode!,
               otpChallengeId: choice.otpChallengeId,
               inviteCode: choice.inviteCode,
               tosAccepted: choice.tosAccepted,

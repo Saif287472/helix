@@ -34,6 +34,25 @@ class RemoteWebSocketClient {
   final void Function(String)? _onError;
   final void Function()? _onDone;
   final void Function(Map<String, dynamic> payload)? _onRawSignal;
+
+  /// Room-level group-call frames the server broadcasts to every JOINED
+  /// participant of a call room.
+  ///
+  /// Recognised and dropped rather than parsed as envelopes. They carry no
+  /// `server_sequence`, are never written to the offline event log, and
+  /// describe state the server owns, so routing them through the sync engine
+  /// would only produce a change notification with nothing to apply. They are
+  /// also not dispatched to a call service, because the server has no route to
+  /// relay a room's SDP or ICE - see the note on the group-call methods in
+  /// `HelixRemoteRestClient`. `call_signal` is dispatched raw for the same
+  /// reason it is not a sync event.
+  static const Set<String> _rawRoomEventTypes = {
+    'participant_joined',
+    'participant_left',
+    'participant_kicked',
+    'room_ended',
+    'screen_sharing_changed',
+  };
   final Duration _pingInterval;
   final Duration _connectTimeout;
   final Duration _callSignalAckTimeout;
@@ -159,6 +178,20 @@ class RemoteWebSocketClient {
         return;
       }
       if (type == 'pong') return;
+
+      // Group-call room broadcasts are recognised here so they cannot be
+      // mistaken for sync events. They are deliberately not dispatched: the
+      // server has no route to relay a room's SDP or ICE, so there is no
+      // service that could act on one. Dropping them explicitly means the next
+      // reader does not have to rediscover that `participant_joined` is a real
+      // server frame the client quietly ignores.
+      if (type != null && _rawRoomEventTypes.contains(type)) {
+        AppLogger.instance.info(
+          'WSClient',
+          'recv $type (group-call room frame, no relay route on the server)',
+        );
+        return;
+      }
 
       final envelope = RemoteRealtimeEnvelope.fromJson(map);
       if (envelope.eventId.isNotEmpty) {

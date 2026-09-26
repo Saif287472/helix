@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'message_tile/content_cards.dart';
+part 'message_tile/rich_content_cards.dart';
 part 'message_tile/status_and_painters.dart';
 
 // ---------------------------------------------------------------------------
@@ -217,6 +218,11 @@ class _MessageTileState extends State<ConversationMessageTile> {
   }
 
   Widget _buildMessageBody(ThemeData theme) {
+    // A poll, event, location or sticker is carried on the message as a typed
+    // field, but nothing rendered it, so it fell through to the `Text` branch
+    // and appeared as its own encoded JSON. Falls through to null for ordinary
+    // text, which is the overwhelming majority of messages.
+    final rich = _RichContent.resolve(widget.message);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -230,7 +236,19 @@ class _MessageTileState extends State<ConversationMessageTile> {
         ],
         if (_CallEventData.tryParse(widget.message.text) case final call?)
           _CallEventCard(data: call)
-        else if (widget.message.media != null)
+        else if (rich != null) ...[
+          if (rich.poll case final poll?)
+            _PollCard(poll: poll)
+          else if (rich.event case final event?)
+            _EventCard(event: event)
+          else if (rich.location case final location?)
+            _LocationCard(location: location)
+          else if (rich.sticker case final sticker?)
+            _StickerCard(
+              sticker: sticker,
+              onDownload: widget.onDownloadAttachment,
+            ),
+        ] else if (widget.message.media != null)
           _MediaPreview(
             media: widget.message.media!,
             onDownload: widget.onDownloadAttachment,

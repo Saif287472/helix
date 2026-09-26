@@ -49,6 +49,22 @@ class _ServerNameCardState extends State<ServerNameCard> {
         ? widget.initialName
         : (widget.fallbackName ?? _placeholderName);
     _controller = TextEditingController(text: _savedName);
+    // Save stays disabled until the text differs from what is stored, so
+    // opening the editor and closing it again cannot issue a pointless write
+    // - or send a name that differs from the server's only by surrounding
+    // whitespace, which the server would silently normalize.
+    _controller.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    if (!mounted) return;
+    setState(() {
+      // Clear a previous failure as soon as the user starts fixing it. Leaving
+      // it up means a stale "server_name must be 60 characters or fewer" sits
+      // under the field while the user is typing a valid name, which reads as
+      // "still wrong" for as long as they are typing.
+      if (_error != null) _error = null;
+    });
   }
 
   @override
@@ -64,9 +80,13 @@ class _ServerNameCardState extends State<ServerNameCard> {
 
   @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     super.dispose();
   }
+
+  /// True when the field holds something the server does not already have.
+  bool get _hasChanges => _controller.text != _savedName;
 
   Future<void> _save() async {
     setState(() {
@@ -190,7 +210,7 @@ class _ServerNameCardState extends State<ServerNameCard> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         minimumSize: Size.zero,
                       ),
-                      onPressed: _isSaving ? null : _save,
+                      onPressed: (_isSaving || !_hasChanges) ? null : _save,
                       child: _isSaving
                           ? const SizedBox(
                               width: 14,

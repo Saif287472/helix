@@ -126,6 +126,107 @@ void main() {
     });
   });
 
+  group('Realtime envelope gate covers every type the backend sends', () {
+    // The mirror of the backend's WS emissions, by source file. A type missing
+    // from the gate is flagged `isUnrecognized`, which makes the sync engine
+    // skip it before reaching the handler written for it - so the event looks
+    // wired and is dropped anyway, and nothing else fails.
+    //
+    // This is a hand-maintained mirror rather than a generated one, so it only
+    // catches an omission if someone remembers to touch it. That is still worth
+    // more than nothing: it is the check that would have caught the device
+    // pairing, group join-request and group epoch key events all being
+    // unreachable at once.
+    const backendEmittedTypes = <String, String>{
+      'chat_message': 'modules/messaging.dart',
+      'message_deleted': 'modules/messaging.dart',
+      'message_edited': 'modules/messaging.dart',
+      'reaction_added': 'modules/messaging.dart',
+      'read_receipt': 'modules/messaging.dart',
+      'delivery_receipt': 'modules/messaging.dart',
+      'typing': 'modules/messaging.dart',
+      'membership_changed': 'modules/groups/membership.dart',
+      'membership_changed_admin': 'modules/groups/membership.dart',
+      'group_created': 'modules/groups/lifecycle.dart',
+      'group_deleted': 'modules/groups/lifecycle.dart',
+      'group_admin_event': 'modules/groups/lifecycle.dart',
+      'group_invite': 'modules/groups/membership.dart',
+      'group_key_updated': 'modules/groups/membership.dart',
+      'group_join_requested': 'modules/groups/join_links.dart',
+      'group_join_request_resolved': 'modules/groups/join_links.dart',
+      'group_add_policy_changed': 'modules/groups/join_links.dart',
+      'group_epoch_key': 'modules/groups/epoch_keys.dart',
+      'contact_updated': 'modules/contacts.dart',
+      'contact_removed': 'modules/contacts.dart',
+      'profile_updated': 'modules/profile.dart',
+      'pending_device_link': 'modules/devices.dart',
+      'device_linked': 'modules/devices.dart',
+      'device_revoked': 'modules/devices.dart',
+      'DEVICE_REVOKED': 'modules/accounts_devices_repository.dart',
+      'scheduled_call_invite': 'modules/group_calls.dart',
+      'scheduled_call_cancelled': 'modules/group_calls.dart',
+    };
+
+    backendEmittedTypes.forEach((type, source) {
+      test('recognises $type (sent by $source)', () {
+        final envelope = RemoteRealtimeEnvelope.fromJson({
+          'event_id': 'evt_1',
+          'schema_version': 1,
+          'timestamp': 1781848900000,
+          'type': type,
+          'payload': const <String, dynamic>{},
+        });
+        expect(
+          envelope.isUnrecognized,
+          isFalse,
+          reason:
+              'The backend sends "$type" ($source) but the envelope gate does '
+              'not list it, so the sync engine drops the event before its '
+              'handler runs. Add it to supportedTypes.',
+        );
+      });
+    });
+
+    test('still flags a genuinely unknown type', () {
+      // The gate has to stay a gate, or graceful degradation is lost.
+      final envelope = RemoteRealtimeEnvelope.fromJson({
+        'event_id': 'evt_1',
+        'schema_version': 1,
+        'timestamp': 1781848900000,
+        'type': 'some_type_from_a_future_server',
+        'payload': const <String, dynamic>{},
+      });
+      expect(envelope.isUnrecognized, isTrue);
+    });
+
+    test('room-level group-call frames are not gated, by design', () {
+      // These are dispatched raw by RemoteWebSocketClient and consumed by
+      // RemoteGroupCallService, so they must not look like replayable sync
+      // events. If one ever appears in the gate, the raw path has been broken.
+      for (final type in const [
+        'call_signal',
+        'participant_joined',
+        'participant_left',
+        'participant_kicked',
+        'room_ended',
+        'screen_sharing_changed',
+      ]) {
+        final envelope = RemoteRealtimeEnvelope.fromJson({
+          'event_id': 'gcevt_1',
+          'schema_version': 1,
+          'timestamp': 1781848900000,
+          'type': type,
+          'payload': const <String, dynamic>{'room_id': 'room_1'},
+        });
+        expect(
+          envelope.isUnrecognized,
+          isTrue,
+          reason: '"$type" is dispatched raw, not through the sync engine.',
+        );
+      }
+    });
+  });
+
   group('Remote Realtime Envelope & Graceful Degradation', () {
     test('Standard Chat Message Envelope', () {
       final json = {

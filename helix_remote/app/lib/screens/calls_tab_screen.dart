@@ -99,7 +99,6 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
       timeLabel: _formatListTime(timestamp),
       durationSeconds: duration,
       durationLabel: _formatDuration(duration),
-      mediaLabel: _estimatedMediaLabel(duration, isVideo: isVideo),
     );
   }
 
@@ -674,15 +673,6 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
     final minute = dt.minute.toString().padLeft(2, '0');
     final suffix = dt.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $suffix';
-  }
-
-  static String _estimatedMediaLabel(int seconds, {required bool isVideo}) {
-    if (seconds <= 0) return '';
-    final bytes = seconds * (isVideo ? 220 * 1024 : 32 * 1024);
-    if (bytes >= 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / 1024).round()} kB';
   }
 
   static String _monthName(int month) => const [

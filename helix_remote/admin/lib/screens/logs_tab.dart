@@ -26,7 +26,15 @@ class LogsTab extends StatefulWidget {
 
 class _LogsTabState extends State<LogsTab> {
   final _scrollController = ScrollController();
-  final String _filter = '';
+  final _filterController = TextEditingController();
+
+  /// Case-insensitive substring filter over the visible lines.
+  ///
+  /// Was a `final String _filter = ''`, which made the whole filtering branch
+  /// of [_visibleLines] unreachable and left the console with no way to find
+  /// an error among thousands of lines. Restored rather than deleted: the
+  /// filtering logic was still here, only frozen.
+  String _filter = '';
   bool _isCleared = false;
   int _clearedAtIndex = 0;
 
@@ -39,7 +47,14 @@ class _LogsTabState extends State<LogsTab> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _filterController.addListener(_onFilterChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
+  }
+
+  void _onFilterChanged() {
+    final next = _filterController.text;
+    if (next == _filter) return;
+    setState(() => _filter = next);
   }
 
   @override
@@ -55,6 +70,8 @@ class _LogsTabState extends State<LogsTab> {
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
+    _filterController.removeListener(_onFilterChanged);
+    _filterController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -241,6 +258,36 @@ class _LogsTabState extends State<LogsTab> {
               ),
               const SizedBox(height: 16),
 
+              // Filter field
+              TextField(
+                controller: _filterController,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Filter lines…',
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
+                  suffixIcon: _filter.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF94A3B8)),
+                          tooltip: 'Clear filter',
+                          onPressed: _filterController.clear,
+                        ),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
               // Log Streamer Window (Fixed height ~320px matching demo image)
               SizedBox(
                 height: 320,
@@ -253,7 +300,9 @@ class _LogsTabState extends State<LogsTab> {
                   ),
                   padding: const EdgeInsets.all(16),
                   child: lines.isEmpty
-                      ? _buildEmptyState(context)
+                      ? (_filter.isNotEmpty
+                            ? _buildFilterMissState()
+                            : _buildEmptyState(context))
                       : ListView.builder(
                           controller: _scrollController,
                           itemCount: lines.length,
@@ -344,6 +393,41 @@ class _LogsTabState extends State<LogsTab> {
     if (line.contains('[WARN]')) return const Color(0xFFD97706);
     if (line.contains('[OK]')) return const Color(0xFF059669);
     return const Color(0xFF2563EB);
+  }
+
+  /// Shown when a filter matches nothing.
+  ///
+  /// Deliberately separate from [_buildEmptyState]: a filter miss means the
+  /// server *did* return lines and they simply did not match, so the
+  /// server's "no log source" explanation and the file path would both be
+  /// misleading here - it would read as though the server had nothing to say.
+  Widget _buildFilterMissState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.filter_alt_off, size: 36, color: Color(0xFF94A3B8)),
+            const SizedBox(height: 12),
+            Text(
+              'No lines match "$_filter"',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 13,
+                fontFamily: 'monospace',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _filterController.clear,
+              child: const Text('Clear filter', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildEmptyState(BuildContext context) {

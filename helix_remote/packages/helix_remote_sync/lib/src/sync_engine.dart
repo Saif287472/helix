@@ -536,6 +536,7 @@ class RemoteSyncEngine {
         );
       case 'conversation_created':
       case 'membership_changed':
+      case 'membership_changed_admin':
         return RemoteSyncChange(
           areas: const {RemoteSyncChangeArea.conversations},
           conversationId: env.payload['conversation_id'] as String?,
@@ -558,6 +559,9 @@ class RemoteSyncEngine {
       case 'group_admin_event':
       case 'group_key_updated':
       case 'group_join_requested':
+      case 'group_join_request_resolved':
+      case 'group_add_policy_changed':
+      case 'group_epoch_key':
         return RemoteSyncChange(
           areas: const {
             RemoteSyncChangeArea.groups,
@@ -567,6 +571,9 @@ class RemoteSyncEngine {
               (env.payload['group_id'] ?? env.payload['conversation_id'])
                   as String?,
         );
+      case 'scheduled_call_invite':
+      case 'scheduled_call_cancelled':
+        return const RemoteSyncChange(areas: {RemoteSyncChangeArea.runtime});
       // Device lifecycle. These were emitted by the server all along and
       // matched no case here, so they fell through to `default` and were
       // dropped - which is why a new-device pairing request never appeared
@@ -657,6 +664,7 @@ abstract class _InboundSyncEvent {
       case 'delivery_receipt':
         return const _ReceiptEvent('DELIVERY');
       case 'membership_changed':
+      case 'membership_changed_admin':
         return const _MembershipChangedEvent();
       case 'conversation_created':
         return const _ConversationCreatedEvent();
@@ -664,8 +672,6 @@ abstract class _InboundSyncEvent {
         return const _TypingEvent();
       case 'sync_marker':
         return const _SyncMarkerEvent();
-      case 'call_signal':
-        return const _CallSignalEvent();
       case 'group_created':
         return const _GroupCreatedEvent();
       case 'group_invite':
@@ -676,8 +682,22 @@ abstract class _InboundSyncEvent {
         return const _GroupAdminEvent();
       case 'group_join_requested':
         return const _GroupJoinRequestedEvent();
+      case 'group_join_request_resolved':
+        // Someone (possibly this device, via another one) approved or
+        // rejected a request. The request row is the state, so mark it
+        // resolved and let the group screen re-read it.
+        return const _GroupJoinRequestResolvedEvent();
+      case 'group_add_policy_changed':
+        // Who may add members changed. The policy itself is read through the
+        // group API; this only says "re-read it".
+        return const _SyncMarkerEvent();
       case 'group_key_updated':
         // Marker only: actual key material is distributed at the app layer.
+        return const _SyncMarkerEvent();
+      case 'group_epoch_key':
+        return const _GroupEpochKeyEvent();
+      case 'scheduled_call_invite':
+      case 'scheduled_call_cancelled':
         return const _SyncMarkerEvent();
       case 'pending_device_link':
         return const _PendingDeviceLinkEvent();
@@ -1065,6 +1085,100 @@ class _PendingDeviceLinkEvent extends _InboundSyncEvent {
   }
 }
 
+/// A join request the client had pending was approved, rejected or expired.
+///
+/// The server tells the requesting side what happened to its own request (see
+/// `join_links.dart`), and relays the decision to the admins so their list is
+/// current. Marking the row resolved locally is what stops a decided request
+/// from sitting in the "Join Requests" list as PENDING forever, and it is why
+/// the requesting user does not get stuck on a join screen.
+class _GroupJoinRequestResolvedEvent extends _InboundSyncEvent {
+  const _GroupJoinRequestResolvedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final requestId = _InboundSyncEvent.requireString(
+      env,
+      'request_id',
+      eventType: 'group_join_request_resolved',
+    );
+    // The relay sends `approved`, not `status` (see `join_links.dart`).
+    final approved = env.payload['approved'] == true;
+    db.updateGroupJoinRequestStatus(
+      requestId: requestId,
+      status: approved ? 'APPROVED' : 'REJECTED',
+    );
+    return true;
+  }
+}
+
+/// A group epoch key, wrapped for this device specifically.
+///
+/// The server distributes key material pairwise: each recipient device gets
+/// its own frame whose `wrapped_key` is ciphertext under that device's
+/// agreement key, so this device can unwrap it and no other can. The frame was
+/// emitted by the server all along and matched no case here, so the wrapped key
+/// was dropped on arrival and the group could never actually decrypt a message
+/// sent under a new epoch.
+///
+/// Storing it is deliberately the whole job here. Unwrapping needs this
+/// device's agreement private key and the group service's session state, so it
+/// belongs at the app layer; the row is written with `delivered_at = 0` and
+/// `getPendingEpochKeyDeliveries` is what the group service drains.
+class _GroupEpochKeyEvent extends _InboundSyncEvent {
+  const _GroupEpochKeyEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final groupId = _InboundSyncEvent.requireString(
+      env,
+      'group_id',
+      eventType: 'group_epoch_key',
+    );
+    final epoch = env.payload['epoch'] as int?;
+    if (epoch == null) {
+      throw const FormatException(
+        'group_epoch_key event is missing authoritative epoch',
+      );
+    }
+    final keyId = _InboundSyncEvent.requireString(
+      env,
+      'key_id',
+      eventType: 'group_epoch_key',
+    );
+    final wrappedKey = _InboundSyncEvent.requireString(
+      env,
+      'wrapped_key',
+      eventType: 'group_epoch_key',
+    );
+
+    // The relay addresses the frame to this device and omits the recipient id,
+    // so the local device id is the authoritative recipient. Writing a
+    // different one would make the row unclaimable.
+    final recipientDeviceId = db.getLocalDeviceId();
+    if (recipientDeviceId == null || recipientDeviceId.isEmpty) {
+      // No local identity yet, so there is nobody to deliver this key to.
+      // Dropping it is correct: the group cannot be read before pairing, and
+      // inventing a recipient would strand the key in the table forever.
+      return false;
+    }
+
+    db.saveGroupEpochKeyDelivery(
+      // The server's event id is `grp_epoch_<group>_<epoch>_<device>`, which
+      // is already unique per delivery, so it doubles as the primary key. That
+      // also makes a redelivery of the same key idempotent rather than a
+      // second pending row.
+      deliveryId: env.eventId,
+      groupId: groupId,
+      epoch: epoch,
+      keyId: keyId,
+      recipientDeviceId: recipientDeviceId,
+      wrappedKey: wrappedKey,
+    );
+    return true;
+  }
+}
+
 /// A pending pairing request completed: the new device is now a full device.
 ///
 /// The event carries no key material, only the device id and name, so this
@@ -1111,15 +1225,6 @@ class _DeviceRevokedEvent extends _InboundSyncEvent {
     db.markDeviceRevokedByDeviceId(deviceId);
     return true;
   }
-}
-
-// Ephemeral — payload delivered via RemoteSyncEngine.onCallSignal callback.
-// No DB write; call media and content must never be persisted server-side.
-class _CallSignalEvent extends _InboundSyncEvent {
-  const _CallSignalEvent();
-
-  @override
-  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) => false;
 }
 
 // P16-001: Server confirms a new group was created; store conversation + metadata.

@@ -31,9 +31,7 @@ class _ReplyQuote extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 160),
           padding: HelixInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: cs.surface.withAlpha(
-              theme.brightness == Brightness.dark ? 44 : 150,
-            ),
+            color: cs.surface.withAlpha(150),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -115,9 +113,7 @@ class _AttachmentCard extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 220, maxWidth: 360),
             padding: HelixInsets.all(10),
             decoration: BoxDecoration(
-              color: cs.onSurface.withAlpha(
-                theme.brightness == Brightness.dark ? 14 : 12,
-              ),
+              color: cs.onSurface.withAlpha(12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -346,9 +342,7 @@ class _CallEventCard extends StatelessWidget {
             radius: 27,
             backgroundColor: danger
                 ? HelixColorTokens.cFFE11D48.withAlpha(24)
-                : cs.onSurface.withAlpha(
-                    theme.brightness == Brightness.dark ? 24 : 18,
-                  ),
+                : cs.onSurface.withAlpha(18),
             child: Icon(
               data.video ? Icons.videocam_outlined : Icons.call_outlined,
               color: danger ? HelixColorTokens.cFFE11D48 : cs.onSurfaceVariant,

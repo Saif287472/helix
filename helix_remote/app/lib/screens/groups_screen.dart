@@ -187,6 +187,52 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
+  /// Renames a group.
+  ///
+  /// `updateGroupInfo` existed with no entry point, so a group created with a
+  /// typo kept that name for its whole life. The server is authoritative on
+  /// the name and will reject an empty one, so an empty submit is refused here
+  /// rather than round-tripped.
+  Future<void> _renameGroup(String groupId) async {
+    final existing = widget.groupService.db.getGroupMetadata(groupId);
+    final controller = TextEditingController(
+      text: existing?['name'] as String? ?? '',
+    );
+    try {
+      final name = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(HelixLocalizations.of(ctx).renameGroupTitle),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: HelixLocalizations.of(ctx).groupNameLabel,
+              border: const OutlineInputBorder(),
+            ),
+            onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(HelixLocalizations.of(context).cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: Text(HelixLocalizations.of(context).save),
+            ),
+          ],
+        ),
+      );
+      if (name == null || name.isEmpty) return;
+      widget.groupService.updateGroupInfo(groupId: groupId, name: name);
+      setState(() => _status = 'Renamed to $name');
+      _reload();
+    } finally {
+      controller.dispose();
+    }
+  }
+
   Future<void> _inviteMember(String groupId) async {
     final controller = TextEditingController();
     try {
@@ -462,14 +508,70 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         final m = members[i];
                         final mid = m['account_id'] as String;
                         final role = m['role'] as String;
+                        final isSelf = mid == _currentAccountId;
+                        final isAdmin = role.toUpperCase() == 'ADMIN' ||
+                            role.toUpperCase() == 'OWNER';
                         return ListTile(
                           dense: true,
                           title: Text(mid),
                           subtitle: Text(role),
-                          trailing: mid != _currentAccountId
-                              ? Row(
+                          trailing: isSelf
+                              ? null
+                              : Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    // Promote/demote. The only role change the
+                                    // server models is MEMBER <-> ADMIN, so that
+                                    // is what the button offers rather than a
+                                    // role picker that could produce a value
+                                    // the backend rejects.
+                                    IconButton(
+                                      icon: Icon(
+                                        isAdmin
+                                            ? Icons.person_outline
+                                            : Icons.shield_outlined,
+                                        size: 18,
+                                      ),
+                                      tooltip: isAdmin
+                                          ? 'Demote to member'
+                                          : 'Make admin',
+                                      onPressed: () {
+                                        widget.groupService.changeMemberRole(
+                                          groupId: groupId,
+                                          accountId: mid,
+                                          role: isAdmin ? 'MEMBER' : 'ADMIN',
+                                        );
+                                        Navigator.pop(ctx);
+                                        setState(
+                                          () => _status = isAdmin
+                                              ? 'Demoted $mid'
+                                              : 'Promoted $mid',
+                                        );
+                                        _reload();
+                                      },
+                                    ),
+                                    // Remove without blocking. Blocking also
+                                    // bars future invites, which is not always
+                                    // what an admin means, and it was the only
+                                    // option offered.
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.person_remove_outlined,
+                                        size: 18,
+                                      ),
+                                      tooltip: 'Remove from group',
+                                      onPressed: () {
+                                        widget.groupService.removeMember(
+                                          groupId: groupId,
+                                          accountId: mid,
+                                        );
+                                        Navigator.pop(ctx);
+                                        setState(
+                                          () => _status = 'Removed $mid',
+                                        );
+                                        _reload();
+                                      },
+                                    ),
                                     IconButton(
                                       icon: const Icon(Icons.block, size: 18),
                                       tooltip: 'Block & remove',
@@ -486,8 +588,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                       },
                                     ),
                                   ],
-                                )
-                              : null,
+                                ),
                         );
                       },
                     ),

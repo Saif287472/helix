@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/data/countries.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
 
 class PersonalVerifyStep extends StatefulWidget {
@@ -53,14 +54,10 @@ class _PersonalVerifyStepState extends State<PersonalVerifyStep> {
   late final List<TextEditingController> _otpControllers;
   late final List<FocusNode> _otpFocusNodes;
 
-  static const List<String> _countries = [
-    '+880',
-    '+1',
-    '+44',
-    '+91',
-    '+49',
-    '+81',
-  ];
+  /// Every country the server will accept a number from, rather than the six
+  /// this step was redesigned with. The step's own dropdown is unchanged -
+  /// only the list behind it grew.
+  static final List<String> _dialCodes = kCountryDialCodes;
 
   @override
   void initState() {
@@ -260,13 +257,20 @@ class _PersonalVerifyStepState extends State<PersonalVerifyStep> {
             padding: HelixInsets.symmetric(horizontal: 12, vertical: 4),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: _countries.contains(widget.countryCode)
+                // An unrecognised stored value would make DropdownButton
+                // assert, so it falls back to the first entry.
+                value: _dialCodes.contains(widget.countryCode)
                     ? widget.countryCode
-                    : _countries.first,
-                items: _countries.map((c) {
+                    : _dialCodes.first,
+                isExpanded: true,
+                items: kCountries.map((c) {
                   return DropdownMenuItem(
-                    value: c,
-                    child: Text(c, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    value: c.dialCode,
+                    child: Text(
+                      countryLabel(c),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   );
                 }).toList(),
                 onChanged: (val) {

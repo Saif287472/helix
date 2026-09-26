@@ -134,6 +134,59 @@ class CallLink {
   );
 }
 
+/// The result of resolving a call-link token.
+///
+/// Deliberately not a [CallLink]. Resolving a link is what someone who was
+/// *given* the token does, and the server tells them only what they need to
+/// decide whether to join: whether approval is required, and which room (if
+/// any) is currently live. The creator's own view - expiry, use count, the
+/// room id the link was minted against - is not in that response, so modelling
+/// it as a [CallLink] would mean inventing those fields as null and then
+/// having the UI show "never expires" for a link that expires in six days.
+class CallLinkResolution {
+  const CallLinkResolution({
+    required this.linkId,
+    required this.requiresApproval,
+    this.roomId,
+    this.roomStatus,
+    this.isVideo = false,
+    this.participantCount = 0,
+  });
+
+  final String linkId;
+  final bool requiresApproval;
+
+  /// The live room behind the link, or null when the link is valid but the
+  /// room has not been created yet (or has already ended). A null [roomId]
+  /// with a successful resolve is the normal case for a link minted ahead of
+  /// time, and the caller is expected to create the room on entry.
+  final String? roomId;
+  final CallRoomStatus? roomStatus;
+  final bool isVideo;
+  final int participantCount;
+
+  bool get hasLiveRoom => roomId != null && roomStatus == CallRoomStatus.active;
+
+  factory CallLinkResolution.fromJson(Map<String, dynamic> j) {
+    final room = j['room'];
+    final roomJson = room is Map<String, dynamic> ? room : null;
+    return CallLinkResolution(
+      linkId: j['link_id'] as String,
+      requiresApproval: (j['requires_approval'] as int? ?? 0) != 0,
+      roomId: roomJson?['room_id'] as String?,
+      roomStatus: roomJson == null
+          ? null
+          : switch (roomJson['status'] as String?) {
+              'ACTIVE' => CallRoomStatus.active,
+              'ENDED' => CallRoomStatus.ended,
+              _ => CallRoomStatus.waiting,
+            },
+      isVideo: (roomJson?['is_video'] as int? ?? 0) != 0,
+      participantCount: roomJson?['participant_count'] as int? ?? 0,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Scheduled call
 // ---------------------------------------------------------------------------

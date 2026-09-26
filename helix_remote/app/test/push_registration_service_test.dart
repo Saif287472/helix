@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/services/push_registration_service.dart';
 import 'package:helix_remote/services/push_token_source.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
+import 'support/group_call_rest_stubs.dart';
 
 /// The server half of push wake was built and tested long before the client
 /// half existed: the backend enqueues a wake notification, finds no token
@@ -213,7 +214,7 @@ class _ThrowingSource implements PushTokenSource {
   Future<void> dispose() async {}
 }
 
-class _FakeRestClient implements HelixRemoteRestClient {
+class _FakeRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
   final List<String> registered = [];
   final List<String> tokenTypes = [];
   int deregisterCalls = 0;

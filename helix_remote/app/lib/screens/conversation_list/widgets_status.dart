@@ -119,9 +119,8 @@ class _SearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final fill = theme.brightness == Brightness.dark
-        ? cs.surfaceContainerHighest.withAlpha(150)
-        : cs.surfaceContainerHighest.withAlpha(120);
+    // Light only - see HelixThemes.
+    final fill = cs.surfaceContainerHighest.withAlpha(120);
 
     return SizedBox(
       height: 56,

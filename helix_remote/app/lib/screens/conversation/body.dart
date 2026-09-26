@@ -433,10 +433,9 @@ class _ChatWallpaper extends StatelessWidget {
     return ColoredBox(
       color: palette.page,
       child: CustomPaint(
-        painter: _ChatWallpaperPainter(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? HelixScrimColors.highlightOnDark
-              : HelixScrimColors.shadow,
+        painter: const _ChatWallpaperPainter(
+          // Light only - see HelixThemes.
+          color: HelixScrimColors.shadow,
         ),
         child: child,
       ),

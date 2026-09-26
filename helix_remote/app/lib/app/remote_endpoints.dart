@@ -55,6 +55,31 @@ class RemoteApiEndpoints {
   Uri get backups => api('backups/');
   Uri get messagesDeviceEvents => api('messages/device-events');
 
+  // --- Group calls, call links, scheduled calls ---
+  //
+  // Mounted at /api/v1/group-calls. Room creation posts to the collection
+  // root, so `groupCallRooms` is the bare path rather than a trailing-slash
+  // form: the shelf router has no redirect on that route, and a redirect on a
+  // POST loses the body.
+
+  Uri get groupCallRooms => api('group-calls');
+  Uri groupCallRoom(String roomId) => api('group-calls/$roomId');
+  Uri groupCallRoomJoin(String roomId) => api('group-calls/$roomId/join');
+  Uri groupCallRoomLeave(String roomId) => api('group-calls/$roomId/leave');
+  Uri groupCallRoomEnd(String roomId) => api('group-calls/$roomId/end');
+  Uri groupCallRoomKick(String roomId) => api('group-calls/$roomId/kick');
+  Uri groupCallRoomKey(String roomId) => api('group-calls/$roomId/key');
+  Uri groupCallRoomScreenSharing(String roomId) =>
+      api('group-calls/$roomId/screen-sharing');
+
+  Uri get groupCallLinks => api('group-calls/links');
+  Uri groupCallLink(String token) => api('group-calls/links/$token');
+
+  Uri get groupCallScheduled => api('group-calls/scheduled');
+  Uri groupCallScheduledRsvp(String id) =>
+      api('group-calls/scheduled/$id/rsvp');
+  Uri groupCallScheduledCall(String id) => api('group-calls/scheduled/$id');
+
   Uri api(String path, {Map<String, String>? queryParameters}) {
     final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
     final apiPath = normalizedPath.startsWith('api/v1/')

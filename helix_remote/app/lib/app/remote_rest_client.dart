@@ -686,6 +686,183 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   Future<Map<String, dynamic>> getTurnCredentials() =>
       _request('GET', 'calls/turn-credentials');
 
+  // --- Group calls ---------------------------------------------------------
+  //
+  // `_request` returns the decoded JSON body. The room mutators return a
+  // `{status: ...}` acknowledgement rather than the room, so they are typed
+  // `void` and the caller re-reads the room if it needs the participant list.
+
+  @override
+  Future<CallRoom> createGroupCallRoom({
+    required bool isVideo,
+    String? scheduledCallId,
+  }) async {
+    final body = <String, dynamic>{'is_video': isVideo};
+    if (scheduledCallId != null) body['scheduled_call_id'] = scheduledCallId;
+    final created = await _request('POST', _path(_endpoints.groupCallRooms), body: body);
+    // The create response carries only {status, room_id, is_video}; it is not
+    // a room document, so re-read rather than pretending the id is a room.
+    return getGroupCallRoom(created['room_id'] as String);
+  }
+
+  @override
+  Future<CallRoom> getGroupCallRoom(String roomId) async {
+    final json = await _request('GET', _path(_endpoints.groupCallRoom(roomId)));
+    return CallRoom.fromJson(json);
+  }
+
+  @override
+  Future<void> joinGroupCallRoom(String roomId) =>
+      _request('POST', _path(_endpoints.groupCallRoomJoin(roomId)));
+
+  @override
+  Future<void> leaveGroupCallRoom(String roomId) =>
+      _request('POST', _path(_endpoints.groupCallRoomLeave(roomId)));
+
+  @override
+  Future<void> endGroupCallRoom(String roomId) =>
+      _request('POST', _path(_endpoints.groupCallRoomEnd(roomId)));
+
+  @override
+  Future<void> kickGroupCallParticipant(String roomId, String deviceId) => _request(
+    'POST',
+    _path(_endpoints.groupCallRoomKick(roomId)),
+    body: {'device_id': deviceId},
+  );
+
+  @override
+  Future<void> deliverGroupCallRoomKey({
+    required String roomId,
+    required String keyId,
+    required int epoch,
+    required List<Map<String, String>> keys,
+  }) => _request(
+    'POST',
+    _path(_endpoints.groupCallRoomKey(roomId)),
+    body: {'key_id': keyId, 'epoch': epoch, 'keys': keys},
+  );
+
+  @override
+  Future<void> setGroupCallScreenSharing(
+    String roomId, {
+    required bool active,
+  }) => _request(
+    'POST',
+    _path(_endpoints.groupCallRoomScreenSharing(roomId)),
+    body: {'active': active},
+  );
+
+  // --- Call links ----------------------------------------------------------
+
+  @override
+  Future<CallLink> createGroupCallLink({
+    String? roomId,
+    bool requiresApproval = false,
+    int maxUses = 0,
+  }) async {
+    final json = await _request(
+      'POST',
+      _path(_endpoints.groupCallLinks),
+      body: {
+        'room_id': ?roomId,
+        'requires_approval': requiresApproval,
+        'max_uses': maxUses,
+      },
+    );
+    // The create response is an acknowledgement, not the stored link, so fill
+    // the fields it does state and derive the rest. The server mints the
+    // expiry as "now + 7 days" with no way to ask for a different one, so that
+    // is the only honest value available here; a caller that needs the
+    // authoritative expiry has to keep the link server-side.
+    final now = DateTime.now();
+    return CallLink(
+      linkId: json['link_id'] as String,
+      linkToken: json['link_token'] as String,
+      requiresApproval: (json['requires_approval'] as int? ?? 0) != 0,
+      createdAt: now,
+      expiresAt: now.add(const Duration(days: 7)),
+    );
+  }
+
+  @override
+  Future<CallLinkResolution> resolveGroupCallLink(String token) async {
+    final json = await _request('GET', _path(_endpoints.groupCallLink(token)));
+    return CallLinkResolution.fromJson(json);
+  }
+
+  @override
+  Future<void> revokeGroupCallLink(String token) =>
+      _request('DELETE', _path(_endpoints.groupCallLink(token)));
+
+  // --- Scheduled calls -----------------------------------------------------
+
+  @override
+  Future<String> createScheduledGroupCall({
+    required String title,
+    required DateTime scheduledAt,
+    required List<String> attendeeIds,
+  }) async {
+    final json = await _request(
+      'POST',
+      _path(_endpoints.groupCallScheduled),
+      body: {
+        'title': title,
+        'scheduled_at': scheduledAt.millisecondsSinceEpoch,
+        'attendee_ids': attendeeIds,
+      },
+    );
+    // Returns the new id, not a ScheduledCall. The response is only
+    // `{status, scheduled_call_id, title}` and there is no GET-by-id, so
+    // building a ScheduledCall here would mean inventing the host, the
+    // attendees' RSVP state and the created-at timestamp. Callers refresh
+    // `listScheduledGroupCalls` instead, which is the server's own view.
+    return json['scheduled_call_id'] as String;
+  }
+
+  @override
+  Future<List<ScheduledCall>> listScheduledGroupCalls() async {
+    final json = await _request('GET', _path(_endpoints.groupCallScheduled));
+    final raw = json['calls'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(ScheduledCall.fromJson)
+        .toList();
+  }
+
+  @override
+  Future<void> rsvpScheduledGroupCall(
+    String scheduledCallId, {
+    required bool yes,
+  }) => _request(
+    'POST',
+    _path(_endpoints.groupCallScheduledRsvp(scheduledCallId)),
+    body: {'rsvp': yes ? 'YES' : 'NO'},
+  );
+
+  @override
+  Future<void> cancelScheduledGroupCall(String scheduledCallId) =>
+      _request('DELETE', _path(_endpoints.groupCallScheduledCall(scheduledCallId)));
+
+  /// Turns a prepared [Uri] back into the relative path `_request` expects.
+  ///
+  /// `_request` takes a path and rebuilds it through [RemoteApiEndpoints.api];
+  /// handing it a full Uri would nest `/api/v1` inside a second time. The
+  /// endpoints object is the single source of truth for paths, so stripping
+  /// the origin here keeps the routes declared in one place.
+  String _path(Uri uri) {
+    final origin = _endpoints.groupCallRooms;
+    var path = uri.path;
+    final prefix = origin.path;
+    if (prefix.isNotEmpty && path.startsWith(prefix)) {
+      path = path.substring(prefix.length);
+    }
+    if (uri.hasQuery) {
+      return '$path?${uri.query}';
+    }
+    return path;
+  }
+
   @override
   Future<Map<String, dynamic>> registerPushToken({
     required String pushToken,

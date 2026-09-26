@@ -312,6 +312,12 @@ class _UsersTabState extends State<UsersTab> {
     );
     if (confirmed != true) return;
 
+    // Marks the account busy for the whole call, exactly as _confirmDelete
+    // does. Without it the row's action buttons stayed live during a block
+    // that deletes an account, every device and a phone-number ban, so a
+    // second tap could fire a concurrent write against an account that was
+    // already being torn down.
+    setState(() => _busyAccountId = accountId);
     try {
       await widget.client.blockUser(accountId);
       if (_selectedUser?['account_id'] == accountId) {
@@ -321,6 +327,8 @@ class _UsersTabState extends State<UsersTab> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyAccountId = null);
     }
   }
 
@@ -762,6 +770,7 @@ class _UsersTabState extends State<UsersTab> {
   Widget _buildDetailPaneContent(Map<String, dynamic> user, {required bool inSheet}) {
     final accountId = user['account_id'] as String? ?? '';
     final displayName = user['display_name'] as String? ?? '';
+    final inviteId = user['invite_id'] as String? ?? '';
     final phone = _formatPhone(user);
     final status = user['status'] as String? ?? 'ACTIVE';
     final isSuspended = status == 'SUSPENDED';
@@ -855,6 +864,17 @@ class _UsersTabState extends State<UsersTab> {
                   ),
                 ],
               ),
+              const SizedBox(height: 14),
+              // The account id and the invite it was redeemed against.
+              //
+              // The redesign dropped both from view and left the account id
+              // reachable only through "Copy User ID" - a button that copies a
+              // value the operator can never read. These are the identifiers an
+              // admin actually needs: the account id is what support asks for,
+              // and the invite is how you tell which code let someone in.
+              _identityRow(label: 'Account ID', value: accountId),
+              if (inviteId.isNotEmpty)
+                _identityRow(label: 'Redeemed invite', value: inviteId),
             ],
           ),
         ),
@@ -1196,8 +1216,45 @@ class _UsersTabState extends State<UsersTab> {
     );
   }
 
-  Widget _statusChip(bool isSuspended) {
-    final bg = isSuspended ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5);
+  /// A labelled identifier in the detail pane.
+  ///
+  /// Monospaced and selectable: these are values an operator reads out or
+  /// pastes into a support ticket, so wrapping them mid-token would make them
+  /// wrong to copy by hand.
+  Widget _identityRow({required String label, required String value}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
+                fontFamily: 'monospace',
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusChip(bool isSuspended) {    final bg = isSuspended ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5);
     final fg = isSuspended ? const Color(0xFFDC2626) : const Color(0xFF059669);
     final border = isSuspended ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0);
     return Container(

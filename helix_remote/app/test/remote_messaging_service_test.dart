@@ -12,6 +12,7 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as p;
+import 'support/group_call_rest_stubs.dart';
 
 class _FakeProtector implements RemoteMessageProtector {
   @override
@@ -52,7 +53,7 @@ class _FakeProtector implements RemoteMessageProtector {
   }
 }
 
-class _FakeRestClient implements HelixRemoteRestClient {
+class _FakeRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
   _FakeRestClient({Map<String, Map<String, dynamic>>? bundles})
     : bundles = bundles ?? {};
 

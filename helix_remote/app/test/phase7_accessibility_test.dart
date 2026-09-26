@@ -98,14 +98,20 @@ void main() {
     await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
   });
 
-  testWidgets('P7 the same screen holds up in the dark theme', (tester) async {
-    // Contrast is a property of the colour pair, so a palette that passes in
-    // light says nothing about dark. Both theme builders ship.
+  testWidgets('P7 the high-contrast theme holds up on the same screen', (
+    tester,
+  ) async {
+    // Contrast is a property of the colour pair, so the high-contrast palette
+    // needs its own check rather than inheriting the default theme's.
+    //
+    // There is no dark variant to check any more: dark mode is deferred for
+    // this product, so the app shell pins ThemeMode.light and HelixThemes
+    // exposes light() and highContrastLight() only. See HelixThemes.
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: HelixLocalizations.localizationsDelegates,
         supportedLocales: HelixLocalizations.supportedLocales,
-        theme: HelixThemes.dark(),
+        theme: HelixThemes.highContrastLight(),
         home: const ServerChoiceScreen(),
       ),
     );
@@ -151,10 +157,10 @@ void main() {
     await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
   });
 
-  testWidgets('P7 the high-contrast themes also meet contrast', (tester) async {
+  testWidgets('P7 the high-contrast theme also meets contrast', (tester) async {
     for (final theme in [
+      HelixThemes.light(),
       HelixThemes.highContrastLight(),
-      HelixThemes.highContrastDark(),
     ]) {
       await tester.pumpWidget(
         MaterialApp(

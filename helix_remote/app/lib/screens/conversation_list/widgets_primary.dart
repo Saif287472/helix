@@ -44,7 +44,7 @@ class _ConversationTile extends StatelessWidget {
     final unread = unreadCount > 0;
     final previewStyle = _previewStyle(preview);
     final selectedColor = Color.alphaBlend(
-      cs.primary.withAlpha(theme.brightness == Brightness.dark ? 60 : 42),
+      cs.primary.withAlpha(42),
       cs.surface,
     );
 

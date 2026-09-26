@@ -18,6 +18,44 @@ Future<void> _settleWithRealIO(WidgetTester tester) async {
   }
 }
 
+/// Advances both clocks the auto-connect path needs.
+///
+/// `_attemptAutoConnect` spends ~1.4s in bare `Future.delayed` steps (the
+/// "deploying / retrieving / connecting / validating / syncing" launch
+/// animation). Inside `testWidgets` a `Future.delayed` runs on the *fake*
+/// clock, so `tester.pump()` with no duration does not advance it and the app
+/// sits on the first launch step forever. Meanwhile AdminClient does real
+/// socket I/O, which only resolves under `tester.runAsync`.
+///
+/// So: pump the fake clock, then yield real time for the socket, then pump
+/// again to flush the resulting setState. Doing only one of the two is what
+/// made these tests hang on the splash.
+Future<void> _advance(WidgetTester tester, Duration step) async {
+  await tester.pump(step);
+  await tester.runAsync(() => Future<void>.delayed(step));
+  await tester.pump();
+}
+
+/// Waits until the logged-in shell is on screen, or for the LoginScreen when
+/// the saved server turns out to be unreachable or to reject the token.
+///
+/// [_settleWithRealIO] is the wrong tool here: it gives up as soon as no
+/// spinner is showing, but the launch sequence has no spinner at all, so it
+/// returned while the app was still on the first step of a ~1.4s animation.
+Future<void> _waitForSettledShell(WidgetTester tester) async {
+  const step = Duration(milliseconds: 50);
+  final shell = find.byKey(const Key('header_sign_out_button'));
+  final login = find.byType(LoginScreen);
+  for (var i = 0; i < 120; i++) {
+    await _advance(tester, step);
+    if (shell.evaluate().isNotEmpty || login.evaluate().isNotEmpty) {
+      // One more pass so the first data load lands.
+      await _advance(tester, step);
+      return;
+    }
+  }
+}
+
 Future<void> _pumpAdminApp(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1000, 800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -37,7 +75,7 @@ void main() {
     await _pumpAdminApp(tester);
     await tester.pumpAndSettle();
 
-    expect(find.text('HELIX SERVER ADMIN'), findsOneWidget);
+    expect(find.text('Helix Admin'), findsOneWidget);
     expect(find.byKey(const Key('login_url_field')), findsOneWidget);
     expect(find.byKey(const Key('login_password_field')), findsOneWidget);
     expect(find.byKey(const Key('login_button')), findsOneWidget);
@@ -110,12 +148,17 @@ void main() {
     await _settleWithRealIO(tester);
     await _settleWithRealIO(tester);
 
-    expect(find.text('Helix Panel'), findsOneWidget);
-    expect(find.text('DASHBOARD'), findsOneWidget);
-    expect(find.byKey(const Key('sidebar_sign_out_button')), findsOneWidget);
+    // The redesigned shell has no sidebar: navigation is a row of pills in
+    // the app bar, and sign-out is a header action. Asserted on what is
+    // actually there rather than on the pre-redesign 'Helix Panel' chrome.
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Users & Devices'), findsOneWidget);
+    expect(find.text('Invites'), findsOneWidget);
+    expect(find.text('Ops & Logs'), findsOneWidget);
+    expect(find.byKey(const Key('header_sign_out_button')), findsOneWidget);
   });
 
-  testWidgets('signing out from the sidebar returns to the LoginScreen', (
+  testWidgets('signing out from the header returns to the LoginScreen', (
     tester,
   ) async {
     late HttpServer server;
@@ -135,15 +178,14 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({'admin_token': 'active-token'});
 
     await _pumpAdminApp(tester);
-    await _settleWithRealIO(tester);
-    await _settleWithRealIO(tester);
+    await _waitForSettledShell(tester);
 
-    expect(find.text('Helix Panel'), findsOneWidget);
+    expect(find.text('Overview'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('sidebar_sign_out_button')));
+    await tester.tap(find.byKey(const Key('header_sign_out_button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('HELIX SERVER ADMIN'), findsOneWidget);
+    expect(find.text('Helix Admin'), findsOneWidget);
     expect(find.byKey(const Key('login_button')), findsOneWidget);
     expect(
       await const FlutterSecureStorage().read(key: 'admin_token'),
@@ -169,10 +211,9 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({'admin_token': 'expired-token'});
 
     await _pumpAdminApp(tester);
-    await _settleWithRealIO(tester);
-    await _settleWithRealIO(tester);
+    await _waitForSettledShell(tester);
 
-    expect(find.text('HELIX SERVER ADMIN'), findsOneWidget);
+    expect(find.text('Helix Admin'), findsOneWidget);
     expect(find.byKey(const Key('login_error_text')), findsOneWidget);
     expect(
       find.textContaining('Session expired or admin password changed'),
@@ -195,10 +236,13 @@ void main() {
       });
 
       await _pumpAdminApp(tester);
-      await _settleWithRealIO(tester);
-      await _settleWithRealIO(tester);
+      await _waitForSettledShell(tester);
 
-      expect(find.text('HELIX SERVER ADMIN'), findsOneWidget);
+      // 'SIGN IN' is unique to the LoginScreen. 'Helix Admin' is not a usable
+      // marker here: the launch skeleton renders the same string, so asserting
+      // on it passes while the app is still stuck on the splash.
+      expect(find.text('SIGN IN'), findsOneWidget);
+      expect(find.text('Administrative Operations Portal'), findsNothing);
       expect(find.byKey(const Key('login_error_text')), findsOneWidget);
       expect(find.textContaining('Could not reach server'), findsOneWidget);
       expect(
@@ -208,7 +252,7 @@ void main() {
     },
   );
 
-  testWidgets('a wide viewport keeps the fixed sidebar when logged in', (
+  testWidgets('a wide viewport keeps navigation in the app bar', (
     tester,
   ) async {
     late HttpServer server;
@@ -228,10 +272,13 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({'admin_token': 'valid-token'});
 
     await _pumpAdminApp(tester);
-    await _settleWithRealIO(tester);
-    await _settleWithRealIO(tester);
+    await _waitForSettledShell(tester);
 
-    expect(find.text('Helix Panel'), findsOneWidget);
+    // Desktop: the four nav pills live in the app bar and there is no bottom
+    // bar and no drawer.
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Ops & Logs'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
     expect(find.byIcon(Icons.menu), findsNothing);
   });
 
@@ -258,15 +305,19 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(const HelixAdminApp());
-    await _settleWithRealIO(tester);
-    await _settleWithRealIO(tester);
+    await _waitForSettledShell(tester);
 
+    // Below the 700px breakpoint the pills would not fit, so navigation moves
+    // into a bottom bar with its own labels. The app bar keeps only the
+    // server name and sign-out.
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byIcon(Icons.menu), findsNothing);
     expect(find.text('Overview'), findsOneWidget);
     expect(find.text('Users'), findsOneWidget);
     expect(find.text('Invites'), findsOneWidget);
     expect(find.text('Ops & Logs'), findsOneWidget);
+    // No pill row in the app bar at this width.
+    expect(find.text('Users & Devices'), findsNothing);
   });
 
   testWidgets(
@@ -363,7 +414,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(setPasswordCalled, isTrue);
-      expect(find.text('DASHBOARD'), findsOneWidget);
+      expect(find.text('Overview'), findsOneWidget);
     },
   );
 }

@@ -10,6 +10,7 @@ import 'package:helix_remote/screens/invite_entry_screen.dart';
 import 'package:helix_remote/screens/setup/setup_screen.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
+import 'support/group_call_rest_stubs.dart';
 
 void main() {
   group('OnboardingNotifier & State', () {
@@ -326,7 +327,7 @@ void main() {
   });
 }
 
-class _OnboardingRestClient implements HelixRemoteRestClient {
+class _OnboardingRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
   _OnboardingRestClient({this.rejectOtp = false});
 
   final bool rejectOtp;

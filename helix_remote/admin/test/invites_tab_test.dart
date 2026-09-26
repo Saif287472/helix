@@ -2,11 +2,44 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/admin_client.dart';
 import 'package:helix_admin/helix_code.dart';
 import 'package:helix_admin/screens/invites_tab.dart';
 import 'package:helix_admin/theme/app_theme.dart';
+
+/// Captures what the Copy button puts on the clipboard.
+///
+/// The card truncates the code for layout, so the on-screen `SelectableText` is
+/// deliberately not the full value - it cannot be decoded, and it is not what
+/// the operator shares either. The clipboard is the real contract: tapping
+/// Copy and reading back the system clipboard is exactly what a user does
+/// before pasting the code into a message.
+Future<String> _copyDisplayedCode(WidgetTester tester) async {
+  String? copied;
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      });
+  addTearDown(
+    () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null),
+  );
+
+  await tester.tap(
+    find.ancestor(
+      of: find.byIcon(Icons.copy),
+      matching: find.byType(OutlinedButton),
+    ),
+  );
+  // The handler awaits Clipboard.setData before showing its confirmation.
+  await tester.pumpAndSettle();
+  return copied ?? '';
+}
 
 /// AdminClient makes real socket I/O (even against the loopback fake
 /// server below), which doesn't interleave with pumpAndSettle()'s
@@ -163,28 +196,32 @@ void main() {
     expect(find.text('No invites issued yet.'), findsNothing);
   });
 
-  testWidgets('generating an invite shows the shareable code once', (
+  testWidgets('generating an invite yields one shareable opaque code', (
     tester,
   ) async {
     final client = AdminClient(baseUrl: baseUrl(), token: 't');
     await _pumpInvitesTab(tester, client);
     await _settleWithRealIO(tester);
 
-    await tester.tap(find.widgetWithText(ElevatedButton, 'Generate Invite'));
+    await tester.tap(find.byTooltip('Create Invite'));
     await _settleWithRealIO(tester);
 
-    final inviteCodeFinder = find.byWidgetPredicate(
-      (w) =>
-          w is SelectableText &&
-          w.data != null &&
-          w.data!.startsWith('HLX-INV-'),
+    // Exactly one create call, and the code is shown truncated for layout.
+    expect(createCalls, equals(1));
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is SelectableText &&
+            w.data != null &&
+            w.data!.startsWith('HLX-INV-') &&
+            w.data!.endsWith('...'),
+      ),
+      findsOneWidget,
     );
-    expect(inviteCodeFinder, findsOneWidget);
-    final textWidget = tester.widget<SelectableText>(inviteCodeFinder);
-    final decoded = decodeHelixInviteCode(textWidget.data!);
+
+    final decoded = decodeHelixInviteCode(await _copyDisplayedCode(tester));
     expect(decoded, isNotNull);
     expect(decoded!.inviteCode, equals('code_1'));
-    expect(createCalls, equals(1));
     // The new invite is reflected in the refreshed history table too.
     expect(find.text('PENDING'), findsNWidgets(2));
   });
@@ -198,19 +235,13 @@ void main() {
       await _pumpInvitesTab(tester, client);
       await _settleWithRealIO(tester);
 
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Generate Invite'));
+      await tester.tap(find.byTooltip('Create Invite'));
       await _settleWithRealIO(tester);
 
-      final inviteCodeFinder = find.byWidgetPredicate(
-        (w) =>
-            w is SelectableText &&
-            w.data != null &&
-            w.data!.startsWith('HLX-INV-'),
-      );
-      expect(inviteCodeFinder, findsOneWidget);
-      final textWidget = tester.widget<SelectableText>(inviteCodeFinder);
-      final decoded = decodeHelixInviteCode(textWidget.data!);
+      final decoded = decodeHelixInviteCode(await _copyDisplayedCode(tester));
       expect(decoded, isNotNull);
+      // The repaired code points at the server this admin is actually talking
+      // to, not at the host the server would have guessed.
       expect(decoded!.serverUrl, equals(baseUrl()));
       expect(decoded.inviteCode, equals('code_1'));
     },
@@ -249,7 +280,7 @@ void main() {
     await _settleWithRealIO(tester);
 
     expect(find.text('PENDING'), findsOneWidget);
-    await tester.tap(find.byTooltip('Cancel invite'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel'));
     await _settleWithRealIO(tester);
 
     expect(find.text('CANCELLED'), findsOneWidget);
