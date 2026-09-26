@@ -58,7 +58,10 @@ mixin AuthPhoneOtpHandlers on AuthModuleBase {
     }
 
     if (db.isPhoneHashBlocked(phoneHash)) {
-      throw AppError.forbidden('This phone number is blocked');
+      throw AppError.forbidden(
+        'This phone number is blocked',
+        code: RemoteErrorCode.phoneBlocked,
+      );
     }
 
     if (!_allowOtpRequest(phoneHash)) {

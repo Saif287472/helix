@@ -55,6 +55,7 @@ class _HelixAdminAppState extends State<HelixAdminApp> {
 /// The four tabs that need a live server connection. Matches the nav, the
 /// bottom bar, and the desktop pill row.
 const _serverDependentTabs = {'dashboard', 'invites', 'users', 'ops'};
+
 /// Intentionally empty: the login form must never pre-fill a specific
 /// self-hoster's domain, or an operator can believe they are pointed at the
 /// server they are actually administering. The saved URL from a previous
@@ -83,9 +84,6 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   final _urlController = TextEditingController(text: _defaultServerUrl);
   final _passwordController = TextEditingController();
-  final _federationDomainController = TextEditingController();
-  final _federationAddressController = TextEditingController();
-  final _federationDirectoryController = TextEditingController();
 
   Map<String, dynamic>? _metrics;
   Map<String, dynamic>? _config;
@@ -106,6 +104,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
   LogStreamHandle? _logStreamHandle;
 
   bool _logAutoRefresh = false;
+
+  /// An account the Users tab should open on arrival (see [UsersTab]).
+  String? _focusAccountId;
 
   /// How many of the lines already in the buffer the server is about to
   /// replay when a log stream opens. See [_setLogAutoRefresh].
@@ -206,7 +207,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
     // Step 3: Connecting to the server…
     final client = AdminClient(baseUrl: url, token: token);
-    
+
     AdminLoginStatus status;
     try {
       status = await client.verifyLoginDetailed().timeout(
@@ -301,9 +302,6 @@ class _MainAdminPageState extends State<MainAdminPage> {
     _latencyPollTimer?.cancel();
     _urlController.dispose();
     _passwordController.dispose();
-    _federationDomainController.dispose();
-    _federationAddressController.dispose();
-    _federationDirectoryController.dispose();
     super.dispose();
   }
 
@@ -327,10 +325,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   void _startLogPollFallback() {
     if (_logPollTimer == null && _logAutoRefresh) {
-      _logPollTimer = Timer.periodic(
-        _logPollInterval,
-        (_) => _refreshLogs(),
-      );
+      _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
     }
   }
 
@@ -355,8 +350,10 @@ class _MainAdminPageState extends State<MainAdminPage> {
       // socket opens, and those are already in the buffer below - so start
       // the cursor at the tail and skip the lines that match, instead of
       // appending a duplicate copy of everything just fetched.
-      _logReplayCursor =
-          (_logs.lines.length - _logReplayBurst).clamp(0, _logs.lines.length);
+      _logReplayCursor = (_logs.lines.length - _logReplayBurst).clamp(
+        0,
+        _logs.lines.length,
+      );
       _logStreamSub = handle.lines.listen(
         (line) {
           if (!mounted) return;
@@ -412,10 +409,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
     final url = _normalizeServerUrl(_urlController.text);
     _urlController.text = url;
     final secret = _passwordController.text.trim();
-    final client = AdminClient(
-      baseUrl: url,
-      token: secret,
-    );
+    final client = AdminClient(baseUrl: url, token: secret);
 
     final status = await client.verifyLoginDetailed();
     if (!mounted) return;
@@ -520,13 +514,11 @@ class _MainAdminPageState extends State<MainAdminPage> {
         _latencyMs = elapsed > 0 ? elapsed : null;
         _metrics = metrics;
         _config = config;
-        final federation = config['federation'] as Map<String, dynamic>?;
-        _federationDomainController.text =
-            federation?['domain'] as String? ?? '';
-        _federationAddressController.text =
-            federation?['public_base_url'] as String? ?? '';
-        _federationDirectoryController.text =
-            federation?['directory_url'] as String? ?? '';
+        // Global has no invite workflow, so its tab disappears; never leave
+        // the console parked on a tab that is no longer in the nav.
+        if (_isGlobalServer && _selectedTab == 'invites') {
+          _selectedTab = 'dashboard';
+        }
         _logs = logs;
         _isLoading = false;
       });
@@ -594,49 +586,56 @@ class _MainAdminPageState extends State<MainAdminPage> {
     }
   }
 
-  Future<String> _saveServerName(String name) async {
-    final client = _client;
-    if (client == null) {
-      throw const AdminRequestException('Not connected to a server.');
-    }
-    final stored = await client.setServerName(name);
-    if (mounted) {
-      setState(() {
-        final config = _config;
-        if (config != null) config['server_name'] = stored;
-      });
-    }
-    return stored;
+  /// Whether the connected server is the public Helix Global instance, as
+  /// reported by `/ops/config`. A server that predates the field reports
+  /// nothing and is treated as a personal server, which is what it is.
+  bool get _isGlobalServer => _config?['global_instance_mode'] == true;
+
+  /// The name in the header. Global is always "Helix Global". Otherwise a
+  /// name set on the server, then the host - the configured name is `''`
+  /// when none is set, and showing that left the header blank beside the
+  /// status dot. The auto-generated "Private server #N" is never shown.
+  String get _headerServerName {
+    if (_isGlobalServer) return 'Helix Global';
+    final configured = (_config?['server_name'] as String?)?.trim();
+    if (configured != null && configured.isNotEmpty) return configured;
+    final host = Uri.tryParse(_urlController.text)?.host;
+    return (host == null || host.isEmpty) ? 'Helix Server' : host;
   }
 
-  Future<void> _setWorldwideMode(bool enabled) async {
-    if (_client == null) return;
-    setState(() => _isLoading = true);
-    try {
-      await _client!.setWorldwideMode(
-        enabled: enabled,
-        domain: _federationDomainController.text.trim(),
-        address: _federationAddressController.text.trim(),
-        directoryUrl: _federationDirectoryController.text.trim(),
-      );
-      await _refreshData();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            enabled ? 'Worldwide Mode enabled.' : 'Worldwide Mode disabled.',
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.toString();
-      });
-    }
-  }
+  /// The top-level destinations for this server. Global drops Invites:
+  /// signup there is SMS-OTP only and no invite is ever issued or redeemed.
+  List<_Destination> get _destinations => [
+    const _Destination(
+      'Overview',
+      'Overview',
+      'dashboard',
+      Icons.dashboard_outlined,
+      Icons.dashboard,
+    ),
+    const _Destination(
+      'Users & Devices',
+      'Users',
+      'users',
+      Icons.people_outline,
+      Icons.people,
+    ),
+    if (!_isGlobalServer)
+      const _Destination(
+        'Invites',
+        'Invites',
+        'invites',
+        Icons.local_activity_outlined,
+        Icons.local_activity,
+      ),
+    const _Destination(
+      'Ops & Logs',
+      'Ops & Logs',
+      'ops',
+      Icons.settings_outlined,
+      Icons.settings,
+    ),
+  ];
 
   static const double _mobileBreakpoint = 700;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -683,55 +682,38 @@ class _MainAdminPageState extends State<MainAdminPage> {
           key: _scaffoldKey,
           appBar: _buildAppBar(isMobile),
           drawer: null,
-          bottomNavigationBar: isMobile
-              ? NavigationBar(
-                  selectedIndex: switch (_selectedTab) {
-                    'dashboard' => 0,
-                    'users' => 1,
-                    'invites' => 2,
-                    'ops' || 'logs' || 'reports' || 'config' || 'backup' => 3,
-                    _ => 0,
-                  },
-                  onDestinationSelected: (idx) {
-                    final targetTab = switch (idx) {
-                      0 => 'dashboard',
-                      1 => 'users',
-                      2 => 'invites',
-                      3 => 'ops',
-                      _ => 'dashboard',
-                    };
-                    setState(() => _selectedTab = targetTab);
-                    if (_serverDependentTabs.contains(targetTab)) {
-                      _refreshData();
-                    }
-                  },
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.dashboard_outlined),
-                      selectedIcon: Icon(Icons.dashboard),
-                      label: 'Overview',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.people_outline),
-                      selectedIcon: Icon(Icons.people),
-                      label: 'Users',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.local_activity_outlined),
-                      selectedIcon: Icon(Icons.local_activity),
-                      label: 'Invites',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.settings_outlined),
-                      selectedIcon: Icon(Icons.settings),
-                      label: 'Ops & Logs',
-                    ),
-                  ],
-                )
-              : null,
+          bottomNavigationBar: isMobile ? _buildBottomNav() : null,
           body: _buildBody(isMobile: isMobile),
         );
       },
+    );
+  }
+
+  Widget _buildBottomNav() {
+    final destinations = _destinations;
+    // Ops sub-screens all live under the Ops destination.
+    final activeTab = switch (_selectedTab) {
+      'logs' || 'reports' || 'config' || 'backup' => 'ops',
+      final tab => tab,
+    };
+    final index = destinations.indexWhere((d) => d.tabId == activeTab);
+    return NavigationBar(
+      selectedIndex: index < 0 ? 0 : index,
+      onDestinationSelected: (idx) {
+        final targetTab = destinations[idx].tabId;
+        setState(() => _selectedTab = targetTab);
+        if (_serverDependentTabs.contains(targetTab)) {
+          _refreshData();
+        }
+      },
+      destinations: [
+        for (final d in destinations)
+          NavigationDestination(
+            icon: Icon(d.icon),
+            selectedIcon: Icon(d.selectedIcon),
+            label: d.shortLabel,
+          ),
+      ],
     );
   }
 
@@ -740,7 +722,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
       automaticallyImplyLeading: false,
       // Laid out against the width the title actually gets, not the window's.
       //
-      // The title row carries the server name and all four nav pills, and the
+      // The title row carries the server name and the nav pills, and the
       // pre-redesign sidebar meant there used to be room for them. There is not
       // any more: at a ~1000px window the Row overflowed and painted the
       // yellow-and-black stripes. Below the width where the four labelled
@@ -748,21 +730,20 @@ class _MainAdminPageState extends State<MainAdminPage> {
       // reachable, and each keeps its tooltip naming it.
       title: LayoutBuilder(
         builder: (context, constraints) {
-          final serverName = _config?['server_name'] as String? ?? 'Helix Server';
-          final pills = <({String label, String tabId, IconData icon})>[
-            (label: 'Overview', tabId: 'dashboard', icon: Icons.dashboard_outlined),
-            (label: 'Users & Devices', tabId: 'users', icon: Icons.people_outline),
-            (label: 'Invites', tabId: 'invites', icon: Icons.local_activity_outlined),
-            (label: 'Ops & Logs', tabId: 'ops', icon: Icons.settings_outlined),
-          ];
+          final serverName = _headerServerName;
+          final pills = _destinations;
           // The status dot, its gap, the widest plausible server name, the
           // leading gap and the pill gaps. Anything under this and the labels
           // cannot all fit.
           const chrome = 8 + 8 + 220 + 32 + 8 * 3;
           final labelledPillWidth =
-              pills.fold<int>(0, (sum, p) => sum + p.label.length * 8 + 28 + 14) +
+              pills.fold<int>(
+                0,
+                (sum, p) => sum + p.label.length * 8 + 28 + 14,
+              ) +
               6;
-          final showLabels = !isMobile && constraints.maxWidth >= chrome + labelledPillWidth;
+          final showLabels =
+              !isMobile && constraints.maxWidth >= chrome + labelledPillWidth;
 
           return Row(
             children: [
@@ -805,29 +786,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           );
         },
       ),
-      actions: [
-        // Sign Out lives here now. It used to live on a Settings tab that the
-        // redesigned nav no longer reaches, which left no way to disconnect
-        // except deep inside Ops > Config. The connected host is the header
-        // title to its left, so the two facts sit together.
-        Tooltip(
-          message: 'Sign out of $_connectedHostLabel',
-          child: IconButton(
-            key: const Key('header_sign_out_button'),
-            onPressed: _disconnect,
-            icon: const Icon(Icons.logout, size: 20),
-            color: const Color(0xFF64748B),
-          ),
-        ),
-        const SizedBox(width: 8),
-      ],
     );
-  }
-
-  /// The host this console is pointed at, for the sign-out tooltip.
-  String get _connectedHostLabel {
-    final host = Uri.tryParse(_urlController.text)?.host;
-    return (host == null || host.isEmpty) ? 'this server' : host;
   }
 
   Widget _buildDesktopNavPill(
@@ -880,9 +839,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
               Icon(
                 icon,
                 size: 16,
-                color: isSelected
-                    ? context.accentColor
-                    : context.textSecondary,
+                color: isSelected ? context.accentColor : context.textSecondary,
               ),
               if (showLabel) ...[
                 const SizedBox(width: 6),
@@ -890,9 +847,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
                   label,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected
-                        ? FontWeight.bold
-                        : FontWeight.w500,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     color: isSelected
                         ? context.textPrimary
                         : context.textSecondary,
@@ -947,8 +902,6 @@ class _MainAdminPageState extends State<MainAdminPage> {
           autoRefreshLogs: _logAutoRefresh,
           onAutoRefreshLogsChanged: _setLogAutoRefresh,
           config: _config,
-          onSetWorldwideMode: _setWorldwideMode,
-          onSaveServerName: _saveServerName,
           serverHost: Uri.tryParse(_urlController.text)?.host,
           isLoading: _isLoading,
           onTriggerBackup: _triggerBackup,
@@ -958,11 +911,42 @@ class _MainAdminPageState extends State<MainAdminPage> {
           initialSubTab: 'reports',
         );
       case 'invites':
-        return InvitesTab(client: _client!);
+        return InvitesTab(
+          client: _client!,
+          onOpenUser: (accountId) => setState(() {
+            _focusAccountId = accountId;
+            _selectedTab = 'users';
+          }),
+        );
       case 'users':
-        return UsersTab(client: _client!);
+        return UsersTab(
+          // Switching here from Invites always builds a fresh tab, so its
+          // initState picks the focus request up; it is cleared once handled.
+          client: _client!,
+          isGlobalServer: _isGlobalServer,
+          focusAccountId: _focusAccountId,
+          onFocusHandled: () => _focusAccountId = null,
+        );
       default:
         return const Center(child: Text('Tab not found'));
     }
   }
+}
+
+/// A top-level console destination: the desktop pill uses [label], the
+/// narrower mobile bar uses [shortLabel].
+class _Destination {
+  const _Destination(
+    this.label,
+    this.shortLabel,
+    this.tabId,
+    this.icon,
+    this.selectedIcon,
+  );
+
+  final String label;
+  final String shortLabel;
+  final String tabId;
+  final IconData icon;
+  final IconData selectedIcon;
 }

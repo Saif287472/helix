@@ -5,9 +5,26 @@ import '../admin_client.dart';
 import '../theme/app_theme.dart';
 
 class UsersTab extends StatefulWidget {
-  const UsersTab({super.key, required this.client});
+  const UsersTab({
+    super.key,
+    required this.client,
+    this.isGlobalServer = false,
+    this.focusAccountId,
+    this.onFocusHandled,
+  });
 
   final AdminClient client;
+
+  /// An account to open as soon as the list loads, e.g. an invite's
+  /// redeemer tapped on the Invites tab. [onFocusHandled] fires once it has
+  /// been opened (or found missing) so the request is not replayed.
+  final String? focusAccountId;
+  final VoidCallback? onFocusHandled;
+
+  /// Helix Global signs users in by SMS code alone, so there is no invite to
+  /// show and no recovery code to issue, and a new sign-in replaces the old
+  /// device rather than adding one.
+  final bool isGlobalServer;
 
   @override
   State<UsersTab> createState() => _UsersTabState();
@@ -28,21 +45,72 @@ class _UsersTabState extends State<UsersTab> {
   final TextEditingController _searchController = TextEditingController();
   Map<String, dynamic>? _selectedUser;
 
+  /// Bumped on every rebuild so an open bottom sheet - which lives on its own
+  /// route and is not rebuilt by this State - reflects revokes, status
+  /// changes and busy spinners instead of the snapshot it was opened with.
+  final _sheetRefresh = ValueNotifier<int>(0);
+
+  /// The open bottom sheet's context, so deleting or blocking the user shown
+  /// in it can close it. Null when no sheet is open (or on wide layouts).
+  BuildContext? _sheetContext;
+
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    _sheetRefresh.value++;
+  }
+
   @override
   void initState() {
     super.initState();
-    _loadUsers();
+    final focus = widget.focusAccountId;
+    if (focus == null) {
+      _loadUsers();
+    } else {
+      _loadUntilFound(focus);
+    }
+  }
+
+  /// Pages through the list until [accountId] turns up, then opens it. The
+  /// users endpoint has no lookup by id, so this stops after a bounded number
+  /// of pages rather than walking an arbitrarily large server.
+  Future<void> _loadUntilFound(String accountId) async {
+    const maxPages = 10;
+    for (var page = 0; page < maxPages; page++) {
+      await _loadUsers(offset: page * _pageSize);
+      if (!mounted) return;
+      final match = _users.where((u) => u['account_id'] == accountId);
+      if (match.isNotEmpty) {
+        widget.onFocusHandled?.call();
+        // After this frame, so the sheet opens over a built list.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openUserSheet(match.first);
+        });
+        return;
+      }
+      if (!_hasMore || _error != null) break;
+    }
+    widget.onFocusHandled?.call();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('That account could not be found.')),
+    );
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _sheetRefresh.dispose();
     super.dispose();
   }
 
+  /// Loads one page. The full-list spinner only shows when there is nothing
+  /// on screen yet or the page changes; a refresh after an admin action keeps
+  /// the (already optimistically updated) list visible instead of blanking it,
+  /// which made every action look like it had not happened.
   Future<void> _loadUsers({int offset = 0}) async {
     setState(() {
-      _loading = true;
+      _loading = _users.isEmpty || offset != _offset;
       _error = null;
     });
     try {
@@ -158,7 +226,8 @@ class _UsersTabState extends State<UsersTab> {
     setState(() => _busyAccountId = accountId);
     try {
       final result = await widget.client.generateRecoveryCode(accountId);
-      final code = result['opaque_code'] as String? ??
+      final code =
+          result['opaque_code'] as String? ??
           result['code'] as String? ??
           result['recovery_code'] as String? ??
           '';
@@ -193,10 +262,13 @@ class _UsersTabState extends State<UsersTab> {
                   width: double.infinity,
                   padding: HelixInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    color: Theme.of(ctx).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: Theme.of(ctx).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                      color: Theme.of(
+                        ctx,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.5),
                     ),
                   ),
                   child: SelectableText(
@@ -271,9 +343,11 @@ class _UsersTabState extends State<UsersTab> {
     setState(() => _busyAccountId = accountId);
     try {
       await widget.client.deleteUser(accountId);
-      if (_selectedUser?['account_id'] == accountId) {
-        _selectedUser = null;
-      }
+      if (!mounted) return;
+      _removeAccountLocally(accountId);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$displayLabel was deleted')));
       await _loadUsers(offset: _offset);
     } catch (e) {
       if (!mounted) return;
@@ -320,9 +394,13 @@ class _UsersTabState extends State<UsersTab> {
     setState(() => _busyAccountId = accountId);
     try {
       await widget.client.blockUser(accountId);
-      if (_selectedUser?['account_id'] == accountId) {
-        _selectedUser = null;
-      }
+      if (!mounted) return;
+      _removeAccountLocally(accountId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$displayLabel was deleted and their number blocked'),
+        ),
+      );
       await _loadUsers(offset: _offset);
     } catch (e) {
       if (!mounted) return;
@@ -336,30 +414,64 @@ class _UsersTabState extends State<UsersTab> {
     setState(() => _selectedUser = user);
     final width = MediaQuery.of(context).size.width;
     if (width < 900) {
-      showModalBottomSheet<void>(
+      final sheet = showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (ctx) => _buildSheetModal(user),
+        // Two thirds at most, so the user list stays visible behind it and
+        // the sheet reads as a panel over this screen rather than a new one.
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 2 / 3,
+        ),
+        builder: (ctx) => ValueListenableBuilder<int>(
+          valueListenable: _sheetRefresh,
+          builder: (context, _, _) {
+            _sheetContext = ctx;
+            final live = _selectedUser;
+            if (live == null || live['account_id'] != user['account_id']) {
+              // The user was deleted or blocked from inside the sheet.
+              return _buildSheetModal(user, gone: true);
+            }
+            return _buildSheetModal(live);
+          },
+        ),
       );
+      sheet.whenComplete(() => _sheetContext = null);
     }
   }
 
-  Widget _buildSheetModal(Map<String, dynamic> user) {
+  /// Takes an account off the screen at once: drops it from the list and
+  /// closes its sheet. Called after a delete or block succeeds.
+  void _removeAccountLocally(String accountId) {
+    final sheetContext = _sheetContext;
+    if (sheetContext != null &&
+        _selectedUser?['account_id'] == accountId &&
+        sheetContext.mounted) {
+      Navigator.of(sheetContext).pop();
+    }
+    setState(() {
+      _users.removeWhere((u) => u['account_id'] == accountId);
+      if (_selectedUser?['account_id'] == accountId) _selectedUser = null;
+    });
+  }
+
+  Widget _buildSheetModal(Map<String, dynamic> user, {bool gone = false}) {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       child: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Fixed: the grab handle and close button stay put while the
+            // details scroll underneath.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const SizedBox(width: 40),
@@ -376,14 +488,28 @@ class _UsersTabState extends State<UsersTab> {
                     color: const Color(0xFF64748B),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
+                    tooltip: 'Close',
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _buildDetailPaneContent(user, inSheet: true),
-            ],
-          ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                child: gone
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Text(
+                          'This account no longer exists.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Color(0xFF64748B)),
+                        ),
+                      )
+                    : _buildDetailPaneContent(user, inSheet: true),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -412,7 +538,9 @@ class _UsersTabState extends State<UsersTab> {
   @override
   Widget build(BuildContext context) {
     final activeCount = _users.where((u) => u['status'] != 'SUSPENDED').length;
-    final suspendedCount = _users.where((u) => u['status'] == 'SUSPENDED').length;
+    final suspendedCount = _users
+        .where((u) => u['status'] == 'SUSPENDED')
+        .length;
     final filtered = _filteredUsers;
 
     return SingleChildScrollView(
@@ -436,11 +564,22 @@ class _UsersTabState extends State<UsersTab> {
             controller: _searchController,
             decoration: InputDecoration(
               hintText: 'Search by name, phone number, or ID...',
-              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-              prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF94A3B8)),
+              hintStyle: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF94A3B8),
+              ),
+              prefixIcon: const Icon(
+                Icons.search,
+                size: 20,
+                color: Color(0xFF94A3B8),
+              ),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear, size: 18, color: Color(0xFF94A3B8)),
+                      icon: const Icon(
+                        Icons.clear,
+                        size: 18,
+                        color: Color(0xFF94A3B8),
+                      ),
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');
@@ -462,7 +601,8 @@ class _UsersTabState extends State<UsersTab> {
                 borderSide: const BorderSide(color: Color(0xFF2563EB)),
               ),
             ),
-            onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+            onChanged: (v) =>
+                setState(() => _searchQuery = v.trim().toLowerCase()),
           ),
           const SizedBox(height: 14),
 
@@ -493,148 +633,161 @@ class _UsersTabState extends State<UsersTab> {
           ),
           const SizedBox(height: 18),
 
-              if (_loading)
-                Center(
-                  child: Padding(
-                    padding: HelixInsets.all(24),
-                    child: const CircularProgressIndicator(),
-                  ),
-                )
-              else if (_users.isEmpty)
-                Padding(
-                  padding: HelixInsets.all(24),
-                  child: Text(
-                    'No users registered yet.',
-                    style: TextStyle(color: context.textFaint),
-                  ),
-                )
-              else if (filtered.isEmpty)
-                Padding(
-                  padding: HelixInsets.all(32),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.search_off, size: 40, color: context.textFaint),
-                        const SizedBox(height: 10),
-                        Text(
-                          'No matching users found.',
-                          style: TextStyle(color: context.textFaint),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {
-                              _searchQuery = '';
-                              _filterStatus = 'ALL';
-                            });
-                          },
-                          child: const Text('Reset Filters'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isSplit = constraints.maxWidth >= 900;
-                    if (!isSplit) {
-                      return Column(
-                        children: [
-                          for (final u in filtered) _buildUserCard(u, isSelected: false),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left Master List
-                        Expanded(
-                          flex: 6,
-                          child: Column(
-                            children: [
-                              for (final u in filtered)
-                                _buildUserCard(
-                                  u,
-                                  isSelected: _selectedUser?['account_id'] == u['account_id'],
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        // Right Detail Pane
-                        Expanded(
-                          flex: 4,
-                          child: _selectedUser != null
-                              ? _buildDetailPaneContent(_selectedUser!, inSheet: false)
-                              : Container(
-                                  padding: HelixInsets.all(32),
-                                  decoration: BoxDecoration(
-                                    color: context.sunkenSurface,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Theme.of(context).dividerColor,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Column(
-                                      children: [
-                                        Icon(Icons.touch_app, size: 36, color: context.textFaint),
-                                        const SizedBox(height: 12),
-                                        Text(
-                                          'Select a user from the list to inspect identity, devices, and actions.',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(color: context.textFaint, fontSize: 13),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-              if (!_loading && (_users.isNotEmpty || _offset > 0)) ...[
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+          if (_loading)
+            Center(
+              child: Padding(
+                padding: HelixInsets.all(24),
+                child: const CircularProgressIndicator(),
+              ),
+            )
+          else if (_users.isEmpty)
+            Padding(
+              padding: HelixInsets.all(24),
+              child: Text(
+                'No users registered yet.',
+                style: TextStyle(color: context.textFaint),
+              ),
+            )
+          else if (filtered.isEmpty)
+            Padding(
+              padding: HelixInsets.all(32),
+              child: Center(
+                child: Column(
                   children: [
-                    TextButton(
-                      key: const Key('users_previous_page'),
-                      onPressed: _offset > 0
-                          ? () => _loadUsers(
-                              offset: (_offset - _pageSize).clamp(0, 1 << 30),
-                            )
-                          : null,
-                      child: const Text('Previous'),
+                    Icon(Icons.search_off, size: 40, color: context.textFaint),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No matching users found.',
+                      style: TextStyle(color: context.textFaint),
                     ),
+                    const SizedBox(height: 8),
                     TextButton(
-                      key: const Key('users_next_page'),
-                      onPressed: _hasMore
-                          ? () => _loadUsers(offset: _offset + _pageSize)
-                          : null,
-                      child: const Text('Next'),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _searchQuery = '';
+                          _filterStatus = 'ALL';
+                        });
+                      },
+                      child: const Text('Reset Filters'),
                     ),
                   ],
                 ),
+              ),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isSplit = constraints.maxWidth >= 900;
+                if (!isSplit) {
+                  return Column(
+                    children: [
+                      for (final u in filtered)
+                        _buildUserCard(u, isSelected: false),
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left Master List
+                    Expanded(
+                      flex: 6,
+                      child: Column(
+                        children: [
+                          for (final u in filtered)
+                            _buildUserCard(
+                              u,
+                              isSelected:
+                                  _selectedUser?['account_id'] ==
+                                  u['account_id'],
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    // Right Detail Pane
+                    Expanded(
+                      flex: 4,
+                      child: _selectedUser != null
+                          ? _buildDetailPaneContent(
+                              _selectedUser!,
+                              inSheet: false,
+                            )
+                          : Container(
+                              padding: HelixInsets.all(32),
+                              decoration: BoxDecoration(
+                                color: context.sunkenSurface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Theme.of(context).dividerColor,
+                                ),
+                              ),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.touch_app,
+                                      size: 36,
+                                      color: context.textFaint,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Select a user from the list to inspect identity, devices, and actions.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: context.textFaint,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            Text(
+              _error!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 13,
+              ),
+            ),
+          ],
+          if (!_loading && (_users.isNotEmpty || _offset > 0)) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  key: const Key('users_previous_page'),
+                  onPressed: _offset > 0
+                      ? () => _loadUsers(
+                          offset: (_offset - _pageSize).clamp(0, 1 << 30),
+                        )
+                      : null,
+                  child: const Text('Previous'),
+                ),
+                TextButton(
+                  key: const Key('users_next_page'),
+                  onPressed: _hasMore
+                      ? () => _loadUsers(offset: _offset + _pageSize)
+                      : null,
+                  child: const Text('Next'),
+                ),
               ],
-            ],
-          ),
-        );
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildUserCard(Map<String, dynamic> user, {required bool isSelected}) {
@@ -644,7 +797,8 @@ class _UsersTabState extends State<UsersTab> {
     final displayName = user['display_name'] as String? ?? '';
     final phone = _formatPhone(user);
     final joined = _formatTimestamp(user['created_at']);
-    final devices = (user['devices'] as List? ?? []).cast<Map<String, dynamic>>();
+    final devices = (user['devices'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
     // `device_count` is the server's own count of ACTIVE devices for this
     // account. Prefer the attached device list when present, fall back to the
     // server count, and never invent a value - an account with no registered
@@ -661,14 +815,10 @@ class _UsersTabState extends State<UsersTab> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isSelected
-            ? const Color(0xFFEFF6FF)
-            : Colors.white,
+        color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isSelected
-              ? const Color(0xFF2563EB)
-              : const Color(0xFFE2E8F0),
+          color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
           width: isSelected ? 1.5 : 1,
         ),
       ),
@@ -717,7 +867,9 @@ class _UsersTabState extends State<UsersTab> {
                       children: [
                         Expanded(
                           child: Text(
-                            displayName.isEmpty ? 'User ($accountId)' : displayName,
+                            displayName.isEmpty
+                                ? 'User ($accountId)'
+                                : displayName,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -767,7 +919,10 @@ class _UsersTabState extends State<UsersTab> {
     );
   }
 
-  Widget _buildDetailPaneContent(Map<String, dynamic> user, {required bool inSheet}) {
+  Widget _buildDetailPaneContent(
+    Map<String, dynamic> user, {
+    required bool inSheet,
+  }) {
     final accountId = user['account_id'] as String? ?? '';
     final displayName = user['display_name'] as String? ?? '';
     final inviteId = user['invite_id'] as String? ?? '';
@@ -822,7 +977,9 @@ class _UsersTabState extends State<UsersTab> {
                     radius: 22,
                     backgroundColor: const Color(0xFFEFF6FF),
                     child: Text(
-                      displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+                      displayName.isNotEmpty
+                          ? displayName[0].toUpperCase()
+                          : 'U',
                       style: const TextStyle(
                         color: Color(0xFF2563EB),
                         fontWeight: FontWeight.bold,
@@ -873,14 +1030,14 @@ class _UsersTabState extends State<UsersTab> {
               // admin actually needs: the account id is what support asks for,
               // and the invite is how you tell which code let someone in.
               _identityRow(label: 'Account ID', value: accountId),
-              if (inviteId.isNotEmpty)
+              if (inviteId.isNotEmpty && !widget.isGlobalServer)
                 _identityRow(label: 'Redeemed invite', value: inviteId),
             ],
           ),
         ),
         const SizedBox(height: 14),
 
-        // Cardlet 2: Active Sessions / Devices
+        // Cardlet 2: Devices
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -895,7 +1052,7 @@ class _UsersTabState extends State<UsersTab> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'ACTIVE SESSIONS / DEVICES',
+                    'DEVICES',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -904,7 +1061,7 @@ class _UsersTabState extends State<UsersTab> {
                     ),
                   ),
                   Text(
-                    '${devices.where((d) => (d['status'] as String? ?? 'ACTIVE').toUpperCase() == 'ACTIVE').length} Active',
+                    '${devices.where(_isActiveDevice).length} signed in',
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -913,29 +1070,40 @@ class _UsersTabState extends State<UsersTab> {
                   ),
                 ],
               ),
+              if (widget.isGlobalServer) ...[
+                const SizedBox(height: 4),
+                const Text(
+                  'On Helix Global, signing in on a new phone replaces the '
+                  'previous one.',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                ),
+              ],
               const SizedBox(height: 10),
               if (devices.isEmpty)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                    horizontal: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.phonelink_erase_outlined,
                         size: 18,
                         color: Color(0xFF94A3B8),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'No connected devices. This account has not '
                           'registered a device on this server yet.',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Color(0xFF64748B),
                             fontSize: 12,
                             height: 1.4,
@@ -947,81 +1115,11 @@ class _UsersTabState extends State<UsersTab> {
                 )
               else
                 for (final dev in devices)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.phone_android, size: 16, color: Color(0xFF64748B)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                dev['device_name'] ?? dev['device_id'] ?? 'Device',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1E293B),
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                'ID: ${dev['device_id'] ?? 'unknown'}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontFamily: 'monospace',
-                                  color: Color(0xFF94A3B8),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (dev['status'] == 'REVOKED')
-                          const Text('Revoked', style: TextStyle(color: Color(0xFFDC2626), fontSize: 11))
-                        else
-                          OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFFDC2626),
-                              side: const BorderSide(color: Color(0xFFFCA5A5)),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              minimumSize: Size.zero,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            ),
-                            onPressed: isBusy
-                                ? null
-                                : () async {
-                                    final deviceId = dev['device_id'] as String?;
-                                    if (deviceId == null) return;
-                                    setState(() {
-                                      _busyAccountId = accountId;
-                                      _error = null;
-                                    });
-                                    try {
-                                      await widget.client.revokeDevice(
-                                        accountId,
-                                        deviceId,
-                                      );
-                                      if (!mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Device access revoked'),
-                                        ),
-                                      );
-                                      await _loadUsers(offset: _offset);
-                                    } catch (e) {
-                                      if (!mounted) return;
-                                      setState(() => _error = e.toString());
-                                    } finally {
-                                      if (mounted) {
-                                        setState(() => _busyAccountId = null);
-                                      }
-                                    }
-                                  },
-                            child: const Text('Revoke', style: TextStyle(fontSize: 11)),
-                          ),
-                      ],
-                    ),
+                  _buildDeviceTile(
+                    dev,
+                    accountId: accountId,
+                    ownerLabel: displayName.isEmpty ? accountId : displayName,
+                    isBusy: isBusy,
                   ),
             ],
           ),
@@ -1051,30 +1149,53 @@ class _UsersTabState extends State<UsersTab> {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.key, size: 15),
-                      label: const Text('Issue 48h Key', style: TextStyle(fontSize: 12)),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
+                  // Global has no recovery flow: the SMS code on the user's
+                  // own number is what signs them back in.
+                  if (!widget.isGlobalServer) ...[
+                    Expanded(
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.key, size: 15),
+                        label: const Text(
+                          'Issue 48h Key',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 9,
+                            horizontal: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                        ),
+                        onPressed: () => _issueRecoveryCode(
+                          accountId,
+                          displayName.isEmpty ? accountId : displayName,
+                        ),
                       ),
-                      onPressed: () => _issueRecoveryCode(accountId, displayName.isEmpty ? accountId : displayName),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.copy, size: 15),
-                      label: const Text('Copy User ID', style: TextStyle(fontSize: 12)),
+                      label: const Text(
+                        'Copy User ID',
+                        style: TextStyle(fontSize: 12),
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF334155),
                         side: const BorderSide(color: Color(0xFFCBD5E1)),
-                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 9,
+                          horizontal: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: accountId));
@@ -1119,21 +1240,38 @@ class _UsersTabState extends State<UsersTab> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFFD97706),
                         side: const BorderSide(color: Color(0xFFF59E0B)),
-                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 9,
+                          horizontal: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       icon: isBusy
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFD97706)),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFFD97706),
+                              ),
                             )
-                          : Icon(isSuspended ? Icons.play_circle_outline : Icons.pause_circle_outline, size: 15),
+                          : Icon(
+                              isSuspended
+                                  ? Icons.play_circle_outline
+                                  : Icons.pause_circle_outline,
+                              size: 15,
+                            ),
                       label: Text(
                         isSuspended ? 'Restore' : 'Suspend',
                         style: const TextStyle(fontSize: 12),
                       ),
-                      onPressed: isBusy ? null : () => isSuspended ? _unsuspend(accountId) : _suspend(accountId),
+                      onPressed: isBusy
+                          ? null
+                          : () => isSuspended
+                                ? _unsuspend(accountId)
+                                : _suspend(accountId),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1142,12 +1280,23 @@ class _UsersTabState extends State<UsersTab> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFFDC2626),
                         side: const BorderSide(color: Color(0xFFEF4444)),
-                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 9,
+                          horizontal: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       icon: const Icon(Icons.delete_outline, size: 15),
-                      label: const Text('Delete Data', style: TextStyle(fontSize: 12)),
-                      onPressed: () => _confirmDelete(accountId, displayName.isEmpty ? accountId : displayName),
+                      label: const Text(
+                        'Delete Data',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      onPressed: () => _confirmDelete(
+                        accountId,
+                        displayName.isEmpty ? accountId : displayName,
+                      ),
                     ),
                   ),
                 ],
@@ -1157,13 +1306,24 @@ class _UsersTabState extends State<UsersTab> {
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF991B1B),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 9,
+                    horizontal: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   elevation: 0,
                 ),
                 icon: const Icon(Icons.block, size: 15),
-                label: const Text('Permanent Block Phone', style: TextStyle(fontSize: 12)),
-                onPressed: () => _confirmBlock(accountId, displayName.isEmpty ? accountId : displayName),
+                label: const Text(
+                  'Permanent Block Phone',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onPressed: () => _confirmBlock(
+                  accountId,
+                  displayName.isEmpty ? accountId : displayName,
+                ),
               ),
             ],
           ),
@@ -1176,14 +1336,328 @@ class _UsersTabState extends State<UsersTab> {
               foregroundColor: const Color(0xFF334155),
               side: const BorderSide(color: Color(0xFFCBD5E1)),
               padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            child: const Text(
+              'Close',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
           ),
         ],
       ],
     );
+  }
+
+  static bool _isActiveDevice(Map<String, dynamic> dev) =>
+      (dev['status'] as String? ?? 'ACTIVE').toUpperCase() == 'ACTIVE';
+
+  /// Matches the name every device got before the app reported its model
+  /// (`Dev dev_68b8`). Such a device renames itself on its next launch.
+  static final _legacyDeviceName = RegExp(r'^Dev dev_[0-9a-f]{4}$');
+
+  Widget _buildDeviceTile(
+    Map<String, dynamic> dev, {
+    required String accountId,
+    required String ownerLabel,
+    required bool isBusy,
+  }) {
+    final deviceId = dev['device_id'] as String? ?? '';
+    final rawName = (dev['device_name'] as String? ?? '').trim();
+    final isUnnamed = rawName.isEmpty || _legacyDeviceName.hasMatch(rawName);
+    final name = isUnnamed ? 'Unnamed device' : rawName;
+    final isActive = _isActiveDevice(dev);
+    final lastSeen = dev['last_seen_at'];
+    final onlineNow =
+        lastSeen is int &&
+        DateTime.now()
+                .difference(DateTime.fromMillisecondsSinceEpoch(lastSeen))
+                .inMinutes <
+            5;
+    final pushEnabled = dev['push_enabled'] == true;
+
+    final lower = rawName.toLowerCase();
+    final icon =
+        lower.contains('windows') ||
+            lower.contains('linux') ||
+            lower.contains('macos')
+        ? Icons.computer
+        : lower.contains('ios') || lower.contains('iphone')
+        ? Icons.phone_iphone
+        : Icons.phone_android;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? const Color(0xFFEFF6FF)
+                      : const Color(0xFFF1F5F9),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: isActive
+                      ? const Color(0xFF2563EB)
+                      : const Color(0xFF94A3B8),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        fontStyle: isUnnamed
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                        color: const Color(0xFF1E293B),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (isUnnamed)
+                      const Text(
+                        'Older app version. The model appears after the '
+                        'app is next opened.',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (isActive && onlineNow) ...[
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF10B981),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                        ],
+                        Flexible(
+                          child: Text(
+                            isActive
+                                ? (onlineNow
+                                      ? 'Online now'
+                                      : 'Last active ${_relativeTime(lastSeen)}')
+                                : 'Signed out',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isActive && onlineNow
+                                  ? const Color(0xFF059669)
+                                  : const Color(0xFF475569),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Signed in ${_formatDate(dev['created_at'])}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (!isActive)
+                _deviceChip(
+                  'Revoked',
+                  const Color(0xFFDC2626),
+                  const Color(0xFFFEF2F2),
+                )
+              else
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDC2626),
+                    side: const BorderSide(color: Color(0xFFFCA5A5)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    minimumSize: Size.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  onPressed: isBusy || deviceId.isEmpty
+                      ? null
+                      : () => _confirmRevokeDevice(
+                          accountId: accountId,
+                          deviceId: deviceId,
+                          deviceLabel: name,
+                          ownerLabel: ownerLabel,
+                        ),
+                  child: const Text('Sign out', style: TextStyle(fontSize: 11)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (isActive)
+                _deviceChip(
+                  pushEnabled ? 'Notifications on' : 'Notifications off',
+                  pushEnabled
+                      ? const Color(0xFF059669)
+                      : const Color(0xFF64748B),
+                  pushEnabled
+                      ? const Color(0xFFECFDF5)
+                      : const Color(0xFFF1F5F9),
+                ),
+              const Spacer(),
+              // For support tickets only; kept small and out of the way.
+              SelectableText(
+                deviceId,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                  color: Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _deviceChip(String label, Color fg, Color bg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: fg),
+      ),
+    );
+  }
+
+  Future<void> _confirmRevokeDevice({
+    required String accountId,
+    required String deviceId,
+    required String deviceLabel,
+    required String ownerLabel,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sign out this device?'),
+        content: Text(
+          '"$deviceLabel" will be signed out of $ownerLabel\'s account '
+          'immediately and stop receiving messages. '
+          '${widget.isGlobalServer ? 'They can sign back in with an SMS code.' : 'Signing back in needs a new login on that device.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _busyAccountId = accountId;
+      _error = null;
+    });
+    try {
+      await widget.client.revokeDevice(accountId, deviceId);
+      if (!mounted) return;
+      setState(() {
+        for (final user in [..._users, ?_selectedUser]) {
+          if (user['account_id'] != accountId) continue;
+          for (final dev in (user['devices'] as List? ?? const [])) {
+            if (dev is Map && dev['device_id'] == deviceId) {
+              dev['status'] = 'REVOKED';
+            }
+          }
+        }
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Device signed out')));
+      await _loadUsers(offset: _offset);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busyAccountId = null);
+    }
+  }
+
+  String _relativeTime(dynamic value) {
+    if (value is! int || value == 0) return 'unknown';
+    final diff = DateTime.now().difference(
+      DateTime.fromMillisecondsSinceEpoch(value),
+    );
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) {
+      return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
+    }
+    if (diff.inDays < 30) {
+      return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+    }
+    return 'on ${_formatDate(value)}';
+  }
+
+  String _formatDate(dynamic value) {
+    if (value is! int || value == 0) return '—';
+    final dt = DateTime.fromMillisecondsSinceEpoch(value).toLocal();
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 
   Widget _buildFilterPill({
@@ -1254,9 +1728,12 @@ class _UsersTabState extends State<UsersTab> {
     );
   }
 
-  Widget _statusChip(bool isSuspended) {    final bg = isSuspended ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5);
+  Widget _statusChip(bool isSuspended) {
+    final bg = isSuspended ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5);
     final fg = isSuspended ? const Color(0xFFDC2626) : const Color(0xFF059669);
-    final border = isSuspended ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0);
+    final border = isSuspended
+        ? const Color(0xFFFCA5A5)
+        : const Color(0xFFA7F3D0);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -1277,7 +1754,8 @@ class _UsersTabState extends State<UsersTab> {
   }
 
   String _formatPhone(Map<String, dynamic> user) {
-    final rawPhone = user['phone'] as String? ??
+    final rawPhone =
+        user['phone'] as String? ??
         user['phone_number'] as String? ??
         user['phone_last4'] as String? ??
         user['mobile'] as String?;
@@ -1287,8 +1765,24 @@ class _UsersTabState extends State<UsersTab> {
 
   String _formatTimestamp(dynamic value) {
     if (value is! int || value == 0) return '—';
-    final dt = DateTime.fromMillisecondsSinceEpoch(value, isUtc: true).toLocal();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final dt = DateTime.fromMillisecondsSinceEpoch(
+      value,
+      isUtc: true,
+    ).toLocal();
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[dt.month - 1]} ${dt.day}';
   }
 }

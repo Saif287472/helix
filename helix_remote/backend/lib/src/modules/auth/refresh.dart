@@ -27,12 +27,19 @@ mixin AuthRefreshHandlers on AuthModuleBase {
     if (!db.isDeviceActive(accountId, deviceId)) {
       db.revokeAllRefreshTokensForDevice(accountId, deviceId);
 
+      if (db.isAccountBlocked(accountId)) {
+        throw AppError.forbidden(
+          'This account has been blocked',
+          code: RemoteErrorCode.accountBlocked,
+        );
+      }
       throw AppError.forbidden('Device revoked');
     }
 
-    if (db.isAccountSuspended(accountId)) {
-      throw AppError.forbidden('Account suspended');
-    }
+    // A suspended account deliberately refreshes normally. Suspension limits
+    // what the account may *do* (see the auth middleware), it does not sign
+    // the user out - refusing here used to drop them back to onboarding,
+    // where they only learned they were suspended after signing in again.
 
     final tokenHash = crypto_pkg.sha256
         .convert(utf8.encode(refreshToken))

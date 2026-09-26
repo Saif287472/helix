@@ -15,7 +15,7 @@ dependencies:
   cryptography: ^2.9.0
   cryptography_flutter: ^2.0.0
   crypto: ^3.0.7
-  flutter_secure_storage: ^10.3.1
+  flutter_secure_storage: ^11.2.0
   helix_remote_domain:
     path: ../helix_remote_domain
 

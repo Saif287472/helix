@@ -61,9 +61,7 @@ class _RecordingClient extends AdminClient {
     }
     final removed = body['removed'];
     if (removed is! Map) return const <String, int>{};
-    return removed.map(
-      (k, v) => MapEntry(k as String, v is int ? v : 0),
-    );
+    return removed.map((k, v) => MapEntry(k as String, v is int ? v : 0));
   }
 
   @override
@@ -102,11 +100,6 @@ Widget _configTab({
   return ConfigTab(
     config: config ?? _defaultConfig,
     client: client,
-    federationDomainController: TextEditingController(),
-    federationAddressController: TextEditingController(),
-    federationDirectoryController: TextEditingController(),
-    onSetWorldwideMode: (_) {},
-    onSaveServerName: (name) async => name,
     onAppLockChanged: onAppLockChanged,
   );
 }
@@ -115,10 +108,7 @@ Widget _configTab({
 /// is off-screen in the default test viewport. Tapping it would then fail for
 /// layout reasons rather than logic ones, so every test here gets a viewport
 /// tall enough to hold the whole card stack.
-Future<void> pumpConfig(
-  WidgetTester tester,
-  Widget child,
-) async {
+Future<void> pumpConfig(WidgetTester tester, Widget child) async {
   tester.view.physicalSize = const Size(1400, 4000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -140,12 +130,9 @@ _RecordingClient _silentClient({
 /// The Switch that belongs to the row labelled [label]. Each Config row is
 /// `Row(children: [Expanded(Column(Text(title))), Switch()])`.
 Finder switchFor(String label) => find.descendant(
-      of: find.ancestor(
-        of: find.text(label),
-        matching: find.byType(Row),
-      ),
-      matching: find.byType(Switch),
-    );
+  of: find.ancestor(of: find.text(label), matching: find.byType(Row)),
+  matching: find.byType(Switch),
+);
 
 /// The property value rendered under [label] in the identity grid.
 String propValueFor(WidgetTester tester, String label) {
@@ -217,7 +204,10 @@ void main() {
   });
 
   group('admin password change', () {
-    Future<void> openDialog(WidgetTester tester, _RecordingClient client) async {
+    Future<void> openDialog(
+      WidgetTester tester,
+      _RecordingClient client,
+    ) async {
       await pumpConfig(tester, _configTab(client: client));
       await tester.tap(find.text('Change Password'));
       await tester.pumpAndSettle();
@@ -252,20 +242,13 @@ void main() {
       expect(client.called('POST /ops/admin-pin'), isFalse);
 
       // Only the current password filled in: rejected locally, no request.
-      await fill(
-        tester,
-        current: 'current-password',
-        next: '',
-        confirm: '',
-      );
+      await fill(tester, current: 'current-password', next: '', confirm: '');
 
       expect(find.textContaining('at least 6 characters'), findsOneWidget);
       expect(client.called('POST /ops/admin-pin'), isFalse);
     });
 
-    testWidgets('a mismatched confirmation blocks the request', (
-      tester,
-    ) async {
+    testWidgets('a mismatched confirmation blocks the request', (tester) async {
       final client = _silentClient();
       await openDialog(tester, client);
 
@@ -318,7 +301,10 @@ void main() {
   });
 
   group('data purge', () {
-    Future<void> openDialog(WidgetTester tester, _RecordingClient client) async {
+    Future<void> openDialog(
+      WidgetTester tester,
+      _RecordingClient client,
+    ) async {
       await pumpConfig(tester, _configTab(client: client));
       await tester.tap(find.text('Purge Data'));
       await tester.pumpAndSettle();
@@ -331,7 +317,11 @@ void main() {
       await openDialog(tester, client);
 
       expect(find.text('Purge expired data?'), findsOneWidget);
-      expect(client.called('POST /ops/purge'), isFalse, reason: 'nothing sent yet');
+      expect(
+        client.called('POST /ops/purge'),
+        isFalse,
+        reason: 'nothing sent yet',
+      );
 
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
@@ -420,11 +410,10 @@ void main() {
       await pumpConfig(tester, _configTab(client: _silentClient()));
 
       expect(
-        tester
-            .widget<Switch>(switchFor('Device Biometric / PIN Lock'))
-            .value,
+        tester.widget<Switch>(switchFor('Device Biometric / PIN Lock')).value,
         isFalse,
-        reason: 'the default used to be true, so the switch displayed "on" '
+        reason:
+            'the default used to be true, so the switch displayed "on" '
             'for an operator who had never enabled it',
       );
     });

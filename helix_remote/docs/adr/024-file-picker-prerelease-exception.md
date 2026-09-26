@@ -1,6 +1,6 @@
 # ADR 024: File-picker prerelease dependency exception
 
-Status: accepted (2026-08-07), review at each dependency update.
+Status: superseded (2026-09-26) by the stable `file_picker ^13.1.0` bump.
 
 `file_picker ^12.0.0-beta.5` remains temporarily required because stable 11
 depends on `win32 ^5`, while the current `share_plus ^13.1.0` requires
@@ -26,3 +26,12 @@ resolves differently, and the range that permitted the drift is gone.
 
 When the win32 conflict clears, this becomes an ordinary version bump: change
 the pin, re-lock, run the attachment matrix, and retire this ADR.
+
+## Retired (2026-09-26)
+
+Stable `file_picker` 13.1.0 resolves with `share_plus ^13.1.0`, so the
+declaration is now the ordinary range `file_picker: ^13.1.0` and this exception
+no longer applies. 13.0 removed `lockParentWindow` from the top-level calls
+(now `WindowsOptions.lockParentWindow`) and `saveFile` returns a `Uri` instead
+of a path. The Android and Windows attachment pick/export matrix still needs a
+manual pass on a device.

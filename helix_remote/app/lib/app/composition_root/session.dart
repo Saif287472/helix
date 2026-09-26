@@ -217,7 +217,29 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
     final token = _accessToken;
     if (token == null || token.isEmpty) return false;
     setAuthenticated(token);
+    if (hasDeviceId) unawaited(_renameLegacyDeviceName(deviceIdStr));
     return true;
+  }
+
+  /// Gives a device registered before real device labels existed a readable
+  /// name, once. Only a server-side name still matching the old `Dev dev_xxxx`
+  /// default is replaced, so a name the user chose in Device Management is
+  /// never overwritten. Best-effort: a failure is retried on the next launch.
+  Future<void> _renameLegacyDeviceName(String deviceId) async {
+    final rest = _restClient;
+    if (rest == null) return;
+    try {
+      final devices = await rest.listDevices();
+      final current = devices.where((d) => d.deviceId == deviceId).firstOrNull;
+      if (current == null || !isLegacyDefaultDeviceName(current.deviceName)) {
+        return;
+      }
+      final label = await describeThisDevice(fallback: current.deviceName);
+      if (label == current.deviceName) return;
+      await rest.renameDevice(deviceId: deviceId, deviceName: label);
+    } catch (_) {
+      // Cosmetic only; the next launch tries again.
+    }
   }
 
   @override

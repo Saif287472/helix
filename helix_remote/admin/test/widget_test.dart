@@ -44,7 +44,7 @@ Future<void> _advance(WidgetTester tester, Duration step) async {
 /// returned while the app was still on the first step of a ~1.4s animation.
 Future<void> _waitForSettledShell(WidgetTester tester) async {
   const step = Duration(milliseconds: 50);
-  final shell = find.byKey(const Key('header_sign_out_button'));
+  final shell = find.text('Ops & Logs');
   final login = find.byType(LoginScreen);
   for (var i = 0; i < 120; i++) {
     await _advance(tester, step);
@@ -136,10 +136,7 @@ void main() {
     await _pumpAdminApp(tester);
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('login_url_field')),
-      serverUrl,
-    );
+    await tester.enterText(find.byKey(const Key('login_url_field')), serverUrl);
     await tester.enterText(
       find.byKey(const Key('login_password_field')),
       'secret-password',
@@ -149,16 +146,16 @@ void main() {
     await _settleWithRealIO(tester);
 
     // The redesigned shell has no sidebar: navigation is a row of pills in
-    // the app bar, and sign-out is a header action. Asserted on what is
-    // actually there rather than on the pre-redesign 'Helix Panel' chrome.
+    // the app bar. Sign-out is deliberately not in the header - it caused
+    // accidental sign-outs - and lives only under Ops > Config.
     expect(find.text('Overview'), findsOneWidget);
     expect(find.text('Users & Devices'), findsOneWidget);
     expect(find.text('Invites'), findsOneWidget);
     expect(find.text('Ops & Logs'), findsOneWidget);
-    expect(find.byKey(const Key('header_sign_out_button')), findsOneWidget);
+    expect(find.byKey(const Key('header_sign_out_button')), findsNothing);
   });
 
-  testWidgets('signing out from the header returns to the LoginScreen', (
+  testWidgets('signing out from Ops > Config returns to the LoginScreen', (
     tester,
   ) async {
     late HttpServer server;
@@ -182,16 +179,99 @@ void main() {
 
     expect(find.text('Overview'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('header_sign_out_button')));
+    await tester.tap(find.text('Ops & Logs'));
+    final configSegment = find.text('Config');
+    for (var i = 0; i < 60 && configSegment.evaluate().isEmpty; i++) {
+      await _advance(tester, const Duration(milliseconds: 50));
+    }
+    await tester.tap(configSegment);
+    await _advance(tester, const Duration(milliseconds: 100));
+    final signOut = find.byKey(const Key('settings_sign_out_button'));
+    await tester.ensureVisible(signOut);
+    await tester.pump();
+    await tester.tap(signOut);
     await tester.pumpAndSettle();
 
     expect(find.text('Helix Admin'), findsOneWidget);
     expect(find.byKey(const Key('login_button')), findsOneWidget);
-    expect(
-      await const FlutterSecureStorage().read(key: 'admin_token'),
-      isNull,
-    );
+    expect(await const FlutterSecureStorage().read(key: 'admin_token'), isNull);
   });
+
+  Future<HttpServer> serveConfig(
+    WidgetTester tester,
+    Map<String, Object?> config,
+  ) async {
+    late HttpServer server;
+    await tester.runAsync(() async {
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response.statusCode = 200;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode(
+            request.uri.path == '/api/v1/ops/config'
+                ? config
+                : {'logs': <String>[]},
+          ),
+        );
+        await request.response.close();
+      });
+    });
+    addTearDown(() => tester.runAsync(() => server.close(force: true)));
+    return server;
+  }
+
+  Future<void> waitForText(WidgetTester tester, String text) async {
+    for (var i = 0; i < 60 && find.text(text).evaluate().isEmpty; i++) {
+      await _advance(tester, const Duration(milliseconds: 50));
+    }
+  }
+
+  testWidgets(
+    'a Helix Global server is labelled in the header and has no Invites tab',
+    (tester) async {
+      final server = await serveConfig(tester, {
+        'server_name': 'Configured Name',
+        'default_server_name': 'Private server #4393',
+        'global_instance_mode': true,
+      });
+      SharedPreferences.setMockInitialValues({
+        'server_url': 'http://${server.address.address}:${server.port}',
+      });
+      FlutterSecureStorage.setMockInitialValues({'admin_token': 'token'});
+
+      await _pumpAdminApp(tester);
+      await _waitForSettledShell(tester);
+      await waitForText(tester, 'Helix Global');
+
+      expect(find.text('Helix Global'), findsOneWidget);
+      expect(find.text('Configured Name'), findsNothing);
+      expect(find.text('Invites'), findsNothing);
+      expect(find.text('Users & Devices'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a personal server with no name shows its host, never "Private server #N"',
+    (tester) async {
+      final server = await serveConfig(tester, {
+        'server_name': '',
+        'default_server_name': 'Private server #4393',
+      });
+      SharedPreferences.setMockInitialValues({
+        'server_url': 'http://${server.address.address}:${server.port}',
+      });
+      FlutterSecureStorage.setMockInitialValues({'admin_token': 'token'});
+
+      await _pumpAdminApp(tester);
+      await _waitForSettledShell(tester);
+      await waitForText(tester, '127.0.0.1');
+
+      expect(find.text('127.0.0.1'), findsOneWidget);
+      expect(find.text('Private server #4393'), findsNothing);
+      expect(find.text('Invites'), findsOneWidget);
+    },
+  );
 
   testWidgets('an unauthorized saved token shows error banner on LoginScreen', (
     tester,
@@ -219,10 +299,7 @@ void main() {
       find.textContaining('Session expired or admin password changed'),
       findsOneWidget,
     );
-    expect(
-      await const FlutterSecureStorage().read(key: 'admin_token'),
-      isNull,
-    );
+    expect(await const FlutterSecureStorage().read(key: 'admin_token'), isNull);
   });
 
   testWidgets(
@@ -282,43 +359,44 @@ void main() {
     expect(find.byIcon(Icons.menu), findsNothing);
   });
 
-  testWidgets('a narrow phone viewport moves navigation into a Bottom Navigation Bar', (
-    tester,
-  ) async {
-    late HttpServer server;
-    await tester.runAsync(() async {
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      server.listen((request) async {
-        request.response.statusCode = 200;
-        request.response.headers.contentType = ContentType.json;
-        request.response.write(jsonEncode({'logs': <String>[]}));
-        await request.response.close();
+  testWidgets(
+    'a narrow phone viewport moves navigation into a Bottom Navigation Bar',
+    (tester) async {
+      late HttpServer server;
+      await tester.runAsync(() async {
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          request.response.statusCode = 200;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(jsonEncode({'logs': <String>[]}));
+          await request.response.close();
+        });
       });
-    });
-    addTearDown(() => tester.runAsync(() => server.close(force: true)));
-    final serverUrl = 'http://${server.address.address}:${server.port}';
+      addTearDown(() => tester.runAsync(() => server.close(force: true)));
+      final serverUrl = 'http://${server.address.address}:${server.port}';
 
-    SharedPreferences.setMockInitialValues({'server_url': serverUrl});
-    FlutterSecureStorage.setMockInitialValues({'admin_token': 'valid-token'});
+      SharedPreferences.setMockInitialValues({'server_url': serverUrl});
+      FlutterSecureStorage.setMockInitialValues({'admin_token': 'valid-token'});
 
-    await tester.binding.setSurfaceSize(const Size(360, 800));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const HelixAdminApp());
-    await _waitForSettledShell(tester);
+      await tester.pumpWidget(const HelixAdminApp());
+      await _waitForSettledShell(tester);
 
-    // Below the 700px breakpoint the pills would not fit, so navigation moves
-    // into a bottom bar with its own labels. The app bar keeps only the
-    // server name and sign-out.
-    expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.byIcon(Icons.menu), findsNothing);
-    expect(find.text('Overview'), findsOneWidget);
-    expect(find.text('Users'), findsOneWidget);
-    expect(find.text('Invites'), findsOneWidget);
-    expect(find.text('Ops & Logs'), findsOneWidget);
-    // No pill row in the app bar at this width.
-    expect(find.text('Users & Devices'), findsNothing);
-  });
+      // Below the 700px breakpoint the pills would not fit, so navigation moves
+      // into a bottom bar with its own labels. The app bar keeps only the
+      // server name and sign-out.
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byIcon(Icons.menu), findsNothing);
+      expect(find.text('Overview'), findsOneWidget);
+      expect(find.text('Users'), findsOneWidget);
+      expect(find.text('Invites'), findsOneWidget);
+      expect(find.text('Ops & Logs'), findsOneWidget);
+      // No pill row in the app bar at this width.
+      expect(find.text('Users & Devices'), findsNothing);
+    },
+  );
 
   testWidgets(
     'uninitialized server opens in setup mode and allows creating admin password',
@@ -396,7 +474,10 @@ void main() {
 
       expect(find.text('CREATE ADMIN PASSWORD'), findsOneWidget);
       expect(find.byKey(const Key('setup_password_field')), findsOneWidget);
-      expect(find.byKey(const Key('setup_confirm_password_field')), findsOneWidget);
+      expect(
+        find.byKey(const Key('setup_confirm_password_field')),
+        findsOneWidget,
+      );
 
       // Enter new password and confirm
       await tester.enterText(

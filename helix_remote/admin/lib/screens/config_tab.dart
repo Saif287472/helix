@@ -3,17 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../admin_client.dart';
-import '../widgets/server_name_card.dart';
 
 class ConfigTab extends StatefulWidget {
   const ConfigTab({
     super.key,
     required this.config,
-    required this.federationDomainController,
-    required this.federationAddressController,
-    required this.federationDirectoryController,
-    required this.onSetWorldwideMode,
-    required this.onSaveServerName,
     this.client,
     this.serverHost,
     this.isLoading = false,
@@ -24,11 +18,6 @@ class ConfigTab extends StatefulWidget {
   });
 
   final Map<String, dynamic>? config;
-  final TextEditingController federationDomainController;
-  final TextEditingController federationAddressController;
-  final TextEditingController federationDirectoryController;
-  final ValueChanged<bool> onSetWorldwideMode;
-  final Future<String> Function(String name) onSaveServerName;
 
   /// Used for the server-owned feature flags. Optional: without it the
   /// feature-flag card is not rendered.
@@ -50,6 +39,7 @@ class ConfigTab extends StatefulWidget {
 
 class _ConfigTabState extends State<ConfigTab> {
   late bool _appLockEnabled;
+
   /// Server-owned flags this console is allowed to toggle.
   ///
   /// `federation_directory_v2` is deliberately absent: federation is deferred
@@ -231,14 +221,14 @@ class _ConfigTabState extends State<ConfigTab> {
       final bundle = await client.getSupportDiagnostic();
       if (!mounted) return;
       setState(() => _busyAction = null);
-      final text = const JsonEncoder.withIndent(
-        '  ',
-      ).convert(bundle);
+      final text = const JsonEncoder.withIndent('  ').convert(bundle);
       await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Support bundle copied. Tokens and secrets are excluded.'),
+          content: Text(
+            'Support bundle copied. Tokens and secrets are excluded.',
+          ),
         ),
       );
     } catch (e) {
@@ -346,24 +336,11 @@ class _ConfigTabState extends State<ConfigTab> {
       return const Center(child: Text('No configuration available.'));
     }
 
-    final federation =
-        (config['federation'] as Map<String, dynamic>?) ?? const {};
-    final worldwideEnabled = federation['worldwide_mode'] == true;
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. SERVER NODE IDENTITY
-          ServerNameCard(
-            initialName: config['server_name'] as String? ?? '',
-            maxLength: config['max_server_name_length'] as int? ?? 60,
-            onSave: widget.onSaveServerName,
-            fallbackName: config['default_server_name'] as String?,
-          ),
-          const SizedBox(height: 16),
-
-          // 2. SERVER CONFIGURATION PROPERTIES
+          // 1. SERVER CONFIGURATION PROPERTIES
           _buildCard(
             title: 'SERVER CONFIGURATION PROPERTIES',
             subtitle:
@@ -375,35 +352,37 @@ class _ConfigTabState extends State<ConfigTab> {
                 // server_id / server_public_key. Surface that as "not
                 // available" instead of substituting an invented value.
                 final rawServerId = config['server_id']?.toString();
-                final serverId = (rawServerId == null || rawServerId.isEmpty ||
+                final serverId =
+                    (rawServerId == null ||
+                        rawServerId.isEmpty ||
                         rawServerId == 'unknown')
                     ? null
                     : rawServerId;
                 final rawPublicKey = config['server_public_key']?.toString();
                 final serverPublicKey =
-                    (rawPublicKey == null || rawPublicKey.isEmpty ||
-                            rawPublicKey == 'unknown')
-                        ? null
-                        : rawPublicKey;
+                    (rawPublicKey == null ||
+                        rawPublicKey.isEmpty ||
+                        rawPublicKey == 'unknown')
+                    ? null
+                    : rawPublicKey;
                 final publicBaseUrl =
                     (config['public_base_url']?.toString().isNotEmpty ?? false)
-                        ? config['public_base_url'].toString()
-                        : (widget.serverHost ??
-                              'Not available - the server reported no public '
-                                  'base URL');
+                    ? config['public_base_url'].toString()
+                    : (widget.serverHost ??
+                          'Not available - the server reported no public '
+                              'base URL');
                 final items = [
-                  _propItem(
-                    label: 'PUBLIC SERVER ADDRESS',
-                    val: publicBaseUrl,
-                  ),
+                  _propItem(label: 'PUBLIC SERVER ADDRESS', val: publicBaseUrl),
                   _propItem(
                     label: 'DEFAULT FALLBACK NAME',
-                    val: config['default_server_name']?.toString() ??
+                    val:
+                        config['default_server_name']?.toString() ??
                         'Not available',
                   ),
                   _propItem(
                     label: 'HOST & PORT',
-                    val: '${config['host'] ?? 'not reported'}:'
+                    val:
+                        '${config['host'] ?? 'not reported'}:'
                         '${config['port'] ?? 'not reported'}',
                   ),
                   _propItem(
@@ -428,10 +407,12 @@ class _ConfigTabState extends State<ConfigTab> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: items
-                        .map((w) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: w,
-                            ))
+                        .map(
+                          (w) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: w,
+                          ),
+                        )
                         .toList(),
                   );
                 }
@@ -449,89 +430,7 @@ class _ConfigTabState extends State<ConfigTab> {
           ),
           const SizedBox(height: 16),
 
-          // 3. WORLDWIDE MODE & PEER NETWORK
-          _buildCard(
-            title: 'WORLDWIDE MODE & PEER NETWORK',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Worldwide Network Mode',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Advertise node to global Helix directory for universal cross-server discovery',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: worldwideEnabled,
-                      activeThumbColor: const Color(0xFF2563EB),
-                      onChanged: widget.onSetWorldwideMode,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Divider(color: Color(0xFFE2E8F0)),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: widget.federationDomainController,
-                  decoration: InputDecoration(
-                    labelText: 'Federation Domain',
-                    hintText: 'node-alpha.helixnet.io',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: widget.federationDirectoryController,
-                  decoration: InputDecoration(
-                    labelText: 'Directory Server URL',
-                    hintText: 'https://dir.helixnet.io/v1',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // 4. LOCAL SECURITY & APP LOCK
+          // 2. LOCAL SECURITY & APP LOCK
           _buildCard(
             title: 'LOCAL SECURITY & APP LOCK',
             child: Column(
@@ -610,15 +509,14 @@ class _ConfigTabState extends State<ConfigTab> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      onPressed:
-                          _busyAction == 'pin' ? null : () => _changePin(),
+                      onPressed: _busyAction == 'pin'
+                          ? null
+                          : () => _changePin(),
                       child: _busyAction == 'pin'
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text('Change Password'),
                     ),
@@ -629,7 +527,7 @@ class _ConfigTabState extends State<ConfigTab> {
           ),
           const SizedBox(height: 16),
 
-          // 5. DATABASE SNAPSHOTS & DISASTER RECOVERY
+          // 3. DATABASE SNAPSHOTS & DISASTER RECOVERY
           _buildCard(
             title: 'DATABASE SNAPSHOTS & DISASTER RECOVERY',
             child: Column(
@@ -740,7 +638,7 @@ class _ConfigTabState extends State<ConfigTab> {
           ),
           const SizedBox(height: 16),
 
-          // 6. NODE MAINTENANCE & CACHE PURGE
+          // 4. NODE MAINTENANCE & CACHE PURGE
           _buildCard(
             title: 'NODE MAINTENANCE & CACHE PURGE',
             child: Column(
@@ -818,15 +716,14 @@ class _ConfigTabState extends State<ConfigTab> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      onPressed:
-                          _busyAction == 'purge' ? null : () => _purgeData(),
+                      onPressed: _busyAction == 'purge'
+                          ? null
+                          : () => _purgeData(),
                       child: _busyAction == 'purge'
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text('Purge Data'),
                     ),
@@ -847,7 +744,7 @@ class _ConfigTabState extends State<ConfigTab> {
             const SizedBox(height: 16),
           ],
 
-          // 7. ADMIN SESSION CONTROL
+          // 5. ADMIN SESSION CONTROL
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -935,7 +832,7 @@ class _ConfigTabState extends State<ConfigTab> {
     final descriptions = <String, String>{
       'crash_reporting_upload':
           'Accept crash reports from client devices. Reports are redacted by '
-              'the client and written only to this server\'s own log.',
+          'the client and written only to this server\'s own log.',
       'minimal_analytics':
           'Accept minimal, redacted usage analytics from client devices.',
     };
@@ -1122,10 +1019,7 @@ class _ConfigTabState extends State<ConfigTab> {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF64748B),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
             ),
           ],
           const SizedBox(height: 16),
@@ -1178,7 +1072,11 @@ class _ConfigTabState extends State<ConfigTab> {
               ),
               if (copyable)
                 IconButton(
-                  icon: const Icon(Icons.copy, size: 16, color: Color(0xFF64748B)),
+                  icon: const Icon(
+                    Icons.copy,
+                    size: 16,
+                    color: Color(0xFF64748B),
+                  ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   tooltip: available ? 'Copy' : 'Nothing to copy',
@@ -1189,7 +1087,9 @@ class _ConfigTabState extends State<ConfigTab> {
                       ? () {
                           Clipboard.setData(ClipboardData(text: val));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('$label copied to clipboard')),
+                            SnackBar(
+                              content: Text('$label copied to clipboard'),
+                            ),
                           );
                         }
                       : null,

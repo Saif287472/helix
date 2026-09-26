@@ -150,6 +150,35 @@ void main() {
     },
   );
 
+  test(
+    'admin users list describes devices without push tokens or device keys',
+    () async {
+      await registerUser(
+        accountId: 'device_view_user',
+        phoneHash: 'device_view_phone',
+      );
+
+      final list = await getJson(
+        '/api/v1/ops/users?limit=50&offset=0',
+        token: adminToken,
+      );
+      final users =
+          (jsonDecode(list.body) as Map<String, dynamic>)['users'] as List;
+      final user = users.cast<Map<String, dynamic>>().firstWhere(
+        (u) => u['account_id'] == 'device_view_user',
+      );
+      final device = (user['devices'] as List).single as Map<String, dynamic>;
+      expect(device['device_id'], equals('device_view_user_device'));
+      expect(device['status'], equals('ACTIVE'));
+      expect(device['created_at'], isA<int>());
+      expect(device['last_seen_at'], isA<int>());
+      expect(device['push_enabled'], isFalse);
+      expect(device.containsKey('push_token'), isFalse);
+      expect(device.containsKey('device_signing_public_key'), isFalse);
+      expect(device.containsKey('device_agreement_public_key'), isFalse);
+    },
+  );
+
   test('malformed phone_last4 is silently dropped, not rejected', () async {
     await registerUser(
       accountId: 'bad_last4_user',
@@ -218,8 +247,8 @@ void main() {
   );
 
   group('Suspend / unsuspend (temporary revoke)', () {
-    test('suspending a user blocks login and rejects an already-issued access '
-        'token, and unsuspending restores both', () async {
+    test('a suspended user stays signed in but cannot act, and unsuspending '
+        'lifts the limit', () async {
       final material = await registerUser(
         accountId: 'suspend_user',
         phoneHash: 'suspend_phone',
@@ -232,12 +261,28 @@ void main() {
       final accessToken = loginBefore['token'] as String;
       final refreshToken = loginBefore['refresh_token'] as String;
 
-      // Access token works before suspension.
-      final beforeSuspend = await getJson(
+      Future<(int, String?, String)> call(String method, String path) async {
+        final request = await client.openUrl(
+          method,
+          Uri.parse('http://127.0.0.1:$port$path'),
+        );
+        request.headers.set('Authorization', 'Bearer $accessToken');
+        request.headers.contentType = ContentType.json;
+        if (method == 'POST') request.write('{}');
+        final response = await request.close();
+        return (
+          response.statusCode,
+          response.headers.value('x-helix-account-status'),
+          await response.transform(utf8.decoder).join(),
+        );
+      }
+
+      final (beforeStatus, beforeHeader, _) = await call(
+        'GET',
         '/api/v1/accounts/devices',
-        token: accessToken,
       );
-      expect(beforeSuspend.statusCode, equals(200));
+      expect(beforeStatus, equals(200));
+      expect(beforeHeader, isNull);
 
       final suspend = await postJson(
         '/api/v1/ops/users/suspend_user/suspend',
@@ -250,25 +295,42 @@ void main() {
         equals('SUSPENDED'),
       );
 
-      // Existing access token now rejected by auth middleware.
-      final afterSuspend = await getJson(
+      // Reads still work, tagged so the app can show the notice at once.
+      final (readStatus, readHeader, _) = await call(
+        'GET',
         '/api/v1/accounts/devices',
-        token: accessToken,
       );
-      expect(afterSuspend.statusCode, equals(403));
+      expect(readStatus, equals(200));
+      expect(readHeader, equals('suspended'));
 
-      // Fresh login attempt is rejected too.
-      final loginAttempt = await login(
+      // Activity is refused with a code the app can explain.
+      for (final path in [
+        '/api/v1/messages/send',
+        '/api/v1/contacts/requests',
+        '/api/v1/calls/signal',
+        '/api/v1/groups/create',
+      ]) {
+        final (status, header, body) = await call('POST', path);
+        expect(status, equals(403), reason: path);
+        expect(header, equals('suspended'), reason: path);
+        expect(
+          (jsonDecode(body) as Map<String, dynamic>)['code'],
+          equals('account_suspended'),
+          reason: path,
+        );
+      }
+
+      // Signing in again and refreshing both still work - suspension no
+      // longer throws the user back to onboarding.
+      final loginWhileSuspended = await login(
         accountId: 'suspend_user',
         material: material,
       );
-      expect(loginAttempt.containsKey('token'), isFalse);
-
-      // Refresh is rejected while suspended.
+      expect(loginWhileSuspended['token'], isNotEmpty);
       final refresh = await postJson('/api/v1/accounts/refresh', {
         'refresh_token': refreshToken,
       });
-      expect(refresh.statusCode, equals(403));
+      expect(refresh.statusCode, equals(200), reason: refresh.body);
 
       final unsuspend = await postJson(
         '/api/v1/ops/users/suspend_user/unsuspend',
@@ -281,12 +343,12 @@ void main() {
         equals('ACTIVE'),
       );
 
-      // Restored: fresh login works again.
-      final loginAfterRestore = await login(
-        accountId: 'suspend_user',
-        material: material,
+      final (afterStatus, afterHeader, _) = await call(
+        'GET',
+        '/api/v1/accounts/devices',
       );
-      expect(loginAfterRestore['token'], isNotEmpty);
+      expect(afterStatus, equals(200));
+      expect(afterHeader, isNull);
     });
 
     test('suspending an unknown account returns 404', () async {
@@ -384,12 +446,26 @@ void main() {
       expect(blockBody['blocked'], isTrue);
       expect(blockBody['deleted'], isTrue);
 
-      // Same "gone immediately" guarantees as a plain delete.
+      // Gone immediately like a plain delete, but the still-installed app is
+      // told the account was blocked rather than just "device inactive", so
+      // it can explain instead of silently returning to onboarding.
       final afterBlock = await getJson(
         '/api/v1/accounts/devices',
         token: accessToken,
       );
-      expect(afterBlock.statusCode, equals(401));
+      expect(afterBlock.statusCode, equals(403));
+      expect(
+        (jsonDecode(afterBlock.body) as Map<String, dynamic>)['code'],
+        equals('account_blocked'),
+      );
+      final refreshAfterBlock = await postJson('/api/v1/accounts/refresh', {
+        'refresh_token': loginBefore['refresh_token'],
+      });
+      expect(refreshAfterBlock.statusCode, equals(403));
+      expect(
+        (jsonDecode(refreshAfterBlock.body) as Map<String, dynamic>)['code'],
+        equals('account_blocked'),
+      );
       final list = await getJson(
         '/api/v1/ops/users?limit=50&offset=0',
         token: adminToken,
@@ -409,10 +485,9 @@ void main() {
         'phone_hash': 'block_phone',
       });
       expect(otpRequest.statusCode, equals(403));
-      expect(
-        (jsonDecode(otpRequest.body) as Map<String, dynamic>)['error'],
-        contains('blocked'),
-      );
+      final otpBody = jsonDecode(otpRequest.body) as Map<String, dynamic>;
+      expect(otpBody['error'], contains('blocked'));
+      expect(otpBody['code'], equals('phone_blocked'));
 
       // ...and so is a direct registration attempt for a brand-new
       // account using that same phone_hash, checked before OTP

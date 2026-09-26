@@ -98,6 +98,78 @@ abstract class HelixLocalizations {
     Locale('en'),
   ];
 
+  /// No description provided for @accountBlockedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone number has been permanently blocked on this server, and the account that used it has been removed.'**
+  String get accountBlockedBody;
+
+  /// No description provided for @accountBlockedLeaveApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave the app'**
+  String get accountBlockedLeaveApp;
+
+  /// No description provided for @accountBlockedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This number is blocked'**
+  String get accountBlockedTitle;
+
+  /// No description provided for @accountBlockedUseDifferentNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with a different number'**
+  String get accountBlockedUseDifferentNumber;
+
+  /// No description provided for @accountRestrictionContactGlobal.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Helix support to find out why and how to get access back.'**
+  String get accountRestrictionContactGlobal;
+
+  /// No description provided for @accountRestrictionContactPersonal.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact the admin of this server to find out why and how to get access back.'**
+  String get accountRestrictionContactPersonal;
+
+  /// No description provided for @accountRestrictionContactSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact support'**
+  String get accountRestrictionContactSupport;
+
+  /// No description provided for @accountRestrictionOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get accountRestrictionOk;
+
+  /// No description provided for @accountRestrictionSupportCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Support email copied'**
+  String get accountRestrictionSupportCopied;
+
+  /// No description provided for @accountSuspendedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is suspended. You can still read messages, but you can\'t send messages, add contacts or make calls.'**
+  String get accountSuspendedBanner;
+
+  /// No description provided for @accountSuspendedRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'This isn\'t available while your account is suspended.'**
+  String get accountSuspendedRefused;
+
+  /// No description provided for @accountSuspendedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account suspended'**
+  String get accountSuspendedTitle;
+
   /// No description provided for @accept.
   ///
   /// In en, this message translates to:

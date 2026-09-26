@@ -48,6 +48,7 @@ class OperabilityModule {
     this.getNeedsAdminSetup,
     this.jwt,
     this.adminPasswordOverride,
+    this.globalInstanceMode = false,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
@@ -80,6 +81,11 @@ class OperabilityModule {
   final String publicBaseUrl;
   final JwtHelper? jwt;
   final String? adminPasswordOverride;
+
+  /// Whether this is the public Helix Global instance (SMS-OTP signup, no
+  /// invites). Reported on `/ops/config` so the admin console can hide the
+  /// invite workflow and label the server; clients learn it from onboarding.
+  final bool globalInstanceMode;
   final DateTime Function() _now;
   late final FeatureFlagService _featureFlags = FeatureFlagService(db);
 
@@ -740,7 +746,22 @@ class OperabilityModule {
     final users = db.getAllUsersDetailedPaginated(limit: limit, offset: offset);
     final usersWithDevices = users.map((user) {
       final accountId = user['account_id'] as String;
-      final devices = db.getDevices(accountId);
+      // Only what the console displays. The raw push token and the device
+      // public keys are credentials/crypto material the admin has no use for,
+      // so they are reduced to a yes/no rather than shipped to the console.
+      final devices = db
+          .getDevices(accountId)
+          .map(
+            (d) => {
+              'device_id': d['device_id'],
+              'device_name': d['device_name'],
+              'status': d['status'],
+              'created_at': d['created_at'],
+              'last_seen_at': d['last_seen_at'],
+              'push_enabled': (d['push_token'] as String?)?.isNotEmpty ?? false,
+            },
+          )
+          .toList();
       return {...user, 'devices': devices};
     }).toList();
 
@@ -789,11 +810,7 @@ class OperabilityModule {
     }
 
     final reports = db.getReports(limit: limit, offset: offset);
-    return _json({
-      'reports': reports,
-      'limit': limit,
-      'offset': offset,
-    });
+    return _json({'reports': reports, 'limit': limit, 'offset': offset});
   }
 
   Future<Response> _resolveReport(Request request, String reportId) async {
@@ -942,6 +959,7 @@ class OperabilityModule {
       // Read from storage rather than held in memory, so the switch reflects
       // reality after a restart instead of resetting itself silently.
       'maintenance_mode': db.getServerConfig('maintenance_mode') == 'true',
+      'global_instance_mode': globalInstanceMode,
       'federation': _federationConfig(),
     });
   }
@@ -1219,6 +1237,7 @@ class OperabilityModule {
     if (phoneHash != null && phoneHash.isNotEmpty) {
       db.blockPhoneHash(phoneHash, blockedByAccountId: adminAccountId);
     }
+    db.markAccountBlocked(accountId);
     await db.deleteAccountData(accountId);
     db.logAudit(
       adminAccountId,
@@ -1353,9 +1372,20 @@ class OperabilityModule {
       throw AppError.badRequest('Invalid limit or offset');
     }
 
+    final status = params['status']?.toUpperCase();
+    const filterable = {'PENDING', 'EXPIRED', 'REDEEMED', 'CANCELLED'};
+    if (status != null && status != 'ALL' && !filterable.contains(status)) {
+      throw AppError.badRequest('Invalid invite status filter');
+    }
+
     final now = _now().millisecondsSinceEpoch;
     final invites = db
-        .getInviteCredentialsPaginated(limit: limit, offset: offset)
+        .getInviteCredentialsPaginated(
+          limit: limit,
+          offset: offset,
+          status: status == 'ALL' ? null : status,
+          now: now,
+        )
         .map(
           (invite) => {
             'invite_id': invite['invite_id'],
@@ -1367,6 +1397,7 @@ class OperabilityModule {
             'expires_at': invite['expires_at'],
             'redeemed_at': invite['redeemed_at'],
             'redeemed_by_account_id': invite['redeemed_by_account_id'],
+            'redeemed_by_display_name': invite['redeemed_by_display_name'],
           },
         )
         .toList();

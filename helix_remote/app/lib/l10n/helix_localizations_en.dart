@@ -9,6 +9,48 @@ class HelixLocalizationsEn extends HelixLocalizations {
   HelixLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get accountBlockedBody =>
+      'This phone number has been permanently blocked on this server, and the account that used it has been removed.';
+
+  @override
+  String get accountBlockedLeaveApp => 'Leave the app';
+
+  @override
+  String get accountBlockedTitle => 'This number is blocked';
+
+  @override
+  String get accountBlockedUseDifferentNumber =>
+      'Sign in with a different number';
+
+  @override
+  String get accountRestrictionContactGlobal =>
+      'Contact Helix support to find out why and how to get access back.';
+
+  @override
+  String get accountRestrictionContactPersonal =>
+      'Contact the admin of this server to find out why and how to get access back.';
+
+  @override
+  String get accountRestrictionContactSupport => 'Contact support';
+
+  @override
+  String get accountRestrictionOk => 'OK';
+
+  @override
+  String get accountRestrictionSupportCopied => 'Support email copied';
+
+  @override
+  String get accountSuspendedBanner =>
+      'Your account is suspended. You can still read messages, but you can\'t send messages, add contacts or make calls.';
+
+  @override
+  String get accountSuspendedRefused =>
+      'This isn\'t available while your account is suspended.';
+
+  @override
+  String get accountSuspendedTitle => 'Account suspended';
+
+  @override
   String get accept => 'Accept';
 
   @override

@@ -9,9 +9,12 @@ import '../theme/app_theme.dart';
 /// Invite-credential issuance and audit history.
 /// Converted to mobile-first cardlet and touch-card system from the Helix Admin demo.
 class InvitesTab extends StatefulWidget {
-  const InvitesTab({super.key, required this.client});
+  const InvitesTab({super.key, required this.client, this.onOpenUser});
 
   final AdminClient client;
+
+  /// Opens the Users tab on the account that redeemed an invite.
+  final ValueChanged<String>? onOpenUser;
 
   @override
   State<InvitesTab> createState() => _InvitesTabState();
@@ -29,6 +32,16 @@ class _InvitesTabState extends State<InvitesTab> {
   String? _lastShareableCode;
   String? _busyInviteId;
 
+  /// Server-side status filter; null shows every invite.
+  String? _statusFilter;
+  static const _filters = <(String label, String? status)>[
+    ('All', null),
+    ('Pending', 'PENDING'),
+    ('Redeemed', 'REDEEMED'),
+    ('Expired', 'EXPIRED'),
+    ('Cancelled', 'CANCELLED'),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +57,7 @@ class _InvitesTabState extends State<InvitesTab> {
       final result = await widget.client.listInvites(
         limit: _pageSize,
         offset: offset,
+        status: _statusFilter,
       );
       final invites = (result['invites'] as List).cast<Map<String, dynamic>>();
       if (!mounted) return;
@@ -103,7 +117,10 @@ class _InvitesTabState extends State<InvitesTab> {
     if (shareableCode != null && isHelixInviteCode(shareableCode)) {
       return shareableCode;
     }
-    final inviteCode = result['invite_code'] as String? ?? result['invite_id'] as String? ?? '';
+    final inviteCode =
+        result['invite_code'] as String? ??
+        result['invite_id'] as String? ??
+        '';
     if (isHelixInviteCode(inviteCode)) {
       return inviteCode;
     }
@@ -126,9 +143,9 @@ class _InvitesTabState extends State<InvitesTab> {
 
   void _copyToClipboard(String value) {
     Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Copied to clipboard')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
   }
 
   void _shareInvite(String code) {
@@ -216,7 +233,10 @@ class _InvitesTabState extends State<InvitesTab> {
                   const SizedBox(height: 12),
 
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(10),
@@ -247,14 +267,17 @@ class _InvitesTabState extends State<InvitesTab> {
                                     style: OutlinedButton.styleFrom(
                                       backgroundColor: Colors.white,
                                       foregroundColor: const Color(0xFF2563EB),
-                                      side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                      side: const BorderSide(
+                                        color: Color(0xFFBFDBFE),
+                                      ),
                                       padding: const EdgeInsets.all(8),
                                       minimumSize: Size.zero,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                     ),
-                                    onPressed: () => _copyToClipboard(effectiveCode),
+                                    onPressed: () =>
+                                        _copyToClipboard(effectiveCode),
                                     child: const Icon(Icons.copy, size: 16),
                                   ),
                                   const SizedBox(width: 6),
@@ -262,14 +285,17 @@ class _InvitesTabState extends State<InvitesTab> {
                                     style: OutlinedButton.styleFrom(
                                       backgroundColor: Colors.white,
                                       foregroundColor: const Color(0xFF334155),
-                                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                      side: const BorderSide(
+                                        color: Color(0xFFCBD5E1),
+                                      ),
                                       padding: const EdgeInsets.all(8),
                                       minimumSize: Size.zero,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                     ),
-                                    onPressed: () => _shareInvite(effectiveCode),
+                                    onPressed: () =>
+                                        _shareInvite(effectiveCode),
                                     child: const Icon(Icons.share, size: 16),
                                   ),
                                 ],
@@ -298,72 +324,91 @@ class _InvitesTabState extends State<InvitesTab> {
                 ],
               ),
             ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          // Invites List Area
-          const Text(
-            'Active & Recent Invites',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
+            // Invites List Area
+            const Text(
+              'Active & Recent Invites',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final (label, status) in _filters) ...[
+                    _buildFilterPill(
+                      label: label,
+                      isSelected: _statusFilter == status,
+                      onTap: () {
+                        if (_statusFilter == status) return;
+                        setState(() => _statusFilter = status);
+                        _loadInvites(offset: 0);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
 
-          if (_loading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (_invites.isEmpty)
-            Padding(
-              padding: HelixInsets.all(24),
-              child: Text(
-                'No invites issued yet.',
-                style: TextStyle(color: context.textFaint),
-              ),
-            )
-          else
-            Column(
-              children: [
-                for (final invite in _invites) _buildInviteCard(invite),
-              ],
-            ),
-          if (!_loading && (_invites.isNotEmpty || _offset > 0)) ...[
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  key: const Key('invites_previous_page'),
-                  onPressed: _offset > 0
-                      ? () => _loadInvites(
-                          offset: (_offset - _pageSize).clamp(
-                            0,
-                            1 << 30,
-                          ),
-                        )
-                      : null,
-                  child: const Text('Previous'),
+            if (_loading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: CircularProgressIndicator(),
                 ),
-                TextButton(
-                  key: const Key('invites_next_page'),
-                  onPressed: _hasMore
-                      ? () => _loadInvites(offset: _offset + _pageSize)
-                      : null,
-                  child: const Text('Next'),
+              )
+            else if (_invites.isEmpty)
+              Padding(
+                padding: HelixInsets.all(24),
+                child: Text(
+                  _statusFilter == null
+                      ? 'No invites issued yet.'
+                      : 'No ${_statusFilter!.toLowerCase()} invites.',
+                  style: TextStyle(color: context.textFaint),
                 ),
-              ],
-            ),
+              )
+            else
+              Column(
+                children: [
+                  for (final invite in _invites) _buildInviteCard(invite),
+                ],
+              ),
+            if (!_loading && (_invites.isNotEmpty || _offset > 0)) ...[
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    key: const Key('invites_previous_page'),
+                    onPressed: _offset > 0
+                        ? () => _loadInvites(
+                            offset: (_offset - _pageSize).clamp(0, 1 << 30),
+                          )
+                        : null,
+                    child: const Text('Previous'),
+                  ),
+                  TextButton(
+                    key: const Key('invites_next_page'),
+                    onPressed: _hasMore
+                        ? () => _loadInvites(offset: _offset + _pageSize)
+                        : null,
+                    child: const Text('Next'),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   /// Human-readable remaining lifetime from the server's `expires_at`, or the
   /// expiry itself when it has passed. The server issues 7-day invites and
@@ -381,7 +426,9 @@ class _InvitesTabState extends State<InvitesTab> {
       if (ago.inDays >= 1) {
         return 'Expired ${ago.inDays} day${ago.inDays == 1 ? '' : 's'} ago';
       }
-      if (ago.inHours >= 1) return 'Expired ${ago.inHours} hour${ago.inHours == 1 ? '' : 's'} ago';
+      if (ago.inHours >= 1) {
+        return 'Expired ${ago.inHours} hour${ago.inHours == 1 ? '' : 's'} ago';
+      }
       return 'Expired ${ago.inMinutes.clamp(1, 59)} minute${ago.inMinutes == 1 ? '' : 's'} ago';
     }
     if (remaining.inDays >= 1) {
@@ -402,6 +449,8 @@ class _InvitesTabState extends State<InvitesTab> {
     final isCancelled = status == 'CANCELLED';
     final isExpired = status == 'EXPIRED';
     final redeemedBy = invite['redeemed_by_account_id'] as String?;
+    final redeemedByName = (invite['redeemed_by_display_name'] as String?)
+        ?.trim();
     final issuer = invite['issuer_type'] as String? ?? 'Master Admin';
     // Only a genuinely pending invite can be cancelled.
     final canCancel = isPending && !isExpired;
@@ -424,8 +473,8 @@ class _InvitesTabState extends State<InvitesTab> {
               color: isRedeemed
                   ? const Color(0xFFECFDF5)
                   : (isPending
-                      ? const Color(0xFFEFF6FF)
-                      : const Color(0xFFFEF2F2)),
+                        ? const Color(0xFFEFF6FF)
+                        : const Color(0xFFFEF2F2)),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -435,7 +484,9 @@ class _InvitesTabState extends State<InvitesTab> {
               size: 20,
               color: isRedeemed
                   ? const Color(0xFF059669)
-                  : (isPending ? const Color(0xFF2563EB) : const Color(0xFFDC2626)),
+                  : (isPending
+                        ? const Color(0xFF2563EB)
+                        : const Color(0xFFDC2626)),
             ),
           ),
           const SizedBox(width: 12),
@@ -457,27 +508,34 @@ class _InvitesTabState extends State<InvitesTab> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  isRedeemed && redeemedBy != null
-                      ? 'Redeemed by $redeemedBy'
-                      : (isCancelled
-                          ? 'Cancelled by Admin'
-                          : 'Issued by $issuer • ${_expiryLabel(invite, status)}'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isExpired
-                        ? const Color(0xFFD97706)
-                        : const Color(0xFF475569),
+                if (isRedeemed && redeemedBy != null)
+                  _buildRedeemerLink(redeemedBy, redeemedByName)
+                else
+                  Text(
+                    isRedeemed
+                        // Redeemed, but the account has since been deleted.
+                        ? 'Redeemed by a deleted account'
+                        : (isCancelled
+                              ? 'Cancelled by Admin'
+                              : 'Issued by $issuer • ${_expiryLabel(invite, status)}'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isExpired
+                          ? const Color(0xFFD97706)
+                          : const Color(0xFF475569),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
                 const SizedBox(height: 2),
                 Text(
                   isRedeemed
                       ? 'Redeemed ${_formatTimestamp(invite['redeemed_at'] ?? invite['created_at'])}'
                       : 'Created ${_formatTimestamp(invite['created_at'])}',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF94A3B8),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -505,17 +563,86 @@ class _InvitesTabState extends State<InvitesTab> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFFDC2626),
                     side: const BorderSide(color: Color(0xFFFCA5A5)),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: () => _cancelInvite(inviteId),
-                  child: const Text('Cancel', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// "Joined as" plus the redeemer's name, tappable through to that user when the console
+  /// supplies [InvitesTab.onOpenUser].
+  Widget _buildRedeemerLink(String accountId, String? name) {
+    final label = (name == null || name.isEmpty) ? 'an unnamed user' : name;
+    final text = Text.rich(
+      TextSpan(
+        text: 'Joined as ',
+        children: [
+          TextSpan(
+            text: label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: widget.onOpenUser == null
+                  ? const Color(0xFF475569)
+                  : const Color(0xFF2563EB),
+            ),
+          ),
+        ],
+      ),
+      style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    if (widget.onOpenUser == null) return text;
+    return InkWell(
+      onTap: () => widget.onOpenUser!(accountId),
+      borderRadius: BorderRadius.circular(4),
+      child: text,
+    );
+  }
+
+  Widget _buildFilterPill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF2563EB) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF2563EB)
+                : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
       ),
     );
   }
@@ -563,8 +690,24 @@ class _InvitesTabState extends State<InvitesTab> {
 
   String _formatTimestamp(dynamic value) {
     if (value is! int || value == 0) return '—';
-    final dt = DateTime.fromMillisecondsSinceEpoch(value, isUtc: true).toLocal();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final dt = DateTime.fromMillisecondsSinceEpoch(
+      value,
+      isUtc: true,
+    ).toLocal();
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 }

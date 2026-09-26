@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:helix_remote/app/routes.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:helix_remote/widgets/account_restriction_gate.dart';
 
 /// The single application shell for every Remote startup state.
 ///
@@ -13,6 +14,10 @@ class HelixRemoteAppShell extends StatelessWidget {
   const HelixRemoteAppShell({super.key, required this.home});
 
   final Widget home;
+
+  /// Lets [AccountRestrictionGate], which sits above the navigator, open its
+  /// dialog over whichever route is showing.
+  static final navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +36,7 @@ class HelixRemoteAppShell extends StatelessWidget {
       // against. With no `darkTheme` registered and the mode pinned there is
       // no longer a path to a theme that does not exist.
       themeMode: ThemeMode.light,
+      navigatorKey: navigatorKey,
       onGenerateRoute: RemoteRouter.onGenerateRoute,
       builder: (context, child) => Shortcuts(
         shortcuts: const {
@@ -44,7 +50,10 @@ class HelixRemoteAppShell extends StatelessWidget {
           },
           child: FocusTraversalGroup(
             policy: OrderedTraversalPolicy(),
-            child: child!,
+            child: AccountRestrictionGate(
+              navigatorKey: navigatorKey,
+              child: child!,
+            ),
           ),
         ),
       ),

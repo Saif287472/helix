@@ -65,7 +65,9 @@ class _PendingRegistration {
     final accountId = _bytesToHex(identityPubKey.bytes.sublist(0, 8));
     final deviceId =
         'dev_${_bytesToHex(deviceSigningPubKey.bytes.sublist(0, 4))}';
-    final deviceName = 'Dev ${deviceId.substring(0, 8)}';
+    final deviceName = await describeThisDevice(
+      fallback: 'Dev ${deviceId.substring(0, 8)}',
+    );
 
     final accountIdentityPublicKey = _base64Url(identityPubKey.bytes);
     final identityPrivateKey = _base64Url(

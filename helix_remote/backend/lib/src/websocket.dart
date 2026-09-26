@@ -248,7 +248,11 @@ class WebSocketRelay implements MessageRelay {
             final requestId = payload['request_id'] as String?;
             final handler = _callSignalHandler;
             Map<String, dynamic> ack;
-            if (handler == null) {
+            if (db.isAccountSuspended(accountId)) {
+              // Same rule as the HTTP call routes (see isSuspendedActivity):
+              // this socket otherwise let a suspended account keep calling.
+              ack = {'status': 'rejected', 'reason': 'account_suspended'};
+            } else if (handler == null) {
               ack = {
                 'status': 'rejected',
                 'reason': 'call signaling unavailable',

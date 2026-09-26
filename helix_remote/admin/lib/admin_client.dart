@@ -202,10 +202,7 @@ class AdminClient {
   Future<AdminLoginStatus> verifyLoginDetailed() async {
     try {
       final response = await http
-          .get(
-            Uri.parse('$baseUrl/api/v1/ops/config'),
-            headers: _headers,
-          )
+          .get(Uri.parse('$baseUrl/api/v1/ops/config'), headers: _headers)
           .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) return AdminLoginStatus.ok;
       if (response.statusCode == 401 || response.statusCode == 403) {
@@ -221,10 +218,10 @@ class AdminClient {
       (await verifyLoginDetailed()) == AdminLoginStatus.ok;
 
   Future<Map<String, dynamic>> getMetrics() async {
-    final response = await _retry(() => http.get(
-      Uri.parse('$baseUrl/api/v1/ops/metrics'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () =>
+          http.get(Uri.parse('$baseUrl/api/v1/ops/metrics'), headers: _headers),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to load metrics: ${response.body}');
     }
@@ -232,37 +229,14 @@ class AdminClient {
   }
 
   Future<Map<String, dynamic>> getConfig() async {
-    final response = await _retry(() => http.get(
-      Uri.parse('$baseUrl/api/v1/ops/config'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () =>
+          http.get(Uri.parse('$baseUrl/api/v1/ops/config'), headers: _headers),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to load config: ${response.body}');
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
-  /// Sets the server's display name, or clears it when [name] is empty.
-  /// Returns the normalized name the server stored, which may differ from
-  /// what was sent (surrounding whitespace trimmed, internal runs
-  /// collapsed).
-  ///
-  /// Throws [AdminRequestException] carrying the server's own message on a
-  /// validation failure, so the field can show why rather than a generic
-  /// error.
-  Future<String> setServerName(String name) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/config/server-name'),
-      headers: _headers,
-      body: jsonEncode({'server_name': name}),
-    ));
-    final body = _decodeOrNull(response.body);
-    if (response.statusCode != 200) {
-      throw AdminRequestException(
-        body?['error'] as String? ?? 'Failed to save the server name.',
-      );
-    }
-    return body?['server_name'] as String? ?? '';
   }
 
   Map<String, dynamic>? _decodeOrNull(String body) {
@@ -274,33 +248,11 @@ class AdminClient {
     }
   }
 
-  Future<Map<String, dynamic>> setWorldwideMode({
-    required bool enabled,
-    required String domain,
-    required String address,
-    required String directoryUrl,
-  }) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/federation/worldwide'),
-      headers: _headers,
-      body: jsonEncode({
-        'enabled': enabled,
-        'domain': domain,
-        'address': address,
-        'directory_url': directoryUrl,
-      }),
-    ));
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update federation: ${response.body}');
-    }
-    return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
   Future<Map<String, dynamic>> triggerBackup() async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/backup'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () =>
+          http.post(Uri.parse('$baseUrl/api/v1/ops/backup'), headers: _headers),
+    );
     if (response.statusCode != 200) {
       throw Exception('Backup failed: ${response.body}');
     }
@@ -311,10 +263,12 @@ class AdminClient {
     int limit = 50,
     int offset = 0,
   }) async {
-    final response = await _retry(() => http.get(
-      Uri.parse('$baseUrl/api/v1/ops/users?limit=$limit&offset=$offset'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.get(
+        Uri.parse('$baseUrl/api/v1/ops/users?limit=$limit&offset=$offset'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to load users: ${response.body}');
     }
@@ -325,20 +279,24 @@ class AdminClient {
   /// and every authenticated request in between, but can be restored with
   /// [unsuspendUser] - no re-registration needed.
   Future<void> suspendUser(String accountId) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/suspend'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/users/$accountId/suspend'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to suspend user: ${response.body}');
     }
   }
 
   Future<void> unsuspendUser(String accountId) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/unsuspend'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/users/$accountId/unsuspend'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to unsuspend user: ${response.body}');
     }
@@ -347,10 +305,12 @@ class AdminClient {
   /// Generates a single-use 48-hour account recovery code (HLX-REC-...)
   /// for a user to restore access on a new device.
   Future<Map<String, dynamic>> generateRecoveryCode(String accountId) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/recovery-code'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/users/$accountId/recovery-code'),
+        headers: _headers,
+      ),
+    );
     final body = _decodeOrNull(response.body);
     if (response.statusCode != 200) {
       throw AdminRequestException(
@@ -365,10 +325,12 @@ class AdminClient {
   /// number itself is left free - a new account can register it again.
   /// Use [blockUser] instead to also refuse that.
   Future<void> deleteUser(String accountId) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/delete'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/users/$accountId/delete'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to delete user: ${response.body}');
     }
@@ -377,10 +339,12 @@ class AdminClient {
   /// Deletes the account like [deleteUser], and additionally bans its
   /// phone number from ever registering again on this server.
   Future<void> blockUser(String accountId) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/users/$accountId/block'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/users/$accountId/block'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to block user: ${response.body}');
     }
@@ -389,20 +353,24 @@ class AdminClient {
   /// Cancels an invite that hasn't been redeemed yet. Fails (409) if it's
   /// already been used or cancelled.
   Future<void> cancelInvite(String inviteId) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/invites/$inviteId/cancel'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/invites/$inviteId/cancel'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to cancel invite: ${response.body}');
     }
   }
 
   Future<ServerLogs> getLogs({int limit = 200}) async {
-    final response = await _retry(() => http.get(
-      Uri.parse('$baseUrl/api/v1/ops/logs?limit=$limit'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.get(
+        Uri.parse('$baseUrl/api/v1/ops/logs?limit=$limit'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to load logs: ${response.body}');
     }
@@ -420,24 +388,35 @@ class AdminClient {
   /// `shareable_url`) is returned exactly once here and never persisted
   /// server-side - only its hash is kept.
   Future<Map<String, dynamic>> createInvite() async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/ops/invites'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/invites'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to create invite: ${response.body}');
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// One page of invites. [status] is `PENDING`, `EXPIRED`, `REDEEMED` or
+  /// `CANCELLED`; null lists every invite. Filtering is server-side so it
+  /// spans every page rather than only the one already loaded.
   Future<Map<String, dynamic>> listInvites({
     int limit = 50,
     int offset = 0,
+    String? status,
   }) async {
-    final response = await _retry(() => http.get(
-      Uri.parse('$baseUrl/api/v1/ops/invites?limit=$limit&offset=$offset'),
-      headers: _headers,
-    ));
+    final statusParam = status == null ? '' : '&status=$status';
+    final response = await _retry(
+      () => http.get(
+        Uri.parse(
+          '$baseUrl/api/v1/ops/invites?limit=$limit&offset=$offset$statusParam',
+        ),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to load invites: ${response.body}');
     }
@@ -447,12 +426,16 @@ class AdminClient {
   /// Revokes an individual device access token.
   Future<void> revokeDevice(String accountId, String deviceId) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/admin/users/$accountId/devices/$deviceId/revoke'),
+      Uri.parse(
+        '$baseUrl/api/v1/admin/users/$accountId/devices/$deviceId/revoke',
+      ),
       headers: _headers,
     );
     if (response.statusCode != 200) {
       final fallbackRes = await http.post(
-        Uri.parse('$baseUrl/api/v1/ops/users/$accountId/devices/$deviceId/revoke'),
+        Uri.parse(
+          '$baseUrl/api/v1/ops/users/$accountId/devices/$deviceId/revoke',
+        ),
         headers: _headers,
       );
       if (fallbackRes.statusCode != 200) {
@@ -473,10 +456,12 @@ class AdminClient {
     if (limit != null) params.add('limit=$limit');
     if (offset != null) params.add('offset=$offset');
     final query = params.isNotEmpty ? '?${params.join('&')}' : '';
-    final response = await _retry(() => http.get(
-      Uri.parse('$baseUrl/api/v1/admin/reports$query'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.get(
+        Uri.parse('$baseUrl/api/v1/admin/reports$query'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw AdminRequestException(
         _decodeOrNull(response.body)?['error'] as String? ??
@@ -493,10 +478,12 @@ class AdminClient {
   /// Throws [AdminRequestException] carrying the server's message on a
   /// non-200, so a failed resolution is never rendered as a success.
   Future<void> resolveReport(String reportId) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/admin/reports/$reportId/resolve'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/admin/reports/$reportId/resolve'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw AdminRequestException(
         _decodeOrNull(response.body)?['error'] as String? ??
@@ -507,10 +494,12 @@ class AdminClient {
 
   /// Dismisses a user report.
   Future<void> dismissReport(String reportId) async {
-    final response = await _retry(() => http.post(
-      Uri.parse('$baseUrl/api/v1/admin/reports/$reportId/dismiss'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/admin/reports/$reportId/dismiss'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw AdminRequestException(
         _decodeOrNull(response.body)?['error'] as String? ??
@@ -530,10 +519,12 @@ class AdminClient {
   /// the Ops screen's own error card could never be reached.
   Future<List<Map<String, dynamic>>> getAuditLogs({String? accountId}) async {
     final q = accountId != null ? '?account_id=$accountId' : '';
-    final response = await _retry(() => http.get(
-      Uri.parse('$baseUrl/api/v1/admin/audit$q'),
-      headers: _headers,
-    ));
+    final response = await _retry(
+      () => http.get(
+        Uri.parse('$baseUrl/api/v1/admin/audit$q'),
+        headers: _headers,
+      ),
+    );
     if (response.statusCode != 200) {
       throw AdminRequestException(
         _decodeOrNull(response.body)?['error'] as String? ??
@@ -596,10 +587,8 @@ class AdminClient {
   /// console can report what actually happened.
   Future<Map<String, int>> purgeData() async {
     final response = await _retry(
-      () => http.post(
-        Uri.parse('$baseUrl/api/v1/ops/purge'),
-        headers: _headers,
-      ),
+      () =>
+          http.post(Uri.parse('$baseUrl/api/v1/ops/purge'), headers: _headers),
     );
     if (response.statusCode != 200) {
       throw AdminRequestException(
@@ -635,7 +624,10 @@ class AdminClient {
   /// rather than an arbitrary remotely-switchable capability.
   Future<Map<String, bool>> getFeatureFlags() async {
     final response = await _retry(
-      () => http.get(Uri.parse('$baseUrl/api/v1/ops/feature-flags'), headers: _headers),
+      () => http.get(
+        Uri.parse('$baseUrl/api/v1/ops/feature-flags'),
+        headers: _headers,
+      ),
     );
     if (response.statusCode != 200) {
       throw AdminRequestException(
@@ -674,7 +666,9 @@ class AdminClient {
   LogStreamHandle streamLogs() {
     final wsProto = baseUrl.startsWith('https') ? 'wss' : 'ws';
     final host = baseUrl.replaceFirst(RegExp(r'^https?://'), '');
-    final uri = Uri.parse('$wsProto://$host/api/v1/admin/logs/stream?token=$token');
+    final uri = Uri.parse(
+      '$wsProto://$host/api/v1/admin/logs/stream?token=$token',
+    );
     final channel = WebSocketChannel.connect(uri);
     final lines = channel.stream.map((event) {
       try {

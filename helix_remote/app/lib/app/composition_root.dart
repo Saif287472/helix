@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart' as crypto_pkg;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
+import 'package:helix_remote/app/account_restriction.dart';
+import 'package:helix_remote/app/device_label.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_config.dart';
@@ -304,6 +306,7 @@ abstract class RemoteCompositionRootBase {
   Future<bool> _validateRuntimeSession();
   Future<void> _purgeLocalSessionOnly();
   Future<void> _transitionToAuthRequired();
+  void _handleAccountSignal(AccountSignal signal);
 }
 
 class RemoteCompositionRoot extends RemoteCompositionRootBase

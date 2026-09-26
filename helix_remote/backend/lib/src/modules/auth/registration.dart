@@ -154,7 +154,10 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
     // OperabilityModule._blockUser) before any OTP or invite work below -
     // no valid credential should let a blocked number back in.
     if (db.isPhoneHashBlocked(phoneHash)) {
-      throw AppError.forbidden('This phone number is blocked');
+      throw AppError.forbidden(
+        'This phone number is blocked',
+        code: RemoteErrorCode.phoneBlocked,
+      );
     }
 
     // Decide between "this phone owns an account already" (Global passwordless
@@ -225,8 +228,7 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       }
       for (final device in db.getDevices(linkedAccountId)) {
         final existingDeviceId = device['device_id'] as String;
-        if (existingDeviceId != deviceId &&
-            device['status'] != 'REVOKED') {
+        if (existingDeviceId != deviceId && device['status'] != 'REVOKED') {
           db.revokeDevice(linkedAccountId, existingDeviceId);
         }
       }

@@ -354,6 +354,25 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     _deleteWhere('blocked_phone_hashes', 'phone_hash = ?', [phoneHash]);
   }
 
+  /// Records that [accountId] was permanently blocked (see migration 45).
+  void markAccountBlocked(String accountId) {
+    final stmt = _db.prepare('''
+      INSERT OR REPLACE INTO blocked_accounts (account_id, blocked_at)
+      VALUES (?, ?);
+    ''');
+    stmt.execute([accountId, DateTime.now().millisecondsSinceEpoch]);
+    stmt.close();
+  }
+
+  bool isAccountBlocked(String accountId) {
+    final stmt = _db.prepare(
+      'SELECT 1 FROM blocked_accounts WHERE account_id = ?;',
+    );
+    final res = stmt.select([accountId]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
   bool isPhoneHashBlocked(String phoneHash) {
     final stmt = _db.prepare(
       'SELECT 1 FROM blocked_phone_hashes WHERE phone_hash = ?;',

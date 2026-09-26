@@ -79,7 +79,7 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
   Future<File?> _pickAttachmentFile() async {
     final file = await FilePicker.pickFile(
       dialogTitle: 'Select attachment',
-      lockParentWindow: true,
+      windowsOptions: const WindowsOptions(lockParentWindow: true),
     );
     final path = file?.path;
     if (path == null || path.isEmpty) return null;
@@ -273,13 +273,16 @@ extension _ConversationAttachmentActions on _ConversationScreenState {
   Future<String?> _exportAttachmentFile(
     RemoteAttachmentContent attachment,
     File file,
-  ) {
-    return FilePicker.saveFile(
+  ) async {
+    final uri = await FilePicker.saveFile(
       dialogTitle: 'Export decrypted attachment',
       fileName: attachment.filename,
       bytes: Uint8List.fromList(file.readAsBytesSync()),
-      lockParentWindow: true,
+      windowsOptions: const WindowsOptions(lockParentWindow: true),
     );
+    if (uri == null) return null;
+    // Android returns a content:// URI; only file:// maps to a local path.
+    return uri.isScheme('file') ? uri.toFilePath() : uri.toString();
   }
 
   Future<bool> _confirm({

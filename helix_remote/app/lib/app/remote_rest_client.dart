@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:helix_remote_api/api/rest_client.dart';
+import 'package:helix_remote/app/account_restriction.dart';
 import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_endpoints.dart';
 import 'package:helix_remote_domain/models.dart';
@@ -15,10 +16,12 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required int timeoutMs,
     this._tokenProvider,
     Future<bool> Function()? refreshAuth,
+    void Function(AccountSignal signal)? onAccountSignal,
     HttpClient? httpClient,
   }) : _endpoints = RemoteApiEndpoints(baseUri),
        _timeout = Duration(milliseconds: timeoutMs),
        _refreshAuth = refreshAuth,
+       _onAccountSignal = onAccountSignal,
        _httpClient =
            httpClient ??
            (() {
@@ -31,6 +34,7 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   final Duration _timeout;
   final String? Function()? _tokenProvider;
   final Future<bool> Function()? _refreshAuth;
+  final void Function(AccountSignal signal)? _onAccountSignal;
   final HttpClient _httpClient;
 
   String? _accessToken;
@@ -152,12 +156,29 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
         .join()
         .timeout(_timeout);
 
+    // Only an authenticated response speaks for *this* account; a public
+    // endpoint answering without the marker says nothing about suspension.
+    final suspendedMarker =
+        resp.headers.value(kAccountStatusHeader) == 'suspended';
+    if (auth != null && suspendedMarker) {
+      _onAccountSignal?.call(AccountSignal.suspended);
+    }
+
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      if (auth != null && !suspendedMarker) {
+        _onAccountSignal?.call(AccountSignal.active);
+      }
       if (respBody.isEmpty) return {};
       return jsonDecode(respBody) as Map<String, dynamic>;
     }
 
     final errorPayload = _decodeApiErrorBody(respBody);
+    switch (errorPayload?['code']) {
+      case 'account_suspended':
+        _onAccountSignal?.call(AccountSignal.refusedWhileSuspended);
+      case 'account_blocked' || 'phone_blocked':
+        _onAccountSignal?.call(AccountSignal.blocked);
+    }
     final details = errorPayload?['details'];
     throw RemoteRestException(
       statusCode: resp.statusCode,
@@ -699,7 +720,11 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   }) async {
     final body = <String, dynamic>{'is_video': isVideo};
     if (scheduledCallId != null) body['scheduled_call_id'] = scheduledCallId;
-    final created = await _request('POST', _path(_endpoints.groupCallRooms), body: body);
+    final created = await _request(
+      'POST',
+      _path(_endpoints.groupCallRooms),
+      body: body,
+    );
     // The create response carries only {status, room_id, is_video}; it is not
     // a room document, so re-read rather than pretending the id is a room.
     return getGroupCallRoom(created['room_id'] as String);
@@ -724,11 +749,12 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       _request('POST', _path(_endpoints.groupCallRoomEnd(roomId)));
 
   @override
-  Future<void> kickGroupCallParticipant(String roomId, String deviceId) => _request(
-    'POST',
-    _path(_endpoints.groupCallRoomKick(roomId)),
-    body: {'device_id': deviceId},
-  );
+  Future<void> kickGroupCallParticipant(String roomId, String deviceId) =>
+      _request(
+        'POST',
+        _path(_endpoints.groupCallRoomKick(roomId)),
+        body: {'device_id': deviceId},
+      );
 
   @override
   Future<void> deliverGroupCallRoomKey({
@@ -841,8 +867,10 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   );
 
   @override
-  Future<void> cancelScheduledGroupCall(String scheduledCallId) =>
-      _request('DELETE', _path(_endpoints.groupCallScheduledCall(scheduledCallId)));
+  Future<void> cancelScheduledGroupCall(String scheduledCallId) => _request(
+    'DELETE',
+    _path(_endpoints.groupCallScheduledCall(scheduledCallId)),
+  );
 
   /// Turns a prepared [Uri] back into the relative path `_request` expects.
   ///

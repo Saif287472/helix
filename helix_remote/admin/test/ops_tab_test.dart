@@ -51,8 +51,6 @@ void main() {
             autoRefreshLogs: false,
             onAutoRefreshLogsChanged: (_) {},
             config: const {'server_name': 'Test Server'},
-            onSetWorldwideMode: (_) async {},
-            onSaveServerName: (_) async => 'Test Server',
             serverHost: 'test.example',
             isLoading: false,
             onTriggerBackup: () async => const {},
@@ -97,25 +95,26 @@ void main() {
     await server.close(force: true);
   });
 
-  testWidgets('an empty audit trail renders the empty state, not sample events', (
-    tester,
-  ) async {
-    await pumpOpsTab(tester);
+  testWidgets(
+    'an empty audit trail renders the empty state, not sample events',
+    (tester) async {
+      await pumpOpsTab(tester);
 
-    expect(find.text('No audit events recorded yet'), findsOneWidget);
-    // The specific fabricated rows the old default list contained. If any of
-    // these can appear without the server sending them, F17 is back.
-    for (final fabricated in const [
-      'Deleted user account',
-      'Suspended user account',
-      'Changed user role',
-      'Updated server configuration',
-    ]) {
-      expect(find.textContaining(fabricated), findsNothing);
-    }
-    // And no event cards at all.
-    expect(find.byIcon(Icons.gavel), findsNothing);
-  });
+      expect(find.text('No audit events recorded yet'), findsOneWidget);
+      // The specific fabricated rows the old default list contained. If any of
+      // these can appear without the server sending them, F17 is back.
+      for (final fabricated in const [
+        'Deleted user account',
+        'Suspended user account',
+        'Changed user role',
+        'Updated server configuration',
+      ]) {
+        expect(find.textContaining(fabricated), findsNothing);
+      }
+      // And no event cards at all.
+      expect(find.byIcon(Icons.gavel), findsNothing);
+    },
+  );
 
   testWidgets('a real audit event is rendered from the server payload', (
     tester,
@@ -176,11 +175,12 @@ void main() {
     expect(find.textContaining('audit store unavailable'), findsWidgets);
   });
 
-  testWidgets('the audit trail is fetched without an account filter by default', (
-    tester,
-  ) async {
-    await pumpOpsTab(tester);
+  testWidgets(
+    'the audit trail is fetched without an account filter by default',
+    (tester) async {
+      await pumpOpsTab(tester);
 
-    expect(requestedPaths, contains('GET /api/v1/admin/audit'));
-  });
+      expect(requestedPaths, contains('GET /api/v1/admin/audit'));
+    },
+  );
 }

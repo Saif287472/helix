@@ -15,8 +15,6 @@ class OpsTab extends StatefulWidget {
     required this.autoRefreshLogs,
     required this.onAutoRefreshLogsChanged,
     required this.config,
-    required this.onSetWorldwideMode,
-    required this.onSaveServerName,
     required this.serverHost,
     required this.isLoading,
     required this.onTriggerBackup,
@@ -32,8 +30,6 @@ class OpsTab extends StatefulWidget {
   final bool autoRefreshLogs;
   final ValueChanged<bool>? onAutoRefreshLogsChanged;
   final Map<String, dynamic>? config;
-  final ValueChanged<bool> onSetWorldwideMode;
-  final Future<String> Function(String name) onSaveServerName;
   final String? serverHost;
   final bool isLoading;
   final Future<void> Function() onTriggerBackup;
@@ -62,8 +58,7 @@ class _OpsTabState extends State<OpsTab> {
   /// When non-null, the audit trail is narrowed to a single account. Empty
   /// means "everything", which is what the server is asked for by default.
   String _auditAccountFilter = '';
-  final TextEditingController _auditAccountController =
-      TextEditingController();
+  final TextEditingController _auditAccountController = TextEditingController();
 
   @override
   void initState() {
@@ -217,32 +212,21 @@ class _OpsTabState extends State<OpsTab> {
             'reports' => ReportsTab(client: widget.client),
             'audit' => _buildAuditView(context),
             'logs' => LogsTab(
-                logs: widget.logs,
-                onRefresh: widget.onRefreshLogs,
-                autoRefreshEnabled: widget.autoRefreshLogs,
-                onAutoRefreshChanged: widget.onAutoRefreshLogsChanged,
-              ),
+              logs: widget.logs,
+              onRefresh: widget.onRefreshLogs,
+              autoRefreshEnabled: widget.autoRefreshLogs,
+              onAutoRefreshChanged: widget.onAutoRefreshLogsChanged,
+            ),
             'config' => ConfigTab(
-                config: widget.config,
-                client: widget.client,
-                federationDomainController: TextEditingController(
-                  text: widget.config?['federation']?['domain'] ?? '',
-                ),
-                federationAddressController: TextEditingController(
-                  text: widget.config?['federation']?['address'] ?? '',
-                ),
-                federationDirectoryController: TextEditingController(
-                  text: widget.config?['federation']?['directory_url'] ?? '',
-                ),
-                onSetWorldwideMode: widget.onSetWorldwideMode,
-                onSaveServerName: widget.onSaveServerName,
-                serverHost: widget.serverHost,
-                isLoading: widget.isLoading,
-                onTriggerBackup: widget.onTriggerBackup,
-                onSignOut: widget.onSignOut,
-                appLockEnabled: widget.appLockEnabled,
-                onAppLockChanged: widget.onAppLockChanged,
-              ),
+              config: widget.config,
+              client: widget.client,
+              serverHost: widget.serverHost,
+              isLoading: widget.isLoading,
+              onTriggerBackup: widget.onTriggerBackup,
+              onSignOut: widget.onSignOut,
+              appLockEnabled: widget.appLockEnabled,
+              onAppLockChanged: widget.onAppLockChanged,
+            ),
             _ => ReportsTab(client: widget.client),
           },
         ],
@@ -341,10 +325,7 @@ class _OpsTabState extends State<OpsTab> {
         const SizedBox(height: 4),
         const Text(
           'Security events, authorization changes, and operator actions logged in real-time.',
-          style: TextStyle(
-            fontSize: 12,
-            color: Color(0xFF64748B),
-          ),
+          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
         ),
         const SizedBox(height: 16),
 
@@ -394,9 +375,8 @@ class _OpsTabState extends State<OpsTab> {
             ),
             const SizedBox(width: 8),
             OutlinedButton(
-              onPressed: () => _applyAuditAccountFilter(
-                _auditAccountController.text,
-              ),
+              onPressed: () =>
+                  _applyAuditAccountFilter(_auditAccountController.text),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF334155),
                 side: const BorderSide(color: Color(0xFFCBD5E1)),
@@ -452,7 +432,9 @@ class _OpsTabState extends State<OpsTab> {
           color: isSelected ? const Color(0xFF2563EB) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+            color: isSelected
+                ? const Color(0xFF2563EB)
+                : const Color(0xFFE2E8F0),
           ),
         ),
         child: Text(
@@ -481,7 +463,11 @@ class _OpsTabState extends State<OpsTab> {
       ),
       child: const Column(
         children: [
-          Icon(Icons.verified_user_outlined, size: 32, color: Color(0xFF94A3B8)),
+          Icon(
+            Icons.verified_user_outlined,
+            size: 32,
+            color: Color(0xFF94A3B8),
+          ),
           SizedBox(height: 10),
           Text(
             'No audit events recorded yet',
@@ -496,7 +482,11 @@ class _OpsTabState extends State<OpsTab> {
             'Administrative actions taken on this server will appear here. '
             'Routine reads and polls are not recorded.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.5),
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF64748B),
+              height: 1.5,
+            ),
           ),
         ],
       ),
@@ -604,10 +594,7 @@ class _OpsTabState extends State<OpsTab> {
           const SizedBox(height: 6),
           Text(
             event.details,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF334155),
-            ),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
           ),
           const SizedBox(height: 6),
           Row(
@@ -616,10 +603,7 @@ class _OpsTabState extends State<OpsTab> {
               const SizedBox(width: 4),
               Text(
                 '${event.time} • IP: ${event.ip} • Session: ${event.session}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF64748B),
-                ),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
               ),
             ],
           ),

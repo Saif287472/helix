@@ -87,9 +87,8 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
       throw AppError.forbidden('Device not registered or inactive');
     }
 
-    if (db.isAccountSuspended(accountId)) {
-      throw AppError.forbidden('Account suspended');
-    }
+    // Suspended accounts sign in normally and are then limited by the auth
+    // middleware, so the app can show why instead of failing the login.
 
     final devicePubKeyStr = device['device_signing_public_key'] as String;
 

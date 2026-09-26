@@ -59,7 +59,7 @@ class LocalNotificationService {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
     await _plugin.initialize(
-      settings,
+      settings: settings,
       onDidReceiveNotificationResponse: _handleNotificationResponse,
     );
 
@@ -143,10 +143,10 @@ class LocalNotificationService {
       autoCancel: true,
     );
     await _plugin.show(
-      peerAccountId.hashCode & 0x7fffffff,
-      'New contact request',
-      'Someone wants to connect with you',
-      NotificationDetails(android: androidDetails),
+      id: peerAccountId.hashCode & 0x7fffffff,
+      title: 'New contact request',
+      body: 'Someone wants to connect with you',
+      notificationDetails: NotificationDetails(android: androidDetails),
     );
   }
 
@@ -167,10 +167,10 @@ class LocalNotificationService {
       autoCancel: true,
     );
     await _plugin.show(
-      'verification_code'.hashCode & 0x7fffffff,
-      'Your Helix verification code',
-      code,
-      NotificationDetails(android: androidDetails),
+      id: 'verification_code'.hashCode & 0x7fffffff,
+      title: 'Your Helix verification code',
+      body: code,
+      notificationDetails: NotificationDetails(android: androidDetails),
     );
   }
 
@@ -186,10 +186,10 @@ class LocalNotificationService {
       autoCancel: true,
     );
     await _plugin.show(
-      'invite_code'.hashCode & 0x7fffffff,
-      'Your Helix Global invite code',
-      code,
-      NotificationDetails(android: androidDetails),
+      id: 'invite_code'.hashCode & 0x7fffffff,
+      title: 'Your Helix Global invite code',
+      body: code,
+      notificationDetails: NotificationDetails(android: androidDetails),
     );
   }
 
@@ -221,10 +221,10 @@ class LocalNotificationService {
       ],
     );
     await _plugin.show(
-      callId.hashCode & 0x7fffffff,
-      isVideo ? 'Incoming video call' : 'Incoming audio call',
-      callerDisplayName,
-      NotificationDetails(android: androidDetails),
+      id: callId.hashCode & 0x7fffffff,
+      title: isVideo ? 'Incoming video call' : 'Incoming audio call',
+      body: callerDisplayName,
+      notificationDetails: NotificationDetails(android: androidDetails),
       payload: 'call_id=$callId',
     );
   }
@@ -248,10 +248,10 @@ class LocalNotificationService {
       actions: const [AndroidNotificationAction('end_call', 'End')],
     );
     await _plugin.show(
-      _ongoingCallNotificationId,
-      isVideo ? 'Video call in progress' : 'Audio call in progress',
-      callerDisplayName,
-      NotificationDetails(android: androidDetails),
+      id: _ongoingCallNotificationId,
+      title: isVideo ? 'Video call in progress' : 'Audio call in progress',
+      body: callerDisplayName,
+      notificationDetails: NotificationDetails(android: androidDetails),
       payload: 'call_id=$callId',
     );
   }
@@ -271,21 +271,21 @@ class LocalNotificationService {
       autoCancel: true,
     );
     await _plugin.show(
-      notificationKey.hashCode & 0x7fffffff,
-      title,
-      body,
-      NotificationDetails(android: androidDetails),
+      id: notificationKey.hashCode & 0x7fffffff,
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(android: androidDetails),
     );
   }
 
   static Future<void> cancelIncomingCall(String callId) async {
     if (!Platform.isAndroid || !_ready) return;
-    await _plugin.cancel(callId.hashCode & 0x7fffffff);
+    await _plugin.cancel(id: callId.hashCode & 0x7fffffff);
   }
 
   static Future<void> cancelOngoingCall() async {
     if (!Platform.isAndroid || !_ready) return;
-    await _plugin.cancel(_ongoingCallNotificationId);
+    await _plugin.cancel(id: _ongoingCallNotificationId);
   }
 
   static void _handleNotificationResponse(NotificationResponse response) {

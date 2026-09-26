@@ -115,6 +115,35 @@ class _LogsTabState extends State<LogsTab> {
         .toList();
   }
 
+  Widget _consoleButton({
+    required Key key,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Expanded(
+      child: OutlinedButton(
+        key: key,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF334155),
+          side: const BorderSide(color: Color(0xFFCBD5E1)),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          minimumSize: Size.zero,
+        ),
+        onPressed: onPressed,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final lines = _visibleLines;
@@ -138,10 +167,14 @@ class _LogsTabState extends State<LogsTab> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: isPaused ? const Color(0xFFFFFBEB) : const Color(0xFFECFDF5),
+                color: isPaused
+                    ? const Color(0xFFFFFBEB)
+                    : const Color(0xFFECFDF5),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isPaused ? const Color(0xFFFDE68A) : const Color(0xFFA7F3D0),
+                  color: isPaused
+                      ? const Color(0xFFFDE68A)
+                      : const Color(0xFFA7F3D0),
                 ),
               ),
               child: Text(
@@ -149,7 +182,9 @@ class _LogsTabState extends State<LogsTab> {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
-                  color: isPaused ? const Color(0xFFD97706) : const Color(0xFF059669),
+                  color: isPaused
+                      ? const Color(0xFFD97706)
+                      : const Color(0xFF059669),
                   letterSpacing: 0.5,
                 ),
               ),
@@ -169,90 +204,62 @@ class _LogsTabState extends State<LogsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Action Buttons Row (Refresh, Pause Stream, Clear Logs, Copy Tail)
+              // Action buttons. One word each and an equal share of the row,
+              // so all four fit a phone-width card; the label scales down
+              // rather than overflowing on the narrowest screens.
               Row(
                 children: [
-                  OutlinedButton.icon(
+                  _consoleButton(
                     key: const Key('logs_refresh_button'),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF334155),
-                      side: const BorderSide(color: Color(0xFFCBD5E1)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      minimumSize: Size.zero,
-                    ),
-                    onPressed: () {
-                      // Always available: with the stream paused, a failed
-                      // poll is otherwise indistinguishable from an idle
-                      // server and there is no way to retry.
-                      widget.onRefresh();
-                    },
-                    icon: const Icon(Icons.refresh, size: 16),
-                    label: const Text('Refresh', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    label: 'Refresh',
+                    // Always available: with the stream paused, a failed
+                    // poll is otherwise indistinguishable from an idle
+                    // server and there is no way to retry.
+                    onPressed: widget.onRefresh,
                   ),
-                  const SizedBox(width: 10),
-                  OutlinedButton(
+                  const SizedBox(width: 8),
+                  _consoleButton(
                     key: const Key('logs_stream_toggle_button'),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF334155),
-                      side: const BorderSide(color: Color(0xFFCBD5E1)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      minimumSize: Size.zero,
-                    ),
+                    label: widget.autoRefreshEnabled ? 'Pause' : 'Resume',
                     onPressed: () {
                       if (widget.onAutoRefreshChanged != null) {
-                        widget.onAutoRefreshChanged!(!widget.autoRefreshEnabled);
+                        widget.onAutoRefreshChanged!(
+                          !widget.autoRefreshEnabled,
+                        );
                       }
                     },
-                    child: Text(
-                      widget.autoRefreshEnabled ? 'Pause Stream' : 'Resume Stream',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
                   ),
-                  const SizedBox(width: 10),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF334155),
-                      side: const BorderSide(color: Color(0xFFCBD5E1)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      minimumSize: Size.zero,
-                    ),
+                  const SizedBox(width: 8),
+                  _consoleButton(
+                    key: const Key('logs_clear_button'),
+                    label: 'Clear',
                     onPressed: () {
                       setState(() {
                         _isCleared = true;
                         _clearedAtIndex = widget.logs.lines.length;
                       });
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Console log display cleared')),
+                        const SnackBar(
+                          content: Text('Console log display cleared'),
+                        ),
                       );
                     },
-                    child: const Text('Clear Logs', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
-                  const SizedBox(width: 10),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF334155),
-                      side: const BorderSide(color: Color(0xFFCBD5E1)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      minimumSize: Size.zero,
-                    ),
+                  const SizedBox(width: 8),
+                  _consoleButton(
+                    key: const Key('logs_copy_button'),
+                    label: 'Copy',
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.of(context);
                       final content = lines.join('\n');
                       await Clipboard.setData(ClipboardData(text: content));
                       if (!mounted) return;
                       messenger.showSnackBar(
-                        const SnackBar(content: Text('Log tail copied to clipboard')),
+                        const SnackBar(
+                          content: Text('Log tail copied to clipboard'),
+                        ),
                       );
                     },
-                    child: const Text('Copy Tail', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -269,17 +276,28 @@ class _LogsTabState extends State<LogsTab> {
                     fontSize: 12,
                     color: Color(0xFF94A3B8),
                   ),
-                  prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 18,
+                    color: Color(0xFF94A3B8),
+                  ),
                   suffixIcon: _filter.isEmpty
                       ? null
                       : IconButton(
-                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF94A3B8)),
+                          icon: const Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: Color(0xFF94A3B8),
+                          ),
                           tooltip: 'Clear filter',
                           onPressed: _filterController.clear,
                         ),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -323,7 +341,10 @@ class _LogsTabState extends State<LogsTab> {
                       _scrollToEnd();
                     },
                     icon: const Icon(Icons.arrow_downward, size: 14),
-                    label: const Text('Jump to latest', style: TextStyle(fontSize: 12)),
+                    label: const Text(
+                      'Jump to latest',
+                      style: TextStyle(fontSize: 12),
+                    ),
                   ),
                 ),
               ],
@@ -347,7 +368,9 @@ class _LogsTabState extends State<LogsTab> {
   }
 
   Widget _buildFormattedLine(String line) {
-    final match = RegExp(r'^(\d{4}-\d{2}-\d{2}T[\d:\.Z]+|\d{2}:\d{2}:\d{2})\s*(\[[A-Z]+\])?\s*(.*)$').firstMatch(line);
+    final match = RegExp(
+      r'^(\d{4}-\d{2}-\d{2}T[\d:\.Z]+|\d{2}:\d{2}:\d{2})\s*(\[[A-Z]+\])?\s*(.*)$',
+    ).firstMatch(line);
     if (match != null) {
       final timeStr = match.group(1) ?? '';
       final tagStr = match.group(2) ?? '';
@@ -363,12 +386,31 @@ class _LogsTabState extends State<LogsTab> {
         padding: const EdgeInsets.symmetric(vertical: 3.0),
         child: SelectableText.rich(
           TextSpan(
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.4),
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12.5,
+              height: 1.4,
+            ),
             children: [
-              TextSpan(text: '$localTime ', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
+              TextSpan(
+                text: '$localTime ',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2563EB),
+                ),
+              ),
               if (tagStr.isNotEmpty)
-                TextSpan(text: '$tagStr ', style: TextStyle(fontWeight: FontWeight.bold, color: tagColor)),
-              TextSpan(text: msgStr, style: const TextStyle(color: Color(0xFF334155))),
+                TextSpan(
+                  text: '$tagStr ',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: tagColor,
+                  ),
+                ),
+              TextSpan(
+                text: msgStr,
+                style: const TextStyle(color: Color(0xFF334155)),
+              ),
             ],
           ),
         ),
@@ -408,7 +450,11 @@ class _LogsTabState extends State<LogsTab> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.filter_alt_off, size: 36, color: Color(0xFF94A3B8)),
+            const Icon(
+              Icons.filter_alt_off,
+              size: 36,
+              color: Color(0xFF94A3B8),
+            ),
             const SizedBox(height: 12),
             Text(
               'No lines match "$_filter"',
@@ -453,7 +499,11 @@ class _LogsTabState extends State<LogsTab> {
             Text(
               message ?? 'No logs available.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF64748B), height: 1.5, fontSize: 13),
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                height: 1.5,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 10),
             Text(

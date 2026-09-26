@@ -1,5 +1,17 @@
 {
   "bn": [
+    "accountBlockedBody",
+    "accountBlockedLeaveApp",
+    "accountBlockedTitle",
+    "accountBlockedUseDifferentNumber",
+    "accountRestrictionContactGlobal",
+    "accountRestrictionContactPersonal",
+    "accountRestrictionContactSupport",
+    "accountRestrictionOk",
+    "accountRestrictionSupportCopied",
+    "accountSuspendedBanner",
+    "accountSuspendedRefused",
+    "accountSuspendedTitle",
     "accept",
     "acceptRequestBeforeOpeningChat",
     "accountId",

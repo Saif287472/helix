@@ -370,20 +370,134 @@ void main() {
       }
     });
 
-    test('invite lookup is rate-limited per IP (429 Too Many Requests)', () async {
-      var rateLimited = false;
-      for (var i = 0; i < 70; i++) {
-        final res = await getJson(
-          '/api/v1/accounts/invite/lookup?invite_code=ratelimit_test',
-        );
-        if (res.statusCode == 429) {
-          rateLimited = true;
-          break;
+    test(
+      'invite lookup is rate-limited per IP (429 Too Many Requests)',
+      () async {
+        var rateLimited = false;
+        for (var i = 0; i < 70; i++) {
+          final res = await getJson(
+            '/api/v1/accounts/invite/lookup?invite_code=ratelimit_test',
+          );
+          if (res.statusCode == 429) {
+            rateLimited = true;
+            break;
+          }
         }
-      }
-      expect(rateLimited, isTrue);
+        expect(rateLimited, isTrue);
+      },
+    );
+  });
+
+  group('admin invite list', () {
+    Future<String> issue() async {
+      final res = await postJson(
+        '/api/v1/ops/invites',
+        null,
+        token: adminToken,
+      );
+      return (jsonDecode(res.body) as Map<String, dynamic>)['invite_code']
+          as String;
+    }
+
+    Future<List<Map<String, dynamic>>> list([String? status]) async {
+      final query = status == null ? '' : '&status=$status';
+      final res = await getJson(
+        '/api/v1/ops/invites?limit=50&offset=0$query',
+        token: adminToken,
+      );
+      expect(res.statusCode, equals(200), reason: res.body);
+      return ((jsonDecode(res.body) as Map<String, dynamic>)['invites'] as List)
+          .cast<Map<String, dynamic>>();
+    }
+
+    test('filters by displayed status and names the redeemer', () async {
+      final redeemedCode = await issue();
+      final register = await registerWithInvite(
+        accountId: 'filter_user',
+        phoneHash: 'filter_phone',
+        inviteCode: redeemedCode,
+      );
+      expect(register.statusCode, equals(200), reason: register.body);
+
+      await issue(); // stays pending
+      await issue(); // cancelled below
+      final pendingIds = (await list('PENDING')).map((i) => i['invite_id']);
+      expect(pendingIds, hasLength(2));
+      final cancel = await postJson(
+        '/api/v1/ops/invites/${pendingIds.last}/cancel',
+        null,
+        token: adminToken,
+      );
+      expect(cancel.statusCode, equals(200));
+
+      expect(await list(), hasLength(3));
+      expect(await list('ALL'), hasLength(3));
+      expect(await list('PENDING'), hasLength(1));
+      expect(await list('CANCELLED'), hasLength(1));
+      final redeemed = await list('REDEEMED');
+      expect(redeemed, hasLength(1));
+      expect(redeemed.single['redeemed_by_account_id'], equals('filter_user'));
+      // registrationBody defaults the display name to the username.
+      expect(
+        redeemed.single['redeemed_by_display_name'],
+        equals('filter_phone'),
+      );
+
+      // EXPIRED is derived from a PENDING row past its expiry, not stored.
+      now = now.add(const Duration(days: 8));
+      expect(await list('PENDING'), isEmpty);
+      expect(await list('EXPIRED'), hasLength(1));
+    });
+
+    test('rejects an unknown status filter', () async {
+      final res = await getJson(
+        '/api/v1/ops/invites?status=BOGUS',
+        token: adminToken,
+      );
+      expect(res.statusCode, equals(400));
     });
   });
+
+  test(
+    'ops config reports whether this is the Helix Global instance',
+    () async {
+      final personal = await getJson('/api/v1/ops/config', token: adminToken);
+      expect(
+        (jsonDecode(personal.body)
+            as Map<String, dynamic>)['global_instance_mode'],
+        isFalse,
+      );
+
+      final globalServer = BackendServer.create(
+        sqliteDb: sqlite3.openInMemory(),
+        jwtSecret: 'invites_test_global_config_secret_32_bytes',
+        adminPasswordOverride: adminToken,
+        rateLimitMaxTokens: 1000,
+        rateLimitRefillRate: 1000,
+        globalInstanceMode: true,
+      );
+      await ServerIdentity.loadOrCreate(globalServer.db);
+      await globalServer.start('127.0.0.1', 0);
+      final globalClient = HttpClient();
+      try {
+        final request = await globalClient.get(
+          '127.0.0.1',
+          globalServer.httpServer!.port,
+          '/api/v1/ops/config',
+        );
+        request.headers.set('Authorization', 'Bearer $adminToken');
+        final response = await request.close();
+        final body =
+            jsonDecode(await response.transform(utf8.decoder).join())
+                as Map<String, dynamic>;
+        expect(response.statusCode, equals(200));
+        expect(body['global_instance_mode'], isTrue);
+      } finally {
+        globalClient.close(force: true);
+        await globalServer.stop();
+      }
+    },
+  );
 }
 
 class _Response {

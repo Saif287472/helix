@@ -53,7 +53,10 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
         baseUri: devConfig.restBaseUri,
         timeoutMs: devConfig.requestTimeoutMs,
         refreshAuth: refreshAccessToken,
+        onAccountSignal: _handleAccountSignal,
       );
+      AccountRestrictionState.serverIsGlobal =
+          devConfig.restBaseUri.host == Uri.parse(kHelixGlobalServerUrl).host;
       _syncGateway = RemoteSyncGatewayImpl(
         baseUri: devConfig.restBaseUri,
         timeoutMs: devConfig.requestTimeoutMs,

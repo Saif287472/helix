@@ -207,10 +207,10 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     // always echo back the id the client proposed.
     final resolvedAccountId =
         registrationResponse['account_id'] as String? ?? accountIdStr;
-    final isExistingAccount =
-        registrationResponse['existing_account'] == true;
+    final isExistingAccount = registrationResponse['existing_account'] == true;
     final effectiveDisplayName = isExistingAccount
-        ? (registrationResponse['display_name'] as String? ?? normalizedDisplayName)
+        ? (registrationResponse['display_name'] as String? ??
+              normalizedDisplayName)
         : normalizedDisplayName;
 
     final challengeResp = await rest.getChallenge(
@@ -303,7 +303,9 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
 
     final deviceIdStr =
         'dev_${_bytesToHex(deviceSigningPubKey.bytes.sublist(0, 4))}';
-    final deviceName = 'Dev ${deviceIdStr.substring(0, 8)}';
+    final deviceName = await describeThisDevice(
+      fallback: 'Dev ${deviceIdStr.substring(0, 8)}',
+    );
 
     final identityPubKeyStr = _base64Url(identityPubKey.bytes);
     final identityPrivStr = _base64Url(

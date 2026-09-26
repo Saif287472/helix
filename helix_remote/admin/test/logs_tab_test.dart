@@ -4,9 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/admin_client.dart';
 import 'package:helix_admin/screens/logs_tab.dart';
 
-Widget _wrap(Widget child) => MaterialApp(
-  home: Scaffold(body: child),
-);
+Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 LogsTab _logsTab({
   required ServerLogs logs,
@@ -138,7 +136,7 @@ void main() {
     );
 
     // Paused by default, so the button offers to resume.
-    expect(find.text('Resume Stream'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
     await tester.tap(find.byKey(const Key('logs_stream_toggle_button')));
     await tester.pump();
 
@@ -192,7 +190,10 @@ void main() {
     // confirmation below is never reached. Mocked so the handler runs to the
     // end.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (call) async => null);
+        .setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async => null,
+        );
     addTearDown(
       () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(SystemChannels.platform, null),
@@ -209,7 +210,7 @@ void main() {
     // There is nothing to copy, so the button is a no-op rather than a
     // disabled affordance the operator has to reason about - it stays
     // tappable and copies an empty string.
-    await tester.tap(find.text('Copy Tail'));
+    await tester.tap(find.text('Copy'));
     // pumpAndSettle, not pump: the handler awaits Clipboard.setData before
     // showing the confirmation.
     await tester.pumpAndSettle();

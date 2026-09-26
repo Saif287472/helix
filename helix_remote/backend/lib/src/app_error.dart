@@ -89,6 +89,20 @@ enum RemoteErrorCode {
   /// when a deployment's salt is re-provisioned (fresh/rotated database).
   discoverySaltStale('discovery_salt_stale'),
 
+  /// The account is suspended by an admin. The session stays valid - reads
+  /// and receiving keep working - but this activity (sending, contact
+  /// requests, calls, groups, uploads, profile edits) is refused. The client
+  /// shows a suspension notice rather than signing the user out.
+  accountSuspended('account_suspended'),
+
+  /// The account was permanently blocked: deleted, with its phone number
+  /// banned. Distinct from a revoked device so the client can explain why it
+  /// was signed out instead of silently returning to onboarding.
+  accountBlocked('account_blocked'),
+
+  /// The phone number is permanently banned from this server.
+  phoneBlocked('phone_blocked'),
+
   internalError('internal_error');
 
   const RemoteErrorCode(this.wire);

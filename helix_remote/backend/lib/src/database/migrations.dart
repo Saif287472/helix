@@ -1416,5 +1416,20 @@ extension BackendDatabaseMigrations on BackendDatabase {
       _db.execute('DROP TABLE IF EXISTS admin_pairing_codes;');
       _db.execute('PRAGMA user_version = 44;');
     }
+
+    if (version < 45) {
+      // Remembers accounts an admin permanently blocked. Blocking deletes the
+      // account, so without this a blocked user's still-installed app could
+      // only be told "device inactive" and would drop back to onboarding with
+      // no explanation. No foreign key: the account row is gone by design.
+      // Holds nothing but the opaque account id and when it happened.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS blocked_accounts (
+          account_id TEXT PRIMARY KEY,
+          blocked_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 45;');
+    }
   }
 }

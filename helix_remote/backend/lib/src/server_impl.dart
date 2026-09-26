@@ -6,6 +6,7 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:crypto/crypto.dart' as crypto_pkg;
+import 'package:helix_remote_backend/src/account_restrictions.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
@@ -300,6 +301,7 @@ class BackendServer {
       getNeedsAdminSetup: () => needsAdminSetup,
       jwt: jwt,
       adminPasswordOverride: adminPasswordOverride,
+      globalInstanceMode: globalInstanceMode,
       now: now,
     );
 
@@ -388,10 +390,7 @@ class BackendServer {
             'error': 'Server is in maintenance mode',
             'status': 'maintenance',
           }),
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': '3600',
-          },
+          headers: {'Content-Type': 'application/json', 'Retry-After': '3600'},
         );
       };
     };
@@ -694,6 +693,22 @@ class BackendServer {
 
         final accountId = claims['account_id'] as String?;
         final deviceId = claims['device_id'] as String?;
+        if (accountId != null &&
+            deviceId != null &&
+            !db.isDeviceActive(accountId, deviceId) &&
+            db.isAccountBlocked(accountId)) {
+          // 403 so the client does not spend a refresh on it: re-auth cannot
+          // help. The code lets it explain the block instead of silently
+          // returning the user to onboarding.
+          return Response(
+            403,
+            body: jsonEncode({
+              'error': 'Forbidden: Account blocked',
+              'code': 'account_blocked',
+            }),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
         if (accountId == null ||
             deviceId == null ||
             !db.isDeviceActive(accountId, deviceId)) {
@@ -709,7 +724,8 @@ class BackendServer {
             headers: {'Content-Type': 'application/json'},
           );
         }
-        if (db.isAccountSuspended(accountId)) {
+        final suspended = db.isAccountSuspended(accountId);
+        if (suspended && isSuspendedActivity(request.method, path)) {
           // Stays 403: the credential is valid and the caller is who they say
           // they are - they are simply not allowed. Refreshing would not help.
           return Response(
@@ -718,7 +734,10 @@ class BackendServer {
               'error': 'Forbidden: Account suspended',
               'code': 'account_suspended',
             }),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              kAccountStatusHeader: 'suspended',
+            },
           );
         }
 
@@ -733,7 +752,12 @@ class BackendServer {
         final updatedRequest = request.change(
           context: {'auth': authorizedClaims},
         );
-        return innerHandler(updatedRequest);
+        if (!suspended) return innerHandler(updatedRequest);
+        // Everything a suspended account may still do (read, receive, manage
+        // its own devices, delete itself) goes through, tagged so the client
+        // can show the notice without first attempting a blocked action.
+        final response = await innerHandler(updatedRequest);
+        return response.change(headers: {kAccountStatusHeader: 'suspended'});
       };
     };
   }

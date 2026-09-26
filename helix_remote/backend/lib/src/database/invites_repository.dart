@@ -86,18 +86,51 @@ extension BackendInvitesRepository on BackendDatabase {
     return changed == 1;
   }
 
+  /// One page of invites, newest first, each carrying the display name of
+  /// the account that redeemed it (null when unredeemed or since deleted).
+  ///
+  /// [status] filters by the *displayed* status: `EXPIRED` is not stored but
+  /// derived from a `PENDING` row whose `expires_at` has passed, so both it
+  /// and `PENDING` need [now] to split the stored `PENDING` rows correctly.
+  /// Null returns every invite.
   List<Map<String, dynamic>> getInviteCredentialsPaginated({
     required int limit,
     required int offset,
+    String? status,
+    int? now,
   }) {
+    final clock = now ?? DateTime.now().millisecondsSinceEpoch;
+    final (where, params) = switch (status) {
+      'PENDING' => (
+        "WHERE ic.status = 'PENDING' AND ic.expires_at >= ?",
+        [clock],
+      ),
+      'EXPIRED' => (
+        "WHERE ic.status = 'PENDING' AND ic.expires_at < ?",
+        [clock],
+      ),
+      'REDEEMED' => ("WHERE ic.status = 'REDEEMED'", const <Object>[]),
+      'CANCELLED' => ("WHERE ic.status = 'CANCELLED'", const <Object>[]),
+      _ => ('', const <Object>[]),
+    };
     final stmt = _db.prepare('''
-      SELECT * FROM invite_credentials
-      ORDER BY created_at DESC
+      SELECT ic.*, p.display_name AS redeemed_by_display_name
+      FROM invite_credentials ic
+      LEFT JOIN account_profiles p ON p.account_id = ic.redeemed_by_account_id
+      $where
+      ORDER BY ic.created_at DESC
       LIMIT ? OFFSET ?;
     ''');
-    final result = stmt.select([limit, offset]);
+    final result = stmt.select([...params, limit, offset]);
     stmt.close();
-    return result.map((row) => _rowToInvite(row)!).toList();
+    return result
+        .map(
+          (row) => {
+            ..._rowToInvite(row)!,
+            'redeemed_by_display_name': row['redeemed_by_display_name'],
+          },
+        )
+        .toList();
   }
 
   /// Atomically cancels an invite, but only if it's still `PENDING` -

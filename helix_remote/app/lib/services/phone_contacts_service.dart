@@ -29,19 +29,25 @@ class DevicePhoneContactsService implements PhoneContactsService {
 
   @override
   Future<PhoneContactsPermissionResult> requestPermission() async {
-    final granted = await fc.FlutterContacts.requestPermission(readonly: true);
-    return granted
-        ? PhoneContactsPermissionResult.granted
-        : PhoneContactsPermissionResult.denied;
+    final status = await fc.FlutterContacts.permissions.request(
+      fc.PermissionType.read,
+    );
+    return switch (status) {
+      fc.PermissionStatus.granted ||
+      fc.PermissionStatus.limited => PhoneContactsPermissionResult.granted,
+      _ => PhoneContactsPermissionResult.denied,
+    };
   }
 
   @override
   Future<List<PhoneBookContact>> loadContacts() async {
-    final contacts = await fc.FlutterContacts.getContacts(withProperties: true);
+    final contacts = await fc.FlutterContacts.getAll(
+      properties: {fc.ContactProperty.phone},
+    );
     return contacts
         .map(
           (c) => PhoneBookContact(
-            displayName: c.displayName,
+            displayName: c.displayName ?? '',
             phoneNumbers: c.phones.map((p) => p.number).toList(growable: false),
           ),
         )

@@ -274,6 +274,7 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
   }
 
   Future<void> logout() async {
+    AccountRestrictionState.restriction.value = AccountRestriction.none;
     await _runtimeCoordinator?.logoutAndPurge();
     await _callService?.endActiveCall();
     await disconnectWebSocket();
@@ -282,7 +283,48 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
   }
 
   @override
-  Future<void> _transitionToAuthRequired() async {
+  /// Applies what the server said about this account to the app-wide
+  /// [AccountRestrictionState].
+  ///
+  /// Suspension keeps the session: the shell shows a banner and explains each
+  /// refused action. A block means the account no longer exists, so the local
+  /// session is purged at once - the blocked screen then sits over onboarding
+  /// until the user picks a way forward.
+  void _handleAccountSignal(AccountSignal signal) {
+    final restriction = AccountRestrictionState.restriction;
+    switch (signal) {
+      case AccountSignal.active:
+        if (restriction.value == AccountRestriction.suspended) {
+          restriction.value = AccountRestriction.none;
+        }
+      case AccountSignal.suspended:
+        if (restriction.value != AccountRestriction.blocked) {
+          restriction.value = AccountRestriction.suspended;
+        }
+      case AccountSignal.refusedWhileSuspended:
+        if (restriction.value != AccountRestriction.blocked) {
+          restriction.value = AccountRestriction.suspended;
+        }
+        AccountRestrictionState.refusedAttempts.value++;
+      case AccountSignal.blocked:
+        restriction.value = AccountRestriction.blocked;
+        if (_state != RemoteStartupState.unauthenticated) {
+          unawaited(_transitionToAuthRequired());
+        }
+    }
+  }
+
+  Future<void>? _authRequiredTransition;
+
+  @override
+  Future<void> _transitionToAuthRequired() {
+    // A block is reported both by the request that hit it and by the refresh
+    // that follows; one purge is enough.
+    return _authRequiredTransition ??= _runAuthRequiredTransition()
+        .whenComplete(() => _authRequiredTransition = null);
+  }
+
+  Future<void> _runAuthRequiredTransition() async {
     await _callService?.endActiveCall();
     await disconnectWebSocket();
     await _purgeLocalSessionOnly();
