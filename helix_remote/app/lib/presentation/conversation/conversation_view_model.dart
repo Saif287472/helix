@@ -81,6 +81,29 @@ class ConversationViewModel extends ChangeNotifier {
     if (peer != null) _messaging.blockContact(peer);
   }
 
+  /// The other participant in a one-to-one conversation, or null for a group.
+  String? get directPeerAccountId => conversationMemberIds
+      .where((accountId) => accountId != currentAccountId)
+      .firstOrNull;
+
+  /// Queues a safety report about the other participant in this conversation.
+  ///
+  /// Only the selected [reasonCode] crosses the wire - never the message text
+  /// or anything the user typed. The server rejects a report carrying
+  /// `message_text` or `plaintext` outright, and `contextHash` exists to give
+  /// an operator a correlation handle without shipping content.
+  bool reportPeer({required String reasonCode, required String contextHash}) {
+    final peer = directPeerAccountId;
+    if (peer == null) return false;
+    _messaging.reportAccount(
+      subjectAccountId: peer,
+      category: 'contact',
+      reasonCode: reasonCode,
+      contextHash: contextHash,
+    );
+    return true;
+  }
+
   Future<String> sendRichMedia({
     required String kind,
     required RemoteAttachmentManifest manifest,

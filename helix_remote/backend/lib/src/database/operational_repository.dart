@@ -21,6 +21,17 @@ extension BackendOperationalRepository on BackendDatabase {
     _db.close();
   }
 
+  /// Runs a DML statement and returns the number of rows it changed.
+  ///
+  /// Only for maintenance-style work where a count has to be reported back to
+  /// the operator. Ordinary reads and writes go through the typed methods on
+  /// the other repository extensions, which is also what keeps table names out
+  /// of the modules.
+  int rawUpdate(String sql, [List<Object?> parameters = const []]) {
+    _db.execute(sql, parameters);
+    return _db.updatedRows;
+  }
+
   int get schemaVersion {
     final rows = _db.select('PRAGMA user_version;');
     return rows.first.columnAt(0) as int;

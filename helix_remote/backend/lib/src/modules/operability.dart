@@ -192,6 +192,15 @@ class OperabilityModule {
       throw AppError.unauthorized('Authentication required');
     }
 
+    // The operator's opt-in. Every report below is counted as rejected when
+    // the flag is off, so `/ops/metrics` shows a client that is still trying
+    // to report to a server that has the sink disabled - which is a
+    // misconfiguration worth seeing rather than a silent 200.
+    if (!_featureFlags.isEnabled('crash_reporting_upload')) {
+      _crashReportsRejected++;
+      throw AppError.forbidden('Crash reporting is disabled on this server.');
+    }
+
     // Per-device, so one device in a crash loop cannot drown out the rest.
     if (!rateLimiter.isAllowed('telemetry_crash:$deviceId')) {
       _crashReportsRejected++;
@@ -239,7 +248,7 @@ class OperabilityModule {
     final flattened = value.replaceAll(RegExp(r'\s+'), ' ').trim();
     return flattened.length <= _crashValueLimit
         ? flattened
-        : '\${flattened.substring(0, _crashValueLimit)}…';
+        : '${flattened.substring(0, _crashValueLimit)}…';
   }
 
   Handler get opsRouter {
@@ -271,6 +280,9 @@ class OperabilityModule {
     router.post('/feature-flags/<name>', _setFeatureFlag);
     router.get('/setup-status', _setupStatus);
     router.post('/setup-admin-password', _setupAdminPassword);
+    router.post('/maintenance', _setMaintenanceMode);
+    router.post('/admin-pin', _changeAdminPin);
+    router.post('/purge', _purge);
     return withAppErrorHandling(router.call);
   }
 
@@ -282,7 +294,7 @@ class OperabilityModule {
     router.get('/config', _config);
     router.post('/config/server-name', _setServerName);
     router.post('/backup', _backup);
-    router.get('/users', _adminUsers);
+    router.get('/users', _users);
     router.post('/users/<accountId>/suspend', _suspendUser);
     router.post('/users/<accountId>/unsuspend', _unsuspendUser);
     router.post('/users/<accountId>/delete', _deleteUser);
@@ -304,6 +316,9 @@ class OperabilityModule {
     router.post('/feature-flags/<name>', _setFeatureFlag);
     router.get('/setup-status', _setupStatus);
     router.post('/setup-admin-password', _setupAdminPassword);
+    router.post('/maintenance', _setMaintenanceMode);
+    router.post('/admin-pin', _changeAdminPin);
+    router.post('/purge', _purge);
     return withAppErrorHandling(router.call);
   }
 
@@ -339,12 +354,131 @@ class OperabilityModule {
     return _json({'success': true});
   }
 
+  /// Turns maintenance mode on or off.
+  ///
+  /// Enforced by a middleware above every module (see
+  /// `BackendServer._maintenanceGuardMiddleware`), which exempts `/ops` and
+  /// `/admin` so this route stays reachable while the mode is on.
+  Future<Response> _setMaintenanceMode(Request request) async {
+    if (!_isAdmin(request)) {
+      throw AppError.forbidden('Admin privileges required');
+    }
+    final body = await _readJsonObject(request);
+    final enabled = body['enabled'];
+    if (enabled is! bool) {
+      throw AppError.badRequest('Expected {"enabled": boolean}');
+    }
+
+    db.setServerConfig('maintenance_mode', enabled.toString());
+    _auditAdminWrite(
+      request,
+      enabled ? 'ADMIN_MAINTENANCE_ENABLED' : 'ADMIN_MAINTENANCE_DISABLED',
+    );
+    return _json({'maintenance_mode': enabled});
+  }
+
+  /// Replaces the master admin password.
+  ///
+  /// Requires the current one, so a console left open on a shared machine
+  /// cannot be used to take the server over. The salt is regenerated rather
+  /// than reused, and neither value is echoed back.
+  Future<Response> _changeAdminPin(Request request) async {
+    if (!_isAdmin(request)) {
+      throw AppError.forbidden('Admin privileges required');
+    }
+    final body = await _readJsonObject(request);
+    final current = body['current_password'];
+    final next = body['new_password'];
+    if (current is! String || next is! String) {
+      throw AppError.badRequest(
+        'current_password and new_password are required',
+      );
+    }
+    if (next.trim().length < 6) {
+      throw AppError.badRequest(
+        'New password must be at least 6 characters long',
+      );
+    }
+    if (!_isValidAdminToken(current)) {
+      // Counted, so a guessing attempt shows up in the audit trail instead of
+      // looking like a success that silently did nothing.
+      _auditAdminWrite(request, 'ADMIN_PIN_CHANGE_REJECTED');
+      throw AppError.unauthorized('The current password is incorrect');
+    }
+
+    final salt = generatePasswordSalt();
+    db.setServerConfig('admin_password_salt', salt);
+    db.setServerConfig(
+      'admin_password_hash',
+      hashAdminPassword(next.trim(), salt),
+    );
+    _auditAdminWrite(request, 'ADMIN_PIN_CHANGED');
+    return _json({'success': true});
+  }
+
+  /// Deletes data that is genuinely safe to discard.
+  ///
+  /// Deliberately conservative: never accounts, devices, messages, contacts,
+  /// or audit history. Only tables that actually carry an age column are
+  /// touched - `attachment_references` is keyed by (file_id, message_id) with
+  /// no timestamp, so there is no honest way to age it out here, and guessing
+  /// would be deleting rows an operator may still be able to resolve.
+  ///
+  /// Reports per-table counts so the console can show a real result rather
+  /// than an unquantified "done".
+  Future<Response> _purge(Request request) async {
+    if (!_isAdmin(request)) {
+      throw AppError.forbidden('Admin privileges required');
+    }
+    final now = _now().millisecondsSinceEpoch;
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    final removed = <String, int>{
+      'outbox_dead_letter': db.rawUpdate(
+        "DELETE FROM outbox WHERE status = 'DLQ' AND created_at < ?;",
+        [now - 7 * dayMs],
+      ),
+      'outbox_failed': db.rawUpdate(
+        "DELETE FROM outbox WHERE status = 'FAILED' AND created_at < ?;",
+        [now - 7 * dayMs],
+      ),
+      'refresh_tokens': db.rawUpdate(
+        'DELETE FROM refresh_tokens WHERE expires_at < ?;',
+        [now],
+      ),
+    };
+
+    final total = removed.values.fold<int>(0, (a, b) => a + b);
+    _auditAdminWrite(request, 'ADMIN_PURGE_RUN removed=$total');
+    return _json({'removed': removed, 'total': total});
+  }
+
+  Future<Map<String, dynamic>> _readJsonObject(Request request) async {
+    final decoded = jsonDecode(await request.readAsString());
+    if (decoded is! Map<String, dynamic>) {
+      throw AppError.badRequest('Expected a JSON object body');
+    }
+    return decoded;
+  }
+
   Response _live(Request request) {
     return _json({
       'status': 'ok',
       'service': 'helix_remote_backend',
       'time': DateTime.now().toUtc().toIso8601String(),
     });
+  }
+
+  /// Whether the WebSocket relay is healthy enough to keep serving clients.
+  ///
+  /// Shared by `/health/ready` and `/ops/support-diagnostic` so the support
+  /// bundle an operator attaches to a ticket can never contradict (or
+  /// over-report on) what the readiness probe actually said.
+  bool _isWebsocketReady() {
+    final websocketRejectLimit =
+        alertThresholds['websocket_reconnect_rejections_5m'] as int;
+    return (wsRelay.stats()['rejected_reconnects'] as int? ?? 0) <
+        websocketRejectLimit;
   }
 
   Response _ready(Request request) {
@@ -354,12 +488,7 @@ class OperabilityModule {
     final turnUrls = CallsModule.resolveTurnUrls(turnUrl);
     final turnConfigured = turnSecret.trim().isNotEmpty && turnUrls.isNotEmpty;
     final apiReady = dbOk;
-    final websocketStats = wsRelay.stats();
-    final websocketRejectLimit =
-        alertThresholds['websocket_reconnect_rejections_5m'] as int;
-    final websocketReady =
-        (websocketStats['rejected_reconnects'] as int? ?? 0) <
-        websocketRejectLimit;
+    final websocketReady = _isWebsocketReady();
     final pushConfigured = outboxWorker.pushProviderConfigured;
     final pushReady =
         pushConfigured &&
@@ -415,6 +544,16 @@ class OperabilityModule {
         'configured': outboxWorker.pushProviderConfigured,
         'available': outboxWorker.pushProviderAvailable,
       },
+      // Whether an SMS gateway is wired up at all, and which one. This says
+      // nothing about whether the credential is *valid* - BulkSMSBD reports a
+      // rejected key with HTTP 200, so configured == true can still mean
+      // every signup fails. It is the difference between "SMS was never set
+      // up" and "SMS is set up but broken", which is otherwise
+      // indistinguishable until a user hits it.
+      'sms_provider': {
+        'configured': smsProvider?.isConfigured ?? false,
+        'name': smsProvider?.displayName ?? 'None',
+      },
       'turn': _turnStatus(),
       'telemetry': {
         'crash_reports_accepted': _crashReportsAccepted,
@@ -447,7 +586,7 @@ class OperabilityModule {
       },
       'readiness': {
         'api_ready': dbOk,
-        'websocket_ready': true,
+        'websocket_ready': _isWebsocketReady(),
         'push_ready':
             outboxWorker.pushProviderConfigured &&
             outboxWorker.pushProviderAvailable &&
@@ -466,6 +605,7 @@ class OperabilityModule {
         // and "SMS is set up but broken", which is otherwise indistinguishable
         // until a user hits it.
         'sms_provider_configured': smsProvider?.isConfigured ?? false,
+        'sms_provider_name': smsProvider?.displayName ?? 'None',
       },
       'metrics': {
         'calls': callsModule.metrics(),
@@ -575,7 +715,15 @@ class OperabilityModule {
     });
   }
 
-  Response _adminUsers(Request request) {
+  /// Paginated user list for the admin console's Users screen.
+  ///
+  /// Serves both `/api/v1/ops/users` and `/api/v1/admin/users` from one
+  /// implementation. They used to be separate handlers, and only the
+  /// `/admin/` one attached the `devices` list - which meant the console,
+  /// which calls `/ops/users`, received a `device_count` and a null device
+  /// list, so no device was ever shown or revocable. The count and the list
+  /// must come from the same call, so there is now only one handler.
+  Response _users(Request request) {
     if (!_isAdmin(request)) {
       throw AppError.forbidden('Admin privileges required');
     }
@@ -632,8 +780,20 @@ class OperabilityModule {
       throw AppError.forbidden('Admin privileges required');
     }
     _auditAdminRead(request, 'ADMIN_REPORTS_LIST_READ');
-    final reports = db.getReports();
-    return _json({'reports': reports});
+
+    final params = request.url.queryParameters;
+    final limit = int.tryParse(params['limit'] ?? '') ?? 50;
+    final offset = int.tryParse(params['offset'] ?? '') ?? 0;
+    if (limit <= 0 || offset < 0) {
+      throw AppError.badRequest('Invalid limit or offset');
+    }
+
+    final reports = db.getReports(limit: limit, offset: offset);
+    return _json({
+      'reports': reports,
+      'limit': limit,
+      'offset': offset,
+    });
   }
 
   Future<Response> _resolveReport(Request request, String reportId) async {
@@ -779,6 +939,9 @@ class OperabilityModule {
       'turn_configured':
           turnSecret.trim().isNotEmpty &&
           CallsModule.resolveTurnUrls(turnUrl).isNotEmpty,
+      // Read from storage rather than held in memory, so the switch reflects
+      // reality after a restart instead of resetting itself silently.
+      'maintenance_mode': db.getServerConfig('maintenance_mode') == 'true',
       'federation': _federationConfig(),
     });
   }
@@ -967,24 +1130,6 @@ class OperabilityModule {
         code: RemoteErrorCode.internalError,
       );
     }
-  }
-
-  Response _users(Request request) {
-    if (!_isAdmin(request)) {
-      throw AppError.forbidden('Admin privileges required');
-    }
-    _auditAdminRead(request, 'ADMIN_USERS_LIST_READ');
-
-    final params = request.url.queryParameters;
-    final limit = int.tryParse(params['limit'] ?? '') ?? 50;
-    final offset = int.tryParse(params['offset'] ?? '') ?? 0;
-
-    if (limit <= 0 || offset < 0) {
-      throw AppError.badRequest('Invalid limit or offset');
-    }
-
-    final users = db.getAllUsersDetailedPaginated(limit: limit, offset: offset);
-    return _json({'users': users, 'limit': limit, 'offset': offset});
   }
 
   Future<Response> _suspendUser(Request request, String accountId) async {

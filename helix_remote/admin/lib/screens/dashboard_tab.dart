@@ -1,14 +1,25 @@
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:flutter/material.dart';
 
+/// Status-dot palette for the Service Integration Health cards. Green only
+/// means "the server says this is working"; amber means "set up but broken";
+/// slate means "not set up".
+const _ok = Color(0xFF10B981);
+const _warn = Color(0xFFF59E0B);
+const _off = Color(0xFF94A3B8);
+
 class DashboardTab extends StatelessWidget {
   const DashboardTab({
     super.key,
     required this.metrics,
-    this.latencyMs = 23,
+    this.latencyMs,
   });
 
   final Map<String, dynamic>? metrics;
+
+  /// Last measured round-trip time in milliseconds, or null when nothing has
+  /// been measured yet. The dashboard renders "Latency: —" rather than a
+  /// placeholder number in that case.
   final int? latencyMs;
 
   @override
@@ -50,14 +61,12 @@ class DashboardTab extends StatelessWidget {
       _Metric(
         title: 'Active Devices Connections',
         value: '${ws['connected_devices'] ?? 0}',
-        subtitle: 'Android, iOS, Windows',
         icon: Icons.phone_android_outlined,
         accent: const Color(0xFF10B981),
       ),
       _Metric(
         title: 'Registered User Accounts',
         value: '${tblCounts['accounts'] ?? 0}',
-        subtitle: '↑ 12% this week',
         icon: Icons.person_outline,
         accent: const Color(0xFF2563EB),
       ),
@@ -74,13 +83,6 @@ class DashboardTab extends StatelessWidget {
         subtitle: 'Delivery Retries',
         icon: Icons.send_outlined,
         accent: const Color(0xFFF59E0B),
-      ),
-      _Metric(
-        title: 'Quarantined Security Events',
-        value: '${tblCounts['quarantine_events'] ?? 0}',
-        subtitle: 'Isolated Events',
-        icon: Icons.shield_outlined,
-        accent: const Color(0xFFEF4444),
       ),
       _Metric(
         title: 'Database Status Check',
@@ -101,7 +103,15 @@ class DashboardTab extends StatelessWidget {
             builder: (context, constraints) {
               final width = constraints.maxWidth;
               final crossAxisCount = width > 1200 ? 3 : 2;
-              final aspectRatio = width <= 600 ? 1.35 : (width > 1200 ? 1.8 : 1.6);
+              // A two-column tile on a 320dp phone is about 138dp wide. At a
+              // 1.35 ratio that leaves ~102dp of height for a card whose
+              // content (12dp padding, a two-line 12dp title beside a 28dp
+              // icon, a 22dp value, an 11dp subtitle) needs a little more,
+              // and the subtitle row clipped. 1.25 gives the content the room
+              // it actually requires.
+              final aspectRatio = width <= 600
+                  ? 1.25
+                  : (width > 1200 ? 1.8 : 1.6);
               return GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -128,14 +138,21 @@ class DashboardTab extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Dashboard',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+              // Flexible so the title yields space to the status pill on a
+              // narrow phone instead of overflowing the row.
+              const Flexible(
+                child: Text(
+                  'Dashboard',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -156,7 +173,9 @@ class DashboardTab extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      latencyMs != null ? 'Latency: ${latencyMs}ms' : 'Latency: 23ms',
+                      latencyMs != null
+                          ? 'Latency: ${latencyMs}ms'
+                          : 'Latency: —',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -237,16 +256,17 @@ class DashboardTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  metric.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF059669),
+                if (metric.subtitle != null)
+                  Text(
+                    metric.subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF059669),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -256,6 +276,11 @@ class DashboardTab extends StatelessWidget {
   }
 
   Widget _buildServiceIntegrations(BuildContext context) {
+    final metrics = this.metrics ?? const <String, dynamic>{};
+    final push = metrics['push_provider'] as Map?;
+    final sms = metrics['sms_provider'] as Map?;
+    final turn = metrics['turn'] as Map?;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -269,28 +294,181 @@ class DashboardTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        _integrationContainer(
-          title: 'FCM Push Notification Service',
-          subtitle: 'Firebase Cloud Messaging • Active',
-          note: 'Background message waking OK',
-          dotColor: const Color(0xFF10B981),
-        ),
+        _pushHealthCard(push),
         const SizedBox(height: 10),
-        _integrationContainer(
-          title: 'SMS Gateway (BulkSMSBD)',
-          subtitle: 'API Balance: \$48.50 • 2,420 Credits',
-          note: 'SMS OTP Dispatch Health OK',
-          dotColor: const Color(0xFF10B981),
-        ),
+        _smsHealthCard(sms),
         const SizedBox(height: 10),
-        _integrationContainer(
-          title: 'TURN Relay Server',
-          subtitle: 'STUN/TURN Peer Connection',
-          note: 'Encrypted Voice & Video Relay OK',
-          dotColor: const Color(0xFF10B981),
-        ),
+        _turnHealthCard(turn),
         const SizedBox(height: 24),
+        _buildCrashTelemetry(metrics['telemetry'] as Map?),
       ],
+    );
+  }
+
+  /// Crash-sink counters, straight from `metrics.telemetry`.
+  ///
+  /// Before this the dashboard carried a hardcoded "Background message waking
+  /// OK" note while the counters sat unused. Rejections are the signal to
+  /// look at: they mean a client is trying to report and the server is
+  /// refusing, which is either the flag being off or a client on a build
+  /// that predates the consent prompt.
+  Widget _buildCrashTelemetry(Map? telemetry) {
+    final accepted = telemetry?['crash_reports_accepted'] as int? ?? 0;
+    final rejected = telemetry?['crash_reports_rejected'] as int? ?? 0;
+    final lastRaw = telemetry?['last_crash_report_at'] as String?;
+    final last = lastRaw == null ? null : DateTime.tryParse(lastRaw);
+    final lastLabel = last == null
+        ? 'No report has ever been accepted'
+        : 'Last accepted ${last.toLocal().toString().split('.').first}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Client Crash Reports',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: rejected > 0 ? _warn : _ok,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$accepted accepted • $rejected rejected',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      lastLabel,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    if (rejected > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        rejected == 1
+                            ? '1 report was refused. Clients must have crash '
+                                  'reporting enabled and consent granted; the '
+                                  'server flag must also be on.'
+                            : '$rejected reports were refused. Clients must '
+                                  'have crash reporting enabled and consent '
+                                  'granted; the server flag must also be on.',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          height: 1.4,
+                          color: Color(0xFFB45309),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// FCM: green only when the provider reports itself available. "Configured
+  /// but unavailable" is a distinct, actionable state from "not configured",
+  /// so it gets its own colour rather than being folded into either.
+  Widget _pushHealthCard(Map? push) {
+    final configured = push?['configured'] == true;
+    final available = push?['available'] == true;
+
+    final Color dot;
+    final String status;
+    final String note;
+    if (available) {
+      dot = _ok;
+      status = 'Firebase Cloud Messaging • Available';
+      note = 'Background message waking is active.';
+    } else if (configured) {
+      dot = _warn;
+      status = 'Firebase Cloud Messaging • Configured but unavailable';
+      note = 'The server has FCM credentials but the provider is not '
+          'responding. Background delivery will not work until it is.';
+    } else {
+      dot = _off;
+      status = 'Firebase Cloud Messaging • Not configured';
+      note = 'No FCM credentials on this server. Push notifications are '
+          'unavailable; messages arrive over the WebSocket only.';
+    }
+    return _integrationContainer(
+      title: 'FCM Push Notification Service',
+      subtitle: status,
+      note: note,
+      dotColor: dot,
+    );
+  }
+
+  /// SMS: the server reports whether a gateway is wired up and which one. It
+  /// cannot report whether the credential is valid - BulkSMSBD answers HTTP
+  /// 200 for a rejected key - so the copy says so rather than claiming health.
+  Widget _smsHealthCard(Map? sms) {
+    final configured = sms?['configured'] == true;
+    final name = sms?['name'] as String? ?? 'None';
+
+    return _integrationContainer(
+      title: 'SMS Gateway',
+      subtitle: configured
+          ? '$name • Configured'
+          : 'No SMS provider configured',
+      note: configured
+          ? 'A gateway is wired up. Credential validity is not reported by '
+              'the server - a rejected API key still returns success at the '
+              'HTTP layer, so a failed signup is the first real signal.'
+          : 'One-time sign-in codes cannot be delivered on this server.',
+      dotColor: configured ? _ok : _off,
+    );
+  }
+
+  /// TURN: `configured` comes from the server; `url_count` is real. Live
+  /// reachability is explicitly not probed, and the copy says so instead of
+  /// implying a relay handshake succeeded.
+  Widget _turnHealthCard(Map? turn) {
+    final configured = turn?['configured'] == true;
+    final urlCount = turn?['url_count'];
+
+    return _integrationContainer(
+      title: 'TURN Relay Server',
+      subtitle: configured
+          ? 'STUN/TURN peer connection • $urlCount URL${urlCount == 1 ? '' : 's'} configured'
+          : 'STUN/TURN peer connection • Not configured',
+      note: configured
+          ? 'Voice and video relay credentials are available. Live '
+              'reachability is not probed by the server.'
+          : 'Calls can place but will not relay media through TURN.',
+      dotColor: configured ? _ok : _off,
     );
   }
 
@@ -359,14 +537,14 @@ class _Metric {
   const _Metric({
     required this.title,
     required this.value,
-    required this.subtitle,
     required this.icon,
     required this.accent,
+    this.subtitle,
   });
 
   final String title;
   final String value;
-  final String subtitle;
+  final String? subtitle;
   final IconData icon;
   final Color accent;
 }

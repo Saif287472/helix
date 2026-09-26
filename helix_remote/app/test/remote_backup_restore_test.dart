@@ -52,10 +52,14 @@ void main() {
   // ever agree with itself. Spelled out, it fails on any schema change and
   // makes bumping the version a decision someone took rather than something
   // that happened.
-  test('RP5-010: fresh in-memory database has schema version 29', () {
+  // v30 adds `pending_device_links`, the local table that records a
+  // new-device pairing request pushed by the server. Previously the request
+  // was received and dropped, so the only way to link a device was to
+  // hand-type its Link ID and 6-digit code.
+  test('RP5-010: fresh in-memory database has schema version 30', () {
     final db = _freshDb();
     addTearDown(db.close);
-    expect(db.schemaVersion, equals(29));
+    expect(db.schemaVersion, equals(30));
   });
 
   // -------------------------------------------------------------------------

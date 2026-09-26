@@ -72,6 +72,16 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
       _syncEngine = RemoteSyncEngine(
         db,
         onCallSignal: onCallSignal,
+        onLocalDeviceRevoked: (deviceId, reason) {
+          // This device's credentials are dead server-side. Anything else we
+          // do here would leave a revoked session limping along, so tear the
+          // session down and let the user re-pair.
+          AppLogger.instance.info(
+            'DEVICE_REVOKED',
+            'local device $deviceId revoked (reason=$reason); signing out',
+          );
+          unawaited(_transitionToAuthRequired());
+        },
         onTrace: (msgId, stage) {
           if (stage == 'send_attempt' || stage == 'server_ack') {
             final t = MessageLatencyRegistry.instance.findSend(msgId);

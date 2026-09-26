@@ -5,7 +5,7 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
   /// assert against one source of truth instead of a literal that silently
   /// goes stale every time a migration is added - which is exactly what had
   /// happened: two tests still expected 18 after the schema reached 27.
-  static const int latestSchemaVersion = 29;
+  static const int latestSchemaVersion = 30;
 
   int get schemaVersion =>
       _db.select('PRAGMA user_version').first['user_version'] as int;
@@ -578,6 +578,13 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
         CREATE INDEX IF NOT EXISTS idx_messages_conv_timestamp
         ON messages(conversation_id, timestamp DESC);
       ''');
+      _db.execute('PRAGMA user_version = 29;');
+    }
+    if (version < 30) {
+      // The server pushes `pending_device_link` to the account's existing
+      // devices whenever a new device asks to join. Nothing consumed it, so
+      // the only way to pair was to hand-type the Link ID and 6-digit code.
+      _createPendingDeviceLinksTable();
       _db.execute('PRAGMA user_version = $latestSchemaVersion;');
     }
   }
@@ -620,6 +627,26 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
         peer_account_id TEXT PRIMARY KEY,
         phone_book_name TEXT NOT NULL,
         updated_at INTEGER NOT NULL
+      );
+    ''');
+  }
+
+  /// New-device pairing requests pushed to this account's existing devices.
+  ///
+  /// Deliberately holds no key material: the `pending_device_link` event
+  /// carries only a link id, the requested device's id and name, and an
+  /// expiry. The 6-digit verification code never leaves the new device, so
+  /// this table is a prompt to go and approve on the other screen, not a
+  /// credential store.
+  void _createPendingDeviceLinksTable() {
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_device_links (
+        link_id TEXT PRIMARY KEY,
+        device_id TEXT NOT NULL,
+        device_name TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING'
       );
     ''');
   }

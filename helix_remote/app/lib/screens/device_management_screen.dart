@@ -5,16 +5,23 @@ import 'package:flutter/material.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
+import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class DeviceManagementScreen extends StatefulWidget {
   const DeviceManagementScreen({
     super.key,
     required this.restClient,
+    this.db,
     this.deviceChanges,
   });
 
   final HelixRemoteRestClient restClient;
+
+  /// Local database, used to read pending new-device pairing requests the
+  /// server pushed to this device. Optional: without it the screen simply
+  /// omits that section.
+  final HelixRemoteDatabase? db;
 
   /// Optional stream of sync changes; reloads device list when devices area changes.
   final Stream<RemoteSyncChange>? deviceChanges;
@@ -25,6 +32,7 @@ class DeviceManagementScreen extends StatefulWidget {
 
 class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
   List<RemoteDevice> _devices = [];
+  List<Map<String, dynamic>> _pendingLinks = [];
   bool _busy = false;
   String? _error;
   StreamSubscription<RemoteSyncChange>? _changeSub;
@@ -46,6 +54,23 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     super.dispose();
   }
 
+  int get _nowMs => DateTime.now().millisecondsSinceEpoch;
+
+  void _loadPendingLinks() {
+    final db = widget.db;
+    if (db == null) {
+      _pendingLinks = [];
+      return;
+    }
+    try {
+      db.purgeExpiredDeviceLinks(nowMs: _nowMs);
+      _pendingLinks = db.getPendingDeviceLinks(nowMs: _nowMs);
+    } catch (_) {
+      // A local read failure must not take the device list down with it.
+      _pendingLinks = [];
+    }
+  }
+
   Future<void> _load() async {
     setState(() {
       _busy = true;
@@ -53,14 +78,19 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     });
     try {
       final devices = await widget.restClient.listDevices();
-      setState(() => _devices = devices);
+      if (!mounted) return;
+      setState(() {
+        _devices = devices;
+        _loadPendingLinks();
+      });
     } catch (_) {
+      if (!mounted) return;
       setState(
         () => _error =
             'Could not load devices. Check your connection and try again.',
       );
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -302,6 +332,119 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     }
   }
 
+  /// New devices that have asked to pair with this account.
+  ///
+  /// The server pushes these to the account's existing devices. Before the
+  /// inbound event was handled they were simply dropped, which left the
+  /// "link a device" form as the only route in - and that form requires
+  /// hand-typing the Link ID and the 6-digit code shown on the other screen.
+  ///
+  /// The code is deliberately absent here: it only ever exists on the
+  /// requesting device, so this list is a prompt to go and confirm there,
+  /// not a way to approve remotely.
+  Widget _buildPendingLinks(BuildContext context) {
+    final count = _pendingLinks.length;
+    return Card(
+      color: const Color(0xFFFFFBEB),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFFDE68A)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.link, size: 18, color: Color(0xFFD97706)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    count == 1
+                        ? '1 device is waiting to be linked'
+                        : '$count devices are waiting to be linked',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF92400E),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              HelixLocalizations.of(
+                context,
+              ).pendingDeviceLinkConfirmElsewhere,
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: Color(0xFFB45309),
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (final link in _pendingLinks)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.phone_android,
+                      size: 16,
+                      color: Color(0xFFB45309),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${link['device_name']} • asked for link '
+                        '${_shortLinkId(link['link_id'] as String)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF92400E),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _dismissPendingLink(link),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF92400E),
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        HelixLocalizations.of(context).dismiss,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _shortLinkId(String linkId) =>
+      linkId.length <= 8 ? linkId : linkId.substring(0, 8);
+
+  void _dismissPendingLink(Map<String, dynamic> link) {
+    final db = widget.db;
+    final linkId = link['link_id'] as String?;
+    if (db == null || linkId == null) return;
+    try {
+      db.markPendingDeviceLinkResolved(linkId, status: 'DISMISSED');
+      setState(_loadPendingLinks);
+    } catch (_) {
+      // Nothing actionable: the row stays and the next reload retries.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -321,6 +464,10 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
           ? HelixErrorState(message: _error!, onRetry: _load)
           : Column(
               children: [
+                if (_pendingLinks.isNotEmpty) ...[
+                  _buildPendingLinks(context),
+                  const SizedBox(height: 8),
+                ],
                 _buildLinkDeviceAction(context),
                 Expanded(
                   child: _devices.isEmpty

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/services/telemetry_consent.dart';
+import 'package:helix_remote/services/telemetry_reporter.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:path/path.dart' as p;
@@ -33,6 +35,22 @@ class PrivacyScreen extends StatefulWidget {
 class _PrivacyScreenState extends State<PrivacyScreen> {
   bool _busy = false;
   String? _status;
+
+  /// Loaded from disk so the switches reflect the stored choice rather than
+  /// the all-off default.
+  TelemetryConsent _telemetryConsent = const TelemetryConsent();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTelemetryConsent();
+  }
+
+  Future<void> _loadTelemetryConsent() async {
+    final consent = await const TelemetryConsentStore().read();
+    if (!mounted) return;
+    setState(() => _telemetryConsent = consent);
+  }
 
   Future<void> _exportData() async {
     setState(() {
@@ -212,6 +230,104 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     _ => 'after ${seconds}s',
   };
 
+  // ---------------------------------------------------------------------------
+  // Privacy & Telemetry
+  // ---------------------------------------------------------------------------
+
+  /// Consent switches for crash reporting and minimal analytics.
+  ///
+  /// These are the only way telemetry reaches the server. Consent defaults to
+  /// off in [TelemetryConsent] and nothing ever wrote it, so the crash sink at
+  /// `POST /api/v1/telemetry/crash` was unreachable from the app - the flags
+  /// were readable (`canReportCrashes`, `canReportAnalytics`) and had no UI
+  /// behind them. Turning either on here persists the choice and re-applies it
+  /// to the live reporter.
+  Widget _buildTelemetryCard() {
+    final reporter = TelemetryReporter.instance;
+    final l10n = HelixLocalizations.of(context);
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.bug_report_outlined),
+            title: Text(l10n.sendCrashReports),
+            subtitle: Text(l10n.sendCrashReportsDescription),
+            isThreeLine: true,
+            value: _telemetryConsent.crashReporting,
+            onChanged: _busy
+                ? null
+                : (v) => _setTelemetry(
+                    crashReporting: v,
+                    minimalAnalytics: _telemetryConsent.minimalAnalytics,
+                  ),
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            secondary: const Icon(Icons.analytics_outlined),
+            title: Text(l10n.sendMinimalAnalytics),
+            subtitle: Text(
+              _telemetryConsent.crashReporting ||
+                      _telemetryConsent.minimalAnalytics
+                  ? l10n.sendMinimalAnalyticsActiveDescription
+                  : l10n.sendMinimalAnalyticsDescription,
+            ),
+            isThreeLine: true,
+            value: _telemetryConsent.minimalAnalytics,
+            onChanged: _busy
+                ? null
+                : (v) => _setTelemetry(
+                    crashReporting: _telemetryConsent.crashReporting,
+                    minimalAnalytics: v,
+                  ),
+          ),
+          if (reporter.canReportCrashes != _telemetryConsent.crashReporting)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text(
+                l10n.telemetrySinkUnavailable,
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.4,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _setTelemetry({
+    required bool crashReporting,
+    required bool minimalAnalytics,
+  }) async {
+    final consent = TelemetryConsent(
+      crashReporting: crashReporting,
+      minimalAnalytics: minimalAnalytics,
+    );
+    setState(() {
+      _busy = true;
+      _telemetryConsent = consent;
+    });
+    try {
+      await const TelemetryConsentStore().write(consent);
+      TelemetryReporter.instance.configure(consent: consent);
+      if (mounted) {
+        setState(
+          () => _status =
+              HelixLocalizations.of(context).telemetryPreferencesSaved,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _status = 'Could not save telemetry preferences: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = widget.messagingService.db;
@@ -255,6 +371,8 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                   onTap: _applyStrictPreset,
                 ),
               ),
+              const SizedBox(height: 8),
+              _buildTelemetryCard(),
               const SizedBox(height: 8),
               Card(
                 child: Column(

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/screens/login_screen.dart';
 import 'package:helix_admin/theme/app_theme.dart';
 
-Widget _wrap(Widget child) => MaterialApp(theme: AppTheme.dark, home: child);
+Widget _wrap(Widget child) => MaterialApp(theme: AppTheme.light, home: child);
 
 void main() {
   testWidgets('renders direct login form fields and header when needsSetup is false', (tester) async {
@@ -21,7 +21,6 @@ void main() {
           errorMessage: null,
           needsSetup: false,
           onSignIn: () {},
-          onOpenGuide: () {},
         ),
       ),
     );
@@ -30,7 +29,6 @@ void main() {
     expect(find.byKey(const Key('login_url_field')), findsOneWidget);
     expect(find.byKey(const Key('login_password_field')), findsOneWidget);
     expect(find.byKey(const Key('login_button')), findsOneWidget);
-    expect(find.byKey(const Key('login_guide_button')), findsOneWidget);
     expect(find.text('SIGN IN'), findsOneWidget);
   });
 
@@ -49,7 +47,6 @@ void main() {
           errorMessage: null,
           needsSetup: true,
           onSignIn: () {},
-          onOpenGuide: () {},
         ),
       ),
     );
@@ -76,7 +73,6 @@ void main() {
           needsSetup: true,
           onSignIn: () {},
           onSetupPassword: (pass) => submittedPassword = pass,
-          onOpenGuide: () {},
         ),
       ),
     );
@@ -122,7 +118,6 @@ void main() {
           isConnecting: false,
           errorMessage: null,
           onSignIn: () {},
-          onOpenGuide: () {},
         ),
       ),
     );
@@ -159,7 +154,6 @@ void main() {
           isConnecting: false,
           errorMessage: null,
           onSignIn: () => signedIn = true,
-          onOpenGuide: () {},
         ),
       ),
     );
@@ -179,7 +173,6 @@ void main() {
           isConnecting: false,
           errorMessage: 'Invalid server URL or admin password.',
           onSignIn: () {},
-          onOpenGuide: () {},
         ),
       ),
     );
@@ -202,7 +195,6 @@ void main() {
           isConnecting: true,
           errorMessage: null,
           onSignIn: () {},
-          onOpenGuide: () {},
         ),
       ),
     );
@@ -214,8 +206,10 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
-  testWidgets('triggers onOpenGuide on guide link tap', (tester) async {
-    var openedGuide = false;
+  // The self-hosting guide belongs to the helix-remote welcome / sign-in
+  // flow, not to this console. The button that used to sit here opened a
+  // second copy that had drifted from it.
+  testWidgets('offers no self-hosting guide link', (tester) async {
     await tester.pumpWidget(
       _wrap(
         LoginScreen(
@@ -224,14 +218,11 @@ void main() {
           isConnecting: false,
           errorMessage: null,
           onSignIn: () {},
-          onOpenGuide: () => openedGuide = true,
         ),
       ),
     );
 
-    await tester.tap(find.byKey(const Key('login_guide_button')));
-    await tester.pump();
-
-    expect(openedGuide, isTrue);
+    expect(find.byKey(const Key('login_guide_button')), findsNothing);
+    expect(find.text('How do I own a personal server?'), findsNothing);
   });
 }

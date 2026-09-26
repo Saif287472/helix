@@ -5,7 +5,6 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 part 'database/accounts_devices_repository.dart';
-part 'database/admin_pairing_repository.dart';
 part 'database/attachments_repository.dart';
 part 'database/audit_tokens_repository.dart';
 part 'database/backups_outbox_repository.dart';

@@ -2192,6 +2192,230 @@ paths:
         '401':
           description: Unauthorized
 
+  /groups/set-add-policy:
+    post:
+      summary: Set who may add members to a group without an invite
+      operationId: setGroupAddPolicy
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group_id, policy]
+              properties:
+                group_id:
+                  type: string
+                policy:
+                  type: string
+      responses:
+        '200':
+          description: Policy updated
+        '401':
+          description: Unauthorized
+
+  /groups/create-join-link:
+    post:
+      summary: Create a shareable join link for a group
+      operationId: createGroupJoinLink
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [link_id, group_id, token]
+              properties:
+                link_id:
+                  type: string
+                group_id:
+                  type: string
+                token:
+                  type: string
+                requires_approval:
+                  type: boolean
+                expires_at:
+                  type: integer
+                  format: int64
+      responses:
+        '200':
+          description: Join link created
+        '401':
+          description: Unauthorized
+
+  /groups/revoke-join-link:
+    post:
+      summary: Revoke a group join link
+      operationId: revokeGroupJoinLink
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [link_id]
+              properties:
+                link_id:
+                  type: string
+                group_id:
+                  type: string
+      responses:
+        '200':
+          description: Join link revoked
+        '401':
+          description: Unauthorized
+
+  /groups/join-via-link:
+    post:
+      summary: Join a group using a join link token
+      operationId: joinGroupViaLink
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                request_id:
+                  type: string
+      responses:
+        '200':
+          description: Joined, or a request is pending approval
+        '401':
+          description: Unauthorized
+
+  /groups/join-requests:
+    get:
+      summary: List pending join requests for a group
+      operationId: getGroupJoinRequests
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Pending join requests
+        '401':
+          description: Unauthorized
+
+  /groups/approve-join-request:
+    post:
+      summary: Approve or reject a pending group join request
+      operationId: approveGroupJoinRequest
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id, approve]
+              properties:
+                request_id:
+                  type: string
+                group_id:
+                  type: string
+                approve:
+                  type: boolean
+      responses:
+        '200':
+          description: Request resolved
+        '401':
+          description: Unauthorized
+
+  /groups/transfer-ownership:
+    post:
+      summary: Transfer group ownership to another member
+      operationId: transferGroupOwnership
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group_id, new_owner_id]
+              properties:
+                group_id:
+                  type: string
+                new_owner_id:
+                  type: string
+                current_owner_id:
+                  type: string
+      responses:
+        '200':
+          description: Ownership transferred
+        '401':
+          description: Unauthorized
+
+  /groups/admin-delete-message:
+    post:
+      summary: Remove a message from a group as an admin
+      operationId: adminDeleteGroupMessage
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group_id, message_id]
+              properties:
+                group_id:
+                  type: string
+                message_id:
+                  type: string
+      responses:
+        '200':
+          description: Message removed
+        '401':
+          description: Unauthorized
+
+  /groups/block-member:
+    post:
+      summary: Block a member from a group
+      operationId: blockGroupMember
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group_id, account_id]
+              properties:
+                group_id:
+                  type: string
+                account_id:
+                  type: string
+      responses:
+        '200':
+          description: Member blocked
+        '401':
+          description: Unauthorized
+
   # ─── Backups ──────────────────────────────────────────────────
   /backups/:
     post:
@@ -2345,6 +2569,120 @@ paths:
       responses:
         '200':
           description: Metrics payload
+        '403':
+          description: Admin privileges required
+
+  /ops/feature-flags:
+    get:
+      summary: Read the server-owned feature flags (admin)
+      operationId: readFeatureFlags
+      tags: [Ops]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Map of flag name to current value
+        '403':
+          description: Admin privileges required
+    post:
+      summary: Set one feature flag (admin)
+      description: >-
+        The server allow-lists flag names, so an unknown name is a 404 rather
+        than an arbitrary remotely-switchable capability. Only flags that gate
+        a real code path have any effect.
+      operationId: setFeatureFlag
+      tags: [Ops]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Flag updated
+        '404':
+          description: Unknown flag name
+
+  /ops/maintenance:
+    post:
+      summary: Turn maintenance mode on or off (admin)
+      description: >-
+        While on, every client route answers 503. /ops, /admin, /server and
+        /health stay reachable so the mode can be inspected and turned back
+        off - otherwise the switch would be a one-way door.
+      operationId: setMaintenanceMode
+      tags: [Ops]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: New maintenance state
+        '403':
+          description: Admin privileges required
+
+  /ops/admin-pin:
+    post:
+      summary: Replace the master admin password (admin)
+      description: >-
+        Requires the current password, so a console left open on a shared
+        machine cannot be used to take the server over. The salt is
+        regenerated; neither value is echoed back.
+      operationId: changeAdminPin
+      tags: [Ops]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 6
+      responses:
+        '200':
+          description: Password changed
+        '401':
+          description: The current password is incorrect
+        '400':
+          description: Missing field, or the new password is too short
+
+  /ops/purge:
+    post:
+      summary: Delete expired operational data (admin)
+      description: >-
+        Removes dead-letter and failed outbox rows older than a week and
+        expired refresh tokens. Never touches accounts, devices, messages,
+        contacts, or audit history. Returns per-table counts.
+      operationId: purgeOperationalData
+      tags: [Ops]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Per-table removal counts and a total
         '403':
           description: Admin privileges required
 

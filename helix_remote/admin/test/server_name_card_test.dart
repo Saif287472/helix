@@ -165,7 +165,10 @@ void main() {
     expect(find.text('nope'), findsNothing);
   });
 
-  testWidgets('the empty-name hint names the host users would see instead', (
+  // The empty-name hint names the *server's* computed fallback name, not a
+  // host. `serverHost` was accepted here and never read, so the card had no
+  // way to show a host; the parameter is gone rather than left inert.
+  testWidgets('the empty-name hint names the server fallback instead', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -173,13 +176,13 @@ void main() {
         ServerNameCard(
           initialName: '',
           maxLength: 60,
-          serverHost: 'hr.agiletechbd.com',
+          fallbackName: 'Private Server #4242',
           onSave: (name) async => name,
         ),
       ),
     );
 
-    expect(find.textContaining('hr.agiletechbd.com'), findsOneWidget);
+    expect(find.textContaining('Private Server #4242'), findsOneWidget);
     expect(find.textContaining('Leave empty'), findsOneWidget);
   });
 

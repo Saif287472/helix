@@ -22,6 +22,7 @@ class RemoteSyncChange {
     this.conversationId,
     this.messageId,
     this.contactAccountId,
+    this.deviceId,
   });
 
   final Set<RemoteSyncChangeArea> areas;
@@ -36,6 +37,11 @@ class RemoteSyncChange {
   /// Present for contact/profile updates so presentation layers can refresh
   /// only the affected peer instead of rebuilding every open conversation.
   final String? contactAccountId;
+
+  /// The affected device for device-lifecycle events. A presentation layer
+  /// needs this to tell "a sibling device was revoked" (refresh the list)
+  /// from "this device was revoked" (tear the session down).
+  final String? deviceId;
 
   bool affects(RemoteSyncChangeArea area) => areas.contains(area);
 
@@ -61,6 +67,7 @@ class RemoteSyncEngine {
     this.diagnostics,
     this.onCallSignal,
     this.onTrace,
+    this.onLocalDeviceRevoked,
   });
 
   final HelixRemoteDatabase db;
@@ -75,6 +82,16 @@ class RemoteSyncEngine {
   /// points. The app layer injects a closure that routes to MessageLatencyRegistry
   /// without creating a package dependency on the app.
   final void Function(String messageId, String stage)? onTrace;
+
+  /// Called when the server reports that **the device this client is running
+  /// on** has been revoked - by the user from another device, by an operator,
+  /// or after a lost-device sweep.
+  ///
+  /// This is deliberately a hard callback rather than a row update: the local
+  /// device's credentials are now dead server-side, and the only correct
+  /// response is to drop the session and send the user back through pairing.
+  /// The app layer injects that teardown.
+  final void Function(String deviceId, String reason)? onLocalDeviceRevoked;
 
   static const String _globalSyncCursorId = '__remote_global_stream__';
   final _changeController = StreamController<RemoteSyncChange>.broadcast(
@@ -272,6 +289,7 @@ class RemoteSyncEngine {
             onTrace?.call(traceMsgId, 'receiver_db_save');
           }
         }
+        _maybeNotifyLocalDeviceRevoked(env);
         _emitChange(_changeFor(env));
         if (env.type == 'chat_message') {
           final traceMsgId = env.payload['message_id'] as String?;
@@ -539,6 +557,7 @@ class RemoteSyncEngine {
       case 'group_deleted':
       case 'group_admin_event':
       case 'group_key_updated':
+      case 'group_join_requested':
         return RemoteSyncChange(
           areas: const {
             RemoteSyncChangeArea.groups,
@@ -547,6 +566,22 @@ class RemoteSyncEngine {
           conversationId:
               (env.payload['group_id'] ?? env.payload['conversation_id'])
                   as String?,
+        );
+      // Device lifecycle. These were emitted by the server all along and
+      // matched no case here, so they fell through to `default` and were
+      // dropped - which is why a new-device pairing request never appeared
+      // and a revoked device kept a live session. `_changeFor` also never
+      // returned `RemoteSyncChangeArea.devices`, so no listener could fire.
+      case 'pending_device_link':
+      case 'device_linked':
+      case 'device_revoked':
+      case 'DEVICE_REVOKED':
+        return RemoteSyncChange(
+          areas: const {
+            RemoteSyncChangeArea.devices,
+            RemoteSyncChangeArea.runtime,
+          },
+          deviceId: env.payload['device_id'] as String?,
         );
       case 'sync_marker':
         return const RemoteSyncChange(areas: {RemoteSyncChangeArea.runtime});
@@ -559,6 +594,30 @@ class RemoteSyncEngine {
     if (!_changeController.isClosed) {
       _changeController.add(change);
     }
+  }
+
+  /// Fires [onLocalDeviceRevoked] when a revocation event names the device
+  /// this client is running on.
+  ///
+  /// The relay scopes the event to our own account but does not say *which*
+  /// of our devices it names, so the comparison has to happen here against
+  /// the locally stored device id. Getting this wrong in the optimistic
+  /// direction would sign the user out of a session that is still perfectly
+  /// valid, so an unknown local device id is treated as "not me".
+  void _maybeNotifyLocalDeviceRevoked(RemoteRealtimeEnvelope env) {
+    if (onLocalDeviceRevoked == null) return;
+    if (env.type != 'device_revoked' && env.type != 'DEVICE_REVOKED') return;
+
+    final revokedId = env.payload['device_id'] as String?;
+    if (revokedId == null || revokedId.isEmpty) return;
+
+    final localDeviceId = db.getLocalDeviceId();
+    if (localDeviceId == null || localDeviceId != revokedId) return;
+
+    onLocalDeviceRevoked!(
+      revokedId,
+      env.payload['reason'] as String? ?? 'DEVICE_REVOKED',
+    );
   }
 
   Future<void> dispose() async {
@@ -615,9 +674,18 @@ abstract class _InboundSyncEvent {
         return const _GroupDeletedEvent();
       case 'group_admin_event':
         return const _GroupAdminEvent();
+      case 'group_join_requested':
+        return const _GroupJoinRequestedEvent();
       case 'group_key_updated':
         // Marker only: actual key material is distributed at the app layer.
         return const _SyncMarkerEvent();
+      case 'pending_device_link':
+        return const _PendingDeviceLinkEvent();
+      case 'device_linked':
+        return const _DeviceLinkedEvent();
+      case 'device_revoked':
+      case 'DEVICE_REVOKED':
+        return const _DeviceRevokedEvent();
       default:
         return null;
     }
@@ -915,6 +983,134 @@ class _SyncMarkerEvent extends _InboundSyncEvent {
 
   @override
   bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) => true;
+}
+
+/// A user asked to join a group through a link that requires approval.
+///
+/// The server relays this to the group's admins and persists the request
+/// server-side, but the client dropped the event, so `getPendingJoinRequests`
+/// was always empty and the "Join Requests" section could never render -
+/// there was no path for an admin to approve a request from the app.
+class _GroupJoinRequestedEvent extends _InboundSyncEvent {
+  const _GroupJoinRequestedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final groupId = _InboundSyncEvent.requireString(
+      env,
+      'group_id',
+      eventType: 'group_join_requested',
+    );
+    final requestId = _InboundSyncEvent.requireString(
+      env,
+      'request_id',
+      eventType: 'group_join_requested',
+    );
+    final requesterId = _InboundSyncEvent.requireString(
+      env,
+      'requester_id',
+      eventType: 'group_join_requested',
+    );
+
+    db.upsertGroupJoinRequest(
+      requestId: requestId,
+      groupId: groupId,
+      requesterId: requesterId,
+      // The relay does not include the link id. Recording '' is the
+      // repository's own "unknown link" representation; the row is keyed by
+      // request_id, so nothing downstream depends on it.
+      linkId: env.payload['link_id'] as String? ?? '',
+      status: 'PENDING',
+    );
+    return true;
+  }
+}
+
+/// A new device asked to pair with this account.
+///
+/// The server pushes this to the account's existing devices. It was dropped
+/// before, which is why the only way to add a device was to hand-type the
+/// Link ID and the 6-digit code. This records the request so the device
+/// screen can list it; the code itself never leaves the new device.
+class _PendingDeviceLinkEvent extends _InboundSyncEvent {
+  const _PendingDeviceLinkEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final linkId = _InboundSyncEvent.requireString(
+      env,
+      'link_id',
+      eventType: 'pending_device_link',
+    );
+    final deviceId = _InboundSyncEvent.requireString(
+      env,
+      'device_id',
+      eventType: 'pending_device_link',
+    );
+    final createdAt = env.payload['timestamp'] as int? ?? env.timestamp;
+
+    // Only store a request the server still considers live; a replayed or
+    // late-arriving frame must not put an expired prompt back on screen.
+    final expiresAt = env.payload['expires_at'] as int? ?? 0;
+    if (expiresAt > 0 && expiresAt <= createdAt) return true;
+
+    db.upsertPendingDeviceLink(
+      linkId: linkId,
+      deviceId: deviceId,
+      deviceName: env.payload['device_name'] as String? ?? 'New device',
+      expiresAt: expiresAt,
+      createdAt: createdAt,
+    );
+    return true;
+  }
+}
+
+/// A pending pairing request completed: the new device is now a full device.
+///
+/// The event carries no key material, only the device id and name, so this
+/// deliberately does *not* synthesize a `devices` row - the local schema
+/// requires both public keys, and inventing them would put a half-real device
+/// in the user's list. The accompanying `RemoteSyncChangeArea.devices` makes
+/// the device screen re-fetch through the API, which returns the real keys.
+class _DeviceLinkedEvent extends _InboundSyncEvent {
+  const _DeviceLinkedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    // A link that has now completed is no longer pending.
+    final linkId = _InboundSyncEvent.optionalString(env, 'link_id');
+    if (linkId != null) {
+      db.markPendingDeviceLinkResolved(linkId, status: 'COMPLETED');
+    } else {
+      // The completion frame omits link_id, so clear out any request that
+      // named this device - that is the request this event is about.
+      final deviceId = _InboundSyncEvent.optionalString(env, 'device_id');
+      if (deviceId != null) {
+        db.markPendingDeviceLinksForDeviceCompleted(deviceId);
+      }
+    }
+    return true;
+  }
+}
+
+/// A device was revoked, here or on another device of the same account.
+///
+/// The local row is marked revoked so the device list reflects reality, and
+/// the engine's `onLocalDeviceRevoked` hook fires when the revoked device is
+/// the one this client is running on.
+class _DeviceRevokedEvent extends _InboundSyncEvent {
+  const _DeviceRevokedEvent();
+
+  @override
+  bool apply(HelixRemoteDatabase db, RemoteRealtimeEnvelope env) {
+    final deviceId = _InboundSyncEvent.requireString(
+      env,
+      'device_id',
+      eventType: 'device_revoked',
+    );
+    db.markDeviceRevokedByDeviceId(deviceId);
+    return true;
+  }
 }
 
 // Ephemeral — payload delivered via RemoteSyncEngine.onCallSignal callback.

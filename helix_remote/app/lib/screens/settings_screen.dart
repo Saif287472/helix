@@ -353,6 +353,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       MaterialPageRoute(
         builder: (_) => DeviceManagementScreen(
           restClient: widget.root.restClient,
+          db: widget.root.database,
           deviceChanges: _tryMessagingChanges(),
         ),
       ),

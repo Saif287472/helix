@@ -707,9 +707,19 @@ extension BackendContactsRepository on BackendDatabase {
     return reportId;
   }
 
-  List<Map<String, dynamic>> getReports() {
-    final stmt = _db.prepare('SELECT * FROM reports ORDER BY created_at DESC;');
-    final res = stmt.select();
+  /// Moderation reports, newest first.
+  ///
+  /// Paged because the admin console's Reports screen offers Previous/Next:
+  /// without a limit the console would request page after page and receive the
+  /// same full list every time, making "Next" a no-op that silently never
+  /// reaches older reports.
+  List<Map<String, dynamic>> getReports({int limit = 50, int offset = 0}) {
+    final stmt = _db.prepare('''
+      SELECT * FROM reports
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?;
+    ''');
+    final res = stmt.select([limit, offset]);
     stmt.close();
     return res
         .map(

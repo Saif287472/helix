@@ -254,6 +254,17 @@
     "readLegalDocuments",
     "reviewGlobalLegalDocuments",
     "terms",
-    "willPermanentlyDeleteAllLocal"
+    "willPermanentlyDeleteAllLocal",
+    "pendingDeviceLinkConfirmElsewhere",
+    "sendCrashReports",
+    "sendCrashReportsDescription",
+    "sendMinimalAnalytics",
+    "sendMinimalAnalyticsDescription",
+    "sendMinimalAnalyticsActiveDescription",
+    "telemetrySinkUnavailable",
+    "telemetryPreferencesSaved",
+    "reportDisclosure",
+    "reportQueued",
+    "reportOnlyOneToOne"
   ]
 }

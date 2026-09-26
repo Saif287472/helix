@@ -365,6 +365,34 @@ class _InvitesTabState extends State<InvitesTab> {
   );
 }
 
+  /// Human-readable remaining lifetime from the server's `expires_at`, or the
+  /// expiry itself when it has passed. The server issues 7-day invites and
+  /// derives `EXPIRED` at read time, so a hardcoded "6 days" was both wrong
+  /// and shown on already-expired invites.
+  String _expiryLabel(Map<String, dynamic> invite, String status) {
+    if (status == 'REDEEMED' || status == 'CANCELLED') return '';
+    final raw = invite['expires_at'];
+    if (raw is! int) return 'Expiry not reported by the server';
+
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(raw);
+    final remaining = expiresAt.difference(DateTime.now());
+    if (remaining.isNegative || remaining == Duration.zero) {
+      final ago = -remaining;
+      if (ago.inDays >= 1) {
+        return 'Expired ${ago.inDays} day${ago.inDays == 1 ? '' : 's'} ago';
+      }
+      if (ago.inHours >= 1) return 'Expired ${ago.inHours} hour${ago.inHours == 1 ? '' : 's'} ago';
+      return 'Expired ${ago.inMinutes.clamp(1, 59)} minute${ago.inMinutes == 1 ? '' : 's'} ago';
+    }
+    if (remaining.inDays >= 1) {
+      return 'Expires in ${remaining.inDays} day${remaining.inDays == 1 ? '' : 's'}';
+    }
+    if (remaining.inHours >= 1) {
+      return 'Expires in ${remaining.inHours} hour${remaining.inHours == 1 ? '' : 's'}';
+    }
+    return 'Expires in ${remaining.inMinutes.clamp(1, 59)} minute${remaining.inMinutes == 1 ? '' : 's'}';
+  }
+
   Widget _buildInviteCard(Map<String, dynamic> invite) {
     final inviteId = invite['invite_id'] as String? ?? '';
     final status = (invite['status'] as String? ?? 'PENDING').toUpperCase();
@@ -372,8 +400,11 @@ class _InvitesTabState extends State<InvitesTab> {
     final isBusy = _busyInviteId == inviteId;
     final isRedeemed = status == 'REDEEMED';
     final isCancelled = status == 'CANCELLED';
+    final isExpired = status == 'EXPIRED';
     final redeemedBy = invite['redeemed_by_account_id'] as String?;
     final issuer = invite['issuer_type'] as String? ?? 'Master Admin';
+    // Only a genuinely pending invite can be cancelled.
+    final canCancel = isPending && !isExpired;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -431,8 +462,13 @@ class _InvitesTabState extends State<InvitesTab> {
                       ? 'Redeemed by $redeemedBy'
                       : (isCancelled
                           ? 'Cancelled by Admin'
-                          : 'Issued by $issuer • Expires in 6 days'),
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                          : 'Issued by $issuer • ${_expiryLabel(invite, status)}'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isExpired
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFF475569),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -463,7 +499,7 @@ class _InvitesTabState extends State<InvitesTab> {
                   width: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              ] else if (isPending) ...[
+              ] else if (canCancel) ...[
                 const SizedBox(height: 6),
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(

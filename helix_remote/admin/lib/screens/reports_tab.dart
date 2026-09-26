@@ -12,41 +12,16 @@ class ReportsTab extends StatefulWidget {
 }
 
 class _ReportsTabState extends State<ReportsTab> {
+  static const _pageSize = 50;
+
   String _selectedFilter = 'Total Reports';
   List<Map<String, dynamic>> _reports = [];
   bool _loading = false;
   String? _error;
   String? _actioningReportId;
 
-  static const List<Map<String, dynamic>> _demoReports = [
-    {
-      'id': 'rep_001',
-      'reason': 'Spam / Unsolicited Contact',
-      'reported_user': 'Marcus Sterling (+44 7700 900077)',
-      'reporter': 'Elena Rostova',
-      'details': 'Sent unwanted promotional links',
-      'status': 'Pending',
-      'created_at': 1710000000000,
-    },
-    {
-      'id': 'rep_002',
-      'reason': 'Suspicious Media Transfer',
-      'reported_user': 'Anonymous Peer #4902',
-      'reporter': 'Master Admin',
-      'details': 'Flagged for manual review',
-      'status': 'Under Review',
-      'created_at': 1710000000000,
-    },
-    {
-      'id': 'rep_003',
-      'reason': 'Impersonation Dispute',
-      'reported_user': 'Account #8810 (Resolved)',
-      'reporter': 'System Verifier',
-      'details': 'User identity verified • Report closed',
-      'status': 'Resolved',
-      'created_at': 1710000000000,
-    },
-  ];
+  int _offset = 0;
+  bool _hasMore = false;
 
   @override
   void initState() {
@@ -54,75 +29,97 @@ class _ReportsTabState extends State<ReportsTab> {
     _loadReports();
   }
 
-  Future<void> _loadReports() async {
+  Future<void> _loadReports({int offset = 0}) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final raw = await widget.client.getReports(limit: 50);
-      final mapped = raw.map((r) {
-        final rawStatus = (r['status'] as String? ?? 'PENDING').toUpperCase();
-        final displayStatus = switch (rawStatus) {
-          'PENDING' => 'Pending',
-          'UNDER REVIEW' || 'ACTIONED' => 'Under Review',
-          'RESOLVED' => 'Resolved',
-          'DISMISSED' => 'Dismissed',
-          _ => 'Pending',
-        };
-
-        return {
-          'id': (r['report_id'] ?? r['id'] ?? '').toString(),
-          'reason': (r['category'] ?? r['reason'] ?? 'Report').toString(),
-          'reported_user': (r['subject_display_name'] ?? r['reported_user'] ?? r['subject_account_id'] ?? 'Unknown').toString(),
-          'reporter': (r['reporter_display_name'] ?? r['reporter'] ?? r['reporter_account_id'] ?? 'Anonymous').toString(),
-          'details': (r['context_hash'] ?? r['details'] ?? r['reason_code'] ?? 'No additional details').toString(),
-          'status': displayStatus,
-          'created_at': r['created_at'] is int
-              ? r['created_at']
-              : (DateTime.tryParse(r['created_at']?.toString() ?? '')?.millisecondsSinceEpoch ?? 0),
-        };
-      }).toList();
+      final raw = await widget.client.getReports(
+        limit: _pageSize,
+        offset: offset,
+      );
+      final mapped = raw.map(_mapReport).toList();
 
       if (!mounted) return;
       setState(() {
         _reports = mapped;
+        _offset = offset;
+        _hasMore = raw.length == _pageSize;
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = null; // Suppress backend error to gracefully fallback to demo reports if unconfigured
+        // Surfaced, not swallowed: a transport failure must be
+        // distinguishable from "there are no reports".
+        _error = e.toString();
       });
     }
+  }
+
+  static Map<String, dynamic> _mapReport(Map<String, dynamic> r) {
+    final rawStatus = (r['status'] as String? ?? 'PENDING').toUpperCase();
+    final displayStatus = switch (rawStatus) {
+      'PENDING' => 'Pending',
+      'UNDER REVIEW' || 'ACTIONED' => 'Under Review',
+      'RESOLVED' => 'Resolved',
+      'DISMISSED' => 'Dismissed',
+      _ => 'Pending',
+    };
+
+    return {
+      'id': (r['report_id'] ?? r['id'] ?? '').toString(),
+      'reason': (r['category'] ?? r['reason'] ?? 'Report').toString(),
+      'reported_user':
+          (r['subject_display_name'] ??
+                  r['reported_user'] ??
+                  r['subject_account_id'] ??
+                  'Unknown')
+              .toString(),
+      'reporter':
+          (r['reporter_display_name'] ??
+                  r['reporter'] ??
+                  r['reporter_account_id'] ??
+                  'Anonymous')
+              .toString(),
+      'details':
+          (r['context_hash'] ??
+                  r['details'] ??
+                  r['reason_code'] ??
+                  'No additional details')
+              .toString(),
+      'status': displayStatus,
+      'created_at': r['created_at'] is int
+          ? r['created_at']
+          : (DateTime.tryParse(
+                  r['created_at']?.toString() ?? '',
+                )?.millisecondsSinceEpoch ??
+                0),
+    };
   }
 
   Future<void> _resolveReport(String reportId) async {
     setState(() => _actioningReportId = reportId);
     try {
       await widget.client.resolveReport(reportId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report marked as Resolved')),
-        );
-      }
-      await _loadReports();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report marked as Resolved')),
+      );
+      await _loadReports(offset: _offset);
     } catch (e) {
-      if (mounted) {
-        // Local state update for smooth interactive feel
-        setState(() {
-          for (final r in _reports) {
-            if (r['id'] == reportId) r['status'] = 'Resolved';
-          }
-          for (final r in _demoReports) {
-            if (r['id'] == reportId) r['status'] = 'Resolved';
-          }
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report marked as Resolved')),
-        );
-      }
+      // A failed resolution is reported as a failure. The row is left
+      // untouched so the screen cannot disagree with the server.
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not resolve report: $e'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _actioningReportId = null);
     }
@@ -132,26 +129,20 @@ class _ReportsTabState extends State<ReportsTab> {
     setState(() => _actioningReportId = reportId);
     try {
       await widget.client.dismissReport(reportId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report dismissed')),
-        );
-      }
-      await _loadReports();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report dismissed')),
+      );
+      await _loadReports(offset: _offset);
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          for (final r in _reports) {
-            if (r['id'] == reportId) r['status'] = 'Dismissed';
-          }
-          for (final r in _demoReports) {
-            if (r['id'] == reportId) r['status'] = 'Dismissed';
-          }
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report dismissed')),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not dismiss report: $e'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _actioningReportId = null);
     }
@@ -267,6 +258,30 @@ class _ReportsTabState extends State<ReportsTab> {
           Column(
             children: [
               for (final report in filtered) _buildReportCard(report),
+              if (!_loading && (_hasMore || _offset > 0)) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      key: const Key('reports_previous_page'),
+                      onPressed: _offset > 0
+                          ? () => _loadReports(
+                              offset: (_offset - _pageSize).clamp(0, 1 << 30),
+                            )
+                          : null,
+                      child: const Text('Previous'),
+                    ),
+                    TextButton(
+                      key: const Key('reports_next_page'),
+                      onPressed: _hasMore
+                          ? () => _loadReports(offset: _offset + _pageSize)
+                          : null,
+                      child: const Text('Next'),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
       ],

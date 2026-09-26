@@ -75,14 +75,6 @@ class _LogsTabState extends State<LogsTab> {
     _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
-  static const List<String> _sampleLogs = [
-    '21:44:01 [INFO] WebSockets connection established from 104.28.14.2',
-    '21:43:55 [OK] Database VACUUM INTO /backups/helix_20260924.db completed',
-    '21:42:10 [INFO] Contact discovery phone hash Argon2id lookup (24ms)',
-    '21:40:02 [WARN] SMS Gateway response balance check: \$48.50 remaining',
-    '21:38:15 [INFO] Server display name updated to "Helix CipherNode Alpha"',
-  ];
-
   List<String> get _visibleLines {
     List<String> baseLines;
     if (widget.logs.lines.isNotEmpty) {
@@ -92,7 +84,11 @@ class _LogsTabState extends State<LogsTab> {
         baseLines = widget.logs.lines;
       }
     } else {
-      baseLines = _isCleared ? <String>[] : _sampleLogs;
+      // An empty console is reported as empty. The server sends a `message`
+      // explaining *why* it has nothing (no log sink, no file, nothing logged
+      // yet) and `_buildEmptyState` shows that verbatim - substituting sample
+      // lines here hid the one piece of text that helps the operator.
+      baseLines = const <String>[];
     }
 
     if (_filter.isEmpty) return baseLines;
@@ -156,10 +152,31 @@ class _LogsTabState extends State<LogsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Action Buttons Row (Pause Stream, Clear Logs, Copy Tail)
+              // Action Buttons Row (Refresh, Pause Stream, Clear Logs, Copy Tail)
               Row(
                 children: [
+                  OutlinedButton.icon(
+                    key: const Key('logs_refresh_button'),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF334155),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      minimumSize: Size.zero,
+                    ),
+                    onPressed: () {
+                      // Always available: with the stream paused, a failed
+                      // poll is otherwise indistinguishable from an idle
+                      // server and there is no way to retry.
+                      widget.onRefresh();
+                    },
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Refresh', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 10),
                   OutlinedButton(
+                    key: const Key('logs_stream_toggle_button'),
                     style: OutlinedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF334155),
@@ -331,6 +348,16 @@ class _LogsTabState extends State<LogsTab> {
 
   Widget _buildEmptyState(BuildContext context) {
     final message = widget.logs.message;
+    // `source` distinguishes "nothing logged yet" from "this server cannot
+    // write a log file at all", and `filePath` tells the operator which file
+    // is being tailed. Both are sent by the server on every response.
+    final source = widget.logs.source;
+    final sourceLabel = switch (source) {
+      'file' => 'Reading from log file',
+      'memory' => 'Reading from in-memory buffer',
+      'none' => 'No log source available',
+      _ => 'Log source: $source',
+    };
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -344,6 +371,29 @@ class _LogsTabState extends State<LogsTab> {
               textAlign: TextAlign.center,
               style: const TextStyle(color: Color(0xFF64748B), height: 1.5, fontSize: 13),
             ),
+            const SizedBox(height: 10),
+            Text(
+              sourceLabel,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF94A3B8),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (widget.logs.filePath != null &&
+                widget.logs.filePath!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              SelectableText(
+                widget.logs.filePath!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
           ],
         ),
       ),

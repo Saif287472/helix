@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// The nested/sunken surface tone used for the sidebar, app bar, and inline
-/// code/example blocks: one step darker than the page background in dark
-/// mode, one step more tinted than it in light mode. Material's ColorScheme
-/// only models a flat background/surface pair, so this fills the gap rather
-/// than smuggling a third hardcoded hex value into every screen that needs
-/// it.
+/// code/example blocks: one step more tinted than the page background.
+/// Material's ColorScheme only models a flat background/surface pair, so this
+/// fills the gap rather than smuggling a third hardcoded hex value into every
+/// screen that needs it.
 class AppSurfaces extends ThemeExtension<AppSurfaces> {
   const AppSurfaces({required this.sunken});
 
@@ -23,22 +22,24 @@ class AppSurfaces extends ThemeExtension<AppSurfaces> {
   }
 }
 
-/// Helix Admin's light and dark themes.
+/// Helix Admin's theme.
 ///
-/// `primary` (violet) is fixed across both brightnesses - it has enough
-/// contrast against both a near-black and a near-white surface to work as
-/// icon/button fill either way. `accent` (the cyan highlight used for links
-/// and monospace values) does not: bright cyan text is unreadable on a white
-/// page, so it's tuned separately per brightness instead of reused verbatim.
+/// Light only, deliberately. Dark mode is deferred for this product: the
+/// console is meant to be light and colourful, and the previous `AppTheme.dark`
+/// was literally `AppTheme.light` with a dark-mode-shaped name - so
+/// `ThemeMode.dark` rendered pixel-identically to light while the dead branch
+/// at [AppColorsX.sunkenSurface] kept a near-black surface value alive that
+/// nothing could ever reach. There is one theme, and it is the light one.
 class AppTheme {
   AppTheme._();
 
   static const _primary = HelixColorTokens.cFF8A2BE2;
 
-  static final ThemeData dark = light;
+  /// Fallback when no [AppSurfaces] extension is present in the tree. Light
+  /// and tinted, matching the page background one step up.
+  static const _sunkenFallback = Color(0xFFEDEAF5);
 
   static final ThemeData light = _build(
-    brightness: Brightness.light,
     background: const Color(0xFFF1F5F9),
     surface: Colors.white,
     sunken: const Color(0xFFE2E8F0),
@@ -48,7 +49,6 @@ class AppTheme {
   );
 
   static ThemeData _build({
-    required Brightness brightness,
     required Color background,
     required Color surface,
     required Color sunken,
@@ -56,24 +56,20 @@ class AppTheme {
     required Color accent,
     required Color error,
   }) {
-    final colorScheme = brightness == Brightness.dark
-        ? ColorScheme.dark(
-            primary: _primary,
-            secondary: accent,
-            error: error,
-            surface: surface,
-            onSurface: onSurface,
-          )
-        : ColorScheme.light(
-            primary: _primary,
-            secondary: accent,
-            error: error,
-            surface: surface,
-            onSurface: onSurface,
-          );
+    final colorScheme = ColorScheme.light(
+      primary: _primary,
+      secondary: accent,
+      error: error,
+      surface: surface,
+      onSurface: onSurface,
+    );
     return ThemeData(
       useMaterial3: true,
-      brightness: brightness,
+      // Pinned rather than left to a brightness parameter: the app sets
+      // `themeMode: ThemeMode.light` unconditionally, so this can only ever
+      // be light, and asserting it here means a future `ColorScheme.dark`
+      // cannot sneak in behind a removed parameter.
+      brightness: Brightness.light,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: background,
       cardColor: surface,
@@ -108,11 +104,9 @@ class AppTheme {
 
 /// Convenience accessors so screens reach for a semantic tier instead of
 /// repeating `Theme.of(context).colorScheme.onSurface.withValues(...)` at
-/// every call site. Each tier mirrors what the old dark-only design used
-/// (`Colors.white`, `Colors.white70`, `Colors.white54`, `Colors.white38`) but
-/// derived from the active theme's `onSurface`, so it lands on the correct
-/// near-black or near-white base in both brightnesses instead of only ever
-/// being legible on a dark card.
+/// every call site. All four tiers are derived from the light theme's
+/// `onSurface`, so each one lands on the same near-black base at a different
+/// strength.
 extension AppColorsX on BuildContext {
   ColorScheme get _scheme => Theme.of(this).colorScheme;
 
@@ -121,14 +115,12 @@ extension AppColorsX on BuildContext {
   Color get textTertiary => _scheme.onSurface.withValues(alpha: 0.54);
   Color get textFaint => _scheme.onSurface.withValues(alpha: 0.38);
 
-  /// The cyan/teal accent used for links, highlighted borders, and
-  /// monospace values - tuned per brightness, see [AppTheme].
+  /// The blue accent used for links, highlighted borders, and monospace
+  /// values. Tuned for legibility on a white page.
   Color get accentColor => _scheme.secondary;
 
   /// The sidebar/app-bar/code-block surface tone. See [AppSurfaces].
   Color get sunkenSurface =>
       Theme.of(this).extension<AppSurfaces>()?.sunken ??
-      (Theme.of(this).brightness == Brightness.dark
-          ? const Color(0xFF0B0B12)
-          : const Color(0xFFEDEAF5));
+      AppTheme._sunkenFallback;
 }

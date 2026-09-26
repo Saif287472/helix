@@ -6,6 +6,13 @@ import 'package:helix_remote_backend/src/app_error.dart';
 abstract interface class SmsProvider {
   bool get isConfigured;
 
+  /// Short operator-facing name of the concrete gateway, e.g. `BulkSMSBD`.
+  ///
+  /// Admin surfaces render this instead of hardcoding a vendor, so a
+  /// self-hoster running a different gateway is not told they are on
+  /// someone else's.
+  String get displayName;
+
   /// Sends [message] as an SMS to [phoneNumber] (E.164, e.g.
   /// `+8801XXXXXXXXX`). Throws [SmsDeliveryException] on failure.
   Future<void> send({required String phoneNumber, required String message});
@@ -18,6 +25,9 @@ final class NoopSmsProvider implements SmsProvider {
 
   @override
   bool get isConfigured => false;
+
+  @override
+  String get displayName => 'None';
 
   @override
   Future<void> send({required String phoneNumber, required String message}) {
@@ -52,6 +62,9 @@ final class BulkSmsBdProvider implements SmsProvider {
 
   @override
   bool get isConfigured => apiKey.isNotEmpty && senderId.isNotEmpty;
+
+  @override
+  String get displayName => 'BulkSMSBD';
 
   @override
   Future<void> send({

@@ -83,6 +83,122 @@ mixin RemoteAccountsContactsRepository on HelixRemoteDatabaseBase {
         .toList();
   }
 
+  /// Flags a device as revoked without touching its key material.
+  ///
+  /// Called when the server pushes `device_revoked`. The public keys stay put
+  /// so the row is still renderable in the device list as a historical entry;
+  /// only the status changes.
+  ///
+  /// Matched on `device_id` alone because the relay scopes this event to the
+  /// recipient's own account and so sends no account id, and because the
+  /// local mirror holds exactly one account (a single global sync cursor).
+  /// Returns true when a row was updated.
+  bool markDeviceRevokedByDeviceId(String deviceId) {
+    final stmt = _db.prepare('''
+      UPDATE devices SET status = 'REVOKED' WHERE device_id = ?;
+    ''');
+    stmt.execute([deviceId]);
+    stmt.close();
+    return _db.updatedRows > 0;
+  }
+
+  /// The local device id recorded for this account, if one is stored.
+  String? getLocalDeviceId() {
+    final stmt = _db.prepare(
+      "SELECT device_id FROM devices WHERE status = 'ACTIVE' ORDER BY created_at DESC LIMIT 1;",
+    );
+    final res = stmt.select();
+    stmt.close();
+    if (res.isEmpty) return null;
+    return res.first['device_id'] as String?;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pending device-link requests
+  // ---------------------------------------------------------------------------
+
+  /// Records a `pending_device_link` push from the server.
+  ///
+  /// Holds no verification code: the 6-digit code the approving device has to
+  /// confirm lives only on the *new* device, so approving means acting on
+  /// that screen, not here.
+  void upsertPendingDeviceLink({
+    required String linkId,
+    required String deviceId,
+    required String deviceName,
+    required int expiresAt,
+    required int createdAt,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO pending_device_links
+        (link_id, device_id, device_name, expires_at, created_at, status)
+      VALUES (?, ?, ?, ?, ?, 'PENDING')
+      ON CONFLICT(link_id) DO UPDATE SET
+        device_id = excluded.device_id,
+        device_name = excluded.device_name,
+        expires_at = excluded.expires_at,
+        created_at = excluded.created_at,
+        status = 'PENDING';
+    ''');
+    stmt.execute([linkId, deviceId, deviceName, expiresAt, createdAt]);
+    stmt.close();
+  }
+
+  /// Pending, unexpired link requests, newest first.
+  List<Map<String, dynamic>> getPendingDeviceLinks({required int nowMs}) {
+    final stmt = _db.prepare('''
+      SELECT * FROM pending_device_links
+      WHERE status = 'PENDING' AND expires_at > ?
+      ORDER BY created_at DESC;
+    ''');
+    final res = stmt.select([nowMs]);
+    stmt.close();
+    return res
+        .map(
+          (row) => {
+            'link_id': row['link_id'] as String,
+            'device_id': row['device_id'] as String,
+            'device_name': row['device_name'] as String,
+            'expires_at': row['expires_at'] as int,
+            'created_at': row['created_at'] as int,
+            'status': row['status'] as String,
+          },
+        )
+        .toList();
+  }
+
+  void markPendingDeviceLinkResolved(String linkId, {required String status}) {
+    final stmt = _db.prepare('''
+      UPDATE pending_device_links SET status = ?
+      WHERE link_id = ?;
+    ''');
+    stmt.execute([status, linkId]);
+    stmt.close();
+  }
+
+  /// Clears every pending request that named [deviceId].
+  ///
+  /// The `device_linked` completion frame does not carry the link id, so the
+  /// only way to retire the matching prompt is by the device it named.
+  void markPendingDeviceLinksForDeviceCompleted(String deviceId) {
+    final stmt = _db.prepare('''
+      UPDATE pending_device_links SET status = 'COMPLETED'
+      WHERE device_id = ? AND status = 'PENDING';
+    ''');
+    stmt.execute([deviceId]);
+    stmt.close();
+  }
+
+  /// Drops link requests the server has already expired, so they cannot
+  /// accumulate in a list the operator can no longer act on.
+  void purgeExpiredDeviceLinks({required int nowMs}) {
+    final stmt = _db.prepare(
+      "DELETE FROM pending_device_links WHERE status = 'PENDING' AND expires_at <= ?;",
+    );
+    stmt.execute([nowMs]);
+    stmt.close();
+  }
+
   // ---------------------------------------------------------------------------
   // Contact operations
   // ---------------------------------------------------------------------------

@@ -399,7 +399,13 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     final result = stmt.select([accountId]);
     stmt.close();
 
-    final list = result
+    // An account with no registered devices genuinely has none. This used to
+    // INSERT a synthetic "Primary Registered Device" row on read, which meant
+    // the admin console could never show a device-less user, an operator could
+    // never tell a real device from a fabricated one, and revoking the
+    // fabricated row was undone by the next read. Reports only what is in the
+    // table.
+    return result
         .map(
           (row) => {
             'device_id': row['device_id'],
@@ -414,34 +420,6 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
           },
         )
         .toList();
-
-    if (list.isEmpty) {
-      final account = getAccount(accountId);
-      if (account != null) {
-        final now =
-            account['created_at'] as int? ??
-            DateTime.now().millisecondsSinceEpoch;
-        final devId =
-            'dev_${accountId.length > 8 ? accountId.substring(0, 8) : accountId}';
-        final key = account['identity_public_key'] as String? ?? 'pk_default';
-        registerDevice(devId, accountId, key, 'Primary Registered Device');
-        return [
-          {
-            'device_id': devId,
-            'account_id': accountId,
-            'device_signing_public_key': key,
-            'device_agreement_public_key': key,
-            'device_name': 'Primary Registered Device',
-            'status': 'ACTIVE',
-            'push_token': null,
-            'created_at': now,
-            'last_seen_at': now,
-          },
-        ];
-      }
-    }
-
-    return list;
   }
 
   void revokeDevice(String accountId, String deviceId) {
@@ -459,6 +437,38 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     ''');
     stmt.execute([deviceName, accountId, deviceId]);
     stmt.close();
+  }
+
+  /// Only the account's ACTIVE devices.
+  ///
+  /// [getDevices] deliberately includes REVOKED rows so the admin console can
+  /// show what was removed. Call paths that deliver to a device - a call
+  /// offer, a message, a prekey bundle - must not use it for that: an empty
+  /// result there means the callee cannot be reached, and a revoked device
+  /// must never be handed a fresh offer.
+  List<Map<String, dynamic>> getActiveDevices(String accountId) {
+    final stmt = _db.prepare('''
+      SELECT * FROM devices
+      WHERE account_id = ? AND status = 'ACTIVE'
+      ORDER BY last_seen_at DESC;
+    ''');
+    final result = stmt.select([accountId]);
+    stmt.close();
+    return result
+        .map(
+          (row) => {
+            'device_id': row['device_id'],
+            'account_id': row['account_id'],
+            'device_signing_public_key': row['device_signing_public_key'],
+            'device_agreement_public_key': row['device_agreement_public_key'],
+            'device_name': row['device_name'],
+            'status': (row['status'] as String? ?? 'ACTIVE').toUpperCase(),
+            'push_token': row['push_token'],
+            'created_at': row['created_at'],
+            'last_seen_at': row['last_seen_at'],
+          },
+        )
+        .toList();
   }
 
   int activeDeviceCount(String accountId) {

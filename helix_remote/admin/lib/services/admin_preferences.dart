@@ -3,16 +3,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Local-only persistence for Helix Admin.
 ///
-/// The server URL, first-launch flag, and app-lock preference are
-/// non-sensitive and live in SharedPreferences. The admin bearer token is
-/// sensitive, so it lives in platform secure storage instead (Android
-/// Keystore-backed / iOS Keychain, via flutter_secure_storage) rather than
-/// SharedPreferences' plaintext file - the same approach already used for
-/// secrets in app/ and packages/helix_remote_crypto.
+/// The server URL and the app-lock preference are non-sensitive and live in
+/// SharedPreferences. The admin bearer token is sensitive, so it lives in
+/// platform secure storage instead (Android Keystore-backed / iOS Keychain,
+/// via flutter_secure_storage) rather than SharedPreferences' plaintext file -
+/// the same approach already used for secrets in app/ and
+/// packages/helix_remote_crypto.
 class AdminPreferences {
   AdminPreferences(this._prefs, this._secureStorage);
 
-  static const _introShownKey = 'intro_shown';
   static const _serverUrlKey = 'server_url';
   static const _appLockEnabledKey = 'app_lock_enabled';
   static const _adminTokenKey = 'admin_token';
@@ -26,11 +25,6 @@ class AdminPreferences {
       const FlutterSecureStorage(),
     );
   }
-
-  bool get introShown => _prefs.getBool(_introShownKey) ?? false;
-
-  Future<void> setIntroShown(bool value) =>
-      _prefs.setBool(_introShownKey, value);
 
   String? get serverUrl => _prefs.getString(_serverUrlKey);
 

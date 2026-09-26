@@ -75,34 +75,50 @@ class _UsersTabState extends State<UsersTab> {
     }
   }
 
+  /// Applies [status] to the account locally so the row updates immediately,
+  /// and returns the status it replaced so a failed call can be rolled back.
+  String? _applyStatusLocally(String accountId, String status) {
+    String? previous;
+    for (final u in _users) {
+      if (u['account_id'] == accountId) {
+        previous = u['status'] as String?;
+        u['status'] = status;
+      }
+    }
+    if (_selectedUser?['account_id'] == accountId) {
+      previous ??= _selectedUser!['status'] as String?;
+      _selectedUser!['status'] = status;
+    }
+    return previous;
+  }
+
   Future<void> _suspend(String accountId) async {
     setState(() {
       _busyAccountId = accountId;
-      for (final u in _users) {
-        if (u['account_id'] == accountId) {
-          u['status'] = 'SUSPENDED';
-        }
-      }
-      if (_selectedUser?['account_id'] == accountId) {
-        _selectedUser!['status'] = 'SUSPENDED';
-      }
+      _error = null;
     });
+    final previousStatus = _applyStatusLocally(accountId, 'SUSPENDED');
 
-    if (mounted) {
+    try {
+      await widget.client.suspendUser(accountId);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Account suspended successfully'),
           duration: Duration(seconds: 2),
         ),
       );
-    }
-
-    try {
-      await widget.client.suspendUser(accountId);
       await _loadUsers(offset: _offset);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      // Roll the optimistic row back so a failed suspend is not displayed as
+      // a suspended account.
+      setState(() {
+        if (previousStatus != null) {
+          _applyStatusLocally(accountId, previousStatus);
+        }
+        _error = e.toString();
+      });
     } finally {
       if (mounted) setState(() => _busyAccountId = null);
     }
@@ -111,31 +127,28 @@ class _UsersTabState extends State<UsersTab> {
   Future<void> _unsuspend(String accountId) async {
     setState(() {
       _busyAccountId = accountId;
-      for (final u in _users) {
-        if (u['account_id'] == accountId) {
-          u['status'] = 'ACTIVE';
-        }
-      }
-      if (_selectedUser?['account_id'] == accountId) {
-        _selectedUser!['status'] = 'ACTIVE';
-      }
+      _error = null;
     });
+    final previousStatus = _applyStatusLocally(accountId, 'ACTIVE');
 
-    if (mounted) {
+    try {
+      await widget.client.unsuspendUser(accountId);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Account restored successfully'),
           duration: Duration(seconds: 2),
         ),
       );
-    }
-
-    try {
-      await widget.client.unsuspendUser(accountId);
       await _loadUsers(offset: _offset);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      setState(() {
+        if (previousStatus != null) {
+          _applyStatusLocally(accountId, previousStatus);
+        }
+        _error = e.toString();
+      });
     } finally {
       if (mounted) setState(() => _busyAccountId = null);
     }
@@ -624,7 +637,14 @@ class _UsersTabState extends State<UsersTab> {
     final phone = _formatPhone(user);
     final joined = _formatTimestamp(user['created_at']);
     final devices = (user['devices'] as List? ?? []).cast<Map<String, dynamic>>();
-    final devicesCount = devices.isEmpty ? (user['device_count'] ?? 1) : devices.length;
+    // `device_count` is the server's own count of ACTIVE devices for this
+    // account. Prefer the attached device list when present, fall back to the
+    // server count, and never invent a value - an account with no registered
+    // devices is genuinely zero, not one.
+    final rawCount = user['device_count'];
+    final devicesCount = devices.isNotEmpty
+        ? devices.length
+        : (rawCount is int ? rawCount : 0);
     final initial = displayName.isNotEmpty
         ? displayName[0].toUpperCase()
         : (accountId.isNotEmpty ? accountId[0].toUpperCase() : 'U');
@@ -875,11 +895,34 @@ class _UsersTabState extends State<UsersTab> {
               ),
               const SizedBox(height: 10),
               if (devices.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    'No active devices registered.',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.phonelink_erase_outlined,
+                        size: 18,
+                        color: Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'No connected devices. This account has not '
+                          'registered a device on this server yet.',
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 )
               else
@@ -925,10 +968,36 @@ class _UsersTabState extends State<UsersTab> {
                               minimumSize: Size.zero,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
-                            onPressed: () async {
-                              await widget.client.revokeDevice(accountId, dev['device_id']);
-                              await _loadUsers(offset: _offset);
-                            },
+                            onPressed: isBusy
+                                ? null
+                                : () async {
+                                    final deviceId = dev['device_id'] as String?;
+                                    if (deviceId == null) return;
+                                    setState(() {
+                                      _busyAccountId = accountId;
+                                      _error = null;
+                                    });
+                                    try {
+                                      await widget.client.revokeDevice(
+                                        accountId,
+                                        deviceId,
+                                      );
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Device access revoked'),
+                                        ),
+                                      );
+                                      await _loadUsers(offset: _offset);
+                                    } catch (e) {
+                                      if (!mounted) return;
+                                      setState(() => _error = e.toString());
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() => _busyAccountId = null);
+                                      }
+                                    }
+                                  },
                             child: const Text('Revoke', style: TextStyle(fontSize: 11)),
                           ),
                       ],

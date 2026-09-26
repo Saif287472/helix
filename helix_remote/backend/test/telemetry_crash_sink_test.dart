@@ -27,6 +27,12 @@ void main() {
       rateLimitRefillRate: 1000,
     );
     await server.start('127.0.0.1', 0);
+    // The sink is opt-in: `crash_reporting_upload` gates `_reportCrash`, so a
+    // deployment that has not turned it on must refuse reports.
+    server.db.setServerConfig(
+      'feature_flag.crash_reporting_upload',
+      'true',
+    );
     port = server.httpServer!.port;
     client = HttpClient();
   });
@@ -80,6 +86,90 @@ void main() {
     final response = await postCrash({'name': 'app_crash', 'fields': {}});
     expect(response.statusCode, equals(401));
     await response.drain<void>();
+  });
+
+  test('the sink refuses reports while the operator flag is off', () async {
+    // The flag defaults to off, so a deployment that never opted in must not
+    // accept crash data - and the refusal has to be counted, otherwise
+    // /ops/metrics cannot distinguish "no clients reporting" from "clients
+    // reporting into a switched-off sink".
+    server.db.setServerConfig(
+      'feature_flag.crash_reporting_upload',
+      'false',
+    );
+    final token = await authenticate('flag_off');
+
+    final response = await postCrash(
+      {'name': 'app_crash', 'fields': {'error': 'StateError: boom'}},
+      token: token,
+    );
+
+    expect(response.statusCode, equals(403));
+    final body =
+        jsonDecode(await response.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    expect(
+      body['error'],
+      contains('disabled'),
+      reason: 'the client is told why, rather than getting a bare 403',
+    );
+
+    server.db.createAccount('crash_flag_ops', 'crash_flag_ops_u', 'ops_key');
+    server.db.setAccountAdmin('crash_flag_ops', isAdmin: true);
+    server.db.registerDevice(
+      'crash_flag_ops_device',
+      'crash_flag_ops',
+      'ops_device_key',
+      'Ops',
+    );
+    final adminToken = server.jwt.generateToken({
+      'account_id': 'crash_flag_ops',
+      'device_id': 'crash_flag_ops_device',
+    }, const Duration(hours: 1));
+
+    final metricsRequest = await client.getUrl(
+      Uri.parse('http://127.0.0.1:$port/api/v1/ops/metrics'),
+    );
+    metricsRequest.headers.set('Authorization', 'Bearer $adminToken');
+    final metricsResponse = await metricsRequest.close();
+    final metrics =
+        jsonDecode(await metricsResponse.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    final telemetry = metrics['telemetry'] as Map<String, dynamic>;
+
+    expect(telemetry['crash_reports_accepted'], equals(0));
+    expect(
+      telemetry['crash_reports_rejected'],
+      equals(1),
+      reason: 'a refused report is still observable',
+    );
+  });
+
+  test('the feature flag snapshot reports the crash sink as on', () async {
+    server.db.createAccount('crash_flag_read', 'crash_flag_read_u', 'ops_key');
+    server.db.setAccountAdmin('crash_flag_read', isAdmin: true);
+    server.db.registerDevice(
+      'crash_flag_read_device',
+      'crash_flag_read',
+      'ops_device_key',
+      'Ops',
+    );
+    final adminToken = server.jwt.generateToken({
+      'account_id': 'crash_flag_read',
+      'device_id': 'crash_flag_read_device',
+    }, const Duration(hours: 1));
+
+    final request = await client.getUrl(
+      Uri.parse('http://127.0.0.1:$port/api/v1/ops/feature-flags'),
+    );
+    request.headers.set('Authorization', 'Bearer $adminToken');
+    final response = await request.close();
+    final body =
+        jsonDecode(await response.transform(utf8.decoder).join())
+            as Map<String, dynamic>;
+    final flags = body['flags'] as Map<String, dynamic>;
+
+    expect(flags['crash_reporting_upload'], isTrue);
   });
 
   test('an authenticated report is accepted and counted', () async {
@@ -166,6 +256,10 @@ void main() {
       rateLimitRefillRate: 0,
     );
     await limited.start('127.0.0.1', 0);
+    limited.db.setServerConfig(
+      'feature_flag.crash_reporting_upload',
+      'true',
+    );
     addTearDown(limited.stop);
     final limitedPort = limited.httpServer!.port;
     final limitedClient = HttpClient();

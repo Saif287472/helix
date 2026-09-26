@@ -21,6 +21,8 @@ class OpsTab extends StatefulWidget {
     required this.isLoading,
     required this.onTriggerBackup,
     this.onSignOut,
+    this.appLockEnabled = false,
+    this.onAppLockChanged,
     this.initialSubTab = 'reports',
   });
 
@@ -36,6 +38,11 @@ class OpsTab extends StatefulWidget {
   final bool isLoading;
   final Future<void> Function() onTriggerBackup;
   final VoidCallback? onSignOut;
+
+  /// Forwarded to the Config sub-tab, which is the only reachable place the
+  /// App Lock switch now lives (the standalone Settings screen is gone).
+  final bool appLockEnabled;
+  final ValueChanged<bool>? onAppLockChanged;
   final String initialSubTab;
 
   @override
@@ -48,41 +55,15 @@ class _OpsTabState extends State<OpsTab> {
   bool _loadingAudit = false;
   List<_AuditEvent> _auditEvents = [];
 
-  static const List<_AuditEvent> _defaultAuditEvents = [
-    _AuditEvent(
-      code: 'ADMIN_USER_RECOVERY_ISSUED',
-      details: 'Admin issued recovery token for user',
-      time: '14:22:08',
-      ip: '192.168.1.42',
-      session: '#8821',
-      badge: 'SUCCESS',
-      badgeColor: Color(0xFF059669),
-      badgeBg: Color(0xFFECFDF5),
-      category: 'Auth & Recovery',
-    ),
-    _AuditEvent(
-      code: 'DEVICE_AUTHORIZATION_REVOKED',
-      details: 'Revoked session key for Device ID',
-      time: '13:58:11',
-      ip: '192.168.1.42',
-      session: '#8821',
-      badge: 'AUDITED',
-      badgeColor: Color(0xFFD97706),
-      badgeBg: Color(0xFFFFFBEB),
-      category: 'Security & Mod',
-    ),
-    _AuditEvent(
-      code: 'SYSTEM_BACKUP_COMPLETED',
-      details: 'Encrypted SQLite snapshot generated',
-      time: '12:00:00',
-      ip: 'SYSTEM AUTOMATION',
-      session: '#cron-00',
-      badge: 'SYSTEM',
-      badgeColor: Color(0xFF2563EB),
-      badgeBg: Color(0xFFEFF6FF),
-      category: 'System',
-    ),
-  ];
+  /// Set when the audit fetch itself fails, so a transport error is never
+  /// rendered as "no audit events recorded yet".
+  String? _auditError;
+
+  /// When non-null, the audit trail is narrowed to a single account. Empty
+  /// means "everything", which is what the server is asked for by default.
+  String _auditAccountFilter = '';
+  final TextEditingController _auditAccountController =
+      TextEditingController();
 
   @override
   void initState() {
@@ -91,12 +72,33 @@ class _OpsTabState extends State<OpsTab> {
     _loadAuditLogs();
   }
 
+  @override
+  void dispose() {
+    _auditAccountController.dispose();
+    super.dispose();
+  }
+
+  void _applyAuditAccountFilter(String value) {
+    setState(() => _auditAccountFilter = value.trim());
+    _loadAuditLogs();
+  }
+
   Future<void> _loadAuditLogs() async {
-    setState(() => _loadingAudit = true);
+    setState(() {
+      _loadingAudit = true;
+      _auditError = null;
+    });
     try {
-      final rawLogs = await widget.client.getAuditLogs();
+      // The filter is applied server-side, so an audit trail narrowed to one
+      // account is a real query rather than the full log re-filtered in the
+      // client.
+      final rawLogs = await widget.client.getAuditLogs(
+        accountId: _auditAccountFilter,
+      );
       if (!mounted) return;
 
+      // The server drops `*_READ` / `*_POLL` unless `include_read=true`, but
+      // not every such action, so the same filter is kept here.
       final significantLogs = rawLogs.where((l) {
         final act = (l['action'] as String? ?? '').toUpperCase();
         return !act.endsWith('_READ') &&
@@ -106,21 +108,20 @@ class _OpsTabState extends State<OpsTab> {
             !act.contains('REPORTS_LIST_READ');
       }).toList();
 
-      if (significantLogs.isNotEmpty) {
-        setState(() {
-          _auditEvents = significantLogs.map((map) => _parseAuditEvent(map)).toList();
-          _loadingAudit = false;
-        });
-        return;
-      }
-    } catch (_) {}
-    if (!mounted) return;
-    setState(() {
-      if (_auditEvents.isEmpty) {
-        _auditEvents = _defaultAuditEvents;
-      }
-      _loadingAudit = false;
-    });
+      setState(() {
+        _auditEvents = significantLogs
+            .map((map) => _parseAuditEvent(map))
+            .toList();
+        _loadingAudit = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _auditEvents = [];
+        _auditError = e.toString();
+        _loadingAudit = false;
+      });
+    }
   }
 
   static _AuditEvent _parseAuditEvent(Map<String, dynamic> map) {
@@ -128,11 +129,22 @@ class _OpsTabState extends State<OpsTab> {
     final accountId = map['account_id'] as String?;
     final deviceId = map['device_id'] as String?;
     final clientIp = map['client_ip'] as String? ?? 'INTERNAL';
-    final timestamp = map['timestamp'] as int? ?? DateTime.now().millisecondsSinceEpoch;
 
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true).toLocal();
-    final timeStr =
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+    // A row with no timestamp says so. Substituting "now" would present an
+    // unlogged event as having just happened.
+    final rawTimestamp = map['timestamp'];
+    final timestamp = rawTimestamp is int ? rawTimestamp : null;
+    final timeStr = timestamp == null
+        ? '—'
+        : () {
+            final dt = DateTime.fromMillisecondsSinceEpoch(
+              timestamp,
+              isUtc: true,
+            ).toLocal();
+            return '${dt.hour.toString().padLeft(2, '0')}:'
+                '${dt.minute.toString().padLeft(2, '0')}:'
+                '${dt.second.toString().padLeft(2, '0')}';
+          }();
 
     String category = 'System';
     String badge = 'SUCCESS';
@@ -212,6 +224,7 @@ class _OpsTabState extends State<OpsTab> {
               ),
             'config' => ConfigTab(
                 config: widget.config,
+                client: widget.client,
                 federationDomainController: TextEditingController(
                   text: widget.config?['federation']?['domain'] ?? '',
                 ),
@@ -227,6 +240,8 @@ class _OpsTabState extends State<OpsTab> {
                 isLoading: widget.isLoading,
                 onTriggerBackup: widget.onTriggerBackup,
                 onSignOut: widget.onSignOut,
+                appLockEnabled: widget.appLockEnabled,
+                onAppLockChanged: widget.onAppLockChanged,
               ),
             _ => ReportsTab(client: widget.client),
           },
@@ -350,12 +365,74 @@ class _OpsTabState extends State<OpsTab> {
         ),
         const SizedBox(height: 16),
 
+        // Account filter. Empty = every account.
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('audit_account_filter'),
+                controller: _auditAccountController,
+                onSubmitted: _applyAuditAccountFilter,
+                style: const TextStyle(fontSize: 12),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Filter by account id (blank = all accounts)',
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: () => _applyAuditAccountFilter(
+                _auditAccountController.text,
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF334155),
+                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Apply'),
+            ),
+            if (_auditAccountFilter.isNotEmpty) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                key: const Key('audit_account_filter_clear'),
+                tooltip: 'Clear account filter',
+                onPressed: () {
+                  _auditAccountController.clear();
+                  _applyAuditAccountFilter('');
+                },
+                icon: const Icon(Icons.close, size: 18),
+                color: const Color(0xFF64748B),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 16),
+
         // Audit Event Cards
         if (_loadingAudit && filtered.isEmpty)
           const Padding(
             padding: EdgeInsets.all(24),
             child: Center(child: CircularProgressIndicator()),
           )
+        else if (_auditError != null)
+          _buildAuditErrorCard(_auditError!)
+        else if (filtered.isEmpty)
+          _buildAuditEmptyState()
         else
           for (final event in filtered) ...[
             _buildAuditEventCard(context, event),
@@ -386,6 +463,97 @@ class _OpsTabState extends State<OpsTab> {
             color: isSelected ? Colors.white : const Color(0xFF475569),
           ),
         ),
+      ),
+    );
+  }
+
+  /// A server that has simply not recorded any significant operator action
+  /// yet. Distinct from [_buildAuditErrorCard], which means the request
+  /// itself failed.
+  Widget _buildAuditEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.verified_user_outlined, size: 32, color: Color(0xFF94A3B8)),
+          SizedBox(height: 10),
+          Text(
+            'No audit events recorded yet',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'Administrative actions taken on this server will appear here. '
+            'Routine reads and polls are not recorded.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAuditErrorCard(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFCA5A5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline, size: 20, color: Color(0xFFDC2626)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Could not load the audit trail',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF991B1B),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF991B1B),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: _loadAuditLogs,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Retry'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF991B1B),
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

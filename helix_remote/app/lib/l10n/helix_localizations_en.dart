@@ -819,4 +819,43 @@ class HelixLocalizationsEn extends HelixLocalizations {
   @override
   String get willPermanentlyDeleteAllLocal =>
       'This will permanently delete all local account data, the encrypted database, and all stored keys. This cannot be undone.';
+
+  @override
+  String get pendingDeviceLinkConfirmElsewhere =>
+      'Open Helix on that device and confirm the code it shows. The code is never sent to this device.';
+
+  @override
+  String get sendCrashReports => 'Send crash reports';
+
+  @override
+  String get sendCrashReportsDescription =>
+      'Redacted crash details go only to the server you are connected to, and land in that server\'s own log. Off means nothing is ever sent.';
+
+  @override
+  String get sendMinimalAnalytics => 'Send minimal analytics';
+
+  @override
+  String get sendMinimalAnalyticsDescription => 'No usage data is sent.';
+
+  @override
+  String get sendMinimalAnalyticsActiveDescription =>
+      'Only the categories listed in the privacy policy, never message content.';
+
+  @override
+  String get telemetrySinkUnavailable =>
+      'Reporting is not available right now: the reporter has no sink configured. The preference is saved and will apply once a connection is established.';
+
+  @override
+  String get telemetryPreferencesSaved => 'Telemetry preferences saved.';
+
+  @override
+  String get reportDisclosure =>
+      'Your server operator will see that you reported this contact and the reason you chose. They will not see your messages.';
+
+  @override
+  String get reportQueued => 'Report queued for your server operator.';
+
+  @override
+  String get reportOnlyOneToOne =>
+      'Open a one-to-one chat to report a contact.';
 }

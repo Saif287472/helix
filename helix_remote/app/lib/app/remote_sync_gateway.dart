@@ -319,6 +319,56 @@ class RemoteOutboundOperation {
       method: 'POST',
       path: 'groups/delete',
     ),
+    // F6 group administration.
+    //
+    // These were enqueued by RemoteGroupService with no entry here, so
+    // `require()` threw StateError, the sync engine classified StateError as
+    // a *permanent* failure, and the operation went straight to FAILED with no
+    // retry - while the UI had already reported success. Each path below is
+    // registered in backend/lib/src/modules/groups.dart, and each payload
+    // shape is the one the matching handler reads; a contract test in
+    // app/test/outbound_operation_registry_test.dart pins the table against
+    // both sides.
+    RemoteOutboundOperation._(
+      type: 'group_set_add_policy',
+      method: 'POST',
+      path: 'groups/set-add-policy',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_create_join_link',
+      method: 'POST',
+      path: 'groups/create-join-link',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_revoke_join_link',
+      method: 'POST',
+      path: 'groups/revoke-join-link',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_join_via_link',
+      method: 'POST',
+      path: 'groups/join-via-link',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_approve_join_request',
+      method: 'POST',
+      path: 'groups/approve-join-request',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_transfer_ownership',
+      method: 'POST',
+      path: 'groups/transfer-ownership',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_admin_delete_message',
+      method: 'POST',
+      path: 'groups/admin-delete-message',
+    ),
+    RemoteOutboundOperation._(
+      type: 'group_block_member',
+      method: 'POST',
+      path: 'groups/block-member',
+    ),
   ];
 
   static final valuesByType = {

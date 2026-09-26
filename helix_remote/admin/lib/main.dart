@@ -4,18 +4,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'admin_client.dart';
-import 'screens/backup_tab.dart';
-import 'screens/config_tab.dart';
 import 'screens/dashboard_tab.dart';
-import 'screens/guide/guide_wizard.dart';
 import 'screens/invites_tab.dart';
 import 'screens/users_tab.dart';
-import 'screens/reports_tab.dart';
 import 'screens/lock_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/logs_tab.dart';
 import 'screens/ops_tab.dart';
-import 'screens/settings_tab.dart';
 import 'services/admin_preferences.dart';
 import 'theme/app_theme.dart';
 
@@ -33,16 +27,18 @@ class HelixAdminApp extends StatefulWidget {
 }
 
 class _HelixAdminAppState extends State<HelixAdminApp> {
-  bool _isDarkMode = false;
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Helix Admin',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      // Light only, unconditionally. Dark mode is deferred for this product,
+      // and the previous `darkTheme: AppTheme.dark` was `AppTheme.dark = light`
+      // - so selecting dark mode rendered the light theme while pretending
+      // otherwise. With no `darkTheme` and a pinned `ThemeMode.light` there is
+      // no longer a way to ask for a theme that does not exist.
+      themeMode: ThemeMode.light,
       builder: (context, child) => Semantics(
         container: true,
         label: 'Helix Admin',
@@ -51,35 +47,22 @@ class _HelixAdminAppState extends State<HelixAdminApp> {
           child: child!,
         ),
       ),
-      home: MainAdminPage(
-        isDarkMode: _isDarkMode,
-        onDarkModeChanged: (v) => setState(() => _isDarkMode = v),
-      ),
+      home: const MainAdminPage(),
     );
   }
 }
 
-const _serverDependentTabs = {
-  'dashboard',
-  'config',
-  'logs',
-  'backup',
-  'invites',
-  'users',
-  'reports',
-  'ops',
-};
-const _defaultServerUrl = 'https://helix.agiletechbd.com';
+/// The four tabs that need a live server connection. Matches the nav, the
+/// bottom bar, and the desktop pill row.
+const _serverDependentTabs = {'dashboard', 'invites', 'users', 'ops'};
+/// Intentionally empty: the login form must never pre-fill a specific
+/// self-hoster's domain, or an operator can believe they are pointed at the
+/// server they are actually administering. The saved URL from a previous
+/// session is what pre-fills this field (see `_loadPreferences`).
+const _defaultServerUrl = '';
 
 class MainAdminPage extends StatefulWidget {
-  const MainAdminPage({
-    super.key,
-    required this.isDarkMode,
-    required this.onDarkModeChanged,
-  });
-
-  final bool isDarkMode;
-  final ValueChanged<bool> onDarkModeChanged;
+  const MainAdminPage({super.key});
 
   @override
   State<MainAdminPage> createState() => _MainAdminPageState();
@@ -92,13 +75,6 @@ class _MainAdminPageState extends State<MainAdminPage> {
   bool _isConnecting = false;
   bool _isCheckingSavedSession = true;
   LaunchStatus _launchStatus = LaunchStatus.deploying;
-  bool _showGuideUnauthenticated = false;
-
-  /// Guide page to open next time the 'guide' tab is built. Reset to 0
-  /// (Welcome) on every normal sidebar navigation.
-  int _guideInitialPage = 0;
-  static const _guideConnectAdminPageIndex = 6;
-
   AdminPreferences? _prefs;
   bool _appLockEnabled = false;
   bool _isUnlocked = false;
@@ -115,12 +91,25 @@ class _MainAdminPageState extends State<MainAdminPage> {
   Map<String, dynamic>? _config;
   ServerLogs _logs = const ServerLogs.empty();
   String? _errorMessage;
-  int _latencyMs = 23;
+
+  /// Round-trip time of the most recent metrics call, in milliseconds.
+  /// Null until one has actually been measured - the dashboard renders
+  /// "Latency: —" rather than inventing a plausible number.
+  int? _latencyMs;
 
   /// Polls the Logs screen while it's live.
   Timer? _logPollTimer;
   StreamSubscription<String>? _logStreamSub;
+
+  /// The live socket, kept so it can be closed. Cancelling [_logStreamSub]
+  /// alone leaves the underlying connection open.
+  LogStreamHandle? _logStreamHandle;
+
   bool _logAutoRefresh = false;
+
+  /// How many of the lines already in the buffer the server is about to
+  /// replay when a log stream opens. See [_setLogAutoRefresh].
+  int _logReplayCursor = 0;
 
   @override
   void initState() {
@@ -146,8 +135,21 @@ class _MainAdminPageState extends State<MainAdminPage> {
       if (!mounted) return;
       setState(() {
         _needsSetup = status.needsSetup;
+        _errorMessage = null;
       });
-    } catch (_) {}
+    } catch (e) {
+      // Surfaced, not swallowed. This call is what decides whether a fresh
+      // server offers the first-time password form, so a failure here means an
+      // operator is silently looking at the normal sign-in form for a server
+      // that has no admin password yet.
+      if (!mounted) return;
+      setState(() {
+        _needsSetup = false;
+        _errorMessage =
+            'Could not reach $targetUrl to check whether this server needs '
+            'first-time setup.';
+      });
+    }
   }
 
   Future<void> _loadPreferences() async {
@@ -288,8 +290,8 @@ class _MainAdminPageState extends State<MainAdminPage> {
   void dispose() {
     _urlDebounce?.cancel();
     _urlController.removeListener(_onUrlChanged);
+    _closeLogStream();
     _logPollTimer?.cancel();
-    _logStreamSub?.cancel();
     _latencyPollTimer?.cancel();
     _urlController.dispose();
     _passwordController.dispose();
@@ -301,40 +303,83 @@ class _MainAdminPageState extends State<MainAdminPage> {
 
   static const _logPollInterval = Duration(seconds: 3);
 
+  /// Number of tail lines the server replays when a log stream opens. Mirrors
+  /// `logSink?.tail(50)` in the backend's `/logs/stream` handler.
+  static const _logReplayBurst = 50;
+
+  void _closeLogStream() {
+    _logStreamSub?.cancel();
+    _logStreamSub = null;
+    final handle = _logStreamHandle;
+    _logStreamHandle = null;
+    if (handle != null) {
+      // Fire-and-forget: the socket teardown must not block the UI, and the
+      // handle swallows its own teardown errors.
+      handle.close();
+    }
+  }
+
+  void _startLogPollFallback() {
+    if (_logPollTimer == null && _logAutoRefresh) {
+      _logPollTimer = Timer.periodic(
+        _logPollInterval,
+        (_) => _refreshLogs(),
+      );
+    }
+  }
+
   void _setLogAutoRefresh(bool enabled) {
     setState(() => _logAutoRefresh = enabled);
     _logPollTimer?.cancel();
-    _logStreamSub?.cancel();
-    _logStreamSub = null;
+    _logPollTimer = null;
+    _closeLogStream();
     if (!enabled) return;
 
     final client = _client;
-    if (client != null) {
-      try {
-        final stream = client.streamLogs();
-        _logStreamSub = stream.listen(
-          (line) {
-            if (!mounted) return;
-            setState(() {
-              _logs = ServerLogs(
-                lines: [..._logs.lines, line],
-                source: _logs.source,
-                message: _logs.message,
-                filePath: _logs.filePath,
-              );
-            });
-          },
-          onError: (_) {
-            if (_logPollTimer == null && _logAutoRefresh) {
-              _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
+    if (client == null) {
+      _startLogPollFallback();
+      _refreshLogs();
+      return;
+    }
+
+    try {
+      final handle = client.streamLogs();
+      _logStreamHandle = handle;
+      // The server replays the last [_logReplayBurst] lines the moment the
+      // socket opens, and those are already in the buffer below - so start
+      // the cursor at the tail and skip the lines that match, instead of
+      // appending a duplicate copy of everything just fetched.
+      _logReplayCursor =
+          (_logs.lines.length - _logReplayBurst).clamp(0, _logs.lines.length);
+      _logStreamSub = handle.lines.listen(
+        (line) {
+          if (!mounted) return;
+          setState(() {
+            if (_logReplayCursor < _logs.lines.length) {
+              if (_logs.lines[_logReplayCursor] == line) {
+                _logReplayCursor++;
+                return;
+              }
+              // Diverged: the buffer is no longer a prefix of the replay, so
+              // stop trying to align and just append from here.
+              _logReplayCursor = _logs.lines.length;
             }
-          },
-        );
-      } catch (_) {
-        _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
-      }
-    } else {
-      _logPollTimer = Timer.periodic(_logPollInterval, (_) => _refreshLogs());
+            _logs = ServerLogs(
+              lines: [..._logs.lines, line],
+              source: _logs.source,
+              message: _logs.message,
+              filePath: _logs.filePath,
+            );
+          });
+        },
+        onError: (_) => _startLogPollFallback(),
+        // A clean server-side close ends the stream without an error. Without
+        // this the console would keep claiming "LIVE STREAMING..." over frozen
+        // data, so fall back to polling just as an error does.
+        onDone: _startLogPollFallback,
+      );
+    } catch (_) {
+      _startLogPollFallback();
     }
     _refreshLogs();
   }
@@ -346,8 +391,9 @@ class _MainAdminPageState extends State<MainAdminPage> {
       final logs = await client.getLogs();
       if (!mounted) return;
       setState(() => _logs = logs);
-    } catch (_) {
-      // Periodic poll failure is suppressed until manual refresh.
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = 'Failed to load logs: $e');
     }
   }
 
@@ -452,13 +498,6 @@ class _MainAdminPageState extends State<MainAdminPage> {
     return url;
   }
 
-  void _openConnectGuide() {
-    setState(() {
-      _selectedTab = 'guide';
-      _guideInitialPage = _guideConnectAdminPageIndex;
-    });
-  }
-
   Timer? _latencyPollTimer;
 
   Future<void> _refreshData() async {
@@ -472,7 +511,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
       sw.stop();
       final elapsed = sw.elapsedMilliseconds;
       setState(() {
-        _latencyMs = elapsed > 0 ? elapsed : 18;
+        _latencyMs = elapsed > 0 ? elapsed : null;
         _metrics = metrics;
         _config = config;
         final federation = config['federation'] as Map<String, dynamic>?;
@@ -513,9 +552,12 @@ class _MainAdminPageState extends State<MainAdminPage> {
       if (!mounted) return;
       setState(() {
         final elapsed = sw.elapsedMilliseconds;
-        _latencyMs = elapsed > 0 ? elapsed : 18;
+        _latencyMs = elapsed > 0 ? elapsed : null;
       });
-    } catch (_) {}
+    } catch (_) {
+      // A failed probe leaves the last good measurement in place rather than
+      // overwriting it with a guess.
+    }
   }
 
   Future<void> _triggerBackup() async {
@@ -612,59 +654,20 @@ class _MainAdminPageState extends State<MainAdminPage> {
       return LockScreen(onUnlocked: _handleUnlocked);
     }
     if (_client == null) {
-      return Stack(
-        children: [
-          LoginScreen(
-            urlController: _urlController,
-            passwordController: _passwordController,
-            isConnecting: _isConnecting,
-            errorMessage: _errorMessage,
-            needsSetup: _needsSetup,
-            onSignIn: _connect,
-            onSetupPassword: _handleSetupPassword,
-            onCheckUrl: () => _checkSetupStatus(),
-            onOpenGuide: () => setState(() => _showGuideUnauthenticated = true),
-          ),
-          if (_showGuideUnauthenticated)
-            Stack(
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() => _showGuideUnauthenticated = false),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.5),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 640, maxHeight: 680),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 16,
-                          offset: Offset(0, -4),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Material(
-                      color: Colors.white,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: GuideWizard(
-                          initialPage: 0,
-                          onClose: () => setState(() => _showGuideUnauthenticated = false),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-        ],
+      // No self-hosting guide here. The guide belongs to the helix-remote
+      // welcome / sign-in flow (`HostGuideStep` in
+      // app/lib/screens/setup/steps/host_guide_step.dart), which is the only
+      // place an operator meets it. The copy in this console was a leftover
+      // from the pre-redesign design.
+      return LoginScreen(
+        urlController: _urlController,
+        passwordController: _passwordController,
+        isConnecting: _isConnecting,
+        errorMessage: _errorMessage,
+        needsSetup: _needsSetup,
+        onSignIn: _connect,
+        onSetupPassword: _handleSetupPassword,
+        onCheckUrl: () => _checkSetupStatus(),
       );
     }
     return LayoutBuilder(
@@ -741,7 +744,7 @@ class _MainAdminPageState extends State<MainAdminPage> {
           ),
           const SizedBox(width: 8),
           Text(
-            _config?['server_name'] as String? ?? _config?['name'] as String? ?? 'Careless',
+            _config?['server_name'] as String? ?? 'Helix Server',
             style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,
@@ -760,10 +763,29 @@ class _MainAdminPageState extends State<MainAdminPage> {
           ],
         ],
       ),
-      actions: const [
-        SizedBox(width: 12),
+      actions: [
+        // Sign Out lives here now. It used to live on a Settings tab that the
+        // redesigned nav no longer reaches, which left no way to disconnect
+        // except deep inside Ops > Config. The connected host is the header
+        // title to its left, so the two facts sit together.
+        Tooltip(
+          message: 'Sign out of $_connectedHostLabel',
+          child: IconButton(
+            key: const Key('header_sign_out_button'),
+            onPressed: _disconnect,
+            icon: const Icon(Icons.logout, size: 20),
+            color: const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(width: 8),
       ],
     );
+  }
+
+  /// The host this console is pointed at, for the sign-out tooltip.
+  String get _connectedHostLabel {
+    final host = Uri.tryParse(_urlController.text)?.host;
+    return (host == null || host.isEmpty) ? 'this server' : host;
   }
 
   Widget _buildDesktopNavPill(String label, String tabId, IconData icon) {
@@ -771,7 +793,6 @@ class _MainAdminPageState extends State<MainAdminPage> {
       'dashboard' => tabId == 'dashboard',
       'users' => tabId == 'users',
       'invites' => tabId == 'invites',
-      'ops' || 'logs' || 'reports' || 'config' || 'backup' => tabId == 'ops',
       _ => _selectedTab == tabId,
     };
 
@@ -779,7 +800,6 @@ class _MainAdminPageState extends State<MainAdminPage> {
       onTap: () {
         setState(() {
           _selectedTab = tabId;
-          _guideInitialPage = 0;
         });
         if (_client != null && _serverDependentTabs.contains(tabId)) {
           _refreshData();
@@ -842,6 +862,14 @@ class _MainAdminPageState extends State<MainAdminPage> {
     );
   }
 
+  /// Builds the body for [_selectedTab].
+  ///
+  /// Only the four redesigned nav destinations are reachable. There used to be
+  /// six more cases here (`config`, `logs`, `reports`, `backup`, `guide`,
+  /// `settings`) that no navigation could ever select - the first three are
+  /// Ops sub-tabs, and the last three were screens removed from the product.
+  /// They are gone rather than left as dead branches, because a case nobody
+  /// can reach is indistinguishable from a feature that is merely broken.
   Widget _getTabWidget() {
     switch (_selectedTab) {
       case 'dashboard':
@@ -860,46 +888,14 @@ class _MainAdminPageState extends State<MainAdminPage> {
           isLoading: _isLoading,
           onTriggerBackup: _triggerBackup,
           onSignOut: _disconnect,
+          appLockEnabled: _appLockEnabled,
+          onAppLockChanged: (value) => _setAppLockEnabled(value),
           initialSubTab: 'reports',
         );
-      case 'config':
-        return ConfigTab(
-          config: _config,
-          federationDomainController: _federationDomainController,
-          federationAddressController: _federationAddressController,
-          federationDirectoryController: _federationDirectoryController,
-          onSetWorldwideMode: _setWorldwideMode,
-          onSaveServerName: _saveServerName,
-          serverHost: Uri.tryParse(_urlController.text)?.host,
-          onSignOut: _disconnect,
-        );
-      case 'logs':
-        return LogsTab(
-          logs: _logs,
-          onRefresh: _refreshLogs,
-          autoRefreshEnabled: _logAutoRefresh,
-          onAutoRefreshChanged: _setLogAutoRefresh,
-        );
-      case 'backup':
-        return BackupTab(isLoading: _isLoading, onTriggerBackup: _triggerBackup);
       case 'invites':
         return InvitesTab(client: _client!);
       case 'users':
         return UsersTab(client: _client!);
-      case 'reports':
-        return ReportsTab(client: _client!);
-      case 'guide':
-        return GuideWizard(initialPage: _guideInitialPage);
-      case 'settings':
-        return SettingsTab(
-          isDarkMode: widget.isDarkMode,
-          onDarkModeChanged: widget.onDarkModeChanged,
-          serverUrl: _urlController.text,
-          onSignOut: _disconnect,
-          onOpenConnectGuide: _openConnectGuide,
-          appLockEnabled: _appLockEnabled,
-          onAppLockChanged: (value) => _setAppLockEnabled(value),
-        );
       default:
         return const Center(child: Text('Tab not found'));
     }

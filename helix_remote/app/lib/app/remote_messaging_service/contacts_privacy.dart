@@ -377,7 +377,7 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
     required String subjectAccountId,
     required String category,
     required String reasonCode,
-    required String contextHash,
+    String? contextHash,
     String? reportId,
   }) {
     final id = reportId ?? 'r_${_clock().microsecondsSinceEpoch}';
@@ -389,7 +389,12 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
         'subject_account_id': subjectAccountId,
         'category': category,
         'reason_code': reasonCode,
-        'context_hash': contextHash,
+        // Omitted rather than sent empty: the server treats it as an optional
+        // correlation handle, and a report raised from a menu has no captured
+        // context to point at. The generated report_id already correlates the
+        // row with the client's outbox entry.
+        if (contextHash != null && contextHash.isNotEmpty)
+          'context_hash': contextHash,
       }),
       idempotencyKey: 'report:$id',
     );

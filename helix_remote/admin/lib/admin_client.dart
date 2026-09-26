@@ -446,40 +446,62 @@ class AdminClient {
     }
   }
 
-  /// Fetches user reports for moderation.
-  Future<List<Map<String, dynamic>>> getReports({int? limit, int? offset}) async {
+  /// Fetches user reports for moderation, one page at a time.
+  ///
+  /// A transport failure throws rather than returning an empty list, so the
+  /// caller can tell "no reports" from "could not reach the server".
+  Future<List<Map<String, dynamic>>> getReports({
+    int? limit,
+    int? offset,
+  }) async {
     final params = <String>[];
     if (limit != null) params.add('limit=$limit');
     if (offset != null) params.add('offset=$offset');
     final query = params.isNotEmpty ? '?${params.join('&')}' : '';
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/v1/admin/reports$query'),
-        headers: _headers,
+    final response = await _retry(() => http.get(
+      Uri.parse('$baseUrl/api/v1/admin/reports$query'),
+      headers: _headers,
+    ));
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to load reports (${response.statusCode}).',
       );
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        final list = body['reports'] as List? ?? [];
-        return list.cast<Map<String, dynamic>>();
-      }
-    } catch (_) {}
-    return [];
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final list = body['reports'] as List? ?? [];
+    return list.cast<Map<String, dynamic>>();
   }
 
   /// Resolves a user safety or abuse report.
+  ///
+  /// Throws [AdminRequestException] carrying the server's message on a
+  /// non-200, so a failed resolution is never rendered as a success.
   Future<void> resolveReport(String reportId) async {
-    await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/admin/reports/$reportId/resolve'),
       headers: _headers,
-    );
+    ));
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to resolve report (${response.statusCode}).',
+      );
+    }
   }
 
   /// Dismisses a user report.
   Future<void> dismissReport(String reportId) async {
-    await http.post(
+    final response = await _retry(() => http.post(
       Uri.parse('$baseUrl/api/v1/admin/reports/$reportId/dismiss'),
       headers: _headers,
-    );
+    ));
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to dismiss report (${response.statusCode}).',
+      );
+    }
   }
 
   /// Fetches administrative audit stream logs.
@@ -499,20 +521,169 @@ class AdminClient {
     return [];
   }
 
+  /// Turns maintenance mode on or off.
+  ///
+  /// While it is on the server answers every client route with 503, so this
+  /// call and anything under `/ops` are the only things that still respond.
+  Future<void> setMaintenanceMode(bool enabled) async {
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/maintenance'),
+        headers: _headers,
+        body: jsonEncode({'enabled': enabled}),
+      ),
+    );
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to change maintenance mode (${response.statusCode}).',
+      );
+    }
+  }
+
+  /// Replaces the master admin password.
+  ///
+  /// The server requires [currentPassword] and regenerates the salt, so this
+  /// cannot be used to take over a console someone else left open.
+  Future<void> changeAdminPin({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/admin-pin'),
+        headers: _headers,
+        body: jsonEncode({
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        }),
+      ),
+    );
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to change the password (${response.statusCode}).',
+      );
+    }
+  }
+
+  /// Deletes expired attachment references, dead-letter and failed outbox
+  /// rows, and stale refresh tokens. Returns the per-table counts so the
+  /// console can report what actually happened.
+  Future<Map<String, int>> purgeData() async {
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/purge'),
+        headers: _headers,
+      ),
+    );
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to purge data (${response.statusCode}).',
+      );
+    }
+    final body = _decodeOrNull(response.body);
+    final removed = (body?['removed'] as Map?) ?? const {};
+    return removed.map((key, value) => MapEntry(key, value is int ? value : 0));
+  }
+
+  /// The redacted support bundle an operator attaches to a bug report.
+  Future<Map<String, dynamic>> getSupportDiagnostic() async {
+    final response = await _retry(
+      () => http.get(
+        Uri.parse('$baseUrl/api/v1/ops/support-diagnostic'),
+        headers: _headers,
+      ),
+    );
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to build the support bundle (${response.statusCode}).',
+      );
+    }
+    return _decodeOrNull(response.body) ?? const {};
+  }
+
+  /// Current state of every server-owned feature flag.
+  ///
+  /// The server allow-lists the flag names, so an unknown name is a 404
+  /// rather than an arbitrary remotely-switchable capability.
+  Future<Map<String, bool>> getFeatureFlags() async {
+    final response = await _retry(
+      () => http.get(Uri.parse('$baseUrl/api/v1/ops/feature-flags'), headers: _headers),
+    );
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to load feature flags (${response.statusCode}).',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final flags = (body['flags'] as Map?) ?? const {};
+    return flags.map((key, value) => MapEntry(key as String, value == true));
+  }
+
+  /// Turns a single server-owned feature flag on or off.
+  Future<void> setFeatureFlag(String name, bool enabled) async {
+    final response = await _retry(
+      () => http.post(
+        Uri.parse('$baseUrl/api/v1/ops/feature-flags/$name'),
+        headers: _headers,
+        body: jsonEncode({'enabled': enabled}),
+      ),
+    );
+    if (response.statusCode != 200) {
+      throw AdminRequestException(
+        _decodeOrNull(response.body)?['error'] as String? ??
+            'Failed to update "$name" (${response.statusCode}).',
+      );
+    }
+  }
+
   /// Opens a live WebSocket stream of server logs.
-  Stream<String> streamLogs() {
+  ///
+  /// The returned handle carries the decoded lines plus a [close] callback.
+  /// Cancelling the `StreamSubscription` alone is not enough - it leaves the
+  /// underlying socket open - so callers must invoke [LogStreamHandle.close]
+  /// when they pause or tear the stream down.
+  LogStreamHandle streamLogs() {
     final wsProto = baseUrl.startsWith('https') ? 'wss' : 'ws';
     final host = baseUrl.replaceFirst(RegExp(r'^https?://'), '');
     final uri = Uri.parse('$wsProto://$host/api/v1/admin/logs/stream?token=$token');
     final channel = WebSocketChannel.connect(uri);
-    return channel.stream.map((event) {
+    final lines = channel.stream.map((event) {
       try {
         final data = jsonDecode(event as String);
         if (data is Map && data.containsKey('line')) {
           return data['line'] as String;
         }
-      } catch (_) {}
+      } catch (_) {
+        // Not a JSON frame - fall through and surface it verbatim.
+      }
       return event.toString();
     });
+    return LogStreamHandle(
+      lines: lines,
+      close: () async {
+        try {
+          await channel.sink.close();
+        } catch (_) {
+          // Already closed or never opened; nothing to do.
+        }
+      },
+    );
   }
+}
+
+/// A live log stream plus the means to actually shut it down.
+///
+/// See [AdminClient.streamLogs].
+class LogStreamHandle {
+  const LogStreamHandle({required this.lines, required this.close});
+
+  final Stream<String> lines;
+
+  /// Closes the underlying WebSocket. Safe to call more than once.
+  final Future<void> Function() close;
 }

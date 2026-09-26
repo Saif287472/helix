@@ -11,7 +11,6 @@ class ServerNameCard extends StatefulWidget {
     required this.maxLength,
     required this.onSave,
     this.fallbackName,
-    this.serverHost,
   });
 
   /// Name currently stored on the server; empty when unset.
@@ -27,9 +26,6 @@ class ServerNameCard extends StatefulWidget {
   /// Fallback name shown to users when no custom display name is configured.
   final String? fallbackName;
 
-  /// Host users connect to (internal fallback).
-  final String? serverHost;
-
   @override
   State<ServerNameCard> createState() => _ServerNameCardState();
 }
@@ -41,12 +37,17 @@ class _ServerNameCardState extends State<ServerNameCard> {
   bool _isSaving = false;
   String? _error;
 
+  /// The name to show when neither a stored name nor a server-computed
+  /// fallback exists. A neutral placeholder, not a plausible-looking invented
+  /// server name.
+  static const _placeholderName = 'Helix Server';
+
   @override
   void initState() {
     super.initState();
     _savedName = widget.initialName.isNotEmpty
         ? widget.initialName
-        : (widget.fallbackName ?? 'Careless');
+        : (widget.fallbackName ?? _placeholderName);
     _controller = TextEditingController(text: _savedName);
   }
 
@@ -56,7 +57,7 @@ class _ServerNameCardState extends State<ServerNameCard> {
     if (widget.initialName != oldWidget.initialName && !_isEditing) {
       _savedName = widget.initialName.isNotEmpty
           ? widget.initialName
-          : (widget.fallbackName ?? 'Careless');
+          : (widget.fallbackName ?? _placeholderName);
       _controller.text = _savedName;
     }
   }

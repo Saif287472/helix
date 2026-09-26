@@ -255,5 +255,17 @@
   "readLegalDocuments": "Read the legal documents",
   "reviewGlobalLegalDocuments": "Review the legal documents before creating a Global account.",
   "terms": "Terms",
-  "willPermanentlyDeleteAllLocal": "This will permanently delete all local account data, the encrypted database, and all stored keys. This cannot be undone."
+  "willPermanentlyDeleteAllLocal": "This will permanently delete all local account data, the encrypted database, and all stored keys. This cannot be undone.",
+  "pendingDeviceLinkConfirmElsewhere": "Open Helix on that device and confirm the code it shows. The code is never sent to this device.",
+  "dismiss": "Dismiss",
+  "sendCrashReports": "Send crash reports",
+  "sendCrashReportsDescription": "Redacted crash details go only to the server you are connected to, and land in that server's own log. Off means nothing is ever sent.",
+  "sendMinimalAnalytics": "Send minimal analytics",
+  "sendMinimalAnalyticsDescription": "No usage data is sent.",
+  "sendMinimalAnalyticsActiveDescription": "Only the categories listed in the privacy policy, never message content.",
+  "telemetrySinkUnavailable": "Reporting is not available right now: the reporter has no sink configured. The preference is saved and will apply once a connection is established.",
+  "telemetryPreferencesSaved": "Telemetry preferences saved.",
+  "reportDisclosure": "Your server operator will see that you reported this contact and the reason you chose. They will not see your messages.",
+  "reportQueued": "Report queued for your server operator.",
+  "reportOnlyOneToOne": "Open a one-to-one chat to report a contact."
 }

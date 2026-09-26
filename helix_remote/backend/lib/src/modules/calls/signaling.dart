@@ -288,7 +288,11 @@ mixin CallsSignalingHandlers on CallsModuleBase {
       return result;
     }
 
-    final devices = db.getDevices(calleeAccountId);
+    // Only ACTIVE devices can receive an offer. Using the full device list
+    // here meant an account whose only device had been revoked still counted
+    // as reachable, and the caller got a 200 for a call that could never be
+    // delivered instead of an explicit no_active_devices.
+    final devices = db.getActiveDevices(calleeAccountId);
     if (devices.isEmpty) {
       return {'status': 'no_active_devices', 'call_id': signal.callId};
     }

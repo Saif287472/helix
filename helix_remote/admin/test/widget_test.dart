@@ -41,33 +41,19 @@ void main() {
     expect(find.byKey(const Key('login_url_field')), findsOneWidget);
     expect(find.byKey(const Key('login_password_field')), findsOneWidget);
     expect(find.byKey(const Key('login_button')), findsOneWidget);
-    expect(find.byKey(const Key('login_guide_button')), findsOneWidget);
     expect(find.text('SIGN IN'), findsOneWidget);
   });
 
-  testWidgets(
-    'the Self-Hosting Guide is accessible unauthenticated via the guide button',
-    (tester) async {
-      await _pumpAdminApp(tester);
-      await tester.pumpAndSettle();
+  // The self-hosting guide moved to the helix-remote welcome / sign-in flow
+  // (`HostGuideStep`). The copy in this console was a pre-redesign leftover
+  // that had drifted from it, so it is gone rather than merely hidden.
+  testWidgets('the login screen offers no self-hosting guide', (tester) async {
+    await _pumpAdminApp(tester);
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('login_guide_button')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Self-Hosting Guide'), findsOneWidget);
-      expect(
-        find.textContaining('Welcome to self-hosting Helix'),
-        findsOneWidget,
-      );
-
-      // Back button in the AppBar returns to the LoginScreen
-      await tester.tap(find.byTooltip('Back to Sign In'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('HELIX SERVER ADMIN'), findsOneWidget);
-      expect(find.byKey(const Key('login_button')), findsOneWidget);
-    },
-  );
+    expect(find.byKey(const Key('login_guide_button')), findsNothing);
+    expect(find.text('Self-Hosting Guide'), findsNothing);
+  });
 
   testWidgets('successful sign in takes the user straight to the dashboard', (
     tester,

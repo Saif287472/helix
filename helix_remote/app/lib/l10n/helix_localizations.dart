@@ -1633,6 +1633,72 @@ abstract class HelixLocalizations {
   /// In en, this message translates to:
   /// **'This will permanently delete all local account data, the encrypted database, and all stored keys. This cannot be undone.'**
   String get willPermanentlyDeleteAllLocal;
+
+  /// No description provided for @pendingDeviceLinkConfirmElsewhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Helix on that device and confirm the code it shows. The code is never sent to this device.'**
+  String get pendingDeviceLinkConfirmElsewhere;
+
+  /// No description provided for @sendCrashReports.
+  ///
+  /// In en, this message translates to:
+  /// **'Send crash reports'**
+  String get sendCrashReports;
+
+  /// No description provided for @sendCrashReportsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Redacted crash details go only to the server you are connected to, and land in that server\'s own log. Off means nothing is ever sent.'**
+  String get sendCrashReportsDescription;
+
+  /// No description provided for @sendMinimalAnalytics.
+  ///
+  /// In en, this message translates to:
+  /// **'Send minimal analytics'**
+  String get sendMinimalAnalytics;
+
+  /// No description provided for @sendMinimalAnalyticsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'No usage data is sent.'**
+  String get sendMinimalAnalyticsDescription;
+
+  /// No description provided for @sendMinimalAnalyticsActiveDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the categories listed in the privacy policy, never message content.'**
+  String get sendMinimalAnalyticsActiveDescription;
+
+  /// No description provided for @telemetrySinkUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Reporting is not available right now: the reporter has no sink configured. The preference is saved and will apply once a connection is established.'**
+  String get telemetrySinkUnavailable;
+
+  /// No description provided for @telemetryPreferencesSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Telemetry preferences saved.'**
+  String get telemetryPreferencesSaved;
+
+  /// No description provided for @reportDisclosure.
+  ///
+  /// In en, this message translates to:
+  /// **'Your server operator will see that you reported this contact and the reason you chose. They will not see your messages.'**
+  String get reportDisclosure;
+
+  /// No description provided for @reportQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Report queued for your server operator.'**
+  String get reportQueued;
+
+  /// No description provided for @reportOnlyOneToOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a one-to-one chat to report a contact.'**
+  String get reportOnlyOneToOne;
 }
 
 class _HelixLocalizationsDelegate

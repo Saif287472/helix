@@ -21,6 +21,9 @@ class _RecordingSmsProvider implements SmsProvider {
   bool get isConfigured => true;
 
   @override
+  String get displayName => 'Recording';
+
+  @override
   Future<void> send({
     required String phoneNumber,
     required String message,
@@ -153,7 +156,7 @@ void main() {
         200,
         reason: await accepted.transform(utf8.decoder).join(),
       );
-      expect(server.db.schemaVersion, 43);
+      expect(server.db.schemaVersion, 44);
       final account = server.db.getAccount('accepted_terms');
       expect(account, isNotNull);
       expect(account!['tos_accepted_at'], isA<int>());
@@ -421,7 +424,45 @@ void main() {
     },
   );
 
-  test('migration 43 upgrades a version-42 account table', () {
+  test('migration 44 upgrades a version-43 account table', () {
+    final raw = sqlite3.openInMemory();
+    // Shaped like a real v43 database, i.e. one migration 43 has already run:
+    // the tos columns are present. Migration 43 is guarded by `version < 43`,
+    // so a synthetic v43 without them would skip straight past the columns the
+    // application now writes.
+    raw.execute('''
+      CREATE TABLE accounts (
+        account_id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        identity_public_key TEXT NOT NULL,
+        phone_hash TEXT,
+        phone_last4 TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        tos_accepted_at INTEGER,
+        tos_version TEXT
+      );
+    ''');
+    raw.execute('PRAGMA user_version = 43;');
+
+    final migrated = BackendDatabase(raw);
+    expect(migrated.schemaVersion, 44);
+    migrated.createAccount(
+      'legacy_account',
+      'helix_legacy_account',
+      'legacy_key',
+      phoneHash: 'legacy_phone',
+    );
+    final account = migrated.getAccount('legacy_account');
+    expect(account?['tos_accepted_at'], isNull);
+    expect(account?['tos_version'], isNull);
+    migrated.close();
+  });
+
+  test('migration 43 still applies on the way to 44', () {
+    // 43 adds the ToS columns; 44 only drops the unused pairing table. A
+    // database jumping from 42 must get both, so the earlier migration is not
+    // shadowed by the newer one.
     final raw = sqlite3.openInMemory();
     raw.execute('''
       CREATE TABLE accounts (
@@ -437,16 +478,64 @@ void main() {
     raw.execute('PRAGMA user_version = 42;');
 
     final migrated = BackendDatabase(raw);
-    expect(migrated.schemaVersion, 43);
-    migrated.createAccount(
-      'legacy_account',
-      'helix_legacy_account',
-      'legacy_key',
-      phoneHash: 'legacy_phone',
+    expect(migrated.schemaVersion, 44);
+    final columns = raw
+        .select('PRAGMA table_info(accounts);')
+        .map((row) => row['name'] as String)
+        .toList();
+    expect(columns, contains('tos_accepted_at'));
+    expect(columns, contains('tos_version'));
+    migrated.close();
+  });
+
+  test('migration 44 drops the unused admin_pairing_codes table', () {
+    // The table and its repository shipped together but nothing ever called
+    // them. Migration 44 removes the table so a fresh install does not carry
+    // a table that looks like an active security control.
+    final raw = sqlite3.openInMemory();
+    raw.execute('''
+      CREATE TABLE admin_pairing_codes (
+        code_hash TEXT PRIMARY KEY,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        redeemed_at INTEGER
+      );
+    ''');
+    raw.execute(
+      "INSERT INTO admin_pairing_codes VALUES ('abc', 1, 2, NULL);",
     );
-    final account = migrated.getAccount('legacy_account');
-    expect(account?['tos_accepted_at'], isNull);
-    expect(account?['tos_version'], isNull);
+    raw.execute('PRAGMA user_version = 43;');
+
+    final migrated = BackendDatabase(raw);
+    expect(migrated.schemaVersion, 44);
+
+    final tables = raw
+        .select("SELECT name FROM sqlite_master WHERE type = 'table';")
+        .map((row) => row['name'] as String)
+        .toList();
+    expect(
+      tables,
+      isNot(contains('admin_pairing_codes')),
+      reason: 'an unread, unwritten table is indistinguishable from a live '
+          'security control',
+    );
+    migrated.close();
+  });
+
+  test('a fresh database has no admin_pairing_codes table at all', () {
+    final raw = sqlite3.openInMemory();
+    final migrated = BackendDatabase(raw);
+    final tables = raw
+        .select("SELECT name FROM sqlite_master WHERE type = 'table';")
+        .map((row) => row['name'] as String)
+        .where((name) => name.contains('admin_pairing'))
+        .toList();
+    expect(
+      tables,
+      isEmpty,
+      reason: 'the table is dropped in migration 44, so even a database that '
+          'ran the original CREATE TABLE must not end up with it',
+    );
     migrated.close();
   });
 

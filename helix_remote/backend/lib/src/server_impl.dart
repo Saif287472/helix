@@ -339,12 +339,62 @@ class BackendServer {
         .addMiddleware(_correlationMiddleware())
         .addMiddleware(_requestLogMiddleware())
         .addMiddleware(_errorHandlingMiddleware())
+        .addMiddleware(_maintenanceGuardMiddleware())
         .addMiddleware(_rateLimitMiddleware())
         .addMiddleware(_s2sAuthMiddleware())
         .addMiddleware(_authMiddleware())
         .addHandler(router.call);
 
     return pipeline;
+  }
+
+  /// Returns 503 for client traffic while maintenance mode is on.
+  ///
+  /// The point of the mode is to stop the server *doing* things - accepting
+  /// messages, handshakes, uploads - so the guard sits above auth and above
+  /// every module router rather than inside any one of them. The routes an
+  /// operator needs to turn it off, and to see why it is on, stay reachable:
+  /// otherwise the switch would be a one-way door.
+  Middleware _maintenanceGuardMiddleware() {
+    // Paths that must keep working, or an operator could not undo the action.
+    // Prefixes, because these are mount points rather than exact paths.
+    const alwaysAllowed = <String>[
+      '/api/v1/health',
+      '/api/v1/ops',
+      '/api/v1/admin',
+      '/api/v1/server',
+    ];
+
+    return (Handler innerHandler) {
+      return (Request request) async {
+        if (db.getServerConfig('maintenance_mode') != 'true') {
+          return innerHandler(request);
+        }
+        // `request.url.path` arrives without a leading slash in this stack,
+        // which is why _authMiddleware matches with `endsWith` throughout.
+        // Normalise before prefix-matching so the allow-list is not silently
+        // comparing against `api/v1/...` and matching nothing.
+        final rawPath = request.url.path;
+        final path = rawPath.startsWith('/') ? rawPath : '/$rawPath';
+        // Not `any(path.startsWith)`: that binds the receiver once and then
+        // ignores the argument `any` passes, so the allow-list would be tested
+        // against a single captured path and every request would be refused.
+        if (alwaysAllowed.any((prefix) => path.startsWith(prefix))) {
+          return innerHandler(request);
+        }
+        return Response(
+          503,
+          body: jsonEncode({
+            'error': 'Server is in maintenance mode',
+            'status': 'maintenance',
+          }),
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': '3600',
+          },
+        );
+      };
+    };
   }
 
   /// Carries a client correlation id through middleware and returns it to the

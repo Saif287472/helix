@@ -11,7 +11,6 @@ class LoginScreen extends StatefulWidget {
     required this.onSignIn,
     this.onSetupPassword,
     this.onCheckUrl,
-    required this.onOpenGuide,
   });
 
   final TextEditingController urlController;
@@ -22,7 +21,6 @@ class LoginScreen extends StatefulWidget {
   final VoidCallback onSignIn;
   final ValueChanged<String>? onSetupPassword;
   final Future<void> Function()? onCheckUrl;
-  final VoidCallback onOpenGuide;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -423,46 +421,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    const Divider(color: Color(0xFFE2E8F0), height: 1),
-                    const SizedBox(height: 20),
-
-                    // "How do I own a personal server?" button
-                    InkWell(
-                      key: const Key('login_guide_button'),
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: widget.onOpenGuide,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFBFDBFE)),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.public,
-                              size: 16,
-                              color: Color(0xFF2563EB),
-                            ),
-                            SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                'How do I own a personal server?',
-                                style: TextStyle(
-                                  color: Color(0xFF2563EB),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    // No self-hosting guide link here. The guide lives in the
+                    // helix-remote welcome / sign-in flow
+                    // (`HostGuideStep`), which is where an operator meets it
+                    // before they have a server to point this console at. The
+                    // button that used to sit here opened a copy of it that
+                    // had drifted from that one.
                   ],
                 ),
               ),

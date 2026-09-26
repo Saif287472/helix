@@ -54,7 +54,8 @@ extension BackendServerConfigRepository on BackendDatabase {
   }
 
   /// Richer per-user view for the admin console's Users screen: account_id,
-  /// display name, the invite they redeemed (if any), and phone_last4 - the
+  /// display name, the invite they redeemed (if any), a count of the account's
+  /// ACTIVE devices, and phone_last4 - the
   /// last 2-4 digits of the phone number submitted at registration
   /// specifically as a display hint (see AuthRegistrationHandlers). Still
   /// never selects username or phone_hash, for the same reason as
@@ -74,7 +75,11 @@ extension BackendServerConfigRepository on BackendDatabase {
         p.display_name,
         ic.invite_id,
         ic.issuer_label AS invite_issuer_label,
-        ic.redeemed_at AS invite_redeemed_at
+        ic.redeemed_at AS invite_redeemed_at,
+        (
+          SELECT COUNT(*) FROM devices d
+          WHERE d.account_id = a.account_id AND d.status = 'ACTIVE'
+        ) AS device_count
       FROM accounts a
       LEFT JOIN account_profiles p ON p.account_id = a.account_id
       LEFT JOIN invite_credentials ic ON ic.redeemed_by_account_id = a.account_id
@@ -96,6 +101,9 @@ extension BackendServerConfigRepository on BackendDatabase {
             'invite_id': row['invite_id'] as String?,
             'invite_issuer_label': row['invite_issuer_label'] as String?,
             'invite_redeemed_at': row['invite_redeemed_at'] as int?,
+            // Real count of ACTIVE devices for this account. The admin console
+            // used to fall back to a hardcoded 1, which it now reads here.
+            'device_count': row['device_count'] as int? ?? 0,
           },
         )
         .toList();

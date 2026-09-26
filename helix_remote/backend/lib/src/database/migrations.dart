@@ -1400,5 +1400,21 @@ extension BackendDatabaseMigrations on BackendDatabase {
 
       _db.execute('PRAGMA user_version = 43;');
     }
+
+    if (version < 44) {
+      // `admin_pairing_codes` was provisioned for a short-lived-code flow that
+      // was never built: `createAdminPairingCode` and `redeemAdminPairingCode`
+      // had no caller anywhere in the tree, so the table was created on every
+      // install and never written to. The console authenticates with the
+      // master password, so there was nothing to pair with. Dropping it rather
+      // than leaving it: an unread, unwritten table is indistinguishable from
+      // a security control that is switched on.
+      //
+      // The table is created with `IF NOT EXISTS` and this drop is guarded, so
+      // a database that never had it (or a fresh one that skips the creation
+      // below) migrates cleanly either way.
+      _db.execute('DROP TABLE IF EXISTS admin_pairing_codes;');
+      _db.execute('PRAGMA user_version = 44;');
+    }
   }
 }

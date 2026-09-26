@@ -279,6 +279,8 @@ extension _ConversationAppBars on _ConversationScreenState {
     );
     if (!mounted || selected == null) return;
     switch (selected) {
+      case 'report':
+        await _reportPeer();
       case 'block':
         _blockPeer();
       case 'clear':
@@ -286,13 +288,80 @@ extension _ConversationAppBars on _ConversationScreenState {
         await _loadMessages();
       default:
         _showPlaceholder(switch (selected) {
-          'report' => 'Report',
           'export' => 'Export chat',
           'shortcut' => 'Add shortcut',
           'list' => 'Add to list',
           _ => selected,
         });
     }
+  }
+
+  /// Reason codes offered when reporting a peer.
+  ///
+  /// Fixed set rather than free text on purpose: the payload is
+  /// `{report_id, subject_account_id, category, reason_code}`, and the server
+  /// rejects any report carrying `message_text` or `plaintext`. What the user
+  /// chose here is the entire signal an operator receives.
+  static const _reportReasons = <({String code, String label})>[
+    (code: 'harassment', label: 'Harassment or abuse'),
+    (code: 'spam', label: 'Spam or scam'),
+    (code: 'impersonation', label: 'Impersonation'),
+    (code: 'sexual_content', label: 'Unwanted sexual content'),
+    (code: 'threats', label: 'Threats or violence'),
+    (code: 'other', label: 'Something else'),
+  ];
+
+  Future<void> _reportPeer() async {
+    final peer = _model.directPeerAccountId;
+    if (peer == null) {
+      // Groups have no single subject to report; the group-admin routes are a
+      // separate, deliberate flow.
+      _toast(HelixLocalizations.of(context).reportOnlyOneToOne);
+      return;
+    }
+
+    final l10n = HelixLocalizations.of(context);
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(HelixLocalizations.of(ctx).report),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(
+              l10n.reportDisclosure,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.45,
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          for (final reason in _reportReasons)
+            SimpleDialogOption(
+              key: Key('report_reason_${reason.code}'),
+              onPressed: () => Navigator.pop(ctx, reason.code),
+              child: Text(reason.label),
+            ),
+        ],
+      ),
+    );
+    if (reason == null || !mounted) return;
+
+    try {
+      _model.reportPeer(reasonCode: reason, contextHash: '');
+      _toast(l10n.reportQueued);
+    } catch (e) {
+      _toast('Could not queue the report: $e');
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showPlaceholder(String label) {
