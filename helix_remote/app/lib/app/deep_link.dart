@@ -1,13 +1,25 @@
+import 'package:helix_remote/app/helix_code.dart';
+
 /// Parsed target for the `helix://` protocol registered by the mobile and
 /// Windows clients. Keeping parsing independent of platform channels makes
 /// incoming links straightforward to validate and test before navigation.
-enum HelixDeepLinkKind { invite, call, groupJoin, contactAdd }
+enum HelixDeepLinkKind { invite, serverCode, call, groupJoin, contactAdd }
+
+/// The host of shared invite and recovery links. Always Helix Global's, even
+/// for a personal server's code: the code travels in the URL fragment, which
+/// a browser never sends to the server, and it names its own server.
+const kHelixLinkHost = 'helix.agiletechbd.com';
+
+/// A shareable link that opens [code] (an `HLX-INV-…` or `HLX-REC-…` code) in
+/// the app's advanced mode.
+String helixCodeLink(String code) => 'https://$kHelixLinkHost/open#$code';
 
 class HelixDeepLink {
   const HelixDeepLink._({
     required this.kind,
     this.inviteCode,
     this.serverUrl,
+    this.code,
     this.callId,
     this.groupId,
     this.contactLinkId,
@@ -20,6 +32,9 @@ class HelixDeepLink {
   final HelixDeepLinkKind kind;
   final String? inviteCode;
   final String? serverUrl;
+
+  /// [HelixDeepLinkKind.serverCode]: the `HLX-INV-…` or `HLX-REC-…` code.
+  final String? code;
   final String? callId;
   final String? groupId;
   final String? contactLinkId;
@@ -30,6 +45,10 @@ class HelixDeepLink {
 
   /// Accepts the canonical protocol forms:
   ///
+  /// * `https://helix.agiletechbd.com/open#HLX-INV-…` (or `#HLX-REC-…`) - the
+  ///   shared form, see [helixCodeLink]
+  /// * `helix://open?code=HLX-…` - what that page's "Open in Helix" button
+  ///   launches when the app did not open the link directly
   /// * `helix://invite?code=CODE&server=https%3A%2F%2Fchat.example`
   /// * `helix://call/CALL_ID`
   /// * `helix://group/join?group=GROUP_ID&invite=CODE`
@@ -45,6 +64,7 @@ class HelixDeepLink {
 
     if (uri.scheme == 'helix') {
       return switch (uri.host) {
+        'open' => _serverCode(uri.queryParameters['code']),
         'invite' => _invite(
           uri.queryParameters['code'] ?? uri.queryParameters['invite'],
           uri.queryParameters['server'],
@@ -59,6 +79,11 @@ class HelixDeepLink {
         ),
         _ => null,
       };
+    }
+
+    if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.pathSegments.firstOrNull == 'open') {
+      return _serverCode(Uri.decodeComponent(uri.fragment));
     }
 
     if ((uri.scheme == 'https' || uri.scheme == 'http') &&
@@ -78,6 +103,24 @@ class HelixDeepLink {
       inviteCode: code,
       serverUrl: server,
     );
+  }
+
+  /// The code this link hands to sign-in's advanced mode, if it is an invite
+  /// or recovery link.
+  String? get setupCode => switch (kind) {
+    HelixDeepLinkKind.serverCode => code,
+    HelixDeepLinkKind.invite when serverUrl != null && serverUrl!.isNotEmpty =>
+      encodeHelixInviteCode(serverUrl: serverUrl!, inviteCode: inviteCode!),
+    _ => null,
+  };
+
+  static HelixDeepLink? _serverCode(String? code) {
+    final trimmed = code?.trim() ?? '';
+    final upper = trimmed.toUpperCase();
+    if (!upper.startsWith('HLX-INV-') && !upper.startsWith('HLX-REC-')) {
+      return null;
+    }
+    return HelixDeepLink._(kind: HelixDeepLinkKind.serverCode, code: trimmed);
   }
 
   static HelixDeepLink? _call(String? callId) {

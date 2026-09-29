@@ -1,6 +1,6 @@
 part of '../main.dart';
 
-enum _BootState { loading, needsServerChoice, needsUrl, offline, running }
+enum _BootState { loading, signIn, running }
 
 class HelixRemoteBootstrap extends StatefulWidget {
   const HelixRemoteBootstrap({super.key, this.initialLink});
@@ -14,18 +14,53 @@ class HelixRemoteBootstrap extends StatefulWidget {
 class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
   _BootState _bootState = _BootState.loading;
   RemoteCompositionRoot? _root;
-  String? _initialUrlError;
+  String? _signInError;
   String _dbDir = '';
   String _cacheDir = '';
-  String _currentServerUrl = kHelixGlobalServerUrl;
   bool _recoveryMode = false;
-  String? _pendingInviteCode;
-  String? _pendingPhoneNumber;
+
+  /// An invite or recovery code from a link, waiting for the sign-in page.
+  String? _pendingCode;
+  StreamSubscription<HelixDeepLink>? _linkSub;
 
   @override
   void initState() {
     super.initState();
+    _pendingCode = widget.initialLink?.setupCode;
+    _linkSub = HelixLinkChannel.instance.links.listen(_onLink);
     _boot();
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
+
+  /// A link tapped while the app is open. Invite and recovery codes go to the
+  /// sign-in page; a signed-in app has no use for one.
+  void _onLink(HelixDeepLink link) {
+    final code = link.setupCode;
+    if (code == null || !mounted) return;
+    final root = _root;
+    final signedIn =
+        root != null &&
+        (root.startupState == RemoteStartupState.ready ||
+            root.startupState == RemoteStartupState.authenticatedAndSyncing);
+    if (signedIn) {
+      final context = HelixRemoteAppShell.navigatorKey.currentContext;
+      if (context != null) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'You are already signed in. Sign out first to use this code.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    setState(() => _pendingCode = code);
   }
 
   Future<void> _boot() async {
@@ -34,258 +69,143 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
       _dbDir = p.join(appDir.path, 'helix_remote_db');
       _cacheDir = p.join(appDir.path, 'attachments_cache');
 
-      final initialLink = widget.initialLink;
-      if (initialLink?.kind == HelixDeepLinkKind.invite) {
-        _pendingInviteCode = initialLink!.inviteCode;
-        _currentServerUrl = initialLink.serverUrl ?? kHelixGlobalServerUrl;
-        await OnboardingStateStore.instance.markFirstLaunchCompleted();
-        await _onConnectUrl(_currentServerUrl);
-        return;
-      }
-
-      // Prefer URL saved at runtime (entered by the user)
+      // A server this device signed in to before: open it, and with it the
+      // account (HelixRemoteApp restores the session from the device).
       final savedUrl = await ServerUrlStore.instance.load();
       if (savedUrl != null && savedUrl.isNotEmpty) {
-        // Back-compat: any install that ever saved a server URL already
-        // completed setup under the pre-first-launch-screen flow, so it
-        // must never see the new choice screen retroactively.
-        await OnboardingStateStore.instance.markFirstLaunchCompleted();
-        await _buildAndApplyRoot(savedUrl);
+        _applyRoot(_rootFor(savedUrl));
         return;
       }
 
-      // Fall back to compile-time --dart-define values (CI / dev scripts)
+      // Compile-time --dart-define values (CI / dev scripts).
       try {
         final dartConfig = RemoteDevelopmentConfig.fromDartDefine(
           databaseDirectory: _dbDir,
           attachmentCacheDir: _cacheDir,
         );
-        await OnboardingStateStore.instance.markFirstLaunchCompleted();
-        final root = RemoteCompositionRoot.production(
-          databaseDirectory: _dbDir,
-          devConfig: dartConfig,
+        _applyRoot(
+          RemoteCompositionRoot.production(
+            databaseDirectory: _dbDir,
+            devConfig: dartConfig,
+          ),
         );
-        if (mounted) {
-          setState(() {
-            _root = root;
-            _bootState = _BootState.running;
-          });
-        }
         return;
       } catch (_) {
-        // No dart-define config — fall through to the first-launch flow
+        // No dart-define config: a fresh install signs in.
       }
-
-      final firstLaunchDone = await OnboardingStateStore.instance
-          .isFirstLaunchCompleted();
-      if (mounted) {
-        setState(() {
-          _bootState = firstLaunchDone
-              ? _BootState.offline
-              : _BootState.needsServerChoice;
-        });
-      }
+      if (mounted) setState(() => _bootState = _BootState.signIn);
     } catch (e, st) {
       AppLogger.instance.error('bootstrap', '$e', st);
       if (mounted) {
         setState(() {
-          _initialUrlError = RemoteUserErrorCopy.scrubDomain(e.toString());
-          _bootState = _BootState.needsServerChoice;
+          _signInError = RemoteUserErrorCopy.scrubDomain(e.toString());
+          _bootState = _BootState.signIn;
         });
       }
     }
   }
 
-  Future<void> _buildAndApplyRoot(String url) async {
-    _currentServerUrl = url;
-    final config = RemoteDevelopmentConfig.fromServerUrl(
-      url,
-      databaseDirectory: _dbDir,
-      attachmentCacheDir: _cacheDir,
-    );
-    final root = RemoteCompositionRoot.production(
-      databaseDirectory: _dbDir,
-      devConfig: config,
-    );
-    if (mounted) {
+  RemoteCompositionRoot _rootFor(String url) =>
+      RemoteCompositionRoot.production(
+        databaseDirectory: _dbDir,
+        devConfig: RemoteDevelopmentConfig.fromServerUrl(
+          url,
+          databaseDirectory: _dbDir,
+          attachmentCacheDir: _cacheDir,
+        ),
+      );
+
+  void _applyRoot(RemoteCompositionRoot root) {
+    if (!mounted) return;
+    setState(() {
+      _root = root;
+      _bootState = _BootState.running;
+    });
+  }
+
+  /// Finishes a sign-in the sign-in pages could not finish themselves: the
+  /// app had no root for that server yet (first launch, or a different server
+  /// than the saved one). Any current root is closed first - two roots must
+  /// never hold the database at once.
+  Future<void> _onServerChoiceMade(Object? choice) async {
+    final (serverUrl, signIn) = switch (choice) {
+      ServerPasswordChoice c => (
+        c.serverUrl,
+        (RemoteCompositionRoot root) =>
+            root.signInWithPasswordKeys(lookup: c.lookup, keys: c.keys),
+      ),
+      ServerRecoveryChoice c => (
+        c.serverUrl,
+        (RemoteCompositionRoot root) => root.recoverAccount(
+          accountId: c.accountId,
+          recoveryCode: c.recoveryCode,
+          phoneHash: c.phoneHash,
+          phoneNumber: c.phoneNumber,
+          otpCode: c.otpCode,
+          otpChallengeId: c.otpChallengeId,
+        ),
+      ),
+      ServerInviteChoice c => (
+        c.serverUrl,
+        (RemoteCompositionRoot root) => root.registerAndLogin(
+          phoneNumber: c.phoneNumber!,
+          phoneHashOverride: c.phoneHash,
+          displayName: c.displayName!,
+          otpCode: c.otpCode!,
+          otpChallengeId: c.otpChallengeId,
+          inviteCode: c.inviteCode,
+          tosAccepted: c.tosAccepted,
+          tosVersion: c.tosVersion,
+        ),
+      ),
+      _ => (null, null),
+    };
+    if (serverUrl == null || signIn == null) return;
+
+    final previous = _root;
+    setState(() {
+      _root = null;
+      _bootState = _BootState.loading;
+      _pendingCode = null;
+      _recoveryMode = false;
+      _signInError = null;
+    });
+    await previous?.dispose();
+
+    RemoteCompositionRoot? root;
+    try {
+      root = _rootFor(serverUrl);
+      await root.initialize();
+      await signIn(root);
+      await ServerUrlStore.instance.save(serverUrl);
+      _applyRoot(root);
+    } catch (e) {
+      await root?.dispose();
+      final conflict =
+          e is RemoteRestException &&
+          e.serverCode == RemoteApiErrorCodes.phoneAlreadyRegistered;
+      if (!mounted) return;
       setState(() {
-        _root = root;
-        _bootState = _BootState.running;
+        _recoveryMode = conflict;
+        _signInError = conflict
+            ? null
+            : switch (choice) {
+                ServerPasswordChoice _ => passwordSignInErrorMessage(e),
+                _ =>
+                  e is RemoteRestException
+                      ? RemoteUserErrorCopy.registrationFailure(
+                          e,
+                          Uri.parse(serverUrl),
+                        )
+                      : RemoteUserErrorCopy.scrubDomain(e.toString()),
+              };
+        _bootState = _BootState.signIn;
       });
     }
   }
 
-  Future<void> _onConnectUrl(String url) async {
-    await ServerUrlStore.instance.save(url);
-    try {
-      await _buildAndApplyRoot(url);
-    } catch (e) {
-      await ServerUrlStore.instance.clear();
-      rethrow;
-    }
-  }
-
-  /// Handles the result popped from [ServerChoiceScreen]: either a chosen
-  /// server + invite (Global or personal), or the user continuing offline
-  /// (including simply backing out without choosing anything).
-  Future<void> _onServerChoiceMade(Object? choice) async {
-    await OnboardingStateStore.instance.markFirstLaunchCompleted();
-    _initialUrlError = null;
-    if (choice is ServerRecoveryChoice ||
-        choice is ServerInviteChoice ||
-        choice == null) {
-      _recoveryMode = false;
-    }
-    if (choice is ServerInviteChoice) {
-      _pendingInviteCode = choice.inviteCode;
-      _pendingPhoneNumber = choice.phoneNumber;
-      RemoteCompositionRoot? root;
-      try {
-        await ServerUrlStore.instance.save(choice.serverUrl);
-        _currentServerUrl = choice.serverUrl;
-        final config = RemoteDevelopmentConfig.fromServerUrl(
-          choice.serverUrl,
-          databaseDirectory: _dbDir,
-          attachmentCacheDir: _cacheDir,
-        );
-        root = RemoteCompositionRoot.production(
-          databaseDirectory: _dbDir,
-          devConfig: config,
-        );
-        await root.initialize();
-        if (choice.phoneNumber != null &&
-            choice.phoneNumber!.isNotEmpty &&
-            choice.displayName != null &&
-            choice.displayName!.isNotEmpty &&
-            choice.otpCode != null &&
-            choice.otpCode!.isNotEmpty) {
-          try {
-            // Only reached with a real OTP. This used to fall back to
-            // '123456' when none was supplied, so a user who skipped the
-            // verification step was silently registered against a hardcoded
-            // code. Without an OTP we fall through to the restore path below,
-            // which is the honest thing to do.
-            await root.registerAndLogin(
-              phoneNumber: choice.phoneNumber!,
-              phoneHashOverride: choice.phoneHash,
-              displayName: choice.displayName!,
-              otpCode: choice.otpCode!,
-              otpChallengeId: choice.otpChallengeId,
-              inviteCode: choice.inviteCode,
-              tosAccepted: choice.tosAccepted,
-              tosVersion: choice.tosVersion,
-            );
-          } catch (e) {
-            if (e is RemoteRestException &&
-                e.serverCode == RemoteApiErrorCodes.phoneAlreadyRegistered) {
-              rethrow;
-            }
-            final restored = await root.tryRestoreSession();
-            if (!restored) rethrow;
-          }
-        }
-        if (mounted) {
-          setState(() {
-            _root = root;
-            _bootState = _BootState.running;
-          });
-        }
-      } catch (e) {
-        await root?.dispose();
-        _pendingInviteCode = null;
-        _pendingPhoneNumber = null;
-        if (e is RemoteRestException &&
-            e.serverCode == RemoteApiErrorCodes.phoneAlreadyRegistered) {
-          _recoveryMode = true;
-          final recover = await _showPhoneRecoveryPrompt();
-          if (!mounted) return;
-          if (recover) {
-            setState(() {
-              _initialUrlError = null;
-              _bootState = _BootState.needsServerChoice;
-            });
-          } else {
-            setState(() {
-              _initialUrlError =
-                  'This phone number is already registered. Use a recovery '
-                  'code to restore the account.';
-              _bootState = _BootState.offline;
-            });
-          }
-          return;
-        }
-        if (mounted) {
-          setState(() {
-            _initialUrlError = RemoteUserErrorCopy.scrubDomain(e.toString());
-            _bootState = _BootState.offline;
-          });
-        }
-      }
-      return;
-    }
-    if (choice is ServerRecoveryChoice) {
-      try {
-        await ServerUrlStore.instance.save(choice.serverUrl);
-        _currentServerUrl = choice.serverUrl;
-        final config = RemoteDevelopmentConfig.fromServerUrl(
-          choice.serverUrl,
-          databaseDirectory: _dbDir,
-          attachmentCacheDir: _cacheDir,
-        );
-        final root = RemoteCompositionRoot.production(
-          databaseDirectory: _dbDir,
-          devConfig: config,
-        );
-        await root.initialize();
-        await root.recoverAccount(
-          accountId: choice.accountId,
-          recoveryCode: choice.recoveryCode,
-          phoneHash: choice.phoneHash,
-        );
-        if (mounted) {
-          setState(() {
-            _root = root;
-            _bootState = _BootState.running;
-          });
-        }
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _initialUrlError = RemoteUserErrorCopy.scrubDomain(e.toString());
-            _bootState = _BootState.offline;
-          });
-        }
-      }
-      return;
-    }
-    if (mounted) setState(() => _bootState = _BootState.offline);
-  }
-
-  Future<bool> _showPhoneRecoveryPrompt() async {
-    if (!mounted) return false;
-    final l10n = HelixLocalizations.of(context);
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(l10n.phoneAlreadyRegistered),
-          content: Text(l10n.phoneAlreadyRegisteredRecoveryMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(l10n.enterRecoveryCode),
-            ),
-          ],
-        );
-      },
-    );
-    return result == true;
-  }
-
+  /// Signing out (or leaving a server) closes the root and starts over on
+  /// the sign-in page.
   Future<void> _onChangeServerUrl() async {
     final oldRoot = _root;
     setState(() {
@@ -297,66 +217,37 @@ class _HelixRemoteBootstrapState extends State<HelixRemoteBootstrap> {
     await ServerUrlStore.instance.clear();
     if (mounted) {
       setState(() {
-        _bootState = _BootState.needsServerChoice;
-        _initialUrlError = null;
+        _bootState = _BootState.signIn;
+        _signInError = null;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_bootState == _BootState.running && _root != null) {
-      return HelixRemoteApp(
-        root: _root!,
-        onChangeServerUrl: _onChangeServerUrl,
-        initialInviteCode: _pendingInviteCode,
-        initialPhoneNumber: _pendingPhoneNumber,
-      );
-    }
-    return _buildBootHome();
-  }
-
-  Widget _buildBootHome() {
     switch (_bootState) {
-      case _BootState.loading:
-        return const Scaffold(
-          body: Center(child: HelixSkeleton(width: 192, height: 24)),
+      case _BootState.running when _root != null:
+        return HelixRemoteApp(
+          root: _root!,
+          onChangeServerUrl: _onChangeServerUrl,
+          onServerChoice: _onServerChoiceMade,
+          initialCode: _pendingCode,
         );
-      case _BootState.needsServerChoice:
-      case _BootState.needsUrl:
-        // The first-launch setup is returned directly as the boot home. A
-        // key change is required when a duplicate-phone conflict switches it
-        // into recovery mode; otherwise Flutter would reuse the completed
-        // SetupScreen state and never start at the recovery-code step.
+      case _BootState.signIn:
         return SetupScreen(
+          // A new key per attempt, so a failed sign-in starts from a clean
+          // page with its error rather than the finished state of the last.
           key: ValueKey<String>(
-            'server-setup-${_recoveryMode ? 'recovery' : 'standard'}',
+            'sign-in-$_recoveryMode-${_signInError.hashCode}',
           ),
           onChoice: _onServerChoiceMade,
-          autoStartLaunch: !_recoveryMode,
+          initialCode: _pendingCode,
           initialRecoveryMode: _recoveryMode,
-          initialServerUrl: _recoveryMode ? _currentServerUrl : null,
+          initialError: _signInError,
         );
-      case _BootState.offline:
-        return _OfflineShellScreen(
-          onServerChoiceMade: _onServerChoiceMade,
-          connectError: _initialUrlError,
-        );
+      case _BootState.loading:
       case _BootState.running:
-        // Handled above before reaching this switch.
-        return const Scaffold(
-          body: Center(child: HelixSkeleton(width: 192, height: 24)),
-        );
+        return const StartupSkeleton();
     }
   }
 }
-
-// ---------------------------------------------------------------------------
-// First-launch server choice — shown once, replaced by _BootState.offline or
-// _BootState.running after a choice is made.
-// ---------------------------------------------------------------------------
-
-/// Hosts [ServerChoiceScreen] as the very first route so it can rely on its
-/// normal push/pop-based result flow even when nothing else has been pushed
-/// yet. Uses `pushReplacement` so there is no route left underneath it to
-/// accidentally navigate back to.

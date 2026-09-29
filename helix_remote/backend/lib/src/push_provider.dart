@@ -187,6 +187,7 @@ final class ApnsPushProvider implements PushProvider {
       final body = switch (notificationType) {
         'new_message' => 'You have a new message',
         'group_invite' => 'You have a new group invitation',
+        'new_sign_in' => _newSignInBody,
         _ => 'You have a new notification',
       };
       payloadJson = jsonEncode({
@@ -323,6 +324,7 @@ final class FcmPushProvider implements PushProvider {
       'incoming_call' => callerLabel,
       'new_message' => 'You have a new message',
       'group_invite' => 'You have a new group invitation',
+      'new_sign_in' => _newSignInBody,
       _ => 'You have a new notification',
     };
     final channelId = isCall ? 'helix_incoming_calls' : 'helix_messages';
@@ -368,8 +370,12 @@ final class FcmPushProvider implements PushProvider {
     if (displayName != null && displayName.isNotEmpty) return displayName;
     final phoneLast4 = data['caller_phone_last4']?.toString().trim();
     if (phoneLast4 != null && phoneLast4.isNotEmpty) {
-      return 'Phone ending $phoneLast4';
+      return phoneLast4;
     }
     return 'Unknown caller';
   }
 }
+
+const _newSignInBody =
+    'A new device signed in to your account. Not you? Sign it out in '
+    'Settings > Devices.';

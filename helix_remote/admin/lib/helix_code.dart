@@ -47,8 +47,8 @@ String encodeHelixInviteCode({
   // Case 2: Legacy URL format with ?invite= parameter
   final withScheme =
       trimmed.startsWith('http://') || trimmed.startsWith('https://')
-          ? trimmed
-          : 'https://$trimmed';
+      ? trimmed
+      : 'https://$trimmed';
   final uri = Uri.tryParse(withScheme);
   if (uri != null && uri.host.isNotEmpty) {
     final inviteParam = uri.queryParameters['invite'];
@@ -109,3 +109,18 @@ bool isHelixInviteCode(String raw) =>
 
 bool isHelixRecoveryCode(String raw) =>
     raw.trim().toUpperCase().startsWith(kHelixRecoveryPrefix);
+
+/// Invite and recovery links always use Helix Global's host: the Android app
+/// is verified for it, and the code - which names its own server - travels
+/// in the URL fragment, which a browser never sends to that host.
+const String kHelixLinkHost = 'helix.agiletechbd.com';
+
+/// A link that opens [code] in the Helix app, e.g. from a chat message.
+String helixCodeLink(String code) => 'https://$kHelixLinkHost/open#$code';
+
+/// What to send someone along with a code, for when the link does not open
+/// the app on its own.
+const String kHelixCodeManualSteps =
+    'If the link does not open Helix: open the app, tap the bottom-right '
+    'corner of the sign-in page three times, tap "Advanced mode" and paste '
+    'the code.';

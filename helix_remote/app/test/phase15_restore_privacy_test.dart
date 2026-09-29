@@ -6,7 +6,10 @@ import 'dart:ffi' show DynamicLibrary;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/screens/backup_screen.dart';
-import 'package:helix_remote/screens/privacy_screen.dart';
+import 'package:helix_remote/app/app_lock.dart';
+import 'package:helix_remote/screens/settings_pages/account_settings_page.dart';
+import 'package:helix_remote/screens/settings_pages/privacy_settings_page.dart';
+import 'package:helix_remote/screens/settings_pages/security_settings_page.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
@@ -14,7 +17,6 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as pathpkg;
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'support/group_call_rest_stubs.dart';
 
 // ---------------------------------------------------------------------------
@@ -163,8 +165,6 @@ void main() {
       addTearDown(db.close);
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _StubRestClient(),
@@ -188,8 +188,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: restClient,
@@ -220,8 +218,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _StubRestClient(),
@@ -239,7 +235,7 @@ void main() {
     });
   });
 
-  group('P15-W02 PrivacyScreen account deletion lifecycle', () {
+  group('P15-W02 Account settings: export and deletion lifecycle', () {
     testWidgets('Export and Delete Account tiles are visible', (tester) async {
       final db = _openDb();
       addTearDown(db.close);
@@ -247,9 +243,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: PrivacyScreen(
+          home: AccountSettingsPage(
             restClient: _StubRestClient(),
             messagingService: messaging,
           ),
@@ -271,9 +265,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: PrivacyScreen(
+          home: AccountSettingsPage(
             restClient: restClient,
             messagingService: messaging,
             onBeforeDelete: () async => callOrder.add('before'),
@@ -286,8 +278,8 @@ void main() {
       );
 
       // Tap Delete Account
-      // Delete account now sits at the bottom of the screen, below the
-      // ordinary toggles, so the tile has to be scrolled into view first.
+      // Delete account sits last on the page, on its own, so it may need
+      // scrolling into view.
       await tester.ensureVisible(find.text('Delete account'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete account'));
@@ -312,17 +304,15 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: PrivacyScreen(
+          home: AccountSettingsPage(
             restClient: _StubRestClient(),
             messagingService: messaging,
           ),
         ),
       );
 
-      // Delete account now sits at the bottom of the screen, below the
-      // ordinary toggles, so the tile has to be scrolled into view first.
+      // Delete account sits last on the page, on its own, so it may need
+      // scrolling into view.
       await tester.ensureVisible(find.text('Delete account'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete account'));
@@ -333,6 +323,106 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Deletion confirmation did not match'), findsOneWidget);
+    });
+  });
+
+  group('Settings pages keep what they show', () {
+    Widget app(Widget home) => MaterialApp(home: home);
+
+    testWidgets('privacy choices and read receipts survive a restart', (
+      tester,
+    ) async {
+      final db = _openDb();
+      addTearDown(db.close);
+      final first = await _makeMessaging(db);
+      first.updatePrivacy(
+        const RemotePrivacySettings(
+          searchDiscoverable: false,
+          presenceVisibility: 'EVERYONE',
+          lastSeenVisibility: 'NOBODY',
+        ),
+      );
+      first.setReadReceiptsEnabled(false);
+
+      // A new service on the same database is what an app restart is.
+      final restarted = await _makeMessaging(db);
+      expect(restarted.privacySettings.lastSeenVisibility, 'NOBODY');
+      expect(restarted.privacySettings.presenceVisibility, 'EVERYONE');
+      expect(restarted.privacySettings.searchDiscoverable, isFalse);
+      expect(restarted.readReceiptsEnabled, isFalse);
+    });
+
+    testWidgets('picking a last-seen audience saves it', (tester) async {
+      final db = _openDb();
+      addTearDown(db.close);
+      final messaging = await _makeMessaging(db);
+      await tester.pumpWidget(
+        app(PrivacySettingsPage(messagingService: messaging)),
+      );
+
+      await tester.tap(find.text('Last seen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nobody').last);
+      await tester.pumpAndSettle();
+
+      expect(messaging.privacySettings.lastSeenVisibility, 'NOBODY');
+      expect(db.getAccountPrivacyPreferences().lastSeenVisibility, 'NOBODY');
+    });
+
+    testWidgets('read receipts switch saves', (tester) async {
+      final db = _openDb();
+      addTearDown(db.close);
+      final messaging = await _makeMessaging(db);
+      await tester.pumpWidget(
+        app(PrivacySettingsPage(messagingService: messaging)),
+      );
+
+      await tester.tap(find.text('Read receipts'));
+      await tester.pumpAndSettle();
+
+      expect(messaging.readReceiptsEnabled, isFalse);
+      expect(db.getReadReceiptsEnabled(), isFalse);
+    });
+
+    testWidgets('app lock only turns on after the unlock prompt succeeds', (
+      tester,
+    ) async {
+      final db = _openDb();
+      addTearDown(db.close);
+      final messaging = await _makeMessaging(db);
+      var promptResult = false;
+      AppLock.deviceSupportsLock = () async => true;
+      AppLock.authenticator = (_) async => promptResult;
+      await tester.pumpWidget(
+        app(SecuritySettingsPage(messagingService: messaging)),
+      );
+
+      await tester.tap(find.text('Lock Helix Remote'));
+      await tester.pumpAndSettle();
+      expect(db.getAppLockSettings().enabled, isFalse);
+
+      promptResult = true;
+      await tester.tap(find.text('Lock Helix Remote'));
+      await tester.pumpAndSettle();
+      expect(db.getAppLockSettings().enabled, isTrue);
+      expect(find.text('Lock the app'), findsOneWidget);
+    });
+
+    testWidgets('a phone without a screen lock cannot enable app lock', (
+      tester,
+    ) async {
+      final db = _openDb();
+      addTearDown(db.close);
+      final messaging = await _makeMessaging(db);
+      AppLock.deviceSupportsLock = () async => false;
+      AppLock.authenticator = (_) async => true;
+      await tester.pumpWidget(
+        app(SecuritySettingsPage(messagingService: messaging)),
+      );
+
+      await tester.tap(find.text('Lock Helix Remote'));
+      await tester.pumpAndSettle();
+      expect(db.getAppLockSettings().enabled, isFalse);
     });
   });
 }

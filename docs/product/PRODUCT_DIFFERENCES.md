@@ -6,10 +6,10 @@ A side-by-side comparison of the architectural and persistence models.
 | :--- | :--- | :--- |
 | **Network Boundary** | LAN/Hotspot only | Public Internet + WAN |
 | **Infrastructure** | Serverless / mDNS multicast | Modular Monolith Backend (SQLite, Local Filesystem) |
-| **Identity Model** | Long-lived install-scoped keypair | Registered account, prekeys on server directory |
+| **Identity Model** | Long-lived install-scoped keypair | Phone-number account with a required password; account identity key shared by the account's devices (a password-wrapped copy is stored on the server); prekeys on the server directory |
 | **Conversation Storage** | RAM only (zero-remnant on restart) | Encrypted SQLite (SQLCipher) persistent database |
 | **Group Authority** | Ephemeral P2P election | Server-assisted membership & distribution |
 | **File Attachments** | Ephemeral stream to disk; RAM cache | Encrypted Local Filesystem; persistent cache |
 | **Panic Wipe** | Deep local wipe (all keys, databases, WAL) | Not applicable (local logout/purge only) |
 | **Multi-Device Support** | No (single device only) | Yes (sync queue, cursors, fan-out) |
-| **Push Notifications** | No | Yes (silent ciphertext push signaling) |
+| **Push Notifications** | No | Yes (FCM wake hints only: no message content or ciphertext) |

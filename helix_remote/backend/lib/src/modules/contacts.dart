@@ -876,7 +876,7 @@ class ContactsModule {
     required Map<String, dynamic> payload,
   }) {
     final now = DateTime.now().millisecondsSinceEpoch;
-    for (final device in db.getDevices(accountId)) {
+    for (final device in db.getActiveDevices(accountId)) {
       final deviceId = device['device_id'] as String;
       final eventId = 'evt_${eventType}_${eventKey}_$deviceId';
       final sequence = db.writeDeviceEvent(

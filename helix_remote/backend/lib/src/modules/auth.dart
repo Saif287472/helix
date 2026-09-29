@@ -6,6 +6,7 @@ import 'package:cryptography/cryptography.dart' as crypto;
 import 'package:crypto/crypto.dart' as crypto_pkg;
 import 'package:helix_remote_backend/src/admin_password.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
+import 'package:helix_remote_backend/src/constant_time.dart';
 import 'package:helix_remote_backend/src/database.dart';
 import 'package:helix_remote_backend/src/invite_codes.dart';
 import 'package:helix_remote_backend/src/jwt.dart';
@@ -19,6 +20,7 @@ import 'package:helix_remote_domain/models.dart';
 part 'auth/challenge_login.dart';
 part 'auth/devices.dart';
 part 'auth/invites.dart';
+part 'auth/password.dart';
 part 'auth/phone_otp.dart';
 part 'auth/profile.dart';
 part 'auth/recovery.dart';
@@ -66,6 +68,120 @@ abstract class AuthModuleBase {
 
   String _serverAudience(Request request);
 
+  bool _isValidPublicKey(String value, crypto.KeyPairType type);
+
+  /// How long an unused refresh token stays valid. Every refresh rotates it
+  /// and restarts the clock, so this is really "how long a device may stay
+  /// closed before it has to sign in again" - and even then the app signs in
+  /// again with its device key, not a new SMS code.
+  static const refreshTokenLifetime = Duration(days: 60);
+  static const accessTokenLifetime = Duration(hours: 1);
+
+  /// Issues a fresh access + refresh token pair for [deviceId] and records
+  /// the refresh token so it can be rotated and revoked. The one place a
+  /// device session is minted - login, refresh, device linking and password
+  /// sign-in all come through here.
+  Map<String, dynamic> _issueDeviceSession(String accountId, String deviceId) {
+    final token = jwt.generateToken({
+      'account_id': accountId,
+      'device_id': deviceId,
+    }, accessTokenLifetime);
+    final refreshToken = jwt.generateToken({
+      'account_id': accountId,
+      'device_id': deviceId,
+      'refresh': true,
+      'jti': _authBase64UrlEncode(
+        List<int>.generate(16, (_) => Random.secure().nextInt(256)),
+      ),
+    }, refreshTokenLifetime);
+    final expiresAt = _now().add(refreshTokenLifetime).millisecondsSinceEpoch;
+    // Every sign-in and hourly refresh marks the device as recently active,
+    // which is what the "your devices" list shows.
+    db.updateDeviceLastSeen(accountId, deviceId, _now().millisecondsSinceEpoch);
+    db.saveRefreshToken(
+      tokenHash: crypto_pkg.sha256
+          .convert(utf8.encode(refreshToken))
+          .toString(),
+      accountId: accountId,
+      deviceId: deviceId,
+      expiresAt: expiresAt,
+    );
+    return {
+      'token': token,
+      'refresh_token': refreshToken,
+      'refresh_expires_at': expiresAt,
+    };
+  }
+
+  /// Refuses a session for a device that is no longer ACTIVE, with the code
+  /// the client needs to tell "you were signed out" from "the account is
+  /// gone". Also revokes whatever refresh tokens the device still holds.
+  void _requireActiveDevice(String accountId, String deviceId) {
+    if (db.isDeviceActive(accountId, deviceId)) return;
+    db.revokeAllRefreshTokensForDevice(accountId, deviceId);
+    if (db.isAccountBlocked(accountId)) {
+      throw AppError.forbidden(
+        'This account has been blocked',
+        code: RemoteErrorCode.accountBlocked,
+      );
+    }
+    throw AppError.forbidden(
+      'This device was signed out',
+      code: RemoteErrorCode.deviceRevoked,
+    );
+  }
+
+  /// Tells every other signed-in device of [accountId] that [newDeviceId]
+  /// just signed in, so an unexpected sign-in is noticed at once.
+  ///
+  /// Unlike [_notifySiblingDevices] (realtime only) this is written to each
+  /// device's event log, so a phone that is offline sees it when it next
+  /// syncs, and it is pushed so a closed app still raises a notification.
+  void _announceNewSignIn({
+    required String accountId,
+    required String newDeviceId,
+    required String deviceName,
+    required String method,
+  }) {
+    final now = _now().millisecondsSinceEpoch;
+    final payload = {
+      'device_id': newDeviceId,
+      'device_name': deviceName,
+      'method': method,
+      'signed_in_at': now,
+    };
+    for (final device in db.getActiveDevices(accountId)) {
+      final targetId = device['device_id'] as String;
+      if (targetId == newDeviceId) continue;
+      final eventId = 'evt_device_linked_${newDeviceId}_$targetId';
+      final sequence = db.writeDeviceEvent(
+        eventId: eventId,
+        recipientDeviceId: targetId,
+        eventType: 'device_linked',
+        payload: jsonEncode(payload),
+      );
+      notifyDevice?.call(targetId, {
+        'event_id': eventId,
+        'schema_version': 1,
+        'timestamp': now,
+        'type': 'device_linked',
+        'payload': payload,
+        'server_sequence': sequence,
+      });
+      // The push carries no device name: it passes through the push
+      // provider, and the app fills in the details once it syncs.
+      db.enqueueOutbox(
+        'outbox_sign_in_${newDeviceId}_$targetId',
+        'PUSH_NOTIFICATION',
+        jsonEncode({
+          'notification_type': 'new_sign_in',
+          'recipient_account_id': accountId,
+          'recipient_device_id': targetId,
+        }),
+      );
+    }
+  }
+
   void _notifySiblingDevices(
     String accountId, {
     required String exceptDeviceId,
@@ -78,6 +194,7 @@ class AuthModule extends AuthModuleBase
         AuthChallengeLoginHandlers,
         AuthDeviceHandlers,
         AuthInviteHandlers,
+        AuthPasswordHandlers,
         AuthPhoneOtpHandlers,
         AuthProfileHandlers,
         AuthRecoveryHandlers,
@@ -137,7 +254,11 @@ class AuthModule extends AuthModuleBase
     router.get('/challenge', _challengeHandler);
     router.post('/login', _loginHandler);
     router.post('/refresh', _refreshHandler);
+    router.post('/recovery/lookup', _lookupRecoveryHandler);
     router.post('/recovery/redeem', _redeemRecoveryHandler);
+    router.post('/password/params', _passwordParamsHandler);
+    router.post('/password/login', _passwordLoginHandler);
+    router.post('/password/verify', _passwordVerifyHandler);
 
     // Auth routes (enforced by middleware in main, but we can verify here too)
     router.get('/devices', _listDevicesHandler);
@@ -150,10 +271,13 @@ class AuthModule extends AuthModuleBase
     router.post('/devices/link/complete', _completeDeviceLinkHandler);
     router.post('/devices/link/complete-new', _completeNewDeviceLinkHandler);
     router.post('/devices/revoke', _revokeDeviceHandler);
+    router.post('/devices/revoke-others', _revokeOtherDevicesHandler);
     router.post('/devices/lost-device', _lostDeviceHandler);
     router.put('/devices/push-token', _updatePushTokenHandler);
     router.post('/profile', _updateProfileHandler);
     router.get('/profile', _getProfileHandler);
+    router.get('/password', _passwordStatusHandler);
+    router.post('/password', _setPasswordHandler);
 
     return withAppErrorHandling(router.call);
   }
@@ -168,7 +292,7 @@ class AuthModule extends AuthModuleBase
   }) {
     final notifier = notifyDevice;
     if (notifier == null) return;
-    for (final device in db.getDevices(accountId)) {
+    for (final device in db.getActiveDevices(accountId)) {
       final deviceId = device['device_id'] as String;
       if (deviceId != exceptDeviceId) {
         notifier(deviceId, payload);

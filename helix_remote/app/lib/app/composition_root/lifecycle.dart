@@ -1,6 +1,34 @@
 part of '../composition_root.dart';
 
 mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
+  /// How old a sign-in may be and still raise a notification here. A live
+  /// sign-in arrives over the socket within seconds; an older one is being
+  /// replayed on catch-up, and the push already told the user about it.
+  static const _signInAlertWindow = Duration(minutes: 2);
+
+  void _onAccountDeviceSignedIn(RemoteAccountSignIn signIn) {
+    // Messages from this device must now also be encrypted to the new one.
+    final ms = _messagingService;
+    final accountId = ms?.currentAccountId;
+    if (ms != null && accountId != null) {
+      ms.invalidatePrekeyBundles([accountId]);
+    }
+    if (signIn.method != 'password') return;
+    if (DateTime.now().difference(signIn.signedInAt) > _signInAlertWindow) {
+      return;
+    }
+    AppLogger.instance.info(
+      'SECURITY',
+      'new password sign-in on another device',
+    );
+    unawaited(
+      LocalNotificationService.showNewSignIn(
+        deviceId: signIn.deviceId,
+        deviceName: signIn.deviceName,
+      ),
+    );
+  }
+
   Future<void> _refreshAttachmentLimits(
     HelixRemoteRestClient restClient,
   ) async {
@@ -75,6 +103,11 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
       _syncEngine = RemoteSyncEngine(
         db,
         onCallSignal: onCallSignal,
+        // Late-bound: the messaging service is created below, after the
+        // engine, and a stale send can only surface once both exist.
+        rebuildStaleOperation: (type, payload) async =>
+            _messagingService?.rebuildStaleSend(type, payload),
+        onAccountDeviceSignedIn: _onAccountDeviceSignedIn,
         onLocalDeviceRevoked: (deviceId, reason) {
           // This device's credentials are dead server-side. Anything else we
           // do here would leave a revoked session limping along, so tear the

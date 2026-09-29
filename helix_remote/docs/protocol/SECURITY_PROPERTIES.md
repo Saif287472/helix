@@ -1,5 +1,7 @@
 # Protocol Security Properties
 
+> **Scope: Helix Local only (LAN protocol, June 2026).** RSA fingerprints, TOFU and RAM-only media below describe Helix Local, not Remote. For Remote see `helix_remote/docs/security/remote_cryptographic_design_review.md` and `helix_remote/docs/product/THREAT_MODEL.md`.
+
 > **Status:** Finalized — Stage 5 review.
 
 ## What the Protocol Guarantees (Current Implementation)

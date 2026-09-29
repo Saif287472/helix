@@ -16,6 +16,11 @@ The advisory flags upgrade pressure but does not replace human review.
 
 ## CI Notes
 
-Known-CVE and license audits should be wired into hosted CI when a chosen tool is
-available for the project. Until then, dependency additions require explicit
-manual review and a note in the completion report.
+Helix Remote has a known-vulnerability gate: the `supply-chain` job in
+`.github/workflows/ci.yml` generates a CycloneDX SBOM
+(`helix_remote/tool/generate_sbom.dart`) and runs OSV-Scanner over
+`./helix_remote`. `helix_remote/tool/check_governance_controls.dart` also checks
+the lockfile and dependency-policy documents. There is no automated license
+audit, and Helix Local changes are not wired into CI yet, so dependency
+additions still require explicit manual review and a note in the completion
+report.

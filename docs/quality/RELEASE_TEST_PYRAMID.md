@@ -1,5 +1,7 @@
 # Phase 11 Release Test Pyramid
 
+> **Status: historical (June 2026, pre-split layout).** Paths below refer to the old single-workspace tree (`apps/`, `packages/`, `services/`, root `tool/`/`scripts/`). Code now lives in two workspaces, `helix_local/` and `helix_remote/`. For current Remote docs see `helix_remote/docs/` and `AGENTS.md`.
+
 Phase 11 release assurance uses a risk-based pyramid instead of a single global
 coverage percentage. Each high-risk area must have at least one executable gate
 at the lowest practical layer and one release-level check before public

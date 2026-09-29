@@ -6,6 +6,10 @@ credentials, app-store accounts, or signing keys.
 
 ## Required Commands
 
+Run these from `helix_remote/` (the scripts use workspace-relative paths).
+Per `AGENTS.md`, agents do not run `-BuildArtifacts` or build APKs unless the
+user asks.
+
 - Run `.\scripts\verify.ps1`.
 - Run `.\scripts\remote_release_gate.ps1`.
 - Run `.\scripts\remote_release_gate.ps1 -BuildArtifacts` only after Remote
@@ -15,7 +19,7 @@ credentials, app-store accounts, or signing keys.
 
 ## Remote Client
 
-- `apps/helix_remote` analysis and tests pass.
+- `app/` (and `admin/`) analysis and tests pass.
 - Remote app imports only Remote packages and allowed SDK packages.
 - Remote application ID is `com.helix.remote`.
 - Remote database filename is `helix_remote.db`.
@@ -28,14 +32,20 @@ credentials, app-store accounts, or signing keys.
   excluded by ADR 023 until its platform controls are implemented and reviewed.
 - Remote contains no Local LAN discovery, UDP broadcast, mDNS browsing, or Local
   panic-wipe orchestration.
-- Fresh-device account restore is link-first: release testing must verify
-  trusted device approval, backup decryption, snapshot restore, prekey
-  publication, and runtime startup.
+- A second device signs in with phone number + password: release testing must
+  verify identity-key unwrap, prekey publication, history-backup restore, the
+  "new sign-in" alert on the other devices, and runtime startup. Device linking
+  from a trusted device and manual backup restore (decryption, snapshot restore)
+  must still work.
+- Sign-out paths: revoke one device, revoke all others, and an SMS-OTP sign-in
+  on Helix Global signing the other devices out.
 
 ## Remote Backend
 
-- `services/helix_remote_backend` unit/integration tests pass.
-- OpenAPI and realtime compatibility fixtures pass.
+- `backend/` unit/integration tests pass (`cd backend; dart test`).
+- OpenAPI and realtime compatibility fixtures pass. Note that
+  `contracts/remote-rest-openapi/openapi.yaml` does not yet describe the
+  password routes, `/backups/history`, or `/devices/revoke-others`.
 - Health, readiness, privacy export, account deletion, and admin metrics gates
   are covered by tests.
 - No plaintext messages, private media bytes, tokens, keys, backup secrets, or
@@ -64,6 +74,6 @@ credentials, app-store accounts, or signing keys.
 
 - Use `docs/release/REMOTE_RELEASE_NOTES_TEMPLATE.md`.
 - Call out known blockers and do not make strong claims about
-  SQLCipher-capable database-at-rest encryption, independent crypto review, full
-  DH/skipped-key ratchet support, or staging completion unless the evidence
-  exists.
+  SQLCipher-capable database-at-rest encryption, independent crypto review,
+  forward secrecy of the (implemented but unreviewed) DH ratchet, or staging
+  completion unless the evidence exists.

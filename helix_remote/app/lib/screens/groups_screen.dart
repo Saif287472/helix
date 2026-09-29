@@ -10,7 +10,6 @@ import 'package:helix_remote/presentation/groups/groups_view_model.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'groups/actions_and_body.dart';
 part 'groups/models.dart';
@@ -116,7 +115,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(HelixLocalizations.of(context).createGroup),
+          title: const Text('Create Group'),
           content: TextField(
             controller: nameController,
             decoration: const InputDecoration(labelText: 'Group name'),
@@ -124,7 +123,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(HelixLocalizations.of(context).cancel),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
@@ -140,7 +139,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 setState(() => _status = 'Group "$name" created (queued)');
                 _reload();
               },
-              child: Text(HelixLocalizations.of(context).create),
+              child: const Text('Create'),
             ),
           ],
         ),
@@ -202,24 +201,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
       final name = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(HelixLocalizations.of(ctx).renameGroupTitle),
+          title: const Text('Rename group'),
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: InputDecoration(
-              labelText: HelixLocalizations.of(ctx).groupNameLabel,
-              border: const OutlineInputBorder(),
+            decoration: const InputDecoration(
+              labelText: 'Group name',
+              border: OutlineInputBorder(),
             ),
             onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(HelixLocalizations.of(context).cancel),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: Text(HelixLocalizations.of(context).save),
+              child: const Text('Save'),
             ),
           ],
         ),
@@ -239,7 +238,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(HelixLocalizations.of(context).inviteMember),
+          title: const Text('Invite Member'),
           content: TextField(
             controller: controller,
             decoration: const InputDecoration(
@@ -250,7 +249,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(HelixLocalizations.of(context).cancel),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
@@ -278,7 +277,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   setState(() => _status = 'Invite failed: $e');
                 }
               },
-              child: Text(HelixLocalizations.of(context).invite),
+              child: const Text('Invite'),
             ),
           ],
         ),
@@ -300,7 +299,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).joinLink),
+        title: const Text('Join Link'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,7 +319,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
               Navigator.pop(ctx);
               setState(() => _status = 'Join link copied');
             },
-            child: Text(HelixLocalizations.of(context).copy),
+            child: const Text('Copy'),
           ),
           TextButton(
             onPressed: () {
@@ -332,14 +331,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
               setState(() => _status = 'Join link revoked');
               _reload();
             },
-            child: Text(
-              HelixLocalizations.of(context).revoke,
-              style: const TextStyle(color: HelixStatusColors.danger),
+            child: const Text(
+              'Revoke',
+              style: TextStyle(color: HelixStatusColors.danger),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(HelixLocalizations.of(context).close),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -352,20 +351,20 @@ class _GroupsScreenState extends State<GroupsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
-          title: Text(HelixLocalizations.of(context).createJoinLink),
+          title: const Text('Create Join Link'),
           content: CheckboxListTile(
-            title: Text(HelixLocalizations.of(context).requireAdminApproval),
+            title: const Text('Require admin approval'),
             value: requiresApproval,
             onChanged: (v) => setSt(() => requiresApproval = v ?? false),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text(HelixLocalizations.of(context).cancel),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(HelixLocalizations.of(context).create),
+              child: const Text('Create'),
             ),
           ],
         ),
@@ -395,7 +394,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
-          title: Text(HelixLocalizations.of(context).groupAddPrivacy),
+          title: const Text('Group-Add Privacy'),
           content: RadioGroup<String>(
             groupValue: selected,
             onChanged: (v) => setSt(() => selected = v!),
@@ -417,11 +416,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(HelixLocalizations.of(context).cancel),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, selected),
-              child: Text(HelixLocalizations.of(context).apply),
+              child: const Text('Apply'),
             ),
           ],
         ),
@@ -441,7 +440,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
-          title: Text(HelixLocalizations.of(context).notificationPolicy),
+          title: const Text('Notification Policy'),
           content: RadioGroup<String>(
             groupValue: selected,
             onChanged: (v) => setSt(() => selected = v!),
@@ -464,11 +463,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(HelixLocalizations.of(context).cancel),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, selected),
-              child: Text(HelixLocalizations.of(context).apply),
+              child: const Text('Apply'),
             ),
           ],
         ),
@@ -491,14 +490,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(HelixLocalizations.of(context).memberManagement),
+          title: const Text('Member Management'),
           content: SizedBox(
             width: double.maxFinite,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (members.isEmpty)
-                  Text(HelixLocalizations.of(context).noMembers)
+                  const Text('No members')
                 else
                   Flexible(
                     child: ListView.builder(
@@ -509,7 +508,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         final mid = m['account_id'] as String;
                         final role = m['role'] as String;
                         final isSelf = mid == _currentAccountId;
-                        final isAdmin = role.toUpperCase() == 'ADMIN' ||
+                        final isAdmin =
+                            role.toUpperCase() == 'ADMIN' ||
                             role.toUpperCase() == 'OWNER';
                         return ListTile(
                           dense: true,
@@ -617,7 +617,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         setState(() => _status = 'Blocked $aid');
                         _reload();
                       },
-                      child: Text(HelixLocalizations.of(context).block),
+                      child: const Text('Block'),
                     ),
                   ],
                 ),
@@ -627,7 +627,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(HelixLocalizations.of(context).close),
+              child: const Text('Close'),
             ),
           ],
         ),
@@ -651,11 +651,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
-          title: Text(HelixLocalizations.of(context).transferOwnership),
+          title: const Text('Transfer Ownership'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(HelixLocalizations.of(context).selectNewGroupOwnerWill),
+              const Text(
+                'Select the new group owner. You will remain an admin.',
+              ),
               const SizedBox(height: 8),
               DropdownButton<String>(
                 value: selected,
@@ -675,11 +677,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text(HelixLocalizations.of(context).cancel),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(HelixLocalizations.of(context).transfer),
+              child: const Text('Transfer'),
             ),
           ],
         ),

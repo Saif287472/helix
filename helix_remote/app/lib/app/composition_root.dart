@@ -7,7 +7,10 @@ import 'package:cryptography/cryptography.dart' as crypto_pkg;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote/app/account_restriction.dart';
+import 'package:helix_remote/app/app_lock.dart';
 import 'package:helix_remote/app/device_label.dart';
+import 'package:helix_remote/app/history_backup_codec.dart';
+import 'package:helix_remote/app/password_vault.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_config.dart';
@@ -37,8 +40,10 @@ import 'package:path/path.dart' as p;
 
 part 'composition_root/call_signaling_gateway.dart';
 part 'composition_root/contacts_sync.dart';
+part 'composition_root/history_backup.dart';
 part 'composition_root/lifecycle.dart';
 part 'composition_root/local_security.dart';
+part 'composition_root/password_auth.dart';
 part 'composition_root/pending_registration.dart';
 part 'composition_root/registration.dart';
 part 'composition_root/runtime.dart';
@@ -307,12 +312,16 @@ abstract class RemoteCompositionRootBase {
   Future<void> _purgeLocalSessionOnly();
   Future<void> _transitionToAuthRequired();
   void _handleAccountSignal(AccountSignal signal);
+  Future<int> restoreHistoryBackup();
+  Future<void> _historyBackupOnStart();
 }
 
 class RemoteCompositionRoot extends RemoteCompositionRootBase
     with
         RemoteCompositionLifecycle,
         RemoteCompositionRegistration,
+        RemoteCompositionPassword,
+        RemoteCompositionHistoryBackup,
         RemoteCompositionContactsSync,
         RemoteCompositionSession,
         RemoteCompositionRuntime,

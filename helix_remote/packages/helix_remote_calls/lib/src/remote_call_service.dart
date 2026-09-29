@@ -1121,7 +1121,7 @@ class RemoteCallService {
 
     final phoneLast4 = signal?.callerPhoneLast4?.trim();
     if (phoneLast4 != null && phoneLast4.isNotEmpty) {
-      return 'Phone ending $phoneLast4';
+      return phoneLast4;
     }
 
     return null;

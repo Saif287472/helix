@@ -20,6 +20,7 @@ import 'package:helix_remote_sync/helix_remote_sync.dart';
 part 'remote_messaging_service/contacts_privacy.dart';
 part 'remote_messaging_service/conversations.dart';
 part 'remote_messaging_service/core.dart';
+part 'remote_messaging_service/history_backup.dart';
 part 'remote_messaging_service/history_receipts.dart';
 part 'remote_messaging_service/message_crypto.dart';
 part 'remote_messaging_service/message_decryption.dart';
@@ -221,6 +222,8 @@ abstract class RemoteMessagingServiceBase {
     required String messageId,
     required String ciphertext,
   });
+  bool _isWireEnvelope(String ciphertext);
+  Future<void> _rewrapWireEnvelopes(String conversationId);
 }
 
 class RemoteMessagingService extends RemoteMessagingServiceBase
@@ -234,7 +237,8 @@ class RemoteMessagingService extends RemoteMessagingServiceBase
         RemoteMessageCrypto,
         RemoteMessageDecryption,
         RemoteSyncOutbox,
-        RemoteHistoryReceipts {
+        RemoteHistoryReceipts,
+        RemoteHistoryBackup {
   RemoteMessagingService({
     required this.db,
     required this.syncEngine,
@@ -245,7 +249,17 @@ class RemoteMessagingService extends RemoteMessagingServiceBase
     Future<Uint8List> Function(String privateKeyRef)? prekeyResolver,
   }) : _clock = clock ?? DateTime.now,
        _prekeyResolver = prekeyResolver {
-    _syncChangeSub = syncEngine.changes.listen(_emitChange);
+    _syncChangeSub = syncEngine.changes.listen((change) {
+      _emitChange(change);
+      // Decrypt what just arrived now, in arrival order, rather than
+      // whenever - and in whatever order - a screen first asks for it.
+      final conversationId = change.conversationId;
+      if (conversationId != null &&
+          change.areas.contains(RemoteSyncChangeArea.messages) &&
+          _deviceId != null) {
+        unawaited(_rewrapWireEnvelopes(conversationId));
+      }
+    });
   }
 
   @override

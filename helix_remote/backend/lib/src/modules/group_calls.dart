@@ -392,7 +392,7 @@ class GroupCallsModule {
           'scheduled_at': scheduledAt,
         },
       };
-      for (final dev in db.getDevices(aid)) {
+      for (final dev in db.getActiveDevices(aid)) {
         wsRelay.trySendToDevice(dev['device_id'] as String, envelope);
       }
     }
@@ -463,7 +463,7 @@ class GroupCallsModule {
         'type': 'scheduled_call_cancelled',
         'payload': {'scheduled_call_id': id, 'title': sc['title']},
       };
-      for (final dev in db.getDevices(a['account_id'] as String)) {
+      for (final dev in db.getActiveDevices(a['account_id'] as String)) {
         wsRelay.trySendToDevice(dev['device_id'] as String, envelope);
       }
     }

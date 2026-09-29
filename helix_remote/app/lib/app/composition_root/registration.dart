@@ -193,10 +193,9 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
       deviceRegistrationSignature:
           pendingRegistration.deviceRegistrationSignature,
       deviceName: deviceName,
-      // Display-only hint for the admin console - never the full number.
-      // normalizedPhone is always '+' followed only by digits (see
-      // RemoteAccountValidation.normalizePhoneNumber), so its last 4
-      // characters are always digits.
+      // The account's phone number, kept by the server for the admin
+      // console, account security and spam protection (the field name is
+      // historical). Identity and matching use the phone hash only.
       phoneLast4: normalizedPhone,
     );
 
@@ -280,10 +279,17 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     await reconcileContactsAndRequests();
   }
 
+  /// Redeems an administrator's recovery code: resets the account onto this
+  /// device (new account key) and signs every other device out. The phone
+  /// number must be the account's, proved with an SMS code when the server
+  /// can send one.
   Future<void> recoverAccount({
     required String accountId,
     required String recoveryCode,
-    String? phoneHash,
+    required String phoneHash,
+    String? phoneNumber,
+    String? otpCode,
+    String? otpChallengeId,
   }) async {
     final rest = _requireReady(_restClient, 'restClient');
     final store = _requireReady(_keyValue, 'keyValue');
@@ -332,6 +338,8 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
       deviceName: deviceName,
       accountIdentityPublicKey: identityPubKeyStr,
       phoneHash: phoneHash,
+      otpCode: otpCode,
+      otpChallengeId: otpChallengeId,
     );
 
     final accessToken = redeemResp['access_token'] as String;
@@ -342,8 +350,11 @@ mixin RemoteCompositionRegistration on RemoteCompositionRootBase {
     await store.write('access_token', accessToken);
     await store.write('refresh_token', refreshToken);
     await store.write('account_id', accountId);
-    if (phoneHash != null && phoneHash.isNotEmpty) {
-      await store.write('phone_hash', phoneHash);
+    await store.write('phone_hash', phoneHash);
+    // Without it a restart cannot restore the session and "Forgot password"
+    // has no number to text.
+    if (phoneNumber != null && phoneNumber.isNotEmpty) {
+      await store.write('phone_number', phoneNumber);
     }
     await store.write('identity_public_key', identityPubKeyStr);
     await store.write('identity_private_key', identityPrivStr);

@@ -1,10 +1,10 @@
 # Helix Remote Operability and Disaster Recovery
 
 Status: Phase 19 repository baseline. This document defines the solo-owner
-operating model and production runbooks. It does not claim that production
-infrastructure exists; Phase 20 deployment must bind these controls to the
-actual host, database, object storage, push provider, TURN provider, and status
-page.
+operating model and production runbooks. Current production (Helix Global) is
+a single Windows PC: SQLite, attachments on local disk, FCM push, coturn in
+WSL1, Caddy in front. Sections about object storage, Redis, regional fallback
+and PITR describe controls that do not exist on that host yet.
 
 ## Service-Level Indicators
 
@@ -68,36 +68,61 @@ Page the solo owner when any of these thresholds are crossed:
 
 ## Server Environment Variables
 
-Required and optional environment variables for `backend/bin/server.dart`:
+Read by `backend/bin/server.dart` and validated in one pass by
+`validateStartupEnv` (`backend/lib/src/startup_env.dart`), which lists every
+problem and exits with code 1 if any is fatal. Values come from the process
+environment and from a `.env` file (`loadEffectiveEnv` looks in the working
+directory, `backend/`, `helix_remote/backend/`, and next to the script); process
+variables win. Never commit or paste real values.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `HELIX_REMOTE_JWT_SECRET` | Yes (prod) | n/a | JWT signing secret (≥ 32 bytes). Process exits 78 if absent outside dev mode. |
-| `HELIX_REMOTE_DEV_MODE` | No | `0` | Set to `1` to bypass JWT and other production guards. Never use in production. |
-| `HELIX_REMOTE_HOST` | No | `127.0.0.1` | Bind address for the HTTP server. |
-| `HELIX_REMOTE_PORT` | No | `8080` | TCP port for the HTTP server. |
-| `HELIX_REMOTE_DB_PATH` | No | `remote_backend.db` | Path to the SQLite database file. |
-| `HELIX_REMOTE_DEPLOYMENT_TOPOLOGY` | No | `single_host` | Production guard: only `single_host` is supported by the SQLite baseline. |
-| `HELIX_REMOTE_BACKEND_WORKERS` | No | `1` | Production guard: must be 1-4 while using SQLite. |
+| `HELIX_REMOTE_JWT_SECRET` | Yes (always) | n/a | JWT signing secret. Must be at least 32 bytes unless dev mode. Missing -> startup fails. |
 | `HELIX_REMOTE_JWT_KEY_RING_JSON` | No | none | JSON map of `kid` to signing secret during a rotation overlap. |
-| `HELIX_REMOTE_JWT_ACTIVE_KID` | Conditional | none | Required when a JWT key ring is set; identifies the only key used to sign new tokens. |
-| `HELIX_REMOTE_ATTACHMENTS_DIR` | No (warns) | none | Directory for attachment storage. If unset, file uploads/downloads are unavailable and a warning is printed on startup. Directory is created if it does not exist. |
-| `HELIX_REMOTE_TURN_URL` | No (warns) | none | TURN server URL (e.g. `turn:turn.example.com:3478`). If unset, relay-only WebRTC calls fail and a warning is printed on startup. |
-| `HELIX_REMOTE_TURN_SECRET` | No (warns) | none | TURN shared secret for credential generation. Required alongside `HELIX_REMOTE_TURN_URL`. |
+| `HELIX_REMOTE_JWT_ACTIVE_KID` | Conditional | none | Required when a key ring is set; must name a key in it. Signs new tokens. |
+| `HELIX_REMOTE_DEV_MODE` | No | unset | `1` relaxes the 32-byte secret minimum and the topology/worker guard, and silences "feature disabled" warnings. Never in production. |
+| `HELIX_REMOTE_HOST` | No | `127.0.0.1` | Bind address. |
+| `HELIX_REMOTE_PORT` | No | `8080` | TCP port. |
+| `HELIX_REMOTE_DB_PATH` | No | `remote_backend.db` | SQLite database file (WAL mode). |
+| `HELIX_REMOTE_DEPLOYMENT_TOPOLOGY` | No | `single_host` | Outside dev mode anything but `single_host` refuses to start (SQLite baseline). |
+| `HELIX_REMOTE_BACKEND_WORKERS` | No | `1` | Outside dev mode must be 1-4. |
+| `HELIX_REMOTE_LOG_FILE` | No | none | Also append server log lines to this file. |
+| `HELIX_REMOTE_ADMIN_PASSWORD` | No | none | Break-glass admin password; overrides the one stored in the database. Without either, first-run setup from the Helix Admin app creates one. |
+| `HELIX_REMOTE_ADMIN_TOKEN` | No | none | Legacy name, read only when `HELIX_REMOTE_ADMIN_PASSWORD` is unset. |
+| `HELIX_REMOTE_PUBLIC_BASE_URL` | No | empty | Public URL of this server (e.g. `https://helix.agiletechbd.com`); recorded on Global auto-issued invites and used to derive the signed-challenge audience. |
+| `HELIX_REMOTE_SERVER_AUDIENCE` | No | derived from the public base URL | Audience bound into signed login/link challenges; overrides the client-sent Host header. |
+| `HELIX_REMOTE_GLOBAL_INSTANCE_MODE` | No | not `true` | `true` only on Helix Global: no invites, SMS OTP is the sign-up credential, ToS acceptance required. Read once at startup. |
+| `HELIX_REMOTE_SMS_API_KEY` | Group | none | BulkSMSBD API key. All-or-nothing with the sender ID; a partial pair is fatal. Unset -> OTP requests get 503. |
+| `HELIX_REMOTE_SMS_SENDER_ID` | Group | none | BulkSMSBD sender ID. |
+| `HELIX_REMOTE_FCM_PROJECT_ID` | Group | none | Firebase project for push wake. Needs exactly one of the two credentials below; project ID alone is fatal. |
+| `HELIX_REMOTE_FCM_SERVICE_ACCOUNT` | Group (one of) | none | Service-account key: a file path, or inline JSON if the value starts with `{`. Preferred. |
+| `HELIX_REMOTE_FCM_ACCESS_TOKEN` | Group (one of) | none | Static OAuth token; expires after an hour and is not renewed. Testing only. |
+| `HELIX_REMOTE_TURN_URL` | Group | none | TURN URL list (e.g. `turn:host:3478?transport=udp,turn:host:3478?transport=tcp`). All-or-nothing with the secret. |
+| `HELIX_REMOTE_TURN_SECRET` | Group | none | TURN shared secret for time-limited credentials; must match coturn (`deploy/coturn/windows/start-turn.ps1` reads the same `.env`). |
+| `HELIX_REMOTE_ATTACHMENTS_DIR` | No (warns) | none | Attachment storage directory, created if missing. Unset -> uploads/downloads unavailable. |
+| `HELIX_REMOTE_MAX_ATTACHMENT_BYTES` | No | 100 MB | Per-file limit, reported to clients by `/api/v1/server/info`. |
+| `HELIX_REMOTE_ACCOUNT_QUOTA_BYTES` | No | 5 GB | Per-account attachment quota. |
+| `HELIX_REMOTE_ATTACHMENT_RETENTION_DAYS` | No | 30 | How long an unreferenced completed attachment is kept. |
+| `HELIX_REMOTE_FEDERATION_DOMAIN` | No | none | Federation identity (federation is deferred). |
+| `HELIX_REMOTE_FEDERATION_DIRECTORY_URL` | No | empty | Federation directory (deferred). |
 
 ### Start / stop server
 
-```sh
-# Minimum production start
-export HELIX_REMOTE_JWT_SECRET="$(openssl rand -hex 32)"
-export HELIX_REMOTE_ATTACHMENTS_DIR=/var/lib/helix-remote/attachments
-export HELIX_REMOTE_TURN_URL=turn:turn.example.com:3478
-export HELIX_REMOTE_TURN_SECRET=<shared_secret>
-dart run backend/bin/server.dart
+Helix Global runs on the user's Windows PC: Caddy terminates TLS and proxies to
+`127.0.0.1:8080`, the backend runs from this working copy, and coturn runs in
+WSL1 (see `helix-remote-server-handoff.md` at the repo root and
+`deploy/coturn/README.md`). That process is live production; deploying a change
+means restarting it.
 
-# Graceful stop: send SIGINT or SIGTERM
-kill -SIGINT <pid>
+```powershell
+cd helix_remote\backend
+dart run bin/server.dart      # reads backend\.env itself
+
+# Stop: Ctrl+C (SIGINT). Env is read once at boot, so restart after editing .env.
 ```
+
+For local development use `scripts/start_remote_backend_dev.ps1` (dev mode,
+separate database under `build\`).
 
 ### Rotate JWT key ring without forced logout
 

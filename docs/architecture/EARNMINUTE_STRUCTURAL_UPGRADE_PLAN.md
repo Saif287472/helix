@@ -1,5 +1,7 @@
 # Structural Upgrade Plan — Lessons from EarnMinute
 
+> **Status: historical, implemented 2026-08-05 (Helix Remote).** Kept as the record of why the backend `*.module.md` / `MODULE.md` docs and module splits exist; file sizes and line counts below are from that date.
+
 Status: **Implemented.** All six adopted items (A1–A6) have landed. The
 per-item plans below are kept as written for the record; each now opens
 with what was actually built, including where the implementation departed

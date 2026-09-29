@@ -14,7 +14,6 @@ import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as p;
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'support/group_call_rest_stubs.dart';
 
 // ---------------------------------------------------------------------------
@@ -144,8 +143,6 @@ void main() {
 
   group('P13-W01 GroupsScreen reachability', () {
     Widget makeWidget() => MaterialApp(
-      localizationsDelegates: HelixLocalizations.localizationsDelegates,
-      supportedLocales: HelixLocalizations.supportedLocales,
       home: GroupsScreen(
         groupService: groupService,
         messagingService: messagingService,

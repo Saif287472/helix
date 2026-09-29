@@ -7,18 +7,25 @@ import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/presentation/settings/settings_view_model.dart';
+import 'package:helix_remote/app/app_lock.dart';
+import 'package:helix_remote/screens/add_contact_screen.dart';
 import 'package:helix_remote/screens/backup_screen.dart';
 import 'package:helix_remote/screens/device_management_screen.dart';
 import 'package:helix_remote/screens/groups_screen.dart';
-import 'package:helix_remote/screens/privacy_screen.dart';
+import 'package:helix_remote/screens/password_screens.dart';
 import 'package:helix_remote/screens/profile_screen.dart';
+import 'package:helix_remote/screens/settings_pages/account_settings_page.dart';
+import 'package:helix_remote/screens/settings_pages/diagnostics_settings_page.dart';
+import 'package:helix_remote/screens/settings_pages/notification_settings_page.dart';
+import 'package:helix_remote/screens/settings_pages/privacy_settings_page.dart';
+import 'package:helix_remote/screens/settings_pages/security_settings_page.dart';
+import 'package:helix_remote/screens/settings_pages/storage_settings_page.dart';
 import 'package:helix_remote/services/app_logger.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'settings/actions.dart';
 part 'settings/widgets.dart';
@@ -79,9 +86,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     if (file == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(HelixLocalizations.of(context).noAnomaliesRecordedYet),
-        ),
+        const SnackBar(content: Text('No anomalies recorded yet.')),
       );
       return;
     }
@@ -97,8 +102,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await Process.run('explorer', ['/select,', dest]);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(HelixLocalizations.of(context).logSavedToDocuments),
+          const SnackBar(
+            content: Text('Log saved to Documents\\Helix Remote\\'),
           ),
         );
       } catch (e) {
@@ -146,9 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await AppLogger.instance.clearLogs();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(HelixLocalizations.of(context).logExportedCleared),
-        ),
+        const SnackBar(content: Text('Log exported and cleared.')),
       );
       return;
     }
@@ -185,7 +188,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).anomalyLog),
+        title: const Text('Anomaly Log'),
         content: SizedBox(
           width: double.maxFinite,
           height: 400,
@@ -219,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(HelixLocalizations.of(context).close),
+            child: const Text('Close'),
           ),
           if (Platform.isAndroid)
             TextButton(
@@ -238,7 +241,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
               },
-              child: Text(HelixLocalizations.of(context).share),
+              child: const Text('Share...'),
             ),
           FilledButton(
             onPressed: () async {
@@ -257,7 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               }
             },
-            child: Text(HelixLocalizations.of(context).copyClear),
+            child: const Text('Copy & clear'),
           ),
         ],
       ),
@@ -269,7 +272,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).changeServerUrl),
+        title: const Text('Change Server URL'),
         content: Text(
           'Currently connected to $serverName.\n\n'
           'This will disconnect and let you enter a new server code or URL. '
@@ -278,11 +281,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(HelixLocalizations.of(context).change),
+            child: const Text('Change'),
           ),
         ],
       ),
@@ -296,18 +299,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).logOut),
-        content: Text(
-          HelixLocalizations.of(context).clearsSavedSessionDeviceAccount,
+        title: const Text('Log out'),
+        content: const Text(
+          'This clears the saved session on this device. Your account and server data are not deleted.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(HelixLocalizations.of(context).logOut),
+            child: const Text('Log out'),
           ),
         ],
       ),
@@ -347,6 +350,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _openPassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            SetPasswordScreen(root: widget.root, mode: SetPasswordMode.change),
+      ),
+    );
+  }
+
   void _openDevices() {
     Navigator.push(
       context,
@@ -355,6 +368,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           restClient: widget.root.restClient,
           db: widget.root.database,
           deviceChanges: _tryMessagingChanges(),
+          currentDeviceId: widget.messagingService.currentDeviceId,
         ),
       ),
     );
@@ -378,19 +392,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _openPrivacy() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PrivacyScreen(
-          restClient: widget.root.restClient,
-          messagingService: widget.messagingService,
-          onBeforeDelete: widget.root.disconnectWebSocket,
-          onAccountDeleted: widget.root.purgeAfterAccountDeletion,
-        ),
-      ),
-    );
+  /// Opens a settings page and refreshes the summaries shown on this list
+  /// when the user comes back.
+  Future<void> _openPage(Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    if (mounted) _update(() {});
   }
+
+  void _openAccount() => _openPage(
+    AccountSettingsPage(
+      restClient: widget.root.restClient,
+      messagingService: widget.messagingService,
+      onOpenProfile: _openProfile,
+      onOpenMyQr: _openMyQr,
+      onOpenPassword: _openPassword,
+      onBackUpHistory: widget.root.backUpHistoryNow,
+      lastHistoryBackupAt: widget.root.lastHistoryBackupAt,
+      onBeforeDelete: widget.root.disconnectWebSocket,
+      onAccountDeleted: widget.root.purgeAfterAccountDeletion,
+    ),
+  );
+
+  void _openPrivacySettings() =>
+      _openPage(PrivacySettingsPage(messagingService: widget.messagingService));
+
+  void _openSecurity() => _openPage(
+    SecuritySettingsPage(messagingService: widget.messagingService),
+  );
+
+  void _openNotifications() => _openPage(
+    NotificationSettingsPage(messagingService: widget.messagingService),
+  );
+
+  void _openStorage() => _openPage(
+    StorageSettingsPage(
+      attachmentCacheDir: widget.root.devConfig.attachmentCacheDir,
+      databaseDir: widget.root.devConfig.databaseDirectory,
+    ),
+  );
+
+  void _openDiagnostics() =>
+      _openPage(DiagnosticsSettingsPage(onExportLog: _exportLog));
+
+  /// The real, signed contact QR - the same one Add contact shows - rather
+  /// than a placeholder icon.
+  void _openMyQr() => _openPage(
+    AddContactScreen(
+      root: widget.root,
+      messagingService: widget.messagingService,
+      initialTab: 1,
+    ),
+  );
 
   void _openGroups() {
     Navigator.push(
@@ -410,7 +462,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).serverConnection),
+        title: const Text('Server connection'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -424,62 +476,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(HelixLocalizations.of(context).close),
+            child: const Text('Close'),
           ),
-        ],
-      ),
-    );
-  }
-
-  void _showAccountCode(String displayName) {
-    final accountId = _viewModel.accountId;
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('$displayName code'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 168,
-              height: 168,
-              decoration: BoxDecoration(
-                color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Icon(
-                Icons.qr_code_2,
-                size: 112,
-                color: Theme.of(ctx).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            SelectableText(
-              accountId.isEmpty ? 'No account ID available' : accountId,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(HelixLocalizations.of(context).close),
-          ),
-          if (accountId.isNotEmpty)
-            FilledButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: accountId));
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      HelixLocalizations.of(context).accountIdCopied,
-                    ),
-                  ),
-                );
-              },
-              child: Text(HelixLocalizations.of(context).copy),
-            ),
         ],
       ),
     );

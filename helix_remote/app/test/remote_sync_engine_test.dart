@@ -1134,4 +1134,186 @@ void main() {
       },
     );
   });
+
+  _signInAlertTests();
+
+  group('multi-device: device list changes', () {
+    test('a chat_message for an unknown conversation records every member', () {
+      final db = _openDb();
+      addTearDown(db.close);
+      final engine = RemoteSyncEngine(db);
+      addTearDown(engine.dispose);
+
+      // This account's own tablet receiving a copy of what its phone sent:
+      // the sender is itself, so without the member list the conversation
+      // would have nobody else in it.
+      final env = _chatMsg(
+        eventId: 'evt-own-copy',
+        seq: 1,
+        messageId: 'msg-own-copy',
+        conversationId: 'conv-new',
+      );
+      engine.handleIncomingEnvelope(
+        RemoteRealtimeEnvelope(
+          eventId: env.eventId,
+          schemaVersion: env.schemaVersion,
+          timestamp: env.timestamp,
+          type: env.type,
+          serverSequence: env.serverSequence,
+          payload: {
+            ...env.payload,
+            'conversation_members': ['acc-alice', 'acc-bob'],
+          },
+        ),
+      );
+
+      expect(db.getConversationMembers('conv-new').toSet(), {
+        'acc-alice',
+        'acc-bob',
+      });
+    });
+
+    test('a stale device list rebuilds the send and retries it once', () async {
+      final db = _openDb();
+      addTearDown(db.close);
+      final rebuiltFor = <String>[];
+      final engine = RemoteSyncEngine(
+        db,
+        rebuildStaleOperation: (type, payload) async {
+          rebuiltFor.add(payload['message_id'] as String);
+          return {
+            ...payload,
+            'envelopes': ['for-the-new-device'],
+          };
+        },
+      );
+      addTearDown(engine.dispose);
+      db.enqueueOperation(
+        'op-stale',
+        'SEND_MESSAGE',
+        '{"message_id":"msg-stale","conversation_id":"conv-001","envelopes":[]}',
+        idempotencyKey: 'message:msg-stale',
+      );
+      final gateway = _StaleOnceGateway();
+
+      await engine.processOutboundQueue(gateway);
+
+      expect(rebuiltFor, ['msg-stale']);
+      expect(gateway.sent.single['envelopes'], ['for-the-new-device']);
+      expect(
+        db.getPendingOperations().where((o) => o['op_id'] == 'op-stale'),
+        isEmpty,
+      );
+    });
+  });
+}
+
+RemoteRealtimeEnvelope _deviceEvent(
+  String type,
+  int seq,
+  Map<String, dynamic> payload,
+) => RemoteRealtimeEnvelope(
+  eventId: 'evt-$type-$seq',
+  schemaVersion: 1,
+  timestamp: _ts(),
+  type: type,
+  serverSequence: seq,
+  payload: payload,
+);
+
+void _seedTwoOwnDevices(HelixRemoteDatabase db) {
+  db.upsertAccount(
+    RemoteAccount(
+      accountId: 'acc-alice',
+      identityPublicKey: 'ik',
+      createdAt: DateTime.now(),
+    ),
+  );
+  // This phone, then - learned later from a prekey bundle, so newer - the
+  // account's tablet.
+  for (final (id, at) in [('dev-phone', 1000), ('dev-tablet', 2000)]) {
+    db.upsertDevice(
+      'acc-alice',
+      RemoteDevice(
+        deviceId: id,
+        deviceName: id,
+        deviceSigningPublicKey: 'sk',
+        deviceAgreementPublicKey: 'ak',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(at),
+      ),
+    );
+  }
+  db.setLocalDeviceId('dev-phone');
+}
+
+void _signInAlertTests() {
+  group('multi-device: sign-in alerts and the local device', () {
+    test('signing out the tablet never signs out this phone', () {
+      final db = _openDb();
+      addTearDown(db.close);
+      final revoked = <String>[];
+      final engine = RemoteSyncEngine(
+        db,
+        onLocalDeviceRevoked: (id, _) => revoked.add(id),
+      );
+      addTearDown(engine.dispose);
+      _seedTwoOwnDevices(db);
+
+      engine.handleIncomingEnvelope(
+        _deviceEvent('device_revoked', 1, {'device_id': 'dev-tablet'}),
+      );
+      expect(revoked, isEmpty);
+
+      engine.handleIncomingEnvelope(
+        _deviceEvent('device_revoked', 2, {'device_id': 'dev-phone'}),
+      );
+      expect(revoked, ['dev-phone']);
+    });
+
+    test('another device signing in raises the sign-in hook', () {
+      final db = _openDb();
+      addTearDown(db.close);
+      final signIns = <RemoteAccountSignIn>[];
+      final engine = RemoteSyncEngine(db, onAccountDeviceSignedIn: signIns.add);
+      addTearDown(engine.dispose);
+      _seedTwoOwnDevices(db);
+
+      engine.handleIncomingEnvelope(
+        _deviceEvent('device_linked', 1, {
+          'device_id': 'dev-laptop',
+          'device_name': 'Laptop',
+          'method': 'password',
+          'signed_in_at': 5000,
+        }),
+      );
+
+      expect(signIns, hasLength(1));
+      expect(signIns.single.deviceName, 'Laptop');
+      expect(signIns.single.method, 'password');
+      expect(signIns.single.signedInAt.millisecondsSinceEpoch, 5000);
+    });
+  });
+}
+
+class _StaleOnceGateway implements SyncGateway {
+  final sent = <Map<String, dynamic>>[];
+  var _failed = false;
+
+  @override
+  Future<List<RemoteRealtimeEnvelope>> fetchInboundEvents({
+    required int sinceSequence,
+  }) async => const [];
+
+  @override
+  Future<void> sendOutboundOperation({
+    required String opId,
+    required String type,
+    required Map<String, dynamic> payload,
+  }) async {
+    if (!_failed) {
+      _failed = true;
+      throw const RemoteStaleDeviceListException('device_list_stale');
+    }
+    sent.add(payload);
+  }
 }

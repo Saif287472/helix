@@ -6,7 +6,6 @@ import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/screens/conversation/chat_palette.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:path/path.dart' as p;
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'message_tile/content_cards.dart';
 part 'message_tile/rich_content_cards.dart';
@@ -115,7 +114,7 @@ class _MessageTileState extends State<ConversationMessageTile> {
             children: [
               if (widget.message.edited) ...[
                 Text(
-                  HelixLocalizations.of(context).edited,
+                  'Edited',
                   style: TextStyle(
                     fontSize: 11.5,
                     color: isMine ? palette.outgoingTime : palette.incomingTime,

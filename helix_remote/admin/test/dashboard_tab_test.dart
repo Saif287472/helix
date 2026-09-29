@@ -3,11 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_admin/screens/dashboard_tab.dart';
 
 const _metrics = <String, dynamic>{
-  'table_counts': {
-    'accounts': 1,
-    'messages': 0,
-    'outbox': 0,
-  },
+  'table_counts': {'accounts': 1, 'messages': 0, 'outbox': 0},
   'websocket': {'connected_devices': 0},
   'database_quick_check_ok': true,
   'push_provider': {'configured': false, 'available': false},
@@ -37,21 +33,22 @@ void main() {
 
   // The reported problem: on a phone each metric occupied about 150dp, so
   // six numbers took roughly a metre of scrolling.
-  testWidgets('metric cards render in a 2-column grid on a phone-width screen', (
-    tester,
-  ) async {
-    await _pumpAt(tester, const Size(411, 915));
+  testWidgets(
+    'metric cards render in a 2-column grid on a phone-width screen',
+    (tester) async {
+      await _pumpAt(tester, const Size(411, 915));
 
-    final cards = find.byType(Card);
-    expect(cards, findsNWidgets(5));
+      final cards = find.byType(Card);
+      expect(cards, findsNWidgets(5));
 
-    final gridFinder = find.byType(GridView);
-    expect(gridFinder, findsOneWidget);
-    final grid = tester.widget<GridView>(gridFinder);
-    final delegate =
-        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-    expect(delegate.crossAxisCount, 2);
-  });
+      final gridFinder = find.byType(GridView);
+      expect(gridFinder, findsOneWidget);
+      final grid = tester.widget<GridView>(gridFinder);
+      final delegate =
+          grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+      expect(delegate.crossAxisCount, 2);
+    },
+  );
 
   testWidgets('all metrics fit on one phone screen without scrolling', (
     tester,
@@ -101,8 +98,10 @@ void main() {
     expect(find.text('FCM Push Notification Service'), findsOneWidget);
     expect(find.textContaining('Not configured'), findsNWidgets(2));
     expect(find.textContaining('No SMS provider configured'), findsOneWidget);
-    expect(find.textContaining('TURN peer connection • Not configured'),
-        findsOneWidget);
+    expect(
+      find.textContaining('TURN peer connection • Not configured'),
+      findsOneWidget,
+    );
 
     // The invented balance is gone.
     expect(find.textContaining('48.50'), findsNothing);
@@ -117,18 +116,16 @@ void main() {
     degraded['sms_provider'] = {'configured': true, 'name': 'BulkSMSBD'};
     degraded['turn'] = {'configured': true, 'url_count': 2};
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: DashboardTab(metrics: degraded))),
+      MaterialApp(
+        home: Scaffold(body: DashboardTab(metrics: degraded)),
+      ),
     );
 
-    expect(
-      find.textContaining('Configured but unavailable'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Configured but unavailable'), findsOneWidget);
     expect(find.textContaining('BulkSMSBD • Configured'), findsOneWidget);
-    expect(
-      find.textContaining('2 URLs configured'),
-      findsOneWidget,
-    );
+    // No probe result in these metrics, so the card says so rather than
+    // claiming the relay is healthy.
+    expect(find.textContaining('Checking relay… • 2 URLs'), findsOneWidget);
   });
 
   testWidgets('an unmeasured latency renders a dash, never a made-up number', (
@@ -197,5 +194,54 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+  });
+
+  group('TURN card', () {
+    Future<void> pumpTurn(
+      WidgetTester tester,
+      Map<String, dynamic> turn,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardTab(metrics: {..._metrics, 'turn': turn}),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('green only when the relay answered', (tester) async {
+      await pumpTurn(tester, {
+        'configured': true,
+        'url_count': 1,
+        'live_reachability': 'reachable',
+      });
+      expect(find.textContaining('Relay responding'), findsOneWidget);
+    });
+
+    testWidgets('configured but silent is a warning, not healthy', (
+      tester,
+    ) async {
+      await pumpTurn(tester, {
+        'configured': true,
+        'url_count': 2,
+        'live_reachability': 'unreachable',
+      });
+      expect(
+        find.textContaining('the relay is not responding'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Relay responding'), findsNothing);
+    });
+
+    testWidgets('an older server without the probe shows checking', (
+      tester,
+    ) async {
+      await pumpTurn(tester, {'configured': true, 'url_count': 1});
+      expect(find.textContaining('Checking relay'), findsOneWidget);
+    });
   });
 }

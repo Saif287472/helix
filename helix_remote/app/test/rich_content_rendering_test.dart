@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote/screens/conversation/message_tile.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -17,8 +16,6 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 /// bug was a missing branch in the tile's dispatch, not a wrong card.
 void main() {
   Widget harness(RemoteDecryptedMessage message) => MaterialApp(
-    localizationsDelegates: HelixLocalizations.localizationsDelegates,
-    supportedLocales: HelixLocalizations.supportedLocales,
     theme: HelixThemes.light(),
     home: Scaffold(
       body: ConversationMessageTile(

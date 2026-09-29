@@ -14,7 +14,6 @@ import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'contacts/widgets.dart';
 
@@ -78,9 +77,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _maybeAutoRefresh();
-        unawaited(widget.root.reconcileContactsAndRequests().then((_) {
-          if (mounted) _reload();
-        }));
+        unawaited(
+          widget.root.reconcileContactsAndRequests().then((_) {
+            if (mounted) _reload();
+          }),
+        );
       }
     });
   }
@@ -315,9 +316,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
       if (updated == null || updated.status != 'Accepted') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Text(
-                HelixLocalizations.of(context).waitingOtherPersonAcceptRequest,
+                'Waiting for the other person to accept your request.',
               ),
             ),
           );
@@ -331,10 +332,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
     if (contact.status != 'Accepted') {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              HelixLocalizations.of(context).acceptRequestBeforeOpeningChat,
-            ),
+          const SnackBar(
+            content: Text('Accept the request before opening a chat.'),
           ),
         );
       }
@@ -419,19 +418,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).removeContact),
+        title: const Text('Remove contact'),
         content: Text('Remove $name from your contacts?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: HelixStatusColors.danger,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(HelixLocalizations.of(context).remove),
+            child: const Text('Remove'),
           ),
         ],
       ),
@@ -510,7 +509,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 onChanged: (v) => setState(() => _searchQuery = v),
               )
             : Text(
-                HelixLocalizations.of(context).contacts,
+                'Contacts',
                 style: TextStyle(
                   color: cs.onPrimary,
                   fontWeight: FontWeight.bold,
@@ -556,14 +555,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
             icon: Icon(Icons.sort, color: cs.onPrimary),
             onSelected: (byName) => setState(() => _sortByName = byName),
             itemBuilder: (_) => [
-              PopupMenuItem(
-                value: false,
-                child: Text(HelixLocalizations.of(context).sortByRecent),
-              ),
-              PopupMenuItem(
-                value: true,
-                child: Text(HelixLocalizations.of(context).sortByName),
-              ),
+              const PopupMenuItem(value: false, child: Text('Sort by recent')),
+              const PopupMenuItem(value: true, child: Text('Sort by name')),
             ],
           ),
         ],
@@ -572,17 +565,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
         children: [
           if (!_syncBannerDismissed && !_syncingContacts)
             MaterialBanner(
-              content: Text(
-                HelixLocalizations.of(context).findContactsAlreadyHelixPhone,
+              content: const Text(
+                'Find contacts already on Helix? Phone numbers are hashed before comparison and never sent in the clear.',
               ),
               actions: [
                 TextButton(
                   onPressed: () => setState(() => _syncBannerDismissed = true),
-                  child: Text(HelixLocalizations.of(context).notNow),
+                  child: const Text('Not now'),
                 ),
                 FilledButton(
                   onPressed: _runContactsSync,
-                  child: Text(HelixLocalizations.of(context).syncContacts),
+                  child: const Text('Sync contacts'),
                 ),
               ],
             ),
@@ -592,10 +585,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 '$_pendingReceivedCount pending contact request${_pendingReceivedCount == 1 ? '' : 's'}',
               ),
               actions: [
-                TextButton(
-                  onPressed: () {},
-                  child: Text(HelixLocalizations.of(context).view),
-                ),
+                TextButton(onPressed: () {}, child: const Text('View')),
               ],
             ),
           if (_statusText != null)
@@ -604,7 +594,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => setState(() => _statusText = null),
-                  child: Text(HelixLocalizations.of(context).dismiss),
+                  child: const Text('Dismiss'),
                 ),
               ],
             ),
@@ -659,7 +649,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     ? FilledButton.icon(
                         onPressed: _addContact,
                         icon: const Icon(Icons.person_add_outlined),
-                        label: Text(HelixLocalizations.of(context).addContact2),
+                        label: const Text('Add contact'),
                       )
                     : null,
               ),

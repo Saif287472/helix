@@ -124,6 +124,73 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
     }
   }
 
+  /// Own-account bundles are best-effort: a lookup failure there must not
+  /// stop a message to a contact. The server still names any own device we
+  /// missed (409 device_list_stale), and the send is rebuilt then.
+  Future<Map<String, dynamic>> _fetchOwnOrPeerBundle(String accountId) async {
+    if (accountId != _accountId) return _fetchOrCacheBundle(accountId);
+    try {
+      return await _fetchOrCacheBundle(accountId);
+    } catch (_) {
+      return const {'devices': <dynamic>[]};
+    }
+  }
+
+  /// Forgets cached prekey bundles for [accountIds] (all when null), so the
+  /// next send sees devices added or removed since.
+  void invalidatePrekeyBundles([Iterable<String>? accountIds]) {
+    if (accountIds == null) {
+      _bundleCache.clear();
+      return;
+    }
+    for (final id in accountIds) {
+      _bundleCache.remove(id);
+    }
+  }
+
+  /// Re-encrypts a queued SEND_MESSAGE after the server reported the device
+  /// list stale - someone in the conversation, or this account itself, has a
+  /// device the envelopes did not cover. The plaintext comes from this
+  /// device's own local-history copy; nothing else about the send changes.
+  Future<Map<String, dynamic>?> rebuildStaleSend(
+    String type,
+    Map<String, dynamic> payload,
+  ) async {
+    if (type != 'SEND_MESSAGE') return null;
+    final messageId = payload['message_id'] as String?;
+    final conversationId = payload['conversation_id'] as String?;
+    if (messageId == null || conversationId == null) return null;
+    final row = db.getMessageById(messageId);
+    final localCiphertext = row?['ciphertext_blob'] as String?;
+    if (localCiphertext == null || localCiphertext.isEmpty) return null;
+    try {
+      final plaintext = await protector.decryptText(
+        conversationId: conversationId,
+        messageId: messageId,
+        ciphertext: localCiphertext,
+      );
+      invalidatePrekeyBundles([
+        ...conversationMemberIds(conversationId),
+        _requireAccountId(),
+      ]);
+      final envelopes = await _buildX3dhEnvelopes(
+        conversationId: conversationId,
+        messageId: messageId,
+        plaintext: plaintext,
+        recipientDeviceIds: const [],
+        senderAccountId: _requireAccountId(),
+        senderDeviceId: _requireDeviceId(),
+      );
+      return {...payload, 'envelopes': envelopes};
+    } catch (e) {
+      AppLogger.instance.warn(
+        'MessageCrypto',
+        'could not rebuild stale send $messageId: ${e.runtimeType}',
+      );
+      return null;
+    }
+  }
+
   @override
   Future<List<Map<String, dynamic>>> _buildX3dhEnvelopes({
     required String conversationId,
@@ -149,13 +216,19 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
     // Concurrent messages to the same recipient share one HTTP request via
     // _bundleFetchInFlight; subsequent messages within the TTL skip the fetch
     // entirely.
+    //
+    // The sender's own account is fetched too: every other device signed in
+    // on this account must get its own copy of what this device sends, or
+    // the server refuses the send (and the other devices would never show
+    // the sent message).
     final allMembers = conversationMemberIds(conversationId);
     final otherMembers = allMembers
         .where((m) => m != senderAccountId)
         .toSet()
         .toList();
+    final bundleAccounts = [...otherMembers, senderAccountId];
 
-    final bundleFutures = otherMembers.map((m) => _fetchOrCacheBundle(m));
+    final bundleFutures = bundleAccounts.map(_fetchOwnOrPeerBundle);
     final bundleResults = await Future.wait(bundleFutures, eagerError: false);
 
     // Build device_id â†’ bundle and device_id â†’ accountId maps; persist
@@ -163,7 +236,7 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
     final deviceBundleMap = <String, Map<String, dynamic>>{};
     final deviceToAccount = <String, String>{};
     for (var i = 0; i < bundleResults.length; i++) {
-      final accountId = otherMembers[i];
+      final accountId = bundleAccounts[i];
       final result = bundleResults[i];
       final devices = result['devices'] as List<dynamic>? ?? [];
       final firstDevice = devices.isEmpty
@@ -182,6 +255,7 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
       for (final device in devices) {
         final d = device as Map<String, dynamic>;
         final deviceId = d['device_id'] as String;
+        if (deviceId == senderDeviceId) continue;
         deviceBundleMap[deviceId] = d;
         deviceToAccount[deviceId] = accountId;
         db.upsertDevice(
@@ -197,10 +271,16 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
       }
     }
 
-    final targetDeviceIds = recipientDeviceIds.isEmpty
-        ? deviceBundleMap.keys.toList()
-        : recipientDeviceIds;
-    if (otherMembers.isNotEmpty && targetDeviceIds.isEmpty) {
+    // The fetched bundles are the truth about which devices exist now, so
+    // they - not the caller's `recipientDeviceIds` - pick the targets. That
+    // list comes from the local device table, which still names devices that
+    // were signed out (no bundle any more, so the send used to fail outright)
+    // and never names a device added since.
+    final targetDeviceIds = deviceBundleMap.keys.toList();
+    final peerTargets = targetDeviceIds
+        .where((d) => deviceToAccount[d] != senderAccountId)
+        .toList();
+    if (otherMembers.isNotEmpty && peerTargets.isEmpty) {
       throw const SecureSessionUnavailableException(
         'no active recipient devices found',
       );
@@ -442,7 +522,9 @@ mixin RemoteMessageCrypto on RemoteMessagingServiceBase {
     }
 
     // Reconstruct DoubleRatchetSession from database state
-    final ratchetSession = await DoubleRatchetSession.fromStoredSession(session);
+    final ratchetSession = await DoubleRatchetSession.fromStoredSession(
+      session,
+    );
 
     // Atomically ratchet sending chain forward by 1 step
     final sendCount = session['send_count'] as int;

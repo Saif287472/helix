@@ -106,7 +106,7 @@ mixin GroupsMembershipHandlers on GroupsModuleBase {
     required String inviteeId,
     required int createdAt,
   }) {
-    final inviteeDevices = db.getDevices(inviteeId);
+    final inviteeDevices = db.getActiveDevices(inviteeId);
     final bodyPayload = {
       'invite_id': inviteId,
       'group_id': groupId,

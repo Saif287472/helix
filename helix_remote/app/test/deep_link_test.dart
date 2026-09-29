@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/deep_link.dart';
+import 'package:helix_remote/app/helix_code.dart';
 
 void main() {
   test('P6 invite deep link provides code and server for onboarding', () {
@@ -48,5 +49,37 @@ void main() {
       link?.contactSignature,
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
+  });
+
+  test('a shared https link carries its code in the fragment', () {
+    const code = 'HLX-INV-aHR0cHM6Ly9jaGF0LmV4YW1wbGV8SU5WLTE';
+    final link = HelixDeepLink.tryParse(helixCodeLink(code));
+    expect(helixCodeLink(code), 'https://$kHelixLinkHost/open#$code');
+    expect(link?.kind, HelixDeepLinkKind.serverCode);
+    expect(link?.setupCode, code);
+  });
+
+  test('the landing page button opens the same code', () {
+    final link = HelixDeepLink.tryParse(
+      'helix://open?code=HLX-REC-aHR0cHM6Ly9jaGF0fGFjY3R8cmVj',
+    );
+    expect(link?.setupCode, 'HLX-REC-aHR0cHM6Ly9jaGF0fGFjY3R8cmVj');
+  });
+
+  test('a link without a Helix code opens nothing', () {
+    expect(
+      HelixDeepLink.tryParse('https://$kHelixLinkHost/open#hello'),
+      isNull,
+    );
+    expect(HelixDeepLink.tryParse('https://$kHelixLinkHost/open'), isNull);
+  });
+
+  test('an old helix://invite link becomes an advanced-mode code', () {
+    final link = HelixDeepLink.tryParse(
+      'helix://invite?code=inv-123&server=https%3A%2F%2Fchat.example',
+    );
+    final decoded = decodeHelixInviteCode(link!.setupCode!);
+    expect(decoded?.serverUrl, 'https://chat.example');
+    expect(decoded?.inviteCode, 'inv-123');
   });
 }

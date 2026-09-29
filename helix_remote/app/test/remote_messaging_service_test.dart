@@ -94,6 +94,8 @@ class _FakeRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
     required String deviceName,
     String? accountIdentityPublicKey,
     String? phoneHash,
+    String? otpCode,
+    String? otpChallengeId,
   }) async => {};
   @override
   Future<Map<String, dynamic>> fetchProfile() async => {};
@@ -658,6 +660,418 @@ void main() {
     expect(db.getMessageById('msg_discovery')!['status'], 'PENDING');
   });
 
+  group('text history backup', () {
+    Future<void> store(
+      String id,
+      String plaintext, {
+      int ts = 1000,
+      String sender = 'bob',
+    }) async {
+      db.saveMessage(
+        RemoteMessage(
+          messageId: id,
+          conversationId: 'dm_backup',
+          senderAccountId: sender,
+          senderDeviceId: '${sender}_device_1',
+          ciphertext: await _FakeProtector().encryptText(
+            conversationId: 'dm_backup',
+            messageId: id,
+            plaintext: plaintext,
+            recipientDeviceId: 'local-history',
+          ),
+        ),
+        ts ~/ 1000,
+        ts,
+        'DELIVERED',
+      );
+    }
+
+    test('only plain text is exported, and a new device imports it', () async {
+      service.createDirectConversation(
+        peerAccountId: 'bob',
+        conversationId: 'dm_backup',
+      );
+      await store(
+        'm_text',
+        const RemoteTextContent(text: 'hello from bob').toPlaintext(),
+        ts: 1000,
+      );
+      await store(
+        'm_mine',
+        const RemoteTextContent(text: 'hi bob').toPlaintext(),
+        ts: 2000,
+        sender: 'alice',
+      );
+      await store(
+        'm_view_once',
+        const RemoteTextContent(
+          text: 'secret',
+          privacy: RemoteContentPrivacy(viewOnce: true),
+        ).toPlaintext(),
+        ts: 3000,
+      );
+      await store(
+        'm_location',
+        const RemoteLocationContent(
+          locationId: 'loc1',
+          latitudeE7: 10000000,
+          longitudeE7: 20000000,
+          accuracyMeters: 5,
+          createdAt: 4000,
+          label: 'Somewhere',
+        ).toPlaintext(),
+        ts: 4000,
+      );
+
+      final snapshot = await service.exportTextHistory();
+      final ids = (snapshot['messages'] as List)
+          .map((m) => (m as Map)['id'])
+          .toSet();
+      expect(ids, {'m_text', 'm_mine'});
+      expect(jsonEncode(snapshot), isNot(contains('secret')));
+
+      // The account's new tablet, with an empty database.
+      final tabletDb = HelixRemoteDatabase(File(':memory:'))..initialize();
+      addTearDown(tabletDb.close);
+      final tablet = RemoteMessagingService(
+        db: tabletDb,
+        syncEngine: RemoteSyncEngine(tabletDb),
+        gateway: _FakeGateway(),
+        protector: _FakeProtector(),
+        restClient: _FakeRestClient(),
+        clock: clock,
+      );
+      await tablet.setupAccount(
+        account: RemoteAccount(
+          accountId: 'alice',
+          identityPublicKey: 'alice_identity_key',
+          createdAt: clock(),
+        ),
+        device: RemoteDevice(
+          deviceId: 'alice_tablet',
+          deviceName: 'Alice tablet',
+          deviceSigningPublicKey: 's',
+          deviceAgreementPublicKey: 'a',
+          createdAt: clock(),
+        ),
+      );
+
+      expect(await tablet.importTextHistory(snapshot), 2);
+      // Importing twice adds nothing.
+      expect(await tablet.importTextHistory(snapshot), 0);
+
+      final history = await tablet.messageHistory('dm_backup');
+      expect(history.map((m) => m.text), ['hi bob', 'hello from bob']);
+      expect(history.first.senderAccountId, 'alice');
+      expect(tabletDb.getConversationMembers('dm_backup').toSet(), {
+        'alice',
+        'bob',
+      });
+      expect(tablet.unreadSummary('dm_backup').unreadCount, 0);
+    });
+  });
+
+  group('received messages end to end', () {
+    late HelixRemoteDatabase bobDb;
+    final bobPrivateKeys = <String, Uint8List>{};
+    late crypto.SimpleKeyPair bobAgreement;
+
+    String b64(List<int> bytes) => base64Url.encode(bytes);
+
+    /// Bob's device with a real signed prekey, and the bundle Alice fetches.
+    Future<Map<String, dynamic>> setUpBob() async {
+      bobDb = HelixRemoteDatabase(File(':memory:'))..initialize();
+      addTearDown(bobDb.close);
+      final identity = await crypto.Ed25519().newKeyPair();
+      bobAgreement = await crypto.X25519().newKeyPair();
+      final spk = await crypto.X25519().newKeyPair();
+      final spkPub = await spk.extractPublicKey();
+      final signature = await crypto.Ed25519().sign(
+        spkPub.bytes,
+        keyPair: identity,
+      );
+      bobPrivateKeys['spk_1'] = Uint8List.fromList(
+        await spk.extractPrivateKeyBytes(),
+      );
+      bobDb.saveLocalPrekey(
+        keyId: 1,
+        role: 'signed_prekey',
+        deviceId: 'bob_device_1',
+        publicKey: b64(spkPub.bytes),
+        privateKeyRef: 'spk_1',
+        signature: b64(signature.bytes),
+        createdAt: 1,
+        rotationState: 'active',
+      );
+      return {
+        'account_identity_key': b64((await identity.extractPublicKey()).bytes),
+        'devices': [
+          {
+            'device_id': 'bob_device_1',
+            'device_key': b64((await bobAgreement.extractPublicKey()).bytes),
+            'identity_key': b64((await identity.extractPublicKey()).bytes),
+            'signed_prekey': {
+              'key_id': 1,
+              'public_key': b64(spkPub.bytes),
+              'signature': b64(signature.bytes),
+            },
+            'one_time_prekey': null,
+          },
+        ],
+      };
+    }
+
+    Future<RemoteMessagingService> bobService() async {
+      final bob = RemoteMessagingService(
+        db: bobDb,
+        syncEngine: RemoteSyncEngine(bobDb),
+        gateway: _FakeGateway(),
+        protector: _FakeProtector(),
+        restClient: _FakeRestClient(),
+        clock: clock,
+        prekeyResolver: (ref) async => bobPrivateKeys[ref]!,
+      );
+      await bob.setupAccount(
+        account: RemoteAccount(
+          accountId: 'bob',
+          identityPublicKey: 'bob_identity_key',
+          createdAt: clock(),
+        ),
+        device: RemoteDevice(
+          deviceId: 'bob_device_1',
+          deviceName: 'Bob phone',
+          deviceSigningPublicKey: 'bob_signing',
+          deviceAgreementPublicKey: 'bob_agreement',
+          createdAt: clock(),
+        ),
+      );
+      bob.setCryptoKeys(
+        devicePrivateKey: Uint8List.fromList(
+          await bobAgreement.extractPrivateKeyBytes(),
+        ),
+        devicePublicKey: Uint8List.fromList(
+          (await bobAgreement.extractPublicKey()).bytes,
+        ),
+      );
+      return bob;
+    }
+
+    test('a received message can still be read after a restart', () async {
+      final bundle = await setUpBob();
+      service = RemoteMessagingService(
+        db: db,
+        syncEngine: RemoteSyncEngine(db),
+        gateway: gateway,
+        protector: _FakeProtector(),
+        restClient: _FakeRestClient(bundles: {'bob': bundle}),
+        clock: clock,
+      );
+      await service.setupAccount(
+        account: RemoteAccount(
+          accountId: 'alice',
+          identityPublicKey: 'alice_identity_key',
+          createdAt: clock(),
+        ),
+        device: RemoteDevice(
+          deviceId: 'alice_device_1',
+          deviceName: 'Alice phone',
+          deviceSigningPublicKey: 'alice_signing',
+          deviceAgreementPublicKey: 'alice_agreement',
+          createdAt: clock(),
+        ),
+      );
+      final aliceAgreement = await crypto.X25519().newKeyPair();
+      service.setCryptoKeys(
+        devicePrivateKey: Uint8List.fromList(
+          await aliceAgreement.extractPrivateKeyBytes(),
+        ),
+        devicePublicKey: Uint8List.fromList(
+          (await aliceAgreement.extractPublicKey()).bytes,
+        ),
+      );
+      service.addContact(peerAccountId: 'bob', nickname: 'Bob');
+      final conversationId = service.createDirectConversation(
+        peerAccountId: 'bob',
+        conversationId: 'dm_alice_bob',
+      );
+      // The first message runs X3DH (v1); the second reuses the session (v2).
+      for (final (id, text) in [('m1', 'first'), ('m2', 'second')]) {
+        await service.sendText(
+          conversationId: conversationId,
+          messageId: id,
+          plaintext: text,
+          recipientDeviceIds: const [],
+        );
+      }
+
+      // The server delivers both envelopes to Bob's device.
+      final bob = await bobService();
+      bobDb.ensureConversationExists(
+        conversationId: conversationId,
+        senderAccountId: 'alice',
+        serverSequence: 0,
+        timestamp: 0,
+        memberAccountIds: const ['alice', 'bob'],
+      );
+      var seq = 0;
+      for (final op in db.getPendingOperations().where(
+        (op) => op['type'] == 'SEND_MESSAGE',
+      )) {
+        final payload =
+            jsonDecode(op['payload'] as String) as Map<String, dynamic>;
+        final envelope = (payload['envelopes'] as List)
+            .cast<Map<String, dynamic>>()
+            .single;
+        bobDb.saveMessage(
+          RemoteMessage(
+            messageId: payload['message_id'] as String,
+            conversationId: conversationId,
+            senderAccountId: 'alice',
+            senderDeviceId: 'alice_device_1',
+            ciphertext: envelope['ciphertext'] as String,
+          ),
+          ++seq,
+          seq * 1000,
+          'DELIVERED',
+        );
+      }
+
+      List<String> texts(List<RemoteDecryptedMessage> messages) =>
+          messages.map((m) => m.text).toList()..sort();
+      expect(texts(await bob.messageHistory(conversationId)), [
+        'first',
+        'second',
+      ]);
+
+      // A restart: a fresh service over the same database, nothing cached.
+      final restarted = await bobService();
+      expect(texts(await restarted.messageHistory(conversationId)), [
+        'first',
+        'second',
+      ]);
+    });
+  });
+
+  group('multi-device', () {
+    late _FakeRestClient rest;
+
+    Future<void> signInAlice() async {
+      service = RemoteMessagingService(
+        db: db,
+        syncEngine: RemoteSyncEngine(db),
+        gateway: gateway,
+        protector: _FakeProtector(),
+        restClient: rest,
+        clock: clock,
+      );
+      await service.setupAccount(
+        account: RemoteAccount(
+          accountId: 'alice',
+          identityPublicKey: 'alice_identity_key',
+          createdAt: clock(),
+        ),
+        device: RemoteDevice(
+          deviceId: 'alice_device_1',
+          deviceName: 'Alice phone',
+          deviceSigningPublicKey: 'alice_device_signing_key',
+          deviceAgreementPublicKey: 'alice_device_agreement_key',
+          createdAt: clock(),
+        ),
+      );
+      final agreement = await crypto.X25519().newKeyPair();
+      service.setCryptoKeys(
+        devicePrivateKey: Uint8List.fromList(
+          await agreement.extractPrivateKeyBytes(),
+        ),
+        devicePublicKey: Uint8List.fromList(
+          (await agreement.extractPublicKey()).bytes,
+        ),
+      );
+      service.addContact(peerAccountId: 'bob', nickname: 'Bob');
+    }
+
+    Set<String> envelopeTargets(Map<String, dynamic> payload) =>
+        (payload['envelopes'] as List)
+            .map((e) => (e as Map)['recipient_device_id'] as String)
+            .toSet();
+
+    Future<Map<String, dynamic>> twoDeviceBundle(
+      String first,
+      String second,
+    ) async {
+      final a = await _validPreKeyBundle(deviceId: first);
+      final b = await _validPreKeyBundle(deviceId: second);
+      return {
+        ...a,
+        'devices': [...a['devices'] as List, ...b['devices'] as List],
+      };
+    }
+
+    test(
+      'a send is also encrypted for this account\'s other devices',
+      () async {
+        rest = _FakeRestClient(
+          bundles: {
+            'bob': await _validPreKeyBundle(deviceId: 'bob_phone'),
+            // The account's own bundle lists this device too; it must be
+            // skipped, never encrypted to itself.
+            'alice': await twoDeviceBundle('alice_device_1', 'alice_tablet'),
+          },
+        );
+        await signInAlice();
+        final conversationId = service.createDirectConversation(
+          peerAccountId: 'bob',
+          conversationId: 'dm_multi_device',
+        );
+
+        await service.sendText(
+          conversationId: conversationId,
+          messageId: 'msg_multi_device',
+          plaintext: 'hello from the phone',
+          recipientDeviceIds: const [],
+        );
+
+        final op = db.getPendingOperations().singleWhere(
+          (op) => op['type'] == 'SEND_MESSAGE',
+        );
+        final payload =
+            jsonDecode(op['payload'] as String) as Map<String, dynamic>;
+        expect(envelopeTargets(payload), {'bob_phone', 'alice_tablet'});
+      },
+    );
+
+    test('a stale send is re-encrypted for a device added since', () async {
+      rest = _FakeRestClient(
+        bundles: {'bob': await _validPreKeyBundle(deviceId: 'bob_phone')},
+      );
+      await signInAlice();
+      final conversationId = service.createDirectConversation(
+        peerAccountId: 'bob',
+        conversationId: 'dm_stale_devices',
+      );
+      await service.sendText(
+        conversationId: conversationId,
+        messageId: 'msg_stale',
+        plaintext: 'hello',
+        recipientDeviceIds: const [],
+      );
+      final op = db.getPendingOperations().singleWhere(
+        (op) => op['type'] == 'SEND_MESSAGE',
+      );
+      final payload =
+          jsonDecode(op['payload'] as String) as Map<String, dynamic>;
+      expect(envelopeTargets(payload), {'bob_phone'});
+
+      // Bob signs in on a tablet with his password.
+      rest.bundles['bob'] = await twoDeviceBundle('bob_phone', 'bob_tablet');
+      final rebuilt = await service.rebuildStaleSend('SEND_MESSAGE', payload);
+
+      expect(rebuilt, isNotNull);
+      expect(envelopeTargets(rebuilt!), {'bob_phone', 'bob_tablet'});
+      expect(rebuilt['message_id'], 'msg_stale');
+    });
+  });
+
   test('P08 invalid discovered signed prekey fails closed', () async {
     final bundle = await _validPreKeyBundle(deviceId: 'bob_bad_spk');
     final devices = bundle['devices'] as List<dynamic>;
@@ -1076,13 +1490,27 @@ void main() {
         throwsStateError,
       );
 
+      // Unread counts what others sent: this account's own messages -
+      // including copies from its other devices - never count.
+      db.saveMessage(
+        const RemoteMessage(
+          messageId: 'msg_f4_from_bob',
+          conversationId: 'dm_f4_productivity',
+          senderAccountId: 'bob',
+          senderDeviceId: 'bob_device_1',
+          ciphertext: 'cipher from bob',
+        ),
+        10,
+        3000,
+        'DELIVERED',
+      );
       db.markConversationRead(
         conversationId: conversationId,
         deviceId: 'alice_device_1',
         lastReadSequence: 1,
         updatedAt: 2000,
       );
-      expect(service.unreadSummary(conversationId).unreadCount, greaterThan(0));
+      expect(service.unreadSummary(conversationId).unreadCount, equals(1));
       service.markConversationRead(conversationId);
       expect(service.unreadSummary(conversationId).unreadCount, equals(0));
 

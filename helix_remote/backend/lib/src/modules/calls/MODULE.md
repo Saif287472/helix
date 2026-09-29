@@ -22,14 +22,14 @@ mixins, the same mechanism `../auth/` and `../groups/` use.
 
 | File | Lines | Holds |
 |---|---|---|
-| `../calls.dart` | ~336 | Routes, TURN credential issuing, shared small helpers |
-| `signaling.dart` | ~425 | `_routeSignal`, `_routeOffer`, `_routeSessionSignal` |
-| `delivery.dart` | ~260 | Device fan-out, answered-elsewhere, push wake |
-| `pending.dart` | ~160 | The pending-call queue |
+| `../calls.dart` | ~380 | Routes, TURN credential issuing, shared small helpers |
+| `signaling.dart` | ~595 | `_routeSignal`, `_routeOffer`, `_routeSessionSignal` |
+| `delivery.dart` | ~315 | Device fan-out, answered-elsewhere, push wake |
+| `pending.dart` | ~195 | The pending-call queue |
 | `federation.dart` | ~115 | Cross-server signal proxying, both directions |
-| `validation.dart` | ~100 | Frame parsing, size bounds, rate-limit windows |
+| `validation.dart` | ~130 | Frame parsing, size bounds, rate-limit windows |
 | `push_tokens.dart` | ~85 | Device push-token registration |
-| `support.dart` | ~75 | `_WindowCounter`, `_ParseResult`, `_ParsedCallSignal` |
+| `support.dart` | ~115 | `_WindowCounter`, `_ParseResult`, `_ParsedCallSignal` |
 
 ## Route table
 

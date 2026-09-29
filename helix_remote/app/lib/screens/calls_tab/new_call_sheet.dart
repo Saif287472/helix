@@ -61,7 +61,7 @@ class _NewCallSheetState extends State<_NewCallSheet> {
               child: Row(
                 children: [
                   Text(
-                    HelixLocalizations.of(context).newCall,
+                    'New call',
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),

@@ -61,6 +61,16 @@ abstract class SyncGateway {
   });
 }
 
+/// The server refused a send because its recipient device list is out of
+/// date: a device was added (someone signed in on a new phone - possibly this
+/// account's own) after the sender fetched prekey bundles.
+class RemoteStaleDeviceListException implements Exception {
+  const RemoteStaleDeviceListException(this.message);
+  final String message;
+  @override
+  String toString() => 'RemoteStaleDeviceListException: $message';
+}
+
 class RemoteSyncEngine {
   RemoteSyncEngine(
     this.db, {
@@ -68,7 +78,23 @@ class RemoteSyncEngine {
     this.onCallSignal,
     this.onTrace,
     this.onLocalDeviceRevoked,
+    this.rebuildStaleOperation,
+    this.onAccountDeviceSignedIn,
   });
+
+  /// Called when another device signed in to this account - with the
+  /// account's password, typically - so the app can alert the user. Never
+  /// called for the device this client runs on.
+  final void Function(RemoteAccountSignIn signIn)? onAccountDeviceSignedIn;
+
+  /// Re-encrypts a queued operation for the current device list after a
+  /// [RemoteStaleDeviceListException]. Returns the replacement payload, or
+  /// null when it cannot be rebuilt (the normal retry path then applies).
+  final Future<Map<String, dynamic>?> Function(
+    String type,
+    Map<String, dynamic> payload,
+  )?
+  rebuildStaleOperation;
 
   final HelixRemoteDatabase db;
   final void Function(String message)? diagnostics;
@@ -290,6 +316,7 @@ class RemoteSyncEngine {
           }
         }
         _maybeNotifyLocalDeviceRevoked(env);
+        _maybeNotifyAccountSignIn(env);
         _emitChange(_changeFor(env));
         if (env.type == 'chat_message') {
           final traceMsgId = env.payload['message_id'] as String?;
@@ -462,11 +489,25 @@ class RemoteSyncEngine {
           : null;
       if (traceMsgId != null) onTrace?.call(traceMsgId, 'send_attempt');
 
-      await gateway.sendOutboundOperation(
-        opId: opId,
-        type: type,
-        payload: payload,
-      );
+      try {
+        await gateway.sendOutboundOperation(
+          opId: opId,
+          type: type,
+          payload: payload,
+        );
+      } on RemoteStaleDeviceListException {
+        final rebuild = rebuildStaleOperation;
+        final rebuilt = rebuild == null ? null : await rebuild(type, payload);
+        if (rebuilt == null) rethrow;
+        // One immediate retry with envelopes for the devices that exist now;
+        // a second mismatch falls through to the ordinary backoff.
+        db.updateOperationPayload(opId, jsonEncode(rebuilt));
+        await gateway.sendOutboundOperation(
+          opId: opId,
+          type: type,
+          payload: rebuilt,
+        );
+      }
 
       if (traceMsgId != null) onTrace?.call(traceMsgId, 'server_ack');
 
@@ -627,9 +668,45 @@ class RemoteSyncEngine {
     );
   }
 
+  void _maybeNotifyAccountSignIn(RemoteRealtimeEnvelope env) {
+    final hook = onAccountDeviceSignedIn;
+    if (hook == null || env.type != 'device_linked') return;
+    final deviceId = env.payload['device_id'] as String?;
+    if (deviceId == null || deviceId.isEmpty) return;
+    if (deviceId == db.getLocalDeviceId()) return;
+    final signedInAt = env.payload['signed_in_at'];
+    hook(
+      RemoteAccountSignIn(
+        deviceId: deviceId,
+        deviceName: env.payload['device_name'] as String? ?? '',
+        method: env.payload['method'] as String? ?? 'link',
+        signedInAt: signedInAt is int
+            ? DateTime.fromMillisecondsSinceEpoch(signedInAt)
+            : DateTime.fromMillisecondsSinceEpoch(env.timestamp),
+      ),
+    );
+  }
+
   Future<void> dispose() async {
     await _changeController.close();
   }
+}
+
+/// Another device signed in to this account.
+class RemoteAccountSignIn {
+  const RemoteAccountSignIn({
+    required this.deviceId,
+    required this.deviceName,
+    required this.method,
+    required this.signedInAt,
+  });
+
+  final String deviceId;
+  final String deviceName;
+
+  /// `password`, or `link` for a device approved from a signed-in one.
+  final String method;
+  final DateTime signedInAt;
 }
 
 abstract class _InboundSyncEvent {
@@ -758,11 +835,15 @@ class _MessageCreatedEvent extends _InboundSyncEvent {
 
     // Guarantee the conversation row exists before writing the message so the
     // FK constraint is satisfied even when conversation_created arrives late.
+    final members = env.payload['conversation_members'];
     db.ensureConversationExists(
       conversationId: conversationId,
       senderAccountId: message.senderAccountId,
       serverSequence: env.serverSequence ?? 0,
       timestamp: env.timestamp,
+      memberAccountIds: members is List
+          ? members.whereType<String>().toList()
+          : const [],
     );
     db.saveMessage(
       message,

@@ -46,7 +46,7 @@ function Invoke-Step {
 
 if (-not (Test-BuildOnlyEnabled)) {
     Invoke-Step "Dart format check" {
-        dart format --output=none --set-exit-if-changed app backend packages tool
+        dart format --output=none --set-exit-if-changed app admin backend packages tool
     }
 
     Invoke-Step "Flutter analyze" {
@@ -59,6 +59,15 @@ if (-not (Test-BuildOnlyEnabled)) {
 
     Invoke-Step "Flutter tests (app)" {
         Push-Location app
+        try {
+            flutter test @FlutterPubArgs
+        } finally {
+            Pop-Location
+        }
+    }
+
+    Invoke-Step "Flutter tests (admin)" {
+        Push-Location admin
         try {
             flutter test @FlutterPubArgs
         } finally {

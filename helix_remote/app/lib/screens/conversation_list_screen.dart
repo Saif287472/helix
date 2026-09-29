@@ -12,7 +12,6 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'conversation_list/actions.dart';
 part 'conversation_list/widgets_primary.dart';
@@ -316,9 +315,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
 
   void _markSelectedUnread() {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(HelixLocalizations.of(context).markUnreadNotAvailableYet),
-      ),
+      const SnackBar(content: Text('Mark as unread is not available yet')),
     );
   }
 
@@ -338,11 +335,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
 
   void _archiveSelected() {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          HelixLocalizations.of(context).archiveNotAvailableHelixYet,
-        ),
-      ),
+      const SnackBar(content: Text('Archive is not available in Helix yet')),
     );
   }
 
@@ -352,11 +345,9 @@ class _ConversationListScreenState extends State<ConversationListScreen>
     }
     _clearSelection();
     _reload();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(HelixLocalizations.of(context).selectedChatsLocked),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Selected chats locked')));
   }
 
   void _favoriteSelected() {
@@ -377,9 +368,9 @@ class _ConversationListScreenState extends State<ConversationListScreen>
       );
     }
     _clearSelection();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(HelixLocalizations.of(context).addedQuickList)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Added to Quick list')));
   }
 
   Future<void> _clearSelectedChats() async {
@@ -387,21 +378,21 @@ class _ConversationListScreenState extends State<ConversationListScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).clearChats),
+        title: const Text('Clear chats'),
         content: Text(
           'Clear messages in $count selected ${count == 1 ? 'chat' : 'chats'} from this device?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(
               foregroundColor: HelixStatusColors.danger,
             ),
-            child: Text(HelixLocalizations.of(context).clear),
+            child: const Text('Clear'),
           ),
         ],
       ),
@@ -419,21 +410,21 @@ class _ConversationListScreenState extends State<ConversationListScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).deleteChats),
+        title: const Text('Delete chats'),
         content: Text(
           'Delete $count selected ${count == 1 ? 'conversation' : 'conversations'} from this device?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(
               foregroundColor: HelixStatusColors.danger,
             ),
-            child: Text(HelixLocalizations.of(context).delete),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -502,7 +493,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
                 onChanged: (v) => setState(() => _searchQuery = v),
               )
             : Text(
-                HelixLocalizations.of(context).appTitle,
+                'Helix Remote',
                 style: TextStyle(
                   color: colorScheme.primary,
                   fontWeight: FontWeight.bold,
@@ -552,33 +543,33 @@ class _ConversationListScreenState extends State<ConversationListScreen>
                     }
                   },
                   itemBuilder: (_) => [
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'mark_read',
-                      child: Text(HelixLocalizations.of(context).markRead),
+                      child: Text('Mark as read'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'mark_unread',
-                      child: Text(HelixLocalizations.of(context).markUnread),
+                      child: Text('Mark as unread'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'select_all',
-                      child: Text(HelixLocalizations.of(context).selectAll),
+                      child: Text('Select all'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'lock',
-                      child: Text(HelixLocalizations.of(context).lockChats),
+                      child: Text('Lock chats'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'favorite',
-                      child: Text(HelixLocalizations.of(context).addFavorites),
+                      child: Text('Add to Favorites'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'list',
-                      child: Text(HelixLocalizations.of(context).addList),
+                      child: Text('Add to list'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'clear',
-                      child: Text(HelixLocalizations.of(context).clearChats),
+                      child: Text('Clear chats'),
                     ),
                   ],
                 ),
@@ -601,18 +592,18 @@ class _ConversationListScreenState extends State<ConversationListScreen>
                     }
                   },
                   itemBuilder: (_) => [
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'refresh',
-                      child: Text(HelixLocalizations.of(context).refresh),
+                      child: Text('Refresh'),
                     ),
                     const PopupMenuDivider(),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'sort_recent',
-                      child: Text(HelixLocalizations.of(context).sortByRecent),
+                      child: Text('Sort by recent'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'sort_name',
-                      child: Text(HelixLocalizations.of(context).sortByName),
+                      child: Text('Sort by name'),
                     ),
                   ],
                 ),
@@ -647,7 +638,7 @@ class _ConversationListScreenState extends State<ConversationListScreen>
                   actions: [
                     TextButton(
                       onPressed: () => setState(() => _statusText = null),
-                      child: Text(HelixLocalizations.of(context).dismiss),
+                      child: const Text('Dismiss'),
                     ),
                   ],
                 ),

@@ -1,6 +1,8 @@
 # Feature Ownership Matrix
 
-Defines which features and behaviors map to Local, Remote, or Shared contexts.
+Defines which features and behaviors map to Local or Remote.
+
+> Note (2026-09): there is no shared code. Helix Local and Helix Remote are separate workspaces (`helix_local/`, `helix_remote/`) that share no packages, so every "Shared Context: Yes" below means each product has its own copy (Remote theme and UI kit: `helix_remote/packages/helix_remote_ui`; Local: `helix_local/app/lib/ui/app_theme.dart`).
 
 | Feature / Behavior | Local Shell | Remote Shell | Shared Context |
 | :--- | :---: | :---: | :---: |

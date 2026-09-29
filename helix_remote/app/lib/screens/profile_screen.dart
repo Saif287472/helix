@@ -6,7 +6,6 @@ import 'package:helix_remote/app/remote_account_validation.dart';
 import 'package:helix_remote/app/remote_error_copy.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -58,11 +57,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await widget.root.restClient.updateDisplayName(name);
       widget.messagingService.setDisplayName(name);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(HelixLocalizations.of(context).displayNameUpdated),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Display name updated')));
       }
     } catch (e) {
       if (mounted) {
@@ -91,7 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
         title: Text(
-          HelixLocalizations.of(context).profile,
+          'Profile',
           style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.bold),
         ),
       ),
@@ -116,10 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 32),
 
           // Display name
-          Text(
-            HelixLocalizations.of(context).displayName,
-            style: theme.textTheme.labelLarge,
-          ),
+          Text('Display name', style: theme.textTheme.labelLarge),
           const SizedBox(height: 8),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,17 +144,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(HelixLocalizations.of(context).save),
+                    : const Text('Save'),
               ),
             ],
           ),
           const SizedBox(height: 24),
 
           // Account ID (read-only)
-          Text(
-            HelixLocalizations.of(context).accountId,
-            style: theme.textTheme.labelLarge,
-          ),
+          Text('Account ID', style: theme.textTheme.labelLarge),
           const SizedBox(height: 8),
           Container(
             padding: HelixInsets.symmetric(horizontal: 12, vertical: 14),
@@ -185,11 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: _accountId));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          HelixLocalizations.of(context).accountIdCopied,
-                        ),
-                      ),
+                      const SnackBar(content: Text('Account ID copied')),
                     );
                   },
                 ),
@@ -198,7 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            HelixLocalizations.of(context).shareAccountIdOthersSo,
+            'Share your account ID with others so they can add you as a contact.',
             style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
           ),
         ],

@@ -1,5 +1,7 @@
 # Rollback Rehearsal
 
+> **Status: historical (June 2026, pre-split layout).** Paths below refer to the old single-workspace tree (`apps/`, `packages/`, `services/`, root `tool/`/`scripts/`). Code now lives in two workspaces, `helix_local/` and `helix_remote/`. For current Remote docs see `helix_remote/docs/` and `AGENTS.md`.
+
 Before release, rehearse and time these rollback paths:
 
 | Path | Rehearsal |

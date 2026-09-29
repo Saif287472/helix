@@ -51,11 +51,14 @@ is authenticated — afterwards there is no way to reach it).
 
 ## 2. Server
 
-Set in `/opt/helix-remote/helix_remote/.env`:
+Helix Global runs on the user's PC (Caddy + `dart run bin/server.dart` in
+`helix_remote/backend`), not a VPS or Docker. Set in
+`helix_remote/backend/.env` (the server loads it itself at startup; process
+environment variables override it):
 
 ```ini
 HELIX_REMOTE_FCM_PROJECT_ID=your-firebase-project-id
-HELIX_REMOTE_FCM_SERVICE_ACCOUNT=/app/secrets/fcm.json
+HELIX_REMOTE_FCM_SERVICE_ACCOUNT=C:/path/outside/the/repo/fcm-service-account.json
 ```
 
 The project ID plus **exactly one** credential is an all-or-nothing group: set
@@ -67,28 +70,15 @@ access token expires after an hour and this server cannot renew it — it prints
 that warning itself at startup. The token variable exists for local testing.
 
 `HELIX_REMOTE_FCM_SERVICE_ACCOUNT` accepts a path *or* inline JSON, decided by
-whether the value starts with `{`. **Use the path.** The service-account
-`private_key` contains embedded newlines, and Docker Compose's `env_file`
-parser does not handle multi-line values reliably — inline JSON fails at boot
-with a `FormatException`.
+whether the value starts with `{` (`readFcmServiceAccount` in
+`backend/lib/src/fcm_access_token.dart`). **Use the path.** The
+service-account `private_key` contains embedded newlines, which a one-line
+`.env` value does not carry reliably. Keep the key file outside the repository
+and never commit it.
 
-That needs a bind mount, since compose otherwise mounts only the data volume:
-
-```yaml
-  helix-backend:
-    volumes:
-      - helix-data:/app/data
-      - ./secrets/fcm-service-account.json:/app/secrets/fcm.json:ro
-```
-
-On the VPS:
-
-```sh
-mkdir -p /opt/helix-remote/helix_remote/secrets
-# copy the key file in, then:
-chmod 600 /opt/helix-remote/helix_remote/secrets/fcm-service-account.json
-docker compose up -d          # not `restart` - env is read once, at boot
-```
+Restart the backend after changing either value; env is read once, at boot.
+(`docker-compose.yml` and a `secrets/` bind mount are only for a Docker
+deployment, which is not what Helix Global uses.)
 
 The key is parsed **before** the server starts listening, so a wrong path or
 the wrong kind of credential is reported at startup rather than at the first
@@ -109,13 +99,17 @@ device has registered — that requires a client build with
 End to end: sign in on a phone, force-close the app, and call it from another
 device. It should ring.
 
+The same push path carries the other wake hints the backend enqueues:
+`new_message`, `group_invite`, and `new_sign_in` (sent to an account's other
+devices when a new device signs in; it carries no device name).
+
 ---
 
 ## Troubleshooting
 
 | Symptom | Cause |
 |---|---|
-| `push_ready: false` | Server env not set, or container restarted rather than recreated |
+| `push_ready: false` | Server env not set, or the backend was not restarted after editing `.env` |
 | `push_ready: true`, still no ring | No device has registered a token — client build has no `google-services.json`, or has not signed in since gaining it |
 | Server refuses to boot | Project ID set without a credential, or the key path is wrong. The startup error names which |
 | Gradle logs "google-services.json not found" | The file is missing or in the wrong directory — it belongs in `app/android/app/`, not `app/android/` |

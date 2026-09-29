@@ -1,3 +1,5 @@
+> **Status: historical (agent transcript and plan, 2026-09-23).** Its fixes landed in commit caa413c (2026-09-23); paths such as `j:/Projects/helix/backend/...` mean `helix_remote/backend/...`. Not a current task list.
+
 Viewed double_ratchet.dart:235-258
 Viewed j:\Projects\helix\backend\lib\src\modules\admin_pairing.dart:56-91
 Listed directory helix

@@ -492,6 +492,58 @@ void main() {
         );
       },
     );
+
+    test(
+      'sessions last 60 days and a revoked device learns it by code',
+      () async {
+        final material = await register(
+          accountId: 'erin',
+          username: 'erin_user',
+          deviceId: 'erin_device',
+          deviceName: 'Erin Phone',
+        );
+        final loginResult = await login(
+          accountId: 'erin',
+          deviceId: 'erin_device',
+          material: material,
+        );
+        expect(
+          loginResult['refresh_expires_at'],
+          now.add(const Duration(days: 60)).millisecondsSinceEpoch,
+        );
+
+        server.db.registerDevice(
+          'erin_second_device',
+          'erin',
+          'second_signing_key',
+          'second_agreement_key',
+          'Second Device',
+        );
+        final revoke = await postJson('/api/v1/accounts/devices/revoke', {
+          'device_id': 'erin_device',
+        }, token: loginResult['token'] as String);
+        expect(revoke.statusCode, equals(200));
+
+        final refresh = await postJson('/api/v1/accounts/refresh', {
+          'refresh_token': loginResult['refresh_token'],
+        });
+        expect(refresh.statusCode, equals(403));
+        expect((jsonDecode(refresh.body) as Map)['code'], 'device_revoked');
+
+        // A valid signature from a revoked device no longer mints a session.
+        final loginChallenge = await challenge('erin', 'erin_device');
+        final relogin = await postJson('/api/v1/accounts/login', {
+          'account_id': 'erin',
+          'device_id': 'erin_device',
+          'signature': await signChallenge(
+            loginChallenge,
+            material.deviceSigningKeyPair,
+          ),
+        });
+        expect(relogin.statusCode, equals(403));
+        expect((jsonDecode(relogin.body) as Map)['code'], 'device_revoked');
+      },
+    );
   });
 
   test('JWT helper emits and validates enterprise session claims', () {

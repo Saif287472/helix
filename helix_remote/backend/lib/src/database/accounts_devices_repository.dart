@@ -87,6 +87,19 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     );
     stmt.execute([identityPublicKey, accountId]);
     stmt.close();
+    // The stored password wraps the *previous* identity key; after a rotation
+    // it can no longer sign anyone in, so the account must set a new one.
+    final clear = _db.prepare(
+      'DELETE FROM account_passwords WHERE account_id = ? AND identity_public_key != ?;',
+    );
+    clear.execute([accountId, identityPublicKey]);
+    clear.close();
+    // Same for the history backup: it is encrypted under the old identity.
+    final clearHistory = _db.prepare(
+      'DELETE FROM history_backups WHERE account_id = ? AND identity_public_key != ?;',
+    );
+    clearHistory.execute([accountId, identityPublicKey]);
+    clearHistory.close();
   }
 
   bool isAccountSuspended(String accountId) {
@@ -221,16 +234,67 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
     };
   }
 
+  /// Everything this server holds about [accountId], for the account's own
+  /// data export (`GET /privacy/export`).
+  ///
+  /// Every table that keeps a row about the account is here. Credentials and
+  /// verifiers are the only thing left out - their existence and dates are
+  /// exported, the secret material is not, because a leaked export must not
+  /// be enough to sign in or to guess the password offline:
+  /// the password verifier and password-wrapped key, refresh-token hashes,
+  /// recovery-code and invite-code hashes, push tokens and link tokens.
   Map<String, dynamic> exportAccountData(String accountId) {
     final deviceIds = getDevices(
       accountId,
     ).map((device) => device['device_id'] as String).toList();
+    final devicePlaceholders = List.filled(deviceIds.length, '?').join(', ');
+    List<Map<String, dynamic>> forDevices(String table, String column) =>
+        deviceIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : _selectWhere(table, '$column IN ($devicePlaceholders)', deviceIds);
+    List<Map<String, dynamic>> without(
+      List<Map<String, dynamic>> rows,
+      Set<String> columns,
+    ) => [
+      for (final row in rows)
+        {
+          for (final entry in row.entries)
+            if (!columns.contains(entry.key)) entry.key: entry.value,
+        },
+    ];
+    Map<String, dynamic>? single(List<Map<String, dynamic>> rows) =>
+        rows.isEmpty ? null : rows.first;
+
+    final password = single(
+      without(
+        _selectWhere('account_passwords', 'account_id = ?', [accountId]),
+        {'auth_hash', 'auth_hash_salt', 'wrapped_identity_key'},
+      ),
+    );
 
     return {
-      'export_version': 1,
+      'export_version': 2,
       'exported_at': DateTime.now().millisecondsSinceEpoch,
+      'withheld': const [
+        'account_passwords.auth_hash',
+        'account_passwords.auth_hash_salt',
+        'account_passwords.wrapped_identity_key',
+        'refresh_tokens.token_hash',
+        'account_recovery_codes.code_hash',
+        'account_recovery_codes.salt',
+        'invite_credentials.invite_code_hash',
+        'device_push_tokens.push_token',
+        'devices.push_token',
+        'group_join_links.token',
+        'call_links.link_token',
+      ],
       'account': getAccount(accountId),
-      'devices': getDevices(accountId),
+      'profile': getAccountProfile(accountId),
+      'privacy': getPrivacy(accountId),
+      'password': password == null
+          ? {'has_password': false}
+          : {'has_password': true, ...password},
+      'devices': without(getDevices(accountId), {'push_token'}),
       'device_revocations': _selectWhere(
         'device_revocations',
         'account_id = ?',
@@ -240,6 +304,28 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
         'pending_device_links',
         'account_id = ?',
         [accountId],
+      ),
+      'sessions': without(
+        _selectWhere('refresh_tokens', 'account_id = ?', [accountId]),
+        {'token_hash'},
+      ),
+      'push_registrations': without(
+        _selectWhere('device_push_tokens', 'account_id = ?', [accountId]),
+        {'push_token'},
+      ),
+      'device_events': forDevices('device_events', 'recipient_device_id'),
+      'sync_cursors': _selectWhere('sync_cursors', 'account_id = ?', [
+        accountId,
+      ]),
+      'recovery_codes': without(
+        _selectWhere('account_recovery_codes', 'account_id = ?', [accountId]),
+        {'code_hash', 'salt'},
+      ),
+      'invite_redeemed': without(
+        _selectWhere('invite_credentials', 'redeemed_by_account_id = ?', [
+          accountId,
+        ]),
+        {'invite_code_hash'},
       ),
       'public_prekeys': {
         'signed_prekeys': _selectWhere('signed_prekeys', 'account_id = ?', [
@@ -251,7 +337,19 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       },
       'contacts': getContacts(accountId),
       'contact_requests': getContactRequests(accountId),
-      'privacy': getPrivacy(accountId),
+      'contact_discovery': {
+        'budget': _selectWhere('contacts_match_budget', 'account_id = ?', [
+          accountId,
+        ]),
+        'cached_matches': _selectWhere(
+          'contacts_match_fingerprints',
+          'account_id = ?',
+          [accountId],
+        ),
+      },
+      'blocked': _selectWhere('blocked_accounts', 'account_id = ?', [
+        accountId,
+      ]),
       'conversations': _selectWhere(
         'conversations',
         'conversation_id IN (SELECT conversation_id FROM conversation_members WHERE account_id = ?)',
@@ -260,19 +358,106 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       'memberships': _selectWhere('conversation_members', 'account_id = ?', [
         accountId,
       ]),
+      'federated_memberships': _selectWhere(
+        'federated_conversation_members',
+        'account_id = ?',
+        [accountId],
+      ),
       'message_mailbox': deviceIds.isEmpty
-          ? <Map<String, dynamic>>[]
+          ? _selectWhere('messages', 'sender_account_id = ?', [accountId])
           : _selectWhere(
               'messages',
-              'recipient_device_id IN (${List.filled(deviceIds.length, '?').join(', ')}) OR sender_account_id = ?',
+              'recipient_device_id IN ($devicePlaceholders) OR sender_account_id = ?',
               [...deviceIds, accountId],
             ),
+      'groups': {
+        'created': _selectWhere('groups', 'creator_id = ?', [accountId]),
+        'creation_log': _selectWhere('group_creation_log', 'account_id = ?', [
+          accountId,
+        ]),
+        'invites': _selectWhere(
+          'group_invites',
+          'inviter_id = ? OR invitee_id = ?',
+          [accountId, accountId],
+        ),
+        'join_requests': _selectWhere(
+          'group_join_requests',
+          'requester_id = ?',
+          [accountId],
+        ),
+        'join_links_created': without(
+          _selectWhere('group_join_links', 'creator_id = ?', [accountId]),
+          {'token'},
+        ),
+        'blocked_from': _selectWhere(
+          'group_blocked_members',
+          'account_id = ?',
+          [accountId],
+        ),
+        'history_packages': _selectWhere(
+          'group_history_packages',
+          'for_account_id = ?',
+          [accountId],
+        ),
+      },
+      'calls': {
+        'one_to_one': _selectWhere(
+          'pending_calls',
+          'caller_account_id = ? OR callee_account_id = ?',
+          [accountId, accountId],
+        ),
+        'rooms_hosted': _selectWhere('call_rooms', 'host_account_id = ?', [
+          accountId,
+        ]),
+        'room_participation': _selectWhere(
+          'call_room_participants',
+          'account_id = ?',
+          [accountId],
+        ),
+        'links_created': without(
+          _selectWhere('call_links', 'created_by = ?', [accountId]),
+          {'link_token'},
+        ),
+        'scheduled_hosted': _selectWhere(
+          'scheduled_calls',
+          'host_account_id = ?',
+          [accountId],
+        ),
+        'scheduled_invited': _selectWhere(
+          'scheduled_call_attendees',
+          'account_id = ?',
+          [accountId],
+        ),
+        'quality_metrics': _selectWhere('call_metrics', 'account_id = ?', [
+          accountId,
+        ]),
+        'turn_credentials_issued': _selectWhere(
+          'turn_credential_log',
+          'account_id = ?',
+          [accountId],
+        ),
+      },
       'attachments': _selectWhere('attachments', 'account_id = ?', [accountId]),
+      'attachment_grants': _selectWhere(
+        'attachment_recipient_grants',
+        'account_id = ?',
+        [accountId],
+      ),
       'backup': getBackup(accountId),
+      'backup_media': _selectWhere('backup_media_objects', 'account_id = ?', [
+        accountId,
+      ]),
+      // Encrypted on the account's devices; only they can read it.
+      'history_backup': single(
+        _selectWhere('history_backups', 'account_id = ?', [accountId]),
+      ),
       'reports': [
         ..._selectWhere('reports', 'reporter_account_id = ?', [accountId]),
         ..._selectWhere('reports', 'subject_account_id = ?', [accountId]),
       ],
+      'safety_actions': _selectWhere('safety_actions', 'actor_account_id = ?', [
+        accountId,
+      ]),
       'audit': _selectWhere('audit_logs', 'account_id = ?', [accountId]),
     };
   }

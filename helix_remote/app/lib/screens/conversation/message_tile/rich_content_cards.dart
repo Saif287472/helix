@@ -56,7 +56,9 @@ class _RichContent {
     if (message.location case final location?) {
       return _RichContent.location(location);
     }
-    if (message.sticker case final sticker?) return _RichContent.sticker(sticker);
+    if (message.sticker case final sticker?) {
+      return _RichContent.sticker(sticker);
+    }
     return null;
   }
 }
@@ -153,15 +155,12 @@ class _PollCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final l10n = HelixLocalizations.of(context);
     final closed = poll.isClosed;
 
     return _RichCard(
       accent: HelixColorTokens.cFF7C3AED,
       icon: Icons.poll_outlined,
-      label: closed
-          ? l10n.pollClosedLabel
-          : l10n.pollLabel,
+      label: closed ? 'Poll closed' : 'Poll',
       dimmed: closed,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,7 +206,7 @@ class _PollCard extends StatelessWidget {
           ),
           if (poll.options.isEmpty)
             Text(
-              l10n.pollNoOptions,
+              'No options',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
@@ -217,7 +216,7 @@ class _PollCard extends StatelessWidget {
             Padding(
               padding: HelixInsets.only(top: 4),
               child: Text(
-                l10n.pollMultipleChoices,
+                'Multiple choices allowed',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: cs.onSurfaceVariant,
                 ),
@@ -242,14 +241,11 @@ class _EventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final l10n = HelixLocalizations.of(context);
 
     return _RichCard(
       accent: HelixColorTokens.cFF0EA5E9,
       icon: Icons.event_outlined,
-      label: event.isCancelled
-          ? l10n.eventCancelledLabel
-          : l10n.eventLabel,
+      label: event.isCancelled ? 'Event cancelled' : 'Event',
       dimmed: event.isCancelled,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,15 +265,16 @@ class _EventCard extends StatelessWidget {
             // is the point of the field: an event time converted to the
             // reader's zone would be a different time from the one the sender
             // agreed to.
-            text: '${_formatEventTime(event.startsAt)}'
+            text:
+                '${_formatEventTime(event.startsAt)}'
                 '${event.timeZone.isEmpty ? '' : ' ${event.timeZone}'}',
           ),
           if (event.locationText.isNotEmpty)
             _EventRow(icon: Icons.place_outlined, text: event.locationText),
           if (event.plusOneAllowed)
-            _EventRow(
+            const _EventRow(
               icon: Icons.group_add_outlined,
-              text: l10n.eventPlusOnes,
+              text: 'Plus ones allowed',
             ),
         ],
       ),
@@ -338,7 +335,6 @@ class _LocationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final l10n = HelixLocalizations.of(context);
     final lat = location.latitudeE7 / 1e7;
     final lon = location.longitudeE7 / 1e7;
     final stopped = location.stoppedAt != null && location.stoppedAt! > 0;
@@ -348,9 +344,7 @@ class _LocationCard extends StatelessWidget {
       icon: location.live && !stopped
           ? Icons.location_searching
           : Icons.place_outlined,
-      label: location.live && !stopped
-          ? l10n.liveLocationLabel
-          : l10n.locationLabel,
+      label: location.live && !stopped ? 'Live location' : 'Location',
       dimmed: location.live && stopped,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,15 +360,18 @@ class _LocationCard extends StatelessWidget {
             ),
           // Coordinates to seven decimals is the wire format; four is what a
           // person can read, and the extra digits are noise in a chat bubble.
-          _EventRow(icon: Icons.my_location, text: '${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}'),
+          _EventRow(
+            icon: Icons.my_location,
+            text: '${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}',
+          ),
           _EventRow(
             icon: Icons.straighten,
             text: location.accuracyMeters > 0
                 ? 'Accurate to ${location.accuracyMeters} m'
-                : l10n.locationAccuracyUnknown,
+                : 'Accuracy unknown',
           ),
           if (location.live && stopped)
-            _EventRow(icon: Icons.history, text: l10n.locationSharingStopped),
+            const _EventRow(icon: Icons.history, text: 'Sharing stopped'),
         ],
       ),
     );
@@ -395,7 +392,6 @@ class _StickerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final l10n = HelixLocalizations.of(context);
 
     // A sticker is an attachment, so the download action is the same one the
     // attachment card already offers. It is wired here rather than left inert
@@ -407,7 +403,7 @@ class _StickerCard extends StatelessWidget {
     return _RichCard(
       accent: HelixColorTokens.cFFE91E63,
       icon: Icons.emoji_emotions_outlined,
-      label: l10n.stickerLabel,
+      label: 'Sticker',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -442,11 +438,11 @@ class _StickerCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       isImage
-                          ? l10n.stickerImage
+                          ? 'Image sticker'
                           : isVideo
-                          ? l10n.stickerVideo
+                          ? 'Video sticker'
                           : mime.isEmpty
-                          ? l10n.stickerLabel
+                          ? 'Sticker'
                           : mime,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
@@ -463,7 +459,7 @@ class _StickerCard extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: () => onDownload!(),
                 icon: const Icon(Icons.download_outlined, size: 18),
-                label: Text(l10n.saveSticker),
+                label: const Text('Save'),
                 style: TextButton.styleFrom(
                   padding: HelixInsets.symmetric(horizontal: 8),
                   minimumSize: const Size(48, 36),

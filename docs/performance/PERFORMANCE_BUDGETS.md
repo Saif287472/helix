@@ -74,13 +74,13 @@
 
 | Endpoint | p50 | p95 | p99 |
 |---|---|---|---|
-| POST /api/v1/auth/register | ≤ 100 ms | ≤ 300 ms | ≤ 500 ms |
-| POST /api/v1/auth/login | ≤ 80 ms | ≤ 200 ms | ≤ 400 ms |
+| POST /api/v1/accounts/register | ≤ 100 ms | ≤ 300 ms | ≤ 500 ms |
+| POST /api/v1/accounts/login | ≤ 80 ms | ≤ 200 ms | ≤ 400 ms |
 | GET /api/v1/messages | ≤ 50 ms | ≤ 150 ms | ≤ 300 ms |
 | POST /api/v1/messages | ≤ 80 ms | ≤ 200 ms | ≤ 400 ms |
 | GET /api/v1/attachments/:id (cache hit) | ≤ 30 ms | ≤ 100 ms | ≤ 200 ms |
 | POST /api/v1/attachments (10 MB upload) | ≤ 500 ms | ≤ 2 000 ms | ≤ 5 000 ms |
-| GET /health/ready | ≤ 10 ms | ≤ 30 ms | ≤ 50 ms |
+| GET /api/v1/health/ready | ≤ 10 ms | ≤ 30 ms | ≤ 50 ms |
 
 ### 2.2 Throughput targets (single-node SQLite)
 
@@ -119,22 +119,30 @@ Baselines must be re-recorded after every release candidate using the commands b
 
 ### 3.1 How to record baselines
 
+> Status (2026-09): the June commands (`apps/helix_local`, `apps/helix_remote`,
+> `tool/benchmark_baseline.dart`, `tool/check_asset_sizes.dart`,
+> `phase10_pagination_test.dart`, `phase10_remote_bench_test.dart`,
+> `docs/performance/baselines/`) were never built or no longer exist. What
+> actually exists today, run from `helix_remote/`:
+
 ```powershell
-# Client benchmarks
-cd apps/helix_local
-flutter test --machine test/phase10_pagination_test.dart | dart run tool/benchmark_baseline.dart record local
+# Budget contract check (CI job `performance-budgets`): verifies the metric
+# names in this file are still present
+dart tool/check_performance_budgets.dart
 
-cd apps/helix_remote
-flutter test --machine test/phase10_remote_bench_test.dart | dart run tool/benchmark_baseline.dart record remote
+# Message-list burst budget on the CI reference runner (CI job `performance-budgets`)
+flutter test app/test/phase4_performance_budget_test.dart
 
-# Asset sizes
-dart run tool/check_asset_sizes.dart
+# Isolate compute and backend scalability tests
+flutter test app/test/phase10_isolate_compute_test.dart
+cd backend; dart test test/phase10_scalability_test.dart; cd ..
 
-# Backend load (requires running backend)
-dart run tool/benchmark_baseline.dart load --url http://localhost:8080
+# Backend load smoke (see helix_remote/docs/operations/LOAD_TESTING.md)
+cd backend; dart run tool/load_smoke.dart --url=http://127.0.0.1:8080/api/v1/health/ready --clients=32 --requests=20 --max-p95-ms=1000
 ```
 
-Output is written to `docs/performance/baselines/BASELINE_<date>.json`.
+There is no baseline recorder and no asset-size checker; record results by hand
+in the table below. Helix Local has no benchmark tooling in `helix_local/`.
 
 ### 3.2 Recorded baselines
 
@@ -148,6 +156,11 @@ Output is written to `docs/performance/baselines/BASELINE_<date>.json`.
 
 ### 4.1 CI gates
 
+> Status (2026-09): only `dart tool/check_performance_budgets.dart` and
+> `app/test/phase4_performance_budget_test.dart` run in CI (job
+> `performance-budgets` in `.github/workflows/ci.yml`). The other rows name
+> tools and tests that do not exist yet.
+
 | Gate | Failure action |
 |---|---|
 | `tool/check_asset_sizes.dart` exceeds budget | PR blocked |
@@ -157,7 +170,8 @@ Output is written to `docs/performance/baselines/BASELINE_<date>.json`.
 
 ### 4.2 Release gates
 
-Before tagging a release:
+Before tagging a release (items naming `check_asset_sizes.dart` or
+`phase10_dr_drill_test.dart` need those tools written first):
 
 - [ ] All client startup budgets met on physical Android device (release build).
 - [ ] All backend p50/p95/p99 budgets met under the load tool with 100 clients.

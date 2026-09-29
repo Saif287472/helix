@@ -85,13 +85,12 @@ mixin AuthRegistrationHandlers on AuthModuleBase {
       throw AppError.badRequest('Display name must be 1–80 characters');
     }
 
-    // Optional, display-only hint for the admin console's Users screen -
-    // never the full number, never used for identity/lookup (phone_hash
-    // is what does that). Not part of the signed registration transcript
-    // below for the same reason display_name isn't: it's not
-    // security-relevant, just cosmetic. Silently dropped rather than
-    // rejecting registration if malformed, and left empty for older
-    // clients that don't send it yet.
+    // The account's phone number (stored in `phone_last4`, a historical
+    // column name), for the admin console, account security and spam
+    // protection. Never used for identity or lookup - phone_hash is what does
+    // that - so it is not part of the signed registration transcript.
+    // Silently dropped rather than rejecting registration if malformed, and
+    // left empty for older clients that don't send it.
     final rawPhoneLast4 =
         (body['phone_number'] ?? body['phone_last4']) as String?;
     final phoneLast4 =

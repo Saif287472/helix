@@ -1,81 +1,121 @@
-# NOTE (documented during the helix_remote phone/invite/contacts-sync
-# overhaul's Phase 12, not fixed here - out of that phase's scope): every
-# `areas` path below is a helix_local path. helix_remote (app/, backend/,
-# admin/, packages/helix_remote_*) is not classified anywhere in this file,
-# so none of its changes get a classification-driven minimum_verification
-# from this mechanism. This does not exempt helix_remote work from
-# AI_GUARDRAILS' non-negotiable protections, which apply repo-wide per their
-# own header - every phase of that overhaul still produced its own explicit
-# risk note (behavior changed / verification performed / manual review
-# remaining) in its commit message regardless of this gap. Classifying
-# helix_remote here properly is follow-up work, not part of that overhaul.
-version: 1
-default_verification: "scripts/verify.ps1"
+# Risk classification for changes, read by humans and agents (see
+# docs/ai/AI_GUARDRAILS.md). Paths are relative to the repository root.
+#
+# The repository is two independent pub workspaces with no root pubspec:
+#   helix_local/   - Helix Local (app, packages/helix_local_*, tool, scripts)
+#   helix_remote/  - Helix Remote (app, admin, backend, packages/helix_remote_*,
+#                    tool, scripts, contracts, deploy, docs)
+# Run each workspace's commands from inside that workspace directory.
+#
+# Helix Remote's canonical gate is helix_remote/scripts/verify.ps1 (Windows)
+# or helix_remote/scripts/verify.sh: format check, flutter analyze, dart
+# analyze backend/tool, and the app, admin, backend and package test suites.
+# Per AGENTS.md, agents do not build APKs unless the user asks.
+#
+# Helix Local has no working one-shot gate: helix_local/scripts/verify_student.*
+# and local_release_gate.ps1 still use the old apps/... layout. Use the
+# per-command lists below from helix_local/.
+version: 2
+default_verification:
+  helix_remote: "helix_remote/scripts/verify.ps1"
+  helix_local: "flutter analyze && flutter test (from helix_local/app)"
 
 classifications:
   - classification: Critical
     areas:
-      - packages/helix_transport/lib/services/transport/secure_channel.dart
-      - lib/providers/controllers/profile_service.dart
-      - lib/providers/controllers/trust_service.dart
-      - lib/core/identity_phrase.dart
-      - lib/main.dart
-      - lib/app.dart
-      - pubspec.yaml
-      - android/**
-      - windows/**
+      # Helix Remote: identity, crypto, sessions, passwords, schema, release config
+      - helix_remote/packages/helix_remote_crypto/**
+      - helix_remote/backend/lib/src/modules/auth.dart
+      - helix_remote/backend/lib/src/modules/auth/**
+      - helix_remote/backend/lib/src/jwt.dart
+      - helix_remote/backend/lib/src/server_impl.dart
+      - helix_remote/backend/lib/src/database/migrations.dart
+      - helix_remote/packages/helix_remote_storage/lib/src/database/migrations.dart
+      - helix_remote/app/lib/app/password_vault.dart
+      - helix_remote/app/lib/app/composition_root/password_auth.dart
+      - helix_remote/app/lib/app/history_backup_codec.dart
+      - helix_remote/app/lib/app/remote_messaging_service/message_crypto.dart
+      - helix_remote/app/lib/app/remote_messaging_service/message_decryption.dart
+      - helix_remote/app/android/**
+      - helix_remote/pubspec.yaml
+      # Helix Local: identity, crypto, bootstrap, platform config
+      - helix_local/packages/helix_local_transport/lib/services/transport/secure_channel.dart
+      - helix_local/packages/helix_local_domain/lib/core/identity_phrase.dart
+      - helix_local/app/lib/providers/controllers/profile_service.dart
+      - helix_local/app/lib/providers/controllers/trust_service.dart
+      - helix_local/app/lib/main.dart
+      - helix_local/app/lib/app.dart
+      - helix_local/pubspec.yaml
+      - helix_local/app/android/**
+      - helix_local/app/windows/**
     minimum_verification:
-      - dart format --set-exit-if-changed lib test tool
-      - flutter analyze
-      - dart run tool/check_boundaries.dart
-      - dart run tool/check_secrets.dart
-      - flutter test
+      - "Remote: helix_remote/scripts/verify.ps1 (or verify.sh)"
+      - "Local (from helix_local/): dart format --set-exit-if-changed app packages tool; flutter analyze; dart run tool/check_secrets.dart; flutter test in app/ and each package"
       - explicit risk report
-    notes: "Identity, crypto, bootstrap, platform permissions, and release configuration require human review."
+    notes: "Identity, crypto, sessions, password handling, schema migrations, platform permissions, and release configuration require human review."
 
   - classification: High
     areas:
-      - packages/helix_protocol/lib/protocol/**
-      - lib/providers/controllers/request_service.dart
-      - lib/providers/controllers/group_service.dart
-      - lib/data/database.dart
-      - lib/routing/**
-      - lib/ui/app_router.dart
-      - lib/providers/controllers/secret_code_service.dart
+      # Helix Remote
+      - helix_remote/backend/lib/src/modules/**
+      - helix_remote/backend/lib/src/database/**
+      - helix_remote/packages/helix_remote_sync/**
+      - helix_remote/packages/helix_remote_api/**
+      - helix_remote/packages/helix_remote_storage/**
+      - helix_remote/packages/helix_remote_calls/**
+      - helix_remote/packages/helix_remote_groups/**
+      - helix_remote/packages/helix_remote_domain/**
+      - helix_remote/app/lib/app/**
+      - helix_remote/contracts/**
+      # Helix Local
+      - helix_local/packages/helix_local_protocol/lib/protocol/**
+      - helix_local/packages/helix_local_storage/lib/data/database.dart
+      - helix_local/app/lib/providers/controllers/request_service.dart
+      - helix_local/app/lib/providers/controllers/group_service.dart
+      - helix_local/app/lib/providers/controllers/secret_code_service.dart
+      - helix_local/app/lib/routing/**
+      - helix_local/app/lib/ui/app_router.dart
     minimum_verification:
-      - dart format --set-exit-if-changed lib test tool
-      - flutter analyze
-      - dart run tool/check_boundaries.dart
-      - dart run tool/check_secrets.dart
-      - flutter test
-    notes: "Protocol, request, group, database, and navigation changes can alter user-visible contracts."
+      - "Remote: helix_remote/scripts/verify.ps1 (or verify.sh)"
+      - "Local (from helix_local/): flutter analyze; targeted and full flutter test"
+    notes: "Protocol, sync, storage, backend module, request, group, and navigation changes can alter user-visible contracts."
 
   - classification: Medium
     areas:
-      - lib/providers/controllers/messaging_service.dart
-      - lib/providers/controllers/file_transfer_service.dart
-      - lib/providers/controllers/ephemeral_media_service.dart
-      - lib/providers/controllers/reconnect_service.dart
-      - lib/providers/controllers/session_service.dart
-      - lib/providers/controllers/notification_service.dart
-      - lib/providers/controllers/tcp_server_service.dart
-      - lib/providers/controllers/diagnostics_service.dart
-      - packages/helix_discovery/**
-      - packages/helix_messaging/**
-      - packages/helix_transfer/**
-      - future/webrtc/**
+      # Helix Remote
+      - helix_remote/app/lib/screens/**
+      - helix_remote/app/lib/widgets/**
+      - helix_remote/app/lib/services/**
+      - helix_remote/admin/lib/**
+      - helix_remote/packages/helix_remote_ui/**
+      - helix_remote/packages/helix_remote_cli/**
+      - helix_remote/deploy/**
+      # Helix Local
+      - helix_local/app/lib/providers/controllers/messaging_service.dart
+      - helix_local/app/lib/providers/controllers/file_transfer_service.dart
+      - helix_local/app/lib/providers/controllers/ephemeral_media_service.dart
+      - helix_local/app/lib/providers/controllers/reconnect_service.dart
+      - helix_local/app/lib/providers/controllers/session_service.dart
+      - helix_local/app/lib/providers/controllers/notification_service.dart
+      - helix_local/app/lib/providers/controllers/tcp_server_service.dart
+      - helix_local/app/lib/providers/controllers/diagnostics_service.dart
+      - helix_local/packages/helix_local_discovery/**
+      - helix_local/packages/helix_local_messaging/**
+      - helix_local/packages/helix_local_transfer/**
     minimum_verification:
-      - targeted tests for affected service
+      - targeted tests for the affected screen or service
       - flutter analyze
-      - flutter test
+      - flutter test for the affected package or app
     notes: "Application behavior, timers, sockets, and media paths require targeted regression tests."
 
   - classification: Low
     areas:
-      - lib/ui/**
-      - lib/theme/**
-      - assets/**
+      - helix_local/app/lib/ui/**
+      - helix_local/app/assets/**
+      - helix_remote/app/assets/**
       - docs/**
+      - helix_local/docs/**
+      - helix_remote/docs/**
     minimum_verification:
       - flutter analyze
       - affected widget/unit tests

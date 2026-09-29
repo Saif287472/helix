@@ -6,17 +6,20 @@ import 'package:helix_remote/app/deep_link.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class AddContactScreen extends StatefulWidget {
   const AddContactScreen({
     super.key,
     required this.root,
     required this.messagingService,
+    this.initialTab = 0,
   });
 
   final RemoteCompositionRoot root;
   final RemoteMessagingService messagingService;
+
+  /// 0 search, 1 my QR, 2 scan.
+  final int initialTab;
 
   @override
   State<AddContactScreen> createState() => _AddContactScreenState();
@@ -38,7 +41,11 @@ class _AddContactScreenState extends State<AddContactScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 2),
+    );
     final nonce = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
     _shareLink = widget.messagingService.createSignedContactLink(
       linkId: 'cl_$nonce',
@@ -143,16 +150,16 @@ class _AddContactScreenState extends State<AddContactScreen>
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text(HelixLocalizations.of(context).sendContactRequest),
+          title: const Text('Send contact request?'),
           content: Text('Send a Helix contact request to $accountId?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: Text(HelixLocalizations.of(context).cancel),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: Text(HelixLocalizations.of(context).sendRequest),
+              child: const Text('Send request'),
             ),
           ],
         ),
@@ -182,7 +189,7 @@ class _AddContactScreenState extends State<AddContactScreen>
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
         title: Text(
-          HelixLocalizations.of(context).addContact,
+          'Add Contact',
           style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.bold),
         ),
         bottom: TabBar(
@@ -242,7 +249,7 @@ class _AddContactScreenState extends State<AddContactScreen>
           FilledButton.icon(
             onPressed: _searching ? null : _search,
             icon: const Icon(Icons.search),
-            label: Text(HelixLocalizations.of(context).search),
+            label: const Text('Search'),
           ),
           if (_foundAccounts.isNotEmpty) ...[
             const SizedBox(height: 24),
@@ -281,7 +288,7 @@ class _AddContactScreenState extends State<AddContactScreen>
                         onPressed: accountId.isEmpty
                             ? null
                             : () => _sendRequest(accountId, displayName),
-                        child: Text(HelixLocalizations.of(context).add),
+                        child: const Text('Add'),
                       ),
                     ),
                   );
@@ -310,7 +317,7 @@ class _AddContactScreenState extends State<AddContactScreen>
         children: [
           const SizedBox(height: 8),
           Text(
-            HelixLocalizations.of(context).shareLinkSomeoneSoThey,
+            'Share this link with someone so they can add you as a contact.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 24),
@@ -345,11 +352,7 @@ class _AddContactScreenState extends State<AddContactScreen>
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: _shareLink));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          HelixLocalizations.of(context).linkCopiedClipboard,
-                        ),
-                      ),
+                      const SnackBar(content: Text('Link copied to clipboard')),
                     );
                   },
                 ),
@@ -358,7 +361,7 @@ class _AddContactScreenState extends State<AddContactScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            HelixLocalizations.of(context).sendViaWhatsappEmailAny,
+            'Send this via WhatsApp, email, or any other channel. The link expires in 7 days and opens a confirmation screen before any contact request is sent.',
             style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
           ),
           const SizedBox(height: 24),
@@ -366,15 +369,13 @@ class _AddContactScreenState extends State<AddContactScreen>
             onPressed: () {
               Clipboard.setData(ClipboardData(text: _shareLink));
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    HelixLocalizations.of(context).linkCopiedPasteAnywhereShare,
-                  ),
+                const SnackBar(
+                  content: Text('Link copied — paste it anywhere to share'),
                 ),
               );
             },
             icon: const Icon(Icons.copy),
-            label: Text(HelixLocalizations.of(context).copyLink),
+            label: const Text('Copy link'),
           ),
         ],
       ),
@@ -439,11 +440,11 @@ class _AddContactScreenState extends State<AddContactScreen>
                     ),
                   )
                 : const Icon(Icons.verified_user_outlined),
-            label: Text(HelixLocalizations.of(context).validateLink),
+            label: const Text('Validate link'),
           ),
           const SizedBox(height: 12),
           Text(
-            HelixLocalizations.of(context).scannedLinksCheckedExpiryReplay,
+            'Scanned links are checked for expiry and replay before a request is sent.',
             style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
           ),
         ],

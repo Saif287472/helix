@@ -2,6 +2,76 @@ part of '../remote_messaging_service.dart';
 
 mixin RemoteMessageDecryption
     on RemoteMessagingServiceBase, RemoteMessageCrypto {
+  final _rewrapChains = <String, Future<void>>{};
+
+  /// A received message arrives as the sender's wire envelope, and the
+  /// ratchet lets each one be decrypted exactly once: the message key is
+  /// consumed. Storing it that way meant a message read before a restart
+  /// could never be read again, and reading a chat newest-first tried a
+  /// follow-up message before the first one had set up its session.
+  ///
+  /// So every wire envelope in the conversation is decrypted once, oldest
+  /// first, and replaced by the same local-history ciphertext a sent message
+  /// uses. Serialised per conversation so no envelope is decrypted twice.
+  @override
+  Future<void> _rewrapWireEnvelopes(String conversationId) {
+    final previous = _rewrapChains[conversationId] ?? Future<void>.value();
+    final next = previous.then((_) => _rewrapPass(conversationId));
+    _rewrapChains[conversationId] = next;
+    return next.whenComplete(() {
+      if (identical(_rewrapChains[conversationId], next)) {
+        _rewrapChains.remove(conversationId);
+      }
+    });
+  }
+
+  Future<void> _rewrapPass(String conversationId) async {
+    final deviceId = _deviceId;
+    if (deviceId == null || _devicePrivateKey == null) return;
+    final rows = db.getWireEnvelopeMessages(
+      conversationId,
+      localDeviceId: deviceId,
+    );
+    for (final row in rows) {
+      final messageId = row['message_id'] as String;
+      final ciphertext = row['ciphertext_blob'] as String;
+      if (!_isWireEnvelope(ciphertext)) continue;
+      try {
+        final plaintext = await _decryptMessage(
+          conversationId: conversationId,
+          messageId: messageId,
+          ciphertext: ciphertext,
+        );
+        final local = await protector.encryptText(
+          conversationId: conversationId,
+          messageId: messageId,
+          plaintext: plaintext,
+          recipientDeviceId: 'local-history',
+        );
+        db.updateMessageCiphertext(messageId, local);
+      } catch (e) {
+        AppLogger.instance.warn(
+          'MessageDecryption',
+          'could not decrypt $messageId: ${e.runtimeType}',
+        );
+      }
+    }
+  }
+
+  @override
+  bool _isWireEnvelope(String ciphertext) {
+    if (!ciphertext.startsWith('eyJ2')) return false;
+    try {
+      final envelope = jsonDecode(utf8.decode(_b64d(ciphertext)));
+      if (envelope is! Map) return false;
+      final version = envelope['v'];
+      return (version == 1 && envelope.containsKey('h')) ||
+          (version == _kSessionMsgVersion && envelope.containsKey('sid'));
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Decrypts a message ciphertext, routing to the correct handler based on
   /// the envelope version field:
   ///   v=1  X3DH packed envelope (initial message from a peer device)
@@ -236,7 +306,9 @@ mixin RemoteMessageDecryption
       counter: counter,
     );
 
-    final ratchetSession = await DoubleRatchetSession.fromStoredSession(session);
+    final ratchetSession = await DoubleRatchetSession.fromStoredSession(
+      session,
+    );
     List<int>? decrypted;
     try {
       final msgKey = await ratchetSession.ratchetReceivingChain(counter);

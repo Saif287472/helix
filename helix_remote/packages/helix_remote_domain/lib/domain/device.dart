@@ -6,6 +6,7 @@ class RemoteDevice {
     required this.deviceAgreementPublicKey,
     required this.createdAt,
     this.status = 'Active',
+    this.lastSeenAt,
   });
 
   final String deviceId;
@@ -14,6 +15,11 @@ class RemoteDevice {
   final String deviceAgreementPublicKey;
   final DateTime createdAt;
   final String status;
+
+  /// When the server last saw this device sign in or refresh its session.
+  final DateTime? lastSeenAt;
+
+  bool get isActive => status.toUpperCase() == 'ACTIVE';
 
   String get devicePublicKey => deviceAgreementPublicKey;
 
@@ -29,6 +35,7 @@ class RemoteDevice {
   factory RemoteDevice.fromJson(Map<String, dynamic> json) {
     final legacyDevicePublicKey = json['device_public_key'] as String?;
     final createdAtValue = json['created_at'];
+    final lastSeenValue = json['last_seen_at'];
     return RemoteDevice(
       deviceId: json['device_id'] as String,
       deviceName: json['device_name'] as String,
@@ -44,6 +51,9 @@ class RemoteDevice {
           ? DateTime.fromMillisecondsSinceEpoch(createdAtValue)
           : DateTime.parse(createdAtValue as String),
       status: json['status'] as String? ?? 'Active',
+      lastSeenAt: lastSeenValue is int && lastSeenValue > 0
+          ? DateTime.fromMillisecondsSinceEpoch(lastSeenValue)
+          : null,
     );
   }
 }

@@ -1,20 +1,23 @@
 # Package Classification Spec
 
-All pre-existing monorepo packages are classified as **Local-specific** by default. They will be moved to `packages/local/` in Phase 4.
+All pre-existing monorepo packages were classified as **Local-specific**. They now live in the `helix_local/` workspace as `helix_local_*` packages; Helix Remote has its own `helix_remote/packages/helix_remote_*` packages. The two workspaces share no packages.
 
-| Package Name | Current Path | Target Category | Shared-Eligible |
+| Original name | Current package and path | Category | Shared-Eligible |
 | :--- | :--- | :--- | :--- |
-| `helix_domain` | `packages/helix_domain` | Local Domain | No (contains Local models) |
-| `helix_protocol` | `packages/helix_protocol` | Local Protocol | No |
-| `helix_crypto` | `packages/helix_crypto` | Local Crypto | No |
-| `helix_transport` | `packages/helix_transport` | Local Transport | No |
-| `helix_storage` | `packages/helix_storage` | Local Storage | No (retention constraints) |
-| `helix_platform` | `packages/helix_platform` | Local Platform | No |
-| `helix_calls` | `packages/helix_calls` | Local Calls | No |
-| `helix_messaging` | `packages/helix_messaging` | Local Messaging | No |
-| `helix_transfer` | `packages/helix_transfer` | Local Transfer | No |
-| `helix_groups` | `packages/helix_groups` | Local Groups | No |
-| `helix_discovery` | `packages/helix_discovery` | Local Discovery | No |
+| `helix_domain` | `helix_local_domain` in `helix_local/packages/helix_local_domain` | Local Domain | No (contains Local models) |
+| `helix_protocol` | `helix_local_protocol` in `helix_local/packages/helix_local_protocol` | Local Protocol | No |
+| `helix_crypto` | `helix_local_crypto` in `helix_local/packages/helix_local_crypto` | Local Crypto | No |
+| `helix_transport` | `helix_local_transport` in `helix_local/packages/helix_local_transport` | Local Transport | No |
+| `helix_storage` | `helix_local_storage` in `helix_local/packages/helix_local_storage` | Local Storage | No (retention constraints) |
+| `helix_platform` | `helix_local_platform` in `helix_local/packages/helix_local_platform` | Local Platform | No |
+| `helix_calls` | `helix_local_calls` in `helix_local/packages/helix_local_calls` | Local Calls | No |
+| `helix_messaging` | `helix_local_messaging` in `helix_local/packages/helix_local_messaging` | Local Messaging | No |
+| `helix_transfer` | `helix_local_transfer` in `helix_local/packages/helix_local_transfer` | Local Transfer | No |
+| `helix_groups` | `helix_local_groups` in `helix_local/packages/helix_local_groups` | Local Groups | No |
+| `helix_discovery` | `helix_local_discovery` in `helix_local/packages/helix_local_discovery` | Local Discovery | No |
+
+## Helix Remote packages
+`helix_remote/packages/`: `helix_remote_domain`, `helix_remote_api`, `helix_remote_crypto`, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_calls`, `helix_remote_groups`, `helix_remote_ui`, `helix_remote_cli` (workspace list in `helix_remote/pubspec.yaml`).
 
 ## Extraction Target
-No shared packages exist at the baseline. If common UI widgets, themes, or non-functional utility models are decoupled in subsequent phases, they will be placed in `packages/shared/helix_ui_kit` or `packages/shared/helix_foundation` under the rules defined in ADR 014.
+No shared packages exist, and no `packages/shared/` directory was created. A shared package would have to satisfy ADR 014.

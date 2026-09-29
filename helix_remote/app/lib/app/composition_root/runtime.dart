@@ -15,6 +15,7 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
     // Not awaited into the startup path's critical section - a slow or failed
     // registration must not delay the app becoming usable.
     unawaited(_startPushRegistration());
+    unawaited(_historyBackupOnStart());
     await _recoverPendingCalls(reason: 'startup');
     // Load own profile display name after runtime is running
     try {
@@ -346,6 +347,8 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
 
   @override
   Future<void> _purgeLocalSessionOnly() async {
+    // Every sign-out path comes through here; onboarding is never locked.
+    AppLock.detach();
     // Before the credentials go: the deregistration endpoint is
     // authenticated, so once the access token is deleted there is no way to
     // tell the server to stop waking this device. It swallows its own

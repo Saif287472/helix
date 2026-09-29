@@ -212,7 +212,7 @@ String _callerLabel(Map<String, dynamic> data) {
   if (displayName != null && displayName.isNotEmpty) return displayName;
   final phoneLast4 = data['caller_phone_last4']?.toString().trim();
   if (phoneLast4 != null && phoneLast4.isNotEmpty) {
-    return 'Phone ending $phoneLast4';
+    return phoneLast4;
   }
   return 'Unknown caller';
 }

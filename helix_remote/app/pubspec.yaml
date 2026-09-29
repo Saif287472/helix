@@ -12,8 +12,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_localizations:
-    sdk: flutter
   helix_remote_domain:
     path: ../packages/helix_remote_domain
   helix_remote_crypto:
@@ -56,6 +54,7 @@ dependencies:
   flutter_contacts: ^2.5.0
   device_info_plus: ^13.2.0
   url_launcher: ^6.3.2
+  local_auth: ^3.0.1
 
 dev_dependencies:
   flutter_test:
@@ -79,10 +78,6 @@ flutter_launcher_icons:
 
 flutter:
   uses-material-design: true
-  # Runs `gen-l10n` on `pub get`, driven by l10n.yaml. The generated catalog is
-  # committed too, so the analyzer and the format gate can see it without a
-  # codegen step having run first.
-  generate: true
   assets:
     - assets/logo.png
 

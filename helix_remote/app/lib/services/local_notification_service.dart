@@ -47,6 +47,13 @@ class LocalNotificationService {
     enableVibration: true,
   );
 
+  static const _securityChannel = AndroidNotificationChannel(
+    'helix_security',
+    'Security alerts',
+    description: 'New sign-ins to your account',
+    importance: Importance.high,
+  );
+
   static const _verificationChannel = AndroidNotificationChannel(
     'helix_verification_codes',
     'Verification Codes',
@@ -89,6 +96,11 @@ class LocalNotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.createNotificationChannel(_verificationChannel);
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(_securityChannel);
 
     // Request runtime permission on Android 13+.
     await _plugin
@@ -118,6 +130,21 @@ class LocalNotificationService {
       return true;
     } catch (_) {
       return true;
+    }
+  }
+
+  /// Whether the system currently lets this app post notifications, without
+  /// prompting. Null off Android, where there is nothing to report.
+  static Future<bool?> notificationsAllowed() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      return await _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.areNotificationsEnabled();
+    } catch (_) {
+      return null;
     }
   }
 
@@ -274,6 +301,32 @@ class LocalNotificationService {
       id: notificationKey.hashCode & 0x7fffffff,
       title: title,
       body: body,
+      notificationDetails: NotificationDetails(android: androidDetails),
+    );
+  }
+
+  /// Another device just signed in to this account. One notification per
+  /// device, so a repeat of the same event replaces rather than stacks.
+  static Future<void> showNewSignIn({
+    required String deviceId,
+    required String deviceName,
+  }) async {
+    if (!Platform.isAndroid || !_ready) return;
+    final androidDetails = AndroidNotificationDetails(
+      _securityChannel.id,
+      _securityChannel.name,
+      channelDescription: _securityChannel.description,
+      importance: Importance.high,
+      priority: Priority.high,
+      autoCancel: true,
+    );
+    final name = deviceName.trim().isEmpty ? 'A new device' : deviceName.trim();
+    await _plugin.show(
+      id: 'sign_in_$deviceId'.hashCode & 0x7fffffff,
+      title: 'New sign-in to your account',
+      body:
+          '$name signed in with your password. Not you? Sign it out in '
+          'Settings > Devices and change your password.',
       notificationDetails: NotificationDetails(android: androidDetails),
     );
   }

@@ -80,7 +80,7 @@ This Privacy Policy explains how Helix Global handles information when you use t
 
 2. Information we process
 Depending on the features you use, Helix Global may process:
-- account information: a client-generated account identifier, a salted one-way phone-number hash, an optional last-four-digit display hint, display name, profile details, account status, and cryptographic public keys;
+- account information: a client-generated account identifier, a salted one-way phone-number hash, display name, profile details, account status, and cryptographic public keys;
 - authentication information: phone verification challenges, hashed verification codes, invite and recovery-code hashes, device records, session and refresh-token records, account-recovery events, and limited audit events;
 - service content: encrypted messages, calls, group data, attachments, and the metadata needed to route, synchronize, back up, and delete that content;
 - network and security information: IP address, request time, device and browser information, rate-limit counters, error records, and server or application logs;

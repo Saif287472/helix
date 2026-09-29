@@ -20,34 +20,37 @@ and remaining cryptographic limitations.
 
 ## Primary Code Paths
 
-- `packages/remote/helix_remote_storage/lib/src/database.dart`
-- `packages/remote/helix_remote_crypto/lib/src/secure_key_storage.dart`
-- `packages/remote/helix_remote_crypto/lib/src/prekey_manager.dart`
-- `packages/remote/helix_remote_crypto/lib/src/x3dh.dart`
-- `apps/helix_remote/lib/app/remote_messaging_service.dart`
-- `apps/helix_remote/lib/app/composition_root.dart`
-- `services/helix_remote_backend/lib/src/modules/prekeys.dart`
-- `services/helix_remote_backend/lib/src/database.dart`
+Paths are relative to `helix_remote/`.
+
+- `packages/helix_remote_storage/lib/src/database.dart`
+- `packages/helix_remote_crypto/lib/src/secure_key_storage.dart`
+- `packages/helix_remote_crypto/lib/src/prekey_manager.dart`
+- `packages/helix_remote_crypto/lib/src/x3dh.dart`
+- `packages/helix_remote_crypto/lib/src/double_ratchet.dart`
+- `app/lib/app/remote_messaging_service.dart`
+- `app/lib/app/composition_root.dart`
+- `backend/lib/src/modules/prekeys.dart`
+- `backend/lib/src/database.dart`
 
 ## Test Evidence
 
-- `packages/remote/helix_remote_storage/test/remote_storage_test.dart`
+- `packages/helix_remote_storage/test/remote_storage_test.dart`
   - SQLCipher wrong-key failure.
   - Plaintext marker binary scan.
   - Plaintext-to-encrypted copy migration.
   - Migration crash-injection rollback.
   - Persisted crypto session, local prekey, and trust-state reopen test.
-- `packages/remote/helix_remote_crypto/test/remote_crypto_test.dart`
+- `packages/helix_remote_crypto/test/remote_crypto_test.dart`
   - Signed prekey verification and invalid-signature rejection.
   - X3DH transcript context binding.
   - Versioned secure-key record inventory without private-key disclosure.
   - Signed prekey and one-time prekey generation, signature verification,
     expiry, and replenishment policy.
-- `apps/helix_remote/test/remote_messaging_service_test.dart`
+- `app/test/remote_messaging_service_test.dart`
   - Missing secure session stores only encrypted local state and enqueues no
     network `SEND_MESSAGE`.
   - Trust decision/key-change state persists.
-- `services/helix_remote_backend/test/integration_test.dart`
+- `backend/test/integration_test.dart`
   - Prekey publication, per-device bundle retrieval, atomic one-time prekey
     consumption, and depleted-prekey behavior.
 
@@ -74,6 +77,10 @@ conversation ID, sender device ID, and recipient device ID.
   complete Signal-compatible Double Ratchet implementation with DH ratchet
   headers, skipped-key storage limits in the production repository, official
   vectors, and audited interoperability evidence.
+  Update (2026-09): `DoubleRatchetSession` now performs DH ratchet steps with
+  ratchet headers and stores skipped-message keys, and it is used on the send
+  and receive paths; official vectors, interoperability evidence and external
+  review are still missing.
 - Independent cryptographic review remains blocked until an external reviewer
   evaluates the exact implementation and commit.
 - The Remote UI still needs dedicated key-change UX surfaces beyond persisted
@@ -86,6 +93,6 @@ conversation ID, sender device ID, and recipient device ID.
 - `docs/security/remote_cryptographic_design_review.md`
 - `docs/security/REMOTE_SECURITY_AND_COMPLIANCE.md`
 - `docs/product/PRIVACY_CLAIM_MATRIX.md`
-- `HELIX_ENTERPRISE_IMPROVEMENT_MASTER_PLAN.md`
+- `HELIX_ENTERPRISE_IMPROVEMENT_MASTER_PLAN.md` (no longer in the repository)
 - Full verification output for the reviewed commit.
 

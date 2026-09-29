@@ -131,6 +131,10 @@ class RemoteSyncGatewayImpl implements SyncGateway {
           .transform(utf8.decoder)
           .join()
           .timeout(_timeout);
+      if (resp.statusCode == 409 &&
+          _errorCode(errBody) == 'device_list_stale') {
+        throw RemoteStaleDeviceListException(errBody);
+      }
       throw HttpException(
         'Operation $type failed with status ${resp.statusCode}: $errBody',
         uri: uri,
@@ -139,6 +143,15 @@ class RemoteSyncGatewayImpl implements SyncGateway {
   }
 
   bool _isAuthFailure(int statusCode) => statusCode == 401 || statusCode == 403;
+
+  String? _errorCode(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map ? decoded['code'] as String? : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<bool> _refreshAuthOnce() =>
       _refreshAuth?.call() ?? Future.value(false);

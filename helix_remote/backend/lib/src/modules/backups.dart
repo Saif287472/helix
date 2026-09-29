@@ -10,6 +10,10 @@ class BackupsModule {
   static const int maxBackupMediaObjectSize = 100 * 1024 * 1024;
   static const int maxBackupMediaQuota = 1024 * 1024 * 1024;
 
+  /// Text history is small; this is room for a few hundred thousand
+  /// compressed messages and a hard stop on anything else.
+  static const int maxHistoryBackupSize = 16 * 1024 * 1024;
+
   final BackendDatabase db;
   final Directory mediaStorageDir;
 
@@ -24,12 +28,72 @@ class BackupsModule {
     final router = Router();
     router.post('/', _uploadBackupHandler);
     router.get('/', _downloadBackupHandler);
+    router.put('/history', _uploadHistoryBackupHandler);
+    router.get('/history', _downloadHistoryBackupHandler);
     router.post('/media', _requestMediaUploadHandler);
     router.get('/media/status/<objectId>', _mediaUploadStatusHandler);
     router.put('/media/<objectId>', _uploadMediaObjectHandler);
     router.get('/media/<objectId>', _downloadMediaObjectHandler);
     router.get('/attachments/upload-url', _getAttachmentUploadUrlHandler);
     return withAppErrorHandling(router.call);
+  }
+
+  /// Stores this account's encrypted text-history backup, replacing the last
+  /// one. The app merges with the stored copy before uploading, so any of
+  /// the account's devices may write it.
+  Future<Response> _uploadHistoryBackupHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
+    }
+    final accountId = auth['account_id'] as String;
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final blob = body['blob'] as String?;
+    if (blob == null || blob.isEmpty) {
+      throw AppError.badRequest('Missing blob');
+    }
+    if (blob.length > maxHistoryBackupSize) {
+      throw AppError(
+        'History backup is too large',
+        statusCode: 413,
+        code: RemoteErrorCode.quotaExceeded,
+      );
+    }
+    final identityPublicKey =
+        db.getAccount(accountId)?['identity_public_key'] as String?;
+    if (identityPublicKey == null) {
+      throw AppError.notFound('Account not found');
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    db.saveHistoryBackup(
+      accountId: accountId,
+      identityPublicKey: identityPublicKey,
+      blob: blob,
+      now: now,
+    );
+    return Response.ok(jsonEncode({'updated_at': now}));
+  }
+
+  Future<Response> _downloadHistoryBackupHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
+    }
+    final backup = db.getHistoryBackup(auth['account_id'] as String);
+    if (backup == null) {
+      throw AppError.notFound('No history backup');
+    }
+    return Response.ok(
+      jsonEncode({'blob': backup['blob'], 'updated_at': backup['updated_at']}),
+      headers: {'Content-Type': 'application/json'},
+    );
   }
 
   Future<Response> _uploadBackupHandler(Request request) async {

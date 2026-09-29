@@ -1,5 +1,7 @@
 # Helix Remote — Enterprise Readiness Audit & Execution Roadmap
 
+> **Status: historical (audit of 2026-08-06).** Kept as a record; its findings were acted on in later commits. Deployment references (VPS, nginx, Docker) predate the current setup: Helix Global runs on the user's PC (Caddy + `dart run bin/server.dart` in `helix_remote/backend`, coturn in WSL1). For current Remote docs see `helix_remote/docs/` and `AGENTS.md`.
+
 **Date:** 2026-08-06
 **Scope:** `helix_remote/` only — client app, admin console, backend, and the 8 `helix_remote_*`
 packages, plus the CI and governance documents that govern them.

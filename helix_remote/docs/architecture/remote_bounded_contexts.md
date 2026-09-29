@@ -1,5 +1,7 @@
 # Helix Remote Bounded Contexts
 
+> **Status: historical domain model (June 2026).** The contexts still apply, but several server table names below were never used. Actual tables (`backend/lib/src/database/migrations.dart`): prekeys are `signed_prekeys` + `one_time_prekeys`; conversation members `conversation_members`; push registration `device_push_tokens`; sync cursors `sync_cursors`; backups `backups` (+ `backup_media_objects`, `history_backups`); account blocks by admins `blocked_accounts`, user-to-user blocks are `contacts` rows; groups use `groups`, `group_invites` and related `group_*` tables; there is no `call_history` table on the server. Attachments and backup media are stored on the server's local filesystem, not S3.
+
 This document defines the 18 bounded contexts that form the domain model for Helix Remote. In contrast to Helix Local (which uses short-lived RAM-only storage), Helix Remote is designed as a persistent, multi-device distributed system.
 
 ---

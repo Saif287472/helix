@@ -166,9 +166,43 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
     return true;
   }
 
+  static const _unreadablePlaceholder = 'This message could not be decrypted.';
+
+  Future<String> _decryptOrPlaceholder(
+    String conversationId,
+    String messageId,
+    String ciphertext,
+  ) async {
+    try {
+      return await _decryptMessage(
+        conversationId: conversationId,
+        messageId: messageId,
+        ciphertext: ciphertext,
+      );
+    } catch (_) {
+      return _unreadablePlaceholder;
+    }
+  }
+
   Future<List<RemoteDecryptedMessage>> _decodeRows(
     List<Map<String, dynamic>> rows,
   ) async {
+    // Anything still in wire form is decrypted once, in arrival order, and
+    // stored locally re-encrypted before this page is read.
+    final pending = {
+      for (final row in rows)
+        if (_isWireEnvelope(row['ciphertext_blob'] as String))
+          row['conversation_id'] as String,
+    };
+    if (pending.isNotEmpty) {
+      for (final conversationId in pending) {
+        await _rewrapWireEnvelopes(conversationId);
+      }
+      rows = [
+        for (final row in rows)
+          db.getMessageById(row['message_id'] as String) ?? row,
+      ];
+    }
     final decoded = <RemoteDecryptedMessage>[];
     for (final row in rows) {
       final messageId = row['message_id'] as String;
@@ -205,11 +239,29 @@ mixin RemoteHistoryReceipts on RemoteMessagingServiceBase {
       if (cached != null && cached.$1 == cipherHash) {
         plaintext = cached.$2;
       } else {
-        plaintext = await _decryptMessage(
-          conversationId: conversationId,
-          messageId: messageId,
-          ciphertext: ciphertext,
-        );
+        try {
+          plaintext = await _decryptMessage(
+            conversationId: conversationId,
+            messageId: messageId,
+            ciphertext: ciphertext,
+          );
+        } catch (e) {
+          // One unreadable message - an edit encrypted to the sender's own
+          // key, or a message whose key was used up before rewrapping
+          // existed - must not take the whole conversation down with it.
+          AppLogger.instance.warn(
+            'History',
+            'message $messageId unreadable: ${e.runtimeType}',
+          );
+          plaintext = edited && ciphertext != row['ciphertext_blob']
+              ? await _decryptOrPlaceholder(
+                  conversationId,
+                  messageId,
+                  row['ciphertext_blob'] as String,
+                )
+              : _unreadablePlaceholder;
+          if (plaintext != _unreadablePlaceholder) edited = false;
+        }
         _decryptCache[messageId] = (cipherHash, plaintext);
       }
       // Decode the JSON envelope once per message (instead of once per

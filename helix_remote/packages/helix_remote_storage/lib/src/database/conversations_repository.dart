@@ -155,11 +155,18 @@ mixin RemoteConversationsRepository on HelixRemoteDatabaseBase {
   /// if neither exists yet (INSERT OR IGNORE). Used by the inbound message
   /// event handler to satisfy the FK constraint before saving the message,
   /// in case the receiver hasn't yet processed a conversation_created event.
+  ///
+  /// [memberAccountIds] is the server's member list when the event carried
+  /// one. Without it a device seeing a conversation for the first time - most
+  /// often this account's own newly signed-in device receiving a copy of
+  /// something sent from another - would record only the sender, which for
+  /// its own copy means a conversation with nobody else in it.
   void ensureConversationExists({
     required String conversationId,
     required String senderAccountId,
     required int serverSequence,
     required int timestamp,
+    List<String> memberAccountIds = const [],
   }) {
     final stmt = _db.prepare('''
       INSERT OR IGNORE INTO conversations (conversation_id, title, type, last_sequence, created_at)
@@ -172,7 +179,9 @@ mixin RemoteConversationsRepository on HelixRemoteDatabaseBase {
       INSERT OR IGNORE INTO members (conversation_id, account_id, role)
       VALUES (?, ?, 'MEMBER');
     ''');
-    memStmt.execute([conversationId, senderAccountId]);
+    for (final accountId in {senderAccountId, ...memberAccountIds}) {
+      memStmt.execute([conversationId, accountId]);
+    }
     memStmt.close();
   }
 }

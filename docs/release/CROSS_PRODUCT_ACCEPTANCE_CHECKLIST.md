@@ -4,16 +4,17 @@ Status: Phase 20 repository and manual release checklist.
 
 ## Automated Gates
 
-- Local app cannot import `packages/remote/**`.
-- Remote app cannot import `packages/local/**`.
-- Shared packages cannot import Local or Remote product packages.
+- Local (`helix_local/`) cannot depend on any `helix_remote_*` package, and
+  Remote (`helix_remote/`) cannot depend on any `helix_local_*` package. The
+  two are separate pub workspaces with no shared packages, so this holds by
+  construction.
 - Secure-storage prefixes differ: `helix_local_v1_` vs `helix_remote_v1_`.
 - Database filenames differ: `helix_local.db` vs `helix_remote.db`.
 - Android application IDs differ: `com.helix.local` vs `com.helix.remote`.
 - Remote source contains no Local LAN discovery, UDP broadcast, mDNS browsing,
   or Local panic-wipe orchestrator.
 - Local source contains no Remote backend URL or Remote push/TURN registration.
-- Package dependency firewall passes `tool/check_boundaries.dart`.
+- Package dependency firewall: `helix_local/tool/check_boundaries.dart` exists but is not run anywhere and its config (`docs/architecture/module_boundaries.json`) still uses the old `apps/`/`packages/` globs.
 
 ## Manual Device Gates
 

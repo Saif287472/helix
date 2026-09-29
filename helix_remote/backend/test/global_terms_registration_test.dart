@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:helix_remote_backend/helix_remote_backend.dart';
 import 'package:helix_remote_backend/src/app_error.dart';
-import 'package:helix_remote_backend/src/phone_hash.dart' as phone_hash_lib;import 'package:helix_remote_backend/src/sms_provider.dart';
+import 'package:helix_remote_backend/src/phone_hash.dart' as phone_hash_lib;
+import 'package:helix_remote_backend/src/sms_provider.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
@@ -156,7 +157,7 @@ void main() {
         200,
         reason: await accepted.transform(utf8.decoder).join(),
       );
-      expect(server.db.schemaVersion, 45);
+      expect(server.db.schemaVersion, 47);
       final account = server.db.getAccount('accepted_terms');
       expect(account, isNotNull);
       expect(account!['tos_accepted_at'], isA<int>());
@@ -339,8 +340,7 @@ void main() {
 
       // Nothing was created and the original device is untouched.
       expect(server.db.getAccount('otp_attacker'), isNull);
-      final active = server
-          .db
+      final active = server.db
           .getDevices('otp_owner')
           .where((d) => d['status'] == 'ACTIVE')
           .toList();
@@ -367,33 +367,30 @@ void main() {
     },
   );
 
-  test(
-    'a blocked phone number cannot sign in with a valid OTP',
-    () async {
-      final first = await postJson(
-        '/api/v1/accounts/register',
-        await registrationBodyFor(
-          accountId: 'blocked_owner',
-          phoneHash: 'blocked_phone_hash',
-          deviceId: 'blocked_owner_device',
-        ),
-      );
-      expect(first.statusCode, 200);
+  test('a blocked phone number cannot sign in with a valid OTP', () async {
+    final first = await postJson(
+      '/api/v1/accounts/register',
+      await registrationBodyFor(
+        accountId: 'blocked_owner',
+        phoneHash: 'blocked_phone_hash',
+        deviceId: 'blocked_owner_device',
+      ),
+    );
+    expect(first.statusCode, 200);
 
-      server.db.blockPhoneHash('blocked_phone_hash');
+    server.db.blockPhoneHash('blocked_phone_hash');
 
-      final response = await postJson(
-        '/api/v1/accounts/register',
-        await registrationBodyFor(
-          accountId: 'blocked_attacker',
-          phoneHash: 'blocked_phone_hash',
-          deviceId: 'blocked_attacker_device',
-        ),
-      );
-      expect(response.statusCode, 403);
-      expect(server.db.getAccount('blocked_attacker'), isNull);
-    },
-  );
+    final response = await postJson(
+      '/api/v1/accounts/register',
+      await registrationBodyFor(
+        accountId: 'blocked_attacker',
+        phoneHash: 'blocked_phone_hash',
+        deviceId: 'blocked_attacker_device',
+      ),
+    );
+    expect(response.statusCode, 403);
+    expect(server.db.getAccount('blocked_attacker'), isNull);
+  });
 
   test(
     'personal mode keeps registration compatible without ToS fields',
@@ -446,7 +443,7 @@ void main() {
     raw.execute('PRAGMA user_version = 43;');
 
     final migrated = BackendDatabase(raw);
-    expect(migrated.schemaVersion, 45);
+    expect(migrated.schemaVersion, 47);
     migrated.createAccount(
       'legacy_account',
       'helix_legacy_account',
@@ -478,7 +475,7 @@ void main() {
     raw.execute('PRAGMA user_version = 42;');
 
     final migrated = BackendDatabase(raw);
-    expect(migrated.schemaVersion, 45);
+    expect(migrated.schemaVersion, 47);
     final columns = raw
         .select('PRAGMA table_info(accounts);')
         .map((row) => row['name'] as String)
@@ -501,13 +498,11 @@ void main() {
         redeemed_at INTEGER
       );
     ''');
-    raw.execute(
-      "INSERT INTO admin_pairing_codes VALUES ('abc', 1, 2, NULL);",
-    );
+    raw.execute("INSERT INTO admin_pairing_codes VALUES ('abc', 1, 2, NULL);");
     raw.execute('PRAGMA user_version = 43;');
 
     final migrated = BackendDatabase(raw);
-    expect(migrated.schemaVersion, 45);
+    expect(migrated.schemaVersion, 47);
 
     final tables = raw
         .select("SELECT name FROM sqlite_master WHERE type = 'table';")
@@ -516,7 +511,8 @@ void main() {
     expect(
       tables,
       isNot(contains('admin_pairing_codes')),
-      reason: 'an unread, unwritten table is indistinguishable from a live '
+      reason:
+          'an unread, unwritten table is indistinguishable from a live '
           'security control',
     );
     migrated.close();
@@ -533,7 +529,8 @@ void main() {
     expect(
       tables,
       isEmpty,
-      reason: 'the table is dropped in migration 44, so even a database that '
+      reason:
+          'the table is dropped in migration 44, so even a database that '
           'ran the original CREATE TABLE must not end up with it',
     );
     migrated.close();

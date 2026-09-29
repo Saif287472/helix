@@ -103,6 +103,24 @@ enum RemoteErrorCode {
   /// The phone number is permanently banned from this server.
   phoneBlocked('phone_blocked'),
 
+  /// This device was signed out (revoked) - by the user from another device,
+  /// by an admin, or by a newer sign-in. Distinct from an expired or replayed
+  /// refresh token: those can be recovered by signing in again with the
+  /// device key, a revoked device cannot.
+  deviceRevoked('device_revoked'),
+
+  /// Password sign-in or change refused: the phone number or password is
+  /// wrong. Deliberately the same code for an unknown number.
+  passwordIncorrect('password_incorrect'),
+
+  /// Too many wrong passwords; `details.locked_until` says when to retry.
+  passwordLocked('password_locked'),
+
+  /// The sender's list of recipient devices is out of date - a device was
+  /// added or removed since it fetched prekey bundles. The client refetches
+  /// and re-encrypts; `details` lists the device ids it missed or should drop.
+  deviceListStale('device_list_stale'),
+
   internalError('internal_error');
 
   const RemoteErrorCode(this.wire);
@@ -152,7 +170,8 @@ class AppError implements Exception {
   factory AppError.conflict(
     String message, {
     RemoteErrorCode code = RemoteErrorCode.conflict,
-  }) => AppError(message, statusCode: 409, code: code);
+    Map<String, Object?>? details,
+  }) => AppError(message, statusCode: 409, code: code, details: details);
 
   factory AppError.tooManyRequests(
     String message, {

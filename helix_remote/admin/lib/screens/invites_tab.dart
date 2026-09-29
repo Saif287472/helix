@@ -151,8 +151,9 @@ class _InvitesTabState extends State<InvitesTab> {
   void _shareInvite(String code) {
     // ignore: deprecated_member_use
     Share.share(
-      'Join my personal server using invite code: $code',
-      subject: 'Helix Personal Server Invite',
+      'Join my Helix server: ${helixCodeLink(code)}\n\n'
+      'Code: $code\n$kHelixCodeManualSteps',
+      subject: 'Helix server invite',
     );
   }
 

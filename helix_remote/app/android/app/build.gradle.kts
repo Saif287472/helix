@@ -53,6 +53,9 @@ android {
 
     dependencies {
         coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+        // The launch themes are AppCompat-based, which local_auth requires to
+        // avoid crashing on Android 8 and below.
+        implementation("androidx.appcompat:appcompat:1.7.1")
     }
 
     defaultConfig {

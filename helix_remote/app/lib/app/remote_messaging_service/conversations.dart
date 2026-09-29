@@ -171,8 +171,11 @@ mixin RemoteConversationManagement on RemoteMessagingServiceBase {
     );
   }
 
-  RemoteUnreadSummary unreadSummary(String conversationId) =>
-      db.unreadSummary(conversationId, _requireDeviceId());
+  RemoteUnreadSummary unreadSummary(String conversationId) => db.unreadSummary(
+    conversationId,
+    _requireDeviceId(),
+    ownAccountId: _accountId,
+  );
 
   RemoteStorageSummary storageSummary(String conversationId) =>
       db.storageSummary(conversationId);
@@ -410,11 +413,15 @@ mixin RemoteConversationManagement on RemoteMessagingServiceBase {
   List<String> recipientDeviceIdsForConversation(String conversationId) {
     final members = db.getConversationMembers(conversationId);
     final accountId = _requireAccountId();
+    final ownDeviceId = _deviceId;
     final ids = <String>[];
-    for (final memberId in members) {
-      if (memberId == accountId) continue;
+    for (final memberId in {...members, accountId}) {
       for (final device in db.getDevices(memberId)) {
-        ids.add(device.deviceId.toString());
+        final id = device.deviceId.toString();
+        // This account's other devices are recipients too; only the device
+        // doing the sending is not.
+        if (memberId == accountId && id == ownDeviceId) continue;
+        ids.add(id);
       }
     }
     return ids;

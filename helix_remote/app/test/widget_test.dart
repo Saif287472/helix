@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/main.dart';
+import 'package:helix_remote/widgets/startup_skeleton.dart';
 import 'package:helix_remote/app/helix_remote_app_shell.dart';
 
 RemoteDevelopmentConfig _devConfig() => RemoteDevelopmentConfig(
@@ -31,8 +32,11 @@ void main() {
       HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
     );
 
-    expect(find.text('HELIX'), findsOneWidget);
-    expect(find.text('Deploying Helix…'), findsOneWidget);
+    // Opening shows nothing at first - a quick start never flashes a
+    // placeholder - and then the shape of the chats page.
+    expect(find.byType(StartupSkeleton), findsOneWidget);
+    expect(find.text('Deploying Helix…'), findsNothing);
+    await tester.pump(StartupSkeleton.delay);
 
     root.dispose();
   });

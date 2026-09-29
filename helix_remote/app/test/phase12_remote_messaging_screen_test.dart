@@ -19,7 +19,6 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as p;
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'support/group_call_rest_stubs.dart';
 
 class _FakeProtector implements RemoteMessageProtector {
@@ -103,6 +102,8 @@ class _FakeRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
     required String deviceName,
     String? accountIdentityPublicKey,
     String? phoneHash,
+    String? otpCode,
+    String? otpChallengeId,
   }) async => {};
 
   @override
@@ -483,8 +484,6 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationScreen(
           conversationId: 'dm_alice_bob',
           messagingService: service,
@@ -521,8 +520,6 @@ void main() {
     // pumpAndSettle() failing to settle).
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationScreen(
           conversationId: 'dm_alice_bob',
           messagingService: service,
@@ -549,8 +546,6 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationScreen(
           conversationId: 'dm_alice_bob',
           messagingService: service,
@@ -596,8 +591,6 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationScreen(
           conversationId: 'dm_alice_bob',
           messagingService: service,
@@ -660,8 +653,6 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationScreen(
           conversationId: 'dm_alice_bob',
           messagingService: service,
@@ -715,8 +706,6 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ContactsScreen(messagingService: service, root: root),
       ),
     );
@@ -760,8 +749,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: ContactsScreen(messagingService: service, root: root),
         ),
       );
@@ -802,8 +789,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: ContactsScreen(messagingService: service, root: root),
         ),
       );
@@ -875,8 +860,6 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationListScreen(messagingService: service, root: root),
       ),
     );
@@ -895,8 +878,6 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationScreen(
           conversationId: 'dm_alice_bob',
           messagingService: service,
@@ -921,8 +902,6 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationScreen(
           conversationId: 'dm_alice_bob',
           messagingService: service,
@@ -983,8 +962,6 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         home: ConversationScreen(
           conversationId: 'dm_alice_bob',
           messagingService: service,
@@ -1027,8 +1004,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: ConversationListScreen(
             messagingService: throwingService,
             root: root,
@@ -1063,8 +1038,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: ConversationListScreen(messagingService: service, root: root),
         ),
       );
@@ -1122,8 +1095,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: ConversationListScreen(messagingService: service, root: root),
         ),
       );

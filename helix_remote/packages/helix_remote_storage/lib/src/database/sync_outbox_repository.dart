@@ -223,6 +223,16 @@ mixin RemoteSyncOutboxRepository on HelixRemoteDatabaseBase {
     stmt.close();
   }
 
+  /// Replaces a queued operation's payload - used when a send has to be
+  /// re-encrypted for a changed set of recipient devices.
+  void updateOperationPayload(String opId, String payload) {
+    final stmt = _db.prepare(
+      'UPDATE pending_operations SET payload = ? WHERE op_id = ?;',
+    );
+    stmt.execute([payload, opId]);
+    stmt.close();
+  }
+
   void retryOperationNow(String opId) {
     final stmt = _db.prepare('''
       UPDATE pending_operations

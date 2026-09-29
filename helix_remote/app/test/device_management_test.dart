@@ -8,7 +8,6 @@ import 'package:helix_remote/screens/device_management_screen.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'support/group_call_rest_stubs.dart';
 
 // ---------------------------------------------------------------------------
@@ -96,8 +95,6 @@ RemoteDevice _device(String id, String name) => RemoteDevice(
 
 Widget _makeApp(_StubRestClient client, {Stream<RemoteSyncChange>? changes}) {
   return MaterialApp(
-    localizationsDelegates: HelixLocalizations.localizationsDelegates,
-    supportedLocales: HelixLocalizations.supportedLocales,
     home: DeviceManagementScreen(restClient: client, deviceChanges: changes),
   );
 }

@@ -43,11 +43,8 @@ class _PhoneBookSuggestionTile extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
-      subtitle: Text(HelixLocalizations.of(context).foundViaPhoneContacts),
-      trailing: FilledButton(
-        onPressed: onAdd,
-        child: Text(HelixLocalizations.of(context).add),
-      ),
+      subtitle: const Text('Found via phone contacts'),
+      trailing: FilledButton(onPressed: onAdd, child: const Text('Add')),
     );
   }
 }
@@ -91,7 +88,7 @@ class _NotOnHelixTile extends StatelessWidget {
       ),
       trailing: OutlinedButton(
         onPressed: onInvite,
-        child: Text(HelixLocalizations.of(context).invite),
+        child: const Text('Invite'),
       ),
     );
   }

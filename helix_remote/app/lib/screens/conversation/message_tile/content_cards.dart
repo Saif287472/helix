@@ -289,9 +289,7 @@ class _MediaPreview extends StatelessWidget {
                           TextButton.icon(
                             onPressed: onDownload,
                             icon: const Icon(Icons.download),
-                            label: Text(
-                              HelixLocalizations.of(context).download,
-                            ),
+                            label: const Text('Download'),
                           ),
                         ],
                       ),

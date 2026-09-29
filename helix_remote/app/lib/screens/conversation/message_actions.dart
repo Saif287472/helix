@@ -47,9 +47,9 @@ extension _ConversationMessageActions on _ConversationScreenState {
         .join('\n');
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(HelixLocalizations.of(context).copied)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Copied')));
     _exitSelectionMode();
   }
 
@@ -221,13 +221,9 @@ extension _ConversationMessageActions on _ConversationScreenState {
                         Navigator.pop(ctx);
                         _exitSelectionMode();
                         Clipboard.setData(ClipboardData(text: message.text));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              HelixLocalizations.of(context).copied,
-                            ),
-                          ),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text('Copied')));
                       }),
                       if (isMine)
                         actionItem(Icons.edit_outlined, 'Edit message', () {
@@ -284,7 +280,7 @@ extension _ConversationMessageActions on _ConversationScreenState {
     final updated = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).editMessage),
+        title: const Text('Edit message'),
         content: TextFormField(
           initialValue: draft,
           autofocus: true,
@@ -295,11 +291,11 @@ extension _ConversationMessageActions on _ConversationScreenState {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, draft.trim()),
-            child: Text(HelixLocalizations.of(context).save),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -364,8 +360,8 @@ extension _ConversationMessageActions on _ConversationScreenState {
   void _blockPeer() {
     if (_model.conversationMemberIds.length < 2) return;
     _model.blockPeer();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(HelixLocalizations.of(context).contactBlocked)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Contact blocked')));
   }
 }

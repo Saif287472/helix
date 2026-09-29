@@ -149,7 +149,7 @@ class MessagingModule {
     final requiredRecipientDeviceIds = <String>{};
     final allowedRecipientDeviceIds = <String>{};
     for (final memberId in conversationMembers) {
-      for (final device in db.getDevices(memberId)) {
+      for (final device in db.getActiveDevices(memberId)) {
         final deviceId = device['device_id'] as String;
         allowedRecipientDeviceIds.add(deviceId);
         if (deviceId == senderDeviceId) {
@@ -189,6 +189,13 @@ class MessagingModule {
         continue;
       }
       if (!allowedRecipientDeviceIds.contains(recipientDeviceId)) {
+        // A sender whose cached device list predates a sign-out still
+        // encrypts to the signed-out device. That envelope can never be
+        // delivered, so it is dropped rather than failing the whole send;
+        // only a device that never belonged to a member is refused.
+        if (_isRetiredDeviceOfMember(recipientDeviceId, conversationMembers)) {
+          continue;
+        }
         throw AppError.forbidden('Envelope targets a non-member device');
       }
       envelopeByDeviceId[recipientDeviceId] = envMap;
@@ -198,9 +205,16 @@ class MessagingModule {
         .where((deviceId) => !envelopeByDeviceId.containsKey(deviceId))
         .toList();
     if (missingTargets.isNotEmpty) {
-      throw AppError.badRequest(
+      // 409, not 400: nothing is wrong with the request's shape - a device
+      // was added (a new sign-in, or the sender's own new phone) since the
+      // sender fetched prekey bundles. The client refetches and re-encrypts.
+      throw AppError.conflict(
         'Missing per-device encrypted envelopes',
-        details: {'missing_device_count': missingTargets.length},
+        code: RemoteErrorCode.deviceListStale,
+        details: {
+          'missing_device_count': missingTargets.length,
+          'missing_device_ids': missingTargets,
+        },
       );
     }
 
@@ -268,6 +282,7 @@ class MessagingModule {
             'sender_account_id': senderAccountId,
             'sender_device_id': senderDeviceId,
             'ciphertext': target.ciphertext,
+            'conversation_members': conversationMembers,
           }),
         );
 
@@ -282,6 +297,10 @@ class MessagingModule {
             'sender_account_id': senderAccountId,
             'sender_device_id': senderDeviceId,
             'ciphertext': target.ciphertext,
+            // Lets a device that has never seen this conversation - most
+            // often the account's own newly signed-in device receiving a copy
+            // of what it sent elsewhere - file it under the right people.
+            'conversation_members': conversationMembers,
           },
           'server_sequence': deviceSeq,
         };
@@ -367,6 +386,13 @@ class MessagingModule {
         'federated_envelopes_count': federatedResults.length,
       }),
     );
+  }
+
+  bool _isRetiredDeviceOfMember(String deviceId, List<String> members) {
+    final owners = db.getDevicesOfDevice(deviceId);
+    if (owners.isEmpty) return false;
+    final ownerId = owners.first['account_id'] as String;
+    return members.contains(ownerId) && !db.isDeviceActive(ownerId, deviceId);
   }
 
   bool _isExternalAccount(String? accountId) {
@@ -496,7 +522,7 @@ class MessagingModule {
     final conversationMembers = db.getConversationMembers(conversationId);
     for (final memberId in conversationMembers) {
       // Query active devices of this member and send delete event
-      final memberDevices = db.getDevices(memberId);
+      final memberDevices = db.getActiveDevices(memberId);
       for (final dev in memberDevices) {
         final targetDeviceId = dev['device_id'] as String;
         if (targetDeviceId != deviceId) {
@@ -769,7 +795,7 @@ class MessagingModule {
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final memberId in db.getConversationMembers(conversationId)) {
-      for (final dev in db.getDevices(memberId)) {
+      for (final dev in db.getActiveDevices(memberId)) {
         final targetDeviceId = dev['device_id'] as String;
         if (targetDeviceId == senderDeviceId) {
           continue;

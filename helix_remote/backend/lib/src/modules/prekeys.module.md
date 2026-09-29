@@ -10,7 +10,7 @@ fetches a bundle for every one of the target's active devices.
 
 ## Owned files
 
-- `prekeys.dart` - `PrekeysModule` and its router. ~175 lines; no split
+- `prekeys.dart` - `PrekeysModule` and its router. ~160 lines; no split
   needed.
 
 ## Route table

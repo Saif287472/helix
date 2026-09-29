@@ -13,8 +13,8 @@ that deployment's information.
 Depending on the features you use, Helix Global may process:
 
 - account information: a client-generated account identifier, a salted one-way
-  phone-number hash, an optional last-four-digit display hint, display name,
-  profile details, account status, and cryptographic public keys;
+  phone-number hash, display name, profile details, account status, and
+  cryptographic public keys;
 - authentication information: phone verification challenges, hashed
   verification codes, invite and recovery-code hashes, device records, session
   and refresh-token records, account-recovery events, and limited audit events;

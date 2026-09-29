@@ -1,5 +1,7 @@
 # ADR 001: Modular Monolith With Clean Boundaries
 
+> **Scope: Helix Local only.** Written for the June 2026 single-workspace layout (`apps/`, `packages/local/`); Local code now lives under `helix_local/`. For Helix Remote see `helix_remote/docs/` and `AGENTS.md`.
+
 Status: accepted
 Date: 2026-06-15
 

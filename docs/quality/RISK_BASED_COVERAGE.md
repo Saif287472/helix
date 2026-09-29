@@ -1,5 +1,7 @@
 # Risk-Based Coverage Plan
 
+> **Status: historical (June 2026, pre-split layout).** Paths below refer to the old single-workspace tree (`apps/`, `packages/`, `services/`, root `tool/`/`scripts/`). Code now lives in two workspaces, `helix_local/` and `helix_remote/`. For current Remote docs see `helix_remote/docs/` and `AGENTS.md`.
+
 Phase 0 does not impose one global coverage percentage. Helix coverage gates are
 risk-based because auth, crypto, storage, sync, wipe, and deletion failures have
 very different blast radius from presentation-only defects.

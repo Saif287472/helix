@@ -21,6 +21,7 @@ import 'package:helix_remote_backend/src/reserved_identifiers.dart';
 import 'package:helix_remote_backend/src/server_identity.dart';
 import 'package:helix_remote_backend/src/server_log.dart';
 import 'package:helix_remote_backend/src/server_name.dart';
+import 'package:helix_remote_backend/src/turn_probe.dart';
 import 'package:helix_remote_backend/src/websocket.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -88,6 +89,7 @@ class OperabilityModule {
   final bool globalInstanceMode;
   final DateTime Function() _now;
   late final FeatureFlagService _featureFlags = FeatureFlagService(db);
+  final TurnProbe _turnProbe = TurnProbe();
 
   static const sloTargets = {
     'availability_monthly': '99.5%',
@@ -517,11 +519,7 @@ class OperabilityModule {
             : 'unavailable',
         'turn': turnConfigured ? 'configured' : 'not_configured',
       },
-      'turn': {
-        'configured': turnConfigured,
-        'url_count': turnUrls.length,
-        'live_reachability': 'not_checked',
-      },
+      'turn': _turnStatus(),
       'schema_version': db.schemaVersion,
       'capabilities': RemoteCapabilityRegistry.current().toJson(),
     }, status: apiReady ? 200 : 503);
@@ -920,10 +918,15 @@ class OperabilityModule {
 
   Map<String, dynamic> _turnStatus() {
     final urls = CallsModule.resolveTurnUrls(turnUrl);
+    final configured = turnSecret.trim().isNotEmpty && urls.isNotEmpty;
     return {
-      'configured': turnSecret.trim().isNotEmpty && urls.isNotEmpty,
+      'configured': configured,
       'url_count': urls.length,
-      'live_reachability': 'not_checked',
+      // Cached and refreshed in the background (see TurnProbe), so this never
+      // makes a metrics poll wait on the network.
+      'live_reachability': configured
+          ? _turnProbe.statusFor(urls.first)
+          : 'not_checked',
     };
   }
 

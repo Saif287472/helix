@@ -2,12 +2,32 @@
 
 This document performs the formal cryptographic design review (P9-001) for Helix Remote. It details the cryptographic decisions and design specifications resolving tasks P9-002 through P9-018 and P9-023.
 
-> F0 status note: this document describes the target reviewed protocol. The
-> current Remote implementation uses X3DH session establishment plus
-> session-key reuse with per-message HKDF counters and authenticated content
-> envelopes. It must not be represented as a complete Signal-compatible Double
-> Ratchet until DH-ratchet headers, skipped-message-key handling,
-> replay-window enforcement, and independent review are completed.
+> Implementation status (2026-09): sections 2-9 describe the target design.
+> Where the code differs:
+>
+> - **Ratchet (section 4):** `DoubleRatchetSession`
+>   (`packages/helix_remote_crypto/lib/src/double_ratchet.dart`) implements the
+>   symmetric chains, DH ratchet steps and skipped-message keys, and is used by
+>   `app/lib/app/remote_messaging_service/message_crypto.dart`. The replay
+>   window in section 6 is not verified, and there is no independent review, so
+>   it must not be represented as Signal-equivalent.
+> - **Identity (section 2):** the account identity key is one per account, not
+>   per device. A device that signs in with the password holds the same key,
+>   unwrapped from a password-wrapped copy on the server (section 9a).
+> - **Signed prekeys (sections 2, 9):** the default signed-prekey TTL is 30 days
+>   (`signedPrekeyTtl` in `packages/helix_remote_crypto/lib/src/prekey_manager.dart`),
+>   not a 14-day background rotation.
+> - **Linking (section 9, P9-007):** there is no QR-and-sign-by-`IK_A` step.
+>   Linking uses a server-stored approval transcript signed by the new device,
+>   a six-digit verification code and a 10-minute TTL
+>   (`backend/lib/src/modules/auth/devices.dart`). A device can also be added
+>   by password sign-in with no approval (section 9a).
+> - **Revocation (section 9, P9-009, P9-018):** revocation is an authenticated
+>   server call (bearer token of a sibling device: `/devices/revoke`,
+>   `/devices/revoke-others`, `/devices/lost-device`), not a published
+>   `IK_A`-signed proof.
+> - **Attachments (section 8):** ciphertext is stored on the server's local
+>   filesystem (`HELIX_REMOTE_ATTACHMENTS_DIR`), not S3.
 
 ---
 
@@ -126,6 +146,41 @@ To scale E2EE groups efficiently without expensive direct fanned-out pairwise me
 *   **Cryptographic Version Negotiation (P9-016)**: The X3DH header contains a protocol version byte. If the recipient does not support the version, it rejects the session setup with a `version_mismatch` error signal.
 *   **Key Rotation (P9-017)**: Signed Prekeys are automatically rotated and re-signed every 14 days by a client background job.
 *   **Lost Device Response (P9-018)**: If a device is lost, the user logs into another active device (or uses the offline recovery phrase) to push a revocation signature, invalidating the lost device's access tokens and session states.
+
+---
+
+## 9a. Password-Wrapped Account Identity Key (implemented 2026-09)
+
+Every account has a password. The server never sees it.
+
+1. The app runs **Argon2id** over the password with a per-account random salt
+   and the server-provided cost (default m=19456 KiB, t=2, p=1, 64-byte output;
+   the server refuses cheaper parameters) in a background isolate.
+2. **HKDF-SHA256** splits the output into two independent keys:
+   - `authKey`, sent to the server on sign-in, password verify and password
+     change. The server stores only a salted SHA-256 of it (the Argon2id cost is
+     already paid, so a stolen table still costs one Argon2id run per guess).
+   - `wrapKey`, which never leaves the device.
+3. `wrapKey` encrypts the account identity private key with **AES-256-GCM**,
+   AAD bound to the identity public key. The ciphertext is stored server-side
+   (`account_passwords.wrapped_identity_key`) and returned by
+   `POST /api/v1/accounts/password/login`, so a new device that knows the
+   password joins as the same account without replacing the other devices.
+4. The sign-in request is signed with the new device's Ed25519 key over a
+   transcript binding the device keys to the phone hash.
+5. Online guessing is limited by a lockout: 5 failures lock for 15 minutes,
+   doubling up to 24 hours, plus per-IP rate limits.
+6. When the identity key rotates (SMS-OTP sign-in on Global, recovery) the
+   wrapped copy and the history backup made under the old key are deleted.
+
+The automatic text-history backup uses a key derived by HKDF from the identity
+private key (info `helix.remote.history-backup.v1`), gzip and AES-GCM with AAD
+bound to the identity public key.
+
+Files: `backend/lib/src/modules/auth/password.dart`,
+`app/lib/app/password_vault.dart`,
+`app/lib/app/composition_root/password_auth.dart`,
+`app/lib/app/history_backup_codec.dart`.
 
 ---
 

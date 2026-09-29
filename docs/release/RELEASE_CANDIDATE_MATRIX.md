@@ -2,8 +2,8 @@
 
 | Area | Local | Remote | Evidence |
 |---|---|---|---|
-| Android release build | Blocked until signing material exists | Blocked until signing material exists | `scripts/*_release_gate.ps1 -BuildArtifacts -Android` |
-| Windows release build | Blocked until signing material exists | Blocked until signing material exists | `scripts/*_release_gate.ps1 -BuildArtifacts -Windows` |
+| Android release build | Blocked until signing material exists | Blocked until signing material exists | `helix_local/scripts/local_release_gate.ps1`, `helix_remote/scripts/remote_release_gate.ps1` (`-BuildArtifacts -Android`) |
+| Windows release build | Blocked until signing material exists | Blocked until signing material exists | same scripts with `-BuildArtifacts -Windows` |
 | Signing isolation | `HELIX_LOCAL_*`, `helix_local.keystore` | `HELIX_REMOTE_*`, `helix_remote.keystore` | ADR 016 and Gradle signing guards |
 | Co-installation | Product-scoped IDs and storage prefixes | Product-scoped IDs and storage prefixes | Phase 20 governance tests |
 | Upgrade | Migration tests and rollback notes required | Migration tests and rollback notes required | storage/backend test suites |

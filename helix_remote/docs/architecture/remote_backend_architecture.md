@@ -4,7 +4,7 @@
 > `docs/adr/019-dart-shelf-backend-authoritative.md`.
 >
 > The authoritative backend currently lives in
-> `services/helix_remote_backend` and is implemented as a Dart/Shelf modular
+> `helix_remote/backend` (formerly `services/helix_remote_backend`) and is implemented as a Dart/Shelf modular
 > monolith. Go/Chi, PostgreSQL, Redis, S3, Prometheus/OpenTelemetry production
 > wiring, and regional production infrastructure below are target-state ideas
 > only. They are not executable implementation claims.
@@ -15,7 +15,7 @@ This document specifies the backend reference architecture for Helix Remote, res
 
 ## 1. Backend Language and Framework (P8-019)
 *   **Current approved implementation**: Dart with `shelf`, `shelf_router`,
-    and `shelf_web_socket` in `services/helix_remote_backend`.
+    and `shelf_web_socket` in `helix_remote/backend` (formerly `services/helix_remote_backend`).
 *   **Superseded target-state option**: Go/Chi was previously documented as a
     possible reference architecture. It is not the implementation and must not
     drive agent work without a future ADR.

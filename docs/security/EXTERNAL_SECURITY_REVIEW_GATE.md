@@ -1,5 +1,7 @@
 # External Security Review Gate
 
+> **Status: historical (June 2026, pre-split layout).** Superseded for Helix Remote by `helix_remote/docs/security/EXTERNAL_SECURITY_REVIEW_GATE.md`; paths below refer to the old `apps/`/`packages/` tree.
+
 Status: required before strong production claims
 
 Helix Local and Helix Remote may not make strong marketing claims about forward

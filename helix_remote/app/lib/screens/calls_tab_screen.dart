@@ -11,7 +11,6 @@ import 'package:helix_remote_domain/models.dart'
 import 'package:helix_remote_calls/helix_remote_calls.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 part 'calls_tab/widgets_primary.dart';
 part 'calls_tab/widgets_secondary.dart';
@@ -171,10 +170,8 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
 
   void _deleteSelected() {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          HelixLocalizations.of(context).deletingSelectedCallsNotAvailable,
-        ),
+      const SnackBar(
+        content: Text('Deleting selected calls is not available yet'),
       ),
     );
   }
@@ -195,19 +192,19 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).clearCallLog),
-        content: Text(HelixLocalizations.of(context).clearAllRecentCallsDevice),
+        title: const Text('Clear call log'),
+        content: const Text('Clear all recent calls from this device?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(
               foregroundColor: HelixStatusColors.danger,
             ),
-            child: Text(HelixLocalizations.of(context).clear),
+            child: const Text('Clear'),
           ),
         ],
       ),
@@ -266,15 +263,13 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
                     if (value == 'clear_selection') _clearSelection();
                   },
                   itemBuilder: (_) => [
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'select_all',
-                      child: Text(HelixLocalizations.of(context).selectAll),
+                      child: Text('Select all'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'clear_selection',
-                      child: Text(
-                        HelixLocalizations.of(context).clearSelection,
-                      ),
+                      child: Text('Clear selection'),
                     ),
                   ],
                 ),
@@ -304,28 +299,26 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
                     }
                   },
                   itemBuilder: (_) => [
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'clear',
-                      child: Text(HelixLocalizations.of(context).clearCallLog),
+                      child: Text('Clear call log'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'scheduled',
-                      child: Text(
-                        HelixLocalizations.of(context).scheduledCalls,
-                      ),
+                      child: Text('Scheduled calls'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'settings',
-                      child: Text(HelixLocalizations.of(context).settings),
+                      child: Text('Settings'),
                     ),
                     const PopupMenuDivider(),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'sort_recent',
-                      child: Text(HelixLocalizations.of(context).sortByRecent),
+                      child: Text('Sort by recent'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'sort_name',
-                      child: Text(HelixLocalizations.of(context).sortByName),
+                      child: Text('Sort by name'),
                     ),
                   ],
                 ),
@@ -364,7 +357,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
                 Padding(
                   padding: HelixInsets.fromLTRB(32, 22, 32, 14),
                   child: Text(
-                    HelixLocalizations.of(context).recent,
+                    'Recent',
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: cs.onSurface,
                       fontSize: 18,

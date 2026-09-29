@@ -2,15 +2,18 @@ part of '../main.dart';
 
 extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
   Widget _buildReadyScreen() {
-    return HomeScreen(
+    return PasswordRequiredGate(
       root: widget.root,
-      onChangeServerUrl: widget.onChangeServerUrl,
+      child: HomeScreen(
+        root: widget.root,
+        onChangeServerUrl: widget.onChangeServerUrl,
+      ),
     );
   }
 
   Widget _buildErrorScreen() {
     return Scaffold(
-      appBar: AppBar(title: Text(HelixLocalizations.of(context).startupError)),
+      appBar: AppBar(title: const Text('Startup Error')),
       body: Center(
         child: Padding(
           padding: HelixInsets.all(24),
@@ -24,7 +27,7 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
               ),
               const SizedBox(height: 16),
               Text(
-                HelixLocalizations.of(context).failedStart,
+                'Failed to start',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
@@ -40,7 +43,7 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
                   _startBoot();
                 },
                 icon: const Icon(Icons.refresh),
-                label: Text(HelixLocalizations.of(context).retry),
+                label: const Text('Retry'),
               ),
             ],
           ),
@@ -51,7 +54,7 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
 
   Widget _buildResetScreen() {
     return Scaffold(
-      appBar: AppBar(title: Text(HelixLocalizations.of(context).resetRequired)),
+      appBar: AppBar(title: const Text('Reset Required')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
@@ -67,13 +70,13 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  HelixLocalizations.of(context).databaseKeyMissing,
+                  'Database key is missing',
                   style: Theme.of(context).textTheme.headlineSmall,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  HelixLocalizations.of(context).existingDatabaseWasFoundBut,
+                const Text(
+                  'An existing database was found but its encryption key is not available in secure storage. A destructive reset is required to continue.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
@@ -89,9 +92,7 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
                       ),
                       onPressed: () => _confirmedReset(context),
                       icon: const Icon(Icons.delete_forever_outlined),
-                      label: Text(
-                        HelixLocalizations.of(context).resetHelixRemote,
-                      ),
+                      label: const Text('Reset Helix Remote'),
                     ),
                   ),
                 ),
@@ -107,21 +108,21 @@ extension _RemoteAppRuntimeViews on _HelixRemoteAppState {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).confirmDestructiveReset),
-        content: Text(
-          HelixLocalizations.of(context).willPermanentlyDeleteAllLocal,
+        title: const Text('Confirm destructive reset'),
+        content: const Text(
+          'This will permanently delete all local account data, the encrypted database, and all stored keys. This cannot be undone.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(HelixLocalizations.of(context).deleteReset),
+            child: const Text('Delete and reset'),
           ),
         ],
       ),

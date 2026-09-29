@@ -97,6 +97,53 @@ abstract class HelixRemoteRestClient {
 
   Future<void> revokeDevice(String deviceId);
 
+  /// Signs out every device of this account except the calling one. Returns
+  /// how many were signed out.
+  Future<int> revokeOtherDevices();
+
+  /// Public. Whether [phoneHash] has an account and a password, plus the
+  /// salt and Argon2id cost to stretch the password with when it does.
+  Future<Map<String, dynamic>> getPasswordParams({required String phoneHash});
+
+  /// Public. Registers a brand-new device on the account with the password
+  /// (proven by [authKey]); returns the session and the wrapped identity key.
+  Future<Map<String, dynamic>> passwordLogin({
+    required String phoneHash,
+    required String authKey,
+    required String deviceId,
+    required String deviceName,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceSignature,
+  });
+
+  /// Public. Checks a password (as [authKey]) without signing a device in.
+  Future<void> verifyPassword({
+    required String phoneHash,
+    required String authKey,
+  });
+
+  /// Stores the account's encrypted text-history backup (opaque [blob]).
+  Future<void> uploadHistoryBackup(String blob);
+
+  /// The account's encrypted text-history backup, or null when none exists.
+  Future<String?> downloadHistoryBackup();
+
+  /// Whether the signed-in account has a password yet.
+  Future<Map<String, dynamic>> getPasswordStatus();
+
+  /// Sets the first password, or changes it with [currentAuthKey] or a fresh
+  /// SMS code ([otpCode]/[otpChallengeId]) as proof.
+  Future<void> setPassword({
+    required Map<String, dynamic> kdfParams,
+    required String kdfSalt,
+    required String authKey,
+    required String wrappedIdentityKey,
+    String? currentAuthKey,
+    String? otpCode,
+    String? otpChallengeId,
+  });
+
   Future<void> reportLostDevice(String deviceId);
 
   Future<List<Map<String, dynamic>>> getDeviceSecurityHistory(String deviceId);
@@ -261,7 +308,10 @@ abstract class HelixRemoteRestClient {
   /// Upcoming calls where this account is host or attendee.
   Future<List<ScheduledCall>> listScheduledGroupCalls();
 
-  Future<void> rsvpScheduledGroupCall(String scheduledCallId, {required bool yes});
+  Future<void> rsvpScheduledGroupCall(
+    String scheduledCallId, {
+    required bool yes,
+  });
 
   /// Host-only. Broadcasts `scheduled_call_cancelled` to the attendees.
   Future<void> cancelScheduledGroupCall(String scheduledCallId);
@@ -282,6 +332,18 @@ abstract class HelixRemoteRestClient {
   /// that is no longer signed in.
   Future<Map<String, dynamic>> deregisterPushToken();
 
+  /// Checks a recovery code without using it up: `valid`, `reason` when it
+  /// is not, `server_name`, `sms_required` (whether redeeming needs the SMS
+  /// code) and, when [phoneHash] is given, `phone_matches`.
+  Future<Map<String, dynamic>> lookupRecovery({
+    required String accountId,
+    required String recoveryCode,
+    String? phoneHash,
+  });
+
+  /// Resets the account onto this device and signs every other device out.
+  /// [phoneHash] must be the account's; the SMS code is required whenever the
+  /// server can send one.
   Future<Map<String, dynamic>> redeemRecovery({
     required String accountId,
     required String recoveryCode,
@@ -291,6 +353,8 @@ abstract class HelixRemoteRestClient {
     required String deviceName,
     String? accountIdentityPublicKey,
     String? phoneHash,
+    String? otpCode,
+    String? otpChallengeId,
   });
 
   Future<Map<String, dynamic>> fetchProfile();

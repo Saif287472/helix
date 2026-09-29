@@ -17,7 +17,7 @@ Status: Phase 20 governance baseline.
 
 An ADR is required before:
 
-- Moving code into `packages/shared/`.
+- Creating any package shared between `helix_local/` and `helix_remote/` (none exists; see ADR 014).
 - Reusing Local infrastructure in Remote or Remote infrastructure in Local.
 - Changing protocol, crypto, identity, trust, storage, wipe, deletion, or group
   admin contracts.
@@ -34,13 +34,13 @@ An ADR is required before:
 
 ## Ownership Map
 
-The canonical ownership map is `ownership-blast-radius.yaml`. Every app,
+The canonical ownership map is `docs/ai/ownership-blast-radius.yaml`. Every app,
 package, service, and tool module must have an owner, classification, and risk
 level before release.
 
 ## Execution Ledger
 
-`docs/architecture/PHASE_12_20_CLOSURE.md` remains the execution ledger for
-remaining and blocked Phase 12+ work. Completion evidence must distinguish
+The former ledger `docs/architecture/PHASE_12_20_CLOSURE.md` no longer exists;
+there is no single execution ledger today. Completion evidence must distinguish
 repository controls from external review, signing, staging, and production
 deployment evidence.

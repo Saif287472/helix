@@ -1431,5 +1431,51 @@ extension BackendDatabaseMigrations on BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 45;');
     }
+
+    if (version < 46) {
+      // Password sign-in. The server never sees the password: the app
+      // stretches it with Argon2id into an auth key (sent, and hashed again
+      // here) and a wrap key (never sent) that encrypts the account identity
+      // private key. `wrapped_identity_key` is that ciphertext, bound to the
+      // identity public key it wraps - when the identity key rotates (phone
+      // takeover, recovery) the row is deleted because it no longer unlocks
+      // anything.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS account_passwords (
+          account_id TEXT PRIMARY KEY
+            REFERENCES accounts(account_id) ON DELETE CASCADE,
+          kdf_params TEXT NOT NULL,
+          kdf_salt TEXT NOT NULL,
+          auth_hash TEXT NOT NULL,
+          auth_hash_salt TEXT NOT NULL,
+          wrapped_identity_key TEXT NOT NULL,
+          identity_public_key TEXT NOT NULL,
+          failed_attempts INTEGER NOT NULL DEFAULT 0,
+          locked_until INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 46;');
+    }
+
+    if (version < 47) {
+      // Automatic text-history backup, one per account. The app encrypts it
+      // with a key derived from the account identity key before upload, so
+      // this is opaque ciphertext. `identity_public_key` records which
+      // identity it was made under: when the identity rotates (phone
+      // takeover, recovery) nobody can decrypt it any more and it is deleted.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS history_backups (
+          account_id TEXT PRIMARY KEY
+            REFERENCES accounts(account_id) ON DELETE CASCADE,
+          identity_public_key TEXT NOT NULL,
+          blob TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 47;');
+    }
   }
 }

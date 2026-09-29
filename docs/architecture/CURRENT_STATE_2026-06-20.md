@@ -1,5 +1,7 @@
 # Current State Evidence Ledger - 2026-06-20
 
+> **Status: historical (June 2026, pre-split layout).** Paths below refer to the old single-workspace tree (`apps/`, `packages/`, `services/`, root `tool/`/`scripts/`). Code now lives in two workspaces, `helix_local/` and `helix_remote/`. For current Remote docs see `helix_remote/docs/` and `AGENTS.md`.
+
 This ledger is the Phase 0 evidence baseline for the enterprise improvement
 cycle. It classifies executable behavior only. A class, package, or checklist
 entry is not counted as implemented unless the app wiring path and tests prove

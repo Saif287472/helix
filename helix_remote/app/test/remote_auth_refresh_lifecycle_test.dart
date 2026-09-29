@@ -3,7 +3,8 @@
 // Verifies:
 //   P04-L01  restart refresh rotates stored tokens before authentication.
 //   P04-L02  revoked/replayed refresh token returns to setup and clears session.
-//   P04-L03  refresh network failure is recoverable and preserves session.
+//   P04-L03  a refresh that cannot reach the server still opens the app on
+//            this device's data, and preserves the session.
 //   P04-L04  logout clears local session without deleting app data.
 
 import 'dart:convert';
@@ -148,35 +149,86 @@ void main() {
       },
     );
 
-    test('P04-L03: refresh network failure is recoverable', () async {
-      final dir = Directory.systemTemp.createTempSync('p04_l03_');
-      addTearDown(() => dir.deleteSync(recursive: true));
+    test(
+      'P04-L03: an unreachable server still opens the app offline',
+      () async {
+        final dir = Directory.systemTemp.createTempSync('p04_l03_');
+        addTearDown(() => dir.deleteSync(recursive: true));
 
-      final store = _InMemoryKeyValueStore();
-      await _seedSession(store);
-      final root = RemoteCompositionRoot.withConfig(
-        _productConfig(dir.path),
-        devConfig: _devConfig(dir.path, Uri.parse('http://127.0.0.1:9')),
-        keyValueStore: store,
-      );
-      addTearDown(root.dispose);
+        final store = _InMemoryKeyValueStore();
+        await _seedSession(store);
+        final root = RemoteCompositionRoot.withConfig(
+          _productConfig(dir.path),
+          devConfig: _devConfig(dir.path, Uri.parse('http://127.0.0.1:9')),
+          keyValueStore: store,
+        );
+        addTearDown(root.dispose);
 
-      await root.initialize();
-      final restored = await root.tryRestoreSession();
+        await root.initialize();
+        final restored = await root.tryRestoreSession();
 
-      expect(restored, isFalse);
-      expect(root.startupState, RemoteStartupState.recoverableFailure);
-      expect(
-        root.lastError,
-        anyOf(
-          contains('Helix Remote server is unreachable'),
-          contains('did not respond in time'),
-        ),
-      );
-      expect(root.lastError, isNot(contains('network recovers')));
-      expect(await store.read('access_token'), equals('expired-access'));
-      expect(await store.read('refresh_token'), equals('refresh-1'));
-    });
+        // Like a messenger: the chats on this device open without the server;
+        // the token is refreshed once the server answers again.
+        expect(restored, isTrue);
+        expect(root.startupState, RemoteStartupState.authenticatedAndSyncing);
+        expect(
+          root.lastError,
+          anyOf(
+            contains('Helix Remote server is unreachable'),
+            contains('did not respond in time'),
+          ),
+        );
+        expect(root.lastError, isNot(contains('network recovers')));
+        expect(await store.read('access_token'), equals('expired-access'));
+        expect(await store.read('refresh_token'), equals('refresh-1'));
+      },
+    );
+
+    test(
+      'P04-L06: a still-valid access token opens without a round trip',
+      () async {
+        final dir = Directory.systemTemp.createTempSync('p04_l06_');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        var refreshCalls = 0;
+        final server = await HttpServer.bind('127.0.0.1', 0);
+        addTearDown(() => server.close(force: true));
+        server.listen((request) async {
+          if (request.uri.path.endsWith('/accounts/refresh')) refreshCalls++;
+          await request.drain<void>();
+          request.response.statusCode = 404;
+          await request.response.close();
+        });
+
+        String b64(Map<String, Object> json) =>
+            base64Url.encode(utf8.encode(jsonEncode(json))).replaceAll('=', '');
+        final exp =
+            DateTime.now()
+                .add(const Duration(minutes: 30))
+                .millisecondsSinceEpoch ~/
+            1000;
+        final token =
+            '${b64({'alg': 'HS256', 'typ': 'JWT'})}.${b64({'exp': exp})}.sig';
+
+        final store = _InMemoryKeyValueStore();
+        await _seedSession(store);
+        await store.write('access_token', token);
+        final root = RemoteCompositionRoot.withConfig(
+          _productConfig(dir.path),
+          devConfig: _devConfig(
+            dir.path,
+            Uri.parse('http://127.0.0.1:${server.port}'),
+          ),
+          keyValueStore: store,
+        );
+        addTearDown(root.dispose);
+
+        await root.initialize();
+        expect(await root.tryRestoreSession(), isTrue);
+
+        expect(root.startupState, RemoteStartupState.authenticatedAndSyncing);
+        expect(refreshCalls, 0);
+      },
+    );
 
     test(
       'P04-L05: interrupted token rotation is recovered on next startup',

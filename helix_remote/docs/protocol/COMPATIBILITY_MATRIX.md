@@ -1,6 +1,15 @@
 # Protocol Compatibility Matrix
 
-Status: F11 account/platform expansion baseline.
+Status: F11 account/platform expansion baseline, with 2026-09 additions
+(password sign-in, history backup).
+
+> Current schema versions (2026-09): app local database `latestSchemaVersion`
+> 31 (`packages/helix_remote_storage/lib/src/database/migrations.dart`, v31 adds
+> `local_identity`); backend `PRAGMA user_version` 47
+> (`backend/lib/src/database/migrations.dart`; v46 `account_passwords`, v47
+> `history_backups`). The capability names below stop at local v26 / backend
+> v32 in this list and at local v23 / backend v24 in
+> `RemoteCapabilityRegistry`; neither has been advanced since.
 
 F0 freezes the Remote baseline around:
 
@@ -41,11 +50,13 @@ Capability names are defined by `RemoteCapability` in
 `packages/helix_remote_domain`.
 
 Stage 3 moves protocol code into `lib/protocol/` without changing the wire
-format. Current protocol version remains `2.2`.
+format. Current protocol version remains `2.2`. (This paragraph and the
+"Version 2.2 Frames", "Unknown-Frame Behavior" sections below describe the
+Helix Local LAN protocol, not Helix Remote.)
 
 ## F1 Device Trust Compatibility
 
-New-device onboarding uses:
+All routes are under `/api/v1`. Device linking uses:
 
 - `POST /accounts/devices/link/request-new`
 - `POST /accounts/devices/link/verify`
@@ -55,6 +66,31 @@ New-device onboarding uses:
 Legacy `/accounts/devices/link/request` and `/complete` remain mounted for old
 clients, but clients that support `helix.remote.multi-device-trust.v1` should
 use the fresh-device request and signed completion flow.
+
+## Password Sign-In Compatibility
+
+Backend schema v46 adds `account_passwords`. Routes:
+
+- `POST /accounts/password/params` (public)
+- `POST /accounts/password/login` (public)
+- `POST /accounts/password/verify` (public)
+- `GET /accounts/password`, `POST /accounts/password` (session)
+- `POST /accounts/devices/revoke-others` (session)
+
+Password KDF parameters travel with each account (`kdf_params`: `alg`
+`argon2id`, `memory_kib`, `iterations`, `parallelism`, `length`), so future
+clients can raise the cost; the server refuses `memory_kib` below 19456 and any
+`length` other than 64. The login transcript is versioned
+(`helix.remote.password-login.v1`). There is no capability token for password
+support. `POST /messages/send` answers 409 `device_list_stale` with
+`missing_device_ids`; clients must refetch bundles and rebuild the send.
+
+## History Backup Compatibility
+
+Backend schema v47 adds `history_backups`. Routes: `PUT /backups/history` and
+`GET /backups/history` (session; 16 MB limit, 413 above it). The blob is an
+opaque, versioned envelope (`v: 1`, key info `helix.remote.history-backup.v1`)
+the server never parses.
 
 ## F2 Backup Compatibility
 
@@ -149,7 +185,8 @@ backend at all; this is an intentional hard cut (see the overhaul's Phase 5
 decision), not an oversight, since there were no real users on v2 at the time
 of the cut.
 
-v3 registration requires `phone_hash`, `otp_code`, and `invite_code` in place
+v3 registration requires `phone_hash`, `otp_code`, and `invite_code` (personal
+servers only; Helix Global takes no invite but requires `tos_version`) in place
 of v2's `username`, and the registration transcript
 (`helix.remote.registration.v3` in the signed payload) binds all three plus
 the account/device key material together, so a signature cannot be replayed

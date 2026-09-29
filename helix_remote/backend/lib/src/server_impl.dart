@@ -31,6 +31,7 @@ import 'package:helix_remote_backend/src/modules/calls.dart';
 import 'package:helix_remote_backend/src/modules/groups.dart';
 import 'package:helix_remote_backend/src/modules/group_calls.dart';
 import 'package:helix_remote_backend/src/admin_password.dart';
+import 'package:helix_remote_backend/src/modules/app_links.dart';
 import 'package:helix_remote_backend/src/modules/operability.dart';
 import 'package:helix_remote_backend/src/modules/privacy_compliance.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
@@ -77,6 +78,10 @@ class BackendServer {
   final String publicBaseUrl;
   final bool globalInstanceMode;
   final String serverAudience;
+
+  /// SHA-256 fingerprints of the Android app's signing certificates, for
+  /// `/.well-known/assetlinks.json` (see [AppLinksModule]).
+  final List<String> androidCertFingerprints;
   HttpServer? _httpServer;
   HttpServer? get httpServer => _httpServer;
 
@@ -108,6 +113,7 @@ class BackendServer {
     required this.publicBaseUrl,
     this.globalInstanceMode = false,
     this.serverAudience = '',
+    this.androidCertFingerprints = const [],
   });
 
   factory BackendServer.create({
@@ -138,6 +144,7 @@ class BackendServer {
     String? publicBaseUrl,
     bool? globalInstanceMode,
     String? serverAudience,
+    List<String> androidCertFingerprints = const [],
   }) {
     final db = BackendDatabase(sqliteDb);
     final jwt = jwtKeyRing == null
@@ -207,6 +214,13 @@ class BackendServer {
                 Platform.environment['HELIX_REMOTE_PUBLIC_BASE_URL'] ??
                 '',
           ),
+      androidCertFingerprints: androidCertFingerprints.isNotEmpty
+          ? androidCertFingerprints
+          : (Platform.environment['HELIX_ANDROID_CERT_SHA256'] ?? '')
+                .split(',')
+                .map((f) => f.trim().toUpperCase())
+                .where((f) => f.isNotEmpty)
+                .toList(),
     );
   }
 
@@ -336,6 +350,13 @@ class BackendServer {
 
     // WebSocket route
     router.get('/api/v1/ws', wsRelay.handleUpgrade);
+
+    // Shared invite/recovery links: the app-link proof and the landing page.
+    final appLinks = AppLinksModule(
+      androidCertFingerprints: androidCertFingerprints,
+    );
+    router.get('/.well-known/assetlinks.json', appLinks.assetLinks);
+    router.get('/open', appLinks.openPage);
 
     final pipeline = const Pipeline()
         .addMiddleware(_correlationMiddleware())
@@ -627,7 +648,11 @@ class BackendServer {
             path.endsWith('/accounts/phone/otp/verify') ||
             path.endsWith('/accounts/invite/lookup') ||
             path.endsWith('/accounts/invite/auto-issue') ||
+            path.endsWith('/accounts/recovery/lookup') ||
             path.endsWith('/accounts/recovery/redeem') ||
+            path.endsWith('/accounts/password/params') ||
+            path.endsWith('/accounts/password/login') ||
+            path.endsWith('/accounts/password/verify') ||
             // Legal documents must be readable before a user has an account.
             path.endsWith('/server/tos') ||
             path.endsWith('/contacts/discovery-salt') ||
@@ -641,7 +666,9 @@ class BackendServer {
             path.endsWith('/admin/auth/login') ||
             path.endsWith('/admin/logs/stream') ||
             path.endsWith('/ops/logs/stream') ||
-            path.endsWith('/ws')) {
+            path.endsWith('/ws') ||
+            path == '.well-known/assetlinks.json' ||
+            path == 'open') {
           return innerHandler(request);
         }
 

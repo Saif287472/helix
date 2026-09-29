@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/widgets/onboarding_security_badges.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 const _securityClaim = 'Protected by military-grade AES-256 encryption';
 const _otpCaution =
@@ -13,11 +12,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
-        home: Scaffold(body: OnboardingSecurityBadge()),
-      ),
+      const MaterialApp(home: Scaffold(body: OnboardingSecurityBadge())),
     );
 
     expect(find.text(_securityClaim), findsOneWidget);
@@ -29,11 +24,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
-        home: Scaffold(body: OtpPlaceholderNotice()),
-      ),
+      const MaterialApp(home: Scaffold(body: OtpPlaceholderNotice())),
     );
 
     expect(find.text(_otpCaution), findsOneWidget);
@@ -47,8 +38,6 @@ void main() {
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: Scaffold(
             body: Column(
               children: [OnboardingSecurityBadge(), OtpPlaceholderNotice()],

@@ -173,6 +173,9 @@ jobs:
   fuzz-seed-corpus:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helix_remote
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/app/account_restriction.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote/widgets/account_restriction_gate.dart';
 
 void main() {
@@ -11,8 +10,6 @@ void main() {
     Future<void> pumpGate(WidgetTester tester) => tester.pumpWidget(
       MaterialApp(
         navigatorKey: navigatorKey,
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         builder: (context, child) =>
             AccountRestrictionGate(navigatorKey: navigatorKey, child: child!),
         home: const Scaffold(body: Text('home screen')),
@@ -28,44 +25,46 @@ void main() {
       tester,
     ) async {
       await pumpGate(tester);
-      final en = await HelixLocalizations.delegate.load(const Locale('en'));
       AccountRestrictionState.restriction.value = AccountRestriction.suspended;
       await tester.pump();
 
       expect(find.text('home screen'), findsOneWidget);
-      expect(find.textContaining(en.accountSuspendedBanner), findsOneWidget);
-      expect(find.text(en.accountRestrictionContactSupport), findsOneWidget);
+      expect(
+        find.textContaining(
+          "Your account is suspended. You can still read messages, but you can't send messages, add contacts or make calls.",
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Contact support'), findsOneWidget);
     });
 
     testWidgets('a refused action explains the suspension in a dialog', (
       tester,
     ) async {
       await pumpGate(tester);
-      final en = await HelixLocalizations.delegate.load(const Locale('en'));
       AccountRestrictionState.restriction.value = AccountRestriction.suspended;
       AccountRestrictionState.refusedAttempts.value++;
       await tester.pumpAndSettle();
 
-      expect(find.text(en.accountSuspendedTitle), findsOneWidget);
-      await tester.tap(find.text(en.accountRestrictionOk));
+      expect(find.text('Account suspended'), findsOneWidget);
+      await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
-      expect(find.text(en.accountSuspendedTitle), findsNothing);
+      expect(find.text('Account suspended'), findsNothing);
     });
 
     testWidgets('blocked offers exactly the three ways forward', (
       tester,
     ) async {
       await pumpGate(tester);
-      final en = await HelixLocalizations.delegate.load(const Locale('en'));
       AccountRestrictionState.restriction.value = AccountRestriction.blocked;
       await tester.pump();
 
       expect(find.text('home screen'), findsNothing);
-      expect(find.text(en.accountBlockedTitle), findsOneWidget);
-      expect(find.text(en.accountRestrictionContactSupport), findsOneWidget);
-      expect(find.text(en.accountBlockedLeaveApp), findsOneWidget);
+      expect(find.text('This number is blocked'), findsOneWidget);
+      expect(find.text('Contact support'), findsOneWidget);
+      expect(find.text('Leave the app'), findsOneWidget);
 
-      await tester.tap(find.text(en.accountBlockedUseDifferentNumber));
+      await tester.tap(find.text('Sign in with a different number'));
       await tester.pump();
       expect(
         AccountRestrictionState.restriction.value,
@@ -79,13 +78,14 @@ void main() {
     ) async {
       AccountRestrictionState.serverIsGlobal = false;
       await pumpGate(tester);
-      final en = await HelixLocalizations.delegate.load(const Locale('en'));
       AccountRestrictionState.restriction.value = AccountRestriction.blocked;
       await tester.pump();
 
-      expect(find.text(en.accountRestrictionContactSupport), findsNothing);
+      expect(find.text('Contact support'), findsNothing);
       expect(
-        find.textContaining(en.accountRestrictionContactPersonal),
+        find.textContaining(
+          'Contact the admin of this server to find out why and how to get access back.',
+        ),
         findsOneWidget,
       );
     });

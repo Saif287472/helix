@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_remote/app/account_restriction.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Draws account restrictions over every route.
@@ -48,24 +47,24 @@ class _AccountRestrictionGateState extends State<AccountRestrictionGate> {
     // calls can be refused together.
     if (navContext == null || _dialogOpen) return;
     _dialogOpen = true;
-    final l10n = HelixLocalizations.of(navContext);
     await showDialog<void>(
       context: navContext,
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.block_outlined),
-        title: Text(l10n.accountSuspendedTitle),
+        title: const Text('Account suspended'),
         content: Text(
-          '${l10n.accountSuspendedRefused}\n\n${_contactLine(l10n)}',
+          "This isn't available while your account is suspended.\n\n"
+          '${_contactLine()}',
         ),
         actions: [
           if (AccountRestrictionState.serverIsGlobal)
             TextButton(
               onPressed: () => _contactSupport(ctx),
-              child: Text(l10n.accountRestrictionContactSupport),
+              child: const Text('Contact support'),
             ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(l10n.accountRestrictionOk),
+            child: const Text('OK'),
           ),
         ],
       ),
@@ -103,16 +102,15 @@ class _AccountRestrictionGateState extends State<AccountRestrictionGate> {
   }
 }
 
-String _contactLine(HelixLocalizations l10n) =>
-    AccountRestrictionState.serverIsGlobal
-    ? l10n.accountRestrictionContactGlobal
-    : l10n.accountRestrictionContactPersonal;
+String _contactLine() => AccountRestrictionState.serverIsGlobal
+    ? 'Contact Helix support to find out why and how to get access back.'
+    : 'Contact the admin of this server to find out why and how to get access back.';
 
 /// Opens the mail app addressed to Helix support, or copies the address when
 /// no mail app can take it.
 Future<void> _contactSupport(BuildContext context) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
-  final copied = HelixLocalizations.of(context).accountRestrictionSupportCopied;
+  final copied = 'Support email copied';
   final uri = Uri(
     scheme: 'mailto',
     path: kHelixSupportEmail,
@@ -136,7 +134,6 @@ class _SuspendedBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = HelixLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.errorContainer,
@@ -150,7 +147,9 @@ class _SuspendedBanner extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '${l10n.accountSuspendedBanner} ${_contactLine(l10n)}',
+                  "Your account is suspended. You can still read messages, but you "
+                  "can't send messages, add contacts or make calls. "
+                  '${_contactLine()}',
                   style: TextStyle(
                     color: scheme.onErrorContainer,
                     fontSize: 13,
@@ -163,7 +162,7 @@ class _SuspendedBanner extends StatelessWidget {
                   style: TextButton.styleFrom(
                     foregroundColor: scheme.onErrorContainer,
                   ),
-                  child: Text(l10n.accountRestrictionContactSupport),
+                  child: const Text('Contact support'),
                 ),
             ],
           ),
@@ -178,7 +177,6 @@ class _BlockedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = HelixLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: SafeArea(
@@ -194,13 +192,15 @@ class _BlockedScreen extends StatelessWidget {
                   Icon(Icons.block, size: 56, color: scheme.error),
                   const SizedBox(height: 20),
                   Text(
-                    l10n.accountBlockedTitle,
+                    'This number is blocked',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '${l10n.accountBlockedBody}\n\n${_contactLine(l10n)}',
+                    'This phone number has been permanently blocked on this server, and '
+                    'the account that used it has been removed.\n\n'
+                    '${_contactLine()}',
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 28),
@@ -208,7 +208,7 @@ class _BlockedScreen extends StatelessWidget {
                     FilledButton.icon(
                       icon: const Icon(Icons.mail_outline),
                       onPressed: () => _contactSupport(context),
-                      label: Text(l10n.accountRestrictionContactSupport),
+                      label: const Text('Contact support'),
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -218,13 +218,13 @@ class _BlockedScreen extends StatelessWidget {
                     // lifting this screen reveals onboarding underneath.
                     onPressed: () => AccountRestrictionState.restriction.value =
                         AccountRestriction.none,
-                    label: Text(l10n.accountBlockedUseDifferentNumber),
+                    label: const Text('Sign in with a different number'),
                   ),
                   const SizedBox(height: 12),
                   TextButton.icon(
                     icon: const Icon(Icons.exit_to_app),
                     onPressed: () => SystemNavigator.pop(),
-                    label: Text(l10n.accountBlockedLeaveApp),
+                    label: const Text('Leave the app'),
                   ),
                 ],
               ),

@@ -1,5 +1,7 @@
 # Helix Global Server — Implementation Plan
 
+> **Status: implemented (commits 9b16ba7, 10fcb2f, 2026-09-25).** Since then, password sign-in was added: a password adds a device without signing others out, while SMS-OTP sign-in on Global still moves the account onto the new device and signs the others out (`helix_remote/backend/lib/src/modules/auth/password.dart`, `registration.dart`).
+
 ## Decisions Locked In
 
 | Question | Decision |

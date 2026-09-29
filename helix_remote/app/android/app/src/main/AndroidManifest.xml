@@ -61,6 +61,19 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="helix" />
             </intent-filter>
+            <!-- Shared invite and recovery links (https://helix.agiletechbd.com/open#HLX-...).
+                 Verified against /.well-known/assetlinks.json on that host, which
+                 the backend serves from HELIX_ANDROID_CERT_SHA256; unverified, the
+                 link opens its landing page, whose button opens the app. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="helix.agiletechbd.com" android:pathPrefix="/open" />
+            </intent-filter>
+            <!-- Links reach Dart through com.helix.remote/links (MainActivity), not
+                 as Navigator routes: none of them names a route the app has. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
         </activity>
         <service
             android:name=".CallForegroundService"

@@ -15,6 +15,54 @@ import 'package:helix_remote_domain/models.dart';
 /// data, because a silent `return true` here would let a test pass while the
 /// feature it thinks it covers does nothing.
 mixin GroupCallRestStubs {
+  Never _passwordNotStubbed(String method) => throw UnimplementedError(
+    'HelixRemoteRestClient.$method was called but this test does not stub '
+    'password sign-in. Override it in the fake if the test is meant to '
+    'cover it.',
+  );
+  Future<int> revokeOtherDevices() async =>
+      _passwordNotStubbed('revokeOtherDevices');
+  Future<Map<String, dynamic>> getPasswordParams({
+    required String phoneHash,
+  }) async => _passwordNotStubbed('getPasswordParams');
+  Future<Map<String, dynamic>> passwordLogin({
+    required String phoneHash,
+    required String authKey,
+    required String deviceId,
+    required String deviceName,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceSignature,
+  }) async => _passwordNotStubbed('passwordLogin');
+  Future<void> verifyPassword({
+    required String phoneHash,
+    required String authKey,
+  }) async => _passwordNotStubbed('verifyPassword');
+  Future<Map<String, dynamic>> lookupRecovery({
+    required String accountId,
+    required String recoveryCode,
+    String? phoneHash,
+  }) async => {'valid': false, 'reason': 'invalid'};
+  // History backup runs in the background after every sign-in; a fake that
+  // does not care has no backup and accepts uploads.
+  Future<void> uploadHistoryBackup(String blob) async {}
+  Future<String?> downloadHistoryBackup() async => null;
+  // The app asks after every sign-in whether a password exists; a fake that
+  // does not care answers "yes" so the create-password gate stays out of
+  // unrelated tests.
+  Future<Map<String, dynamic>> getPasswordStatus() async => {
+    'has_password': true,
+  };
+  Future<void> setPassword({
+    required Map<String, dynamic> kdfParams,
+    required String kdfSalt,
+    required String authKey,
+    required String wrappedIdentityKey,
+    String? currentAuthKey,
+    String? otpCode,
+    String? otpChallengeId,
+  }) async => _passwordNotStubbed('setPassword');
+
   Never _groupCallsNotStubbed(String method) => throw UnimplementedError(
     'HelixRemoteRestClient.$method was called but this test does not stub '
     'group calls. Override it in the fake if the test is meant to cover it.',

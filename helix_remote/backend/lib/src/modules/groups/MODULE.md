@@ -24,14 +24,14 @@ mixins, the same mechanism `../auth/` uses.
 
 | File | Lines | Holds |
 |---|---|---|
-| `../groups.dart` | ~200 | Routes, collaborators, and the remote-action dispatch table |
+| `../groups.dart` | ~195 | Routes, collaborators, and the remote-action dispatch table |
 | `federation.dart` | ~170 | `_proxyToHome`, `_requireHomeOnly`, roster sync push |
-| `lifecycle.dart` | ~330 | create / info / members / update / delete |
-| `membership.dart` | ~640 | invite, respond, role, leave, remove, transfer |
-| `join_links.dart` | ~395 | add policy, join links, approval queue |
-| `moderation.dart` | ~150 | admin message deletion, member blocking |
-| `epoch_keys.dart` | ~150 | Sender Key epoch distribution |
-| `relay.dart` | ~80 | fan-out helpers, last-admin promotion, `_unauthorized` |
+| `lifecycle.dart` | ~290 | create / info / members / update / delete |
+| `membership.dart` | ~545 | invite, respond, role, leave, remove, transfer |
+| `join_links.dart` | ~315 | add policy, join links, approval queue |
+| `moderation.dart` | ~125 | admin message deletion, member blocking |
+| `epoch_keys.dart` | ~135 | Sender Key epoch distribution |
+| `relay.dart` | ~90 | fan-out helpers, last-admin promotion, `_unauthorized` |
 
 `GroupsModuleBase` in `../groups.dart` lists exactly the helpers that cross
 a part boundary — Dart mixins can only see members declared on their `on`

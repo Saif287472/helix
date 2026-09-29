@@ -13,8 +13,19 @@ mixin RemoteMessagingCore on RemoteMessagingServiceBase {
   }) async {
     db.upsertAccount(account);
     db.upsertDevice(account.accountId, device);
+    db.setLocalDeviceId(device.deviceId);
     _accountId = account.accountId;
     _deviceId = device.deviceId;
+    // These used to live only in memory, so every restart silently reset
+    // read receipts to on and presence to CONTACTS - whatever the user had
+    // chosen in Settings.
+    _readReceiptsEnabled = db.getReadReceiptsEnabled();
+    final stored = db.getAccountPrivacyPreferences();
+    _privacySettings = RemotePrivacySettings(
+      searchDiscoverable: stored.searchDiscoverable,
+      presenceVisibility: stored.presenceVisibility,
+      lastSeenVisibility: stored.lastSeenVisibility,
+    );
     _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.devices}));
   }
 
@@ -28,6 +39,7 @@ mixin RemoteMessagingCore on RemoteMessagingServiceBase {
 
   void setReadReceiptsEnabled(bool enabled) {
     _readReceiptsEnabled = enabled;
+    db.setReadReceiptsEnabled(enabled: enabled);
   }
 
   void verifyDevice({required String accountId, required String deviceId}) {
@@ -54,6 +66,7 @@ mixin RemoteMessagingCore on RemoteMessagingServiceBase {
   }
 
   String? get currentAccountId => _accountId;
+  String? get currentDeviceId => _deviceId;
   String? get currentDisplayName => _displayName;
   void setDisplayName(String name) => _displayName = name;
 

@@ -50,7 +50,7 @@ class S2SModule {
     }
 
     try {
-      final devices = db.getDevices(targetAccountId);
+      final devices = db.getActiveDevices(targetAccountId);
       if (devices.isEmpty) {
         throw AppError.notFound('No active devices found for this account');
       }
@@ -266,7 +266,7 @@ class S2SModule {
             payload == null) {
           continue;
         }
-        for (final dev in db.getDevices(recipientAccountId)) {
+        for (final dev in db.getActiveDevices(recipientAccountId)) {
           final targetDeviceId = dev['device_id'] as String;
           int? deviceSeq;
           final eventId =
@@ -391,7 +391,7 @@ class S2SModule {
             // cross-server push can land while the invitee's device isn't
             // connected, and there's no "reconnect and refetch" fallback
             // for it the way a local device implicitly has.
-            for (final dev in db.getDevices(inviteeId)) {
+            for (final dev in db.getActiveDevices(inviteeId)) {
               final devId = dev['device_id'] as String;
               final eventId = 'group_invite_${inviteId}_$devId';
               final deviceSeq = db.writeDeviceEvent(
@@ -439,7 +439,7 @@ class S2SModule {
         : {'group_id': groupId, 'action': 'synced'};
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final memberId in after) {
-      for (final dev in db.getDevices(memberId)) {
+      for (final dev in db.getActiveDevices(memberId)) {
         final devId = dev['device_id'] as String;
         final eventId = '${eventType}_${groupId}_${now}_$devId';
         final deviceSeq = db.writeDeviceEvent(

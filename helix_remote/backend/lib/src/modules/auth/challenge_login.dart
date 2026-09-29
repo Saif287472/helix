@@ -84,8 +84,16 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
     );
 
     if (device.isEmpty) {
-      throw AppError.forbidden('Device not registered or inactive');
+      throw AppError.forbidden(
+        'Device not registered',
+        code: RemoteErrorCode.deviceRevoked,
+      );
     }
+    // getDevices includes REVOKED rows. A revoked device used to be handed a
+    // token here that the auth middleware then refused on first use; the app
+    // re-signs in with its device key after a failed refresh, so it must learn
+    // here, once, that the device is gone.
+    _requireActiveDevice(accountId, deviceId);
 
     // Suspended accounts sign in normally and are then limited by the auth
     // middleware, so the app can show why instead of failing the login.
@@ -119,33 +127,7 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
       throw AppError.forbidden('Signature verification failed');
     }
 
-    // Generate Access Token (1 hour expiry)
-    final accessToken = jwt.generateToken({
-      'account_id': accountId,
-      'device_id': deviceId,
-    }, const Duration(hours: 1));
-
-    // Generate Refresh Token (7 days expiry)
-    final refreshToken = jwt.generateToken({
-      'account_id': accountId,
-      'device_id': deviceId,
-      'refresh': true,
-      'jti': Random.secure().nextInt(1000000000).toString(),
-    }, const Duration(days: 7));
-
-    // Hash refresh token and save in database
-    final tokenHash = crypto_pkg.sha256
-        .convert(utf8.encode(refreshToken))
-        .toString();
-    final expiresAt = DateTime.now()
-        .add(const Duration(days: 7))
-        .millisecondsSinceEpoch;
-    db.saveRefreshToken(
-      tokenHash: tokenHash,
-      accountId: accountId,
-      deviceId: deviceId,
-      expiresAt: expiresAt,
-    );
+    final session = _issueDeviceSession(accountId, deviceId);
 
     db.logAudit(
       accountId,
@@ -155,13 +137,7 @@ mixin AuthChallengeLoginHandlers on AuthModuleBase {
       null,
     );
 
-    return Response.ok(
-      jsonEncode({
-        'token': accessToken,
-        'refresh_token': refreshToken,
-        'message': 'Login successful',
-      }),
-    );
+    return Response.ok(jsonEncode({...session, 'message': 'Login successful'}));
   }
 
   @override

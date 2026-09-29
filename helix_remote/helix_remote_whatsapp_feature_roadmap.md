@@ -1,5 +1,7 @@
 # Helix Remote — Core Feature Roadmap
 
+> **Status: historical (July 2026).** Current differences: contacts are discovered by salted phone-number hash (no usernames), the app is light-only (no dark mode), and it is English-only (no Bengali/localization layer). For current state see `helix_remote/docs/`.
+
 > **Notice:** The WhatsApp-inspired feature roadmap (141 features) is officially deprecated and archived. Helix is **not** trying to be WhatsApp, and we are not implementing business features, payments, stories/status updates, channels, or communities. 
 >
 > Helix is a secure, private, self-hosted, and federated communication platform. The development focus is strictly on the **20 features that matter**.

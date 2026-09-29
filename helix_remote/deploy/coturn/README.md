@@ -115,6 +115,51 @@ The admin console's Config screen should now show **TURN Server
 Configured: ENABLED**, and the Logs screen should no longer carry the
 `HELIX_REMOTE_TURN_URL or HELIX_REMOTE_TURN_SECRET is not set` warning.
 
+## Windows home PC (behind a router)
+
+Helix Global currently runs on a Windows PC rather than a VPS. coturn has
+no native Windows build, so `windows/start-turn.ps1` runs it in WSL1 (which
+shares Windows' network stack) using the same template and entrypoint as
+above. The router is what makes this different from the VPS: coturn listens
+on the PC's LAN address and advertises the router's public one.
+
+### One-time setup
+
+1. **Install coturn in WSL:** `wsl -d Ubuntu -u root -- apt install -y coturn`.
+2. **Give the PC a fixed LAN address** (a DHCP reservation in the router),
+   because the port forwards below point at it.
+3. **Forward on the router** to that LAN address: UDP 3478, TCP 3478, and
+   UDP 49160-49200 (the relay range in `turnserver.conf`).
+4. **Allow them through Windows Firewall** (elevated PowerShell):
+
+   ```powershell
+   New-NetFirewallRule -DisplayName 'Helix TURN (UDP)' -Direction Inbound -Protocol UDP -LocalPort 3478,49160-49200 -Action Allow
+   New-NetFirewallRule -DisplayName 'Helix TURN (TCP)' -Direction Inbound -Protocol TCP -LocalPort 3478 -Action Allow
+   ```
+
+5. **Configure the backend in `backend/.env` only.** The backend lets
+   Windows environment variables override `.env`, so remove any
+   `HELIX_REMOTE_TURN_*` user/system environment variables - otherwise the
+   backend and coturn can end up with different secrets.
+
+   ```ini
+   HELIX_REMOTE_TURN_URL=turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp
+   HELIX_REMOTE_TURN_SECRET=<openssl rand -hex 32>
+   ```
+
+   Restart the backend after changing either value.
+
+### Run
+
+```powershell
+.\deploy\coturn\windows\start-turn.ps1   # detects public and LAN IP
+.\deploy\coturn\windows\stop-turn.ps1
+```
+
+The public IP is detected at each start. A home connection's public IP can
+change; when it does, the DNS record and this relay both need the new one -
+re-run `start-turn.ps1` after updating DNS.
+
 ## Verifying it actually relays
 
 Config saying ENABLED only means the backend has a URL and a secret. To

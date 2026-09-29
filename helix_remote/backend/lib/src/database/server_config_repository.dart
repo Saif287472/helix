@@ -55,13 +55,10 @@ extension BackendServerConfigRepository on BackendDatabase {
 
   /// Richer per-user view for the admin console's Users screen: account_id,
   /// display name, the invite they redeemed (if any), a count of the account's
-  /// ACTIVE devices, and phone_last4 - the
-  /// last 2-4 digits of the phone number submitted at registration
-  /// specifically as a display hint (see AuthRegistrationHandlers). Still
-  /// never selects username or phone_hash, for the same reason as
-  /// getAllUsersPaginated above; phone_last4 is the one intentional,
-  /// narrow exception to "no phone data leaves the hash," since it cannot
-  /// be used to recover the full number or to identify/match an account.
+  /// ACTIVE devices, and phone_last4 - the phone number submitted at
+  /// registration (see AuthRegistrationHandlers). Still never selects
+  /// username or phone_hash, for the same reason as getAllUsersPaginated
+  /// above.
   List<Map<String, dynamic>> getAllUsersDetailedPaginated({
     required int limit,
     required int offset,

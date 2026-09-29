@@ -348,6 +348,21 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   );
 
   @override
+  Future<Map<String, dynamic>> lookupRecovery({
+    required String accountId,
+    required String recoveryCode,
+    String? phoneHash,
+  }) => _request(
+    'POST',
+    'accounts/recovery/lookup',
+    body: {
+      'account_id': accountId,
+      'recovery_code': recoveryCode,
+      if (phoneHash != null && phoneHash.isNotEmpty) 'phone_hash': phoneHash,
+    },
+  );
+
+  @override
   Future<Map<String, dynamic>> redeemRecovery({
     required String accountId,
     required String recoveryCode,
@@ -357,6 +372,8 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
     required String deviceName,
     String? accountIdentityPublicKey,
     String? phoneHash,
+    String? otpCode,
+    String? otpChallengeId,
   }) => _request(
     'POST',
     'accounts/recovery/redeem',
@@ -371,6 +388,9 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
           accountIdentityPublicKey.isNotEmpty)
         'account_identity_public_key': accountIdentityPublicKey,
       if (phoneHash != null && phoneHash.isNotEmpty) 'phone_hash': phoneHash,
+      if (otpCode != null && otpCode.isNotEmpty) 'otp_code': otpCode,
+      if (otpChallengeId != null && otpChallengeId.isNotEmpty)
+        'otp_challenge_id': otpChallengeId,
     },
   );
 
@@ -587,6 +607,103 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
       'POST',
       'accounts/devices/revoke',
       body: {'device_id': deviceId},
+    );
+  }
+
+  @override
+  Future<int> revokeOtherDevices() async {
+    final response = await _request('POST', 'accounts/devices/revoke-others');
+    return response['revoked_count'] as int? ?? 0;
+  }
+
+  @override
+  Future<Map<String, dynamic>> getPasswordParams({required String phoneHash}) =>
+      _request(
+        'POST',
+        'accounts/password/params',
+        body: {'phone_hash': phoneHash},
+      );
+
+  @override
+  Future<Map<String, dynamic>> passwordLogin({
+    required String phoneHash,
+    required String authKey,
+    required String deviceId,
+    required String deviceName,
+    required String deviceSigningPublicKey,
+    required String deviceAgreementPublicKey,
+    required String deviceSignature,
+  }) => _request(
+    'POST',
+    'accounts/password/login',
+    body: {
+      'phone_hash': phoneHash,
+      'auth_key': authKey,
+      'device_id': deviceId,
+      'device_name': deviceName,
+      'device_signing_public_key': deviceSigningPublicKey,
+      'device_agreement_public_key': deviceAgreementPublicKey,
+      'device_signature': deviceSignature,
+    },
+    // A wrong password is a 403 about the password, not about a token.
+    skipAuthRefresh: true,
+  );
+
+  @override
+  Future<void> verifyPassword({
+    required String phoneHash,
+    required String authKey,
+  }) async {
+    await _request(
+      'POST',
+      'accounts/password/verify',
+      body: {'phone_hash': phoneHash, 'auth_key': authKey},
+      skipAuthRefresh: true,
+    );
+  }
+
+  @override
+  Future<void> uploadHistoryBackup(String blob) async {
+    await _request('PUT', 'backups/history', body: {'blob': blob});
+  }
+
+  @override
+  Future<String?> downloadHistoryBackup() async {
+    try {
+      final response = await _request('GET', 'backups/history');
+      return response['blob'] as String?;
+    } on RemoteRestException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getPasswordStatus() =>
+      _request('GET', 'accounts/password');
+
+  @override
+  Future<void> setPassword({
+    required Map<String, dynamic> kdfParams,
+    required String kdfSalt,
+    required String authKey,
+    required String wrappedIdentityKey,
+    String? currentAuthKey,
+    String? otpCode,
+    String? otpChallengeId,
+  }) async {
+    await _request(
+      'POST',
+      'accounts/password',
+      body: {
+        'kdf_params': kdfParams,
+        'kdf_salt': kdfSalt,
+        'auth_key': authKey,
+        'wrapped_identity_key': wrappedIdentityKey,
+        'current_auth_key': ?currentAuthKey,
+        'otp_code': ?otpCode,
+        'otp_challenge_id': ?otpChallengeId,
+      },
     );
   }
 

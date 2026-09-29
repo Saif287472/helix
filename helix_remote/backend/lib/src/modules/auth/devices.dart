@@ -154,7 +154,7 @@ mixin AuthDeviceHandlers on AuthModuleBase {
     if (!db.accountExists(accountId)) {
       throw AppError.forbidden('Account not found');
     }
-    final trustedDevices = db.getDevices(accountId);
+    final trustedDevices = db.getActiveDevices(accountId);
     if (trustedDevices.isEmpty) {
       throw AppError.forbidden('No trusted device can approve this link');
     }
@@ -511,6 +511,24 @@ mixin AuthDeviceHandlers on AuthModuleBase {
       );
     }
 
+    await _signOutDevice(
+      accountId: accountId,
+      deviceToRevoke: deviceToRevoke,
+      revokedByDeviceId: auth['device_id'] as String?,
+      clientIp: request.context['client_ip'] as String?,
+    );
+
+    return Response.ok(jsonEncode({'message': 'Device revoked successfully'}));
+  }
+
+  /// Signs [deviceToRevoke] out everywhere: its sessions, its undelivered
+  /// mail, its prekeys (so nobody encrypts to it again) and its push token.
+  Future<void> _signOutDevice({
+    required String accountId,
+    required String deviceToRevoke,
+    required String? revokedByDeviceId,
+    required String? clientIp,
+  }) async {
     db.revokeDevice(accountId, deviceToRevoke);
     db.revokeAllRefreshTokensForDevice(accountId, deviceToRevoke);
     await db.deleteMessagesForDevice(deviceToRevoke);
@@ -521,16 +539,10 @@ mixin AuthDeviceHandlers on AuthModuleBase {
       revocationId: _randomToken('rev'),
       accountId: accountId,
       revokedDeviceId: deviceToRevoke,
-      revokedByDeviceId: auth['device_id'] as String?,
+      revokedByDeviceId: revokedByDeviceId,
       reason: 'USER_REVOKED',
     );
-    db.logAudit(
-      accountId,
-      auth['device_id'] as String?,
-      'DEVICE_REVOKED',
-      request.context['client_ip'] as String?,
-      null,
-    );
+    db.logAudit(accountId, revokedByDeviceId, 'DEVICE_REVOKED', clientIp, null);
     _notifySiblingDevices(
       accountId,
       exceptDeviceId: deviceToRevoke,
@@ -541,8 +553,32 @@ mixin AuthDeviceHandlers on AuthModuleBase {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       },
     );
+  }
 
-    return Response.ok(jsonEncode({'message': 'Device revoked successfully'}));
+  /// "Sign out all other devices": everything except the device asking.
+  Future<Response> _revokeOtherDevicesHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
+    }
+    final accountId = auth['account_id'] as String;
+    final currentDeviceId = auth['device_id'] as String;
+    var revoked = 0;
+    for (final device in db.getActiveDevices(accountId)) {
+      final deviceId = device['device_id'] as String;
+      if (deviceId == currentDeviceId) continue;
+      await _signOutDevice(
+        accountId: accountId,
+        deviceToRevoke: deviceId,
+        revokedByDeviceId: currentDeviceId,
+        clientIp: request.context['client_ip'] as String?,
+      );
+      revoked++;
+    }
+    return Response.ok(jsonEncode({'revoked_count': revoked}));
   }
 
   Future<Response> _lostDeviceHandler(Request request) async {
@@ -625,6 +661,7 @@ mixin AuthDeviceHandlers on AuthModuleBase {
     return crypto_pkg.sha256.convert(utf8.encode(code)).toString();
   }
 
+  @override
   bool _isValidPublicKey(String value, crypto.KeyPairType type) {
     try {
       final bytes = base64Url.decode(base64Url.normalize(value));
@@ -703,35 +740,6 @@ mixin AuthDeviceHandlers on AuthModuleBase {
     } catch (_) {
       return false;
     }
-  }
-
-  Map<String, dynamic> _issueDeviceSession(String accountId, String deviceId) {
-    final token = jwt.generateToken({
-      'account_id': accountId,
-      'device_id': deviceId,
-    }, const Duration(hours: 1));
-    final refreshToken = jwt.generateToken({
-      'account_id': accountId,
-      'device_id': deviceId,
-      'refresh': true,
-      'jti': Random.secure().nextInt(1000000000).toString(),
-    }, const Duration(days: 7));
-    final expiresAt = _now()
-        .add(const Duration(days: 7))
-        .millisecondsSinceEpoch;
-    db.saveRefreshToken(
-      tokenHash: crypto_pkg.sha256
-          .convert(utf8.encode(refreshToken))
-          .toString(),
-      accountId: accountId,
-      deviceId: deviceId,
-      expiresAt: expiresAt,
-    );
-    return {
-      'token': token,
-      'refresh_token': refreshToken,
-      'refresh_expires_at': expiresAt,
-    };
   }
 
   Future<Response> _updatePushTokenHandler(Request request) async {

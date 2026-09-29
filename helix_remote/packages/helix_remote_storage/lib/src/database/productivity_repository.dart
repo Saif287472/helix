@@ -78,7 +78,14 @@ mixin RemoteProductivityRepository on HelixRemoteDatabaseBase {
     stmt.close();
   }
 
-  RemoteUnreadSummary unreadSummary(String conversationId, String deviceId) {
+  /// [ownAccountId], when given, keeps this account's own messages out of
+  /// the count - with several devices signed in, what one of them sent
+  /// arrives on the others and is not something to "read".
+  RemoteUnreadSummary unreadSummary(
+    String conversationId,
+    String deviceId, {
+    String? ownAccountId,
+  }) {
     final readRows = _db.select(
       '''
       SELECT last_read_sequence, mention_count
@@ -96,9 +103,10 @@ mixin RemoteProductivityRepository on HelixRemoteDatabaseBase {
     final unreadRows = _db.select(
       '''
       SELECT COUNT(*) AS count FROM messages
-      WHERE conversation_id = ? AND server_sequence > ?;
+      WHERE conversation_id = ? AND server_sequence > ?
+        AND (? IS NULL OR sender_account_id != ?);
       ''',
-      [conversationId, lastRead],
+      [conversationId, lastRead, ownAccountId, ownAccountId],
     );
     return RemoteUnreadSummary(
       conversationId: conversationId,

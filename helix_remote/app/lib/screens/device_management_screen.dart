@@ -6,7 +6,6 @@ import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class DeviceManagementScreen extends StatefulWidget {
   const DeviceManagementScreen({
@@ -14,9 +13,13 @@ class DeviceManagementScreen extends StatefulWidget {
     required this.restClient,
     this.db,
     this.deviceChanges,
+    this.currentDeviceId,
   });
 
   final HelixRemoteRestClient restClient;
+
+  /// This device, so the list can mark it and keep "sign out" off it.
+  final String? currentDeviceId;
 
   /// Local database, used to read pending new-device pairing requests the
   /// server pushed to this device. Optional: without it the screen simply
@@ -79,8 +82,18 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     try {
       final devices = await widget.restClient.listDevices();
       if (!mounted) return;
+      // The server also returns signed-out devices (for the admin console);
+      // this screen is "where am I signed in", so only active ones show.
+      final active = devices.where((d) => d.isActive).toList()
+        ..sort((a, b) {
+          if (a.deviceId == widget.currentDeviceId) return -1;
+          if (b.deviceId == widget.currentDeviceId) return 1;
+          final aSeen = a.lastSeenAt ?? a.createdAt;
+          final bSeen = b.lastSeenAt ?? b.createdAt;
+          return bSeen.compareTo(aSeen);
+        });
       setState(() {
-        _devices = devices;
+        _devices = active;
         _loadPendingLinks();
       });
     } catch (_) {
@@ -98,16 +111,16 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).revokeDevice),
+        title: const Text('Revoke Device'),
         content: Text('Revoke "${device.deviceName}"? This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(HelixLocalizations.of(context).revoke),
+            child: const Text('Revoke'),
           ),
         ],
       ),
@@ -119,9 +132,9 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text(
-              HelixLocalizations.of(context).couldNotRevokeDeviceCheck,
+              'Could not revoke device. Check your connection and try again.',
             ),
           ),
         );
@@ -129,12 +142,76 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     }
   }
 
+  Future<void> _signOutOthers() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sign out all other devices?'),
+        content: const Text(
+          'Every other device signed in to your account will be signed out. This device stays signed in.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign out others'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      final count = await widget.restClient.revokeOtherDevices();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            count == 1
+                ? 'Signed out 1 other device.'
+                : 'Signed out $count other devices.',
+          ),
+        ),
+      );
+      if (mounted) await _load();
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not sign out the other devices. Check your connection and try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  String _activity(RemoteDevice device) {
+    if (device.deviceId == widget.currentDeviceId) return 'This device';
+    final seen = device.lastSeenAt;
+    if (seen == null) return 'Signed in ${_date(device.createdAt)}';
+    final ago = DateTime.now().difference(seen);
+    if (ago.inMinutes < 2) return 'Active now';
+    if (ago.inHours < 1) return 'Active ${ago.inMinutes} min ago';
+    if (ago.inDays < 1) return 'Active ${ago.inHours} h ago';
+    if (ago.inDays < 7) return 'Active ${ago.inDays} d ago';
+    return 'Last active ${_date(seen)}';
+  }
+
+  String _date(DateTime time) {
+    final local = time.toLocal();
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    return '${local.year}-$m-$d';
+  }
+
   Future<void> _rename(RemoteDevice device) async {
     final controller = TextEditingController(text: device.deviceName);
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).renameDevice),
+        title: const Text('Rename Device'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -144,11 +221,11 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text(HelixLocalizations.of(context).save),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -164,11 +241,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              HelixLocalizations.of(context).couldNotRenameDeviceTry,
-            ),
-          ),
+          const SnackBar(content: Text('Could not rename device. Try again.')),
         );
       }
     }
@@ -178,18 +251,18 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(HelixLocalizations.of(context).reportLostDevice),
+        title: const Text('Report Lost Device'),
         content: Text(
           'Report "${device.deviceName}" as lost? Its sessions and queued messages will be revoked.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(HelixLocalizations.of(context).reportLost),
+            child: const Text('Report Lost'),
           ),
         ],
       ),
@@ -201,10 +274,8 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              HelixLocalizations.of(context).couldNotReportDeviceLost,
-            ),
+          const SnackBar(
+            content: Text('Could not report device as lost. Try again.'),
           ),
         );
       }
@@ -230,24 +301,22 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                 if (index == 0) {
                   return ListTile(
                     dense: true,
-                    title: Text(HelixLocalizations.of(context).firstSeen),
+                    title: const Text('First seen'),
                     subtitle: Text(device.createdAt.toLocal().toString()),
                   );
                 }
                 if (index == 1) {
                   return ListTile(
                     dense: true,
-                    title: Text(HelixLocalizations.of(context).keyFingerprint),
+                    title: const Text('Key fingerprint'),
                     subtitle: Text(_fingerprint(device.deviceSigningPublicKey)),
                   );
                 }
                 if (index == 2) return const Divider();
                 if (history.isEmpty) {
-                  return ListTile(
+                  return const ListTile(
                     dense: true,
-                    title: Text(
-                      HelixLocalizations.of(context).noSecurityHistoryFound,
-                    ),
+                    title: Text('No security history found.'),
                   );
                 }
                 final row = history[index - 3];
@@ -266,7 +335,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(HelixLocalizations.of(context).close),
+              child: const Text('Close'),
             ),
           ],
         ),
@@ -274,9 +343,9 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text(
-              HelixLocalizations.of(context).couldNotLoadSecurityHistory,
+              'Could not load security history. Check your connection and try again.',
             ),
           ),
         );
@@ -322,10 +391,8 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              HelixLocalizations.of(context).couldNotProcessDeviceLink,
-            ),
+          const SnackBar(
+            content: Text('Could not process device link. Try again.'),
           ),
         );
       }
@@ -345,10 +412,10 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
   Widget _buildPendingLinks(BuildContext context) {
     final count = _pendingLinks.length;
     return Card(
-      color: const Color(0xFFFFFBEB),
+      color: HelixStatusColors.pendingSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFFDE68A)),
+        side: const BorderSide(color: HelixStatusColors.pendingOutline),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -357,7 +424,11 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.link, size: 18, color: Color(0xFFD97706)),
+                const Icon(
+                  Icons.link,
+                  size: 18,
+                  color: HelixStatusColors.pendingIcon,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -367,21 +438,19 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF92400E),
+                      color: HelixStatusColors.onPendingSurface,
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
-            Text(
-              HelixLocalizations.of(
-                context,
-              ).pendingDeviceLinkConfirmElsewhere,
-              style: const TextStyle(
+            const Text(
+              'Open Helix on that device and confirm the code it shows. The code is never sent to this device.',
+              style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
-                color: Color(0xFFB45309),
+                color: HelixStatusColors.pendingAccent,
               ),
             ),
             const SizedBox(height: 10),
@@ -393,7 +462,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                     const Icon(
                       Icons.phone_android,
                       size: 16,
-                      color: Color(0xFFB45309),
+                      color: HelixStatusColors.pendingAccent,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -402,7 +471,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                         '${_shortLinkId(link['link_id'] as String)}',
                         style: const TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF92400E),
+                          color: HelixStatusColors.onPendingSurface,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -411,14 +480,14 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                     TextButton(
                       onPressed: () => _dismissPendingLink(link),
                       style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF92400E),
+                        foregroundColor: HelixStatusColors.onPendingSurface,
                         minimumSize: Size.zero,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: Text(
-                        HelixLocalizations.of(context).dismiss,
-                        style: const TextStyle(fontSize: 12),
+                      child: const Text(
+                        'Dismiss',
+                        style: TextStyle(fontSize: 12),
                       ),
                     ),
                   ],
@@ -449,7 +518,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(HelixLocalizations.of(context).devices),
+        title: const Text('Devices'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -469,6 +538,20 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                   const SizedBox(height: 8),
                 ],
                 _buildLinkDeviceAction(context),
+                if (widget.currentDeviceId != null &&
+                    _devices.any((d) => d.deviceId != widget.currentDeviceId))
+                  Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.logout,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      title: const Text('Sign out all other devices'),
+                      subtitle: const Text('Keeps only this device signed in'),
+                      onTap: _signOutOthers,
+                    ),
+                  ),
                 Expanded(
                   child: _devices.isEmpty
                       ? const HelixEmptyState(
@@ -481,13 +564,17 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                           itemCount: _devices.length,
                           itemBuilder: (_, i) {
                             final device = _devices[i];
+                            final isThisDevice =
+                                device.deviceId == widget.currentDeviceId;
                             return Card(
                               child: ListTile(
-                                leading: const Icon(Icons.phone_android),
-                                title: Text(device.deviceName),
-                                subtitle: Text(
-                                  'ID: ${device.deviceId} | ${device.status}',
+                                leading: Icon(
+                                  isThisDevice
+                                      ? Icons.smartphone
+                                      : Icons.phone_android,
                                 ),
+                                title: Text(device.deviceName),
+                                subtitle: Text(_activity(device)),
                                 trailing: PopupMenuButton<String>(
                                   onSelected: (value) {
                                     if (value == 'rename') {
@@ -501,34 +588,24 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                                     }
                                   },
                                   itemBuilder: (_) => [
-                                    PopupMenuItem(
+                                    const PopupMenuItem(
                                       value: 'rename',
-                                      child: Text(
-                                        HelixLocalizations.of(context).rename,
-                                      ),
+                                      child: Text('Rename'),
                                     ),
-                                    PopupMenuItem(
+                                    const PopupMenuItem(
                                       value: 'history',
-                                      child: Text(
-                                        HelixLocalizations.of(
-                                          context,
-                                        ).securityHistory,
-                                      ),
+                                      child: Text('Security History'),
                                     ),
-                                    PopupMenuItem(
-                                      value: 'lost',
-                                      child: Text(
-                                        HelixLocalizations.of(
-                                          context,
-                                        ).reportLost,
+                                    if (!isThisDevice) ...[
+                                      const PopupMenuItem(
+                                        value: 'lost',
+                                        child: Text('Report Lost'),
                                       ),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'revoke',
-                                      child: Text(
-                                        HelixLocalizations.of(context).revoke,
+                                      const PopupMenuItem(
+                                        value: 'revoke',
+                                        child: Text('Revoke'),
                                       ),
-                                    ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -546,9 +623,9 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       margin: HelixInsets.all(12),
       child: ListTile(
         leading: const Icon(Icons.qr_code_scanner),
-        title: Text(HelixLocalizations.of(context).linkNewDevice),
-        subtitle: Text(
-          HelixLocalizations.of(context).approveRejectPendingRequestFresh,
+        title: const Text('Link New Device'),
+        subtitle: const Text(
+          'Approve or reject a pending request from a fresh device.',
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: _approveOrRejectLinkRequest,
@@ -601,7 +678,7 @@ class _DeviceLinkDecisionDialogState extends State<_DeviceLinkDecisionDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(HelixLocalizations.of(context).linkNewDevice),
+      title: const Text('Link New Device'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -624,7 +701,7 @@ class _DeviceLinkDecisionDialogState extends State<_DeviceLinkDecisionDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(HelixLocalizations.of(context).cancel),
+          child: const Text('Cancel'),
         ),
         TextButton(
           onPressed: () => Navigator.pop(
@@ -635,7 +712,7 @@ class _DeviceLinkDecisionDialogState extends State<_DeviceLinkDecisionDialog> {
               verificationCode: _codeController.text.trim(),
             ),
           ),
-          child: Text(HelixLocalizations.of(context).reject),
+          child: const Text('Reject'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(
@@ -646,7 +723,7 @@ class _DeviceLinkDecisionDialogState extends State<_DeviceLinkDecisionDialog> {
               verificationCode: _codeController.text.trim(),
             ),
           ),
-          child: Text(HelixLocalizations.of(context).approve),
+          child: const Text('Approve'),
         ),
       ],
     );

@@ -1,6 +1,6 @@
 # Incident On-Call Runbooks
 
-Each incident uses the ownership map in `ownership-blast-radius.yaml`, records a
+Each incident uses the ownership map in `docs/ai/ownership-blast-radius.yaml`, records a
 timeline, preserves evidence, and avoids logging secrets or plaintext content.
 
 | Incident | First Response | Owner |

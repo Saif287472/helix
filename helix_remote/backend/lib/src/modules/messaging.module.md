@@ -27,7 +27,7 @@ valid session (`_authMiddleware` does not exempt any `/messages/*` path).
 | Method | Path | Handler | Notes |
 |---|---|---|---|
 | POST | `/conversations/create` | `_createConversationHandler` | DIRECT only - rejects `type: 'GROUP'`. |
-| POST | `/send` | `_sendMessageHandler` | Per-device ciphertext envelopes; idempotent on `message_id`. |
+| POST | `/send` | `_sendMessageHandler` | Per-device ciphertext envelopes (to every active device of every member, including the sender's own other devices); idempotent on `message_id`. 409 `device_list_stale` with `missing_device_ids` when a required device has no envelope (the client refetches bundles and rebuilds once); envelopes for a member's signed-out device are dropped. |
 | GET | `/sync` | `_syncMessagesHandler` | With `conversation_id`: history for that conversation. Without: offline catch-up across all conversations. |
 | POST | `/cursor` | `_updateCursorHandler` | Advances the caller's per-conversation read cursor. |
 | POST | `/delete` | `_deleteMessageHandler` | Sender-only; writes a tombstone and triggers attachment refcount cleanup. |

@@ -95,7 +95,7 @@ extension _ConversationBody on _ConversationScreenState {
             : TextButton.icon(
                 onPressed: _loadMore,
                 icon: const Icon(Icons.expand_less, size: 18),
-                label: Text(HelixLocalizations.of(context).loadEarlierMessages),
+                label: const Text('Load earlier messages'),
                 style: TextButton.styleFrom(
                   padding: HelixInsets.symmetric(horizontal: 16, vertical: 6),
                   backgroundColor: Theme.of(
@@ -132,9 +132,7 @@ extension _ConversationBody on _ConversationScreenState {
     if (index < 0) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(HelixLocalizations.of(context).originalMessageNotFound),
-        ),
+        const SnackBar(content: Text('Original message not found')),
       );
       return;
     }
@@ -295,7 +293,7 @@ extension _ConversationBody on _ConversationScreenState {
       actions: [
         TextButton(
           onPressed: () => _update(() => _attachmentStatus = null),
-          child: Text(HelixLocalizations.of(context).dismiss),
+          child: const Text('Dismiss'),
         ),
       ],
     );
@@ -413,11 +411,7 @@ extension _ConversationBody on _ConversationScreenState {
 
   void _showVoiceNoteUnavailable() {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          HelixLocalizations.of(context).voiceMessagesNotAvailableYet,
-        ),
-      ),
+      const SnackBar(content: Text('Voice messages are not available yet')),
     );
   }
 }

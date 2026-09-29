@@ -28,7 +28,7 @@ extension _ConversationListBody on _ConversationListScreenState {
                     ? FilledButton.icon(
                         onPressed: _showNewChatPicker,
                         icon: const Icon(Icons.add_comment),
-                        label: Text(HelixLocalizations.of(context).newChat),
+                        label: const Text('New chat'),
                       )
                     : null,
               ),

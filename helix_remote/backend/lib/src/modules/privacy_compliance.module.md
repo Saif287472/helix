@@ -20,7 +20,7 @@ belongs to the account rather than to a privacy namespace.
 
 | Method | Path | Handler | Notes |
 |---|---|---|---|
-| GET | `/export` | `_exportHandler` | Everything stored for the calling account. |
+| GET | `/export` | `_exportHandler` | Everything `exportAccountData` holds for the calling account (`export_version` 2): every account-scoped table, including password metadata and the encrypted history backup. Credential material is withheld and listed under `withheld` (password verifier and wrapped key, refresh-token, recovery-code and invite-code hashes, push and link tokens). |
 | GET | `/admin/audit` | `_adminAuditHandler` | Admin only. `?account_id=` narrows it. |
 
 ### `accountRouter` - `/api/v1/account`

@@ -1,12 +1,6 @@
 part of '../settings_screen.dart';
 
 extension _SettingsActions on _SettingsScreenState {
-  void _showSoon(String title) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$title is not available in this build yet.')),
-    );
-  }
-
   int _blockedContacts() {
     try {
       return _viewModel.blockedContactsCount;
@@ -35,33 +29,30 @@ extension _SettingsActions on _SettingsScreenState {
     }
   }
 
-  List<_SettingsGroup> _settingsGroups(Uri serverUri) {
-    final appLockEnabled = _viewModel.appLockEnabled;
-    final defaultDisappearing = _viewModel.defaultDisappearingSeconds;
-    final previewsOn = _viewModel.notificationPreviewsEnabled;
-    final silenceUnknown = _viewModel.silenceUnknownCallers;
+  static String _visibility(String value) => switch (value) {
+    'EVERYONE' => 'everyone',
+    'NOBODY' => 'nobody',
+    _ => 'contacts',
+  };
 
-    // Nine rows used to lead to this same privacy screen and twelve more
-    // led nowhere at all. Rows that shared a destination are collapsed into
-    // one, with the state each of them displayed gathered into its subtitle:
-    // strictly more information in less space, and one tap target instead of
-    // nine. Placeholders survive only where the feature is genuinely next
-    // up - a settings list that mostly apologises teaches people to stop
-    // reading it.
+  List<_SettingsGroup> _settingsGroups(Uri serverUri) {
+    final privacy = widget.messagingService.privacySettings;
+    final readReceipts = widget.messagingService.readReceiptsEnabled;
     final lockedChats = _lockedCount();
     final blocked = _blockedContacts();
     final privacySummary = [
-      appLockEnabled ? 'App lock on' : 'App lock off',
+      'Last seen: ${_visibility(privacy.lastSeenVisibility)}',
+      readReceipts ? 'read receipts on' : 'read receipts off',
+      if (blocked > 0) '$blocked blocked',
+    ].join('  \u00b7  ');
+    final securitySummary = [
+      AppLock.enabled ? 'App lock on' : 'App lock off',
       if (lockedChats > 0)
         '$lockedChats locked ${lockedChats == 1 ? 'chat' : 'chats'}',
-      if (blocked > 0) '$blocked blocked',
-      'Disappearing ${_disappearingLabel(defaultDisappearing).toLowerCase()}',
-    ].join('  \u00b7  ');
-    final alertsSummary = [
-      previewsOn ? 'Previews shown' : 'Previews hidden',
-      silenceUnknown ? 'unknown callers silenced' : 'all calls ring',
     ].join('  \u00b7  ');
 
+    // Every row opens its own page. The old list dressed up one combined
+    // privacy screen behind several rows and apologised for the rest.
     return [
       _SettingsGroup(
         title: 'Account',
@@ -70,8 +61,8 @@ extension _SettingsActions on _SettingsScreenState {
             icon: Icons.person_outline,
             color: HelixColorTokens.cFF3B82F6,
             title: 'Account',
-            subtitle: 'Profile name and account ID',
-            onTap: _openProfile,
+            subtitle: 'Profile, QR code, your data, delete account',
+            onTap: _openAccount,
           ),
           _SettingsItem(
             icon: Icons.devices_outlined,
@@ -92,23 +83,28 @@ extension _SettingsActions on _SettingsScreenState {
       _SettingsGroup(
         title: 'Privacy and security',
         items: [
-          // Absorbs what used to be five separate rows - Passkeys and
-          // authentication, Chat lock, Blocked contacts, Disappearing
-          // messages, Security notifications - every one of which opened
-          // exactly this screen.
+          _SettingsItem(
+            icon: Icons.visibility_outlined,
+            color: HelixColorTokens.cFF7C3AED,
+            title: 'Privacy',
+            subtitle: privacySummary,
+            onTap: _openPrivacySettings,
+          ),
           _SettingsItem(
             icon: Icons.lock_outline,
-            color: HelixColorTokens.cFF7C3AED,
-            title: 'Privacy and security',
-            subtitle: privacySummary,
-            onTap: _openPrivacy,
+            color: HelixColorTokens.cFF4F46E5,
+            title: 'Security',
+            subtitle: securitySummary,
+            onTap: _openSecurity,
           ),
           _SettingsItem(
             icon: Icons.notifications_none_outlined,
             color: HelixColorTokens.cFFF24E1E,
             title: 'Notifications and calls',
-            subtitle: alertsSummary,
-            onTap: _openPrivacy,
+            subtitle: _viewModel.silenceUnknownCallers
+                ? 'Unknown callers silenced'
+                : 'All calls ring',
+            onTap: _openNotifications,
           ),
         ],
       ),
@@ -134,16 +130,15 @@ extension _SettingsActions on _SettingsScreenState {
             icon: Icons.storage_outlined,
             color: HelixColorTokens.cFF0EA5E9,
             title: 'Storage and data',
-            subtitle: 'Media cache, auto-download and data saving',
-            onTap: () => _showSoon('Storage and data'),
+            subtitle: 'Space used on this phone and clean-up',
+            onTap: _openStorage,
           ),
           _SettingsItem(
             icon: Icons.bug_report_outlined,
             color: HelixColorTokens.cFFF97316,
-            title: 'Diagnostics and logs',
-            subtitle: 'Export and clear Helix anomaly logs',
-            trailingIcon: Icons.ios_share_outlined,
-            onTap: _exportLog,
+            title: 'Diagnostics',
+            subtitle: 'Crash reports, analytics and the error log',
+            onTap: _openDiagnostics,
           ),
           _SettingsItem(
             icon: Icons.dns_outlined,
@@ -154,7 +149,6 @@ extension _SettingsActions on _SettingsScreenState {
                 ? _showServerInfo
                 : _confirmChangeServer,
           ),
-          // Absorbs "App updates", which opened this same dialog.
           _SettingsItem(
             icon: Icons.info_outline,
             color: HelixColorTokens.cFF6D6AAE,
@@ -205,14 +199,6 @@ extension _SettingsActions on _SettingsScreenState {
         isDestructive: true,
         onTap: _confirmLogout,
       ),
-      _SettingsItem(
-        icon: Icons.delete_forever_outlined,
-        color: HelixColorTokens.cFFB91C1C,
-        title: 'Delete account',
-        subtitle: 'Permanently delete your Helix account',
-        isDestructive: true,
-        onTap: _openPrivacy,
-      ),
     ].where(_matchesSearch).toList();
 
     return Scaffold(
@@ -237,7 +223,7 @@ extension _SettingsActions on _SettingsScreenState {
               accountId: accountId,
               serverName: _serverName,
               onTap: _openProfile,
-              onQrTap: () => _showAccountCode(displayName),
+              onQrTap: _openMyQr,
               onEditTap: _openProfile,
             ),
             const SizedBox(height: 18),
@@ -281,15 +267,5 @@ extension _SettingsActions on _SettingsScreenState {
     return q.isEmpty ||
         item.title.toLowerCase().contains(q) ||
         item.subtitle.toLowerCase().contains(q);
-  }
-
-  String _disappearingLabel(int seconds) {
-    return switch (seconds) {
-      0 => 'Off',
-      86400 => '24h',
-      604800 => '7d',
-      7776000 => '90d',
-      _ => '${(seconds / 86400).round()}d',
-    };
   }
 }

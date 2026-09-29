@@ -3,6 +3,8 @@
 Status: accepted  
 Date: 2026-06-19  
 
+> Status note (2026-09): no `packages/shared/` directory was ever created. The repository is now two independent workspaces (`helix_local/`, `helix_remote/`) that share no packages; these rules would apply only if a shared package is proposed in future.
+
 ## Context
 Sharing code between Local and Remote apps too loosely will re-introduce tight coupling and cause bugs where Local changes break Remote or vice versa.
 

@@ -1,5 +1,7 @@
 # Helix Remote — Diagnostic Report & Remediation Plan
 
+> **Status: historical (diagnostic of 2026-08-05).** Kept as a record; its findings were acted on in later commits. Deployment references (VPS, nginx, Docker) predate the current setup: Helix Global runs on the user's PC (Caddy + `dart run bin/server.dart` in `helix_remote/backend`, coturn in WSL1). For current Remote docs see `helix_remote/docs/` and `AGENTS.md`.
+
 **Date:** 2026-08-05
 **Inputs:** 3 call/attachment screenshots, 3 anomaly logs (`helix_remote_anomaly_log.txt`,
 `helix_remote_anomaly_log1.txt`, `DOC20260805WA0000.pdf` — 17 sessions, 2026-08-03 → 08-05).

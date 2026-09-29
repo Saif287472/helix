@@ -1,7 +1,7 @@
 # Helix Remote Privacy Claim Matrix
 
 Status: Phase 9 release candidate review
-Date: 2026-06-23
+Date: 2026-06-23 (rows updated 2026-09)
 
 This matrix maps every public-facing or internal privacy and security claim to
 its implementation status and the evidence that supports it. Claims marked
@@ -21,11 +21,11 @@ documentation until the evidence column is satisfied.
 
 | Claim | Status | Implementation | Gate |
 | --- | --- | --- | --- |
-| Messages are end-to-end encrypted | Implemented | X3DH key agreement + per-message HKDF/AES-GCM session envelopes; decrypt-before-auth fixed in Phase 9-11; X3DH sig verification audited | Production-reviewed cryptography confirmed below |
+| Messages are end-to-end encrypted | Implemented | X3DH key agreement + `DoubleRatchetSession` (DH ratchet steps, skipped-message keys, AES-GCM message keys); decrypt-before-auth fixed in Phase 9-11; X3DH sig verification audited | Production-reviewed cryptography confirmed below |
 | Only sender and recipient can read messages | Implemented | Server stores only ciphertext envelopes; backend `RedactedLogger` never logs plaintext | Same as above |
 | No plaintext push payload | Implemented | `OutboxWorker.enqueueOutbox` rejects payloads containing `plaintext` key (`throwsArgumentError`); backend test `P18 plaintext report and push payloads are rejected` passes | Test in CI |
 | No mandatory address-book upload | Implemented | Contacts sync is opt-in (rationale dialog + OS permission prompt, re-askable, degrades gracefully on denial); raw phone numbers are never sent - only salted HMAC-SHA256 hashes via `/contacts/match`, and matching is fully skippable | `PhoneContactsService`/`hashPhoneBookContacts` unit tests; `invites_tab_test.dart`-style fake-server test for the match flow |
-| Phone numbers are never stored or transmitted in plaintext | Implemented | `phoneHash()` (client and server, byte-identical) is the only form a phone number takes off-device; see ADR-017's phone/OTP/invite redaction addendum | `contacts_discovery_salt_test.dart`, `phone_contacts_service_test.dart` known-answer vector |
+| Phone numbers are never stored in plaintext | Partial | `phoneHash()` (client and server, byte-identical) is the only form used for identity and matching. The raw number *is* transmitted once per SMS-code request (`/api/v1/accounts/phone/otp/request`) and handed to the SMS gateway for delivery, but not stored from that request. Registration stores the account's phone number in `accounts.phone_last4` (historical column name) for the admin console, account security and spam protection | `contacts_discovery_salt_test.dart`, `phone_contacts_service_test.dart` known-answer vector |
 | Production-reviewed cryptography | Partial | Primitives are `cryptography`/`cryptography_flutter` (well-reviewed library); X3DH/session-envelope implementation is Helix-owned; external review is pending | Full external cryptographic audit (Phase 9-11 blocked item) |
 
 ## Data and Storage Claims
@@ -33,9 +33,10 @@ documentation until the evidence column is satisfied.
 | Claim | Status | Implementation | Gate |
 | --- | --- | --- | --- |
 | No sale of personal data | Implemented | No third-party data-sharing integrations exist; confirmed in `docs/product/PRIVACY_POLICY.md` | Reviewed before any third-party integration is added |
-| User can export all their data | Implemented | `/api/v1/account/export` returns all server-held data as JSON | Manual smoke-test on release build |
-| User can delete their account and data | Implemented | `/api/v1/account/delete` purges account, devices, messages, backups; confirmed in `privacy_compliance_test.dart` | Same |
-| Backups are encrypted with user-held key | Implemented | `RemoteBackupCrypto` writes v2 Argon2id + AES-256-GCM envelopes, reads legacy PBKDF2 v1 envelopes, and server stores only ciphertext plus metadata | `remote_backup_restore_test.dart` passes |
+| User can export all their data | Implemented | `GET /api/v1/privacy/export` returns every account-scoped server table as JSON (`exportAccountData` in `backend/lib/src/database/accounts_devices_repository.dart`, `export_version` 2), including password metadata and the encrypted history backup. Credential material (password verifier and wrapped key, token and code hashes, push/link tokens) is withheld and listed in `withheld` | `backend/test/privacy_compliance_test.dart`; manual smoke-test on release build |
+| User can delete their account and data | Implemented | `DELETE /api/v1/account/delete` purges account, devices, messages, backups; the password row and history backup go by `ON DELETE CASCADE`; the app then purges local data (`purgeAfterAccountDeletion`); confirmed in `privacy_compliance_test.dart` | Same |
+| Backups are encrypted with user-held key | Implemented | `RemoteBackupCrypto` writes v2 Argon2id + AES-256-GCM envelopes, reads legacy PBKDF2 v1 envelopes, and server stores only ciphertext plus metadata. The automatic text-history backup is AES-GCM under a key derived from the account identity key (`app/lib/app/history_backup_codec.dart`) | `remote_backup_restore_test.dart` passes |
+| The server never learns the password | Implemented | Argon2id + HKDF on the device; only a derived auth key is sent and stored as a salted SHA-256; the identity key is uploaded only wrapped under a separate password-derived key (`backend/lib/src/modules/auth/password.dart`, `app/lib/app/password_vault.dart`) | External review of the password scheme |
 | Locked and ephemeral chats stay out of normal exposure paths | Implemented | Schema v16 stores locked-chat, disappearing, view-once, keep-in-chat, and advanced privacy flags; normal lists/search/backups/export/call/notification paths enforce them | F3 tests in backup, storage, calls, and backend contacts suites pass |
 | Advertising ID is not collected | Implemented | No ad-SDK dependency; `AndroidManifest.xml` has no `AD_ID` permission | Verified in `docs/product/APP_STORE_PRIVACY.md` |
 
@@ -43,8 +44,9 @@ documentation until the evidence column is satisfied.
 
 | Claim | Status | Implementation | Gate |
 | --- | --- | --- | --- |
-| Sessions can be remotely revoked | Implemented | Device revoke and mark-lost endpoints purge tokens and queued messages | `privacy_compliance_test.dart` test passes |
-| Each device has an independent identity key | Implemented | Device key generated at registration; `device_id` is separate from `account_id` | Verified in Phase 4 evidence |
+| Sessions can be remotely revoked | Implemented | Device revoke, revoke-others and mark-lost endpoints purge tokens and queued messages | `privacy_compliance_test.dart` test passes |
+| Each device has independent device keys | Implemented | Each device generates its own Ed25519 signing and X25519 agreement keys; `device_id` is separate from `account_id`. The account identity key is shared by the account's devices | Verified in Phase 4 evidence |
+| You are told when a new device signs in | Implemented | Password sign-in writes a durable device event to every other device and enqueues a `new_sign_in` push | Backend auth tests |
 
 ## Claims Blocked For Strong Claim
 
@@ -55,7 +57,7 @@ until the gate condition is met:
 | --- | --- | --- |
 | "Military-grade encryption" or equivalent superlatives | Unverifiable and legally risky | Remove from all copy; do not add |
 | "Zero-knowledge" | Not accurate: server sees metadata (timestamps, recipient IDs, message sizes) | Add only after metadata minimization work that satisfies ADR-017 scope |
-| "Forward secrecy" (as a strong claim) | Current X3DH/session-envelope path does not yet implement the complete DH-ratchet/skipped-key behavior needed for this claim | Add only after full reviewed DH-ratchet multi-device integration test |
+| "Forward secrecy" (as a strong claim) | A DH ratchet with skipped-message keys is implemented but has not been externally reviewed or covered by a multi-device integration test | Add only after full reviewed DH-ratchet multi-device integration test |
 | "Open source" | Code is not currently published | Add only after public repository is confirmed |
 
 ### Documented exception: onboarding "military-grade AES-256" line

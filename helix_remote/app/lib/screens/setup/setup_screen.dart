@@ -1,42 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:helix_remote_ui/helix_remote_ui.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/screens/setup/pages/phone_page.dart';
+import 'package:helix_remote/screens/setup/pages/sign_in_fields.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
-import 'package:helix_remote/screens/setup/steps/splash_step.dart';
-import 'package:helix_remote/screens/setup/steps/server_selection_step.dart';
-import 'package:helix_remote/screens/setup/steps/global_phone_step.dart';
-import 'package:helix_remote/screens/setup/steps/global_otp_step.dart';
-import 'package:helix_remote/screens/setup/steps/global_name_step.dart';
-import 'package:helix_remote/screens/setup/steps/others_hub_step.dart';
-import 'package:helix_remote/screens/setup/steps/host_guide_step.dart';
-import 'package:helix_remote/screens/setup/steps/code_entry_step.dart';
-import 'package:helix_remote/screens/setup/steps/personal_verify_step.dart';
+import 'package:helix_remote/screens/setup/steps/legal_documents_sheet.dart';
+import 'package:helix_remote/screens/setup/widgets/sign_in_frame.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 
+/// Sign-in. Always opens on the simple Helix Global page: a phone number and
+/// "Next". A personal server is behind the hidden advanced mode (see
+/// [AdvancedModeCorner]) or an invite/recovery link.
 class SetupScreen extends StatefulWidget {
   const SetupScreen({
     super.key,
     this.onChoice,
     this.notifier,
     this.root,
-    this.onChangeServerUrl,
-    this.initialInviteCode,
-    this.initialPhoneNumber,
-    this.autoStartLaunch = true,
+    this.initialCode,
     this.initialRecoveryMode = false,
-    this.initialServerUrl,
+    this.initialError,
   });
 
+  /// Receives the finished sign-in when it has to be completed by the host
+  /// (see [OnboardingNotifier.completedChoice]).
   final void Function(Object? choice)? onChoice;
   final OnboardingNotifier? notifier;
   final RemoteCompositionRoot? root;
-  final Future<void> Function(String url)? onChangeServerUrl;
-  final String? initialInviteCode;
-  final String? initialPhoneNumber;
-  final bool autoStartLaunch;
+
+  /// An invite or recovery code from a link: opens advanced mode with it.
+  final String? initialCode;
+
+  /// Opens advanced mode on the code page (a number that already has an
+  /// account on a personal server needs a recovery code).
   final bool initialRecoveryMode;
-  final String? initialServerUrl;
+
+  /// Why the last sign-in attempt failed, shown on the first page.
+  final String? initialError;
 
   @override
   State<SetupScreen> createState() => _SetupScreenState();
@@ -44,95 +44,86 @@ class SetupScreen extends StatefulWidget {
 
 class _SetupScreenState extends State<SetupScreen> {
   late final OnboardingNotifier _notifier;
-  bool _createdLocalNotifier = false;
+  bool _ownsNotifier = false;
   bool _handledCompletion = false;
-  bool _phoneRecoveryDialogScheduled = false;
-  bool _phoneRecoveryDialogOpen = false;
+  bool _recoveryDialogOpen = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.notifier != null) {
-      _notifier = widget.notifier!;
+    final given = widget.notifier;
+    if (given != null) {
+      _notifier = given;
     } else {
-      _notifier = OnboardingNotifier(
-        root: widget.root,
-        autoStartLaunch: widget.autoStartLaunch,
-        onServerUrlChanged: widget.onChangeServerUrl,
-      );
-      _createdLocalNotifier = true;
+      _notifier = OnboardingNotifier(root: widget.root);
+      _ownsNotifier = true;
     }
-
-    if (widget.initialInviteCode != null &&
-        widget.initialInviteCode!.isNotEmpty) {
-      _notifier.updateCodeString(widget.initialInviteCode!);
-    }
-    if (widget.initialPhoneNumber != null &&
-        widget.initialPhoneNumber!.isNotEmpty) {
-      _notifier.updatePhoneNumber(widget.initialPhoneNumber!);
-    }
-
     _notifier.addListener(_onNotifierUpdate);
-    if (widget.initialRecoveryMode) {
-      _notifier.beginPhoneRecovery(serverUrl: widget.initialServerUrl);
+    final code = widget.initialCode?.trim() ?? '';
+    if (code.isNotEmpty) {
+      _notifier.openWithCode(code);
+    } else if (widget.initialRecoveryMode) {
+      _notifier.openAdvancedMode();
+    }
+    final error = widget.initialError;
+    if (error != null && error.isNotEmpty) _notifier.showError(error);
+  }
+
+  @override
+  void didUpdateWidget(SetupScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final code = widget.initialCode?.trim() ?? '';
+    if (code.isNotEmpty && code != oldWidget.initialCode?.trim()) {
+      _notifier.openWithCode(code);
     }
   }
 
   @override
   void dispose() {
     _notifier.removeListener(_onNotifierUpdate);
-    if (_createdLocalNotifier) {
-      _notifier.dispose();
-    }
+    if (_ownsNotifier) _notifier.dispose();
     super.dispose();
   }
 
   void _onNotifierUpdate() {
     if (!mounted) return;
-    if (_notifier.state.showPhoneRecoveryPrompt &&
-        !_phoneRecoveryDialogScheduled &&
-        !_phoneRecoveryDialogOpen) {
-      _phoneRecoveryDialogScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        _phoneRecoveryDialogScheduled = false;
-        await _showPhoneRecoveryDialog();
-      });
+    final state = _notifier.state;
+    if (state.showPhoneRecoveryPrompt && !_recoveryDialogOpen) {
+      _recoveryDialogOpen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _askForRecovery());
     }
-    if (_handledCompletion) return;
-    if (_notifier.state.isComplete) {
+    if (state.isComplete && !_handledCompletion) {
       _handledCompletion = true;
       final choice = _notifier.completedChoice;
       widget.onChoice?.call(choice);
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).maybePop(choice);
-      }
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) navigator.maybePop(choice);
     }
   }
 
-  Future<void> _showPhoneRecoveryDialog() async {
-    if (!mounted || _phoneRecoveryDialogOpen) return;
-    _phoneRecoveryDialogOpen = true;
-    final l10n = HelixLocalizations.of(context);
+  Future<void> _askForRecovery() async {
+    if (!mounted) return;
     final recover = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(l10n.phoneAlreadyRegistered),
-          content: Text(l10n.phoneAlreadyRegisteredRecoveryMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(l10n.enterRecoveryCode),
-            ),
-          ],
-        );
-      },
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('This number already has an account'),
+        content: const Text(
+          'This phone number already has an account on this server. Ask your '
+          'server admin for a recovery code to sign back in.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Enter recovery code'),
+          ),
+        ],
+      ),
     );
-    _phoneRecoveryDialogOpen = false;
+    _recoveryDialogOpen = false;
     if (!mounted) return;
     if (recover == true) {
       _notifier.beginPhoneRecovery();
@@ -143,193 +134,248 @@ class _SetupScreenState extends State<SetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.sizeOf(context).width > 760;
-
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Padding(
-              padding: HelixInsets.symmetric(
-                horizontal: isWide ? HelixSpace.xl : HelixSpace.md,
-                vertical: HelixSpace.md,
-              ),
-              child: ListenableBuilder(
-                listenable: _notifier,
-                builder: (context, _) {
-                  final state = _notifier.state;
-                  final showBack =
-                      state.step != OnboardingStep.splash &&
-                      (state.step != OnboardingStep.serverSelection ||
-                          (state.serverType == ServerType.global &&
-                              state.globalSubStep != GlobalSubStep.phone) ||
-                          (state.serverType == ServerType.others &&
-                              state.othersOption == OthersOption.join &&
-                              state.joinSubStep != JoinSubStep.code));
-
-                  return Column(
-                    children: [
-                      if (showBack) ...[
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: IconButton(
-                            icon: const Icon(Icons.arrow_back),
-                            onPressed: state.isLoading
-                                ? null
-                                : _notifier.goBack,
-                            tooltip: 'Back',
-                          ),
-                        ),
-                        const SizedBox(height: HelixSpace.xs),
-                      ],
-                      Expanded(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 250),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          child: KeyedSubtree(
-                            key: ValueKey(state.step),
-                            child: _buildStepContent(context, state),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
+    return Theme(
+      data: HelixThemes.signIn(
+        highContrast: MediaQuery.highContrastOf(context),
+      ),
+      child: ListenableBuilder(
+        listenable: _notifier,
+        builder: (context, _) => AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: KeyedSubtree(
+            key: ValueKey('${_notifier.state.mode}-${_notifier.state.page}'),
+            child: _page(context, _notifier.state),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStepContent(BuildContext context, OnboardingState state) {
-    final isPersonal = state.serverType == ServerType.others;
+  String get _phoneLabel {
+    final state = _notifier.state;
+    final digits = state.phoneNumber.trim();
+    return digits.isEmpty
+        ? _notifier.phoneNumber
+        : '${state.countryCode} $digits';
+  }
 
-    switch (state.step) {
-      case OnboardingStep.splash:
-        return SplashStep(statusText: state.loadingStatus);
+  Widget? _serverBadge(OnboardingState state) {
+    final name = state.serverName;
+    if (!state.isAdvanced || name == null) return null;
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'Server: $name',
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.dns_outlined,
+                size: 16,
+                color: scheme.onSecondaryContainer,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  name,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: scheme.onSecondaryContainer),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-      case OnboardingStep.serverSelection:
-        return ServerSelectionStep(
-          selectedType: state.serverType,
-          othersOption: state.othersOption ?? OthersOption.join,
-          onSelectType: _notifier.setServerType,
-          onSelectOthersOption: _notifier.setOthersOption,
-          countryCode: state.countryCode,
-          phoneNumber: state.phoneNumber,
-          onCountryCodeChanged: _notifier.updateCountryCode,
-          onPhoneChanged: _notifier.updatePhoneNumber,
-          onRequestOtp: () => _notifier.requestOtp(isPersonal: isPersonal),
-          otpCode: state.otpCode,
-          onOtpChanged: _notifier.updateOtpCode,
-          onVerifyOtp: () => _notifier.verifyOtp(isPersonal: isPersonal),
-          displayName: state.displayName,
-          onDisplayNameChanged: _notifier.updateDisplayName,
-          tosAccepted: state.tosAccepted,
-          onTosAcceptedChanged: _notifier.setTosAccepted,
-          onCompleteSetup: ({bool skip = false}) =>
-              _notifier.completeSetup(skip: skip, isPersonal: isPersonal),
-          rememberDevice: state.rememberDevice,
-          onRememberDeviceChanged: _notifier.toggleRememberDevice,
-          codeString: state.codeString,
-          showInfoPopover: state.showCodeInfoPopover,
-          onCodeChanged: _notifier.updateCodeString,
-          onToggleInfo: _notifier.toggleCodeInfoPopover,
-          onVerifyCode: () => _notifier.resolveCode(),
-          hostGuideStep: state.hostGuideStep,
-          onHostStepChanged: _notifier.updateHostGuideStep,
-          isLoading: state.isLoading,
+  Widget _page(BuildContext context, OnboardingState state) {
+    final n = _notifier;
+    final loading = state.isLoading;
+    final theme = Theme.of(context);
+    final note = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    switch (state.page) {
+      case SetupPage.code:
+        return SignInFrame(
+          title: 'Personal server',
+          subtitle: 'Enter the invite or recovery code from your server admin.',
+          isLoading: loading,
           errorMessage: state.errorMessage,
-          onProceed: _notifier.proceedFromServerSelection,
-          globalSubStep: state.globalSubStep,
-          joinSubStep: state.joinSubStep,
-          connectedServerName: state.connectedServerName,
+          onBack: n.leaveAdvancedMode,
+          primaryLabel: 'Next',
+          onPrimary: n.submitCode,
+          child: CodeField(
+            initial: state.codeString,
+            enabled: !loading,
+            detected: n.detectedCodeType,
+            onChanged: n.updateCodeString,
+            onSubmit: n.submitCode,
+          ),
         );
 
-      case OnboardingStep.globalPhone:
-        return GlobalPhoneStep(
-          countryCode: state.countryCode,
-          phoneNumber: state.phoneNumber,
-          isLoading: state.isLoading,
+      case SetupPage.phone:
+        final global = !state.isAdvanced;
+        return SignInFrame(
+          title: global
+              ? 'Sign in'
+              : (state.isRecovery ? 'Recover your account' : 'Join the server'),
+          subtitle: global
+              ? 'Use your phone number to continue to Helix.'
+              : (state.isRecovery
+                    ? 'Enter the phone number of the account.'
+                    : 'Enter your phone number.'),
+          badge: _serverBadge(state),
+          isLoading: loading,
           errorMessage: state.errorMessage,
-          onCountryCodeChanged: _notifier.updateCountryCode,
-          onPhoneChanged: _notifier.updatePhoneNumber,
-          onSubmit: () => _notifier.requestOtp(),
+          onBack: global ? null : n.goBack,
+          primaryLabel: 'Next',
+          onPrimary: n.submitPhone,
+          footer: global
+              ? TextButton(
+                  onPressed: () => showLegalDocumentsSheet(context),
+                  child: const Text('Terms & Privacy'),
+                )
+              : null,
+          corner: global
+              ? AdvancedModeCorner(onOpen: n.openAdvancedMode)
+              : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PhoneFields(
+                countryCode: state.countryCode,
+                phoneNumber: state.phoneNumber,
+                enabled: !loading,
+                onCountryCodeChanged: n.updateCountryCode,
+                onPhoneChanged: n.updatePhoneNumber,
+                onSubmit: n.submitPhone,
+              ),
+              if (global) ...[
+                const SizedBox(height: HelixSpace.sm),
+                Text(
+                  'New to Helix? Enter your number and we will set up your '
+                  'account.',
+                  style: note,
+                ),
+              ],
+            ],
+          ),
         );
 
-      case OnboardingStep.globalOtp:
-        return GlobalOtpStep(
-          phoneNumber: '${state.countryCode} ${state.phoneNumber}',
-          otpCode: state.otpCode,
-          rememberDevice: state.rememberDevice,
-          isLoading: state.isLoading,
+      case SetupPage.password:
+        return SignInFrame(
+          title: 'Welcome back',
+          subtitle: _phoneLabel,
+          badge: _serverBadge(state),
+          isLoading: loading,
           errorMessage: state.errorMessage,
-          otpIsPlaceholder: state.otpIsPlaceholder,
-          onOtpChanged: _notifier.updateOtpCode,
-          onRememberDeviceChanged: _notifier.toggleRememberDevice,
-          onSubmit: () => _notifier.verifyOtp(),
-          onResendOtp: () => _notifier.requestOtp(),
+          onBack: n.goBack,
+          primaryLabel: 'Sign in',
+          onPrimary: n.signInWithPassword,
+          secondary: TextButton(
+            onPressed: loading ? null : n.forgotPassword,
+            child: const Text('Forgot password?'),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PasswordField(
+                enabled: !loading,
+                onChanged: n.updatePassword,
+                onSubmit: n.signInWithPassword,
+              ),
+              const SizedBox(height: HelixSpace.sm),
+              Text(
+                'Your other devices stay signed in. Signing in with an SMS '
+                'code instead signs them out.',
+                style: note,
+              ),
+            ],
+          ),
         );
 
-      case OnboardingStep.globalName:
-        return GlobalNameStep(
-          displayName: state.displayName,
-          tosAccepted: state.tosAccepted,
-          onTosAcceptedChanged: _notifier.setTosAccepted,
-          isLoading: state.isLoading,
+      case SetupPage.otp:
+        return SignInFrame(
+          title: 'Enter the code',
+          subtitle: 'We sent a 6-digit code by SMS to $_phoneLabel.',
+          badge: _serverBadge(state),
+          isLoading: loading,
           errorMessage: state.errorMessage,
-          onNameChanged: _notifier.updateDisplayName,
-          onSubmit: () => _notifier.completeSetup(skip: false),
-          onSkip: () => _notifier.completeSetup(skip: true),
+          onBack: n.goBack,
+          primaryLabel: 'Next',
+          onPrimary: n.submitOtp,
+          secondary: TextButton(
+            onPressed: loading ? null : n.requestOtp,
+            child: const Text('Resend code'),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              OtpField(
+                initial: state.otpCode,
+                enabled: !loading,
+                onChanged: n.updateOtpCode,
+                onSubmit: n.submitOtp,
+              ),
+              if (state.isRecovery || state.accountExists) ...[
+                const SizedBox(height: HelixSpace.sm),
+                Text(
+                  'Continuing moves your account to this phone and signs out '
+                  'your other devices.',
+                  style: note,
+                ),
+              ],
+            ],
+          ),
         );
 
-      case OnboardingStep.othersHub:
-        return OthersHubStep(onSelectOption: _notifier.setOthersOption);
+      case SetupPage.name:
+        final newAccount = !state.accountExists;
+        final needsTerms = n.requiresTerms;
+        final canSubmit = !needsTerms || state.tosAccepted;
+        void submit() {
+          if (canSubmit) n.completeSetup();
+        }
 
-      case OnboardingStep.hostGuide:
-        return HostGuideStep(
-          currentStep: state.hostGuideStep,
-          onStepChanged: _notifier.updateHostGuideStep,
-          onBackToOptions: () => _notifier.setOthersOption(OthersOption.join),
-          onProceedToJoin: () => _notifier.setOthersOption(OthersOption.join),
-        );
-
-      case OnboardingStep.codeEntry:
-        return CodeEntryStep(
-          codeString: state.codeString,
-          isLoading: state.isLoading,
+        return SignInFrame(
+          title: newAccount ? 'Your name' : 'Welcome back',
+          subtitle: newAccount
+              ? 'This is how your contacts will see you.'
+              : 'Accept the terms to continue to your account.',
+          badge: _serverBadge(state),
+          isLoading: loading,
           errorMessage: state.errorMessage,
-          showInfoPopover: state.showCodeInfoPopover,
-          onCodeChanged: _notifier.updateCodeString,
-          onToggleInfo: _notifier.toggleCodeInfoPopover,
-          onSubmit: () => _notifier.resolveCode(),
-        );
-
-      case OnboardingStep.personalVerify:
-        return PersonalVerifyStep(
-          connectedServerName: state.connectedServerName ?? 'Personal Server',
-          codeType: state.codeType,
-          countryCode: state.countryCode,
-          phoneNumber: state.phoneNumber,
-          otpCode: state.otpCode,
-          rememberDevice: state.rememberDevice,
-          displayName: state.displayName,
-          isLoading: state.isLoading,
-          loadingStatus: state.loadingStatus,
-          errorMessage: state.errorMessage,
-          onCountryCodeChanged: _notifier.updateCountryCode,
-          onPhoneChanged: _notifier.updatePhoneNumber,
-          onOtpChanged: _notifier.updateOtpCode,
-          onRememberDeviceChanged: _notifier.toggleRememberDevice,
-          onNameChanged: _notifier.updateDisplayName,
-          onRequestOtp: ({bool isPersonal = true}) =>
-              _notifier.requestOtp(isPersonal: isPersonal),
-          onVerifyOtp: ({bool isPersonal = true}) =>
-              _notifier.verifyOtp(isPersonal: isPersonal),
-          onComplete: () => _notifier.completeSetup(isPersonal: true),
+          onBack: n.goBack,
+          primaryLabel: newAccount ? 'Create account' : 'Continue',
+          onPrimary: canSubmit ? submit : null,
+          secondary: newAccount
+              ? TextButton(
+                  onPressed: loading || !canSubmit
+                      ? null
+                      : () => n.completeSetup(skip: true),
+                  child: const Text('Skip'),
+                )
+              : null,
+          child: NameFields(
+            askName: newAccount,
+            initialName: state.displayName,
+            showTerms: needsTerms,
+            termsAccepted: state.tosAccepted,
+            enabled: !loading,
+            onNameChanged: n.updateDisplayName,
+            onTermsChanged: n.setTosAccepted,
+            onSubmit: submit,
+          ),
         );
     }
   }

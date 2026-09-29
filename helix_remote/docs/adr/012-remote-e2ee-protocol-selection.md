@@ -3,6 +3,8 @@
 Status: accepted  
 Date: 2026-06-19  
 
+> Implementation status (2026-09): the "widely deployed library" goal was not met. Helix Remote uses its own X3DH (`packages/helix_remote_crypto/lib/src/x3dh.dart`) and `DoubleRatchetSession` (`packages/helix_remote_crypto/lib/src/double_ratchet.dart`) built on the `cryptography` package primitives (Ed25519, X25519, HKDF, AES-GCM). It has not been externally reviewed; see `docs/security/EXTERNAL_SECURITY_REVIEW_GATE.md`.
+
 ## Context
 Writing custom cryptographic protocols is highly risky and prone to implementation flaws. Helix Remote must use a verified, mature E2EE protocol.
 

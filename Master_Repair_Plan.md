@@ -1,5 +1,7 @@
 # Helix Remote: Master Repair & Architecture Hardening Plan
 
+> **Status: historical (2026-09-23).** Its batches landed in commit caa413c (2026-09-23) and later fixes; not a current task list. See `AGENTS.md` and `helix_remote/docs/`.
+
 This engineering roadmap translates the findings from the comprehensive 15-section system audit into a production-grade remediation plan. Modeled after [`Final_Plan.md`](file:///j:/Projects/helix/Final_Plan.md), it provides exact file citations, line ranges, root causes, drop-in replacement code, verification commands, and edge-case test specifications.
 
 ---

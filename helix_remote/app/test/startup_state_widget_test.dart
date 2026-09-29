@@ -3,17 +3,8 @@
 // Verifies:
 //   P03-W01  resetRequired state renders the Reset button (no dead-end screen).
 //   P03-W02  authenticatedAndSyncing renders the Syncing screen, not the ready screen.
-//   P05-W01  fresh-device recovery is visibly disabled and accepts no code.
-//   P05-W02  tapping the invalid-invite icon shows the reason (not a silent
-//            no-op - ScaffoldMessenger.of needs a context from inside the
-//            MaterialApp this State builds, not the State's own context).
-//   P05-W03  a pasted full join link in the invite field is reduced to the
-//            bare code, since admins hand out links but this field expects
-//            only the code.
-//   P05-W04  the phone field's error text isn't limited to one line -
-//            server-provided errors (e.g. an SMS gateway's rejection
-//            reason) are longer than a plain validation label and must not
-//            be truncated with an ellipsis.
+//   P05-W01  signed out, the app shows the simple sign-in page only.
+//   P05-W02  advanced mode's code page explains an empty code.
 
 import 'dart:io';
 
@@ -167,7 +158,7 @@ void main() {
   );
 
   testWidgets(
-    'P05-W01: unauthenticated state renders new Welcome SetupScreen and no legacy screens',
+    'P05-W01: unauthenticated state renders the simple sign-in page',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p05_w01_');
       addTearDown(() {
@@ -189,23 +180,18 @@ void main() {
       );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Helix Global Server').evaluate().isNotEmpty) break;
+        if (find.text('Sign in').evaluate().isNotEmpty) break;
       }
 
-      // The new welcome flow is rendered
-      expect(find.text('Helix Global Server'), findsOneWidget);
-      expect(find.text('Others'), findsOneWidget);
-      expect(find.text('Request OTP'), findsOneWidget);
-      // The offline escape hatch was removed; Global signup is phone + OTP.
+      expect(find.text('Sign in'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget);
+      // One page, one server: no server tabs, no hosting guide, no
+      // personal-server entry in sight until advanced mode is opened.
+      expect(find.text('Others'), findsNothing);
+      expect(find.text('Helix Global Server'), findsNothing);
+      expect(find.textContaining('Host your own'), findsNothing);
+      expect(find.text('Advanced mode'), findsNothing);
       expect(find.text('Continue offline for now'), findsNothing);
-
-      // Legacy screens are gone entirely
-      expect(find.text('Server invitation code'), findsNothing);
-      expect(find.text('Restore existing account'), findsNothing);
-      expect(find.text('Restore account'), findsNothing);
-      expect(find.text('Restore code'), findsNothing);
-      expect(find.text('Enter your restore code'), findsNothing);
-      expect(find.text('Unavailable'), findsNothing);
 
       expect(root.startupState, RemoteStartupState.unauthenticated);
 
@@ -215,7 +201,7 @@ void main() {
   );
 
   testWidgets(
-    'P05-W02: invalid code in CodeEntryStep displays validation error',
+    'P05-W02: an empty code in advanced mode displays a validation error',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync('p05_w02_');
       addTearDown(() {
@@ -237,102 +223,24 @@ void main() {
       );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Others').evaluate().isNotEmpty) break;
+        if (find.text('Sign in').evaluate().isNotEmpty) break;
       }
 
-      await tester.tap(find.text('Others'));
-      await tester.pumpAndSettle();
-
-      // Submit empty code to trigger validation error
-      await tester.ensureVisible(find.text('Verify & Connect'));
-      await tester.tap(find.text('Verify & Connect'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Please enter a code or link.'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    },
-  );
-
-  testWidgets(
-    'P05-W03: pasting a full join link into the code entry field extracts the bare code',
-    (tester) async {
-      final dir = Directory.systemTemp.createTempSync('p05_w03_');
-      addTearDown(() {
-        if (dir.existsSync()) {
-          try {
-            dir.deleteSync(recursive: true);
-          } catch (_) {}
-        }
-      });
-
-      final root = RemoteCompositionRoot.withConfig(
-        _productConfig(dir.path),
-        devConfig: _devConfig(dir.path),
-        keyValueStore: _InMemoryKeyValueStore(),
-      );
-
-      await tester.pumpWidget(
-        HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
-      );
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Others').evaluate().isNotEmpty) break;
+      final corner = find.byKey(const ValueKey('advanced-mode-corner'));
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(corner);
+        await tester.pump(const Duration(milliseconds: 200));
       }
-
-      await tester.tap(find.text('Others'));
+      await tester.tap(find.text('Advanced mode'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.byType(TextFormField).first);
-      await tester.enterText(
-        find.byType(TextFormField).first,
-        'https://hr.agiletechbd.com/join?invite=UiFzSP3Vgp6XA7fEby6-IPb5i',
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Enter the invite or recovery code you were given.'),
+        findsOneWidget,
       );
-      await tester.pump();
-
-      expect(find.text('UiFzSP3Vgp6XA7fEby6-IPb5i'), findsOneWidget);
-      expect(find.textContaining('hr.agiletechbd.com'), findsNothing);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    },
-  );
-
-  testWidgets(
-    'P05-W04: the phone field allows multi-line error text instead of truncating it',
-    (tester) async {
-      final dir = Directory.systemTemp.createTempSync('p05_w04_');
-      addTearDown(() {
-        if (dir.existsSync()) {
-          try {
-            dir.deleteSync(recursive: true);
-          } catch (_) {}
-        }
-      });
-
-      final root = RemoteCompositionRoot.withConfig(
-        _productConfig(dir.path),
-        devConfig: _devConfig(dir.path),
-        keyValueStore: _InMemoryKeyValueStore(),
-      );
-
-      await tester.pumpWidget(
-        HelixRemoteAppShell(home: HelixRemoteApp(root: root)),
-      );
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Request OTP').evaluate().isNotEmpty) break;
-      }
-
-      final phoneField = tester.widget<TextField>(
-        find.byType(TextField).first,
-      );
-      // InputDecoration.errorMaxLines defaults to null, which truncates
-      // errorText to a single line with an ellipsis - a long server error
-      // (e.g. "Failed to send verification SMS: ...") would be cut off.
-      expect(phoneField.decoration?.errorMaxLines, isNotNull);
-      expect(phoneField.decoration!.errorMaxLines! > 1, isTrue);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();

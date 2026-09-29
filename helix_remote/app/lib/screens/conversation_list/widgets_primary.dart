@@ -274,10 +274,7 @@ class _OutboxBanner extends StatelessWidget {
               ),
             ),
             if (summary.failedCount > 0)
-              TextButton(
-                onPressed: onRetry,
-                child: Text(HelixLocalizations.of(context).retry),
-              ),
+              TextButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),

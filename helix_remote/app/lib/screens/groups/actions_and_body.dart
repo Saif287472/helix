@@ -49,7 +49,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(HelixLocalizations.of(context).cancel),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -112,7 +112,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(HelixLocalizations.of(context).groups),
+        title: const Text('Groups'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -202,9 +202,7 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
             ),
           Expanded(
             child: groups.isEmpty
-                ? Center(
-                    child: Text(HelixLocalizations.of(context).noGroupsYet),
-                  )
+                ? const Center(child: Text('No groups yet'))
                 : ListView.builder(
                     itemCount: groups.length,
                     itemBuilder: (context, index) {
@@ -283,120 +281,88 @@ extension _GroupsActionsAndBody on _GroupsScreenState {
                               }
                             },
                             itemBuilder: (ctx) => [
-                              PopupMenuItem(
+                              const PopupMenuItem(
                                 value: 'open',
                                 child: ListTile(
-                                  leading: const Icon(Icons.chat),
-                                  title: Text(
-                                    HelixLocalizations.of(context).open,
-                                  ),
+                                  leading: Icon(Icons.chat),
+                                  title: Text('Open'),
                                 ),
                               ),
                               if (group.isAdmin)
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: 'invite',
                                   child: ListTile(
-                                    leading: const Icon(Icons.person_add),
-                                    title: Text(
-                                      HelixLocalizations.of(
-                                        context,
-                                      ).inviteMember2,
-                                    ),
+                                    leading: Icon(Icons.person_add),
+                                    title: Text('Invite member'),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: 'join_link',
                                   child: ListTile(
-                                    leading: const Icon(Icons.link),
-                                    title: Text(
-                                      HelixLocalizations.of(context).joinLink2,
-                                    ),
+                                    leading: Icon(Icons.link),
+                                    title: Text('Join link'),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: 'privacy',
                                   child: ListTile(
-                                    leading: const Icon(Icons.lock_outline),
-                                    title: Text(
-                                      HelixLocalizations.of(
-                                        context,
-                                      ).groupAddPrivacy2,
-                                    ),
+                                    leading: Icon(Icons.lock_outline),
+                                    title: Text('Group-add privacy'),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: 'rename',
                                   child: ListTile(
-                                    leading: const Icon(Icons.drive_file_rename_outline),
-                                    title: Text(
-                                      HelixLocalizations.of(
-                                        context,
-                                      ).renameGroup,
+                                    leading: Icon(
+                                      Icons.drive_file_rename_outline,
                                     ),
+                                    title: Text('Rename group'),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: 'members',
                                   child: ListTile(
-                                    leading: const Icon(Icons.people_outline),
-                                    title: Text(
-                                      HelixLocalizations.of(
-                                        context,
-                                      ).manageMembers,
-                                    ),
+                                    leading: Icon(Icons.people_outline),
+                                    title: Text('Manage members'),
                                   ),
                                 ),
                               if (group.isAdmin)
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: 'transfer',
                                   child: ListTile(
-                                    leading: const Icon(Icons.swap_horiz),
-                                    title: Text(
-                                      HelixLocalizations.of(
-                                        context,
-                                      ).transferOwnership2,
-                                    ),
+                                    leading: Icon(Icons.swap_horiz),
+                                    title: Text('Transfer ownership'),
                                   ),
                                 ),
-                              PopupMenuItem(
+                              const PopupMenuItem(
                                 value: 'notifications',
                                 child: ListTile(
-                                  leading: const Icon(
-                                    Icons.notifications_outlined,
-                                  ),
-                                  title: Text(
-                                    HelixLocalizations.of(
-                                      context,
-                                    ).notifications,
-                                  ),
+                                  leading: Icon(Icons.notifications_outlined),
+                                  title: Text('Notifications'),
                                 ),
                               ),
-                              PopupMenuItem(
+                              const PopupMenuItem(
                                 value: 'leave',
                                 child: ListTile(
-                                  leading: const Icon(Icons.exit_to_app),
-                                  title: Text(
-                                    HelixLocalizations.of(context).leaveGroup,
-                                  ),
+                                  leading: Icon(Icons.exit_to_app),
+                                  title: Text('Leave group'),
                                 ),
                               ),
                               if (group.isAdmin)
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: 'delete',
                                   child: ListTile(
-                                    leading: const Icon(
+                                    leading: Icon(
                                       Icons.delete_forever,
                                       color: HelixStatusColors.danger,
                                     ),
                                     title: Text(
-                                      HelixLocalizations.of(
-                                        context,
-                                      ).deleteGroup,
-                                      style: const TextStyle(
+                                      'Delete group',
+                                      style: TextStyle(
                                         color: HelixStatusColors.danger,
                                       ),
                                     ),

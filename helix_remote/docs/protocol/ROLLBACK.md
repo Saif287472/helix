@@ -1,5 +1,7 @@
 # Protocol Split Rollback
 
+> **Status: historical, Helix Local only (June 2026 Stage 3 protocol split).** `helix_protocol` and the root `scripts/verify.ps1` refer to the old root layout; this does not apply to Helix Remote.
+
 Stage 3 is intentionally reversible.
 
 ## If The Split Regresses

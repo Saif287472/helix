@@ -27,7 +27,7 @@ This document defines the policies and technical design principles governing bac
 
 ## 4. Deprecation Windows and Versioning (P8-041, P8-040)
 *   **Versioning Schema**:
-    *   **REST API**: Scoped via path variables (e.g., `/api/v1/auth/login`).
+    *   **REST API**: Scoped via path variables (e.g., `/api/v1/accounts/login`).
     *   **WebSocket Envelope**: Tracked via `schema_version` (integer).
 *   **Deprecation Flow**:
     1.  **Announcement**: When a version is deprecated, the server starts returning a `Warning: 299 - "Deprecated: Use v2 by [date]"` HTTP header.

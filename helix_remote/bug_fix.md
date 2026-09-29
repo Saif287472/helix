@@ -1,3 +1,5 @@
+> **Status: historical (July 2026 repair analysis).** Kept as a record; file paths and line references are from that date and many findings have since been fixed. For current guidance see `AGENTS.md` and `helix_remote/docs/`.
+
 Here is the Phase 2 Deep Repair Analysis. As a Principal Refactoring Engineer, I have reorganized the audit findings into a high-ROI, low-risk implementation roadmap. This plan requires zero architectural rewrites and focuses entirely on maximizing stability and security with the minimum necessary code changes.
 
 ---

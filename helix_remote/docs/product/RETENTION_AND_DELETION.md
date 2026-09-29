@@ -26,6 +26,15 @@ Date: 2026-06-19
   unreferenced cleanup is implemented by the attachment lifecycle helpers.
 - Backups: the latest opaque encrypted backup is retained until replaced or
   account deletion. Message deletion marks a backup as requiring reupload.
+- Chat history backup (`history_backups`): one encrypted text-only blob per
+  account, replaced on each upload. Deleted when the account identity key
+  rotates (it can no longer be decrypted) and on account deletion.
+- Account password (`account_passwords`): retained until the password is
+  changed (row replaced), the identity key rotates (row deleted, a new
+  password must be set), or account deletion.
+- Refresh tokens: stored only as SHA-256 hashes; each expires 60 days after it
+  was issued and is revoked when rotated (every refresh), when its device is
+  signed out, or on account deletion. Access tokens (1 hour) are not stored.
 - Audit records: retained for security accountability with redacted IP/user-agent
   fields. Account-specific rows are removed by account deletion.
 
@@ -39,6 +48,11 @@ The account deletion endpoint requires the authenticated user to send
   prekeys, and device mailboxes.
 - Contacts, contact requests, privacy settings, reports, attachments, backups,
   and account-specific audit rows.
+- The account password row and the chat history backup (both via
+  `ON DELETE CASCADE` from `accounts`; `PRAGMA foreign_keys = ON`).
+
+The app then deletes its local tokens, local database and attachment cache
+(`purgeAfterAccountDeletion` in `app/lib/app/composition_root/runtime.dart`).
 
 The endpoint does not delete Local product data and does not touch arbitrary
 filesystem paths. It also does not touch `invite_credentials` rows: if the

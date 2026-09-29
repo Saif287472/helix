@@ -1,5 +1,7 @@
 # ADR: Remote Group Call Architecture - SFU over Peer-to-Peer Mesh
 
+> **Status: superseded (never adopted).** This SFU draft was replaced by the full-mesh design in `docs/protocol/F8_GROUP_CALLS_DESIGN.md` (at most 4 participants; `_maxParticipants = 4` in `helix_remote/packages/helix_remote_calls/lib/src/remote_group_call_service.dart` and `helix_remote/backend/lib/src/modules/group_calls.dart`). There is no SFU.
+
 **Status:** Draft
 **Date:** 2026-06-19
 **Phase:** P16-015

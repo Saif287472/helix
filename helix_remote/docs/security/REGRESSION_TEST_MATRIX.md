@@ -32,7 +32,7 @@ visible here rather than only in the audit.
 | Finding | Regression test evidence |
 | --- | --- |
 | MED-1: full window re-fetch and re-decrypt per inbound message | `app/test/audit_findings_regression_test.dart` (delta path, no window re-read) and `app/test/phase4_performance_budget_test.dart` (1,000-message burst within the frame budget) |
-| MED-2: no design system, localization, or responsive layout in the client | `app/test/phase5_design_tokens_test.dart` (no colour literals outside the UI package), `app/test/phase5_responsive_screenshot_test.dart` (phone/tablet/desktop), `app/test/helix_localizations_test.dart` |
+| MED-2: no design system, localization, or responsive layout in the client | `app/test/phase5_design_tokens_test.dart` (no colour literals outside the UI package), `app/test/phase5_responsive_screenshot_test.dart` (phone/tablet/desktop). Localization was removed on 2026-09-28: the app is English-only with plain string literals. |
 | MED-3: non-constant-time comparison of JWT signature and admin token | `backend/test/constant_time_comparison_test.dart` — comparator correctness on every case `==` would handle, plus both call sites |
 | MED-4: no crash reporting or analytics | `app/test/telemetry_reporter_test.dart` (opt-in required, sink required, failures never propagate, payload carries no token or phone number) and `backend/test/telemetry_crash_sink_test.dart` (authenticated, bounded, rate-limited, observable) |
 | MED-5: accessibility effectively absent; text scale capped at 1.3× | `app/test/phase7_accessibility_test.dart` — every icon button labelled, guidelines on a real screen in both themes, high-contrast pair, usable at 2×, and no clamp anywhere in the shell |

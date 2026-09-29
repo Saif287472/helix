@@ -139,6 +139,10 @@ mixin RemotePrivacyRepository on HelixRemoteDatabaseBase {
   static const String _strictPresetKey = 'strict_account_settings_applied';
   static const String _unknownCallPolicyKey = 'silence_unknown_callers';
   static const String _notificationPreviewKey = 'notification_previews';
+  static const String _readReceiptsKey = 'read_receipts_enabled';
+  static const String _presenceVisibilityKey = 'presence_visibility';
+  static const String _lastSeenVisibilityKey = 'last_seen_visibility';
+  static const String _searchDiscoverableKey = 'search_discoverable';
   static const String _lockedChatSecretVerifierKey =
       'locked_chat_secret_verifier';
 
@@ -209,6 +213,44 @@ mixin RemotePrivacyRepository on HelixRemoteDatabaseBase {
 
   void setSilenceUnknownCallers({required bool enabled}) {
     _setPrivacySetting(_unknownCallPolicyKey, enabled ? 'true' : 'false');
+  }
+
+  /// Whether this device sends read receipts. Defaults to on, matching the
+  /// messaging service's default before anything was stored.
+  bool getReadReceiptsEnabled() =>
+      _getPrivacySetting(_readReceiptsKey) != 'false';
+
+  void setReadReceiptsEnabled({required bool enabled}) {
+    _setPrivacySetting(_readReceiptsKey, enabled ? 'true' : 'false');
+  }
+
+  /// The account's presence preferences as last chosen on this device.
+  /// Visibilities are `EVERYONE`, `CONTACTS` or `NOBODY`; the defaults are
+  /// what the messaging service used before these were persisted.
+  ({
+    bool searchDiscoverable,
+    String presenceVisibility,
+    String lastSeenVisibility,
+  })
+  getAccountPrivacyPreferences() => (
+    searchDiscoverable: _getPrivacySetting(_searchDiscoverableKey) != 'false',
+    presenceVisibility:
+        _getPrivacySetting(_presenceVisibilityKey) ?? 'CONTACTS',
+    lastSeenVisibility:
+        _getPrivacySetting(_lastSeenVisibilityKey) ?? 'CONTACTS',
+  );
+
+  void setAccountPrivacyPreferences({
+    required bool searchDiscoverable,
+    required String presenceVisibility,
+    required String lastSeenVisibility,
+  }) {
+    _setPrivacySetting(
+      _searchDiscoverableKey,
+      searchDiscoverable ? 'true' : 'false',
+    );
+    _setPrivacySetting(_presenceVisibilityKey, presenceVisibility);
+    _setPrivacySetting(_lastSeenVisibilityKey, lastSeenVisibility);
   }
 
   bool getNotificationPreviewsEnabled() =>

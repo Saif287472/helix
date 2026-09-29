@@ -142,7 +142,9 @@ RemoteIceConfigProvider _providerFor(HelixRemoteRestClient rest) =>
       ),
     );
 
-class _ThrowingRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
+class _ThrowingRestClient
+    with GroupCallRestStubs
+    implements HelixRemoteRestClient {
   _ThrowingRestClient(this._error);
 
   final Object _error;

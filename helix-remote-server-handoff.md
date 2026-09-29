@@ -5,26 +5,30 @@ messaging app (private repo `github.com/Saif287472/helix`, main branch). This is
 currently configured for personal/family and development use. The earlier InterServer
 VPS (vps3516391 / `157.250.207.166`) has been fully wiped, decommissioned, and cancelled.
 All backend and media relay services are now hosted locally on a dedicated Windows PC
-with Caddy and WSL2.
+with Caddy, and coturn runs in **WSL1** (not WSL2: WSL1 shares Windows' network stack,
+so coturn binds the PC's real LAN address).
+
+The running backend on this PC is live production for Helix Global. Deploying a change
+means committing it to this working copy and restarting the backend; never hand-edit
+live state. The PC is not always on.
 
 
 ## Server & Network Environment
 - **Host Machine:** Windows 10/11 PC (User: `Hasan`)
 - **Local IP (LAN):** `192.168.0.185`
 - **Public IPv4:** `43.230.120.37`
-- **WSL2 Instance:** Ubuntu 26.04 LTS (`hasan@DESKTOP-HA14AQF`)
+- **WSL1 distro:** Ubuntu (`start-turn.ps1 -Distro` defaults to `Ubuntu`)
 - **Router Port Forwarding (NAT to `192.168.0.185`):**
   - TCP `80` → `80` (HTTP ACME challenge / Caddy redirect)
   - TCP `443` → `443` (HTTPS / Caddy)
   - UDP/TCP `3478` → `3478` (Coturn STUN/TURN signaling)
-  - TCP `5349` → `5349` (Coturn TURNS TLS signaling)
-  - UDP `49152-49250` → `49152-49250` (Coturn WebRTC media relay range)
-  *(Note: Single-mode router inputs can strip dashes. Ensure range forwarding is preserved).*
-- **Windows Defender Firewall (Inbound Rules):**
-  - `Helix Caddy Web`: TCP 80, 443 (Allow)
-  - `Coturn Signaling UDP`: UDP 3478 (Allow)
-  - `Coturn Signaling TCP`: TCP 3478 (Allow)
-  - `Coturn Relay Media`: UDP 49152-49250 (Allow)
+  - UDP `49160-49200` → `49160-49200` (Coturn relay range; `min-port`/`max-port` in
+    `helix_remote/deploy/coturn/turnserver.conf`)
+  *(Note: Single-mode router inputs can strip dashes. Ensure range forwarding is preserved.
+  Older forwards for `49152-49250` and TCP `5349` are wider than needed.)*
+- **Windows Defender Firewall (Inbound Rules):** see "Windows home PC" in
+  `helix_remote/deploy/coturn/README.md` (UDP 3478 + 49160-49200, TCP 3478), plus
+  `Helix Caddy Web`: TCP 80, 443 (Allow).
 
 
 
@@ -37,98 +41,100 @@ with Caddy and WSL2.
   helix.agiletechbd.com {
       reverse_proxy 127.0.0.1:8080
   }
+  ```
 
-
-* **TLS Certificate:** Automatic ZeroSSL / Let's Encrypt managed by Caddy via `tls-alpn-01` challenge. Verified active and auto-renewing.
+* **TLS Certificate:** Automatic ZeroSSL / Let's Encrypt managed by Caddy via `tls-alpn-01` challenge.
+* `helix_remote/deploy/nginx/` is legacy from the VPS era and is not used here.
 
 ## Deployed Services
 
 ### 1. Helix Dart Backend Monolith
 
 * **Location:** `J:\Projects\helix\helix_remote\backend`
-* **Entry point:** `bin/server.dart` (runs on Dart SDK ^3.12, listening on `127.0.0.1:8080`)
-* **Storage:** Local SQLite database at `remote_backend.db`, attachments at `./attachments_storage`
-* **Secrets & Configuration:** Sourced from `backend/.env` (parsed and exported before boot):
+* **Entry point:** `bin/server.dart` (Dart SDK ^3.12, listening on `127.0.0.1:8080`)
+* **Storage:** Local SQLite database at `remote_backend.db` (schema `PRAGMA user_version` 47),
+  attachments at `./attachments_storage`
+* **Secrets & Configuration:** `backend/.env`. The server reads it itself at startup
+  (`loadEffectiveEnv` in `backend/lib/src/startup_env.dart`); process environment
+  variables override `.env`. Never commit or paste its values. The keys this deployment needs are:
 
+```ini
 HELIX_REMOTE_PORT=8080
 HELIX_REMOTE_HOST=127.0.0.1
 HELIX_REMOTE_DEV_MODE=0
-HELIX_REMOTE_JWT_SECRET=a68ef41z68wecf1zefza8cd... (persistent 32+ bytes)
+HELIX_REMOTE_JWT_SECRET=<32+ bytes, persistent>
 HELIX_REMOTE_DB_PATH=remote_backend.db
 HELIX_REMOTE_ATTACHMENTS_DIR=./attachments_storage
-HELIX_REMOTE_PUBLIC_BASE_URL=[https://helix.agiletechbd.com](https://helix.agiletechbd.com)
-HELIX_REMOTE_TURN_URL=turn:helix.agiletechbd.com:3478?transport=udp
-HELIX_REMOTE_TURN_SECRET=4gs6dr84gs6d5g4f9s8er...
-TURN_REALM=helix.agiletechbd.com
-TURN_EXTERNAL_IP=43.230.120.37
+HELIX_REMOTE_PUBLIC_BASE_URL=https://helix.agiletechbd.com
+HELIX_REMOTE_GLOBAL_INSTANCE_MODE=true
+HELIX_REMOTE_SMS_API_KEY=<BulkSMSBD key>
+HELIX_REMOTE_SMS_SENDER_ID=<BulkSMSBD sender id>
+HELIX_REMOTE_TURN_URL=turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp
+HELIX_REMOTE_TURN_SECRET=<shared with coturn>
+```
 
+  The full variable list is in `helix_remote/docs/operations/REMOTE_OPERABILITY_AND_DR.md`.
 
-
-
-* **Admin Token:** Generated on first run and stored in `backend/ADMIN_TOKEN.txt`. Required for `/api/v1/ops/*` endpoints.
+* **Admin access:** there is no admin token file any more. The admin password is either
+  `HELIX_REMOTE_ADMIN_PASSWORD` in `.env` (break-glass override) or a password created
+  from the Helix Admin app on first run and stored hashed in the database; the server
+  prints which one applies at startup. `bin/reset_admin_password.dart` resets the stored one.
 
 ### 2. WebRTC TURN Media Relay (Coturn)
 
-* **Runtime:** Running natively inside WSL2 Ubuntu (`sudo service coturn status`)
-* **Config (`/etc/turnserver.conf`):**
-
-listening-port=3478
-fingerprint
-lt-cred-mech
-use-auth-secret
-static-auth-secret=4gs6dr84gs6d5g4f9s8er...
-realm=helix.agiletechbd.com
-external-ip=43.230.120.37
-min-port=49152
-max-port=49250
-no-cli
-
-
-
-* **Daemon Flag:** Enabled via `TURNSERVER_ENABLED=1` in `/etc/default/coturn`.
+* **Runtime:** coturn inside WSL1, started by `helix_remote/deploy/coturn/windows/start-turn.ps1`
+  and stopped by `stop-turn.ps1`. The script renders `deploy/coturn/turnserver.conf` with
+  `deploy/coturn/entrypoint.sh` (the same template the Docker deployment uses), reads
+  `HELIX_REMOTE_TURN_SECRET` from the process environment or `backend/.env`, and detects the
+  public and LAN IPs. The secret never goes on a command line.
+* **Log:** `wsl -d Ubuntu -u root -- tail -f /var/log/helix-turn.log`
+* One-time setup (install coturn, port forwards, firewall): `helix_remote/deploy/coturn/README.md`,
+  section "Windows home PC".
 
 
 ## Health & Verification
 
-Liveness and readiness endpoints confirmed functional:
+```powershell
+# Public readiness probe (call_ready, turn, websocket_ready, push_ready)
+curl.exe https://helix.agiletechbd.com/api/v1/health/ready
+```
 
-powershell
-# Public readiness probe (returns call_ready: true, turn: configured, websocket_ready: true)
-curl.exe -k [https://helix.agiletechbd.com/api/v1/health/ready](https://helix.agiletechbd.com/api/v1/health/ready)
-
-# Ops probe (requires Admin Bearer token)
-curl.exe -k -H "Authorization: Bearer <ADMIN_TOKEN>" [https://helix.agiletechbd.com/api/v1/ops/config](https://helix.agiletechbd.com/api/v1/ops/config)
-
+Ops endpoints (`/api/v1/ops/*`, `/api/v1/admin/*`) need an admin session from the Helix
+Admin app; use the app rather than hand-crafted requests.
 
 
 ## Client Integration ("Helix Global Server")
 
 * **Target URL:** `https://helix.agiletechbd.com`
-* **Default Onboarding Route:** When users tap **Helix Global Server** on the initial launch menu, the client bypasses manual URL typing and automatically routes requests to `https://helix.agiletechbd.com`.
-* **Invite Code Policy:**
-* For open public signups, keep `HELIX_REMOTE_REQUIRE_INVITE=0` (or omitted) in `backend/.env`.
-* If invite protection is enabled, auto-fill `_invitationCodeController.text` in `app/lib/main.dart` with the designated global server invite token so users do not need to input it manually.
+* **Default Onboarding Route:** choosing **Helix Global Server** in the app routes to
+  `https://helix.agiletechbd.com` without manual URL entry.
+* **Invites:** Helix Global has no invite codes. With `HELIX_REMOTE_GLOBAL_INSTANCE_MODE=true`
+  an SMS OTP (BulkSMSBD) is the only credential for sign-up; every account must also set a
+  password, and a password sign-in adds a device without signing others out. Personal
+  (non-Global) servers keep invite-only registration.
 
+> Sign-in (2026-09-28): the app opens on a single Helix Global page (phone number, then password or SMS code, then name/terms for new accounts). A personal server is reached through the hidden advanced mode (three taps in the bottom-right corner reveal an "Advanced mode" button; a fourth opens it) or through a shared link `https://helix.agiletechbd.com/open#HLX-…`. Advanced mode has one code field that tells an invite (`HLX-INV-`) from a recovery code (`HLX-REC-`), then the same phone and password/SMS pages. A recovery code names the server and account; the phone number must match the account (`POST /accounts/recovery/lookup`). With a password it is an ordinary password sign-in - nothing is reset. Without one, or via "Forgot password", `POST /accounts/recovery/redeem` resets the account onto the new device (new identity key, all other devices signed out) and requires the SMS code whenever the server has an SMS provider.
+>
+> For shared links to open the app directly, set `HELIX_ANDROID_CERT_SHA256` in `helix_remote/backend/.env` to the SHA-256 fingerprint(s) of the APK signing certificate(s), comma-separated; the backend then serves `/.well-known/assetlinks.json`. Without it the link opens a landing page (`/open`) whose button opens the app.
 
 
 ## Startup Runbook (Post PC Reboot)
 
-1. **Start Coturn (WSL2):**
-bash
-wsl -u root service coturn start
-
-
-
+1. **Start Coturn (WSL1, PowerShell):**
+   ```powershell
+   cd J:\Projects\helix\helix_remote
+   .\deploy\coturn\windows\start-turn.ps1
+   ```
 
 2. **Start Caddy (PowerShell Admin):**
-powershell
-cd J:\Projects\Servers\helix_server
-.\caddy.exe run
-
-
+   ```powershell
+   cd J:\Projects\Servers\helix_server
+   .\caddy.exe run
+   ```
 
 3. **Start Helix Backend (PowerShell):**
-powershell
-cd J:\Projects\helix\helix_remote\backend
-Get-Content .env | Where-Object { $_ -match '=' -and -not $_.Trim().StartsWith('#') } \vert{} ForEach-Object { $name, $value =$_.Split('=', 2); [System.Environment]::SetEnvironmentVariable($name.Trim(),$value.Trim()) }
-dart run bin/server.dart
+   ```powershell
+   cd J:\Projects\helix\helix_remote\backend
+   dart run bin/server.dart
+   ```
+   No manual `.env` export is needed; the server loads `backend/.env` itself.

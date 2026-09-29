@@ -28,6 +28,41 @@ mixin RemoteMessagesRepository on HelixRemoteDatabaseBase {
     stmt.close();
   }
 
+  /// Messages in [conversationId] from other accounts - or this account's
+  /// other devices - whose stored ciphertext still looks like a wire
+  /// envelope (base64url JSON beginning `{"v`), oldest first. The caller
+  /// confirms each one; the prefix is only a cheap filter.
+  List<Map<String, dynamic>> getWireEnvelopeMessages(
+    String conversationId, {
+    required String localDeviceId,
+  }) {
+    final rows = _db.select(
+      '''
+      SELECT message_id, ciphertext_blob FROM messages
+      WHERE conversation_id = ? AND sender_device_id != ?
+        AND ciphertext_blob LIKE 'eyJ2%'
+      ORDER BY server_sequence ASC, timestamp ASC;
+      ''',
+      [conversationId, localDeviceId],
+    );
+    return rows
+        .map(
+          (row) => {
+            'message_id': row['message_id'],
+            'ciphertext_blob': row['ciphertext_blob'],
+          },
+        )
+        .toList();
+  }
+
+  void updateMessageCiphertext(String messageId, String ciphertext) {
+    final stmt = _db.prepare(
+      'UPDATE messages SET ciphertext_blob = ? WHERE message_id = ?;',
+    );
+    stmt.execute([ciphertext, messageId]);
+    stmt.close();
+  }
+
   List<Map<String, dynamic>> getMessages(
     String conversationId, {
     int limit = 50,

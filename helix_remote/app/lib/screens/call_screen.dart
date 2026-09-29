@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 class CallScreen extends StatelessWidget {
   const CallScreen({
@@ -81,7 +80,7 @@ class _IncomingCallOverlay extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  HelixLocalizations.of(context).ringing,
+                  'Ringing',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.labelLarge,
                 ),

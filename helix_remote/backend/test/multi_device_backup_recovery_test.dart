@@ -451,7 +451,8 @@ void main() {
           },
         ],
       }, token: alice1.accessToken);
-      expect(missing.statusCode, equals(400));
+      expect(missing.statusCode, equals(409));
+      expect((jsonDecode(missing.body) as Map)['code'], 'device_list_stale');
 
       final plaintext = await _postJson(client, port, '/api/v1/messages/send', {
         'message_id': 'msg_plaintext_rejected',

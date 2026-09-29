@@ -5,7 +5,7 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
   /// assert against one source of truth instead of a literal that silently
   /// goes stale every time a migration is added - which is exactly what had
   /// happened: two tests still expected 18 after the schema reached 27.
-  static const int latestSchemaVersion = 30;
+  static const int latestSchemaVersion = 31;
 
   int get schemaVersion =>
       _db.select('PRAGMA user_version').first['user_version'] as int;
@@ -585,6 +585,21 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
       // devices whenever a new device asks to join. Nothing consumed it, so
       // the only way to pair was to hand-type the Link ID and 6-digit code.
       _createPendingDeviceLinksTable();
+      _db.execute('PRAGMA user_version = 30;');
+    }
+    if (version < 31) {
+      // Which device this database belongs to. It used to be inferred as
+      // "the newest ACTIVE row in devices", but that table also holds every
+      // contact's devices (learned from prekey bundles) and - with several
+      // devices per account - this account's own other devices. Once any of
+      // those was newer, a sign-out of *another* device looked like a
+      // sign-out of this one, and group keys were filed under the wrong id.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS local_identity (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
+      ''');
       _db.execute('PRAGMA user_version = $latestSchemaVersion;');
     }
   }

@@ -2,6 +2,13 @@
 
 Status: completed locally on 2026-06-25.
 
+> Status (2026-09): the app is now light-only. `HelixRemoteAppShell` pins
+> `ThemeMode.light` (`app/lib/app/helix_remote_app_shell.dart`) and
+> `helix_remote_ui` offers only `HelixThemes.light()` and `highContrastLight()`,
+> so the light/dark/system choice stored in `theme_preferences` has no dark
+> effect. The table is kept for schema compatibility. The app is also
+> English-only (no localization or Bengali strings).
+
 F10 adds local-first visual personalization, profile metadata, and sticker
 organization without introducing AI-dependent generation or unsafe media bypasses.
 

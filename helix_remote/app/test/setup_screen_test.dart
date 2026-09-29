@@ -2,340 +2,45 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote_api/api/rest_client.dart';
-import 'package:helix_remote/app/remote_config.dart';
+import 'package:helix_remote/app/helix_code.dart';
+import 'package:helix_remote/app/password_vault.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
-import 'package:helix_remote/screens/invite_entry_screen.dart';
+import 'package:helix_remote/screens/setup/setup_choices.dart';
 import 'package:helix_remote/screens/setup/setup_screen.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_notifier.dart';
 import 'package:helix_remote/screens/setup/state/onboarding_state.dart';
+import 'package:helix_remote/screens/setup/widgets/sign_in_frame.dart';
+import 'package:helix_remote_api/api/rest_client.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
+
 import 'support/group_call_rest_stubs.dart';
 
-void main() {
-  group('OnboardingNotifier & State', () {
-    test('initializes with splash and advances to serverSelection', () async {
-      final notifier = OnboardingNotifier(autoStartLaunch: false);
-      expect(notifier.state.step, OnboardingStep.splash);
-      expect(notifier.state.serverType, ServerType.global);
+const _personal = 'https://chat.example.org';
 
-      notifier.updateState(
-        (s) => s.copyWith(step: OnboardingStep.serverSelection),
-      );
-      expect(notifier.state.step, OnboardingStep.serverSelection);
-    });
-
-    test('Path A: Global server navigation and validation', () async {
-      final notifier = OnboardingNotifier(
-        autoStartLaunch: false,
-        client: _OnboardingRestClient(),
-      );
-      notifier.updateState(
-        (s) => s.copyWith(step: OnboardingStep.serverSelection),
-      );
-
-      notifier.proceedFromServerSelection();
-      expect(notifier.state.globalSubStep, GlobalSubStep.phone);
-
-      // Validation failure on short phone
-      notifier.updatePhoneNumber('12');
-      final failOtp = await notifier.requestOtp();
-      expect(failOtp, isFalse);
-      expect(notifier.state.errorMessage, isNotNull);
-
-      // Valid phone request
-      notifier.updatePhoneNumber('1712345678');
-      final successOtp = await notifier.requestOtp();
-      expect(successOtp, isTrue);
-      expect(notifier.state.globalSubStep, GlobalSubStep.otp);
-
-      // The Global path verifies the code before profile creation.
-      notifier.updateOtpCode('123456');
-      final verified = await notifier.verifyOtp();
-      expect(verified, isTrue);
-      expect(notifier.state.globalSubStep, GlobalSubStep.name);
-
-      // Complete setup after accepting the Global legal documents.
-      notifier.updateDisplayName('Alice');
-      notifier.setTosAccepted(true);
-      final complete = await notifier.completeSetup();
-      expect(complete, isTrue);
-      expect(notifier.state.isComplete, isTrue);
-      final choice = notifier.completedChoice as ServerInviteChoice?;
-      expect(choice?.serverUrl, kHelixGlobalServerUrl);
-      expect(choice?.phoneNumber, contains('1712345678'));
-      expect(choice?.tosAccepted, isTrue);
-      expect(choice?.tosVersion, isNotEmpty);
-      expect(choice?.phoneHash, isNotEmpty);
-      expect(choice?.otpChallengeId, 'otp_test');
-    });
-
-    test(
-      'Global keeps the user on OTP when verification is rejected',
-      () async {
-        final notifier =
-            OnboardingNotifier(
-              autoStartLaunch: false,
-              client: _OnboardingRestClient(rejectOtp: true),
-            )..updateState(
-              (s) => s.copyWith(
-                step: OnboardingStep.serverSelection,
-                phoneNumber: '1712345678',
-              ),
-            );
-
-        expect(await notifier.requestOtp(), isTrue);
-        notifier.updateOtpCode('123456');
-        expect(await notifier.verifyOtp(), isFalse);
-        expect(notifier.state.globalSubStep, GlobalSubStep.otp);
-        expect(notifier.state.errorMessage, contains('Incorrect'));
-      },
-    );
-
-    test('Global registration cannot complete before ToS acceptance', () async {
-      final notifier =
-          OnboardingNotifier(
-            autoStartLaunch: false,
-            client: _OnboardingRestClient(),
-          )..updateState(
-            (s) => s.copyWith(
-              step: OnboardingStep.serverSelection,
-              globalSubStep: GlobalSubStep.name,
-              phoneNumber: '1712345678',
-              displayName: 'Alice',
-            ),
-          );
-
-      final complete = await notifier.completeSetup();
-      expect(complete, isFalse);
-      expect(notifier.state.errorMessage, contains('accept'));
-      expect(notifier.state.isComplete, isFalse);
-    });
-
-    test('Path B: Others option navigation (Host & Join)', () async {
-      final notifier = OnboardingNotifier(autoStartLaunch: false);
-      notifier.updateState(
-        (s) => s.copyWith(
-          step: OnboardingStep.serverSelection,
-          serverType: ServerType.others,
-        ),
-      );
-
-      // Sub-tab Host guide
-      notifier.setOthersOption(OthersOption.host);
-      expect(notifier.state.othersOption, OthersOption.host);
-      expect(notifier.state.hostGuideStep, 0);
-
-      notifier.updateHostGuideStep(2);
-      expect(notifier.state.hostGuideStep, 2);
-
-      // Sub-tab Join personal server
-      notifier.setOthersOption(OthersOption.join);
-      expect(notifier.state.othersOption, OthersOption.join);
-      expect(notifier.state.joinSubStep, JoinSubStep.code);
-
-      notifier.updateCodeString('INV-9921');
-      final ok = await notifier.resolveCode();
-      expect(ok, isTrue);
-      expect(notifier.state.codeType, CodeType.invitation);
-      expect(notifier.state.joinSubStep, JoinSubStep.phone);
-    });
-
-    test('duplicate-phone recovery prompt routes to recovery code entry', () {
-      final notifier = OnboardingNotifier(autoStartLaunch: false)
-        ..beginPhoneRecovery(serverUrl: 'https://global.example');
-
-      expect(notifier.state.step, OnboardingStep.codeEntry);
-      expect(notifier.state.serverType, ServerType.others);
-      expect(notifier.state.codeType, CodeType.recovery);
-      expect(notifier.state.serverNodeUrl, 'https://global.example');
-    });
-
-    test('Recovery code routing', () async {
-      final notifier = OnboardingNotifier(autoStartLaunch: false);
-      notifier.updateState(
-        (s) => s.copyWith(
-          step: OnboardingStep.serverSelection,
-          serverType: ServerType.others,
-          othersOption: OthersOption.join,
-        ),
-      );
-
-      notifier.updateCodeString('REC-1122-RESTORE');
-      final ok = await notifier.resolveCode();
-      expect(ok, isTrue);
-      expect(notifier.state.codeType, CodeType.recovery);
-      expect(notifier.state.joinSubStep, JoinSubStep.recoverySync);
-    });
+/// One fake server (or several - it records which URL each client was made
+/// for) behind every sign-in call.
+class _SignInServer with GroupCallRestStubs implements HelixRemoteRestClient {
+  _SignInServer({
+    this.hasPassword = false,
+    this.accountExists = false,
+    this.phoneMatches = true,
+    this.smsRequired = true,
+    this.inviteValid = true,
+    this.recoveryValid = true,
+    this.correctAuthKey,
   });
 
-  group('SetupScreen Widget', () {
-    testWidgets('renders splash step with status text', (tester) async {
-      final notifier = OnboardingNotifier(autoStartLaunch: false);
-      notifier.updateState(
-        (s) => s.copyWith(
-          step: OnboardingStep.splash,
-          loadingStatus: 'Deploying Helix…',
-        ),
-      );
+  bool hasPassword;
+  bool accountExists;
+  bool phoneMatches;
+  bool smsRequired;
+  bool inviteValid;
+  bool recoveryValid;
+  String? correctAuthKey;
+  int otpRequests = 0;
+  final recoveryLookups = <String?>[];
 
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: SetupScreen(notifier: notifier),
-        ),
-      );
-
-      expect(find.text('HELIX'), findsOneWidget);
-      expect(find.text('The privacy you deserve'), findsOneWidget);
-      expect(find.text('Deploying Helix…'), findsOneWidget);
-    });
-
-    testWidgets('renders server selection step for the Global path', (
-      tester,
-    ) async {
-      final notifier = OnboardingNotifier(autoStartLaunch: false);
-      notifier.updateState(
-        (s) => s.copyWith(
-          step: OnboardingStep.serverSelection,
-          serverType: ServerType.global,
-        ),
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: SetupScreen(notifier: notifier, onChoice: (_) {}),
-        ),
-      );
-
-      expect(find.text('Helix Global Server'), findsOneWidget);
-      expect(find.text('Others'), findsOneWidget);
-      expect(find.text('Request OTP'), findsOneWidget);
-      // Global signup is phone + OTP only: there is no invite step and no
-      // offline escape hatch.
-      expect(find.text('Continue offline for now'), findsNothing);
-    });
-
-    testWidgets('advances to otp step on request and handles back button', (
-      tester,
-    ) async {
-      final notifier = OnboardingNotifier(
-        autoStartLaunch: false,
-        client: _OnboardingRestClient(),
-      );
-      notifier.updateState(
-        (s) => s.copyWith(
-          step: OnboardingStep.serverSelection,
-          serverType: ServerType.global,
-          phoneNumber: '1712345678',
-        ),
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: SetupScreen(notifier: notifier),
-        ),
-      );
-
-      expect(find.text('Please enter your phone number'), findsOneWidget);
-      expect(find.text('Request OTP'), findsOneWidget);
-
-      // Tap Request OTP to go to global otp
-      await tester.ensureVisible(find.text('Request OTP'));
-      await tester.tap(find.text('Request OTP'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Enter verification code'), findsOneWidget);
-      expect(find.byIcon(Icons.arrow_back), findsOneWidget);
-
-      // Tap back button
-      await tester.tap(find.byIcon(Icons.arrow_back));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Please enter your phone number'), findsOneWidget);
-    });
-
-    testWidgets('Global final step exposes the legal acceptance sheet', (
-      tester,
-    ) async {
-      final notifier =
-          OnboardingNotifier(
-            autoStartLaunch: false,
-            client: _OnboardingRestClient(),
-          )..updateState(
-            (s) => s.copyWith(
-              step: OnboardingStep.serverSelection,
-              serverType: ServerType.global,
-              globalSubStep: GlobalSubStep.name,
-              displayName: 'Alice',
-            ),
-          );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: SetupScreen(notifier: notifier),
-        ),
-      );
-
-      expect(
-        find.text('I agree to the Terms of Service and Privacy Policy'),
-        findsOneWidget,
-      );
-      await tester.ensureVisible(find.text('Read the legal documents'));
-      await tester.tap(find.text('Read the legal documents'));
-      await tester.pumpAndSettle();
-      expect(find.text('Helix Global Terms of Service'), findsOneWidget);
-      await tester.tap(find.text('Privacy'));
-      await tester.pumpAndSettle();
-      expect(find.text('Helix Global Privacy Policy'), findsOneWidget);
-    });
-
-    testWidgets('renders Others tab with segmented sub-tabs and code entry', (
-      tester,
-    ) async {
-      final notifier = OnboardingNotifier(autoStartLaunch: false);
-      notifier.updateState(
-        (s) => s.copyWith(
-          step: OnboardingStep.serverSelection,
-          serverType: ServerType.others,
-          othersOption: OthersOption.join,
-        ),
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: SetupScreen(notifier: notifier),
-        ),
-      );
-
-      expect(find.text('Choose a custom server option:'), findsOneWidget);
-      expect(find.text('Join a personal server'), findsOneWidget);
-      expect(find.text('Host your own server'), findsOneWidget);
-      expect(find.text('Enter invitation or recovery code'), findsOneWidget);
-      expect(find.text('CODE INPUT'), findsOneWidget);
-      expect(find.text('Verify & Connect'), findsOneWidget);
-    });
-  });
-}
-
-class _OnboardingRestClient with GroupCallRestStubs implements HelixRemoteRestClient {
-  _OnboardingRestClient({this.rejectOtp = false});
-
-  final bool rejectOtp;
-
-  @override
-  Future<Map<String, dynamic>> autoIssueGlobalInvite() async => {
-    'invite_code': 'INV-TEST',
-  };
+  static const kdfSalt = 'c2FsdHNhbHRzYWx0c2FsdA';
 
   @override
   Future<Map<String, dynamic>> fetchDiscoverySalt() async => {
@@ -343,10 +48,40 @@ class _OnboardingRestClient with GroupCallRestStubs implements HelixRemoteRestCl
   };
 
   @override
+  Future<Map<String, dynamic>> getPasswordParams({
+    required String phoneHash,
+  }) async => {
+    'account_exists': accountExists || hasPassword,
+    'has_password': hasPassword,
+    if (hasPassword) ...{
+      'kdf_params': const PasswordKdfParams().toJson(),
+      'kdf_salt': kdfSalt,
+    },
+  };
+
+  @override
+  Future<void> verifyPassword({
+    required String phoneHash,
+    required String authKey,
+  }) async {
+    if (authKey != correctAuthKey) {
+      throw const RemoteRestException(
+        message: '{"error":"Wrong","code":"password_incorrect"}',
+        statusCode: 403,
+        serverCode: 'password_incorrect',
+        failureKind: RemoteRestFailureKind.http,
+      );
+    }
+  }
+
+  @override
   Future<Map<String, dynamic>> requestPhoneOtp({
     required String phoneHash,
     required String phoneNumber,
-  }) async => {'challenge_id': 'otp_test'};
+  }) async {
+    otpRequests++;
+    return {'challenge_id': 'otp_test'};
+  }
 
   @override
   Future<Map<String, dynamic>> verifyPhoneOtp({
@@ -354,7 +89,7 @@ class _OnboardingRestClient with GroupCallRestStubs implements HelixRemoteRestCl
     required String otpCode,
     String? challengeId,
   }) async {
-    if (rejectOtp) {
+    if (otpCode != '123456') {
       throw const RemoteRestException(
         message: '{"error":"Incorrect verification code","code":"invalid_otp"}',
         statusCode: 400,
@@ -366,5 +101,397 @@ class _OnboardingRestClient with GroupCallRestStubs implements HelixRemoteRestCl
   }
 
   @override
+  Future<Map<String, dynamic>> lookupInvite({
+    required String inviteCode,
+  }) async => inviteValid
+      ? {'valid': true, 'server_name': 'Family server'}
+      : {'valid': false, 'reason': 'expired'};
+
+  @override
+  Future<Map<String, dynamic>> lookupRecovery({
+    required String accountId,
+    required String recoveryCode,
+    String? phoneHash,
+  }) async {
+    recoveryLookups.add(phoneHash);
+    if (!recoveryValid) return {'valid': false, 'reason': 'invalid'};
+    return {
+      'valid': true,
+      'server_name': 'Family server',
+      'sms_required': smsRequired,
+      if (phoneHash != null) 'phone_matches': phoneMatches,
+    };
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+String get _recoveryCode => encodeHelixRecoveryCode(
+  serverUrl: _personal,
+  accountId: 'acct_1',
+  recoveryCode: 'rec_secret',
+);
+
+String get _inviteCode =>
+    encodeHelixInviteCode(serverUrl: _personal, inviteCode: 'INV-1');
+
+OnboardingNotifier _notifier(_SignInServer server, {List<String>? urls}) =>
+    OnboardingNotifier(
+      clientFactory: (url) {
+        urls?.add(url);
+        return server;
+      },
+    );
+
+Future<String> _authKey(String password) async =>
+    (await PasswordVault.deriveKeys(
+      password: password,
+      salt: _SignInServer.kdfSalt,
+      params: const PasswordKdfParams(),
+    )).authKey;
+
+void main() {
+  group('Global sign-in', () {
+    test('opens on the phone page, with nothing to wait for', () {
+      final n = OnboardingNotifier();
+      expect(n.state.mode, SetupMode.global);
+      expect(n.state.page, SetupPage.phone);
+      expect(n.state.isLoading, isFalse);
+    });
+
+    test(
+      'a number with a password goes to the password page, no SMS',
+      () async {
+        final server = _SignInServer(hasPassword: true);
+        final n = _notifier(server)..updatePhoneNumber('1700000000');
+
+        expect(await n.submitPhone(), isTrue);
+
+        expect(n.state.page, SetupPage.password);
+        expect(server.otpRequests, 0);
+      },
+    );
+
+    test('the right password signs in with keys, never the password', () async {
+      final server = _SignInServer(
+        hasPassword: true,
+        correctAuthKey: await _authKey('correct horse'),
+      );
+      final n = _notifier(server)..updatePhoneNumber('1700000000');
+      await n.submitPhone();
+
+      n.updatePassword('correct horse');
+      expect(await n.signInWithPassword(), isTrue);
+
+      expect(n.state.isComplete, isTrue);
+      expect(n.state.password, isEmpty);
+      final choice = n.completedChoice! as ServerPasswordChoice;
+      expect(choice.keys.authKey, server.correctAuthKey);
+      expect(choice.serverUrl, isNot(_personal));
+    });
+
+    test('a wrong password stays on the page with a clear message', () async {
+      final server = _SignInServer(hasPassword: true, correctAuthKey: 'x');
+      final n = _notifier(server)..updatePhoneNumber('1700000000');
+      await n.submitPhone();
+
+      n.updatePassword('wrong password');
+      expect(await n.signInWithPassword(), isFalse);
+
+      expect(n.state.page, SetupPage.password);
+      expect(n.state.errorMessage, contains('password is not right'));
+    });
+
+    test('"Forgot password" sends the SMS code instead', () async {
+      final server = _SignInServer(hasPassword: true);
+      final n = _notifier(server)..updatePhoneNumber('1700000000');
+      await n.submitPhone();
+
+      await n.forgotPassword();
+
+      expect(server.otpRequests, 1);
+      expect(n.state.page, SetupPage.otp);
+    });
+
+    test('a new number: SMS code, then name and terms', () async {
+      final server = _SignInServer();
+      final n = _notifier(server)..updatePhoneNumber('1700000000');
+
+      await n.submitPhone();
+      expect(n.state.page, SetupPage.otp);
+
+      n.updateOtpCode('000000');
+      expect(await n.submitOtp(), isFalse);
+      expect(n.state.page, SetupPage.otp);
+
+      n.updateOtpCode('123456');
+      expect(await n.submitOtp(), isTrue);
+      expect(n.state.page, SetupPage.name);
+      expect(n.state.accountExists, isFalse);
+
+      n.updateDisplayName('Alice');
+      expect(await n.completeSetup(), isFalse, reason: 'terms not accepted');
+      n.setTosAccepted(true);
+      expect(await n.completeSetup(), isTrue);
+
+      final choice = n.completedChoice! as ServerInviteChoice;
+      expect(choice.inviteCode, isEmpty);
+      expect(choice.displayName, 'Alice');
+      expect(choice.otpCode, '123456');
+      expect(choice.tosAccepted, isTrue);
+    });
+
+    test('an existing account without a password skips the name', () async {
+      final server = _SignInServer(accountExists: true);
+      final n = _notifier(server)..updatePhoneNumber('1700000000');
+      await n.submitPhone();
+      n.updateOtpCode('123456');
+      await n.submitOtp();
+
+      expect(n.state.page, SetupPage.name);
+      expect(n.state.accountExists, isTrue);
+    });
+  });
+
+  group('Advanced mode', () {
+    test('an invite code goes to the phone page of that server', () async {
+      final urls = <String>[];
+      final server = _SignInServer();
+      final n = _notifier(server, urls: urls)..openAdvancedMode();
+      expect(n.state.page, SetupPage.code);
+
+      n.updateCodeString(_inviteCode);
+      expect(n.detectedCodeType, CodeType.invitation);
+      expect(await n.submitCode(), isTrue);
+
+      expect(n.state.page, SetupPage.phone);
+      expect(n.state.codeType, CodeType.invitation);
+      expect(n.state.serverName, 'Family server');
+      expect(n.serverUrl, _personal);
+      expect(urls, everyElement(_personal));
+    });
+
+    test('an expired invite says so and stays on the code page', () async {
+      final n = _notifier(_SignInServer(inviteValid: false))
+        ..openAdvancedMode(code: _inviteCode);
+
+      expect(await n.submitCode(), isFalse);
+
+      expect(n.state.page, SetupPage.code);
+      expect(n.state.errorMessage, contains('expired'));
+    });
+
+    test(
+      'a used or expired recovery code is refused on the code page',
+      () async {
+        final n = _notifier(_SignInServer(recoveryValid: false))
+          ..openAdvancedMode(code: _recoveryCode);
+
+        expect(await n.submitCode(), isFalse);
+
+        expect(n.state.page, SetupPage.code);
+        expect(n.state.errorMessage, contains('recovery code is not valid'));
+      },
+    );
+
+    test('something that is not a code is refused', () async {
+      final n = _notifier(_SignInServer())..openAdvancedMode(code: 'hello');
+      expect(await n.submitCode(), isFalse);
+      expect(n.state.errorMessage, contains('not an invite or recovery code'));
+    });
+
+    test('a recovery code with a password signs in without a reset', () async {
+      final server = _SignInServer(
+        hasPassword: true,
+        correctAuthKey: await _authKey('correct horse'),
+      );
+      final n = _notifier(server)..openAdvancedMode(code: _recoveryCode);
+      expect(n.detectedCodeType, CodeType.recovery);
+
+      expect(await n.submitCode(), isTrue);
+      expect(n.state.isRecovery, isTrue);
+      expect(n.state.page, SetupPage.phone);
+
+      n.updatePhoneNumber('1700000000');
+      expect(await n.submitPhone(), isTrue);
+      expect(server.recoveryLookups.last, isNotNull, reason: 'phone checked');
+      expect(n.state.page, SetupPage.password);
+
+      n.updatePassword('correct horse');
+      expect(await n.signInWithPassword(), isTrue);
+      final choice = n.completedChoice! as ServerPasswordChoice;
+      expect(choice.serverUrl, _personal);
+    });
+
+    test('a recovery code for someone else\'s number is refused', () async {
+      final n = _notifier(_SignInServer(phoneMatches: false))
+        ..openAdvancedMode(code: _recoveryCode);
+      await n.submitCode();
+      n.updatePhoneNumber('1700000000');
+
+      expect(await n.submitPhone(), isFalse);
+
+      expect(n.state.page, SetupPage.phone);
+      expect(n.state.errorMessage, contains('does not belong'));
+    });
+
+    test('a recovery without a password resets with the SMS code', () async {
+      final server = _SignInServer();
+      final n = _notifier(server)..openAdvancedMode(code: _recoveryCode);
+      await n.submitCode();
+      n.updatePhoneNumber('1700000000');
+      await n.submitPhone();
+      expect(n.state.page, SetupPage.otp);
+
+      n.updateOtpCode('123456');
+      expect(await n.submitOtp(), isTrue);
+
+      final choice = n.completedChoice! as ServerRecoveryChoice;
+      expect(choice.accountId, 'acct_1');
+      expect(choice.recoveryCode, 'rec_secret');
+      expect(choice.otpCode, '123456');
+      expect(choice.otpChallengeId, 'otp_test');
+      expect(choice.phoneHash, isNotEmpty);
+      expect(choice.phoneNumber, '+8801700000000');
+    });
+
+    test('a server without SMS resets straight after the phone', () async {
+      final server = _SignInServer(smsRequired: false);
+      final n = _notifier(server)..openAdvancedMode(code: _recoveryCode);
+      await n.submitCode();
+      n.updatePhoneNumber('1700000000');
+
+      expect(await n.submitPhone(), isTrue);
+
+      expect(server.otpRequests, 0);
+      expect(n.completedChoice, isA<ServerRecoveryChoice>());
+    });
+
+    test('an invite for a number that already has an account asks for a '
+        'recovery code', () async {
+      final n = _notifier(_SignInServer(accountExists: true))
+        ..openAdvancedMode(code: _inviteCode);
+      await n.submitCode();
+      n.updatePhoneNumber('1700000000');
+
+      expect(await n.submitPhone(), isFalse);
+      expect(n.state.showPhoneRecoveryPrompt, isTrue);
+
+      n.beginPhoneRecovery();
+      expect(n.state.page, SetupPage.code);
+      expect(n.state.codeString, isEmpty);
+    });
+
+    test('a link opens advanced mode and checks its code at once', () async {
+      final n = _notifier(_SignInServer());
+      expect(await n.openWithCode(_inviteCode), isTrue);
+      expect(n.state.mode, SetupMode.advanced);
+      expect(n.state.page, SetupPage.phone);
+    });
+
+    test('back from the code page returns to the Global page', () {
+      final n = _notifier(_SignInServer())..openAdvancedMode();
+      n.goBack();
+      expect(n.state.mode, SetupMode.global);
+      expect(n.state.page, SetupPage.phone);
+    });
+  });
+
+  group('SetupScreen', () {
+    Future<void> pump(WidgetTester tester, OnboardingNotifier notifier) =>
+        tester.pumpWidget(
+          MaterialApp(
+            theme: HelixThemes.light(),
+            home: SetupScreen(notifier: notifier),
+          ),
+        );
+
+    testWidgets('the Global page is just a phone number and Next', (
+      tester,
+    ) async {
+      await pump(tester, OnboardingNotifier());
+
+      expect(find.text('Sign in'), findsOneWidget);
+      expect(find.byKey(const ValueKey('phone-field')), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget);
+      expect(find.text('Advanced mode'), findsNothing);
+      expect(find.textContaining('Host your own'), findsNothing);
+      expect(find.byTooltip('Back'), findsNothing);
+    });
+
+    testWidgets('three taps in the corner reveal Advanced mode; a fourth '
+        'opens it', (tester) async {
+      await pump(tester, OnboardingNotifier());
+      final corner = find.byKey(const ValueKey('advanced-mode-corner'));
+
+      await tester.tap(corner);
+      await tester.pump(const Duration(milliseconds: 1500));
+      await tester.tap(corner);
+      await tester.pump(const Duration(milliseconds: 1500));
+      expect(find.text('Advanced mode'), findsNothing);
+      await tester.tap(corner);
+      await tester.pump();
+      expect(find.text('Advanced mode'), findsOneWidget);
+
+      await tester.tap(find.text('Advanced mode'));
+      await tester.pumpAndSettle();
+      expect(find.text('Personal server'), findsOneWidget);
+      expect(find.byKey(const ValueKey('code-field')), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sign in'), findsOneWidget);
+    });
+
+    testWidgets('taps too far apart do not count, and the button hides again', (
+      tester,
+    ) async {
+      await pump(tester, OnboardingNotifier());
+      final corner = find.byKey(const ValueKey('advanced-mode-corner'));
+
+      await tester.tap(corner);
+      await tester.tap(corner);
+      await tester.pump(
+        AdvancedModeCorner.tapWindow + const Duration(milliseconds: 100),
+      );
+      await tester.tap(corner);
+      await tester.pump();
+      expect(find.text('Advanced mode'), findsNothing);
+
+      await tester.tap(corner);
+      await tester.tap(corner);
+      await tester.pump();
+      expect(find.text('Advanced mode'), findsOneWidget);
+      await tester.pump(
+        AdvancedModeCorner.tapWindow + const Duration(milliseconds: 100),
+      );
+      expect(find.text('Advanced mode'), findsNothing);
+    });
+
+    testWidgets('the name page carries the terms and the legal documents', (
+      tester,
+    ) async {
+      final n = _notifier(_SignInServer())..updatePhoneNumber('1700000000');
+      await n.submitPhone();
+      n.updateOtpCode('123456');
+      await n.submitOtp();
+      await pump(tester, n);
+
+      expect(find.byKey(const ValueKey('name-field')), findsOneWidget);
+      final create = find.widgetWithText(FilledButton, 'Create account');
+      expect(tester.widget<FilledButton>(create).onPressed, isNull);
+
+      await tester.tap(find.byKey(const ValueKey('terms-checkbox')));
+      await tester.pump();
+      expect(tester.widget<FilledButton>(create).onPressed, isNotNull);
+
+      await tester.ensureVisible(
+        find.text('Read the Terms and Privacy Policy'),
+      );
+      await tester.tap(find.text('Read the Terms and Privacy Policy'));
+      await tester.pumpAndSettle();
+      expect(find.text('Helix Global Terms of Service'), findsOneWidget);
+    });
+  });
 }

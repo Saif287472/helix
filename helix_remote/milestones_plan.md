@@ -1,5 +1,7 @@
 # Helix Remote — Milestones & Phase-by-Phase Plan
 
+> **Status: historical (July 2026).** Milestones were executed in July-August 2026 (see commits fee1eaa, 3bddd89); some scope has since changed (federation deferred, app is light-only and English-only). For current state see `helix_remote/docs/` and `AGENTS.md`.
+
 > This plan details the 5 Milestones for the development of Helix Remote and Helix Admin, structured sequentially to ensure a robust, E2E-encrypted, private, and federated communication platform.
 
 ---

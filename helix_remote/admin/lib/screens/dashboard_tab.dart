@@ -9,11 +9,7 @@ const _warn = Color(0xFFF59E0B);
 const _off = Color(0xFF94A3B8);
 
 class DashboardTab extends StatelessWidget {
-  const DashboardTab({
-    super.key,
-    required this.metrics,
-    this.latencyMs,
-  });
+  const DashboardTab({super.key, required this.metrics, this.latencyMs});
 
   final Map<String, dynamic>? metrics;
 
@@ -49,9 +45,11 @@ class DashboardTab extends StatelessWidget {
       } else if (dbBytes < 1024 * 1024) {
         dbSizeLabel = '${(dbBytes / 1024).toStringAsFixed(1)} KB SQLite DB';
       } else if (dbBytes < 1024 * 1024 * 1024) {
-        dbSizeLabel = '${(dbBytes / (1024 * 1024)).toStringAsFixed(2)} MB SQLite DB';
+        dbSizeLabel =
+            '${(dbBytes / (1024 * 1024)).toStringAsFixed(2)} MB SQLite DB';
       } else {
-        dbSizeLabel = '${(dbBytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB SQLite DB';
+        dbSizeLabel =
+            '${(dbBytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB SQLite DB';
       }
     } else {
       dbSizeLabel = '$totalRows Records SQLite';
@@ -119,7 +117,9 @@ class DashboardTab extends StatelessWidget {
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
                 childAspectRatio: aspectRatio,
-                children: [for (final tile in tiles) _metricCard(context, tile)],
+                children: [
+                  for (final tile in tiles) _metricCard(context, tile),
+                ],
               );
             },
           ),
@@ -154,7 +154,10 @@ class DashboardTab extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFECFDF5),
                   borderRadius: BorderRadius.circular(20),
@@ -191,8 +194,6 @@ class DashboardTab extends StatelessWidget {
       ),
     );
   }
-
-
 
   /// Roomier tile layout for tablet and desktop widths.
   Widget _metricCard(BuildContext context, _Metric metric) {
@@ -250,8 +251,8 @@ class DashboardTab extends StatelessWidget {
                       color: metric.value == 'HEALTHY'
                           ? const Color(0xFF059669)
                           : (metric.value == 'UNHEALTHY'
-                              ? const Color(0xFFDC2626)
-                              : const Color(0xFF0F172A)),
+                                ? const Color(0xFFDC2626)
+                                : const Color(0xFF0F172A)),
                     ),
                   ),
                 ),
@@ -415,12 +416,14 @@ class DashboardTab extends StatelessWidget {
     } else if (configured) {
       dot = _warn;
       status = 'Firebase Cloud Messaging • Configured but unavailable';
-      note = 'The server has FCM credentials but the provider is not '
+      note =
+          'The server has FCM credentials but the provider is not '
           'responding. Background delivery will not work until it is.';
     } else {
       dot = _off;
       status = 'Firebase Cloud Messaging • Not configured';
-      note = 'No FCM credentials on this server. Push notifications are '
+      note =
+          'No FCM credentials on this server. Push notifications are '
           'unavailable; messages arrive over the WebSocket only.';
     }
     return _integrationContainer(
@@ -445,30 +448,53 @@ class DashboardTab extends StatelessWidget {
           : 'No SMS provider configured',
       note: configured
           ? 'A gateway is wired up. Credential validity is not reported by '
-              'the server - a rejected API key still returns success at the '
-              'HTTP layer, so a failed signup is the first real signal.'
+                'the server - a rejected API key still returns success at the '
+                'HTTP layer, so a failed signup is the first real signal.'
           : 'One-time sign-in codes cannot be delivered on this server.',
       dotColor: configured ? _ok : _off,
     );
   }
 
-  /// TURN: `configured` comes from the server; `url_count` is real. Live
-  /// reachability is explicitly not probed, and the copy says so instead of
-  /// implying a relay handshake succeeded.
+  /// TURN: green only when the relay actually answered the server's STUN
+  /// probe. A URL and secret being present is not enough - a stale config
+  /// pointing at a relay that no longer exists used to show green here.
   Widget _turnHealthCard(Map? turn) {
     final configured = turn?['configured'] == true;
     final urlCount = turn?['url_count'];
+    final live = turn?['live_reachability'] as String?;
+    final urls = '$urlCount URL${urlCount == 1 ? '' : 's'}';
+
+    final (String subtitle, String note, Color dot) = !configured
+        ? (
+            'STUN/TURN peer connection • Not configured',
+            'Calls can place but will not relay media through TURN.',
+            _off,
+          )
+        : switch (live) {
+            'reachable' => (
+              'Relay responding • $urls',
+              'The relay answered a STUN check from this server. Router '
+                  'port forwarding for outside clients is not tested.',
+              _ok,
+            ),
+            'unreachable' => (
+              'Configured, but the relay is not responding • $urls',
+              'Calls that need a relay (mobile data, strict routers) will '
+                  'fail to connect media until it answers.',
+              _warn,
+            ),
+            _ => (
+              'Checking relay… • $urls',
+              'A STUN check is running; refresh in a moment.',
+              _off,
+            ),
+          };
 
     return _integrationContainer(
       title: 'TURN Relay Server',
-      subtitle: configured
-          ? 'STUN/TURN peer connection • $urlCount URL${urlCount == 1 ? '' : 's'} configured'
-          : 'STUN/TURN peer connection • Not configured',
-      note: configured
-          ? 'Voice and video relay credentials are available. Live '
-              'reachability is not probed by the server.'
-          : 'Calls can place but will not relay media through TURN.',
-      dotColor: configured ? _ok : _off,
+      subtitle: subtitle,
+      note: note,
+      dotColor: dot,
     );
   }
 
@@ -490,10 +516,7 @@ class DashboardTab extends StatelessWidget {
           Container(
             width: 8,
             height: 8,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
           const SizedBox(width: 14),
           Expanded(

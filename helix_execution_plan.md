@@ -1,5 +1,7 @@
 # Helix Remote & Helix Admin — Phase-by-Phase Execution Plan
 
+> **Status: historical, implemented.** Phases 1-5 were carried out in commits e77cbe0 and 5249bdf (2026-09-26), followed by f66a930; the dark-mode and Bengali overrides are now final (the app is light-only and English-only). Not a current task list.
+
 > **AGENT INSTRUCTIONS:** You are tasked with executing this remediation plan phase by phase across `helix_remote` (`app`, `packages`, `backend`) and `helix_remote/admin` (`helix-admin`). Read Section 0 before modifying any file.
 
 ---

@@ -1,5 +1,7 @@
 # Authenticated Key-Agreement Review
 
+> **Scope: Helix Local only.** Written for the June 2026 single-workspace layout (`apps/`, `packages/local/`); Local code now lives under `helix_local/`. For Helix Remote see `helix_remote/docs/` and `AGENTS.md`.
+
 Status: internal review complete for Phase 7
 
 ## Scope

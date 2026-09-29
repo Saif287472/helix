@@ -315,6 +315,11 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
     _validateVisibility(settings.presenceVisibility);
     _validateVisibility(settings.lastSeenVisibility);
     _privacySettings = settings;
+    db.setAccountPrivacyPreferences(
+      searchDiscoverable: settings.searchDiscoverable,
+      presenceVisibility: settings.presenceVisibility,
+      lastSeenVisibility: settings.lastSeenVisibility,
+    );
     db.enqueueOperation(
       'privacy_${_clock().microsecondsSinceEpoch}',
       'PRIVACY_UPDATE',

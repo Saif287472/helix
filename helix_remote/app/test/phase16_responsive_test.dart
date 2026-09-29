@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/screens/backup_screen.dart';
 import 'package:helix_remote/screens/device_management_screen.dart';
-import 'package:helix_remote/screens/privacy_screen.dart';
+import 'package:helix_remote/screens/settings_pages/account_settings_page.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
@@ -18,7 +18,6 @@ import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
 import 'package:path/path.dart' as pathpkg;
-import 'package:helix_remote/l10n/helix_localizations.dart';
 import 'support/group_call_rest_stubs.dart';
 
 // ---------------------------------------------------------------------------
@@ -154,8 +153,6 @@ void main() {
         var desktop = false;
         await tester.pumpWidget(
           MaterialApp(
-            localizationsDelegates: HelixLocalizations.localizationsDelegates,
-            supportedLocales: HelixLocalizations.supportedLocales,
             home: Builder(
               builder: (context) {
                 tablet = HelixBreakpoints.isTablet(context);
@@ -179,8 +176,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _MinRestClient(),
@@ -201,8 +196,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _MinRestClient(),
@@ -216,7 +209,7 @@ void main() {
     });
   });
 
-  group('P16-W02 PrivacyScreen small screen (320×568)', () {
+  group('P16-W02 Account settings small screen (320×568)', () {
     testWidgets('renders without overflow', (tester) async {
       _setSmallScreen(tester);
       final db = _openDb();
@@ -225,9 +218,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: PrivacyScreen(
+          home: AccountSettingsPage(
             restClient: _MinRestClient(),
             messagingService: messaging,
           ),
@@ -244,11 +235,7 @@ void main() {
       _setSmallScreen(tester);
 
       await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: DeviceManagementScreen(restClient: _MinRestClient()),
-        ),
+        MaterialApp(home: DeviceManagementScreen(restClient: _MinRestClient())),
       );
       await tester.pump();
 
@@ -263,8 +250,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           home: BackupScreen(
             db: db,
             restClient: _MinRestClient(),
@@ -276,16 +261,16 @@ void main() {
       expect(find.byType(SingleChildScrollView), findsOneWidget);
     });
 
-    testWidgets('PrivacyScreen body is SingleChildScrollView', (tester) async {
+    testWidgets('Account settings body is SingleChildScrollView', (
+      tester,
+    ) async {
       final db = _openDb();
       addTearDown(db.close);
       final messaging = await _makeMessaging(db);
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
-          home: PrivacyScreen(
+          home: AccountSettingsPage(
             restClient: _MinRestClient(),
             messagingService: messaging,
           ),

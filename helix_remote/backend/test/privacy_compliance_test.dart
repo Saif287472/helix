@@ -67,6 +67,23 @@ void main() {
       }, token: alice.accessToken);
       expect(send.statusCode, equals(200));
 
+      server.db.setAccountPassword(
+        accountId: 'alice',
+        kdfParams: '{"alg":"argon2id"}',
+        kdfSalt: 'kdf_salt_value',
+        authHash: 'SECRET_AUTH_HASH',
+        authHashSalt: 'SECRET_AUTH_SALT',
+        wrappedIdentityKey: 'SECRET_WRAPPED_KEY',
+        identityPublicKey: 'identity_pk',
+        now: 1000,
+      );
+      server.db.saveHistoryBackup(
+        accountId: 'alice',
+        identityPublicKey: 'identity_pk',
+        blob: 'encrypted_history_blob',
+        now: 2000,
+      );
+
       final export = await _getJson(
         client,
         port,
@@ -85,6 +102,28 @@ void main() {
       final mailbox = (exported['message_mailbox'] as List<dynamic>)
           .cast<Map<String, dynamic>>();
       expect(mailbox.single['ciphertext'], equals('opaque_ciphertext_only'));
+      expect(exported['export_version'], 2);
+      final password = exported['password'] as Map<String, dynamic>;
+      expect(password['has_password'], isTrue);
+      expect(password['kdf_salt'], 'kdf_salt_value');
+      expect(
+        (exported['history_backup'] as Map<String, dynamic>)['blob'],
+        'encrypted_history_blob',
+      );
+      expect(exported['sessions'], isNotEmpty);
+      // Credentials never leave in an export: a leaked file must not sign
+      // anyone in or allow offline password guessing.
+      final json = jsonEncode(exported);
+      for (final secret in [
+        'SECRET_AUTH_HASH',
+        'SECRET_AUTH_SALT',
+        'SECRET_WRAPPED_KEY',
+      ]) {
+        expect(json, isNot(contains(secret)));
+      }
+      final session = (exported['sessions'] as List).first as Map;
+      expect(session.containsKey('token_hash'), isFalse);
+      expect(exported['withheld'], contains('refresh_tokens.token_hash'));
       expect(jsonEncode(exported), isNot(contains('plaintext message')));
       expect(jsonEncode(exported), isNot(contains('127.0.0.1')));
 

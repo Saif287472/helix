@@ -5,22 +5,19 @@ class HelixRemoteApp extends StatefulWidget {
     super.key,
     required this.root,
     this.onChangeServerUrl,
-    this.initialInviteCode,
-    this.initialPhoneNumber,
+    this.onServerChoice,
+    this.initialCode,
   });
 
   final RemoteCompositionRoot root;
   final Future<void> Function()? onChangeServerUrl;
 
-  /// Invite code carried over from the first-launch server-choice screen
-  /// (Helix Global or a personal server), so the create-account form is
-  /// pre-filled and the user doesn't have to re-enter or re-paste it.
-  final String? initialInviteCode;
+  /// Completes a sign-in on another server than this root's (see
+  /// `HelixRemoteBootstrap._onServerChoiceMade`).
+  final Future<void> Function(Object? choice)? onServerChoice;
 
-  /// E.164 phone number carried over from the personal-server invite entry
-  /// screen (the only place it's collected before this point), so the
-  /// create-account form doesn't ask for it a second time.
-  final String? initialPhoneNumber;
+  /// An invite or recovery code from a link, for the sign-in page.
+  final String? initialCode;
 
   @override
   State<HelixRemoteApp> createState() => _HelixRemoteAppState();
@@ -130,7 +127,8 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   Future<void> _startBoot() async {
     if (_initializing) return;
     if (widget.root.startupState == RemoteStartupState.ready ||
-        widget.root.startupState == RemoteStartupState.authenticatedAndSyncing) {
+        widget.root.startupState ==
+            RemoteStartupState.authenticatedAndSyncing) {
       if (mounted && _startupState != widget.root.startupState) {
         setState(() => _startupState = widget.root.startupState);
       }
@@ -179,6 +177,15 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
   @override
   Widget build(BuildContext context) => _buildBaseScreen();
 
+  /// What opening is actually doing right now, for the skeleton.
+  String get _startupStatus => switch (_startupState) {
+    RemoteStartupState.openingSecureStorage => 'Unlocking your keys…',
+    RemoteStartupState.firstRunInitialization ||
+    RemoteStartupState.openingDatabase => 'Opening your chats…',
+    RemoteStartupState.restoringSession => 'Signing you in…',
+    _ => 'Opening Helix…',
+  };
+
   Widget _buildBaseScreen() {
     switch (_startupState) {
       case RemoteStartupState.idle:
@@ -187,22 +194,13 @@ class _HelixRemoteAppState extends State<HelixRemoteApp>
       case RemoteStartupState.firstRunInitialization:
       case RemoteStartupState.openingDatabase:
       case RemoteStartupState.restoringSession:
-        return const Scaffold(
-          body: Center(
-            child: SplashStep(statusText: 'Deploying Helix…'),
-          ),
-        );
+        return StartupSkeleton(status: _startupStatus);
 
       case RemoteStartupState.unauthenticated:
         return SetupScreen(
           root: widget.root,
-          onChangeServerUrl: widget.onChangeServerUrl != null
-              ? (url) async {
-                  await widget.onChangeServerUrl!();
-                }
-              : null,
-          initialInviteCode: widget.initialInviteCode,
-          initialPhoneNumber: widget.initialPhoneNumber,
+          onChoice: widget.onServerChoice,
+          initialCode: widget.initialCode,
         );
 
       case RemoteStartupState.authenticatedAndSyncing:

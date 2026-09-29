@@ -5,6 +5,17 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
   void setAuthenticated(String accessToken) {
     _applyAccessToken(accessToken);
     _setState(RemoteStartupState.authenticatedAndSyncing);
+    AppLock.attach(
+      read: () {
+        final settings = _messagingService?.db.getAppLockSettings();
+        if (settings == null) return null;
+        return (
+          enabled: settings.enabled,
+          relockAfterSeconds: settings.relockAfterSeconds,
+        );
+      },
+      callActive: () => _callService?.activeCall != null,
+    );
   }
 
   void _applyAccessToken(String accessToken) {
@@ -38,9 +49,7 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
 
     final storedRefreshToken = await store.read('refresh_token');
     if (storedRefreshToken == null || storedRefreshToken.isEmpty) {
-      _lastRefreshFailureKind = _RefreshFailureKind.missingSession;
-      await _transitionToAuthRequired();
-      return false;
+      return _recoverSessionWithDeviceKey();
     }
 
     try {
@@ -53,33 +62,24 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
           accessToken.isEmpty ||
           refreshToken == null ||
           refreshToken.isEmpty) {
-        _lastRefreshFailureKind = _RefreshFailureKind.authRequired;
-        await _transitionToAuthRequired();
-        return false;
+        return _recoverSessionWithDeviceKey();
       }
 
-      await _persistRotatedTokens(
+      await _adoptSessionTokens(
         accessToken: accessToken,
         refreshToken: refreshToken,
       );
-      final reconnectRealtime = _wsClient?.isConnected ?? false;
-      _applyAccessToken(accessToken);
-      if (reconnectRealtime) {
-        unawaited(
-          connectWebSocket().catchError((_) {
-            _lastError = 'Realtime reconnect failed after session refresh.';
-          }),
-        );
-      }
-      _lastError = null;
-      _lastRefreshFailureKind = _RefreshFailureKind.none;
       return true;
     } on RemoteRestException catch (e) {
       if (_isAuthFailure(e.statusCode)) {
-        _lastRefreshFailureKind = _RefreshFailureKind.authRequired;
-        _lastError = RemoteUserErrorCopy.authExpired();
-        await _transitionToAuthRequired();
-        return false;
+        if (_isTerminalSessionCode(e.serverCode)) {
+          return _endSessionForGood();
+        }
+        // Expired (the device sat unused past the refresh lifetime),
+        // replayed after a crash mid-rotation, or otherwise unrecognized:
+        // none of these mean the device was signed out, so it proves who it
+        // is again with its own key instead of costing the user an SMS code.
+        return _recoverSessionWithDeviceKey();
       }
       _lastRefreshFailureKind = _RefreshFailureKind.transient;
       _lastError = _formatRefreshFailure(e);
@@ -90,6 +90,156 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
       return false;
     }
   }
+
+  Future<void> _adoptSessionTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    await _persistRotatedTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
+    final reconnectRealtime = _wsClient?.isConnected ?? false;
+    _applyAccessToken(accessToken);
+    if (reconnectRealtime) {
+      unawaited(
+        connectWebSocket().catchError((_) {
+          _lastError = 'Realtime reconnect failed after session refresh.';
+        }),
+      );
+    }
+    _lastError = null;
+    _lastRefreshFailureKind = _RefreshFailureKind.none;
+  }
+
+  /// Whether the JWT [token] is still valid for at least [margin], read
+  /// from its own `exp` claim. The signature is the server's business; this
+  /// only decides whether asking for a new one first is worth a round trip.
+  bool _jwtValidFor(String token, Duration margin) {
+    final parts = token.split('.');
+    if (parts.length != 3) return false;
+    try {
+      final payload =
+          jsonDecode(utf8.decode(_base64UrlDecode(parts[1])))
+              as Map<String, dynamic>;
+      final exp = payload['exp'];
+      if (exp is! int) return false;
+      final expiresAt = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      return expiresAt.isAfter(DateTime.now().add(margin));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Codes after which signing in again with the device key cannot help:
+  /// the server has signed this device out or removed the account.
+  bool _isTerminalSessionCode(String? code) =>
+      code == 'device_revoked' ||
+      code == 'account_blocked' ||
+      code == 'phone_blocked';
+
+  Future<bool> _endSessionForGood() async {
+    _lastRefreshFailureKind = _RefreshFailureKind.authRequired;
+    _lastError = RemoteUserErrorCopy.authExpired();
+    await _transitionToAuthRequired();
+    return false;
+  }
+
+  /// Signs this device in again with the Ed25519 key it registered with -
+  /// the same challenge login used right after registration. The session's
+  /// keys are only purged when the server says the device is actually gone;
+  /// a network failure leaves everything in place for the next attempt.
+  ///
+  /// A server that predates the `device_revoked` code hands a revoked device
+  /// a token at login and only refuses it on use. Without the cooldown the
+  /// app would sign in, be refused, sign in again, and loop; a second
+  /// recovery inside the window is treated as the device being signed out.
+  static const _deviceKeySignInCooldown = Duration(minutes: 2);
+  DateTime? _lastDeviceKeySignInAt;
+
+  Future<bool> _recoverSessionWithDeviceKey() async {
+    final store = _keyValue;
+    final rest = _restClient;
+    if (store == null || rest == null) {
+      _lastRefreshFailureKind = _RefreshFailureKind.missingSession;
+      return false;
+    }
+    final accountId = await store.read('account_id');
+    final deviceId = await store.read('device_id');
+    final signingPrivate = await store.read('device_signing_private_key');
+    final signingPublic = await store.read('device_signing_public_key');
+    if (accountId == null ||
+        accountId.isEmpty ||
+        deviceId == null ||
+        deviceId.isEmpty ||
+        signingPrivate == null ||
+        signingPrivate.isEmpty ||
+        signingPublic == null ||
+        signingPublic.isEmpty) {
+      return _endSessionForGood();
+    }
+
+    final last = _lastDeviceKeySignInAt;
+    if (last != null &&
+        DateTime.now().difference(last) < _deviceKeySignInCooldown) {
+      return _endSessionForGood();
+    }
+
+    try {
+      final challengeResp = await rest.getChallenge(
+        accountId: accountId,
+        deviceId: deviceId,
+      );
+      final challenge = challengeResp['challenge'] as String;
+      final keyPair = crypto_pkg.SimpleKeyPairData(
+        _base64UrlDecode(signingPrivate),
+        publicKey: crypto_pkg.SimplePublicKey(
+          _base64UrlDecode(signingPublic),
+          type: crypto_pkg.KeyPairType.ed25519,
+        ),
+        type: crypto_pkg.KeyPairType.ed25519,
+      );
+      final signature = await crypto_pkg.Ed25519().sign(
+        utf8.encode(challenge),
+        keyPair: keyPair,
+      );
+      final loginResp = await rest.loginDevice(
+        accountId: accountId,
+        deviceId: deviceId,
+        signature: _base64Url(signature.bytes),
+      );
+      final accessToken = loginResp['token'] as String?;
+      final refreshToken = loginResp['refresh_token'] as String?;
+      if (accessToken == null ||
+          accessToken.isEmpty ||
+          refreshToken == null ||
+          refreshToken.isEmpty) {
+        return _endSessionForGood();
+      }
+      _lastDeviceKeySignInAt = DateTime.now();
+      await _adoptSessionTokens(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+      );
+      return true;
+    } on RemoteRestException catch (e) {
+      if (e.isTransportFailure || !_isLoginRefusal(e.statusCode)) {
+        _lastRefreshFailureKind = _RefreshFailureKind.transient;
+        _lastError = _formatRefreshFailure(e);
+        return false;
+      }
+      return _endSessionForGood();
+    } catch (_) {
+      _lastRefreshFailureKind = _RefreshFailureKind.transient;
+      _lastError = RemoteUserErrorCopy.unknownStartup();
+      return false;
+    }
+  }
+
+  /// The challenge login refuses with 401/403 (bad signature, unknown or
+  /// revoked device, blocked account) - never with a 5xx or 429.
+  bool _isLoginRefusal(int? statusCode) =>
+      statusCode == 401 || statusCode == 403 || statusCode == 404;
 
   String _formatRefreshFailure(RemoteRestException error) =>
       RemoteUserErrorCopy.refreshFailure(error, devConfig.restBaseUri);
@@ -150,16 +300,16 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
     final store = _keyValue;
     if (store == null) return false;
     await _recoverInterruptedTokenRotation(store);
-    final storedAccessToken = await store.read('access_token');
-    final storedRefreshToken = await store.read('refresh_token');
-    if (storedAccessToken == null ||
-        storedAccessToken.isEmpty ||
-        storedRefreshToken == null ||
-        storedRefreshToken.isEmpty) {
-      return false;
-    }
     final accountId = await store.read('account_id');
     if (accountId == null || accountId.isEmpty) return false;
+    // Lost tokens alone no longer mean "signed out": while this device still
+    // holds its signing key, refreshAccessToken signs it in again with it.
+    final storedRefreshToken = await store.read('refresh_token');
+    final storedSigningKey = await store.read('device_signing_private_key');
+    if ((storedRefreshToken == null || storedRefreshToken.isEmpty) &&
+        (storedSigningKey == null || storedSigningKey.isEmpty)) {
+      return false;
+    }
     final phoneNumber = await store.read('phone_number');
     final pubKey = await store.read('identity_public_key');
     final deviceIdStr = await store.read('device_id');
@@ -179,12 +329,31 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
         deviceSigningPubKey != null && deviceAgreementPubKey != null;
     final hasDevicePriv = deviceAgreementPrivStr != null;
     final hasSession = hasPhone && hasKey && hasDeviceId && hasDeviceKey;
-    final refreshed = await refreshAccessToken();
-    if (!refreshed) {
-      if (_lastRefreshFailureKind == _RefreshFailureKind.transient) {
-        _setState(RemoteStartupState.recoverableFailure);
+    // Open on what this device already has, the way a messenger does: an
+    // access token that is still good needs no round trip first, and one that
+    // expires later is refreshed by the REST client when it is refused.
+    final storedAccessToken = await store.read('access_token');
+    if (hasSession &&
+        storedAccessToken != null &&
+        _jwtValidFor(storedAccessToken, const Duration(minutes: 1))) {
+      _applyAccessToken(storedAccessToken);
+    } else {
+      final refreshed = await refreshAccessToken();
+      if (!refreshed) {
+        final offline =
+            _lastRefreshFailureKind == _RefreshFailureKind.transient;
+        if (!offline) return false;
+        if (!hasSession ||
+            storedAccessToken == null ||
+            storedAccessToken.isEmpty) {
+          _setState(RemoteStartupState.recoverableFailure);
+          return false;
+        }
+        // Offline (or the server is down): still open the chats on this
+        // device. The token is refreshed on the first request that is
+        // refused once the server can be reached again.
+        _applyAccessToken(storedAccessToken);
       }
-      return false;
     }
 
     if (hasSession) {
@@ -217,6 +386,9 @@ mixin RemoteCompositionSession on RemoteCompositionRootBase {
     final token = _accessToken;
     if (token == null || token.isEmpty) return false;
     setAuthenticated(token);
+    // A cold start with a saved session is "opening the app"; a fresh
+    // sign-in just proved who the user is with an SMS code, so it is not.
+    AppLock.lockIfEnabled();
     if (hasDeviceId) unawaited(_renameLegacyDeviceName(deviceIdStr));
     return true;
   }

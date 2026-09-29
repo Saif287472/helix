@@ -1,3 +1,5 @@
+> **Status: external reference (another project, April 2026).** Describes the EarnMinute codebase, not Helix. Kept only as the source for `docs/architecture/EARNMINUTE_STRUCTURAL_UPGRADE_PLAN.md`; nothing here applies to Helix code.
+
 EarnMinute Codebase Architecture Report — Findings
 Repository root: e:\Saif\earnminute (git repo, most recent commit ccd219a — "Full codebase structure refactor and module system introduce, Attachments in chatting system", 2026‑04‑09).
 

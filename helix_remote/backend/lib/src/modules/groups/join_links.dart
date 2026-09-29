@@ -286,7 +286,7 @@ mixin GroupsJoinLinkHandlers on GroupsModuleBase {
       db.updateGroupJoinRequestStatus(requestId, 'REJECTED');
     }
     // Notify the requester of the decision.
-    final requesterDevices = db.getDevices(requesterId);
+    final requesterDevices = db.getActiveDevices(requesterId);
     for (final dev in requesterDevices) {
       final devId = dev['device_id'] as String;
       final envelope = BackendDatabase.buildEnvelope(

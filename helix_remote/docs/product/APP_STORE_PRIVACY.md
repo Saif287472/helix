@@ -8,8 +8,17 @@ must be reviewed against the exact release build and store form wording.
 
 ## Data Linked To The User
 
-- Account ID and hashed phone number (`phone_hash` - the phone number itself
-  is never collected in plaintext by the server; there is no username field).
+- Account ID and hashed phone number (`phone_hash`; there is no username
+  field).
+  The raw phone number is sent to the server only when requesting an SMS code;
+  the server checks it against the hash, passes it to the SMS gateway
+  (BulkSMSBD) for delivery, and does not store it from that request.
+- Password-derived verifier and password-wrapped identity key: Argon2id
+  salt/parameters, a salted hash of a key derived from the password, and the
+  account identity private key encrypted under another password-derived key
+  (`account_passwords`). The password itself is never collected.
+- Encrypted, text-only chat history backup (`history_backups`), which the
+  server cannot decrypt.
 - Device IDs and device names.
 - Contacts/friend state created inside Helix Remote.
 - Abuse reports and safety actions.
@@ -28,8 +37,8 @@ must be reviewed against the exact release build and store form wording.
 - Advertising ID is not collected by current code.
 - Behavioral advertising or sale of personal data is not part of the product.
 - Plaintext message contents are not collected by supported backend APIs.
-- Plaintext phone numbers, OTP codes, and invite codes are not stored server-
-  side (OTP/invite codes as hashes only; phone numbers as `phone_hash` only).
+- OTP codes and invite codes are not stored server-side (hashes only). Phone
+  numbers are matched only by `phone_hash`.
 
 ## Permissions
 
@@ -39,8 +48,8 @@ must be reviewed against the exact release build and store form wording.
   Contacts tab; used solely to compute phone-hash matches, never to read or
   transmit raw contact data. Degrades gracefully if denied.
 - Notifications: for generic message/call alerts without plaintext content,
-  and for the phone-OTP/invite-code placeholder display described in
-  `docs/product/THREAT_MODEL.md` T-6 (not a claim of secure delivery).
+  and for "new sign-in on your account" alerts. OTP codes arrive by SMS, not
+  by notification.
 - Files/storage picker: for user-selected encrypted attachment import/export.
 
 ## Required Manual Review Before Submission

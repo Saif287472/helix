@@ -56,10 +56,12 @@ void main() {
   // new-device pairing request pushed by the server. Previously the request
   // was received and dropped, so the only way to link a device was to
   // hand-type its Link ID and 6-digit code.
-  test('RP5-010: fresh in-memory database has schema version 30', () {
+  // v31 adds `local_identity`, which records which device the database
+  // belongs to instead of guessing it from the devices table.
+  test('RP5-010: fresh in-memory database has schema version 31', () {
     final db = _freshDb();
     addTearDown(db.close);
-    expect(db.schemaVersion, equals(30));
+    expect(db.schemaVersion, equals(31));
   });
 
   // -------------------------------------------------------------------------

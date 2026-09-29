@@ -91,3 +91,6 @@ test_attachments_storage/
 test_remote_attachments_storage/
 test_attachments_storage*/
 
+# Claude Code: the project skills in .claude/skills are shared; local
+# permission settings are per machine.
+.claude/settings.local.json

@@ -102,8 +102,27 @@ mixin RemoteAccountsContactsRepository on HelixRemoteDatabaseBase {
     return _db.updatedRows > 0;
   }
 
-  /// The local device id recorded for this account, if one is stored.
+  /// Records which device this database belongs to. Set when the account is
+  /// set up on this device; read by [getLocalDeviceId].
+  void setLocalDeviceId(String deviceId) {
+    final stmt = _db.prepare('''
+      INSERT INTO local_identity (key, value) VALUES ('device_id', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+    ''');
+    stmt.execute([deviceId]);
+    stmt.close();
+  }
+
+  /// The device this database belongs to.
+  ///
+  /// Falls back to the newest ACTIVE device only for a database set up
+  /// before the id was recorded; [setLocalDeviceId] replaces that guess the
+  /// next time the account is set up (every app start).
   String? getLocalDeviceId() {
+    final recorded = _db.select(
+      "SELECT value FROM local_identity WHERE key = 'device_id';",
+    );
+    if (recorded.isNotEmpty) return recorded.first['value'] as String?;
     final stmt = _db.prepare(
       "SELECT device_id FROM devices WHERE status = 'ACTIVE' ORDER BY created_at DESC LIMIT 1;",
     );

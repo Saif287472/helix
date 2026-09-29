@@ -7,7 +7,7 @@
 - `HelixStatusBadge` for compact state labels.
 - `showHelixDestructiveDialog` for dangerous, confirmed actions.
 
-Themes are supplied by `HelixThemes.light`, `.dark`, `.highContrastLight`, and `.highContrastDark`; use `HelixColorTokens`, `HelixSpace`, `HelixInsets`, and `HelixRadius` instead of new ad-hoc values.
+The app is light-only: themes are supplied by `HelixThemes.light()` and `HelixThemes.highContrastLight()` (there is no dark theme, and the shell pins `ThemeMode.light` in `app/lib/app/helix_remote_app_shell.dart`). UI text is plain English string literals; there is no localization layer. Use `HelixColorTokens`, `HelixSpace`, `HelixInsets`, and `HelixRadius` instead of new ad-hoc values.
 
 Use filled buttons for the primary action, tonal buttons for an important secondary action, outlined buttons for a visible alternative, and text buttons for low-emphasis actions. Destructive actions must use `showHelixDestructiveDialog`.
 

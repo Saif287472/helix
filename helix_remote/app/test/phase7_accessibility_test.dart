@@ -14,9 +14,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/screens/server_choice_screen.dart';
+import 'package:helix_remote/screens/setup/setup_screen.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
-import 'package:helix_remote/l10n/helix_localizations.dart';
 
 /// Every `IconButton(` in [source], paired with its 1-based line, whose
 /// argument list carries no `tooltip:`.
@@ -80,16 +79,11 @@ void main() {
   testWidgets('P7 the first screen a user meets satisfies the guidelines', (
     tester,
   ) async {
-    // ServerChoiceScreen is the first-launch screen and builds without a
-    // composition root, which makes it the one real screen this suite can
-    // hold to the guidelines directly.
+    // The sign-in page is the first screen and builds without a composition
+    // root, which makes it the one real screen this suite can hold to the
+    // guidelines directly.
     await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
-        theme: HelixThemes.light(),
-        home: const ServerChoiceScreen(),
-      ),
+      MaterialApp(theme: HelixThemes.light(), home: const SetupScreen()),
     );
 
     await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
@@ -109,10 +103,8 @@ void main() {
     // exposes light() and highContrastLight() only. See HelixThemes.
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         theme: HelixThemes.highContrastLight(),
-        home: const ServerChoiceScreen(),
+        home: const SetupScreen(),
       ),
     );
 
@@ -124,8 +116,6 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: HelixLocalizations.localizationsDelegates,
-        supportedLocales: HelixLocalizations.supportedLocales,
         theme: HelixThemes.light(),
         home: Scaffold(
           body: Center(
@@ -164,8 +154,6 @@ void main() {
     ]) {
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           theme: theme,
           home: Scaffold(
             body: Center(
@@ -194,8 +182,6 @@ void main() {
       MediaQuery(
         data: const MediaQueryData(textScaler: TextScaler.linear(2)),
         child: MaterialApp(
-          localizationsDelegates: HelixLocalizations.localizationsDelegates,
-          supportedLocales: HelixLocalizations.supportedLocales,
           theme: HelixThemes.light(),
           home: Scaffold(
             body: FilledButton(onPressed: () {}, child: const Text('Continue')),

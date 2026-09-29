@@ -17,7 +17,7 @@ mixin GroupsRelayHelpers on GroupsModuleBase {
     final members = db.getConversationMembers(groupId);
     for (final memberId in members) {
       if (memberId == excludeAccountId) continue;
-      final devices = db.getDevices(memberId);
+      final devices = db.getActiveDevices(memberId);
       for (final dev in devices) {
         final devId = dev['device_id'] as String;
         if (devId == excludeDeviceId) continue;
@@ -43,7 +43,7 @@ mixin GroupsRelayHelpers on GroupsModuleBase {
     for (final member in members) {
       if (member['role'] != 'ADMIN') continue;
       final memberId = member['account_id'] as String;
-      final devices = db.getDevices(memberId);
+      final devices = db.getActiveDevices(memberId);
       for (final dev in devices) {
         final devId = dev['device_id'] as String;
         final envelope = BackendDatabase.buildEnvelope(

@@ -6,7 +6,7 @@ Date: 2026-06-20
 ## Context
 
 The repository contains an executable Dart/Shelf backend under
-`services/helix_remote_backend`. Older architecture text described a Go/Chi
+`helix_remote/backend` (originally `services/helix_remote_backend`). Older architecture text described a Go/Chi
 backend with PostgreSQL, Redis, and S3 as if those were the current
 implementation. Source inspection and tests show those statements are target
 state only.
@@ -21,9 +21,13 @@ production deployment statements are superseded as implementation claims. They
 may be discussed only as future target-state options until an ADR and
 executable migration evidence prove otherwise.
 
-Documentation must not claim that Remote E2EE, Double Ratchet persistence,
-PostgreSQL, Redis, or object storage are already implemented unless the claim
-links to production wiring and tests. SQLCipher database-at-rest encryption is
+Documentation must not claim that PostgreSQL, Redis, or object storage are
+already implemented unless the claim links to production wiring and tests.
+(Status 2026-09: Remote E2EE with X3DH and a persisted Double Ratchet is now
+wired - `packages/helix_remote_crypto/lib/src/double_ratchet.dart`, used by
+`app/lib/app/remote_messaging_service/message_crypto.dart` - but remains
+without external review. Production runs SQLite with attachments on the local
+filesystem.) SQLCipher database-at-rest encryption is
 implemented by P2-01 and must continue to link to the storage tests that prove
 wrong-key failure, binary marker absence, and plaintext migration rollback.
 

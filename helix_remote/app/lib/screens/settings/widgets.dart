@@ -265,17 +265,12 @@ class _SettingsRow extends StatelessWidget {
                   ),
                 ),
               ),
-            if (item.trailingIcon != null) ...[
-              const SizedBox(width: 6),
-              Icon(item.trailingIcon, color: cs.onSurfaceVariant, size: 22),
-            ] else ...[
-              const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right,
-                color: cs.onSurfaceVariant.withAlpha(180),
-                size: 24,
-              ),
-            ],
+            const SizedBox(width: 4),
+            Icon(
+              Icons.chevron_right,
+              color: cs.onSurfaceVariant.withAlpha(180),
+              size: 24,
+            ),
           ],
         ),
       ),
@@ -328,7 +323,7 @@ class _EmptySearchState extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            HelixLocalizations.of(context).tryDifferentTitleDescription,
+            'Try a different title or description.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
@@ -355,7 +350,6 @@ class _SettingsItem {
     required this.subtitle,
     required this.onTap,
     this.value,
-    this.trailingIcon,
     this.isDestructive = false,
   });
 
@@ -365,7 +359,6 @@ class _SettingsItem {
   final String subtitle;
   final VoidCallback onTap;
   final String? value;
-  final IconData? trailingIcon;
   final bool isDestructive;
 }
 

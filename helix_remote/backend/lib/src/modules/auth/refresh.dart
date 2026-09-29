@@ -24,17 +24,7 @@ mixin AuthRefreshHandlers on AuthModuleBase {
 
     final deviceId = claims['device_id'] as String;
 
-    if (!db.isDeviceActive(accountId, deviceId)) {
-      db.revokeAllRefreshTokensForDevice(accountId, deviceId);
-
-      if (db.isAccountBlocked(accountId)) {
-        throw AppError.forbidden(
-          'This account has been blocked',
-          code: RemoteErrorCode.accountBlocked,
-        );
-      }
-      throw AppError.forbidden('Device revoked');
-    }
+    _requireActiveDevice(accountId, deviceId);
 
     // A suspended account deliberately refreshes normally. Suspension limits
     // what the account may *do* (see the auth middleware), it does not sign
@@ -65,44 +55,13 @@ mixin AuthRefreshHandlers on AuthModuleBase {
 
     db.revokeRefreshToken(tokenHash);
 
-    // Generate new pair
-
-    final newAccessToken = jwt.generateToken({
-      'account_id': accountId,
-
-      'device_id': deviceId,
-    }, const Duration(hours: 1));
-
-    final newRefreshToken = jwt.generateToken({
-      'account_id': accountId,
-
-      'device_id': deviceId,
-
-      'refresh': true,
-
-      'jti': Random.secure().nextInt(1000000000).toString(),
-    }, const Duration(days: 7));
-
-    final newTokenHash = crypto_pkg.sha256
-        .convert(utf8.encode(newRefreshToken))
-        .toString();
-
-    final expiresAt = DateTime.now()
-        .add(const Duration(days: 7))
-        .millisecondsSinceEpoch;
-
-    db.saveRefreshToken(
-      tokenHash: newTokenHash,
-
-      accountId: accountId,
-
-      deviceId: deviceId,
-
-      expiresAt: expiresAt,
-    );
-
+    final session = _issueDeviceSession(accountId, deviceId);
     return Response.ok(
-      jsonEncode({'token': newAccessToken, 'refresh_token': newRefreshToken}),
+      jsonEncode({
+        'token': session['token'],
+        'refresh_token': session['refresh_token'],
+        'refresh_expires_at': session['refresh_expires_at'],
+      }),
     );
   }
 }

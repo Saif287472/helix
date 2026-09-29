@@ -202,22 +202,6 @@ const controls = <GovernanceControl>[
         'lines emitted while handling the request, so they correlated '
         'nothing.',
   ),
-
-  // --- Localization --------------------------------------------------------
-  GovernanceControl(
-    'localization delegate',
-    'app/lib/l10n/helix_localizations.dart',
-    "'bn'",
-  ),
-  GovernanceControl(
-    'localization loads synchronously',
-    'app/lib/l10n/helix_localizations.dart',
-    'SynchronousFuture',
-    because:
-        'Localizations renders nothing until every delegate resolves. An '
-        'async delegate over a compiled-in catalog cost a blank frame on '
-        'every launch.',
-  ),
 ];
 
 void main() {

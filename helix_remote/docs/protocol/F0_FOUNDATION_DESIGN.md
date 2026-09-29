@@ -1,6 +1,11 @@
 # F0 Foundation Design
 
-Status: implemented baseline for Phase F0.
+Status: implemented baseline for Phase F0. The schema capabilities listed
+below are the F0 baseline, not today's versions: the app's local database is at
+`latestSchemaVersion` 31 (`packages/helix_remote_storage/lib/src/database/migrations.dart`)
+and the backend at `PRAGMA user_version` 47 (`backend/lib/src/database/migrations.dart`).
+`RemoteCapabilityRegistry` (`packages/helix_remote_domain/lib/domain/capabilities.dart`)
+still stops at `local-storage-schema.v23` and `backend-schema.v24`.
 
 ## Capability Registry
 
@@ -55,9 +60,11 @@ generation, crypto-session counter updates, and outbox insertion in one SQLite
 transaction. Secure-session failures roll back the transaction and then store a
 local `SECURE_SESSION_UNAVAILABLE` row without enqueuing network send state.
 
-The current protocol remains X3DH plus session-key reuse. It is not documented
-as a complete Double Ratchet until DH ratchet headers, skipped-message keys,
-and independent review are added.
+At F0 the protocol was X3DH plus session-key reuse. Since then
+`DoubleRatchetSession` (`packages/helix_remote_crypto/lib/src/double_ratchet.dart`)
+added DH ratchet headers and skipped-message keys, and it is used for sends and
+receives (`app/lib/app/remote_messaging_service/message_crypto.dart`). It has
+not been independently reviewed, so no strong public claim is made.
 
 ## Attachment Grants
 

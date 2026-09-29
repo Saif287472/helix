@@ -111,7 +111,7 @@ class PrekeysModule {
     }
 
     // 1. Get all active devices for the target account
-    final devices = db.getDevices(targetAccountId);
+    final devices = db.getActiveDevices(targetAccountId);
     if (devices.isEmpty) {
       throw AppError.notFound('No active devices found for this account');
     }

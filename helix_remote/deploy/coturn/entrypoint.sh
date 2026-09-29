@@ -9,8 +9,8 @@
 # it off disk and out of argv.
 set -eu
 
-TEMPLATE=/etc/coturn/turnserver.conf.template
-RENDERED=/tmp/turnserver.conf
+TEMPLATE=${TURN_TEMPLATE:-/etc/coturn/turnserver.conf.template}
+RENDERED=${TURN_RENDERED:-/tmp/turnserver.conf}
 CERT_DIR=${TURN_CERT_DIR:-/etc/coturn/certs}
 
 if [ -z "${HELIX_REMOTE_TURN_SECRET:-}" ]; then
@@ -48,7 +48,19 @@ fi
 # passed as an argument to another process either.
 export TURN_CERT_FILE TURN_PKEY_FILE
 TURN_EXTERNAL_IP=${TURN_EXTERNAL_IP:-}
-export TURN_EXTERNAL_IP
+# Behind a NAT router (a home PC rather than a VPS), coturn must listen and
+# relay on the LAN address while advertising the public one; coturn spells
+# that `external-ip=PUBLIC/LAN`. With no TURN_LOCAL_IP the host's public
+# address is on its own interface, and all three are the same.
+if [ -n "${TURN_LOCAL_IP:-}" ]; then
+    TURN_LISTEN_IP=$TURN_LOCAL_IP
+    if [ -n "$TURN_EXTERNAL_IP" ]; then
+        TURN_EXTERNAL_IP="$TURN_EXTERNAL_IP/$TURN_LOCAL_IP"
+    fi
+else
+    TURN_LISTEN_IP=$TURN_EXTERNAL_IP
+fi
+export TURN_EXTERNAL_IP TURN_LISTEN_IP
 
 umask 077
 : > "$RENDERED"
@@ -65,6 +77,10 @@ while IFS= read -r line || [ -n "$line" ]; do
             ;;
         *'${TURN_EXTERNAL_IP}'*)
             value=$TURN_EXTERNAL_IP
+            key=${line%%=*}
+            ;;
+        *'${TURN_LISTEN_IP}'*)
+            value=$TURN_LISTEN_IP
             key=${line%%=*}
             ;;
         *'${TURN_CERT_FILE}'*)

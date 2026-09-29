@@ -11,6 +11,9 @@ abstract final class HelixColorTokens {
   static const success = Color(0xFF14804A);
   static const warning = Color(0xFFF4A340);
   static const danger = Color(0xFFBA1A1A);
+
+  /// The blue of the app icon, used by the sign-in pages.
+  static const signInBlue = Color(0xFF2563EB);
   static const avatarPalette = <Color>[
     Color(0xFFE91E63),
     Color(0xFF9C27B0),
@@ -198,6 +201,14 @@ abstract final class HelixStatusColors {
   static const cautionContainer = Color(0xFFFFE0B2);
   static const onCautionContainer = Color(0xFFE65100);
 
+  /// A softer amber for a card that asks for a decision (a device waiting
+  /// to be approved): its surface, outline, icon, text and accent.
+  static const pendingSurface = Color(0xFFFFFBEB);
+  static const pendingOutline = Color(0xFFFDE68A);
+  static const pendingIcon = Color(0xFFD97706);
+  static const onPendingSurface = Color(0xFF92400E);
+  static const pendingAccent = Color(0xFFB45309);
+
   /// Failed, revoked, or refused.
   static const danger = Color(0xFFF44336);
   static const dangerContainer = Color(0xFFFFCDD2);
@@ -284,16 +295,37 @@ abstract final class HelixThemes {
   static ThemeData light() => _theme(Brightness.light, contrast: 0);
   static ThemeData highContrastLight() => _theme(Brightness.light, contrast: 1);
 
-  static ThemeData _theme(Brightness brightness, {double contrast = 0}) {
+  /// The sign-in pages: the same components in the app icon's blue.
+  static ThemeData signIn({bool highContrast = false}) => _theme(
+    Brightness.light,
+    contrast: highContrast ? 1 : 0,
+    seed: HelixColorTokens.signInBlue,
+  );
+
+  static ThemeData _theme(
+    Brightness brightness, {
+    double contrast = 0,
+    Color seed = HelixColorTokens.brand,
+  }) {
     assert(
       brightness == Brightness.light,
       'Helix is light-only. Pass Brightness.light.',
     );
-    final colors = ColorScheme.fromSeed(
-      seedColor: HelixColorTokens.brand,
+    var colors = ColorScheme.fromSeed(
+      seedColor: seed,
       brightness: brightness,
       contrastLevel: contrast,
+      dynamicSchemeVariant: seed == HelixColorTokens.brand
+          ? DynamicSchemeVariant.tonalSpot
+          : DynamicSchemeVariant.fidelity,
     );
+    if (seed != HelixColorTokens.brand && contrast == 0) {
+      // Exactly the icon's blue; white on it is 5.2:1.
+      colors = colors.copyWith(
+        primary: seed,
+        onPrimary: const Color(0xFFFFFFFF),
+      );
+    }
     return ThemeData(
       useMaterial3: true,
       colorScheme: colors,

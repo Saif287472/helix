@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'package:share_plus/share_plus.dart';
 import '../admin_client.dart';
+import '../helix_code.dart';
 import '../theme/app_theme.dart';
 
 class UsersTab extends StatefulWidget {
@@ -253,9 +255,11 @@ class _UsersTabState extends State<UsersTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Send this recovery code to $displayLabel. They can enter it on a new '
-                  'device to restore their account access. The server address is '
-                  'shielded inside this code.',
+                  'Send this link to $displayLabel. On their new phone it '
+                  'opens Helix with the code filled in; they then confirm '
+                  'their phone number with their password (nothing is reset) '
+                  'or, without one, an SMS code (their other devices are '
+                  'signed out). It works once and expires in 48 hours.',
                 ),
                 const SizedBox(height: 16),
                 Container(
@@ -288,15 +292,28 @@ class _UsersTabState extends State<UsersTab> {
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Close'),
             ),
+            TextButton.icon(
+              icon: const Icon(Icons.share, size: 16),
+              label: const Text('Share'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                // ignore: deprecated_member_use
+                Share.share(
+                  'Your Helix recovery link: ${helixCodeLink(code)}\n\n'
+                  'Code: $code\n$kHelixCodeManualSteps',
+                  subject: 'Helix account recovery',
+                );
+              },
+            ),
             FilledButton.icon(
               icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy Code'),
+              label: const Text('Copy link'),
               onPressed: () {
-                Clipboard.setData(ClipboardData(text: code));
+                Clipboard.setData(ClipboardData(text: helixCodeLink(code)));
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Recovery code copied to clipboard'),
+                    content: Text('Recovery link copied to clipboard'),
                   ),
                 );
               },
@@ -575,6 +592,7 @@ class _UsersTabState extends State<UsersTab> {
               ),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
+                      tooltip: 'Clear search',
                       icon: const Icon(
                         Icons.clear,
                         size: 18,
