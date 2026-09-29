@@ -28,6 +28,10 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<RemoteCallStatus?>? _callSub;
   bool _callScreenShowing = false;
 
+  /// The tabs are pages side by side: swipe left/right between them, or tap
+  /// the bar below.
+  final PageController _pages = PageController();
+
   @override
   void initState() {
     super.initState();
@@ -86,7 +90,18 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _changeSub?.cancel();
     _callSub?.cancel();
+    _pages.dispose();
     super.dispose();
+  }
+
+  void _selectTab(int index) {
+    if (index == _tab) return;
+    setState(() => _tab = index);
+    _pages.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -94,26 +109,30 @@ class _HomeScreenState extends State<HomeScreen> {
     final hasPending = _pendingContactRequests > 0;
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      body: IndexedStack(
-        index: _tab,
+      body: PageView(
+        controller: _pages,
+        onPageChanged: (index) => setState(() => _tab = index),
         children: [
-          ConversationListScreen(
-            messagingService: widget.root.messagingService,
-            root: widget.root,
-          ),
-          CallsTabScreen(
-            root: widget.root,
-            messagingService: widget.root.messagingService,
-          ),
-          ContactsScreen(
-            messagingService: widget.root.messagingService,
-            root: widget.root,
-          ),
-          SettingsScreen(
-            root: widget.root,
-            messagingService: widget.root.messagingService,
-            onChangeServerUrl: widget.onChangeServerUrl,
-          ),
+          for (final page in <Widget>[
+            ConversationListScreen(
+              messagingService: widget.root.messagingService,
+              root: widget.root,
+            ),
+            CallsTabScreen(
+              root: widget.root,
+              messagingService: widget.root.messagingService,
+            ),
+            ContactsScreen(
+              messagingService: widget.root.messagingService,
+              root: widget.root,
+            ),
+            SettingsScreen(
+              root: widget.root,
+              messagingService: widget.root.messagingService,
+              onChangeServerUrl: widget.onChangeServerUrl,
+            ),
+          ])
+            _KeepAlivePage(child: page),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -126,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(999),
         ),
         selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
+        onDestinationSelected: _selectTab,
         destinations: [
           const NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
@@ -159,6 +178,29 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+}
+
+/// Keeps a tab alive while another is on screen, so a tab's scroll position
+/// and loaded data survive swiping away from it.
+class _KeepAlivePage extends StatefulWidget {
+  const _KeepAlivePage({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlivePage> createState() => _KeepAlivePageState();
+}
+
+class _KeepAlivePageState extends State<_KeepAlivePage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 

@@ -55,6 +55,30 @@ class RemoteCapability {
   static const platformExpansionV1 = 'helix.remote.platform-expansion.v1';
   static const localStorageSchemaV23 = 'helix.remote.local-storage-schema.v23';
 
+  // Schema capabilities name the newest schema a build speaks; the versions
+  // in between were never negotiated on, so they are not listed one by one.
+  static const localStorageSchemaV31 = 'helix.remote.local-storage-schema.v31';
+  static const backendSchemaV47 = 'helix.remote.backend-schema.v47';
+
+  /// Password sign-in on any device, password-wrapped account identity key.
+  static const passwordSignInV1 = 'helix.remote.password-sign-in.v1';
+
+  /// Senders encrypt for their own other devices; 409 `device_list_stale`.
+  static const ownDeviceFanOutV1 = 'helix.remote.own-device-fan-out.v1';
+
+  /// Other devices are told when a new device signs in.
+  static const signInAlertsV1 = 'helix.remote.sign-in-alerts.v1';
+
+  /// Encrypted, text-only chat history backup (`/backups/history`).
+  static const historyBackupV1 = 'helix.remote.history-backup.v1';
+
+  /// Recovery codes checked before use, bound to the account's phone and
+  /// its SMS code (`/accounts/recovery/lookup`).
+  static const recoveryLookupV1 = 'helix.remote.recovery-lookup.v1';
+
+  /// Shared `https://…/open#HLX-…` invite and recovery links.
+  static const codeLinksV1 = 'helix.remote.code-links.v1';
+
   static const stable = <String>{
     schemaVersion,
     realtimeEnvelopeV1,
@@ -102,6 +126,14 @@ class RemoteCapability {
     proxyDiagnosticsV1,
     platformExpansionV1,
     localStorageSchemaV23,
+    localStorageSchemaV31,
+    backendSchemaV47,
+    passwordSignInV1,
+    ownDeviceFanOutV1,
+    signInAlertsV1,
+    historyBackupV1,
+    recoveryLookupV1,
+    codeLinksV1,
   };
 }
 
