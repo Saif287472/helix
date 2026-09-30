@@ -1,0 +1,680 @@
+# Helix Remote Architecture v2 — Plan of Record
+
+Status: **accepted plan, not started** · Written 2026-09-30 · Owner: hasan
+
+This is the single plan for rebuilding Helix Remote so it can grow ~10× in
+features and serve millions of users without another architecture change.
+Every v2 session follows this document. **Do not start work that is not the
+next unfinished phase in the tracker (§11), and do not change the target
+architecture (§3–§6) without an entry in the change log (§12) that the user
+approved in chat.**
+
+Scope: `helix_remote/` only. **Nothing under `helix_local/` changes** — it is
+a separate app. Root files (CI, root docs) are touched only where they concern
+Remote, and their Local parts are left exactly as they are.
+
+---
+
+## 1. Decisions already made (2026-09-30, by the user)
+
+| # | Decision |
+|---|---|
+| D1 | Backend database is **PostgreSQL**. SQLite is not used by the server at all in v2 (not even in tests — tests use a real Postgres). |
+| D2 | **Clean slate.** There are no real users. Both databases start from a new baseline schema. No migration from app schema v32 or backend schema v48. Live Helix Global data is discarded at cutover (the user does that step). Phones reinstall. |
+| D3 | App uses **Riverpod + drift**, organised as **feature modules**. |
+| D4 | Work is **phased**, one phase at a time, each ending green and committed. |
+| D5 | Product rules and security invariants in `AGENTS.md` carry over unchanged (English only, light theme only, screenshots allowed, no contact requests, WhatsApp-style people, sign-in on Helix Global with hidden advanced mode, 48 px targets, tooltips, password never leaves the device, etc.). |
+
+## 2. Why (findings that drove the plan)
+
+Measured on 2026-09-30 (app/lib 37k LOC, backend/lib 26k LOC).
+
+**App**
+- Messages are stored as ciphertext inside SQLCipher and **decrypted on every
+  read**. The chat list decrypts one message per chat, and search decrypts up
+  to 500 messages per chat. Edits and reactions are replayed from `revisions`
+  at read time, with N+1 queries.
+- All SQLite calls are **synchronous on the UI isolate**.
+- There are **no reactive queries**. The UI re-fetches on broad
+  `RemoteSyncChange` events and pages with `LIMIT/OFFSET`.
+- 73 local tables. 59 of 252 storage methods are never called. There are dead
+  screens (`GroupCallScreen`, `call_link_sheet`) and dead code
+  (`account_runtime_registry`).
+- God objects:
+  - `RemoteMessagingService` (~4.3k LOC across 12 mixins) and
+    `RemoteCompositionRoot` (~3.6k LOC across 8 mixins).
+  - `HelixRemoteDatabase` is 18 mixins over one shared `_db`.
+  - Screens reach into `messagingService.db` (41 call sites) and `restClient`
+    directly.
+- **Crypto:**
+  - The app never performs a Diffie-Hellman ratchet step, only symmetric
+    chain steps, so there is **no post-compromise security**.
+  - Sessions are keyed per *conversation* × device pair.
+  - Group messages are fanned out pairwise per device (`GroupSenderChain`
+    exists but is unused).
+  - Prekey replenishment is never wired.
+
+**Backend**
+- The whole DB API is synchronous (~660 call sites). Correctness *depends* on
+  single-isolate SQLite: sequence allocation is read-then-write.
+- Three transaction mechanisms. 16 repository methods issue a raw nested
+  `BEGIN`.
+- State that breaks with more than one node:
+  - the WS registry, and `trySendToDevice` results that drive push decisions
+  - ~10 in-memory rate limiters
+  - login challenges
+  - the S2S replay map
+  - an outbox without claims or leases
+  - blobs on local disk (`ObjectStorageAdapter` exists but is unused)
+- `messages` and `device_events` are never deleted on ack. The mailbox quota
+  counts rows that never go away.
+- SQLite-only SQL, a Postgres adapter stub, and a migration framework
+  (`lib/src/migrations.dart`) that production never uses.
+
+## 3. Target architecture — principles
+
+1. **Growth is additive.** A new feature is a new backend module, a new app
+   feature folder, its own tables, and new content/event types. Core code
+   does not change.
+2. **Boundaries are enforced by tests,** not convention. There are import-rule
+   tests on both sides (§8).
+3. **The server is stateless.** Any node can serve any request. All shared
+   state lives in Postgres (durable) or the ephemeral store (TTL). Nodes
+   coordinate only through the event bus and the outbox.
+4. **The server knows as little as possible.** Edits, reactions, receipts,
+   deletes and replies are end-to-end encrypted *content*, not server routes.
+   The server stores only *undelivered* ciphertext (mailbox) and deletes it on
+   ack.
+5. **Decrypt once.** A message is decrypted exactly once, on arrival, into
+   structured rows. SQLCipher is the at-rest protection, as `PRODUCT_CONTRACT`
+   and `PRIVACY_POLICY` already promise.
+6. **One source of truth for the wire.** A shared `helix_remote_protocol`
+   package defines every REST DTO, realtime frame, error code and content
+   type. It is used by server, app, admin and CLI.
+7. **Pure-Dart core.** Messaging logic (sessions, inbound pipeline, outbox,
+   features) is a Flutter-free package. It runs in the UI app, in the FCM
+   background isolate, in the CLI and in tests.
+8. **Tables arrive with the feature that uses them.** No speculative schema.
+9. **Every scaling component sits behind an interface** with a
+   single-host implementation now and a scale-out implementation later
+   (§4.6). Swapping an implementation is configuration, not architecture.
+
+## 4. Server v2 (`helix_remote/server/`, package `helix_remote_server`)
+
+It is built fresh beside the old `backend/`, which stays live and untouched
+until cutover (§10). At cutover `backend/` is deleted.
+
+### 4.1 Layout
+
+```
+server/
+  bin/server.dart               entry: load config -> build platform -> modules -> serve
+  bin/migrate.dart              run migrations only (deploy step)
+  bin/admin_tool.dart           reset admin password etc.
+  lib/src/platform/             no business logic
+    config/                     typed, validated config from env (one class)
+    db/                         Db, Tx interfaces; Postgres pool impl; migration runner
+    http/                       pipeline, middleware, AppError -> response, auth context
+    bus/                        EventBus (publish/subscribe across nodes)
+    ephemeral/                  EphemeralStore (TTL keys: presence, challenges, WS routes)
+    ratelimit/                  RateLimiter over a RateLimitStore
+    outbox/                     transactional outbox + job runner (leases, SKIP LOCKED)
+    blobs/                      ObjectStorage (local FS, S3-compatible), presigned URLs
+    push/ sms/ turn/            provider interfaces + impls (moved from backend)
+    observability/              JSON logs, request ids, /metrics (Prometheus text), health
+    ids.dart clock.dart         UUIDv7, injectable clock
+  lib/src/kernel/               shared types every module may use: ids, errors,
+                                AuthContext, Page/cursor, Idempotency, events base
+  lib/src/modules/<module>/
+    module.dart                 implements HelixModule (below)
+    api.dart                    the ONLY file other modules may import (facade + events)
+    http/                       handlers, request/response mapping (DTOs from protocol pkg)
+    application/                use cases; transactions start here
+    domain/                     entities, rules
+    data/                       Postgres repositories (this module's schema only)
+    migrations/0001_init.sql …  this module's tables
+    MODULE.md                   routes, tables, events, jobs, invariants
+  test/                         per-module tests + architecture tests + e2e
+```
+
+```dart
+abstract interface class HelixModule {
+  String get name;                       // also its Postgres schema name
+  List<Migration> get migrations;
+  void routes(RouteRegistry r);          // public routes declared here, explicitly
+  void subscriptions(EventBus bus);
+  List<JobDefinition> get jobs;          // outbox handlers + periodic jobs
+}
+```
+
+The server is a list of modules. **Public (unauthenticated) routes are
+declared per module with `r.public(...)`**, which requires a rate-limit
+policy argument. This replaces the `endsWith` list in `_authMiddleware`.
+The architecture test prints the full public-route list, and a snapshot test
+fails when it changes, so every new public route is a deliberate diff.
+
+### 4.2 Modules
+
+| Module (schema) | Owns |
+|---|---|
+| `identity` | accounts, devices, device linking, sessions/refresh tokens (**single mint point `issueDeviceSession`**), password auth (HKDF auth key only), phone OTP, invites, recovery codes, suspension/blocks by admin |
+| `keys` | identity keys, signed prekeys, one-time prekeys, sender-key distribution bookkeeping; prekey-low events |
+| `messaging` | conversations (direct), membership view, **mailbox**, send, ack, delivery events |
+| `realtime` | WS gateway, connection routing, replay/flow control, presence and typing (ephemeral) |
+| `people` | profiles, `~Helix name`, discovery (phone-hash match with budgets), user-to-user blocks, privacy settings, reports |
+| `groups` | group roster authority, roles, invites, join links, moderation, group settings |
+| `calls` | 1:1 signaling, pending calls, TURN credentials, call push wake |
+| `group_calls` | rooms, participants, room keys, call links, scheduled calls |
+| `media` | attachment upload/download (presigned), quotas, reference counts, GC |
+| `backup` | encrypted backups, history backups, backup media |
+| `federation` | S2S signing and verification, peer directory, outbound relay jobs, inbound S2S routes |
+| `ops` | health, readiness, metrics, maintenance mode, feature flags, logs stream, telemetry |
+| `admin` | operator console API (users, invites, recovery codes, reports, audit) |
+| `compliance` | data export, account deletion orchestration, audit log |
+
+Modules never join or write another module's tables. They talk through
+`api.dart` facades (synchronous request/response) or through domain events on
+the bus (asynchronous). **No foreign keys cross schemas.** Account deletion is
+an `identity.account_deleted` event that every module handles by purging its
+own rows, tracked to completion by `compliance`.
+
+### 4.3 Database (PostgreSQL 17)
+
+- **Driver and pool:** `package:postgres` v3 with a pool. `Db.tx((tx) async
+  {...})` is the only way to write. Nested calls reuse the outer transaction.
+  Repository methods take a `Tx`/`Session` and never open their own
+  transaction.
+- **Migrations:**
+  - Per-module numbered SQL files.
+  - The runner records `(module, version, checksum)` in
+    `platform.schema_migrations`, refuses changed checksums, and runs under
+    an advisory lock so only one node migrates.
+  - Rules are **expand → migrate → contract**: never rename or drop in the
+    same release that stops using a column.
+  - This reuses the ideas in today's unused `backend/lib/src/migrations.dart`.
+- **IDs:** UUIDv7 (time-ordered, index-friendly). Client-generated ids are
+  used for client-created objects (messages, idempotent ops).
+- **Sequences:** the per-device mailbox sequence comes from
+  `UPDATE identity.devices SET next_seq = next_seq + $n RETURNING next_seq`
+  inside the send transaction (row lock, correct under concurrency). No
+  `MAX()+1`.
+- **Time:** `timestamptz`. Payloads are `bytea`, never base64 text. JSON only
+  as `jsonb` for genuinely schemaless data.
+- **Partitioning:** the mailbox is hash-partitioned by `device_id` from day
+  one (16 partitions). Audit and metrics tables are range-partitioned by
+  month, with retention jobs that drop partitions.
+- **Indexing rule:** every query in a repository has an index, verified by an
+  `EXPLAIN` test for the hot paths (send, fetch mailbox, ack, auth lookup).
+
+### 4.4 Messaging and delivery model (the core)
+
+```
+client A --POST /messages/send (one envelope per recipient device, idempotency key)-->
+  messaging: validate membership + active devices (getActiveDevices; 409 on stale list)
+  tx { allocate seq per device; insert mailbox rows; outbox(push if offline) }
+  after commit: bus.publish(device.wake(device_ids))
+realtime node holding B's socket: on wake -> read mailbox after cursor -> push frames
+client B: decrypt -> store -> ack(seq) --> messaging deletes mailbox rows <= seq
+```
+
+- **Mailbox:**
+  - Columns: `messaging.mailbox(device_id, seq, envelope bytea, sender_hint,
+    created_at, expires_at)`.
+  - One row per recipient device, including the sender's *other* devices
+    (that is how multi-device sync works).
+  - Deleted on ack. Undelivered rows expire after 30 days (job).
+  - The per-device quota counts only undelivered rows.
+- **One event stream per device.** Everything a device must receive arrives in
+  the mailbox as a typed envelope: messages, encrypted control content,
+  sender-key distributions, group roster changes and device-list changes.
+  Today's separate `messages` + `device_events` tables become one table.
+- **Server-visible envelope kinds:** only routing kinds (`message`,
+  `roster_change`, `device_list_change`, `key_change`, `account_signal`).
+  Edits, reactions, receipts, replies, deletes, polls, locations and so on
+  are **inside** the encrypted content.
+- **Typing and presence:** ephemeral WS frames through the bus and
+  `EphemeralStore`. Never stored.
+- **Live-or-push decision:** `realtime` keeps `device → node` routes in
+  `EphemeralStore` with a heartbeat TTL. "Is B online?" is a route lookup, not
+  a local-socket check. Offline → the outbox push job. Calls use the same
+  lookup (replacing today's `trySendToDevice` result logic).
+- **Idempotency:** every mutating request carries `Idempotency-Key`, and
+  results are stored in `platform.idempotency` (24 h). Sends are also
+  naturally idempotent on `(message_id, recipient_device)`.
+- **History on a new device:** it comes only from device-to-device transfer
+  or the encrypted history backup (F2). The server keeps no history.
+  *Confirm in Phase 1 against F1/F2 docs; update them.*
+
+### 4.5 Realtime protocol
+
+- **Transport:** `GET /v1/ws`, with the subprotocol negotiated via
+  `Sec-WebSocket-Protocol: helix.v1+json`. A future `helix.v1+cbor` is
+  additive and needs no architecture change.
+- **Frames:** `{t, id, seq?, body}`. Client acks, server replays after the
+  cursor with a credit window (keeps today's flow-control idea), heartbeats,
+  and `wake` hints. Unknown frame types are ignored and acked (keeps
+  `remote_compatibility_policy.md` §2).
+- **Auth:** the access token at upgrade, plus an `isDeviceActive` check.
+  Revocation publishes `device.revoked` on the bus, and the node holding the
+  socket closes it.
+
+### 4.6 Scale-out seams (interfaces with a single-host impl now)
+
+| Interface | Now (PC, single host) | Scale-out (config switch) |
+|---|---|---|
+| `EventBus` | Postgres `LISTEN/NOTIFY` | Redis Streams or NATS |
+| `EphemeralStore` | Postgres `UNLOGGED` tables + TTL sweep | Redis |
+| `RateLimitStore` | Postgres (token bucket, one statement) | Redis |
+| `ObjectStorage` | local filesystem, served by the server | any S3-compatible store (MinIO, R2, S3) with presigned URLs + CDN |
+| `MailboxStore` | Postgres partitioned table | same (read replicas, more partitions); a wide-column store at 10M+ DAU is the one deliberate escape hatch |
+| `PushProvider`, `SmsProvider` | FCM, BulkSMSBD | + APNs, others |
+
+Run topology now: Caddy → 1–2 server processes → Postgres on the same PC.
+Later: a load balancer → N nodes → managed Postgres (primary + replicas) +
+Redis + object storage. **The code is identical in both.** A test proves two
+nodes behind one Postgres deliver messages and calls correctly (Phase S7).
+
+*Honest limit:* a home PC cannot serve millions of users. The code will
+scale; the hardware has to move to hosted infrastructure when real load
+arrives. That is a deployment change, not an architecture change.
+
+### 4.7 Cross-cutting
+
+- **Errors:** `AppError(code, status, safeMessage)`, with codes defined in the
+  protocol package. Nothing sensitive in messages.
+- **Logs:** structured JSON with a correlation id, via the redacting logger
+  (never passwords, tokens, keys, content, codes, full phone numbers — enforced
+  by a log-redaction test).
+- **Config:** one `ServerConfig.fromEnv` that validates and fails fast.
+  Topology is `single_host` or `cluster`. Env var names are documented in the
+  handoff doc. **The user edits `.env`; agents never do.**
+- **Personal servers:** still a single `docker compose up` (server + Postgres
+  + optional MinIO). Personal servers *requiring* Postgres is accepted.
+
+## 5. Protocol and crypto v2
+
+- **`helix_remote_protocol` package** (pure Dart, new):
+  - REST DTOs, realtime frames, envelope kinds, content types (moved from
+    `helix_remote_domain/message_content.dart`), error codes, and
+    pagination/cursor types.
+  - JSON codecs are hand-written or generated. Golden fixtures live in
+    `contracts/`.
+  - The OpenAPI file is rewritten for v1 of the new contract, and the
+    route-parity test is kept.
+- **REST path prefix:** `/v1/...`. Since there are no clients (D2), this is a
+  contract reset, recorded in an ADR, not a deprecation.
+- **Sessions:**
+  - X3DH + a **full Double Ratchet** (DH ratchet steps, skipped-key limits),
+    one session per **(local device, remote device)**, not per conversation.
+  - The conversation id travels inside the encrypted content.
+  - Prekey replenishment is wired: the server emits `keys.prekeys_low`, and
+    the client uploads more.
+- **Groups:**
+  - **Sender Keys** (`GroupSenderChain`): O(1) encryption per message. Sender
+    keys are distributed over pairwise sessions, and rotate on member removal
+    or device change.
+  - The server fans out one ciphertext per member device.
+  - `GroupCryptoProtocol` is an interface so MLS can be added later without
+    touching the engine.
+- **Content types:** versioned, and `unknown → "This message needs a newer
+  version of Helix"` placeholder, never a crash.
+- **Rules:**
+  - Crypto code changes need test vectors and a review note in
+    `docs/security/remote_cryptographic_design_review.md`.
+  - Never weaken verification to make something work.
+  - Crypto remains *without external review* until one happens, and the docs
+    keep saying so.
+
+## 6. Client v2
+
+### 6.1 Packages (dependency direction is strict, top depends on bottom)
+
+```
+app, admin, cli
+   └─ helix_remote_engine      pure Dart: session manager, inbound pipeline, outbox,
+   │                           transfer queue, feature services (chats, people, groups,
+   │                           calls signaling state, backup, devices, settings)
+   ├─ helix_remote_db          drift + SQLCipher, schema, DAOs, watch queries (pure Dart*)
+   ├─ helix_remote_api         typed REST + WS clients, one client class per server module
+   ├─ helix_remote_crypto      X3DH, Double Ratchet, Sender Keys, attachment/backup crypto
+   ├─ helix_remote_protocol    wire DTOs, frames, content types, error codes
+   └─ helix_remote_domain      entities and value types only
+helix_remote_calls (WebRTC engine, Flutter)   helix_remote_ui (tokens, components, Flutter)
+```
+
+\* `helix_remote_db` uses `drift` + `sqlite3` (SQLCipher hook), with no Flutter
+dependency, so the FCM background isolate and the CLI can open it.
+
+These packages are **retired at cutover:** `helix_remote_storage`,
+`helix_remote_sync` and `helix_remote_groups` (folded into engine), and the
+REST implementation inside `app/lib/app/remote_rest_client.dart` (moves to
+`helix_remote_api`).
+
+### 6.2 Local database (drift, SQLCipher, background isolate)
+
+- **Opening:** `NativeDatabase.createInBackground` with a setup callback that
+  applies `PRAGMA key` and WAL. There is never a DB call on the UI isolate.
+- **Schema v1 starting point** (tables land only with the phase that uses
+  them):
+  - `self_account`, `self_devices`
+  - `people` (account_id, helix_name, phone_hash, phonebook_name, nickname,
+    avatar_blob, blocked, updated_at) and `person_devices` (identity key,
+    trust state)
+  - `conversations` (id, kind, title, avatar, pinned_at, muted_until,
+    archived, **last_message_id, last_message_at, last_message_preview,
+    unread_count, mention_count**, draft, disappearing_seconds) and
+    `conversation_members`
+  - `messages` (local_rowid, message_id UUIDv7, conversation_id, sender,
+    sender_device, **sort_key**, sent_at, received_at, kind, body,
+    reply_to_id, forwarded, status, edited_at, deleted_at, expires_at,
+    view_once_state)
+    - `message_reactions`, `message_receipts`
+    - `attachments` (blob id, key, digest, mime, size, dims, duration,
+      blurhash, thumbnail path, local path, transfer state)
+    - `messages_fts` (FTS5, external content)
+  - `call_log`
+  - groups: `groups`, `group_members`, `group_settings`
+  - crypto: `identity`, `sessions` (per device pair), `prekeys`,
+    `sender_keys`
+  - sync: `inbox_cursor`, `processed_envelopes`, `outbox_ops`,
+    `transfer_jobs`
+  - `settings` (typed key/value)
+- **Rules:**
+  - Denormalised conversation summary columns are updated in the same
+    transaction as the message write.
+  - Keyset paging on `(conversation_id, sort_key)`.
+  - Drift schema dumps are checked in, and every migration has a
+    `drift_dev` migration test from the first release onward.
+- **Generated code:** committed. CI fails if `build_runner` output is stale.
+
+### 6.3 Engine pipelines
+
+- **Inbound:** WS frame or HTTP fetch → `processed_envelopes` dedupe →
+  decrypt (session / sender key) → decode content → **apply** (one drift
+  transaction: message row + summary + reactions/receipts/edits + FTS) → ack.
+  - A failure quarantines only that envelope, with a visible "couldn't
+    decrypt" row. It never blocks the stream.
+  - The same code runs in the FCM background isolate, which then shows the
+    local notification.
+- **Outbound:** a UI action → one drift transaction (optimistic row + `outbox_ops`)
+  → the outbox worker encrypts at send time → REST with an idempotency key →
+  status update.
+  - Backoff, stale-device-list rebuild, and a single wake-up path for
+    every enqueue. This fixes today's group ops that wait for an unrelated
+    trigger.
+- **Transfers:** an attachment upload/download queue with resume, presigned
+  URLs, and thumbnails generated locally.
+
+### 6.4 App (`helix_remote/app/lib`)
+
+```
+lib/
+  main.dart                     zones, error reporting, platform init, ProviderScope
+  core/                         providers for engine/db/api, go_router + deep links
+                                (helix://, https://helix.agiletechbd.com/open#HLX-…),
+                                lifecycle, notifications, push, app lock, platform channels
+  features/<feature>/
+    application/                Riverpod Notifiers/StreamProviders (UI state only)
+    presentation/               screens + widgets (StatelessWidget/ConsumerWidget)
+  shared/widgets/               cross-feature widgets built on helix_remote_ui
+```
+
+- **Features:** `sign_in` (Global default page; hidden advanced mode: 3 taps
+  bottom-right 2 s apart, 4th opens; shared link), `home` (Chats/Calls/Settings
+  swipe tabs), `chats`, `conversation`, `people` (search inside Chats and
+  Calls), `calls`, `groups`, `settings`, `devices`, `backup`, `profile`.
+- **Rules:**
+  - Presentation imports only its own `application/`, `shared/`,
+    `helix_remote_ui` and `helix_remote_domain`.
+  - Never `helix_remote_db`, `_api`, `_crypto` or `_engine` directly
+    (enforced by test).
+  - Every list is a `StreamProvider` over a drift watch query.
+- **Performance budgets** (tests):
+  - chat list with 5k chats builds in under 16 ms per frame
+  - conversation open with 100k messages in the DB shows its first page in
+    under 150 ms
+  - 1,000-message burst without dropped frames (keeps
+    `phase4_performance_budget_test`)
+
+## 7. Carried-over invariants (must hold in v2; each has a test)
+
+- **Security:**
+  - The password never leaves the device (HKDF auth key only).
+  - Sessions are minted in exactly one place.
+  - Delivery uses active devices only.
+  - Public routes are declared and rate-limited.
+  - No secrets or content in logs.
+  - No weakened signature or transcript checks.
+- **Product:**
+  - English literals, no l10n layer.
+  - Light theme only; colours from theme/tokens.
+  - Screenshots allowed (no FLAG_SECURE or display affinity).
+  - `IconButton` tooltips; 48 px targets.
+  - No contact requests; people naming order (phone-book name → nickname →
+    number → `~Helix name`); renaming writes to phone contacts.
+  - Three swipe tabs.
+  - Sign-in rules as above.
+- **Every test in `docs/security/REGRESSION_TEST_MATRIX.md`** has a v2
+  equivalent before cutover. The matrix is updated to point at it.
+- **Deployment:**
+  - Agents never stop or restart the live server and never edit live
+    DB/`.env`.
+  - No APK builds unless asked.
+
+## 8. Guardrails (how drift is prevented)
+
+1. **Architecture tests** (fail CI):
+   - Server: modules import only other modules' `api.dart`. No `dart:io` File
+     use outside `platform/blobs`. No SQL outside `data/`. The public-route
+     snapshot.
+   - Client: the package DAG in §6.1. Presentation import rules. No `sqlite3`
+     or `drift` import outside `helix_remote_db`. No `http`/`WebSocket`
+     outside `helix_remote_api`.
+2. **Every module and feature has its `MODULE.md`/`FEATURE.md`,** updated in
+   the same commit as the code.
+3. **This file's tracker (§11)** is updated at the end of every phase (status,
+   date, commit, test counts).
+4. **ADRs:** Phase 0 writes the ADRs. A change to §3–§6 needs a new ADR plus
+   a change-log entry (§12) approved by the user.
+5. **Gate per phase:** `dart analyze`/`flutter analyze` clean, all tests green,
+   `dart format` on changed files, docs updated, one commit on the v2 branch.
+
+## 9. Where the work happens
+
+- **Branch:** `architecture-v2`, in a **git worktree at a short path**
+  (`J:\hx2`). Production keeps running from the main checkout
+  (`J:\Projects\helix`) on `main`, untouched.
+- **Scope:** the new server is built in `helix_remote/server/` (parallel to
+  `backend/`). The client stack is new packages. The app's `lib/` is rebuilt
+  in place on the branch in phase A1, with the old `lib/` deleted from the
+  branch; `main` keeps it for reference.
+- **`main` still receives urgent fixes** to the live v1 during the rebuild,
+  and those fixes are not ported unless the plan's feature needs them.
+
+## 10. Phases
+
+Each phase ends with its gate (§8.5). "User step" items are things only the
+user does.
+
+### Phase 0 — Decisions, tooling, guardrails
+- **ADRs:**
+  - 025 Postgres + stateless nodes (supersedes the implementation parts of
+    ADR-019)
+  - 026 server module architecture
+  - 027 client architecture (drift + Riverpod + engine)
+  - 028 protocol v2 contract reset (mailbox, E2EE control content,
+    device-pair sessions, Sender Keys)
+  - 029 guardrails
+- **Dependencies:** entries in `DEPENDENCY_RISK_REGISTER.md` and a lockfile
+  policy check for `postgres`, `drift`, `drift_dev`, `build_runner`,
+  `flutter_riverpod`, `go_router`, and an S3 client (or a small SigV4 signer).
+- **Worktree + branch.** CI: add a Postgres 17 service container for the v2
+  server job, and add v2 jobs alongside the v1 ones. Local Postgres helper
+  script for tests (`HELIX_TEST_DATABASE_URL`).
+- **Architecture-test harness** (empty rules that later phases fill in).
+- **User step:** install PostgreSQL 17 on the PC (native Windows installer
+  recommended), and create role `helix` plus databases `helix` and
+  `helix_test`.
+
+### Phase P1 — Protocol v1 (new contract) and `helix_remote_protocol`
+- **Spec:**
+  - REST surface per module (new `openapi.yaml`)
+  - realtime frames
+  - envelope kinds
+  - encrypted content types (text, media, reply, edit, reaction, receipt,
+    delete, poll, location, contact, sticker, system)
+  - errors, pagination, idempotency
+- **Crypto spec:** the device-pair Double Ratchet with DH steps, Sender Keys
+  distribution and rotation, prekey lifecycle, and the safety-number/identity
+  change UX hooks.
+- **Confirm the F1/F2 history model** (§4.4). Update the F1, F2, F3, F4 and
+  F5 protocol docs, `DATA_FLOW`, `METADATA_INVENTORY` and
+  `PRIVACY_CLAIM_MATRIX` (the server now sees less).
+- **The package itself:** DTOs + codecs + golden fixtures + tests.
+- **User checkpoint:** review the metadata and crypto changes before S1.
+
+### Phase S1 — Server platform
+- Config; the Postgres pool and `Db`/`Tx`; the migration runner; the HTTP
+  pipeline and middleware; `RouteRegistry` with public-route declarations.
+- `EventBus` (LISTEN/NOTIFY + in-memory), `EphemeralStore`, `RateLimiter`,
+  outbox and job runner (leases, `SKIP LOCKED`, retries, DLQ), `ObjectStorage`
+  (FS + S3), push/SMS/TURN providers, observability, health.
+- Test harness: a fresh schema per test file on `helix_test`.
+
+### Phase S2 — `identity` + `keys`
+- Registration, password sign-in (HKDF key, lockout), phone OTP, invites,
+  recovery codes, device linking, refresh rotation with reuse detection,
+  `issueDeviceSession`, suspension and admin blocks.
+- Prekeys and bundles, prekey-low events.
+
+### Phase S3 — `messaging` + `realtime`
+- Conversations and membership; mailbox send, fetch, ack and expiry; quotas;
+  stale-device 409.
+- WS gateway with routes in `EphemeralStore`, wake via the bus, replay with
+  credits, typing and presence, and revocation closing sockets.
+- Push via the outbox.
+- `EXPLAIN` tests on hot paths.
+
+### Phase S4 — `people` + `media` + `backup`
+- Profiles, discovery match with budgets (keeps the documented T-5 oracle
+  risk), blocks, privacy, reports.
+- Presigned attachments with reference counts and GC; backups, history
+  backups and backup media.
+
+### Phase S5 — `groups` + `calls` + `group_calls`
+- Roster authority, roles, invites, join links and moderation, with roster
+  events into mailboxes.
+- 1:1 call signaling over the bus, pending calls, TURN credentials and push
+  wake.
+- Group call rooms, links and scheduled calls, only if the app will ship them
+  in A3. Otherwise they are deferred and listed in §13.
+
+### Phase S6 — `federation` + `ops` + `admin` + `compliance`
+- S2S signing and verification, the replay cache in `EphemeralStore`, and
+  outbox relay jobs; home-server group authority.
+- Ops and admin APIs, maintenance mode and feature flags; account deletion
+  orchestration via events.
+
+### Phase S7 — Server hardening
+- Two-node end-to-end test: messages, calls and revocation across nodes.
+- Load harness for authenticated send/receive (k6 or a Dart tool): record p50
+  and p95 at 1k simulated devices on the PC.
+- Security review pass (`/security-review`). Docs: handoff and operability.
+
+### Phase C1 — `helix_remote_db`
+- The drift schema v1 subset needed by the engine; the background isolate;
+  SQLCipher (wrong-key failure and no-plaintext tests, carried from P2-01).
+- FTS5; watch queries; keyset paging; migration test scaffolding.
+
+### Phase C2 — `helix_remote_crypto` v2
+- The full Double Ratchet with DH steps and skipped-key caps.
+- Device-pair sessions, Sender Keys, prekey replenishment logic.
+- Test vectors, and cross-checks against the spec in P1.
+
+### Phase C3 — `helix_remote_api` + `helix_remote_engine` (messaging core)
+- Typed clients per server module, and the WS client.
+- Session manager; inbound and outbound pipelines; direct chats with all
+  content types; people; devices; settings.
+- **Rebuild the CLI on the engine.** End-to-end tests: two CLI clients plus a
+  linked second device through server v2.
+
+### Phase C4 — Engine: groups, calls state, media transfers, backup
+- Sender Keys groups end to end; call signaling state for the calls package;
+  the transfer queue; history backup and restore; device-to-device transfer.
+
+### Phase A1 — App shell
+- The new `lib/` skeleton: Riverpod, go_router, deep links, lifecycle,
+  app lock, notifications, and the FCM background handler running the engine.
+- Sign-in flow with all its rules; the home tabs shell.
+- Rule tests carried over: tokens, tooltips, targets, screenshots allowed,
+  the English-only scan.
+
+### Phase A2 — Chats + conversation + people
+- The WhatsApp-level chat list and conversation.
+- Composer, replies, reactions, edit and delete, receipts, media, voice
+  notes, search (FTS).
+- People search in Chats and Calls; contact info; the rename-writes-to-phone
+  behaviour.
+- Performance budget tests.
+
+### Phase A3 — Calls + groups + settings + devices + backup + profile
+- 1:1 calls: full-screen incoming, foreground service, audio routing.
+- Groups UI and all settings pages. Device management; backup and restore;
+  profile.
+
+### Phase AD — Admin console on the new admin API
+
+### Phase X — Cutover
+- **Delete** `helix_remote/backend/`, `helix_remote_storage`,
+  `helix_remote_sync` and `helix_remote_groups`, plus old tests and dead docs.
+- **Update** AGENTS.md (repo map, schema versions), CI, `scripts/verify.*`,
+  the security docs, the regression matrix and the handoff doc.
+- Merge `architecture-v2` into `main`.
+- **User steps:** create the production DB, add the new `.env` lines (listed
+  exactly by the agent), stop the old backend, run `bin/migrate.dart`, start
+  the new server, update Caddy if the upstream changes, and reinstall the
+  app on phones.
+
+## 11. Tracker
+
+| Phase | Status | Date | Commit | Notes |
+|---|---|---|---|---|
+| 0 Decisions, tooling | not started | | | |
+| P1 Protocol | not started | | | |
+| S1 Server platform | not started | | | |
+| S2 identity + keys | not started | | | |
+| S3 messaging + realtime | not started | | | |
+| S4 people + media + backup | not started | | | |
+| S5 groups + calls | not started | | | |
+| S6 federation + ops + admin | not started | | | |
+| S7 Server hardening | not started | | | |
+| C1 helix_remote_db | not started | | | |
+| C2 crypto v2 | not started | | | |
+| C3 api + engine core + CLI | not started | | | |
+| C4 engine: groups, media, backup | not started | | | |
+| A1 App shell | not started | | | |
+| A2 Chats + conversation + people | not started | | | |
+| A3 Calls, groups, settings, … | not started | | | |
+| AD Admin console | not started | | | |
+| X Cutover | not started | | | |
+
+Phase order: 0 → P1 → S1 → S2 → S3 → (S4, S5, S6 in any order) → S7.
+C1 and C2 may run once P1 is done. C3 needs S3. A1 needs C3. X comes last.
+
+## 12. Change log (plan changes approved by the user)
+
+| Date | Change | Approved in |
+|---|---|---|
+| 2026-09-30 | Plan created (D1–D5). | this session |
+
+## 13. Open questions (resolve in the named phase, record the answer here)
+
+- **P1:** new-device history only from transfer/backup (no server history)?
+  Recommended: yes.
+- **P1:** do locked chats need their own key beyond SQLCipher, or is the lock
+  a UI gate? Recommended: a UI gate, plus hiding the chat from the list and
+  notifications.
+- **S5/A3:** ship group calls in v2, or defer? Today their UI is not wired.
+- **S1:** S3 client dependency vs a small in-house SigV4 signer.
+- **Phase 0:** is Postgres in Docker or native on the PC? Recommended:
+  native.

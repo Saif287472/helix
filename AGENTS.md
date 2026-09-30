@@ -9,6 +9,19 @@ For any non-trivial Helix Remote change, use the project skills:
 `helix-feature` (order of work across backend → API → app → tests → report)
 and `helix-verify` (analyze, test, separate new failures from known ones).
 
+**Never change anything under `helix_local/`** - it is a separate app.
+
+## Architecture v2 rebuild (in progress)
+
+Helix Remote is being rebuilt to the plan of record in
+`helix_remote/docs/architecture/ARCHITECTURE_V2_PLAN.md` (Postgres, stateless
+server modules, drift + Riverpod + a pure-Dart engine, protocol v2). Before
+any v2 work, read it and do only the next unfinished phase in its tracker
+(§11); update the tracker when the phase ends. Changing the target
+architecture needs a user-approved change-log entry (§12). v2 work happens on
+branch `architecture-v2` in a worktree; `main` and this checkout stay the live
+v1 until cutover, and the rest of this file describes v1.
+
 ## Repository map
 
 Two separate Dart/Flutter workspaces; there is no root `pubspec.yaml`.
