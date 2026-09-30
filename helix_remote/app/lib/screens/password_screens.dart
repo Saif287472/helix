@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/password_vault.dart';
 import 'package:helix_remote/app/remote_rest_client.dart';
+import 'package:helix_remote/services/app_logger.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// Keeps a signed-in account without a password on the "create a password"
@@ -149,6 +150,10 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
       widget.onDone?.call();
       if (_isChange && navigator.canPop()) navigator.pop(true);
     } on RemoteRestException catch (e) {
+      AppLogger.instance.warn(
+        'password',
+        'save failed: HTTP ${e.statusCode} ${e.serverCode ?? e.failureKind.name}',
+      );
       if (!mounted) return;
       setState(
         () => _error = switch (e.serverCode) {
@@ -160,7 +165,10 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
             'Could not save the password. Check your connection and try again.',
         },
       );
-    } catch (_) {
+    } catch (e, st) {
+      // The type only: a message could echo input, and this screen holds the
+      // password.
+      AppLogger.instance.warn('password', 'save failed: ${e.runtimeType}', st);
       if (mounted) {
         setState(
           () => _error =

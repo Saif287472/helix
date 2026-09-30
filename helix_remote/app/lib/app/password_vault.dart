@@ -4,6 +4,12 @@ import 'dart:math' as math;
 
 import 'package:cryptography/cryptography.dart';
 
+/// The HKDF salt for derivations that have none: 32 zero bytes, which RFC 5869
+/// defines as the value of an absent salt, so keys are unchanged. An empty
+/// list must not be passed instead - on Android `cryptography_flutter` runs
+/// HMAC natively and Java's `SecretKeySpec` throws on an empty key.
+final List<int> hkdfZeroSalt = List.unmodifiable(List<int>.filled(32, 0));
+
 /// Argon2id cost for a password, as the server stores and hands it back.
 class PasswordKdfParams {
   const PasswordKdfParams({
@@ -92,7 +98,7 @@ class PasswordVault {
     final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
     Future<List<int>> expand(String info) async => (await hkdf.deriveKey(
       secretKey: SecretKey(master),
-      nonce: const [],
+      nonce: hkdfZeroSalt,
       info: utf8.encode(info),
     )).extractBytes();
     return PasswordKeys(

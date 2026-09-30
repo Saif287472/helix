@@ -173,9 +173,43 @@ void main() {
       expect(device['created_at'], isA<int>());
       expect(device['last_seen_at'], isA<int>());
       expect(device['push_enabled'], isFalse);
+      expect(device['push_deliverable'], isFalse);
       expect(device.containsKey('push_token'), isFalse);
       expect(device.containsKey('device_signing_public_key'), isFalse);
       expect(device.containsKey('device_agreement_public_key'), isFalse);
+    },
+  );
+
+  test(
+    'a push token on a server without FCM is not reported as deliverable',
+    () async {
+      await registerUser(
+        accountId: 'push_view_user',
+        phoneHash: 'push_view_phone',
+      );
+      server.db.updateDevicePushToken(
+        'push_view_user',
+        'push_view_user_device',
+        'fcm-token-for-test',
+      );
+
+      final list = await getJson(
+        '/api/v1/ops/users?limit=50&offset=0',
+        token: adminToken,
+      );
+      final users =
+          (jsonDecode(list.body) as Map<String, dynamic>)['users'] as List;
+      final user = users.cast<Map<String, dynamic>>().firstWhere(
+        (u) => u['account_id'] == 'push_view_user',
+      );
+      final device = (user['devices'] as List).single as Map<String, dynamic>;
+      expect(device['push_enabled'], isTrue);
+      expect(
+        device['push_deliverable'],
+        isFalse,
+        reason: 'this test server has no FCM credential',
+      );
+      expect(device.containsKey('push_token'), isFalse);
     },
   );
 

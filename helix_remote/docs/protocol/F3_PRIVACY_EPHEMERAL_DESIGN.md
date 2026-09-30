@@ -58,6 +58,8 @@ set.
 
 ## Platform Limits
 
-Helix stores screenshot/screen-recording policy and documents it as best-effort.
-No UI claims absolute screenshot prevention on platforms where the OS does not
-guarantee it.
+Helix does not block screenshots or screen recording on any screen (the
+per-screen FLAG_SECURE / Windows display-affinity protection was removed on
+2026-09-30 because people need to screenshot chats). Disappearing messages and
+view-once content can therefore be captured by the recipient; no UI claims
+otherwise.

@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart' as crypto_pkg;
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:helix_remote/services/inbound_message_notifier.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
 import 'package:helix_remote/app/account_restriction.dart';
@@ -263,6 +265,8 @@ abstract class RemoteCompositionRootBase {
   set _callService(RemoteCallService? value);
   PushRegistrationService? get _pushRegistration;
   set _pushRegistration(PushRegistrationService? value);
+  InboundMessageNotifier? get _messageNotifier;
+  set _messageNotifier(InboundMessageNotifier? value);
   // Used by composition mixins; private abstract members are not seen as direct references.
   // ignore: unused_element
   RemoteGroupService? get _groupService;
@@ -314,6 +318,9 @@ abstract class RemoteCompositionRootBase {
   void _handleAccountSignal(AccountSignal signal);
   Future<int> restoreHistoryBackup();
   Future<void> _historyBackupOnStart();
+  Future<void> _backUpHistoryForNewDevice();
+  void _scheduleFollowUpRestores();
+  void _cancelFollowUpRestores();
   Future<void> _refreshPeopleOnStart();
 }
 
@@ -424,6 +431,8 @@ class RemoteCompositionRoot extends RemoteCompositionRootBase
   RemoteCallService? _callService;
   @override
   PushRegistrationService? _pushRegistration;
+  @override
+  InboundMessageNotifier? _messageNotifier;
   @override
   RemoteGroupService? _groupService;
   @override

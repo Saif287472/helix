@@ -84,6 +84,9 @@ instructions. `docs/codebase/` is a gitignored code dump - never read it.
   tokens in `helix_remote_ui`; no `Color(0x…)`/`Colors.x` in `app/lib`
   (`phase5_design_tokens_test`). Sign-in pages use `HelixThemes.signIn()`
   (the app icon's blue).
+- **Screenshots are allowed everywhere.** No FLAG_SECURE, no Windows display
+  affinity, no per-screen capture blocking (removed 2026-09-30 - people need
+  to screenshot chats; `screenshots_allowed_test`). Never add it back.
 - Every `IconButton` has a `tooltip:`; tap targets are at least 48 px
   (`phase7_accessibility_test`, which also checks the sign-in page).
 - **No contact requests.** Anyone can message or call anyone who has not
@@ -142,7 +145,7 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ### Known pre-existing test failures
 
-None as of 2026-09-30 (app 483, backend 576, admin 109, api 46, storage 25,
+None as of 2026-09-30 (app 486, backend 577, admin 109, api 46, storage 25,
 sync 13, calls 73 - all passing). Add any failure you confirm is pre-existing here,
 with the date.
 
@@ -153,6 +156,11 @@ with the date.
 - Heredocs containing apostrophes or `\n` break easily: write multi-line
   patches as a Python script in the scratchpad and run it.
 - `tar` needs `--force-local` for `C:` paths.
+- `dart test` in `helix_remote/backend` fails with `PathAccessException` on
+  `.dart_tool/lib/sqlcipher.dll` while the live server runs from this
+  checkout (it holds the DLL). Run backend tests in a short-path worktree
+  (`git worktree add --detach J:/wt/<name> HEAD`, apply the diff, copy
+  untracked files, `flutter pub get`), then remove it.
 - Run `dart format` only on files you changed; the tree is not uniformly
   formatted with the current formatter.
 - Never `robocopy /MIR` Flutter directories (it follows `.plugin_symlinks`

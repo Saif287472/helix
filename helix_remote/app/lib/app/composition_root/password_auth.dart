@@ -211,6 +211,7 @@ mixin RemoteCompositionPassword
     await restoreHistoryBackup();
     setAuthenticated(accessToken);
     await startRuntime();
+    _scheduleFollowUpRestores();
     await reconcileContactsAndRequests();
   }
 

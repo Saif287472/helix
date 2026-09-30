@@ -134,6 +134,9 @@ mixin RemoteCompositionLocalSecurity on RemoteCompositionRootBase {
   }
 
   Future<void> _disposeOnce() async {
+    _cancelFollowUpRestores();
+    unawaited(_messageNotifier?.dispose());
+    _messageNotifier = null;
     LocalNotificationService.setCallActionHandler(null);
     _runtimeSnapshotSub?.cancel();
     _runtimeSnapshotSub = null;

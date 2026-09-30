@@ -67,7 +67,14 @@ the password gets its chats back.
   uploads the result, so any device may write it.
 - Schedule: uploaded at most once a day at app start, or on demand from
   Settings > Account (`app/lib/app/composition_root/history_backup.dart`).
-- Restore: on password sign-in, before the app opens.
+  Also uploaded at once when another device of the account signs in with the
+  password (the `device_linked` event), so the new device is not up to a day
+  behind.
+- Restore: on password sign-in, before the app opens, and again 20 s and 90 s
+  later to pick up the backups the other devices make for it (restores skip
+  messages already present). After that, new messages reach every device
+  directly: each send is encrypted for every active device of every member,
+  including the sender's own other devices.
 - Server: `PUT` / `GET /api/v1/backups/history`, one row per account in
   `history_backups` (blob, size, identity public key), 16 MB limit (413 above
   it). The server cannot decrypt it. When the account identity rotates (SMS

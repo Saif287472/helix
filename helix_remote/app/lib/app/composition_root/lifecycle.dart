@@ -17,6 +17,7 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
     if (DateTime.now().difference(signIn.signedInAt) > _signInAlertWindow) {
       return;
     }
+    unawaited(_backUpHistoryForNewDevice());
     AppLogger.instance.info(
       'SECURITY',
       'new password sign-in on another device',

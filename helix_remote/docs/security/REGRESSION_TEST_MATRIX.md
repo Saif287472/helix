@@ -22,7 +22,7 @@ visible here rather than only in the audit.
 | Finding | Regression test evidence |
 | --- | --- |
 | HIGH-1: unredacted, persistent, user-shared diagnostic log | `app/test/log_redaction_test.dart` — bearer tokens, phone numbers, and response bodies do not survive the write boundary |
-| HIGH-2: screenshots and screen recording expose message content | `app/test/screen_security_test.dart` — acquire/release across nesting and route swaps, plus the Windows runner's `SetWindowDisplayAffinity` handler and its presence in the build |
+| HIGH-2: screenshots and screen recording expose message content | **Accepted, not mitigated (2026-09-30).** Screenshot blocking (FLAG_SECURE / `SetWindowDisplayAffinity`) was removed at the product owner's request because people need to screenshot chats; the recents thumbnail also shows the last screen. `app/test/screenshots_allowed_test.dart` keeps it from returning unnoticed. |
 | HIGH-3: `android:allowBackup` extracts app-private data | `app/test/android_manifest_security_test.dart` — manifest requires `allowBackup=false`, extraction rules, and full-backup content |
 | HIGH-4: lockfile not committed, builds not reproducible | CI `flutter pub get --enforce-lockfile` on both Helix Remote jobs in `.github/workflows/ci.yml`, against a pinned Flutter version |
 | HIGH-5: 403 overloaded, so every permission denial rotates a refresh token | `app/test/remote_rest_client_auth_refresh_test.dart` and `backend/test/phase1_auth_test.dart` — only 401 triggers a refresh; the server reserves 403 for authorization |

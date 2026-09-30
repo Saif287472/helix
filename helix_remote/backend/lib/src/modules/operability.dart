@@ -742,6 +742,11 @@ class OperabilityModule {
     }
 
     final users = db.getAllUsersDetailedPaginated(limit: limit, offset: offset);
+    // A device with a push token still gets nothing when this server has no
+    // working FCM credential, so the console is told both halves.
+    final pushWorks =
+        outboxWorker.pushProviderConfigured &&
+        outboxWorker.pushProviderAvailable;
     final usersWithDevices = users.map((user) {
       final accountId = user['account_id'] as String;
       // Only what the console displays. The raw push token and the device
@@ -757,6 +762,9 @@ class OperabilityModule {
               'created_at': d['created_at'],
               'last_seen_at': d['last_seen_at'],
               'push_enabled': (d['push_token'] as String?)?.isNotEmpty ?? false,
+              'push_deliverable':
+                  pushWorks &&
+                  ((d['push_token'] as String?)?.isNotEmpty ?? false),
             },
           )
           .toList();

@@ -11,6 +11,56 @@ const _historyRestorePendingKey = 'history_backup.restore_pending';
 mixin RemoteCompositionHistoryBackup on RemoteCompositionRootBase {
   static const backupInterval = Duration(hours: 24);
 
+  /// When a device that just signed in with the password restores again.
+  /// Its first restore runs at sign-in, before the account's other devices
+  /// have heard about it; they back up as soon as they do
+  /// ([_backUpHistoryForNewDevice]), and these later passes pick that up, so
+  /// the new device is not left up to a day behind. Restores skip messages
+  /// already present, so repeating one is cheap.
+  @visibleForTesting
+  static List<Duration> followUpRestoreDelays = const [
+    Duration(seconds: 20),
+    Duration(seconds: 90),
+  ];
+
+  final _followUpRestores = <Timer>[];
+
+  @override
+  void _scheduleFollowUpRestores() {
+    _cancelFollowUpRestores();
+    for (final delay in followUpRestoreDelays) {
+      _followUpRestores.add(
+        Timer(delay, () {
+          if (_messagingService == null || _restClient == null) return;
+          unawaited(restoreHistoryBackup());
+        }),
+      );
+    }
+  }
+
+  @override
+  void _cancelFollowUpRestores() {
+    for (final timer in _followUpRestores) {
+      timer.cancel();
+    }
+    _followUpRestores.clear();
+  }
+
+  /// Another device of this account just signed in with the password: upload
+  /// the history now rather than at the next daily backup, so it can restore
+  /// everything up to this moment. Best-effort.
+  @override
+  Future<void> _backUpHistoryForNewDevice() async {
+    try {
+      await backUpHistoryNow();
+    } catch (e) {
+      AppLogger.instance.warn(
+        'HISTORY',
+        'backup for new device failed: ${e.runtimeType}',
+      );
+    }
+  }
+
   Future<({List<int> key, String identityPublicKey})?> _historyKey() async {
     final store = _keyValue;
     if (store == null) return null;

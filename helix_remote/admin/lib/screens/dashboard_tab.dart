@@ -423,8 +423,11 @@ class DashboardTab extends StatelessWidget {
       dot = _off;
       status = 'Firebase Cloud Messaging • Not configured';
       note =
-          'No FCM credentials on this server. Push notifications are '
-          'unavailable; messages arrive over the WebSocket only.';
+          'No FCM credentials on this server, so a phone whose app is closed '
+          'or asleep is not told about new messages or calls. An app still '
+          'running in the background notifies while it stays connected. To '
+          'enable push, set HELIX_REMOTE_FCM_PROJECT_ID and '
+          'HELIX_REMOTE_FCM_SERVICE_ACCOUNT in backend/.env and restart.';
     }
     return _integrationContainer(
       title: 'FCM Push Notification Service',

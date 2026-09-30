@@ -3,6 +3,7 @@ import 'dart:io' show gzip;
 import 'dart:math' as math;
 
 import 'package:cryptography/cryptography.dart';
+import 'package:helix_remote/app/password_vault.dart' show hkdfZeroSalt;
 
 /// Encryption and merging for the automatic text-history backup.
 ///
@@ -24,7 +25,7 @@ class HistoryBackupCodec {
   static Future<List<int>> deriveKey(List<int> identityPrivateKey) async {
     final key = await Hkdf(hmac: Hmac.sha256(), outputLength: 32).deriveKey(
       secretKey: SecretKey(identityPrivateKey),
-      nonce: const [],
+      nonce: hkdfZeroSalt,
       info: utf8.encode('helix.remote.history-backup.v1'),
     );
     return key.extractBytes();

@@ -1395,6 +1395,8 @@ class _UsersTabState extends State<UsersTab> {
                 .inMinutes <
             5;
     final pushEnabled = dev['push_enabled'] == true;
+    // Older servers do not send push_deliverable; fall back to the token.
+    final pushDeliverable = (dev['push_deliverable'] ?? pushEnabled) == true;
 
     final lower = rawName.toLowerCase();
     final icon =
@@ -1543,12 +1545,20 @@ class _UsersTabState extends State<UsersTab> {
             children: [
               if (isActive)
                 _deviceChip(
-                  pushEnabled ? 'Notifications on' : 'Notifications off',
-                  pushEnabled
+                  pushDeliverable
+                      ? 'Push on'
+                      : pushEnabled
+                      ? 'Push token, but server has no FCM'
+                      : 'No push token',
+                  pushDeliverable
                       ? const Color(0xFF059669)
+                      : pushEnabled
+                      ? const Color(0xFFB45309)
                       : const Color(0xFF64748B),
-                  pushEnabled
+                  pushDeliverable
                       ? const Color(0xFFECFDF5)
+                      : pushEnabled
+                      ? const Color(0xFFFFFBEB)
                       : const Color(0xFFF1F5F9),
                 ),
               const Spacer(),

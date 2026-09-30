@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:helix_remote/services/screen_security.dart';
 import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
@@ -40,8 +39,7 @@ enum _ChatFilter { all, unread, favorites, groups, custom }
 
 enum _ConversationSort { recent, name }
 
-class _ConversationListScreenState extends State<ConversationListScreen>
-    with SecureScreenStateMixin {
+class _ConversationListScreenState extends State<ConversationListScreen> {
   late final ConversationListViewModel _viewModel;
   List<RemoteConversation> _conversations = [];
   bool _loaded = false;
