@@ -16,6 +16,7 @@ mixin RemoteCompositionRuntime on RemoteCompositionRootBase {
     // registration must not delay the app becoming usable.
     unawaited(_startPushRegistration());
     unawaited(_historyBackupOnStart());
+    unawaited(_refreshPeopleOnStart());
     await _recoverPendingCalls(reason: 'startup');
     // Load own profile display name after runtime is running
     try {

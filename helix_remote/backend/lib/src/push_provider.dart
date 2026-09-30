@@ -327,15 +327,28 @@ final class FcmPushProvider implements PushProvider {
       'new_sign_in' => _newSignInBody,
       _ => 'You have a new notification',
     };
-    final channelId = isCall ? 'helix_incoming_calls' : 'helix_messages';
-
+    // A call is data-only: the app draws its own ringing notification (the
+    // phone's ringtone, Answer/Decline) and clears it when the call ends. A
+    // system notification alongside it showed a second, plain banner that
+    // nothing could cancel. It lives only as long as a call can ring.
+    final callWake =
+        notificationType == 'incoming_call' || notificationType == 'call_ended';
     final body = jsonEncode({
       'message': {
         'token': token,
-        'notification': {'title': notificationTitle, 'body': notificationBody},
+        if (!callWake)
+          'notification': {
+            'title': notificationTitle,
+            'body': notificationBody,
+          },
         'android': {
           'priority': 'HIGH',
-          'notification': {'channel_id': channelId, 'sound': 'default'},
+          if (callWake) 'ttl': '45s',
+          if (!callWake)
+            'notification': {
+              'channel_id': 'helix_messages',
+              'sound': 'default',
+            },
         },
         'data': stringData,
       },

@@ -42,20 +42,23 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: AppLock.locked,
-      builder: (context, locked, child) => Stack(
-        children: [
-          // Kept alive and out of reach of focus and screen readers while
-          // covered.
-          ExcludeSemantics(
-            excluding: locked,
-            child: ExcludeFocus(excluding: locked, child: child!),
-          ),
-          if (locked) const Positioned.fill(child: _LockScreen()),
-        ],
-      ),
+    return ListenableBuilder(
+      listenable: Listenable.merge([AppLock.locked, AppLock.callInProgress]),
       child: widget.child,
+      builder: (context, child) {
+        final locked = AppLock.locked.value && !AppLock.callInProgress.value;
+        return Stack(
+          children: [
+            // Kept alive and out of reach of focus and screen readers while
+            // covered.
+            ExcludeSemantics(
+              excluding: locked,
+              child: ExcludeFocus(excluding: locked, child: child!),
+            ),
+            if (locked) const Positioned.fill(child: _LockScreen()),
+          ],
+        );
+      },
     );
   }
 }

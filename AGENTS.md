@@ -52,8 +52,8 @@ docs/                        cross-product docs; much of it historical (see bann
 .github/workflows/ci.yml     CI (Remote jobs run in helix_remote/)
 ```
 
-Schema versions: backend SQLite `PRAGMA user_version` **47**; app local DB
-**31**. Bump with a migration block and update the tests that assert them.
+Schema versions: backend SQLite `PRAGMA user_version` **48**; app local DB
+**32**. Bump with a migration block and update the tests that assert them.
 
 ## Read before working in an area
 
@@ -86,6 +86,13 @@ instructions. `docs/codebase/` is a gitignored code dump - never read it.
   (the app icon's blue).
 - Every `IconButton` has a `tooltip:`; tap targets are at least 48 px
   (`phase7_accessibility_test`, which also checks the sign-in page).
+- **No contact requests.** Anyone can message or call anyone who has not
+  blocked them (WhatsApp-style); there is no Contacts tab. People are shown
+  by phone-book name, then nickname, then number, then `~Helix name`
+  (`remote_messaging_service/people.dart`). Renaming someone writes the name
+  to the phone's contacts too. Search for people lives in the Chats and
+  Calls tabs (`screens/people/`). Home is three swipeable tabs: Chats,
+  Calls, Settings.
 - Sign-in always opens on the simple Helix Global page. Personal servers are
   behind the hidden advanced mode (3 taps bottom-right, 2 s apart, reveal it;
   a 4th opens it) or a shared link `https://helix.agiletechbd.com/open#HLX-…`.
@@ -135,8 +142,8 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ### Known pre-existing test failures
 
-None as of 2026-09-28 (app 468, backend 568, admin 109, api 46, storage 25,
-sync 13 - all passing). Add any failure you confirm is pre-existing here,
+None as of 2026-09-30 (app 483, backend 576, admin 109, api 46, storage 25,
+sync 13, calls 73 - all passing). Add any failure you confirm is pre-existing here,
 with the date.
 
 ## Working on Windows

@@ -1477,5 +1477,24 @@ extension BackendDatabaseMigrations on BackendDatabase {
       ''');
       _db.execute('PRAGMA user_version = 47;');
     }
+
+    if (version < 48) {
+      // Who has reached out to whom (a message or a call). Anyone can now
+      // message anyone, so sharing a conversation proves nothing - the
+      // other side may never have answered. A phone number is shown only to
+      // someone its owner has contacted, the way a phone shows the number
+      // of whoever texts or calls it.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS account_reach (
+          from_account_id TEXT NOT NULL
+            REFERENCES accounts(account_id) ON DELETE CASCADE,
+          to_account_id TEXT NOT NULL
+            REFERENCES accounts(account_id) ON DELETE CASCADE,
+          first_at INTEGER NOT NULL,
+          PRIMARY KEY (from_account_id, to_account_id)
+        );
+      ''');
+      _db.execute('PRAGMA user_version = 48;');
+    }
   }
 }

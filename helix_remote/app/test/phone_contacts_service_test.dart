@@ -208,4 +208,10 @@ class _FakePhoneContactsService implements PhoneContactsService {
 
   @override
   Future<List<PhoneBookContact>> loadContacts() async => contacts;
+
+  @override
+  Future<bool> saveName({
+    required String phoneNumber,
+    required String name,
+  }) async => result == PhoneContactsPermissionResult.granted;
 }

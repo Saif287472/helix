@@ -52,6 +52,8 @@ class ContactsModule {
     router.post('/unblock', _unblockHandler);
     router.get('/search', _searchHandler);
     router.post('/match', _matchPhoneHashesHandler);
+    router.post('/people', _peopleHandler);
+    router.post('/sync', _syncSavedContactsHandler);
     router.get('/privacy', _getPrivacyHandler);
     router.post('/privacy', _setPrivacyHandler);
     router.post('/presence', _presenceHeartbeatHandler);
@@ -67,7 +69,8 @@ class ContactsModule {
   /// contacts-sync flow. Self-heals on first call; never rotated afterward,
   /// since that would silently invalidate every existing phone-hash match.
   Future<Response> _discoverySaltHandler(Request request) async {
-    final clientIp = (request.context['client_ip'] as String?) ??
+    final clientIp =
+        (request.context['client_ip'] as String?) ??
         request.headers['x-forwarded-for']?.split(',').first.trim() ??
         '127.0.0.1';
     if (!_allowDiscoverySalt(clientIp)) {
@@ -222,6 +225,92 @@ class ContactsModule {
       expectedActor: 'requester',
       action: 'CANCEL',
       close: (requestId) => db.closeContactRequest(requestId, 'CANCELLED'),
+    );
+  }
+
+  /// Names (and, once they have been in touch, phone numbers) for account
+  /// ids this device sees in chats and calls but has no phone-book entry
+  /// for - the "unknown number" a phone shows for someone not saved.
+  ///
+  /// The number is only returned to someone the account has itself messaged,
+  /// called or saved - never just because the caller wrote to them, since
+  /// anyone can do that. Someone who blocked the caller is left out.
+  Future<Response> _peopleHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
+    }
+    final accountId = auth['account_id'] as String;
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final requested = body['account_ids'];
+    if (requested is! List) {
+      throw AppError.badRequest('account_ids must be a list');
+    }
+    final ids = requested.whereType<String>().toSet();
+    if (ids.length > 200) {
+      throw AppError.badRequest('At most 200 account_ids at a time');
+    }
+
+    final people = <Map<String, dynamic>>[];
+    for (final id in ids) {
+      if (id == accountId) continue;
+      final account = db.getAccount(id);
+      if (account == null || account['status'] == 'BLOCKED') continue;
+      if (db.isBlocked(id, accountId)) continue;
+      final profile = db.getAccountProfile(id);
+      final phone = (account['phone_last4'] as String? ?? '').trim();
+      people.add({
+        'account_id': id,
+        'display_name': profile?['display_name'] as String? ?? '',
+        if (phone.isNotEmpty && db.hasReachedOrSaved(id, accountId))
+          'phone_number': phone,
+      });
+    }
+    return Response.ok(
+      jsonEncode({'people': people}),
+      headers: {'Content-Type': 'application/json'},
+    );
+  }
+
+  /// Records the accounts this user has in their phone book (or named), as
+  /// one-sided contacts - what "My contacts" means for online status and
+  /// group-add settings. Only ids are sent; names never leave the phone.
+  /// Existing blocks are left alone.
+  Future<Response> _syncSavedContactsHandler(Request request) async {
+    final auth = request.context['auth'] as Map<String, dynamic>?;
+    if (auth == null) {
+      throw AppError.forbidden(
+        'Unauthorized',
+        code: RemoteErrorCode.unauthorized,
+      );
+    }
+    final accountId = auth['account_id'] as String;
+    final body =
+        jsonDecode(await request.readAsString()) as Map<String, dynamic>;
+    final requested = body['peer_account_ids'];
+    if (requested is! List) {
+      throw AppError.badRequest('peer_account_ids must be a list');
+    }
+    final ids = requested.whereType<String>().toSet()..remove(accountId);
+    if (ids.length > 1000) {
+      throw AppError.badRequest('At most 1000 peer_account_ids at a time');
+    }
+    var added = 0;
+    for (final id in ids) {
+      if (db.getAccount(id) == null) continue;
+      if (db.isBlocked(accountId, id) || db.areContacts(accountId, id)) {
+        continue;
+      }
+      db.addContact(accountId, id, null);
+      added++;
+    }
+    return Response.ok(
+      jsonEncode({'added': added}),
+      headers: {'Content-Type': 'application/json'},
     );
   }
 

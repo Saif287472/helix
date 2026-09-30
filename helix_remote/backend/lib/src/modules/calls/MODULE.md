@@ -142,3 +142,18 @@ honouring what it negotiated — which is the case this exists to survive.
   nothing resolves to `relay_only` and silently tightens a call that had
   agreed `direct_and_relay`. `_handleRestartOffer` in `remote_call_service`
   sends `ipPrivacy` for exactly this reason.
+- **Anyone can call anyone** (2026-09-30): there is no contact requirement.
+  An offer is refused as `callee is not reachable` only when the callee does
+  not exist or either side has blocked the other. Every offer records
+  `account_reach(caller → callee)` (migration 48), which is what later lets
+  the callee see the caller's number (see `contacts.module.md`).
+- **A second offer on an ANSWERED call is a renegotiation** (ICE restart
+  after a network change), relayed through `_routeSessionSignal` rather than
+  treated as a new call or a duplicate.
+- **Wakes are data-only and only for what needs one.** A device with no
+  socket is woken with `notification_type: incoming_call` for an offer
+  (carrying `expires_at`, so a push delayed past the ring deadline does not
+  ring) and `call_ended` for end/cancel/decline/busy/answered_elsewhere, so
+  its ringing notification goes away. Answers and candidates never wake a
+  device. `push_provider.dart` sends call wakes without a `notification`
+  block, with a 45 s FCM `ttl`; the app draws the ringing notification.

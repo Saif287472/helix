@@ -8,6 +8,8 @@ import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/app/remote_runtime_coordinator.dart';
 import 'package:helix_remote/presentation/conversation_list/conversation_list_view_model.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
+import 'package:helix_remote/screens/people/people_picker_screen.dart';
+import 'package:helix_remote/screens/people/people_search.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_groups/helix_remote_groups.dart';
 import 'package:helix_remote_sync/helix_remote_sync.dart';
@@ -128,32 +130,29 @@ class _ConversationListScreenState extends State<ConversationListScreen>
       _tryRuntimeCoordinator()?.snapshot;
 
   Future<void> _showNewChatPicker() async {
-    final contacts = _viewModel.acceptedContacts();
-    if (!mounted) return;
-    final peerAccountId = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => _ContactPickerSheet(contacts: contacts),
+    final result = await PeoplePickerScreen.open(
+      context,
+      root: widget.root,
+      messagingService: widget.messagingService,
     );
-    if (peerAccountId == null || !mounted) return;
-    final derivedId = _viewModel.conversationIdForPeer(peerAccountId);
-    if (derivedId == null) return;
-    // conversationIdForPeer only derives the ID string - it never creates
-    // the conversation row/membership. Without this, picking a contact
-    // here who has no prior chat opened a ConversationScreen for a
-    // conversation that doesn't exist in the database at all. Guarded by
-    // an existence check because createDirectConversation's upsert resets
-    // last_sequence to 0, which would corrupt an already-existing
-    // conversation's unread/sort state if called again for someone
-    // already chatted with.
-    final alreadyExists = _viewModel.memberIds(derivedId).isNotEmpty;
-    final conversationId = alreadyExists
-        ? derivedId
-        : _viewModel.createDirectConversation(peerAccountId);
-    _openConversation(conversationId);
+    if (result == null || !mounted) return;
+    _onPersonPicked(result.person, result.action);
+  }
+
+  /// Anyone can be messaged or called straight away - no contact request.
+  void _onPersonPicked(RemotePerson person, PersonAction action) {
+    switch (action) {
+      case PersonAction.chat:
+        _openConversation(
+          widget.messagingService.directChatWith(person.accountId),
+        );
+      case PersonAction.voiceCall:
+      case PersonAction.videoCall:
+        _callPerson(
+          person.accountId,
+          isVideo: action == PersonAction.videoCall,
+        );
+    }
   }
 
   void _openConversation(String conversationId) {
@@ -192,13 +191,11 @@ class _ConversationListScreenState extends State<ConversationListScreen>
     final members = _viewModel.memberIds(conversationId);
     final peer = members.where((id) => id != accountId).firstOrNull;
     if (peer == null) return;
-    final contact = _viewModel
-        .acceptedContacts()
-        .where((c) => c.peerAccountId == peer)
-        .firstOrNull;
-    final displayName = contact == null || contact.nickname.isEmpty
-        ? peer
-        : contact.nickname;
+    await _callPerson(peer, isVideo: isVideo);
+  }
+
+  Future<void> _callPerson(String peer, {required bool isVideo}) async {
+    final displayName = widget.messagingService.personName(peer);
     try {
       // Awaited on purpose. `startOutgoingCall` is async and rethrows after
       // it has cleaned up, so without the await its error bypassed this
@@ -212,9 +209,14 @@ class _ConversationListScreenState extends State<ConversationListScreen>
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Call failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The call could not be started. Check your connection and try '
+              'again.',
+            ),
+          ),
+        );
       }
     }
   }
@@ -263,7 +265,9 @@ class _ConversationListScreenState extends State<ConversationListScreen>
 
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
-      list = list.where((c) => c.title.toLowerCase().contains(q)).toList();
+      list = list
+          .where((c) => _resolvedTitle(c).toLowerCase().contains(q))
+          .toList();
     }
     if (_sort == _ConversationSort.name) {
       list = [...list]
@@ -284,9 +288,15 @@ class _ConversationListScreenState extends State<ConversationListScreen>
   bool _hasUnread(RemoteConversation conversation) =>
       _viewModel.unreadCount(conversation.conversationId) > 0;
 
-  String _resolvedTitle(RemoteConversation conv) => conv.title.isNotEmpty
-      ? conv.title
-      : _viewModel.peerDisplayName(conv.conversationId) ?? conv.conversationId;
+  /// A group's own title; for a direct chat, the other person's current
+  /// name (phone book first), so a rename shows everywhere at once.
+  String _resolvedTitle(RemoteConversation conv) {
+    if (!_isGroupConversation(conv)) {
+      final peer = _viewModel.peerDisplayName(conv.conversationId);
+      if (peer != null) return peer;
+    }
+    return conv.title.isNotEmpty ? conv.title : 'Chat';
+  }
 
   void _toggleSelection(RemoteConversation conversation) {
     setState(() {

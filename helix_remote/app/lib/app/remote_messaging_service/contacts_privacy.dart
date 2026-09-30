@@ -246,7 +246,10 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
   /// local-only overrides that feed into [peerDisplayName] - they exist
   /// independently of the `contacts` table since a match can be found for
   /// an account that isn't a Helix contact yet.
-  void recordPhoneContactMatches(Map<String, String> accountIdToPhoneBookName) {
+  void recordPhoneContactMatches(
+    Map<String, String> accountIdToPhoneBookName, {
+    Map<String, String> phoneNumbers = const {},
+  }) {
     if (accountIdToPhoneBookName.isEmpty) return;
     final now = _clock().millisecondsSinceEpoch;
     accountIdToPhoneBookName.forEach((accountId, phoneBookName) {
@@ -256,6 +259,7 @@ mixin RemoteContactsPrivacy on RemoteMessagingServiceBase {
         peerAccountId: accountId,
         phoneBookName: trimmed,
         updatedAt: now,
+        phoneNumber: phoneNumbers[accountId] ?? '',
       );
     });
     _emitChange(const RemoteSyncChange(areas: {RemoteSyncChangeArea.contacts}));

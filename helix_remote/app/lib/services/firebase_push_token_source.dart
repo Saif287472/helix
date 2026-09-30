@@ -24,12 +24,21 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     '[push] background message received id=${message.messageId} '
     'type=$type call_id=$shortCallId keys=${message.data.keys.join(',')}',
   );
-  if (type != 'incoming_call' && type != 'new_message') {
+  if (type != 'incoming_call' &&
+      type != 'call_ended' &&
+      type != 'new_message') {
     debugPrint('[push] background message ignored type=$type');
     return;
   }
 
-  if (type == 'incoming_call' && (callId == null || callId.isEmpty)) return;
+  if ((type == 'incoming_call' || type == 'call_ended') &&
+      (callId == null || callId.isEmpty)) {
+    return;
+  }
+  if (type == 'incoming_call' && _ringingIsOver(message.data)) {
+    debugPrint('[push] background call wake too late call_id=$shortCallId');
+    return;
+  }
 
   try {
     DartPluginRegistrant.ensureInitialized();
@@ -40,7 +49,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       '[push] background local notifications initialized '
       'call_id=$shortCallId',
     );
-    if (type == 'incoming_call') {
+    if (type == 'call_ended') {
+      // The caller hung up, or another of this account's devices answered:
+      // stop ringing here.
+      await LocalNotificationService.cancelIncomingCall(callId!);
+    } else if (type == 'incoming_call') {
       final isVideo = _isVideoCall(message.data);
       final fullScreen =
           await AndroidCallRuntimeService.shouldUseFullScreenIncomingCall();
@@ -160,7 +173,12 @@ class FirebasePushTokenSource implements PushTokenSource {
           'type=$type call_id=$shortCallId',
     );
     try {
-      if (type == 'incoming_call' && callId != null && callId.isNotEmpty) {
+      if (type == 'call_ended' && callId != null && callId.isNotEmpty) {
+        await LocalNotificationService.cancelIncomingCall(callId);
+      } else if (type == 'incoming_call' &&
+          callId != null &&
+          callId.isNotEmpty &&
+          !_ringingIsOver(message.data)) {
         await LocalNotificationService.showIncomingCall(
           callId: callId,
           callerDisplayName: _callerLabel(message.data),
@@ -202,6 +220,15 @@ class FirebasePushTokenSource implements PushTokenSource {
     await _refreshes.close();
     _initialized = false;
   }
+}
+
+/// Whether the call's ringing deadline (sent by the server as `expires_at`,
+/// epoch milliseconds) has clearly passed. The margin covers a phone clock
+/// running a little fast: dropping a real call is worse than a late ring.
+bool _ringingIsOver(Map<String, dynamic> data) {
+  final deadline = int.tryParse('${data['expires_at'] ?? ''}');
+  return deadline != null &&
+      DateTime.now().millisecondsSinceEpoch > deadline + 30000;
 }
 
 bool _isVideoCall(Map<String, dynamic> data) =>

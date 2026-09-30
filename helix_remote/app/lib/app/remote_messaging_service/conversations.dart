@@ -8,12 +8,8 @@ mixin RemoteConversationManagement on RemoteMessagingServiceBase {
   }) {
     final accountId = _requireAccountId();
     final deviceId = _requireDeviceId();
-    final contact = db.getContact(peerAccountId);
-    if (contact == null || contact.status != 'Accepted') {
-      throw StateError(
-        'Direct conversations require an accepted Remote contact',
-      );
-    }
+    // No contact request first: anyone on the server can be messaged, like
+    // a phone number. Blocking is enforced by the server on delivery.
     final id =
         conversationId ?? _stableDirectConversationId(accountId, peerAccountId);
 
@@ -387,27 +383,16 @@ mixin RemoteConversationManagement on RemoteMessagingServiceBase {
   List<String> conversationMemberIds(String conversationId) =>
       db.getConversationMembers(conversationId);
 
-  /// Returns the display name to show for a DM conversation.
-  /// For a 1-to-1 conversation it prefers a phone-book name learned from
-  /// contacts sync, then the peer's nickname from contacts, falling back to
-  /// the raw account ID if neither is known. Returns null for group
-  /// conversations.
+  /// The name to show for a direct conversation's other person (see
+  /// [RemotePeople.personName]): phone-book name, saved name, their number,
+  /// then their Helix name. Null for a conversation without one.
   String? peerDisplayName(String conversationId) {
     final myId = _accountId;
     if (myId == null) return null;
     final members = db.getConversationMembers(conversationId);
     final peerId = members.firstWhere((id) => id != myId, orElse: () => '');
     if (peerId.isEmpty) return null;
-    final phoneBookName = db.phoneContactName(peerId);
-    if (phoneBookName != null && phoneBookName.isNotEmpty) {
-      return phoneBookName;
-    }
-    final contact = db.getContacts().firstWhere(
-      (c) => c.peerAccountId == peerId,
-      orElse: () =>
-          RemoteContact(peerAccountId: peerId, nickname: peerId, status: ''),
-    );
-    return contact.nickname.isNotEmpty ? contact.nickname : peerId;
+    return (this as RemotePeople).personName(peerId);
   }
 
   List<String> recipientDeviceIdsForConversation(String conversationId) {

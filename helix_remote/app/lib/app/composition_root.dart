@@ -314,6 +314,7 @@ abstract class RemoteCompositionRootBase {
   void _handleAccountSignal(AccountSignal signal);
   Future<int> restoreHistoryBackup();
   Future<void> _historyBackupOnStart();
+  Future<void> _refreshPeopleOnStart();
 }
 
 class RemoteCompositionRoot extends RemoteCompositionRootBase

@@ -26,6 +26,7 @@ part 'remote_messaging_service/message_crypto.dart';
 part 'remote_messaging_service/message_decryption.dart';
 part 'remote_messaging_service/message_event_location.dart';
 part 'remote_messaging_service/message_sending.dart';
+part 'remote_messaging_service/people.dart';
 part 'remote_messaging_service/personalization.dart';
 part 'remote_messaging_service/sync_outbox.dart';
 
@@ -230,6 +231,7 @@ class RemoteMessagingService extends RemoteMessagingServiceBase
     with
         RemoteMessagingCore,
         RemoteContactsPrivacy,
+        RemotePeople,
         RemoteConversationManagement,
         RemoteMessageSending,
         RemoteEventLocationSending,

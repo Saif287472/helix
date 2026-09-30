@@ -350,6 +350,9 @@ extension BackendAccountsDevicesRepository on BackendDatabase {
       'blocked': _selectWhere('blocked_accounts', 'account_id = ?', [
         accountId,
       ]),
+      'reached_out_to': _selectWhere('account_reach', 'from_account_id = ?', [
+        accountId,
+      ]),
       'conversations': _selectWhere(
         'conversations',
         'conversation_id IN (SELECT conversation_id FROM conversation_members WHERE account_id = ?)',

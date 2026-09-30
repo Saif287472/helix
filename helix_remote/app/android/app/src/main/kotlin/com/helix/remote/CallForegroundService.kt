@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 
@@ -23,12 +25,49 @@ class CallForegroundService : Service() {
             ACTION_START -> {
                 val caller = intent.getStringExtra(EXTRA_CALLER) ?: "Unknown caller"
                 val isVideo = intent.getBooleanExtra(EXTRA_IS_VIDEO, false)
-                startForeground(NOTIFICATION_ID, buildNotification(caller, isVideo))
-                return START_STICKY
+                if (!startAsForeground(buildNotification(caller, isVideo), isVideo)) {
+                    // Nothing the call is allowed to hold in the background:
+                    // the call still works while Helix is on screen.
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+                return START_NOT_STICKY
             }
         }
         return START_NOT_STICKY
     }
+
+    /**
+     * Starts as a foreground service holding only what this call may use.
+     * On Android 14+ a type whose runtime permission is missing (the camera
+     * on a voice call, say) throws a SecurityException and crashes the app,
+     * so the types are named explicitly instead of taking the manifest's.
+     */
+    private fun startAsForeground(notification: Notification, isVideo: Boolean): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification)
+            return true
+        }
+        var types = 0
+        if (granted(android.Manifest.permission.RECORD_AUDIO)) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        }
+        if (isVideo && granted(android.Manifest.permission.CAMERA)) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        }
+        if (types == 0) return false
+        return try {
+            startForeground(NOTIFICATION_ID, notification, types)
+            true
+        } catch (_: RuntimeException) {
+            // Started from the background where Android refuses it
+            // (ForegroundServiceStartNotAllowedException) or a type refused.
+            false
+        }
+    }
+
+    private fun granted(permission: String): Boolean =
+        checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
     private fun buildNotification(caller: String, isVideo: Boolean): Notification {
         ensureChannel()
@@ -40,7 +79,7 @@ class CallForegroundService : Service() {
             launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentImmutableFlag()
         )
-        val title = if (isVideo) "Video call in progress" else "Audio call in progress"
+        val title = if (isVideo) "Ongoing video call" else "Ongoing voice call"
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -49,8 +88,10 @@ class CallForegroundService : Service() {
         }
         return builder
             .setSmallIcon(applicationInfo.icon)
-            .setContentTitle(title)
-            .setContentText(caller)
+            .setContentTitle(caller)
+            .setContentText(title)
+            .setUsesChronometer(true)
+            .setShowWhen(true)
             .setContentIntent(contentIntent)
             .setCategory(Notification.CATEGORY_CALL)
             .setOngoing(true)

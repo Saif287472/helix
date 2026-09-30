@@ -22,6 +22,11 @@ enum PhoneContactsPermissionResult { granted, denied }
 abstract class PhoneContactsService {
   Future<PhoneContactsPermissionResult> requestPermission();
   Future<List<PhoneBookContact>> loadContacts();
+
+  /// Names [phoneNumber] [name] in the phone's contacts: renames the entry
+  /// that has this number, or creates one. False when the user refused
+  /// permission or the entry belongs to a read-only account.
+  Future<bool> saveName({required String phoneNumber, required String name});
 }
 
 class DevicePhoneContactsService implements PhoneContactsService {
@@ -37,6 +42,49 @@ class DevicePhoneContactsService implements PhoneContactsService {
       fc.PermissionStatus.limited => PhoneContactsPermissionResult.granted,
       _ => PhoneContactsPermissionResult.denied,
     };
+  }
+
+  @override
+  Future<bool> saveName({
+    required String phoneNumber,
+    required String name,
+  }) async {
+    final wanted = RemoteAccountValidation.normalizePhoneNumber(phoneNumber);
+    if (!RemoteAccountValidation.isValidPhoneNumber(wanted) ||
+        name.trim().isEmpty) {
+      return false;
+    }
+    final status = await fc.FlutterContacts.permissions.request(
+      fc.PermissionType.readWrite,
+    );
+    if (status != fc.PermissionStatus.granted &&
+        status != fc.PermissionStatus.limited) {
+      return false;
+    }
+    final newName = fc.Name(first: name.trim());
+    final contacts = await fc.FlutterContacts.getAll(
+      properties: {fc.ContactProperty.name, fc.ContactProperty.phone},
+    );
+    final existing = contacts.where(
+      (c) => c.phones.any(
+        (p) => RemoteAccountValidation.normalizePhoneNumber(p.number) == wanted,
+      ),
+    );
+    try {
+      if (existing.isNotEmpty) {
+        await fc.FlutterContacts.update(existing.first.copyWith(name: newName));
+      } else {
+        await fc.FlutterContacts.create(
+          fc.Contact(
+            name: newName,
+            phones: [fc.Phone(number: wanted)],
+          ),
+        );
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
@@ -108,4 +156,26 @@ Map<String, Set<String>> groupPhoneBookHashesByName({
     }
   }
   return hashesByName;
+}
+
+/// The normalized number behind each phone-book hash, so a match can be
+/// remembered with its number (for renaming it back into the phone book).
+Map<String, String> phoneBookNumbersByHash({
+  required List<PhoneBookContact> contacts,
+  required String discoverySaltBase64,
+}) {
+  final numbers = <String, String>{};
+  for (final contact in contacts) {
+    for (final rawNumber in contact.phoneNumbers) {
+      final normalized = RemoteAccountValidation.normalizePhoneNumber(
+        rawNumber,
+      );
+      if (!RemoteAccountValidation.isValidPhoneNumber(normalized)) continue;
+      numbers.putIfAbsent(
+        phoneHash(discoverySaltBase64, normalized),
+        () => normalized,
+      );
+    }
+  }
+  return numbers;
 }

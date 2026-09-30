@@ -96,6 +96,10 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     };
     pc.onIceGatheringState = (state) {
       _diag(callId, 'ice_gathering_state ${_shortEnum(state)}');
+      if (state == webrtc.RTCIceGatheringState.RTCIceGatheringStateComplete) {
+        final waiter = _gatheringDone.remove(callId);
+        if (waiter != null && !waiter.isCompleted) waiter.complete();
+      }
     };
     pc.onSignalingState = (state) {
       _diag(callId, 'signaling_state ${_shortEnum(state)}');
@@ -120,6 +124,9 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     required bool video,
   }) async {
     _diag(callId, 'state_create begin video=$video');
+    // A stale mark from an earlier call with this id must not end this one;
+    // a mark set *while* the media is being set up (the user hung up) must.
+    _endedCalls.remove(callId);
     final pc = await _createPeerConnection(callId);
     _diag(callId, 'local_media request video=$video');
     final localStream = await _createLocalStream(video: video);
@@ -144,8 +151,14 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
       localRenderer: localRenderer,
       remoteRenderer: remoteRenderer,
     );
+    if (_endedCalls.contains(callId)) {
+      // Hung up before the media was ready: release the microphone and camera
+      // now, or they stay held and every later call is refused.
+      _diag(callId, 'state_create aborted reason=ended_during_setup');
+      await _releaseState(state);
+      throw const CallEndedDuringSetup();
+    }
     _calls[callId] = state;
-    _endedCalls.remove(callId);
     _emitMedia(callId, state);
     state.qualityTimer = Timer.periodic(
       _qualityPollingInterval,
@@ -162,7 +175,7 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     _diag(callId, 'create_offer done sdp_len=${offer.sdp?.length ?? 0}');
     await state.pc.setLocalDescription(offer);
     _diag(callId, 'set_local_offer done');
-    return offer.sdp ?? '';
+    return _sdpWithCandidates(callId, state, offer.sdp ?? '');
   }
 
   @override
@@ -186,7 +199,7 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     _diag(callId, 'create_answer done sdp_len=${answer.sdp?.length ?? 0}');
     await state.pc.setLocalDescription(answer);
     _diag(callId, 'set_local_answer done');
-    return answer.sdp ?? '';
+    return _sdpWithCandidates(callId, state, answer.sdp ?? '');
   }
 
   @override
@@ -320,6 +333,11 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
       _diag(callId, 'end_call ignored reason=missing_state');
       return;
     }
+    await _releaseState(state);
+    _diag(callId, 'end_call cleanup_done');
+  }
+
+  Future<void> _releaseState(_PeerConnectionState state) async {
     state.qualityTimer?.cancel();
     await _ignoreCleanup(state.pc.close);
     await _ignoreCleanup(state.pc.dispose);
@@ -334,8 +352,39 @@ class RemoteWebRtcCallEngine implements RemoteCallEngine {
     });
     await _ignoreCleanup(state.localRenderer.dispose);
     await _ignoreCleanup(state.remoteRenderer.dispose);
-    _diag(callId, 'end_call cleanup_done');
   }
+
+  final Map<String, Completer<void>> _gatheringDone = {};
+
+  /// Waits (briefly) for ICE gathering so the SDP handed to signalling already
+  /// carries this side's candidates. A callee woken by a push, or reached
+  /// over REST, may never receive the separate candidate messages that were
+  /// sent while it was offline - with relay-only TURN a call cannot connect
+  /// without them. Candidates still trickle as usual afterwards.
+  Future<String> _sdpWithCandidates(
+    String callId,
+    _PeerConnectionState state,
+    String fallback,
+  ) async {
+    if (state.pc.iceGatheringState !=
+        webrtc.RTCIceGatheringState.RTCIceGatheringStateComplete) {
+      final waiter = _gatheringDone.putIfAbsent(callId, Completer<void>.new);
+      await waiter.future.timeout(
+        _gatheringWait,
+        onTimeout: () => _diag(callId, 'ice_gathering wait timed_out'),
+      );
+      _gatheringDone.remove(callId);
+    }
+    if (_endedCalls.contains(callId)) return fallback;
+    try {
+      final local = await state.pc.getLocalDescription();
+      final sdp = local?.sdp;
+      if (sdp != null && sdp.isNotEmpty) return sdp;
+    } catch (_) {}
+    return fallback;
+  }
+
+  static const _gatheringWait = Duration(milliseconds: 2500);
 
   @override
   Future<void> dispose() async {

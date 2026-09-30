@@ -121,3 +121,12 @@ abstract interface class RemoteCallEngine {
   Future<void> endCall(String callId);
   Future<void> dispose();
 }
+
+/// The call was ended while its media was still being set up; nothing is
+/// left running.
+class CallEndedDuringSetup implements Exception {
+  const CallEndedDuringSetup();
+
+  @override
+  String toString() => 'The call ended before it started.';
+}

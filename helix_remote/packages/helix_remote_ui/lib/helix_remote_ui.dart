@@ -165,6 +165,11 @@ abstract final class HelixCallColors {
   /// Answer, and the connected indicator.
   static const answerCall = Color(0xFF4CAF50);
 
+  /// The "return to call" bar: a deeper green, so white text on it reads
+  /// at 5:1.
+  static const callBar = Color(0xFF1E7B3A);
+  static const onCallBar = Color(0xFFFFFFFF);
+
   /// A control that cannot be actioned yet — distinct from an idle one, so
   /// "not available" never reads as "available but unlit".
   static const controlDisabled = Color(0xFF9E9E9E);
@@ -177,6 +182,28 @@ abstract final class HelixCallColors {
 
   /// Participant is sharing their screen.
   static const participantSharing = Color(0xFF448AFF);
+
+  /// The 1:1 call surface: a calm dark gradient from [surfaceTop] to
+  /// [surfaceBottom], shown whenever there is no video to fill the screen.
+  static const surfaceTop = Color(0xFF1C2B31);
+  static const surfaceBottom = Color(0xFF0A1114);
+
+  /// The rounded tray that holds the in-call controls. Semi-opaque so it
+  /// reads the same over the call surface and over live video.
+  static const controlPanel = Color(0xCC1A252A);
+
+  /// Fill behind an idle round control in the tray.
+  static const controlIdle = Color(0x29FFFFFF);
+
+  /// Fill behind a control whose feature is switched on (muted, speaker on,
+  /// camera off) — a solid light disc so the state is legible at a glance.
+  static const controlToggled = Color(0xFFF1F4F5);
+
+  /// Icon on [controlToggled].
+  static const onControlToggled = Color(0xFF101418);
+
+  /// Inline notice behind a friendly call error or warning.
+  static const noticeSurface = Color(0xE62A3439);
 }
 
 /// Severity colours for status affordances — message delivery state, group

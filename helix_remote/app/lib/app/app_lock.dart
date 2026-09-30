@@ -13,6 +13,10 @@ abstract final class AppLock {
   /// True while the lock screen is covering the app.
   static final locked = ValueNotifier<bool>(false);
 
+  /// A call is ringing or connected. Like a phone's lock screen, the lock
+  /// then stays out of the call's way; it covers the app again afterwards.
+  static final callInProgress = ValueNotifier<bool>(false);
+
   /// Replaceable in tests; the real one shows the system unlock prompt.
   @visibleForTesting
   static Future<bool> Function(String reason) authenticator = _systemPrompt;

@@ -228,6 +228,41 @@ extension BackendContactsRepository on BackendDatabase {
     return res.isNotEmpty;
   }
 
+  /// Records that [fromAccountId] messaged or called [toAccountId].
+  void recordReach(String fromAccountId, String toAccountId, int now) {
+    if (fromAccountId == toAccountId) return;
+    final stmt = _db.prepare('''
+      INSERT OR IGNORE INTO account_reach (from_account_id, to_account_id, first_at)
+      SELECT ?, ?, ?
+      WHERE EXISTS (SELECT 1 FROM accounts WHERE account_id = ?)
+        AND EXISTS (SELECT 1 FROM accounts WHERE account_id = ?);
+    ''');
+    stmt.execute([fromAccountId, toAccountId, now, fromAccountId, toAccountId]);
+    stmt.close();
+  }
+
+  /// Whether [ownerAccountId] has shown [viewerAccountId] their number: they
+  /// messaged or called the viewer, or saved the viewer as a contact. Having
+  /// merely been messaged by the viewer does not count - anyone can do that.
+  bool hasReachedOrSaved(String ownerAccountId, String viewerAccountId) {
+    final stmt = _db.prepare('''
+      SELECT 1 FROM account_reach
+      WHERE from_account_id = ? AND to_account_id = ?
+      UNION ALL
+      SELECT 1 FROM contacts
+      WHERE account_id = ? AND peer_account_id = ? AND status = 'ACCEPTED'
+      LIMIT 1;
+    ''');
+    final res = stmt.select([
+      ownerAccountId,
+      viewerAccountId,
+      ownerAccountId,
+      viewerAccountId,
+    ]);
+    stmt.close();
+    return res.isNotEmpty;
+  }
+
   bool areContacts(String accountId, String peerAccountId) {
     final stmt = _db.prepare(
       "SELECT 1 FROM contacts WHERE account_id = ? AND peer_account_id = ? AND status = 'ACCEPTED';",

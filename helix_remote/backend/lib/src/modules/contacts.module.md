@@ -8,6 +8,8 @@ for why these exist.
 
 Contact relationships (add/remove/block/unblock), the contact-request
 lifecycle (create/accept/reject/cancel), phone-hash contact discovery,
+people lookups (names and, when allowed, numbers of accounts the caller
+talks to), saved-contacts sync,
 account search, presence, per-account privacy settings, and abuse reporting
 (reports + admin safety actions).
 
@@ -34,6 +36,8 @@ session.
 | POST | `/add`, `/remove`, `/block`, `/unblock` | respective handlers | All take `peer_account_id`. |
 | GET | `/search` | `_searchHandler` | Rate-limited (`accountSearchMinuteLimit`, 30/min); min 3-char query. |
 | POST | `/match` | `_matchPhoneHashesHandler` | Rate-limited (`contactsMatchDailyLimit`, 5/day) and batch-capped (`contactsMatchBatchLimit`, 500). |
+| POST | `/people` | `_peopleHandler` | `account_ids` (max 200) -> display name, plus `phone_number` only when that person reached out to the caller or saved them. Blocked/missing accounts are left out. |
+| POST | `/sync` | `_syncSavedContactsHandler` | `peer_account_ids` (max 1000) of the caller's phone-book matches, saved one-way as ACCEPTED contacts. Returns `{added}`. |
 | GET / POST | `/privacy` | `_getPrivacyHandler` / `_setPrivacyHandler` | Presence/last-seen visibility + discoverability flags. |
 | POST | `/presence` | `_presenceHeartbeatHandler` | Updates the caller device's last-seen timestamp. |
 | GET | `/presence/<accountId>` | `_presenceHandler` | Presence of another account, filtered by that account's privacy settings. |
@@ -87,3 +91,13 @@ responses (`_createRequestHandler`, `_searchHandler`,
 - **`/discovery-salt` self-heals but never rotates** - see the handler's own
   doc comment for why (rotating would silently invalidate every existing
   phone-hash match).
+- **No contact request is needed to talk** (2026-09-30). Messaging and calls
+  are open to any account that has not blocked (or been blocked by) the
+  other, like WhatsApp. The request routes remain for older clients; the
+  current app never sends one - "saving" someone is a one-sided
+  `contacts` row.
+- **A number is shown only to people who have reason to see it.**
+  `hasReachedOrSaved(owner, viewer)` is true when the owner messaged or
+  called the viewer (`account_reach`, recorded by `messaging.dart` on send
+  and `calls/signaling.dart` on offer) or has the viewer in their contacts.
+  Sharing a conversation is *not* enough - anyone can create one with anyone.

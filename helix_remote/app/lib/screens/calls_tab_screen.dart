@@ -5,6 +5,9 @@ import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/presentation/calls/calls_tab_view_model.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
+import 'package:helix_remote/screens/people/dial_pad.dart';
+import 'package:helix_remote/screens/people/people_picker_screen.dart';
+import 'package:helix_remote/screens/people/people_search.dart';
 import 'package:helix_remote/screens/scheduled_calls_screen.dart';
 import 'package:helix_remote_domain/models.dart'
     show RemoteContact, ScheduledCall;
@@ -14,7 +17,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 part 'calls_tab/widgets_primary.dart';
 part 'calls_tab/widgets_secondary.dart';
-part 'calls_tab/new_call_sheet.dart';
+part 'calls_tab/call_history_row.dart';
 
 class CallsTabScreen extends StatefulWidget {
   const CallsTabScreen({
@@ -101,35 +104,25 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
     );
   }
 
-  String _peerName(String peerId) {
-    try {
-      final convId = _viewModel.conversationIdForPeer(peerId);
-      if (convId != null) {
-        final name = _viewModel.peerDisplayName(convId);
-        if (name != null && name.isNotEmpty) return name;
-      }
-    } catch (e) {
-      // Falls through to the contact-list lookup below, so the UI still
-      // resolves a name where it can.
-      AppLogger.instance.warn('calls_tab', 'peer name lookup failed: \$e');
-    }
-    for (final contact in _viewModel.acceptedContacts()) {
-      if (contact.peerAccountId == peerId && contact.nickname.isNotEmpty) {
-        return contact.nickname;
-      }
-    }
-    return peerId;
-  }
+  String _peerName(String peerId) => widget.messagingService.personName(peerId);
 
-  String _peerIdentifier(String peerId) {
-    try {
-      final contact = _viewModel.acceptedContacts().firstWhere(
-        (c) => c.peerAccountId == peerId,
-      );
-      if (contact.nickname.isNotEmpty) return contact.peerAccountId;
-    } catch (_) {}
-    return peerId;
-  }
+  /// The number under the name, like a phone's call log.
+  String _peerIdentifier(String peerId) =>
+      widget.messagingService.peerPhoneNumber(peerId) ?? '';
+
+  /// People to show as call shortcuts: named contacts first.
+  List<RemoteContact> get _shortcutPeople => widget.messagingService
+      .people()
+      .where((p) => !p.isUnsaved)
+      .take(12)
+      .map(
+        (p) => RemoteContact(
+          peerAccountId: p.accountId,
+          nickname: p.name,
+          status: 'Accepted',
+        ),
+      )
+      .toList(growable: false);
 
   List<_CallHistoryRow> get _filteredHistory {
     final q = _query.trim().toLowerCase();
@@ -342,12 +335,11 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
                     ),
                   ),
                 _QuickActions(
-                  contacts: _viewModel.acceptedContacts(),
+                  contacts: _shortcutPeople,
                   recentRows: _history,
                   onNewCall: () => _showNewCallPicker(context),
                   onSchedule: _openScheduledCalls,
-                  onKeypad: () =>
-                      _showPlaceholder('Keypad is not available yet'),
+                  onKeypad: _openDialPad,
                   onFavorites: () => _showPlaceholder(
                     'Favorite calls are ready for Helix shortcuts',
                   ),
@@ -366,7 +358,11 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
                     ),
                   ),
                 ),
-                Expanded(child: _buildHistory(theme, cs)),
+                Expanded(
+                  child: _query.trim().isEmpty
+                      ? _buildHistory(theme, cs)
+                      : _buildSearchResults(theme),
+                ),
               ],
             ),
       floatingActionButton: FloatingActionButton.small(
@@ -377,6 +373,84 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
         child: const Icon(Icons.add_call),
       ),
     );
+  }
+
+  /// One search over the call log and everyone reachable - a number typed
+  /// in can be called straight away.
+  Widget _buildSearchResults(ThemeData theme) {
+    final rows = _filteredHistory;
+    return ListView(
+      padding: HelixInsets.only(bottom: 112),
+      children: [
+        if (rows.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              'Recent calls',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+        for (final row in rows.take(20))
+          _CallHistoryTile(
+            row: row,
+            isSelected: false,
+            isSelectionMode: false,
+            onTap: () => _openCallInfo(row),
+            onLongPress: () {},
+            onAvatarTap: () => _showQuickContactPopup(row),
+            onQuickCall: () => _callBack(
+              row.peerId,
+              isVideo: row.isVideo,
+              peerDisplayName: row.peerName,
+            ),
+          ),
+        PeopleSearchResults(
+          root: widget.root,
+          messagingService: widget.messagingService,
+          query: _query,
+          forCalls: true,
+          showInvites: false,
+          onPick: _onPersonPicked,
+        ),
+      ],
+    );
+  }
+
+  void _onPersonPicked(RemotePerson person, PersonAction action) {
+    if (action == PersonAction.chat) {
+      _openChatWith(person.accountId, person.name);
+      return;
+    }
+    _callBack(
+      person.accountId,
+      isVideo: action == PersonAction.videoCall,
+      peerDisplayName: person.name,
+    );
+  }
+
+  Future<void> _openDialPad() async {
+    final number = await showDialPad(context);
+    if (number == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final person = await widget.root.findPersonByPhone(number);
+      if (!mounted) return;
+      if (person == null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('$number is not on Helix yet.')),
+        );
+        return;
+      }
+      _onPersonPicked(person, PersonAction.voiceCall);
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Could not look up that number. Try again.'),
+        ),
+      );
+    }
   }
 
   Widget _buildHistory(ThemeData theme, ColorScheme cs) {
@@ -401,7 +475,7 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
             const SizedBox(height: 4),
             Text(
               _history.isEmpty
-                  ? 'Start your first call from Helix contacts.'
+                  ? 'Tap + to call anyone on Helix, or use the keypad.'
                   : 'Try a different search.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
@@ -460,20 +534,28 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
         peerDisplayName: peerDisplayName,
       );
     } catch (e) {
+      AppLogger.instance.warn(
+        'calls_tab',
+        'call start failed: ${e.runtimeType}',
+      );
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Call failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The call could not be started. Check your connection and try '
+              'again.',
+            ),
+          ),
+        );
       }
     }
   }
 
-  void _messagePeer(_CallHistoryRow row) {
-    final conversationId = _viewModel.conversationIdForPeer(row.peerId);
-    if (conversationId == null) {
-      _showPlaceholder('No Helix chat exists for this contact yet');
-      return;
-    }
+  void _messagePeer(_CallHistoryRow row) =>
+      _openChatWith(row.peerId, row.peerName);
+
+  void _openChatWith(String peerId, String peerName) {
+    final conversationId = widget.messagingService.directChatWith(peerId);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ConversationScreen(
@@ -482,16 +564,10 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
           attachmentService: _tryAttachmentService(),
           groupService: _tryGroupService(),
           callsAvailable: _tryCallsAvailable(),
-          onStartAudioCall: () => _callBack(
-            row.peerId,
-            isVideo: false,
-            peerDisplayName: row.peerName,
-          ),
-          onStartVideoCall: () => _callBack(
-            row.peerId,
-            isVideo: true,
-            peerDisplayName: row.peerName,
-          ),
+          onStartAudioCall: () =>
+              _callBack(peerId, isVideo: false, peerDisplayName: peerName),
+          onStartVideoCall: () =>
+              _callBack(peerId, isVideo: true, peerDisplayName: peerName),
         ),
       ),
     );
@@ -581,22 +657,15 @@ class _CallsTabScreenState extends State<CallsTabScreen> {
     );
   }
 
-  void _showNewCallPicker(BuildContext context) {
-    final contacts = _viewModel.acceptedContacts();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => _NewCallSheet(
-        contacts: contacts,
-        onCall: (peerId, {required isVideo, peerDisplayName}) {
-          Navigator.of(ctx).pop();
-          _callBack(peerId, isVideo: isVideo, peerDisplayName: peerDisplayName);
-        },
-      ),
+  Future<void> _showNewCallPicker(BuildContext context) async {
+    final result = await PeoplePickerScreen.open(
+      context,
+      root: widget.root,
+      messagingService: widget.messagingService,
+      forCalls: true,
     );
+    if (result == null || !mounted) return;
+    _onPersonPicked(result.person, result.action);
   }
 
   void _openScheduledCalls() {

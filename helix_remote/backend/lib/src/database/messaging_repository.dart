@@ -2,6 +2,17 @@ part of '../database.dart';
 
 extension BackendMessagingRepository on BackendDatabase {
   // Conversations
+  /// The conversation's type (`DIRECT`, `GROUP`), or null when it does not
+  /// exist.
+  String? conversationType(String conversationId) {
+    final stmt = _db.prepare(
+      'SELECT type FROM conversations WHERE conversation_id = ?;',
+    );
+    final res = stmt.select([conversationId]);
+    stmt.close();
+    return res.isEmpty ? null : res.first['type'] as String?;
+  }
+
   void createConversation(
     String conversationId,
     String type,

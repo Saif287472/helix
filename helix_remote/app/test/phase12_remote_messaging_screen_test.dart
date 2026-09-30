@@ -10,8 +10,8 @@ import 'package:helix_remote/app/composition_root.dart';
 import 'package:helix_remote/app/remote_config.dart';
 import 'package:helix_remote/app/remote_attachment_service.dart';
 import 'package:helix_remote/app/remote_messaging_service.dart';
-import 'package:helix_remote/screens/contacts_screen.dart';
 import 'package:helix_remote/screens/conversation_list_screen.dart';
+import 'package:helix_remote/screens/people/people_picker_screen.dart';
 import 'package:helix_remote/screens/conversation_screen.dart';
 import 'package:helix_remote_api/api/realtime_envelope.dart';
 import 'package:helix_remote_api/api/rest_client.dart';
@@ -686,153 +686,6 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('P07 contact screen exposes pending request actions', (
-    tester,
-  ) async {
-    service.recordIncomingContactRequest(
-      requestId: 'cr_carol',
-      peerAccountId: 'carol',
-      nickname: 'Carol',
-    );
-    service.sendContactRequest(requestId: 'cr_dan', peerAccountId: 'dan');
-
-    final dir = Directory.systemTemp.createTempSync('p07_widget_');
-    addTearDown(() => dir.deleteSync(recursive: true));
-    final root = RemoteCompositionRoot.production(
-      databaseDirectory: dir.path,
-      devConfig: _devConfig(dir.path),
-    );
-    addTearDown(root.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ContactsScreen(messagingService: service, root: root),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.text('PendingReceived'), findsOneWidget);
-    expect(find.byTooltip('Accept request'), findsOneWidget);
-    expect(find.text('Cancel'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Accept request'));
-    await tester.pump();
-    expect(db.getContact('carol')!.status, 'Accepted');
-    expect(find.text('Contact request accepted'), findsOneWidget);
-
-    await tester.tap(find.text('Cancel'));
-    await tester.pump();
-    expect(db.getContact('dan'), isNull);
-    expect(db.getContactRequest('cr_dan')!.status, 'Cancelled');
-  });
-
-  testWidgets(
-    'P07 phone-book overrides feed into the contacts list and surface '
-    'not-yet-added matches as suggestions',
-    (tester) async {
-      // Bob is already an accepted contact (nickname 'Bob' from setUp); a
-      // phone-book match should override that display without touching the
-      // persisted nickname. Dave has no contact row at all - he should show
-      // up as a suggestion the user can add.
-      service.recordPhoneContactMatches({
-        'bob': 'Bobby (Phone)',
-        'dave': 'Dave M.',
-      });
-
-      final dir = Directory.systemTemp.createTempSync('p07b_widget_');
-      addTearDown(() => dir.deleteSync(recursive: true));
-      final root = RemoteCompositionRoot.production(
-        databaseDirectory: dir.path,
-        devConfig: _devConfig(dir.path),
-      );
-      addTearDown(root.dispose);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ContactsScreen(messagingService: service, root: root),
-        ),
-      );
-      await tester.pump();
-
-      // Existing contact's tile now shows the phone-book name, not the
-      // stored nickname - peerDisplayName()'s resolution order, applied
-      // here without mutating the underlying contact record.
-      expect(find.text('Bobby (Phone)'), findsOneWidget);
-      expect(find.text('Bob'), findsNothing);
-      expect(db.getContact('bob')!.nickname, equals('Bob'));
-
-      // Dave isn't a contact yet - he appears as a phone-book suggestion.
-      expect(find.text('From your phone book'), findsOneWidget);
-      expect(find.text('Dave M.'), findsOneWidget);
-      expect(db.getContact('dave'), isNull);
-
-      await tester.tap(find.text('Add'));
-      await tester.pump();
-
-      expect(db.getContact('dave')!.status, 'PendingSent');
-      expect(db.getContact('dave')!.nickname, equals('Dave M.'));
-      // Now that Dave is a contact, he moves out of the suggestions section.
-      expect(find.text('From your phone book'), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'P09 contact list reacts to inbound contact changes and disposes',
-    (tester) async {
-      final dir = Directory.systemTemp.createTempSync('p09_widget_');
-      addTearDown(() => dir.deleteSync(recursive: true));
-      final root = RemoteCompositionRoot.production(
-        databaseDirectory: dir.path,
-        devConfig: _devConfig(dir.path),
-      );
-      addTearDown(root.dispose);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ContactsScreen(messagingService: service, root: root),
-        ),
-      );
-      await tester.pump();
-      expect(service.debugChangeListenerCount, equals(1));
-
-      expect(find.text('Eve'), findsNothing);
-
-      final applied = service.syncEngine.handleIncomingEnvelope(
-        RemoteRealtimeEnvelope(
-          eventId: 'evt_contact_eve',
-          serverSequence: 1,
-          schemaVersion: 1,
-          timestamp: clock().millisecondsSinceEpoch,
-          type: 'contact_updated',
-          payload: {
-            'peer_account_id': 'eve',
-            'nickname': 'Eve',
-            'status': 'PendingReceived',
-            'request_id': 'cr_eve',
-            'direction': 'received',
-          },
-        ),
-      );
-      expect(applied, isTrue);
-
-      // The change reaches ContactsScreen through two chained broadcast
-      // streams (syncEngine.changes -> RemoteMessagingService._emitChange ->
-      // service.changes -> ContactsScreen's listener). The second hop's
-      // delivery is a real scheduled callback that plain pump()/pumpAndSettle()
-      // calls don't flush under flutter_test's fake-async zone; runAsync()
-      // drains it the same way it's needed for real I/O elsewhere in this
-      // suite.
-      await tester.runAsync(() async {});
-      await tester.pump();
-      expect(find.text('Eve'), findsOneWidget);
-      expect(find.byTooltip('Accept request'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      expect(service.debugChangeListenerCount, equals(0));
-    },
-  );
-
   testWidgets('P10 outbox banner shows queued and failed retry state', (
     tester,
   ) async {
@@ -1044,7 +897,11 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.byTooltip('New chat'));
-      await tester.pumpAndSettle();
+      // The picker checks the phone book in the background; its spinner
+      // never settles in a test, so pump for the route transition instead.
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
       await tester.tap(find.text('Carol'));
       await tester.pumpAndSettle();
 
@@ -1101,13 +958,15 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.byTooltip('New chat'));
-      await tester.pumpAndSettle();
-      // 'Bob' also matches the existing dm_alice_bob tile underneath the
-      // picker sheet, so the tap must be scoped to the picker itself
-      // (DraggableScrollableSheet) rather than matching either occurrence.
+      // The picker checks the phone book in the background; its spinner
+      // never settles in a test, so pump for the route transition instead.
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      // "Bob" appears in the chat list too; tap the one in the picker.
       await tester.tap(
         find.descendant(
-          of: find.byType(DraggableScrollableSheet),
+          of: find.byType(PeoplePickerScreen),
           matching: find.text('Bob'),
         ),
       );

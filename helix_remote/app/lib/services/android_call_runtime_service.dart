@@ -30,7 +30,10 @@ class AndroidCallRuntimeService {
           ) ??
           false;
     } catch (_) {
-      return false;
+      // No activity to ask (a push woke the app in the background): the
+      // phone is then almost always locked or idle, where a call should take
+      // the whole screen - as the phone app does.
+      return true;
     }
   }
 

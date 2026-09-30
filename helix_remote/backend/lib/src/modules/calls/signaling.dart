@@ -45,7 +45,9 @@ mixin CallsSignalingHandlers on CallsModuleBase {
     return _routeSignal(
       accountId: accountId,
       deviceId: deviceId,
-      clientIp: 'websocket',
+      // Per account: every socket shares one address from the server's
+      // point of view, so an IP bucket here was one bucket for everybody.
+      clientIp: 'websocket:$accountId',
       message: message,
     );
   }
@@ -145,6 +147,22 @@ mixin CallsSignalingHandlers on CallsModuleBase {
       return {'status': 'duplicate', 'request_id': requestId};
     }
 
+    // An offer inside a call already answered is a renegotiation (ICE
+    // restart after a network change), not a new call: relay it to the other
+    // side like any other frame of the call.
+    final existing = signal.signalType == 'offer'
+        ? db.getPendingCall(signal.callId)
+        : null;
+    if (existing != null && existing['status'] == 'ANSWERED') {
+      return _routeSessionSignal(
+        accountId: accountId,
+        deviceId: deviceId,
+        signal: signal,
+        requestId: requestId,
+        now: now,
+        trustedRemote: trustedRemote,
+      );
+    }
     if (signal.signalType == 'offer') {
       _increment('attempts');
       return _routeOffer(
@@ -211,13 +229,17 @@ mixin CallsSignalingHandlers on CallsModuleBase {
             'reason': 'callee is not reachable (no federated conversation)',
           };
         }
-      } else if (!db.areContacts(accountId, calleeAccountId) ||
-          !db.areContacts(calleeAccountId, accountId)) {
+      } else if (db.isBlocked(calleeAccountId, accountId) ||
+          db.isBlocked(accountId, calleeAccountId)) {
+        // Like a phone: anyone can call anyone on this server - no contact
+        // request first - unless one of them has blocked the other. The
+        // reason is deliberately the same as for an unknown callee, so a
+        // caller cannot tell they were blocked.
         _increment('rejected');
-        return {
-          'status': 'rejected',
-          'reason': 'callee is not an accepted contact',
-        };
+        return {'status': 'rejected', 'reason': 'callee is not reachable'};
+      } else if (db.getAccount(calleeAccountId) == null) {
+        _increment('rejected');
+        return {'status': 'rejected', 'reason': 'callee is not reachable'};
       }
     }
     if (_accountSignalRate.count('offer:$accountId') > _maxOffersPerMinute) {
@@ -240,6 +262,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
         return {'status': 'rejected', 'reason': 'Federation is not configured'};
       }
       final expiresAt = now + _pendingCallTtlMs;
+      db.recordReach(accountId, calleeAccountId, now);
       db.createPendingCall(
         callId: signal.callId,
         callerAccountId: accountId,
@@ -301,6 +324,7 @@ mixin CallsSignalingHandlers on CallsModuleBase {
         .map((device) => device['device_id'] as String)
         .toList();
     final expiresAt = now + _pendingCallTtlMs;
+    db.recordReach(accountId, calleeAccountId, now);
     db.createPendingCall(
       callId: signal.callId,
       callerAccountId: accountId,
@@ -346,7 +370,11 @@ mixin CallsSignalingHandlers on CallsModuleBase {
       // OS may have suspended its Dart isolate while the connection remains
       // registered. The data-only wake is harmless in the foreground because
       // the app handles the call through the socket there.
-      _enqueueCallWake(targetDeviceId, signal.callId);
+      _enqueueCallWake(
+        targetDeviceId,
+        signal.callId,
+        notificationType: 'incoming_call',
+      );
     }
     if (delivered > 0) {
       _increment('offers_delivered');

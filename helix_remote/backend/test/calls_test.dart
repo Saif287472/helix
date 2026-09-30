@@ -288,7 +288,7 @@ void main() {
     await ws.close();
   });
 
-  test('non-contact call is rejected', () async {
+  test('anyone can be called without a contact request', () async {
     server.db.createAccount('user3', 'charlie', 'charlie_key');
     server.db.registerDevice(
       'device4',
@@ -300,10 +300,29 @@ void main() {
     final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
     final res = await client.post('/api/v1/calls/signal', {
       'target_account_id': 'user3',
+      'payload': {'signal_type': 'offer', 'call_id': 'call_stranger'},
+    });
+    expect(res.status, equals(200));
+  });
+
+  test('a callee who blocked the caller cannot be reached', () async {
+    server.db.createAccount('user3', 'charlie', 'charlie_key');
+    server.db.registerDevice(
+      'device4',
+      'user3',
+      'device4_key',
+      'Charlie Phone',
+    );
+    server.db.blockContact('user3', 'user1');
+
+    final client = TestHttpClient('http://127.0.0.1:$port', tokenA);
+    final res = await client.post('/api/v1/calls/signal', {
+      'target_account_id': 'user3',
       'payload': {'signal_type': 'offer', 'call_id': 'call_blocked'},
     });
     expect(res.status, equals(400));
-    expect(res.body, contains('accepted contact'));
+    expect(res.body, contains('not reachable'));
+    expect(res.body, isNot(contains('block')));
   });
 
   test(
@@ -494,6 +513,56 @@ void main() {
     );
     expect(server.db.getPendingCall('call_long')!['status'], equals('END'));
   });
+
+  test(
+    'a second offer inside an answered call is relayed (ICE restart)',
+    () async {
+      // After a network change the caller renegotiates with a new offer on the
+      // same call id. It belongs to the call already running: it must reach
+      // the other side, not be refused as a duplicate call.
+      final tokenB = server.jwt.generateToken({
+        'account_id': 'user2',
+        'device_id': 'device2',
+      }, const Duration(hours: 1));
+      final clientA = TestHttpClient('http://127.0.0.1:$port', tokenA);
+      final clientB = TestHttpClient('http://127.0.0.1:$port', tokenB);
+
+      await clientA.post('/api/v1/calls/signal', {
+        'target_account_id': 'user2',
+        'payload': {
+          'signal_type': 'offer',
+          'call_id': 'call_restart',
+          'sdp': 'offer-sdp',
+        },
+      });
+      final answer = await clientB.post('/api/v1/calls/signal', {
+        'payload': {
+          'signal_type': 'answer',
+          'call_id': 'call_restart',
+          'sdp': 'answer-sdp',
+        },
+      });
+      expect(answer.status, equals(200));
+
+      final restart = await clientA.post('/api/v1/calls/signal', {
+        'target_account_id': 'user2',
+        'payload': {
+          'signal_type': 'offer',
+          'call_id': 'call_restart',
+          'sdp': 'restart-sdp',
+        },
+      });
+      expect(restart.status, equals(200));
+      final status =
+          (jsonDecode(restart.body) as Map<String, dynamic>)['status'];
+      expect(status, anyOf(equals('delivered'), equals('queued')));
+      expect(
+        server.db.getPendingCall('call_restart')!['status'],
+        equals('ANSWERED'),
+        reason: 'a renegotiation must not reset the call to ringing',
+      );
+    },
+  );
 
   test('expired and out-of-order call signals do not revive a call', () async {
     final client = TestHttpClient('http://127.0.0.1:$port', tokenA);

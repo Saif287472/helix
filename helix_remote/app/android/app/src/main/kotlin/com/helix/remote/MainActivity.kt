@@ -99,10 +99,15 @@ class MainActivity : FlutterFragmentActivity() {
                     val caller = call.argument<String>("callerDisplayName") ?: "Unknown caller"
                     val isVideo = call.argument<Boolean>("isVideo") ?: false
                     val intent = CallForegroundService.startIntent(this, caller, isVideo)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(intent)
-                    } else {
-                        startService(intent)
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                    } catch (_: RuntimeException) {
+                        // Android 12+ refuses a foreground service started
+                        // from the background. The call itself carries on.
                     }
                     result.success(null)
                 }

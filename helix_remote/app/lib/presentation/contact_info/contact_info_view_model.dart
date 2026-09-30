@@ -1,12 +1,17 @@
 import 'package:helix_remote/app/remote_messaging_service.dart';
+import 'package:helix_remote/services/phone_contacts_service.dart';
 import 'package:helix_remote_domain/models.dart';
 import 'package:helix_remote_storage/helix_remote_storage.dart';
 
 /// Messaging and persistence boundary for a contact-information view.
 class ContactInfoViewModel {
-  ContactInfoViewModel(this._messaging);
+  ContactInfoViewModel(
+    this._messaging, {
+    PhoneContactsService phoneContacts = const DevicePhoneContactsService(),
+  }) : _phoneContacts = phoneContacts;
 
   final RemoteMessagingService _messaging;
+  final PhoneContactsService _phoneContacts;
 
   String? peerDisplayName(String conversationId) =>
       _messaging.peerDisplayName(conversationId);
@@ -53,6 +58,17 @@ class ContactInfoViewModel {
     reasonCode: 'user_reported',
     contextHash: contextHash,
   );
-  void saveNickname({required String accountId, required String nickname}) =>
-      _messaging.addContact(peerAccountId: accountId, nickname: nickname);
+
+  /// Renames [accountId] in Helix and in the phone's contacts (the entry with
+  /// their number, or a new one). Returns whether the phone book was updated.
+  Future<bool> rename({required String accountId, required String name}) async {
+    _messaging.renamePerson(accountId, name);
+    final number = _messaging.peerPhoneNumber(accountId);
+    if (number == null) return false;
+    try {
+      return await _phoneContacts.saveName(phoneNumber: number, name: name);
+    } catch (_) {
+      return false;
+    }
+  }
 }

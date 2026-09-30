@@ -123,7 +123,12 @@ mixin RemoteCompositionContactsSync
 
     // Applied incrementally rather than only on a clean finish: a sync that
     // stops at chunk 3 of 5 should keep chunks 1-2, not throw them away.
+    final numbersByHash = phoneBookNumbersByHash(
+      contacts: phoneBookContacts,
+      discoverySaltBase64: salt,
+    );
     final overrides = <String, String>{};
+    final numbers = <String, String>{};
     final results = <String, PhoneContactMatch>{};
     for (final entry in matchesJson.entries) {
       final data = entry.value as Map<String, dynamic>;
@@ -132,13 +137,16 @@ mixin RemoteCompositionContactsSync
       final phoneBookName = hashToName[entry.key] ?? '';
       if (phoneBookName.isEmpty) continue;
       overrides[accountId] = phoneBookName;
+      final number = numbersByHash[entry.key];
+      if (number != null) numbers[accountId] = number;
       results[accountId] = PhoneContactMatch(
         accountId: accountId,
         phoneBookName: phoneBookName,
         displayName: data['display_name'] as String? ?? '',
       );
     }
-    ms.recordPhoneContactMatches(overrides);
+    ms.recordPhoneContactMatches(overrides, phoneNumbers: numbers);
+    unawaited(_syncSavedContacts(overrides.keys.toList()));
 
     final hashesByName = groupPhoneBookHashesByName(
       contacts: phoneBookContacts,
@@ -169,6 +177,116 @@ mixin RemoteCompositionContactsSync
       hashesRemainingToday: hashesRemaining,
       retryAfter: retryAfter,
     );
+  }
+
+  DateTime? _lastPeopleRefresh;
+
+  @override
+  Future<void> _refreshPeopleOnStart() => refreshPeopleProfiles(force: true);
+
+  /// Fetches names (and, once in touch, numbers) for chat and call peers
+  /// this device has neither a phone-book entry nor a profile for, so an
+  /// unsaved person shows as their number rather than an id. Throttled
+  /// unless [force]; never throws.
+  Future<void> refreshPeopleProfiles({bool force = false}) async {
+    final now = DateTime.now();
+    final last = _lastPeopleRefresh;
+    if (!force && last != null && now.difference(last).inSeconds < 20) return;
+    _lastPeopleRefresh = now;
+    final rest = _restClient;
+    final ms = _messagingService;
+    if (rest == null || ms == null) return;
+    try {
+      final ids = ms.peersWithoutProfile();
+      for (var start = 0; start < ids.length; start += 200) {
+        final end = (start + 200).clamp(0, ids.length);
+        final response = await rest.lookupPeople(ids.sublist(start, end));
+        final people = (response['people'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+        ms.recordPeerProfiles(people);
+      }
+    } catch (e) {
+      AppLogger.instance.warn(
+        'people',
+        'profile refresh failed: ${e.runtimeType}',
+      );
+    }
+  }
+
+  /// Looks up who on this server has [phoneNumber] - the "message this
+  /// number" path, for someone not in the phone book. Null when nobody (or
+  /// nobody discoverable) has it.
+  Future<RemotePerson?> findPersonByPhone(String phoneNumber) async {
+    final rest = _requireReady(_restClient, 'restClient');
+    final store = _requireReady(_keyValue, 'keyValue');
+    final ms = _requireReady(_messagingService, 'messagingService');
+    final normalized = RemoteAccountValidation.normalizePhoneNumber(
+      phoneNumber,
+    );
+    if (!RemoteAccountValidation.isValidPhoneNumber(normalized)) return null;
+    final salt = await _getOrFetchDiscoverySalt(store: store, rest: rest);
+    final hash = phoneHash(salt, normalized);
+    final response = await rest.matchPhoneHashes([hash]);
+    final matches = response['matches'] as Map<String, dynamic>? ?? const {};
+    final match = matches[hash] as Map<String, dynamic>?;
+    final accountId = match?['account_id'] as String?;
+    if (accountId == null || accountId.isEmpty) return null;
+    if (accountId == ms.currentAccountId) return null;
+    ms.recordFoundPerson(
+      accountId: accountId,
+      phoneNumber: normalized,
+      helixName: match?['display_name'] as String? ?? '',
+    );
+    return ms.person(accountId);
+  }
+
+  /// Opens (or creates) the direct chat with [accountId].
+  String directChatWith(String accountId) => _requireReady(
+    _messagingService,
+    'messagingService',
+  ).directChatWith(accountId);
+
+  /// Tells the server who is in this user's contacts (ids only), in chunks.
+  /// Best effort: it only affects "My contacts" privacy settings.
+  Future<void> _syncSavedContacts(List<String> accountIds) async {
+    final rest = _restClient;
+    if (rest == null || accountIds.isEmpty) return;
+    try {
+      for (var start = 0; start < accountIds.length; start += 1000) {
+        final end = (start + 1000).clamp(0, accountIds.length);
+        await rest.syncSavedContacts(accountIds.sublist(start, end));
+      }
+    } catch (e) {
+      AppLogger.instance.warn(
+        'people',
+        'contacts sync failed: ${e.runtimeType}',
+      );
+    }
+  }
+
+  /// Names [accountId] [name] here and in the phone's contacts (renaming the
+  /// entry with their number, or creating one). Returns whether the phone
+  /// book was updated too.
+  Future<bool> renamePerson(
+    String accountId,
+    String name, {
+    PhoneContactsService phoneContacts = const DevicePhoneContactsService(),
+  }) async {
+    final ms = _requireReady(_messagingService, 'messagingService');
+    ms.renamePerson(accountId, name);
+    unawaited(_syncSavedContacts([accountId]));
+    final number = ms.peerPhoneNumber(accountId);
+    if (number == null) return false;
+    try {
+      return await phoneContacts.saveName(phoneNumber: number, name: name);
+    } catch (e) {
+      AppLogger.instance.warn(
+        'people',
+        'phone book rename failed: ${e.runtimeType}',
+      );
+      return false;
+    }
   }
 
   /// Chunk size for contact discovery. Matches the server's per-request cap

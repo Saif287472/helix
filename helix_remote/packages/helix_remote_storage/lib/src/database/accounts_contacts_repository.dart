@@ -365,17 +365,92 @@ mixin RemoteAccountsContactsRepository on HelixRemoteDatabaseBase {
     required String peerAccountId,
     required String phoneBookName,
     required int updatedAt,
+    String phoneNumber = '',
   }) {
+    // Keeps a number learned before when this match carries none.
     final stmt = _db.prepare('''
-      INSERT OR REPLACE INTO phone_contact_names (
+      INSERT INTO phone_contact_names (
         peer_account_id,
         phone_book_name,
-        updated_at
+        updated_at,
+        phone_number
       )
-      VALUES (?, ?, ?);
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(peer_account_id) DO UPDATE SET
+        phone_book_name = excluded.phone_book_name,
+        updated_at = excluded.updated_at,
+        phone_number = CASE WHEN excluded.phone_number = ''
+          THEN phone_contact_names.phone_number
+          ELSE excluded.phone_number END;
     ''');
-    stmt.execute([peerAccountId, phoneBookName, updatedAt]);
+    stmt.execute([peerAccountId, phoneBookName, updatedAt, phoneNumber]);
     stmt.close();
+  }
+
+  /// The number behind a phone-book match, when the sync recorded one.
+  String? phoneContactNumber(String peerAccountId) {
+    final stmt = _db.prepare(
+      'SELECT phone_number FROM phone_contact_names WHERE peer_account_id = ?;',
+    );
+    final res = stmt.select([peerAccountId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    final number = res.first['phone_number'] as String? ?? '';
+    return number.isEmpty ? null : number;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Peer profiles: what the server says about people this device talks to
+  // (their Helix name and, once in touch, their phone number).
+  // ---------------------------------------------------------------------------
+
+  void savePeerProfile({
+    required String peerAccountId,
+    required String displayName,
+    required String phoneNumber,
+    required int updatedAt,
+  }) {
+    final stmt = _db.prepare('''
+      INSERT INTO peer_profiles (
+        peer_account_id, display_name, phone_number, updated_at
+      ) VALUES (?, ?, ?, ?)
+      ON CONFLICT(peer_account_id) DO UPDATE SET
+        display_name = excluded.display_name,
+        phone_number = CASE WHEN excluded.phone_number = ''
+          THEN peer_profiles.phone_number
+          ELSE excluded.phone_number END,
+        updated_at = excluded.updated_at;
+    ''');
+    stmt.execute([peerAccountId, displayName, phoneNumber, updatedAt]);
+    stmt.close();
+  }
+
+  /// `{display_name, phone_number, updated_at}` for [peerAccountId].
+  Map<String, Object?>? peerProfile(String peerAccountId) {
+    final stmt = _db.prepare(
+      'SELECT display_name, phone_number, updated_at FROM peer_profiles '
+      'WHERE peer_account_id = ?;',
+    );
+    final res = stmt.select([peerAccountId]);
+    stmt.close();
+    if (res.isEmpty) return null;
+    return Map<String, Object?>.from(res.first);
+  }
+
+  /// Every stored peer profile, keyed by account id.
+  Map<String, Map<String, Object?>> peerProfiles() {
+    final res = _db.select(
+      'SELECT peer_account_id, display_name, phone_number, updated_at '
+      'FROM peer_profiles;',
+    );
+    return {
+      for (final row in res)
+        row['peer_account_id'] as String: {
+          'display_name': row['display_name'],
+          'phone_number': row['phone_number'],
+          'updated_at': row['updated_at'],
+        },
+    };
   }
 
   String? phoneContactName(String peerAccountId) {

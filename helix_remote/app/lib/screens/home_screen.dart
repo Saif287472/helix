@@ -2,14 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:helix_remote/app/composition_root.dart';
+import 'package:helix_remote/app/remote_attachment_service.dart';
+import 'package:helix_remote/app/remote_messaging_service.dart';
 import 'package:helix_remote/screens/call_screen.dart';
 import 'package:helix_remote/screens/calls_tab_screen.dart';
-import 'package:helix_remote/screens/contacts_screen.dart';
 import 'package:helix_remote/screens/conversation_list_screen.dart';
+import 'package:helix_remote/screens/conversation_screen.dart';
 import 'package:helix_remote/screens/settings_screen.dart';
 import 'package:helix_remote/services/app_logger.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
-import 'package:helix_remote_sync/helix_remote_sync.dart';
+import 'package:helix_remote_groups/helix_remote_groups.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.root, this.onChangeServerUrl});
@@ -23,8 +26,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
-  int _pendingContactRequests = 0;
-  StreamSubscription<RemoteSyncChange>? _changeSub;
   StreamSubscription<RemoteCallStatus?>? _callSub;
   bool _callScreenShowing = false;
 
@@ -32,63 +33,69 @@ class _HomeScreenState extends State<HomeScreen> {
   /// the bar below.
   final PageController _pages = PageController();
 
+  /// The call running now, shown as a "return to call" bar while its
+  /// screen is minimised.
+  RemoteCallStatus? _liveCall;
+
   @override
   void initState() {
     super.initState();
-    _changeSub = widget.root.messagingService.changes.listen(_onRemoteChange);
     _callSub = widget.root.callService.callStatusChanges.listen(_onCallStatus);
-    _refreshBadge();
-  }
-
-  void _onRemoteChange(RemoteSyncChange change) {
-    if (change.affects(RemoteSyncChangeArea.contacts)) {
-      _refreshBadge();
+    // A call already ringing or connected when Home appears (the app was
+    // opened from the call notification) is shown at once.
+    final active = widget.root.callService.activeCall;
+    if (active != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _onCallStatus(active),
+      );
     }
   }
+
+  static bool _isLive(RemoteCallStatus status) => switch (status.state) {
+    RemoteCallState.declined ||
+    RemoteCallState.busy ||
+    RemoteCallState.failed ||
+    RemoteCallState.ended => false,
+    _ => true,
+  };
 
   void _onCallStatus(RemoteCallStatus? status) {
     if (!mounted) return;
-    final shouldShowCallScreen =
-        status != null &&
-        !(status.state == RemoteCallState.ringing &&
-            status.direction == kCallDirectionIncoming);
-    if (shouldShowCallScreen && !_callScreenShowing) {
-      _callScreenShowing = true;
-      AppLogger.instance.info(
-        'CALL_NAV',
-        'pushing call screen state=${status.state.name} '
-            'direction=${status.direction} peer=${status.peerAccountId}',
-      );
-      Navigator.of(context)
-          .push<void>(
-            MaterialPageRoute<void>(
-              settings: const RouteSettings(name: '/call'),
-              fullscreenDialog: true,
-              builder: (_) => _CallScreenWrapper(root: widget.root),
-            ),
-          )
-          .then((_) => _callScreenShowing = false);
+    final live = status != null && _isLive(status) ? status : null;
+    if (live?.callId != _liveCall?.callId ||
+        (live == null) != (_liveCall == null)) {
+      setState(() => _liveCall = live);
+    } else {
+      _liveCall = live;
     }
+    // Only a live call opens the screen - ringing included. A call that is
+    // already over never pops a screen up just to say so.
+    if (live != null && !_callScreenShowing) _openCallScreen(live);
   }
 
-  void _refreshBadge() {
-    try {
-      final count = widget.root.messagingService
-          .contactRequests()
-          .where((r) => r.direction == 'received' && r.status == 'Pending')
-          .length;
-      if (mounted) setState(() => _pendingContactRequests = count);
-    } catch (e) {
-      AppLogger.instance.warn(
-        'home',
-        'contact request badge refresh failed: \$e',
-      );
-    }
+  void _openCallScreen(RemoteCallStatus status) {
+    _callScreenShowing = true;
+    AppLogger.instance.info(
+      'CALL_NAV',
+      'pushing call screen state=${status.state.name} '
+          'direction=${status.direction}',
+    );
+    Navigator.of(context)
+        .push<void>(
+          MaterialPageRoute<void>(
+            settings: const RouteSettings(name: '/call'),
+            fullscreenDialog: true,
+            builder: (_) => _CallScreenWrapper(root: widget.root),
+          ),
+        )
+        .then((_) {
+          _callScreenShowing = false;
+          if (mounted) setState(() {});
+        });
   }
 
   @override
   void dispose() {
-    _changeSub?.cancel();
     _callSub?.cancel();
     _pages.dispose();
     super.dispose();
@@ -106,33 +113,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasPending = _pendingContactRequests > 0;
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      body: PageView(
-        controller: _pages,
-        onPageChanged: (index) => setState(() => _tab = index),
+      body: Column(
         children: [
-          for (final page in <Widget>[
-            ConversationListScreen(
-              messagingService: widget.root.messagingService,
-              root: widget.root,
+          if (_liveCall != null && !_callScreenShowing)
+            _ReturnToCallBar(
+              status: _liveCall!,
+              onTap: () => _openCallScreen(_liveCall!),
             ),
-            CallsTabScreen(
-              root: widget.root,
-              messagingService: widget.root.messagingService,
+          Expanded(
+            // The bar already covers the status bar area.
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: _liveCall != null && !_callScreenShowing,
+              child: PageView(
+                controller: _pages,
+                onPageChanged: (index) => setState(() => _tab = index),
+                children: [
+                  for (final page in <Widget>[
+                    ConversationListScreen(
+                      messagingService: widget.root.messagingService,
+                      root: widget.root,
+                    ),
+                    CallsTabScreen(
+                      root: widget.root,
+                      messagingService: widget.root.messagingService,
+                    ),
+                    SettingsScreen(
+                      root: widget.root,
+                      messagingService: widget.root.messagingService,
+                      onChangeServerUrl: widget.onChangeServerUrl,
+                    ),
+                  ])
+                    _KeepAlivePage(child: page),
+                ],
+              ),
             ),
-            ContactsScreen(
-              messagingService: widget.root.messagingService,
-              root: widget.root,
-            ),
-            SettingsScreen(
-              root: widget.root,
-              messagingService: widget.root.messagingService,
-              onChangeServerUrl: widget.onChangeServerUrl,
-            ),
-          ])
-            _KeepAlivePage(child: page),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -146,36 +164,108 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         selectedIndex: _tab,
         onDestinationSelected: _selectTab,
-        destinations: [
-          const NavigationDestination(
+        destinations: const [
+          NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
             label: 'Chats',
           ),
-          const NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.call_outlined),
             selectedIcon: Icon(Icons.call),
             label: 'Calls',
           ),
           NavigationDestination(
-            icon: Badge(
-              isLabelVisible: hasPending,
-              label: Text('$_pendingContactRequests'),
-              child: const Icon(Icons.people_outline),
-            ),
-            selectedIcon: Badge(
-              isLabelVisible: hasPending,
-              label: Text('$_pendingContactRequests'),
-              child: const Icon(Icons.people),
-            ),
-            label: 'Contacts',
-          ),
-          const NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings),
             label: 'Settings',
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The bar across the top while a call's screen is minimised - tap to go
+/// back to it, like the phone app's "return to call".
+class _ReturnToCallBar extends StatefulWidget {
+  const _ReturnToCallBar({required this.status, required this.onTap});
+
+  final RemoteCallStatus status;
+  final VoidCallback onTap;
+
+  @override
+  State<_ReturnToCallBar> createState() => _ReturnToCallBarState();
+}
+
+class _ReturnToCallBarState extends State<_ReturnToCallBar> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  String get _label {
+    final started = widget.status.startedAt;
+    if (widget.status.state != RemoteCallState.active || started == null) {
+      return switch (widget.status.state) {
+        RemoteCallState.ringing
+            when widget.status.direction == kCallDirectionIncoming =>
+          'Incoming call',
+        RemoteCallState.reconnecting => 'Reconnecting…',
+        _ => 'Calling…',
+      };
+    }
+    final elapsed = DateTime.now().difference(started);
+    final m = elapsed.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final sec = elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return elapsed.inHours > 0 ? '${elapsed.inHours}:$m:$sec' : '$m:$sec';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: HelixCallColors.callBar,
+      child: SafeArea(
+        bottom: false,
+        child: InkWell(
+          onTap: widget.onTap,
+          child: SizedBox(
+            height: 44,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  widget.status.isVideo ? Icons.videocam : Icons.call,
+                  size: 18,
+                  color: HelixCallColors.onCallBar,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Tap to return to call · ${widget.status.displayName} · $_label',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: HelixCallColors.onCallBar,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -227,7 +317,7 @@ class _CallScreenWrapperState extends State<_CallScreenWrapper> {
   }
 
   void _onStatus(RemoteCallStatus? status) {
-    if (!mounted) return;
+    if (!mounted || _leaving) return;
     final String logMsg;
     if (status == null) {
       logMsg = 'call ended — popping screen';
@@ -244,18 +334,76 @@ class _CallScreenWrapperState extends State<_CallScreenWrapper> {
     setState(() => _status = status);
   }
 
+  /// Set once this screen hands over to a chat, so the call ending does not
+  /// pop the chat that replaced it.
+  bool _leaving = false;
+
   @override
   void dispose() {
     _sub?.cancel();
     super.dispose();
   }
 
+  RemoteMessagingService? get _messaging {
+    try {
+      return widget.root.messagingService;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// "Message" on a ringing call: decline it and open the chat with the
+  /// caller, to write "can't talk now".
+  void _declineAndMessage(RemoteCallStatus status) {
+    final messaging = _messaging;
+    if (messaging == null) return;
+    final String conversationId;
+    try {
+      conversationId = messaging.directChatWith(status.peerAccountId);
+    } catch (_) {
+      return;
+    }
+    _leaving = true;
+    _sub?.cancel();
+    unawaited(widget.root.declineIncomingCall());
+    RemoteAttachmentService? attachments;
+    RemoteGroupService? groups;
+    try {
+      attachments = widget.root.attachmentService;
+    } catch (_) {}
+    try {
+      groups = widget.root.groupService;
+    } catch (_) {}
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => ConversationScreen(
+          conversationId: conversationId,
+          messagingService: messaging,
+          attachmentService: attachments,
+          groupService: groups,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final status = _status ?? widget.root.callService.activeCall;
+    var status = _status ?? widget.root.callService.activeCall;
     if (status == null) return const SizedBox.shrink();
+    final messaging = _messaging;
+    final peerId = status.peerAccountId;
+    if (messaging != null && (status.peerDisplayName ?? '').trim().isEmpty) {
+      status = status.copyWith(peerDisplayName: messaging.personName(peerId));
+    }
+    final number = messaging?.peerPhoneNumber(peerId);
+    final current = status;
     return CallScreen(
-      callStatus: status,
+      callStatus: current,
+      onMinimize: () => Navigator.of(context).maybePop(),
+      peerSubtitle: number != null && number != current.displayName
+          ? number
+          : null,
+      onMessage: messaging == null ? null : () => _declineAndMessage(current),
       onAccept: () => widget.root.acceptIncomingCall(),
       onDecline: () => widget.root.declineIncomingCall(),
       onEnd: () => widget.root.endActiveCall(),

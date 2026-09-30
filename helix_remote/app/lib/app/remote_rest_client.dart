@@ -348,6 +348,14 @@ class HelixRemoteRestClientImpl implements HelixRemoteRestClient {
   );
 
   @override
+  Future<Map<String, dynamic>> syncSavedContacts(List<String> accountIds) =>
+      _request('POST', 'contacts/sync', body: {'peer_account_ids': accountIds});
+
+  @override
+  Future<Map<String, dynamic>> lookupPeople(List<String> accountIds) =>
+      _request('POST', 'contacts/people', body: {'account_ids': accountIds});
+
+  @override
   Future<Map<String, dynamic>> lookupRecovery({
     required String accountId,
     required String recoveryCode,

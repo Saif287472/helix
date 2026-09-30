@@ -373,6 +373,64 @@ void main() {
     db.close();
   });
 
+  group('people without contact requests', () {
+    test('a chat can start with anyone, no contact needed', () {
+      expect(db.getContact('dan'), isNull);
+      final id = service.createDirectConversation(peerAccountId: 'dan');
+      expect(service.conversationMemberIds(id), containsAll(['alice', 'dan']));
+    });
+
+    test('names fall back from phone book to number to Helix name', () {
+      service.createDirectConversation(peerAccountId: 'dan');
+      expect(service.personName('dan'), 'Helix user');
+      expect(service.peersWithoutProfile(), contains('dan'));
+
+      service.recordPeerProfiles([
+        {'account_id': 'dan', 'display_name': 'Dan'},
+      ]);
+      expect(service.personName('dan'), '~Dan');
+      expect(service.peersWithoutProfile(), isNot(contains('dan')));
+
+      service.recordPeerProfiles([
+        {
+          'account_id': 'dan',
+          'display_name': 'Dan',
+          'phone_number': '+8801700000055',
+        },
+      ]);
+      expect(service.personName('dan'), '+8801700000055');
+      expect(service.person('dan').isUnsaved, isTrue);
+
+      service.recordPhoneContactMatches(
+        {'dan': 'Dan Brother'},
+        phoneNumbers: {'dan': '+8801700000055'},
+      );
+      expect(service.personName('dan'), 'Dan Brother');
+      expect(service.person('dan').isUnsaved, isFalse);
+
+      service.renamePerson('dan', 'Danny');
+      expect(service.personName('dan'), 'Danny');
+      expect(service.peerPhoneNumber('dan'), '+8801700000055');
+    });
+
+    test('people lists everyone reachable, named first, never self', () {
+      service.recordPhoneContactMatches({'erin': 'Erin'});
+      service.createDirectConversation(peerAccountId: 'frank');
+      service.recordPeerProfiles([
+        {
+          'account_id': 'frank',
+          'display_name': 'Frank',
+          'phone_number': '+8801700000066',
+        },
+      ]);
+      final people = service.people();
+      final ids = people.map((p) => p.accountId).toList();
+      expect(ids, containsAll(['bob', 'erin', 'frank']));
+      expect(ids, isNot(contains('alice')));
+      expect(ids.last, 'frank', reason: 'unsaved numbers come last');
+    });
+  });
+
   test(
     'Phase 12 direct send stores local ciphertext and sends no plaintext',
     () async {
@@ -1935,10 +1993,8 @@ void main() {
 
   test('P07 service preserves pending requests and gates conversations', () {
     service.sendContactRequest(requestId: 'cr_pending', peerAccountId: 'zara');
-    expect(
-      () => service.createDirectConversation(peerAccountId: 'zara'),
-      throwsStateError,
-    );
+    // No contact request is needed to start a chat any more.
+    expect(service.createDirectConversation(peerAccountId: 'zara'), isNotEmpty);
     expect(
       () => service.sendContactRequest(
         requestId: 'cr_duplicate',

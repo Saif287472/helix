@@ -5,7 +5,7 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
   /// assert against one source of truth instead of a literal that silently
   /// goes stale every time a migration is added - which is exactly what had
   /// happened: two tests still expected 18 after the schema reached 27.
-  static const int latestSchemaVersion = 31;
+  static const int latestSchemaVersion = 32;
 
   int get schemaVersion =>
       _db.select('PRAGMA user_version').first['user_version'] as int;
@@ -600,6 +600,31 @@ mixin RemoteDatabaseMigrations on HelixRemoteDatabaseBase {
           value TEXT NOT NULL
         );
       ''');
+      _db.execute('PRAGMA user_version = 31;');
+    }
+    if (version < 32) {
+      // Anyone can be messaged or called without a contact request, so the
+      // app meets people it has no phone-book entry for. This keeps what the
+      // server told us about them (their Helix name and, once in touch,
+      // their number) and the number behind each phone-book match, so a
+      // rename can be written back to the phone's contacts.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS peer_profiles (
+          peer_account_id TEXT PRIMARY KEY,
+          display_name TEXT NOT NULL DEFAULT '',
+          phone_number TEXT NOT NULL DEFAULT '',
+          updated_at INTEGER NOT NULL
+        );
+      ''');
+      final columns = _db
+          .select('PRAGMA table_info(phone_contact_names);')
+          .map((row) => row['name'] as String)
+          .toSet();
+      if (!columns.contains('phone_number')) {
+        _db.execute(
+          "ALTER TABLE phone_contact_names ADD COLUMN phone_number TEXT NOT NULL DEFAULT '';",
+        );
+      }
       _db.execute('PRAGMA user_version = $latestSchemaVersion;');
     }
   }

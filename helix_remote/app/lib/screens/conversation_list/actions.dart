@@ -1,8 +1,60 @@
 part of '../conversation_list_screen.dart';
 
 extension _ConversationListBody on _ConversationListScreenState {
+  /// People matching the search who are not already among the chats found.
+  Widget _peopleResults(List<RemoteConversation> chats) {
+    final me = _viewModel.currentAccountId;
+    final shown = <String>{
+      for (final chat in chats)
+        if (!_isGroupConversation(chat))
+          ..._viewModel.memberIds(chat.conversationId).where((id) => id != me),
+    };
+    return PeopleSearchResults(
+      root: widget.root,
+      messagingService: widget.messagingService,
+      query: _searchQuery,
+      excludeAccountIds: shown,
+      showInvites: false,
+      onPick: _onPersonPicked,
+    );
+  }
+
   Widget _buildConversationList() {
     final list = _filteredConversations;
+    if (_searchQuery.isNotEmpty) {
+      // Like a phone's messages app: one search finds chats and people -
+      // and any number typed can be messaged directly.
+      return ListView(
+        padding: HelixInsets.only(top: 8, bottom: 112),
+        children: [
+          if (list.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Chats',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          for (final conv in list)
+            _ConversationTile(
+              conversation: conv,
+              title: _resolvedTitle(conv),
+              lastMessagePreview: _lastMessagePreview[conv.conversationId],
+              unreadCount: widget.messagingService
+                  .unreadSummary(conv.conversationId)
+                  .unreadCount,
+              isSelected: false,
+              isSelectionMode: false,
+              isGroup: _isGroupConversation(conv),
+              onTap: () => _openConversation(conv.conversationId),
+              onLongPress: () {},
+            ),
+          _peopleResults(list),
+        ],
+      );
+    }
     if (list.isEmpty) {
       final emptyLabel = _activeFilter == _ChatFilter.unread
           ? 'No unread conversations'

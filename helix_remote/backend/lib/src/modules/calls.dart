@@ -141,7 +141,11 @@ abstract class CallsModuleBase {
     Map<String, dynamic> payload, {
     String? requestId,
   });
-  void _enqueueCallWake(String targetDeviceId, String callId);
+  void _enqueueCallWake(
+    String targetDeviceId,
+    String callId, {
+    required String notificationType,
+  });
   bool _isPendingCalleeDevice({
     required Map<String, dynamic> session,
     required String accountId,

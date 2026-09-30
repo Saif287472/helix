@@ -204,6 +204,22 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
         if (status != null &&
             status.state == RemoteCallState.ringing &&
             status.direction == kCallDirectionIncoming) {
+          // Answer was pressed before this call reached the app (cold start
+          // from the notification, or the offer still on its way).
+          final pending = LocalNotificationService.pendingAccept;
+          if (pending != null &&
+              pending.callId == status.callId &&
+              DateTime.now().difference(pending.at).inSeconds < 60) {
+            LocalNotificationService.pendingAccept = null;
+            unawaited(
+              LocalNotificationService.cancelIncomingCall(status.callId),
+            );
+            unawaited(acceptIncomingCall());
+            if (!_callStatusController.isClosed) {
+              _callStatusController.add(status);
+            }
+            return;
+          }
           lastIncomingCallNotificationId = status.callId;
           unawaited(
             AndroidCallRuntimeService.shouldUseFullScreenIncomingCall().then(
@@ -252,12 +268,33 @@ mixin RemoteCompositionLifecycle on RemoteCompositionRootBase {
           unawaited(LocalNotificationService.cancelOngoingCall());
           unawaited(AndroidCallRuntimeService.stopForegroundCall());
         }
+        AppLock.callInProgress.value =
+            status != null &&
+            (status.state == RemoteCallState.ringing ||
+                status.state == RemoteCallState.dialing ||
+                status.state == RemoteCallState.preparing ||
+                status.state == RemoteCallState.connecting ||
+                status.state == RemoteCallState.active ||
+                status.state == RemoteCallState.reconnecting);
         if (!_callStatusController.isClosed) _callStatusController.add(status);
       });
       LocalNotificationService.setCallActionHandler((action, callId) {
         final active = _callService?.activeCall;
-        if (active == null || active.callId != callId) return;
+        if (active == null || active.callId != callId) {
+          // Not here yet: an Answer is kept (see pendingAccept) and taken up
+          // when the offer arrives; a Decline goes straight to the server so
+          // the caller stops ringing.
+          if (action == LocalNotificationCallAction.decline) {
+            unawaited(
+              _restClient
+                  ?.declinePendingCall(callId)
+                  .then((_) {}, onError: (_) {}),
+            );
+          }
+          return;
+        }
         if (action == LocalNotificationCallAction.accept) {
+          LocalNotificationService.pendingAccept = null;
           unawaited(acceptIncomingCall());
         } else if (action == LocalNotificationCallAction.decline) {
           unawaited(declineIncomingCall());

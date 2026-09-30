@@ -76,6 +76,31 @@ class MessagingModule {
     if (!members.contains(senderAccountId)) {
       members.add(senderAccountId);
     }
+    if (members.toSet().length > 2) {
+      throw AppError.badRequest(
+        'A direct conversation has at most two members',
+      );
+    }
+
+    // Creating is idempotent and never takes over someone else's
+    // conversation: an existing id keeps its members and its sequence.
+    final existingType = db.conversationType(conversationId);
+    if (existingType != null) {
+      if (existingType != 'DIRECT' ||
+          !db.isConversationMember(conversationId, senderAccountId)) {
+        throw AppError.forbidden(
+          'You are not a member of this conversation',
+          code: RemoteErrorCode.notAMember,
+        );
+      }
+      return Response.ok(
+        jsonEncode({
+          'message': 'Conversation already exists',
+          'conversation_id': conversationId,
+          'idempotent': true,
+        }),
+      );
+    }
 
     db.createConversation(conversationId, type, title, members);
     db.logAudit(
@@ -223,7 +248,14 @@ class MessagingModule {
     final federatedResults = <Map<String, dynamic>>[];
 
     // Pre-flight validation: verify recipients, blocking, and device quotas before mutating state
-    final validTargets = <({String recipientDeviceId, String recipientAccountId, String ciphertext})>[];
+    final validTargets =
+        <
+          ({
+            String recipientDeviceId,
+            String recipientAccountId,
+            String ciphertext,
+          })
+        >[];
     for (final entry in envelopeByDeviceId.entries) {
       final recipientDeviceId = entry.key;
       final ciphertext = entry.value['ciphertext'] as String;
@@ -256,7 +288,8 @@ class MessagingModule {
       ));
     }
 
-    final pendingRelays = <({String deviceId, Map<String, dynamic> envelope})>[];
+    final pendingRelays =
+        <({String deviceId, Map<String, dynamic> envelope})>[];
     db.transaction(() {
       final now = DateTime.now().millisecondsSinceEpoch;
       for (final target in validTargets) {
@@ -370,6 +403,10 @@ class MessagingModule {
       }
     }
 
+    final reachedAt = DateTime.now().millisecondsSinceEpoch;
+    for (final memberId in conversationMembers) {
+      db.recordReach(senderAccountId, memberId, reachedAt);
+    }
     db.logAudit(
       senderAccountId,
       senderDeviceId,

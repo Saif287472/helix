@@ -403,11 +403,15 @@ extension _ContactInfoActions on _ContactInfoScreenState {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit nickname'),
+        title: const Text('Edit name'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Display name'),
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Name',
+            helperText: 'Also saved in your phone contacts',
+          ),
         ),
         actions: [
           TextButton(
@@ -423,8 +427,18 @@ extension _ContactInfoActions on _ContactInfoScreenState {
     );
     controller.dispose();
     if (name == null || name.isEmpty) return;
-    _viewModel.saveNickname(accountId: peer, nickname: name);
+    final savedToPhone = await _viewModel.rename(accountId: peer, name: name);
     await _load();
+    if (!savedToPhone && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Saved in Helix. Allow access to contacts to save it in your '
+            'phone too.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<bool> _confirm({

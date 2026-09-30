@@ -130,7 +130,17 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
       payload,
       requestId: requestId,
     );
-    if (!delivered) _enqueueCallWake(targetDeviceId, signal.callId);
+    // Only the end of a call is worth waking a device for: its ringing
+    // notification must go. An answer or candidate for a device that is not
+    // connected is useless, and waking it with "incoming call" for one is
+    // how ghost call notifications appeared.
+    if (!delivered && _endsTheCall(signal.signalType)) {
+      _enqueueCallWake(
+        targetDeviceId,
+        signal.callId,
+        notificationType: 'call_ended',
+      );
+    }
     return {
       'status': delivered ? 'delivered' : 'queued',
       'delivered': delivered,
@@ -160,9 +170,19 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
         'created_at': now,
         'expires_at': session['expires_at'],
       };
-      _deliverSignal(sibling, payload, requestId: requestId);
+      if (!_deliverSignal(sibling, payload, requestId: requestId)) {
+        _enqueueCallWake(sibling, callId, notificationType: 'call_ended');
+      }
     }
   }
+
+  static bool _endsTheCall(String signalType) => const {
+    'end',
+    'cancel',
+    'decline',
+    'busy',
+    'answered_elsewhere',
+  }.contains(signalType);
 
   @override
   bool _deliverSignal(
@@ -182,7 +202,11 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
   }
 
   @override
-  void _enqueueCallWake(String targetDeviceId, String callId) {
+  void _enqueueCallWake(
+    String targetDeviceId,
+    String callId, {
+    required String notificationType,
+  }) {
     final call = db.getPendingCall(callId);
     final isVideo = (call?['is_video'] as int? ?? 0) != 0;
     final callerAccountId = call?['caller_account_id'] as String?;
@@ -195,10 +219,15 @@ mixin CallsDeliveryHelpers on CallsModuleBase {
       eventId,
       'PUSH_NOTIFICATION',
       jsonEncode({
-        'notification_type': 'incoming_call',
+        'notification_type': notificationType,
         'call_id': callId,
         'target_device_id': targetDeviceId,
         'is_video': isVideo,
+        // When the ringing stops: a push that arrives late (FCM holds it
+        // while the phone is in deep sleep) must not ring for a call that
+        // is already over.
+        if (notificationType == 'incoming_call' && call?['expires_at'] != null)
+          'expires_at': call!['expires_at'],
         ...callerIdentity,
       }),
     );

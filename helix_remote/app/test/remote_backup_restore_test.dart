@@ -61,7 +61,7 @@ void main() {
   test('RP5-010: fresh in-memory database has schema version 31', () {
     final db = _freshDb();
     addTearDown(db.close);
-    expect(db.schemaVersion, equals(31));
+    expect(db.schemaVersion, equals(32));
   });
 
   // -------------------------------------------------------------------------

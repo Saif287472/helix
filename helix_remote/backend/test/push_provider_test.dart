@@ -50,17 +50,10 @@ void main() {
         'is_video': 'true',
         'caller_display_name': 'Ada',
       });
-      expect(message['notification'], {
-        'title': 'Incoming video call',
-        'body': 'Ada',
-      });
-      expect(message['android'], {
-        'priority': 'HIGH',
-        'notification': {
-          'channel_id': 'helix_incoming_calls',
-          'sound': 'default',
-        },
-      });
+      // Data-only: the app draws the ringing notification itself; a system
+      // notification next to it could never be cleared when the call ends.
+      expect(message.containsKey('notification'), isFalse);
+      expect(message['android'], {'priority': 'HIGH', 'ttl': '45s'});
     } finally {
       await subscription.cancel();
       await server.close(force: true);

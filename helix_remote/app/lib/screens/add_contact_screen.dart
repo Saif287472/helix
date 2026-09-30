@@ -98,20 +98,14 @@ class _AddContactScreenState extends State<AddContactScreen>
     }
   }
 
+  /// Hands the person back to whoever opened this screen, which opens the
+  /// chat with them - there is no contact request to send first.
   Future<void> _sendRequest(String accountId, String displayName) async {
-    try {
-      widget.messagingService.sendContactRequest(peerAccountId: accountId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Contact request sent to $displayName')),
-      );
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed: $e')));
-    }
+    widget.messagingService.recordPeerProfiles([
+      {'account_id': accountId, 'display_name': displayName},
+    ]);
+    if (!mounted) return;
+    Navigator.of(context).pop(accountId);
   }
 
   Future<void> _handleContactLink(String link) async {
@@ -150,8 +144,8 @@ class _AddContactScreenState extends State<AddContactScreen>
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Send contact request?'),
-          content: Text('Send a Helix contact request to $accountId?'),
+          title: const Text('Start a chat?'),
+          content: const Text('Start an encrypted chat with this person?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -159,7 +153,7 @@ class _AddContactScreenState extends State<AddContactScreen>
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Send request'),
+              child: const Text('Start chat'),
             ),
           ],
         ),
@@ -189,7 +183,7 @@ class _AddContactScreenState extends State<AddContactScreen>
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
         title: Text(
-          'Add Contact',
+          'Find someone',
           style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.bold),
         ),
         bottom: TabBar(
@@ -288,7 +282,7 @@ class _AddContactScreenState extends State<AddContactScreen>
                         onPressed: accountId.isEmpty
                             ? null
                             : () => _sendRequest(accountId, displayName),
-                        child: const Text('Add'),
+                        child: const Text('Message'),
                       ),
                     ),
                   );
@@ -361,7 +355,7 @@ class _AddContactScreenState extends State<AddContactScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'Send this via WhatsApp, email, or any other channel. The link expires in 7 days and opens a confirmation screen before any contact request is sent.',
+            'Send this via WhatsApp, email, or any other channel. The link expires in 7 days and opens a confirmation screen before a chat starts.',
             style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
           ),
           const SizedBox(height: 24),

@@ -38,6 +38,11 @@ mixin GroupCallRestStubs {
     required String phoneHash,
     required String authKey,
   }) async => _passwordNotStubbed('verifyPassword');
+  Future<Map<String, dynamic>> syncSavedContacts(
+    List<String> accountIds,
+  ) async => {'added': accountIds.length};
+  Future<Map<String, dynamic>> lookupPeople(List<String> accountIds) async =>
+      {'people': <Map<String, dynamic>>[]};
   Future<Map<String, dynamic>> lookupRecovery({
     required String accountId,
     required String recoveryCode,

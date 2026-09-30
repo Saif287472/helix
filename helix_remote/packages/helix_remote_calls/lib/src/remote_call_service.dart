@@ -430,13 +430,26 @@ class RemoteCallService {
     );
   }
 
-  void _startIncomingTimer(String callId) {
+  void _startIncomingTimer(String callId, {int? serverDeadlineMs}) {
     _incomingRingTimer?.cancel();
+    // A callee woken by a push gets the offer late; ringing past the server's
+    // own deadline only leads to an Answer the server refuses as expired.
+    var limit = _incomingRingLimit;
+    if (serverDeadlineMs != null) {
+      final left = Duration(
+        milliseconds: serverDeadlineMs - DateTime.now().millisecondsSinceEpoch,
+      );
+      if (left < limit) {
+        limit = left < const Duration(seconds: 5)
+            ? const Duration(seconds: 5)
+            : left;
+      }
+    }
     _diag(
-      'timer start cid=${_cid(callId)} incoming_ring_ms=${_incomingRingLimit.inMilliseconds}',
+      'timer start cid=${_cid(callId)} incoming_ring_ms=${limit.inMilliseconds}',
     );
     _incomingRingTimer = Timer(
-      _incomingRingLimit,
+      limit,
       () => _failCallIfActive(callId, RemoteCallState.ended),
     );
   }
@@ -710,6 +723,12 @@ class RemoteCallService {
 
     try {
       final sdp = await engine.createOffer(callId, video: isVideo);
+      if (_endedWhileSettingUp(callId)) {
+        // Hung up while the camera/microphone and ICE were starting: do not
+        // ring the other side for a call that is already over.
+        await _safeEndCall(callId);
+        return;
+      }
       await _applyDefaultAudioRoute(callId: callId, isVideo: isVideo);
       _transition(RemoteCallState.dialing);
       final receipt = await signalingGateway.sendCallSignal(
@@ -729,6 +748,9 @@ class RemoteCallService {
       _startOutgoingTimers(callId);
     } catch (error) {
       await _safeEndCall(callId);
+      if (error is CallEndedDuringSetup || _endedWhileSettingUp(callId)) {
+        return;
+      }
       _activeCall = RemoteCallStatus(
         callId: callId,
         peerAccountId: peerId,
@@ -819,8 +841,13 @@ class RemoteCallService {
     if (!db.getSilenceUnknownCallers()) return false;
     final caller = signal.callerAccountId ?? signal.peerId ?? '';
     if (caller.isEmpty) return true;
+    // Known = in the phone book, or named by the user in Helix.
+    final phoneBookName = db.phoneContactName(caller);
+    if (phoneBookName != null && phoneBookName.isNotEmpty) return false;
     final contact = db.getContact(caller);
-    return contact == null || contact.status != 'Accepted';
+    return contact == null ||
+        contact.status != 'Accepted' ||
+        contact.nickname.trim().isEmpty;
   }
 
   void _recordSilencedUnknownOffer(RemoteCallSignal signal) {
@@ -861,7 +888,7 @@ class RemoteCallService {
       await _handleRestartOffer(active, signal);
       return;
     }
-    if (active != null) {
+    if (active != null && !_isTerminal(active.state)) {
       _diag(
         'offer busy cid=${_cid(signal.callId)} active=${_cid(active.callId)} state=${active.state.name}',
       );
@@ -896,7 +923,7 @@ class RemoteCallService {
       isSpeakerOn: _defaultSpeakerOn(isVideo: signal.isVideo),
     );
     _emitCallStatus();
-    _startIncomingTimer(signal.callId);
+    _startIncomingTimer(signal.callId, serverDeadlineMs: signal.expiresAt);
   }
 
   Future<void> acceptIncomingCall() async {
@@ -919,6 +946,10 @@ class RemoteCallService {
         offerSdp,
         video: call.isVideo,
       );
+      if (_endedWhileSettingUp(call.callId)) {
+        await _safeEndCall(call.callId);
+        return;
+      }
       await _applyDefaultAudioRoute(callId: call.callId, isVideo: call.isVideo);
       await _flushQueuedIce(call.callId);
       db.setActiveCallMarker(
@@ -941,7 +972,11 @@ class RemoteCallService {
           ipPrivacy: iceConfig.ipPrivacy,
         ),
       );
-    } catch (_) {
+    } catch (error) {
+      if (error is CallEndedDuringSetup || _endedWhileSettingUp(call.callId)) {
+        await _safeEndCall(call.callId);
+        return;
+      }
       await _finishCall(
         call,
         terminalState: RemoteCallState.failed,
@@ -950,6 +985,15 @@ class RemoteCallService {
       );
       rethrow;
     }
+  }
+
+  /// Whether [callId] stopped being the live call while its media was being
+  /// set up (hung up, cancelled by the other side, or replaced).
+  bool _endedWhileSettingUp(String callId) {
+    final current = _activeCall;
+    return current == null ||
+        current.callId != callId ||
+        _isTerminal(current.state);
   }
 
   Future<void> declineIncomingCall() async {

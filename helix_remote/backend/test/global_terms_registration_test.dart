@@ -157,7 +157,7 @@ void main() {
         200,
         reason: await accepted.transform(utf8.decoder).join(),
       );
-      expect(server.db.schemaVersion, 47);
+      expect(server.db.schemaVersion, 48);
       final account = server.db.getAccount('accepted_terms');
       expect(account, isNotNull);
       expect(account!['tos_accepted_at'], isA<int>());
@@ -443,7 +443,7 @@ void main() {
     raw.execute('PRAGMA user_version = 43;');
 
     final migrated = BackendDatabase(raw);
-    expect(migrated.schemaVersion, 47);
+    expect(migrated.schemaVersion, 48);
     migrated.createAccount(
       'legacy_account',
       'helix_legacy_account',
@@ -475,7 +475,7 @@ void main() {
     raw.execute('PRAGMA user_version = 42;');
 
     final migrated = BackendDatabase(raw);
-    expect(migrated.schemaVersion, 47);
+    expect(migrated.schemaVersion, 48);
     final columns = raw
         .select('PRAGMA table_info(accounts);')
         .map((row) => row['name'] as String)
@@ -502,7 +502,7 @@ void main() {
     raw.execute('PRAGMA user_version = 43;');
 
     final migrated = BackendDatabase(raw);
-    expect(migrated.schemaVersion, 47);
+    expect(migrated.schemaVersion, 48);
 
     final tables = raw
         .select("SELECT name FROM sqlite_master WHERE type = 'table';")

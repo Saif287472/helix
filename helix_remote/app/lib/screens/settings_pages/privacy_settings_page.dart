@@ -279,9 +279,9 @@ class _BlockedContactsPageState extends State<BlockedContactsPage> {
                 SettingsTile(
                   icon: Icons.person_off_outlined,
                   color: HelixColorTokens.cFFDC2626,
-                  title: contact.nickname.isEmpty
-                      ? contact.peerAccountId
-                      : contact.nickname,
+                  title: widget.messagingService.personName(
+                    contact.peerAccountId,
+                  ),
                   trailing: TextButton(
                     onPressed: () {
                       widget.messagingService.unblockContact(

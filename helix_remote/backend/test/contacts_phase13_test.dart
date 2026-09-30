@@ -351,6 +351,88 @@ void main() {
     },
   );
 
+  test('people lookup names anyone; numbers only after they reach out', () async {
+    db.createAccount(
+      'dave',
+      'dave',
+      'dave_identity',
+      phoneHash: 'dave_hash',
+      phoneLast4: '+8801700000044',
+    );
+    db.upsertAccountProfile(accountId: 'dave', displayName: 'Dave');
+
+    Future<Map<String, dynamic>> lookup() async {
+      final res = await _json(
+        contacts.router.call(
+          _request(
+            'POST',
+            '/people',
+            authAccount: 'alice',
+            authDevice: 'alice_device',
+            body: {
+              'account_ids': ['dave', 'alice', 'nobody'],
+            },
+          ),
+        ),
+      );
+      expect(res.statusCode, 200);
+      final people = (res.body['people'] as List).cast<Map<String, dynamic>>();
+      expect(people.map((p) => p['account_id']), ['dave']);
+      return people.single;
+    }
+
+    final stranger = await lookup();
+    expect(stranger['display_name'], 'Dave');
+    expect(stranger.containsKey('phone_number'), isFalse);
+
+    // Sharing a conversation proves nothing - anyone can start one.
+    db.createConversation('dm_alice_dave', 'DIRECT', null, ['alice', 'dave']);
+    db.recordReach('alice', 'dave', 1);
+    expect((await lookup()).containsKey('phone_number'), isFalse);
+
+    // Dave writing or calling Alice shows her his number.
+    db.recordReach('dave', 'alice', 2);
+    expect((await lookup())['phone_number'], '+8801700000044');
+
+    db.blockContact('dave', 'alice');
+    final blocked = await _json(
+      contacts.router.call(
+        _request(
+          'POST',
+          '/people',
+          authAccount: 'alice',
+          authDevice: 'alice_device',
+          body: {
+            'account_ids': ['dave'],
+          },
+        ),
+      ),
+    );
+    expect(blocked.body['people'], isEmpty);
+  });
+
+  test('saved contacts sync records ids one way and keeps blocks', () async {
+    db.blockContact('alice', 'carol');
+    final res = await _json(
+      contacts.router.call(
+        _request(
+          'POST',
+          '/sync',
+          authAccount: 'alice',
+          authDevice: 'alice_device',
+          body: {
+            'peer_account_ids': ['bob', 'carol', 'alice', 'ghost'],
+          },
+        ),
+      ),
+    );
+    expect(res.statusCode, 200);
+    expect(res.body['added'], 1);
+    expect(db.areContacts('alice', 'bob'), isTrue);
+    expect(db.areContacts('bob', 'alice'), isFalse);
+    expect(db.isBlocked('alice', 'carol'), isTrue);
+  });
+
   test('Phase 13 contact request quota enforced', () async {
     for (var i = 0; i < ContactsModule.contactRequestDailyLimit; i++) {
       _seedAccount(db, 'quota_$i', 'quota_$i', 'quota_device_$i');

@@ -21,6 +21,9 @@ class StubCallEngine implements RemoteCallEngine {
   /// a server with no TURN relay produces in production.
   Object? createOfferError;
 
+  /// When set, createOffer waits for it - lets a test hang up mid-setup.
+  Completer<void>? offerGate;
+
   @override
   Stream<RemoteCallEngineEvent> get events => _ctrl.stream;
 
@@ -46,6 +49,8 @@ class StubCallEngine implements RemoteCallEngine {
   @override
   Future<String> createOffer(String callId, {bool video = false}) async {
     log.add('createOffer:$callId:video=$video');
+    final gate = offerGate;
+    if (gate != null) await gate.future;
     final error = createOfferError;
     if (error != null) throw error;
     return 'stub_offer_sdp';
@@ -242,6 +247,39 @@ void main() {
     expect(sent!.signalType, equals(kSignalOffer));
     expect(sent.sdp, equals('stub_offer_sdp'));
     expect(sent.isVideo, isFalse);
+  });
+
+  test('hanging up while the call is being set up rings nobody', () async {
+    final svc = makeService();
+    engine.offerGate = Completer<void>();
+    final starting = svc.startOutgoingCall(peerId: 'peer_bob', isVideo: false);
+    await Future<void>.delayed(Duration.zero);
+    await svc.endActiveCall();
+    engine.offerGate!.complete();
+    await starting;
+
+    expect(gateway.lastSignalTo('peer_bob')?.signalType, isNot(kSignalOffer));
+    expect(svc.activeCall, isNull);
+  });
+
+  test('an unknown caller is silenced; a phone-book name is not', () async {
+    db.setSilenceUnknownCallers(enabled: true);
+    db.savePhoneContactName(
+      peerAccountId: 'mum',
+      phoneBookName: 'Mum',
+      updatedAt: 1,
+    );
+    final svc = makeService();
+    await svc.processInboundSignal(
+      const RemoteCallSignal(
+        callId: 'call_mum',
+        signalType: kSignalOffer,
+        callerAccountId: 'mum',
+        callerDeviceId: 'mum_phone',
+        sdp: 'offer',
+      ),
+    );
+    expect(svc.activeCall?.state, RemoteCallState.ringing);
   });
 
   test(

@@ -1,10 +1,30 @@
-import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:helix_remote_calls/helix_remote_calls.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 
-class CallScreen extends StatelessWidget {
+import 'package:helix_remote/screens/call/call_controls.dart';
+import 'package:helix_remote/screens/call/call_format.dart';
+import 'package:helix_remote/screens/call/call_parts.dart';
+import 'package:helix_remote/screens/call/incoming_call_view.dart';
+import 'package:helix_remote/screens/call/video_call_view.dart';
+
+/// The 1:1 call screen for every [RemoteCallState].
+///
+/// - Incoming ringing: full-screen answer surface (Decline / Accept, and
+///   optionally Message).
+/// - Outgoing and voice calls: avatar, name, status or timer, and a compact
+///   one-row control tray.
+/// - Video: full-bleed remote video with a draggable self preview; the
+///   controls fade out after a few seconds and come back on tap.
+/// - Terminal states: the final word ("Call ended") with the timer frozen
+///   and every control disabled.
+///
+/// Back minimises the call through [onMinimize] and never pops the screen
+/// on its own while a minimise target exists; on the incoming screen back
+/// does nothing.
+class CallScreen extends StatefulWidget {
   const CallScreen({
     super.key,
     required this.callStatus,
@@ -15,6 +35,9 @@ class CallScreen extends StatelessWidget {
     this.onSpeaker,
     this.onVideo,
     this.onSwitchCamera,
+    this.onMinimize,
+    this.peerSubtitle,
+    this.onMessage,
   });
 
   final RemoteCallStatus callStatus;
@@ -26,467 +49,373 @@ class CallScreen extends StatelessWidget {
   final void Function({required bool enabled})? onVideo;
   final VoidCallback? onSwitchCamera;
 
-  @override
-  Widget build(BuildContext context) {
-    if (callStatus.state == RemoteCallState.ringing &&
-        callStatus.direction == kCallDirectionIncoming) {
-      return _IncomingCallOverlay(
-        callStatus: callStatus,
-        onAccept: onAccept,
-        onDecline: onDecline,
-      );
-    }
-    return _ActiveCallOverlay(
-      callStatus: callStatus,
-      onEnd: onEnd,
-      onMute: onMute,
-      onSpeaker: onSpeaker,
-      onVideo: onVideo,
-      onSwitchCamera: onSwitchCamera,
-    );
-  }
-}
+  /// Collapse back to the app while the call continues.
+  final VoidCallback? onMinimize;
 
-class _IncomingCallOverlay extends StatelessWidget {
-  const _IncomingCallOverlay({
-    required this.callStatus,
-    required this.onAccept,
-    required this.onDecline,
-  });
+  /// Secondary line under the name, e.g. the peer's phone number.
+  final String? peerSubtitle;
 
-  final RemoteCallStatus callStatus;
-  final VoidCallback? onAccept;
-  final VoidCallback onDecline;
+  /// Incoming screen only: decline and open the chat with the caller.
+  final VoidCallback? onMessage;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: theme.colorScheme.surface,
-      child: SafeArea(
-        child: SizedBox.expand(
-          child: Padding(
-            padding: HelixInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 44,
-                  child: Icon(
-                    callStatus.isVideo ? Icons.video_call : Icons.call,
-                    size: 48,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'Ringing',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Incoming ${callStatus.isVideo ? 'video' : 'audio'} call',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  callStatus.displayName,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 48),
-                Wrap(
-                  alignment: WrapAlignment.spaceEvenly,
-                  runAlignment: WrapAlignment.center,
-                  spacing: 48,
-                  runSpacing: 20,
-                  children: [
-                    _CallActionButton(
-                      icon: Icons.call_end,
-                      label: 'Decline',
-                      color: HelixCallColors.endCall,
-                      onPressed: onDecline,
-                    ),
-                    _CallActionButton(
-                      icon: Icons.call,
-                      label: 'Accept',
-                      color: HelixCallColors.answerCall,
-                      onPressed: onAccept,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  State<CallScreen> createState() => _CallScreenState();
 }
 
-class _ActiveCallOverlay extends StatefulWidget {
-  const _ActiveCallOverlay({
-    required this.callStatus,
-    required this.onEnd,
-    required this.onMute,
-    required this.onSpeaker,
-    required this.onVideo,
-    required this.onSwitchCamera,
-  });
+class _CallScreenState extends State<CallScreen> {
+  static const _autoHideDelay = Duration(seconds: 4);
 
-  final RemoteCallStatus callStatus;
-  final VoidCallback onEnd;
-  final void Function({required bool muted})? onMute;
-  final void Function({required bool enabled})? onSpeaker;
-  final void Function({required bool enabled})? onVideo;
-  final VoidCallback? onSwitchCamera;
+  Timer? _ticker;
+  Timer? _hideTimer;
+  bool _controlsVisible = true;
 
-  @override
-  State<_ActiveCallOverlay> createState() => _ActiveCallOverlayState();
-}
+  /// The call length captured when the call reached a terminal state, so the
+  /// timer stops instead of counting on under "Call ended".
+  Duration? _frozenElapsed;
 
-class _ActiveCallOverlayState extends State<_ActiveCallOverlay> {
-  Offset _previewOffset = const Offset(20, 72);
-  Timer? _durationTimer;
+  RemoteCallStatus get _status => widget.callStatus;
 
   @override
   void initState() {
     super.initState();
-    _durationTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => mounted ? setState(() {}) : null,
-    );
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && isConnectedCallState(_status.state)) setState(() {});
+    });
+    if (isTerminalCallState(_status.state)) _freeze();
+    _syncAutoHide();
+  }
+
+  @override
+  void didUpdateWidget(CallScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final old = oldWidget.callStatus;
+    if (old.callId != _status.callId) {
+      _frozenElapsed = null;
+      _controlsVisible = true;
+    }
+    if (isTerminalCallState(_status.state) &&
+        (!isTerminalCallState(old.state) || old.callId != _status.callId)) {
+      _freeze();
+    }
+    if (_autoHideEligible(old) != _autoHideEligible(_status)) {
+      _controlsVisible = true;
+      _syncAutoHide();
+    }
   }
 
   @override
   void dispose() {
-    _durationTimer?.cancel();
+    _ticker?.cancel();
+    _hideTimer?.cancel();
     super.dispose();
   }
 
+  void _freeze() {
+    final startedAt = _status.startedAt;
+    _frozenElapsed = startedAt == null
+        ? null
+        : DateTime.now().difference(startedAt);
+  }
+
+  Duration? get _elapsed {
+    if (isTerminalCallState(_status.state)) return _frozenElapsed;
+    final startedAt = _status.startedAt;
+    if (startedAt == null || !isConnectedCallState(_status.state)) {
+      return null;
+    }
+    return DateTime.now().difference(startedAt);
+  }
+
+  /// Controls only auto-hide over live remote video on a connected call.
+  bool _autoHideEligible(RemoteCallStatus status) =>
+      status.isVideo &&
+      status.state == RemoteCallState.active &&
+      status.remoteRenderer != null;
+
+  void _syncAutoHide() {
+    _hideTimer?.cancel();
+    _hideTimer = null;
+    if (!_autoHideEligible(_status) || !_controlsVisible) return;
+    _hideTimer = Timer(_autoHideDelay, () {
+      if (!mounted || !_autoHideEligible(_status)) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _toggleControls() {
+    setState(() => _controlsVisible = !_controlsVisible);
+    _syncAutoHide();
+  }
+
+  void _noteInteraction() {
+    if (!_controlsVisible) setState(() => _controlsVisible = true);
+    _syncAutoHide();
+  }
+
+  void _handleBack(bool didPop, Object? _) {
+    if (didPop || isIncomingRinging(_status)) return;
+    widget.onMinimize?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final status = widget.callStatus;
-    final hasRemoteVideo =
-        status.isVideo &&
-        status.remoteRenderer != null &&
-        status.state == RemoteCallState.active;
-    final hasLocalPreview =
-        status.isVideo &&
-        status.isLocalVideoEnabled &&
-        status.localRenderer != null;
+    final status = _status;
+    final incoming = isIncomingRinging(status);
 
-    return Material(
-      color: HelixScrimColors.backdrop,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: hasRemoteVideo
-                ? RemoteCallVideoView(renderer: status.remoteRenderer!)
-                : _VideoPlaceholder(status: status),
-          ),
-          if (hasLocalPreview)
-            Positioned(
-              left: _previewOffset.dx,
-              top: _previewOffset.dy,
-              child: GestureDetector(
-                onPanUpdate: (details) {
-                  final size = MediaQuery.sizeOf(context);
-                  setState(() {
-                    _previewOffset = Offset(
-                      (_previewOffset.dx + details.delta.dx).clamp(
-                        8,
-                        size.width - 132,
-                      ),
-                      (_previewOffset.dy + details.delta.dy).clamp(
-                        48,
-                        size.height - 196,
-                      ),
-                    );
-                  });
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: 124,
-                    height: 168,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: HelixScrimColors.backdrop,
-                        border: Border.all(
-                          color: HelixScrimColors.onBackdropSubtle,
-                        ),
-                      ),
-                      child: RemoteCallVideoView(
-                        renderer: status.localRenderer!,
-                        mirror: status.isFrontCamera,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          Positioned.fill(
-            child: SafeArea(
-              child: Padding(
-                padding: HelixInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _CallHeader(status: status),
-                    const Spacer(),
-                    if (status.errorMessage != null)
-                      _CallErrorBanner(message: status.errorMessage!),
-                    const SizedBox(height: 16),
-                    _CallControls(
-                      status: status,
-                      onEnd: widget.onEnd,
-                      onMute: widget.onMute,
-                      onSpeaker: widget.onSpeaker,
-                      onVideo: widget.onVideo,
-                      onSwitchCamera: widget.onSwitchCamera,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+    final Widget body;
+    if (incoming) {
+      body = IncomingCallView(
+        status: status,
+        onAccept: widget.onAccept,
+        onDecline: widget.onDecline,
+        peerSubtitle: widget.peerSubtitle,
+        onMessage: widget.onMessage,
+      );
+    } else if (_showsVideoLayout(status)) {
+      body = _buildVideo(context);
+    } else {
+      body = _buildVoice(context);
+    }
+
+    return PopScope(
+      canPop: !incoming && widget.onMinimize == null,
+      onPopInvokedWithResult: _handleBack,
+      child: Material(color: HelixCallColors.surfaceBottom, child: body),
+    );
+  }
+
+  /// Full-bleed video once the peer's stream exists, or while your own
+  /// camera previews before the call connects.
+  bool _showsVideoLayout(RemoteCallStatus status) {
+    if (!status.isVideo || isTerminalCallState(status.state)) return false;
+    if (isConnectedCallState(status.state) && status.remoteRenderer != null) {
+      return true;
+    }
+    return status.localRenderer != null && status.isLocalVideoEnabled;
+  }
+
+  bool get _finished => isTerminalCallState(_status.state);
+
+  bool get _poorConnection => !_finished && (_status.quality?.isWeak ?? false);
+
+  Widget? _notice() {
+    // While the link is merely weak the chip says it; the sentence would
+    // repeat it at twice the size.
+    if (_poorConnection) return null;
+    final message = friendlyCallError(_status.errorMessage);
+    if (message == null) return null;
+    return CallNotice(message: message, isError: _finished);
+  }
+
+  Widget _tray() {
+    final status = _status;
+    return Listener(
+      onPointerDown: (_) => _noteInteraction(),
+      child: CallControlTray(
+        controls: buildCallControls(
+          status: status,
+          finished: _finished,
+          onEnd: widget.onEnd,
+          onMute: widget.onMute,
+          onSpeaker: widget.onSpeaker,
+          onVideo: widget.onVideo,
+          onSwitchCamera: widget.onSwitchCamera,
+        ),
       ),
     );
   }
-}
 
-class _CallHeader extends StatelessWidget {
-  const _CallHeader({required this.status});
-
-  final RemoteCallStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        Text(
-          status.displayName,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            color: HelixScrimColors.onBackdrop,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _stateLabel(status.state),
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: HelixScrimColors.onBackdropMuted,
-          ),
-        ),
-        if (status.startedAt != null && status.state == RemoteCallState.active)
-          Padding(
-            padding: HelixInsets.only(top: 6),
-            child: Text(
-              _formatDuration(DateTime.now().difference(status.startedAt!)),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: HelixScrimColors.onBackdropMuted,
-              ),
-            ),
-          ),
-      ],
+  Widget _minimiseButton() {
+    if (widget.onMinimize == null) return const SizedBox(width: 48);
+    return IconButton(
+      tooltip: 'Minimise call',
+      onPressed: widget.onMinimize,
+      color: HelixScrimColors.onBackdrop,
+      icon: const Icon(Icons.keyboard_arrow_down),
     );
   }
 
-  String _stateLabel(RemoteCallState state) {
-    return switch (state) {
-      RemoteCallState.preparing || RemoteCallState.dialing => 'Calling',
-      RemoteCallState.ringing => 'Ringing',
-      RemoteCallState.connecting => 'Connecting',
-      RemoteCallState.active => 'Connected',
-      RemoteCallState.reconnecting => 'Reconnecting',
-      RemoteCallState.busy => 'Busy',
-      RemoteCallState.declined => 'Declined',
-      RemoteCallState.failed => 'Failed',
-      RemoteCallState.ended => 'Ended',
-    };
-  }
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    final hours = duration.inHours;
-    return hours > 0
-        ? '$hours:$minutes:$seconds'
-        : '${duration.inMinutes}:$seconds';
-  }
-}
-
-class _VideoPlaceholder extends StatelessWidget {
-  const _VideoPlaceholder({required this.status});
-
-  final RemoteCallStatus status;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildVoice(BuildContext context) {
     final theme = Theme.of(context);
-    return ColoredBox(
-      color: HelixColorTokens.cFF101418,
-      child: Center(
+    final status = _status;
+    final subtitle = widget.peerSubtitle?.trim() ?? '';
+    final notice = _notice();
+    final pulse =
+        status.state == RemoteCallState.dialing ||
+        status.state == RemoteCallState.ringing ||
+        status.state == RemoteCallState.preparing;
+
+    return CallSurface(
+      child: SafeArea(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            CircleAvatar(
-              radius: 54,
-              backgroundColor: HelixScrimColors.controlSurface,
-              child: Text(
-                status.displayName.isEmpty
-                    ? '?'
-                    : status.displayName.characters.first.toUpperCase(),
-                style: theme.textTheme.displaySmall?.copyWith(
-                  color: HelixScrimColors.onBackdrop,
-                ),
+            Padding(
+              padding: HelixInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                children: [
+                  _minimiseButton(),
+                  Expanded(
+                    child: EncryptedCallLabel(
+                      prefix: status.isVideo
+                          ? 'Helix video call'
+                          : 'Helix voice call',
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
               ),
             ),
-            const SizedBox(height: 18),
-            Text(
-              status.isVideo && !status.isLocalVideoEnabled
-                  ? 'Camera off'
-                  : status.isVideo
-                  ? 'Waiting for video'
-                  : 'Audio call',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: HelixScrimColors.onBackdropMuted,
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final avatar = (constraints.maxHeight * 0.36).clamp(
+                    64.0,
+                    136.0,
+                  );
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                        minWidth: constraints.maxWidth,
+                      ),
+                      child: Padding(
+                        padding: HelixInsets.symmetric(
+                          horizontal: HelixSpace.lg,
+                          vertical: HelixSpace.xs,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CallAvatar(
+                              status: status,
+                              diameter: avatar,
+                              pulse: pulse,
+                            ),
+                            const SizedBox(height: 12),
+                            Semantics(
+                              header: true,
+                              child: Text(
+                                status.displayName,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.headlineMedium?.copyWith(
+                                  color: HelixScrimColors.onBackdrop,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (subtitle.isNotEmpty)
+                              Padding(
+                                padding: HelixInsets.only(top: 2),
+                                child: Text(
+                                  subtitle,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: HelixScrimColors.onBackdropMuted,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 8),
+                            CallStatusLine(status: status, elapsed: _elapsed),
+                            if (status.isVideo &&
+                                !status.isLocalVideoEnabled &&
+                                !_finished)
+                              Padding(
+                                padding: HelixInsets.only(top: 6),
+                                child: Text(
+                                  'Camera off',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: HelixScrimColors.onBackdropFaint,
+                                  ),
+                                ),
+                              ),
+                            if (_poorConnection)
+                              Padding(
+                                padding: HelixInsets.only(top: 10),
+                                child: const PoorConnectionChip(),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
+            ),
+            if (notice != null)
+              Padding(
+                padding: HelixInsets.fromLTRB(16, 0, 16, 10),
+                child: notice,
+              ),
+            Padding(
+              padding: HelixInsets.fromLTRB(12, 0, 12, 12),
+              child: _tray(),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _CallErrorBanner extends StatelessWidget {
-  const _CallErrorBanner({required this.message});
+  Widget _buildVideo(BuildContext context) {
+    final theme = Theme.of(context);
+    final status = _status;
+    final visible = !_autoHideEligible(status) || _controlsVisible;
 
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: HelixCallColors.endCall.withAlpha(220),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: HelixInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: HelixScrimColors.onBackdrop),
-        ),
-      ),
-    );
-  }
-}
-
-class _CallControls extends StatelessWidget {
-  const _CallControls({
-    required this.status,
-    required this.onEnd,
-    required this.onMute,
-    required this.onSpeaker,
-    required this.onVideo,
-    required this.onSwitchCamera,
-  });
-
-  final RemoteCallStatus status;
-  final VoidCallback onEnd;
-  final void Function({required bool muted})? onMute;
-  final void Function({required bool enabled})? onSpeaker;
-  final void Function({required bool enabled})? onVideo;
-  final VoidCallback? onSwitchCamera;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 16,
-      runSpacing: 14,
+    final header = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _CallActionButton(
-          icon: status.isMuted ? Icons.mic_off : Icons.mic,
-          label: status.isMuted ? 'Unmute' : 'Mute',
-          color: HelixScrimColors.onBackdropSubtle,
-          onPressed: onMute == null
-              ? null
-              : () => onMute!(muted: !status.isMuted),
-        ),
-        _CallActionButton(
-          icon: status.isSpeakerOn ? Icons.volume_up : Icons.hearing,
-          label: status.isSpeakerOn ? 'Speaker' : 'Earpiece',
-          color: HelixScrimColors.onBackdropSubtle,
-          onPressed: onSpeaker == null
-              ? null
-              : () => onSpeaker!(enabled: !status.isSpeakerOn),
-        ),
-        if (status.isVideo)
-          _CallActionButton(
-            icon: status.isLocalVideoEnabled
-                ? Icons.videocam
-                : Icons.videocam_off,
-            label: status.isLocalVideoEnabled ? 'Video' : 'Video off',
-            color: HelixScrimColors.onBackdropSubtle,
-            onPressed: onVideo == null
-                ? null
-                : () => onVideo!(enabled: !status.isLocalVideoEnabled),
+        _minimiseButton(),
+        Expanded(
+          child: Padding(
+            padding: HelixInsets.only(top: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(
+                    status.displayName,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: HelixScrimColors.onBackdrop,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                CallStatusLine(
+                  status: status,
+                  elapsed: _elapsed,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: HelixScrimColors.onBackdropMuted,
+                  ),
+                ),
+                if (_poorConnection)
+                  Padding(
+                    padding: HelixInsets.only(top: 6),
+                    child: const PoorConnectionChip(),
+                  ),
+              ],
+            ),
           ),
-        if (status.isVideo)
-          _CallActionButton(
-            icon: Icons.cameraswitch,
-            label: 'Switch',
-            color: HelixScrimColors.onBackdropSubtle,
-            onPressed: onSwitchCamera,
-          ),
-        _CallActionButton(
-          icon: Icons.call_end,
-          label: 'End',
-          color: HelixCallColors.endCall,
-          onPressed: onEnd,
         ),
+        const SizedBox(width: 48),
       ],
     );
-  }
-}
 
-class _CallActionButton extends StatelessWidget {
-  const _CallActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FloatingActionButton(
-          heroTag: 'call_$label',
-          backgroundColor: onPressed != null
-              ? color
-              : HelixCallColors.controlDisabled,
-          onPressed: onPressed,
-          child: Icon(icon, color: HelixScrimColors.onBackdrop),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: HelixScrimColors.onBackdrop)),
-      ],
+    return VideoCallView(
+      status: status,
+      header: header,
+      tray: _tray(),
+      notice: _notice(),
+      controlsVisible: visible,
+      onStageTap: _toggleControls,
     );
   }
 }

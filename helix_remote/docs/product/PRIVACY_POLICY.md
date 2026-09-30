@@ -33,11 +33,13 @@ jurisdiction-specific legal review before public launch.
   server cannot read it. Media is not included.
 - Device identifiers: device ID, device name, public device key, active/revoked
   state, push-token field when configured, and last-seen timestamp.
-- Contacts and safety state: contact requests, accepted contacts, block state,
-  privacy settings, abuse reports, and safety/admin actions. If you opt into
-  contacts sync, salted hashes of your phone-book numbers are checked against
-  the server to find people already on Helix - your phone-book names and any
-  unmatched numbers never leave your device.
+- Contacts and safety state: saved contacts, block state, privacy settings,
+  abuse reports, and safety/admin actions, plus a record of whom you have
+  messaged or called (`account_reach`) - that record is what lets someone you
+  contacted see your number. If you opt into contacts sync, salted hashes of
+  your phone-book numbers are checked against the server to find people
+  already on Helix, and the people found are saved as your contacts - your
+  phone-book names and any unmatched numbers never leave your device.
 - Messaging metadata: conversation IDs, membership rows, message IDs,
   per-device recipient IDs, server sequence numbers, timestamps, and encrypted
   message envelopes.

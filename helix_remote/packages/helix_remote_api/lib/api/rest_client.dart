@@ -332,6 +332,15 @@ abstract class HelixRemoteRestClient {
   /// that is no longer signed in.
   Future<Map<String, dynamic>> deregisterPushToken();
 
+  /// Names for [accountIds] and, for people this account has been in touch
+  /// with, their phone numbers: `{people: [{account_id, display_name,
+  /// phone_number?}]}`.
+  Future<Map<String, dynamic>> lookupPeople(List<String> accountIds);
+
+  /// Records [accountIds] as this account's contacts (people in the phone
+  /// book, or named in Helix) - ids only, never names.
+  Future<Map<String, dynamic>> syncSavedContacts(List<String> accountIds);
+
   /// Checks a recovery code without using it up: `valid`, `reason` when it
   /// is not, `server_name`, `sms_required` (whether redeeming needs the SMS
   /// code) and, when [phoneHash] is given, `phone_matches`.
