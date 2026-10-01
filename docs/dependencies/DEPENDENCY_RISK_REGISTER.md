@@ -20,7 +20,8 @@ stable releases checked on 2026-09-30.
 | `build_runner` | `2.16.1` | dev-only (`helix_remote_db`) | C1 | Dev tool only, with a large transitive tree. | client-team | Keep it in `dev_dependencies` only. It is not part of the shipped app. |
 | `flutter_riverpod` | `3.4.3` | `helix_remote/app` | A1 | Central to UI state. A major bump later would touch every feature. | client-team | Use plain providers, with no `riverpod_generator`, so there is less codegen to keep in step. Take upgrades on their own, with the widget suite. |
 | `go_router` | `18.0.2` | `helix_remote/app` | A1 | Routing and deep links (`helix://`, `/open` links). A regression breaks shared links silently. | client-team | Deep-link tests for both link forms, plus the hidden advanced-mode entry. |
-| S3 client (undecided) | — | `helix_remote/server` | S1 | Candidates: `aws_signature_v4` `0.6.13` (maintained, request signing only) or `minio` `3.5.8` (last release 2025-08, a staleness risk). | server-team | Decide in S1 (plan §13). The local-filesystem `ObjectStorage` ships first either way. |
+| `aws_signature_v4` + `aws_common` | `0.6.13` / `0.7.15` | `helix_remote/server` (**added in S1**) | S1 | The user chose it on 2026-10-01 for S3-compatible storage. It pulls in `built_value`, `built_collection`, `http2` and `os_detect`, all server-only. A signing bug would surface as rejected uploads, not leaked data. | server-team | Confined to `platform/blobs/` (architecture test). Presign structure is tested against AWS's documented SigV4 parameters. Local storage is the default. |
+| `shelf`, `shelf_router`, `http` | `1.4.2` / `1.1.4` / `1.2.x` | `helix_remote/server` (S1) | S1 | Already used and reviewed by v1 `backend/`. | server-team | — |
 
 ## Deferred major upgrades (MED-8)
 

@@ -35,6 +35,34 @@ void main() {
     ]);
   });
 
+  test('only the db layer touches the Postgres driver', () {
+    expectClean([
+      ForbiddenDirectiveRule(
+        name: 'driver-isolation',
+        reason:
+            'use the Db/Tx interfaces (ADR-025); the driver stays in platform/db.',
+        forbidden: anyPackage({'postgres'}),
+        appliesTo: (path) =>
+            path.startsWith('lib/') && !path.startsWith('lib/src/platform/db/'),
+      ),
+      ForbiddenDirectiveRule(
+        name: 'storage-isolation',
+        reason: 'use ObjectStorage; S3 signing stays in platform/blobs.',
+        forbidden: anyPackage({'aws_signature_v4', 'aws_common'}),
+        appliesTo: (path) =>
+            path.startsWith('lib/') &&
+            !path.startsWith('lib/src/platform/blobs/'),
+      ),
+      ForbiddenDirectiveRule(
+        name: 'modules-use-the-platform',
+        reason:
+            'modules get infrastructure from ModuleContext, not from shelf_io or dart:io servers.',
+        forbidden: (uri) => uri == 'package:shelf/shelf_io.dart',
+        appliesTo: (path) => path.startsWith('lib/src/modules/'),
+      ),
+    ]);
+  });
+
   test('is pure Dart', () {
     expectClean([
       ForbiddenDirectiveRule(

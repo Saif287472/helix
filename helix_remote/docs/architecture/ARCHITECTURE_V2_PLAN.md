@@ -1,6 +1,6 @@
 # Helix Remote Architecture v2 — Plan of Record
 
-Status: **in progress — P1 done, next: S1** · Written 2026-09-30 · Owner: hasan
+Status: **in progress — S1 done, next: S2** · Written 2026-09-30 · Owner: hasan
 
 > **Authoritative copy:** this file on branch `architecture-v2` (worktree
 > `J:\hx2`). The copy on `main` is a snapshot from before Phase 0.
@@ -644,7 +644,7 @@ user does.
 |---|---|---|---|---|
 | 0 Decisions, tooling | **done** | 2026-10-01 | Phase 0 commit on `architecture-v2` | ADRs 025–029. `helix_remote_architecture_rules` (20 tests). `server/` skeleton (7 tests: architecture rules plus a Postgres 17 smoke test that is green against the local DB). `postgres 3.5.17` locked (lockfile additions only). Postgres 17 service on CI `verify-linux` with `HELIX_REQUIRE_TEST_DATABASE=1`. Verify scripts cover `server/`. Local role and DBs created by the user. Known pre-existing failure: governance check (3 stale screen-capture controls, identical on `main`). |
 | P1 Protocol | **done** (review pending) | 2026-10-01 | P1 commit on `architecture-v2` | `docs/protocol/v2/` (REST, realtime, content, crypto, metadata, review checklist). `helix_remote_protocol` with 63 tests: route catalog (126 routes, public-route snapshot, doc coverage), DTOs for every module except admin, envelopes, frames, sealed payloads, content model, padding, UUIDv7. 9 golden fixtures in `contracts/v2/fixtures/`. |
-| S1 Server platform | not started | | | |
+| S1 Server platform | **done** | 2026-10-01 | S1 commit on `architecture-v2` | Async `Db`/`Tx` over a Postgres pool (afterCommit hooks, constraint mapping, serialization retries, LISTEN/NOTIFY). Checksummed per-module migrations under an advisory lock. Postgres event bus, UNLOGGED ephemeral store, one-statement token buckets. Outbox and job runner with SKIP LOCKED leases, backoff, dead letters and dedupe. Cluster-safe periodic jobs. Local and S3 (SigV4) object storage. A route registry checked against the protocol catalog (public routes need limits). Pipeline with request ids, trusted-proxy IPs, global limits, maintenance mode, error mapping and security headers. Idempotency keys, redacting JSON logs, Prometheus metrics, typed config, module system, `HelixServer`, the `ops` health module, `bin/server.dart`, `bin/migrate.dart`. 57 server tests on Postgres, including two-node checks (jobs never double-run, rate limits shared, bus across connections, second server on the same DB). |
 | S2 identity + keys | not started | | | |
 | S3 messaging + realtime | not started | | | |
 | S4 people + media + backup | not started | | | |
@@ -669,6 +669,7 @@ C1 and C2 may run once P1 is done. C3 needs S3. A1 needs C3. X comes last.
 | Date | Change | Approved in |
 |---|---|---|
 | 2026-09-30 | Plan created (D1–D5). | this session |
+| 2026-10-01 | S1: migrations are Dart constants (`List<Migration>` per module), not `.sql` files, so they compile into the server binary. Tests isolate by a random **schema prefix** instead of a database per test, because the `helix` role has no CREATEDB. Push, SMS and TURN providers move to the phases that use them (S2 SMS, S3 push, S5 TURN), so no unused code is ported early. | this session (autonomous run) |
 | 2026-10-01 | P1: the Dart route catalog plus `REST_V2.md` replaces a hand-maintained v2 OpenAPI file (a test keeps them in sync). Product docs (`METADATA_INVENTORY`, `PRIVACY_CLAIM_MATRIX`, `DATA_FLOW`, F1–F5) keep describing v1 until cutover. `METADATA_V2.md` and the v2 protocol docs hold the v2 truth and are folded in at Phase X. Admin DTOs move to S6/AD, and S2S payload details to S6. | this session (autonomous run) |
 | 2026-10-01 | Group calls deferred from v2. S3 signing via `aws_signature_v4`. Autonomous run through AD, one phase at a time; P1 checkpoint becomes review-later. | this session |
 | 2026-10-01 | §13 recommendations accepted (history, locked chats, native Postgres). Phase 0: v2 CI coverage goes into the existing `verify-linux`/`verify-windows` jobs instead of separate jobs. `helix_remote_architecture_rules` is a test-only package (`testOnlyPackages`), importable only from `test/`. | this session |

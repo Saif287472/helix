@@ -6,8 +6,33 @@ It runs on PostgreSQL 17, with stateless nodes and one module per area
 (ADR-025, ADR-026). Until cutover the live server is `../backend/` (v1); this
 package is not deployed.
 
-Status: Phase 0 skeleton. It has the test harness and the architecture rules;
-the platform layer arrives in Phase S1.
+- **Status:** Phase S1 is done. The platform layer is in place (see
+  `lib/src/platform/PLATFORM.md`). The only module so far is `ops` (health).
+- **Next:** Phase S2, the `identity` and `keys` modules.
+
+## Layout
+
+```
+bin/server.dart          one node: config -> platform -> modules -> HTTP
+bin/migrate.dart         apply migrations and exit
+lib/src/platform/        infrastructure (PLATFORM.md)
+lib/src/modules/<name>/  module.dart, api.dart, http/, application/, domain/,
+                         data/, MODULE.md   (ADR-026)
+lib/src/modules/all_modules.dart   production module list
+lib/src/server.dart      HelixServer: migrate, register, start, stop
+test/                    platform/, per-module tests, architecture_test.dart
+```
+
+## Running a node locally
+
+Copy `.env.example` to `.env`, fill it in, then:
+
+```bash
+dart run bin/server.dart
+```
+
+The process listens on `HELIX_HOST:HELIX_PORT`. It stops on Ctrl+C,
+finishing in-flight requests for up to 10 seconds.
 
 ## Local database (one-time)
 
@@ -31,9 +56,11 @@ dart test
 ```
 
 - **Without `HELIX_TEST_DATABASE_URL`:** database tests are **skipped**, and
-  the report says so. Architecture tests still run.
-- **CI** sets `HELIX_REQUIRE_TEST_DATABASE=1` and a Postgres 17 service, so
-  there a missing database fails the run.
-- **Isolation:** each test gets its own schema through `withTestSchema`
-  (`test/support/test_database.dart`), and the schema is dropped afterwards.
+  the report says so. CI sets `HELIX_REQUIRE_TEST_DATABASE=1` and runs a
+  Postgres 17 service, so there a missing database fails the run.
+- **Isolation:** each test uses a random schema prefix (`t1a2b3c4d_identity`,
+  …), and `dropSchemas` cleans it up. Suites can share one database and run
+  in parallel.
+- **Two nodes:** a second `HelixServer` on the same prefix acts as another
+  node (see `test/server_test.dart`).
 - **Passwords:** the connection URL is never printed. Do not log it.

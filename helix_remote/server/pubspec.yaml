@@ -11,10 +11,18 @@ environment:
 resolution: workspace
 
 dependencies:
+  aws_common: ^0.7.15
+  aws_signature_v4: ^0.6.13
+  crypto: ^3.0.7
+  helix_remote_protocol:
+    path: ../packages/helix_remote_protocol
+  http: ^1.2.0
+  path: ^1.9.1
   postgres: ^3.5.17
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
 
 dev_dependencies:
   helix_remote_architecture_rules:
     path: ../packages/helix_remote_architecture_rules
-  path: ^1.9.1
   test: ^1.31.0

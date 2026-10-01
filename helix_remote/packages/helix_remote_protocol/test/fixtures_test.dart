@@ -173,7 +173,8 @@ void main() {
         isTrue,
         reason: 'run with HELIX_UPDATE_FIXTURES=1',
       );
-      final stored = file.readAsStringSync().trim();
+      // Normalise line endings: a Windows checkout may convert to CRLF.
+      final stored = file.readAsStringSync().replaceAll('\r\n', '\n').trim();
       expect(stored, encoded, reason: 'wire format of ${entry.key} changed');
       // Decoding the stored fixture and encoding again is lossless.
       expect(encoder.convert(redecode(JsonReader.decode(stored))), stored);
