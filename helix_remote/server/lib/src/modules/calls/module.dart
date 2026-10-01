@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/calls/api.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
 import 'package:helix_remote_server/src/platform/config/server_config.dart';
@@ -56,6 +57,8 @@ final class CallsModule extends ModuleBase {
   final IdentityApi identity;
   final MessagingApi messaging;
   final TurnConfig turn;
+  late final CallsApi api = _CallsFacade(this);
+  CallRelay? _relay;
 
   static const pushJob = 'calls.push';
   static const credentialLifetime = Duration(hours: 1);
@@ -78,7 +81,13 @@ final class CallsModule extends ModuleBase {
   @override
   List<Migration> get migrations => const [
     Migration(1, 'calls_baseline', _baseline),
+    Migration(2, 'federated_callers', _federatedCallers),
   ];
+
+  /// Callers on other servers are stored qualified (`uuid@domain`).
+  static String _federatedCallers(String s) =>
+      'ALTER TABLE $s.pending_calls ALTER COLUMN caller_account TYPE text '
+      'USING caller_account::text;';
 
   static String _baseline(String s) =>
       '''
@@ -187,41 +196,123 @@ CREATE TABLE $s.call_metrics (
       throw const ApiError(ErrorCode.invalidField);
     }
     if (req.kind == CallSignalKind.offer) await _limit(_offers, me.accountId);
+    final parsed = _parse(req.recipients, excludeDevice: me.deviceId);
 
+    final delivered = <String>[];
+    final pending = <String>[];
+    // Remote parts first: a stale or unreachable callee server fails the
+    // signal before any local device rings.
+    final relay = _relay;
+    for (final entry in parsed.remote.entries) {
+      final answer = await relay!.relayCall(
+        entry.key,
+        callId,
+        S2SCallSignal(
+          sender: AccountAddress.local(
+            me.accountId,
+          ).qualified(relay.localDomain),
+          senderDevice: me.deviceId,
+          signal: CallSignalRequest(
+            kind: req.kind,
+            recipients: entry.value,
+            ttl: req.ttl,
+          ),
+        ),
+      );
+      delivered.addAll(answer.delivered);
+      pending.addAll(answer.pending);
+    }
+    final local = await _deliverLocal(
+      callId,
+      senderAccount: me.accountId,
+      senderDevice: me.deviceId,
+      kind: req.kind,
+      ttl: req.ttl,
+      parsed: parsed,
+    );
+    return jsonResponse(
+      CallSignalResponse(
+        delivered: [...delivered, ...local.delivered],
+        pending: [...pending, ...local.pending],
+      ).toJson(),
+    );
+  }
+
+  /// Local recipients become `addressed` and `payloads`; `uuid@domain`
+  /// recipients are grouped by domain with that server's bare ids.
+  _ParsedSignal _parse(List<Recipient> recipients, {String? excludeDevice}) {
+    final local = _relay?.localDomain;
     final payloads = <String, Uint8List>{};
     final addressed = <String, Set<String>>{};
-    for (final r in req.recipients) {
-      if (!Uuid.isValid(r.account)) {
+    final remote = <String, List<Recipient>>{};
+    for (final r in recipients) {
+      var address = AccountAddress.tryParse(r.account);
+      if (address != null && local != null) {
+        address = address.relativeTo(local);
+      }
+      if (address == null) {
         throw const ApiError(
           ErrorCode.invalidField,
           details: {'field': 'recipients'},
         );
       }
-      final set = addressed.putIfAbsent(r.account, () => {});
       for (final d in r.devices) {
-        if (d.device == me.deviceId || d.payload.length > 64 * 1024) {
+        if (!Uuid.isValid(d.device) ||
+            d.device == excludeDevice ||
+            d.payload.length > 64 * 1024) {
           throw const ApiError(
             ErrorCode.invalidField,
             details: {'field': 'recipients.devices'},
           );
         }
+      }
+      if (address.isRemote) {
+        if (local == null) {
+          throw const ApiError(
+            ErrorCode.federationUnavailable,
+            message: 'this server does not federate',
+          );
+        }
+        remote
+            .putIfAbsent(address.domain!, () => [])
+            .add(Recipient(account: address.id, devices: r.devices));
+        continue;
+      }
+      final set = addressed.putIfAbsent(address.id, () => {});
+      for (final d in r.devices) {
         set.add(d.device);
         payloads[d.device] = d.payload;
       }
     }
+    return _ParsedSignal(addressed, payloads, remote);
+  }
+
+  Future<CallSignalResponse> _deliverLocal(
+    String callId, {
+    required String senderAccount,
+    required String senderDevice,
+    required CallSignalKind kind,
+    required Duration ttl,
+    required _ParsedSignal parsed,
+  }) async {
+    final payloads = parsed.payloads;
+    final addressed = parsed.addressed;
+    if (addressed.isEmpty) {
+      return const CallSignalResponse(delivered: [], pending: []);
+    }
     // Offers ring every device of the callee: the list must be complete.
-    if (req.kind == CallSignalKind.offer) {
+    if (kind == CallSignalKind.offer) {
       await messaging.checkDevices(
         context.db,
         addressed,
-        senderAccount: me.accountId,
-        senderDevice: me.deviceId,
+        senderAccount: senderAccount,
+        senderDevice: senderDevice,
       );
     }
     final blockers = await messaging.blockedBy(
       context.db,
-      me.accountId,
-      addressed.keys.where((a) => a != me.accountId),
+      senderAccount,
+      addressed.keys.where((a) => a != senderAccount),
     );
     for (final account in blockers) {
       addressed[account]!.forEach(payloads.remove);
@@ -230,29 +321,29 @@ CREATE TABLE $s.call_metrics (
     final delivery = Delivery(
       kind: EnvelopeKind.callSignal,
       callId: callId,
-      from: EnvelopeSender(account: me.accountId, device: me.deviceId),
-      data: {'kind': req.kind.wire},
-      urgent: req.kind == CallSignalKind.offer,
+      from: EnvelopeSender(account: senderAccount, device: senderDevice),
+      data: {'kind': kind.wire},
+      urgent: kind == CallSignalKind.offer,
     );
     final delivered = await messaging.deliverEphemeral(payloads, delivery);
     final pending = <String>[];
-    if (req.kind == CallSignalKind.offer) {
-      final ttl = req.ttl > maxTtl ? maxTtl : req.ttl;
+    if (kind == CallSignalKind.offer) {
+      final capped = ttl > maxTtl ? maxTtl : ttl;
       await context.db.tx((tx) async {
         for (final device in payloads.keys.where(
           (d) => !delivered.contains(d),
         )) {
           await tx.execute(
             'INSERT INTO $schema.pending_calls (call_id, callee_device, caller_account, caller_device, payload, expires_at) '
-            'VALUES (@c:text, @d:uuid, @a:uuid, @cd:uuid, @p:bytea, now() + make_interval(secs => @ttl:int8)) '
+            'VALUES (@c:text, @d:uuid, @a:text, @cd:uuid, @p:bytea, now() + make_interval(secs => @ttl:int8)) '
             'ON CONFLICT (call_id, callee_device) DO UPDATE SET payload = excluded.payload, expires_at = excluded.expires_at',
             {
               'c': callId,
               'd': device,
-              'a': me.accountId,
-              'cd': me.deviceId,
+              'a': senderAccount,
+              'cd': senderDevice,
               'p': payloads[device],
-              'ttl': ttl.inSeconds,
+              'ttl': capped.inSeconds,
             },
           );
           await context.outbox.enqueue(
@@ -269,14 +360,53 @@ CREATE TABLE $s.call_metrics (
           pending.add(device);
         }
       });
-    } else if (req.kind == CallSignalKind.end) {
+    } else if (kind == CallSignalKind.end) {
       await _endPending(callId, notifyEnded: true);
     }
-    return jsonResponse(
-      CallSignalResponse(
-        delivered: delivered.toList(),
-        pending: pending,
-      ).toJson(),
+    return CallSignalResponse(delivered: delivered.toList(), pending: pending);
+  }
+
+  Future<CallSignalResponse> _receive(
+    String domain,
+    String callId,
+    S2SCallSignal signal,
+  ) async {
+    if (!_callId.hasMatch(callId)) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'call_id'},
+      );
+    }
+    final sender = AccountAddress.tryParse(signal.sender);
+    if (sender == null || sender.domain != domain) {
+      throw const ApiError(
+        ErrorCode.forbidden,
+        message: 'the sender must belong to the calling server',
+      );
+    }
+    final req = signal.signal;
+    if (req.kind == CallSignalKind.unknown ||
+        req.recipients.isEmpty ||
+        !Uuid.isValid(signal.senderDevice)) {
+      throw const ApiError(ErrorCode.invalidField);
+    }
+    if (req.kind == CallSignalKind.offer) {
+      await _limit(_offers, sender.toString());
+    }
+    final parsed = _parse(req.recipients);
+    if (parsed.remote.isNotEmpty) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        message: 'recipients must be accounts on this server',
+      );
+    }
+    return _deliverLocal(
+      callId,
+      senderAccount: sender.toString(),
+      senderDevice: signal.senderDevice,
+      kind: req.kind,
+      ttl: req.ttl,
+      parsed: parsed,
     );
   }
 
@@ -399,4 +529,28 @@ CREATE TABLE $s.call_metrics (
       await identity.dropPushToken(context.db, device);
     }
   }
+}
+
+final class _ParsedSignal {
+  _ParsedSignal(this.addressed, this.payloads, this.remote);
+
+  final Map<String, Set<String>> addressed;
+  final Map<String, Uint8List> payloads;
+  final Map<String, List<Recipient>> remote;
+}
+
+final class _CallsFacade implements CallsApi {
+  _CallsFacade(this._m);
+
+  final CallsModule _m;
+
+  @override
+  void setRelay(CallRelay relay) => _m._relay = relay;
+
+  @override
+  Future<CallSignalResponse> receive(
+    String domain,
+    String callId,
+    S2SCallSignal signal,
+  ) => _m._receive(domain, callId, signal);
 }

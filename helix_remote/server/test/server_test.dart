@@ -75,6 +75,7 @@ void main() {
           'ops',
           'admin',
           'compliance',
+          'federation',
         }),
         isEmpty,
       );

@@ -17,7 +17,7 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
   PeopleModule(
     super.context, {
     required this.identity,
-    required MessagingApi messaging,
+    required this.messaging,
   }) {
     api = _PeopleFacade(this);
     messaging.setBlockPolicy(api.blockedBy);
@@ -25,6 +25,7 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
   }
 
   final IdentityApi identity;
+  final MessagingApi messaging;
   late final PeopleApi api;
 
   static const dailyDiscoveryBudget = 5000;
@@ -45,7 +46,12 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
   @override
   List<Migration> get migrations => const [
     Migration(1, 'people_baseline', _baseline),
+    Migration(2, 'federated_blocks', _federatedBlocks),
   ];
+
+  /// Blocked accounts on other servers are stored qualified (`uuid@domain`).
+  static String _federatedBlocks(String s) =>
+      'ALTER TABLE $s.blocks ALTER COLUMN blocked TYPE text USING blocked::text;';
 
   static String _baseline(String s) =>
       '''
@@ -172,8 +178,8 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       });
     }
     await tx.execute(
-      'DELETE FROM $s.blocks WHERE account_id = @a:uuid OR blocked = @a:uuid',
-      {'a': accountId},
+      'DELETE FROM $s.blocks WHERE account_id = @a:uuid OR blocked = @t:text',
+      {'a': accountId, 't': accountId},
     );
     await tx.execute(
       'DELETE FROM $s.contacts WHERE account_id = @a:uuid OR contact = @a:uuid',
@@ -237,7 +243,7 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
     if (accounts.isEmpty) return const {};
     final rows = await context.db.query(
       'SELECT account_id FROM $s.privacy WHERE account_id = ANY(@ids:_uuid) AND NOT $flag '
-      'UNION SELECT account_id FROM $s.blocks WHERE account_id = ANY(@ids:_uuid) AND blocked = @me:uuid',
+      'UNION SELECT account_id FROM $s.blocks WHERE account_id = ANY(@ids:_uuid) AND blocked = @me:text',
       {'ids': accounts.toList(), 'me': me},
     );
     return {for (final r in rows) r.string('account_id')};
@@ -359,13 +365,28 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
     );
   }
 
+  /// The `{account}` of a block route in canonical form: a bare id for
+  /// accounts here, `uuid@domain` for accounts on other servers.
+  String _blockTarget(HelixRequest q) {
+    var address = AccountAddress.tryParse(q.param('account'));
+    final local = messaging.localDomain;
+    if (address != null && local != null) address = address.relativeTo(local);
+    if (address == null || (address.isRemote && local == null)) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'account'},
+      );
+    }
+    return address.toString();
+  }
+
   Future<Response> _block(HelixRequest q) async {
-    final target = q.uuidParam('account');
+    final target = _blockTarget(q);
     if (target == q.device.accountId) {
       throw const ApiError(ErrorCode.invalidField);
     }
     await context.db.execute(
-      'INSERT INTO $s.blocks (account_id, blocked) VALUES (@a:uuid, @b:uuid) ON CONFLICT DO NOTHING',
+      'INSERT INTO $s.blocks (account_id, blocked) VALUES (@a:uuid, @b:text) ON CONFLICT DO NOTHING',
       {'a': q.device.accountId, 'b': target},
     );
     return noContent();
@@ -373,8 +394,8 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
 
   Future<Response> _unblock(HelixRequest q) async {
     await context.db.execute(
-      'DELETE FROM $s.blocks WHERE account_id = @a:uuid AND blocked = @b:uuid',
-      {'a': q.device.accountId, 'b': q.uuidParam('account')},
+      'DELETE FROM $s.blocks WHERE account_id = @a:uuid AND blocked = @b:text',
+      {'a': q.device.accountId, 'b': _blockTarget(q)},
     );
     return noContent();
   }
@@ -469,7 +490,7 @@ final class _PeopleFacade implements PeopleApi {
     final ids = recipients.toSet().toList();
     if (ids.isEmpty) return const {};
     final rows = await db.query(
-      'SELECT account_id FROM ${_m.s}.blocks WHERE blocked = @s:uuid AND account_id = ANY(@ids:_uuid)',
+      'SELECT account_id FROM ${_m.s}.blocks WHERE blocked = @s:text AND account_id = ANY(@ids:_uuid)',
       {'s': sender, 'ids': ids},
     );
     return {for (final r in rows) r.string('account_id')};

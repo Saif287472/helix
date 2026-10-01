@@ -67,7 +67,7 @@ final class MailboxStore {
     const columns =
         'device_id, seq, id, kind, sender_account, sender_device, group_id, call_id, '
         'payload, data, urgent, expires_at';
-    const values = '@id:uuid, @kind:text, @sa:uuid, @sd:uuid, @g:uuid, @c:text';
+    const values = '@id:uuid, @kind:text, @sa:text, @sd:uuid, @g:uuid, @c:text';
     if (withPayload.isNotEmpty) {
       await tx.execute(
         'INSERT INTO $s.mailbox ($columns) '

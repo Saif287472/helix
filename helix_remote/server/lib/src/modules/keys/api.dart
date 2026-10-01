@@ -5,6 +5,21 @@ import 'package:helix_remote_server/src/platform/db/db.dart';
 /// device). The messaging module turns it into a `prekeys_low` envelope.
 typedef PrekeysLowHook = Future<void> Function(String deviceId, int remaining);
 
+/// Bundles of accounts on other servers (installed by the federation
+/// module).
+abstract interface class RemoteKeySource {
+  /// This server's domain: addresses qualified with it are local.
+  String get localDomain;
+
+  /// [accountId]'s bundles from [domain]'s server (consuming one-time
+  /// prekeys there); null if that server does not know the account.
+  Future<AccountKeys?> fetch(
+    String domain,
+    String accountId, {
+    Set<String>? devices,
+  });
+}
+
 /// The keys module's facade (ADR-026).
 abstract interface class KeysApi {
   /// Bundles for an account's active devices (optionally only [devices]),
@@ -13,6 +28,8 @@ abstract interface class KeysApi {
   Future<AccountKeys?> bundles(String accountId, {Set<String>? devices});
 
   void onPrekeysLow(PrekeysLowHook hook);
+
+  void setRemoteSource(RemoteKeySource source);
 
   Future<void> purgeAccount(Tx tx, List<String> deviceIds);
 }

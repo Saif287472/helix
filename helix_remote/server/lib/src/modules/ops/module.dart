@@ -118,7 +118,15 @@ CREATE TABLE $s.settings (
     final settings = OpsSettings(
       serverName: stored['server_name'] ?? context.config.serverName,
       maintenance: stored['maintenance'] == 'true',
-      federationEnabled: stored['federation_enabled'] == 'true',
+      federationEnabled: switch (stored['federation_enabled']) {
+        'true' => true,
+        'false' => false,
+        _ =>
+          context.config.env['HELIX_FEDERATION_ENABLED']
+                  ?.trim()
+                  .toLowerCase() ==
+              'true',
+      },
       flags: {
         for (final e in OpsApi.knownFlags.entries)
           e.key: switch (stored['flag.${e.key}']) {

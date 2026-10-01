@@ -59,3 +59,13 @@ their next send, and from the AIK in the next bundle or prekey message
 ## Hooks
 
 `onDeviceRevoked` deletes the device's mailbox and sequence row.
+
+## Federation
+
+Recipients may be `uuid@domain`. The send is checked locally first, then
+each remote server is relayed to through `MessageRelay` (the federation
+module), then the local part is stored. Stale device lists from several
+servers come back together, accounts qualified. Sends relayed by another
+server enter through `MessagingApi.receive` and follow the same path
+(`_accept`). Foreign senders are stored qualified: `sender_account` is
+`text` since migration 2.

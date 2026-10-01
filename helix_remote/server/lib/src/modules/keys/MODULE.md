@@ -22,7 +22,10 @@ The X3DH key directory (CRYPTO_V2.md §3). Schema `keys`. Facade:
 - **Low prekeys are signalled.** When a device drops below 20 one-time
   prekeys, `onPrekeysLow` hooks run at most once an hour per device. The
   messaging module (S3) turns that into a `prekeys_low` envelope.
-- **Federated accounts** (`id@domain`) return 404 until Phase S6.
+- **Federated accounts** (`id@domain`) are fetched from their home server
+  through the federation module's `RemoteKeySource`. The same
+  per-requester and per-target limits apply, keyed by the qualified
+  address. The answer's `account` is qualified.
 
 No foreign keys to identity (ADR-026): rows are keyed by device id and
 purged through hooks.

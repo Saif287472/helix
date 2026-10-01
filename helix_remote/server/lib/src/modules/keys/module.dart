@@ -22,6 +22,7 @@ final class KeysModule extends ModuleBase implements ProvidesAccountExport {
   }
 
   final IdentityApi identity;
+  RemoteKeySource? _remote;
   late final PrekeyStore _store;
   late final KeysApi api;
   final List<PrekeysLowHook> _lowHooks = [];
@@ -190,14 +191,21 @@ CREATE TABLE $s.one_time_prekeys (
   );
 
   Future<Response> _bundle(HelixRequest q) async {
-    final target = q.param('account');
-    if (!Uuid.isValid(target)) {
-      // Federated (`id@domain`) bundles arrive with the federation module.
-      throw const ApiError(ErrorCode.notFound);
+    final remote = _remote;
+    var address = AccountAddress.tryParse(q.param('account'));
+    if (address != null && remote != null) {
+      address = address.relativeTo(remote.localDomain);
+    }
+    if (address == null) throw const ApiError(ErrorCode.notFound);
+    if (address.isRemote && remote == null) {
+      throw const ApiError(
+        ErrorCode.federationUnavailable,
+        message: 'this server does not federate',
+      );
     }
     for (final (policy, key) in [
       (_perRequester, q.device.deviceId),
-      (_perTarget, target),
+      (_perTarget, address.toString()),
     ]) {
       final decision = await context.rateLimiter.hit(policy, key);
       if (!decision.allowed) {
@@ -205,10 +213,25 @@ CREATE TABLE $s.one_time_prekeys (
       }
     }
     final wanted = q.queryAll('device').toSet();
-    final keys = await api.bundles(
-      target,
-      devices: wanted.isEmpty ? null : wanted,
-    );
+    final devices = wanted.isEmpty ? null : wanted;
+    if (address.isRemote) {
+      final keys = await remote!.fetch(
+        address.domain!,
+        address.id,
+        devices: devices,
+      );
+      if (keys == null || keys.account != address.id) {
+        throw const ApiError(ErrorCode.notFound);
+      }
+      return jsonResponse(
+        AccountKeys(
+          account: address.toString(),
+          identityKey: keys.identityKey,
+          devices: keys.devices,
+        ).toJson(),
+      );
+    }
+    final keys = await api.bundles(address.id, devices: devices);
     if (keys == null) throw const ApiError(ErrorCode.notFound);
     return jsonResponse(keys.toJson());
   }
@@ -218,6 +241,9 @@ final class _KeysFacade implements KeysApi {
   _KeysFacade(this._m);
 
   final KeysModule _m;
+
+  @override
+  void setRemoteSource(RemoteKeySource source) => _m._remote = source;
 
   @override
   Future<AccountKeys?> bundles(String accountId, {Set<String>? devices}) async {

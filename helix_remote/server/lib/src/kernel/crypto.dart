@@ -48,3 +48,21 @@ Future<bool> verifyEd25519({
     return false;
   }
 }
+
+/// An Ed25519 key from a 32-byte seed (server identity keys).
+final class Ed25519Signer {
+  Ed25519Signer._(this._pair, this.publicKey);
+
+  final SimpleKeyPair _pair;
+  final Uint8List publicKey;
+
+  static Future<Ed25519Signer> fromSeed(List<int> seed) async {
+    if (seed.length != 32) throw ArgumentError('seed must be 32 bytes');
+    final pair = await _ed25519.newKeyPairFromSeed(seed);
+    final public = await pair.extractPublicKey();
+    return Ed25519Signer._(pair, Uint8List.fromList(public.bytes));
+  }
+
+  Future<Uint8List> sign(List<int> message) async =>
+      Uint8List.fromList((await _ed25519.sign(message, keyPair: _pair)).bytes);
+}

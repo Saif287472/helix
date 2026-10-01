@@ -38,6 +38,7 @@ final class MessagingModule extends ModuleBase
   late final MailboxStore _store;
   late final MessagingApi api;
   BlockPolicy _blockPolicy = (db, sender, recipients) async => const <String>{};
+  MessageRelay? _relay;
 
   static const pushJob = 'messaging.push';
   static const maxRecipients = 1100;
@@ -63,7 +64,13 @@ final class MessagingModule extends ModuleBase
   @override
   List<Migration> get migrations => const [
     Migration(1, 'mailbox_baseline', mailboxBaseline),
+    Migration(2, 'federated_senders', _federatedSenders),
   ];
+
+  /// Senders on other servers are stored qualified (`uuid@domain`).
+  static String _federatedSenders(String s) =>
+      'ALTER TABLE $s.mailbox ALTER COLUMN sender_account TYPE text '
+      'USING sender_account::text;';
 
   @override
   Map<String, JobHandler> get jobs => {pushJob: _push};
@@ -89,43 +96,118 @@ final class MessagingModule extends ModuleBase
   Future<Response> _send(HelixRequest q) async {
     final me = q.device;
     final req = q.json(SendMessageRequest.fromJson);
-    if (!Uuid.isValid(req.id)) {
+    final parsed = _parse(
+      req.id,
+      req.recipients,
+      excludeDevice: me.deviceId,
+      allowRemote: true,
+    );
+    final remote = parsed.remote;
+    final relay = _relay;
+    return jsonResponse(
+      (await _accept(
+        id: req.id,
+        senderAccount: me.accountId,
+        senderDevice: me.deviceId,
+        parsed: parsed,
+        urgent: req.urgent,
+        ephemeral: req.ephemeral,
+        beforeDelivery: remote.isEmpty
+            ? null
+            : () => _relayAll(
+                relay!,
+                remote,
+                id: req.id,
+                sender: AccountAddress.local(
+                  me.accountId,
+                ).qualified(relay.localDomain),
+                senderDevice: me.deviceId,
+                urgent: req.urgent,
+                ephemeral: req.ephemeral,
+              ),
+      )).toJson(),
+    );
+  }
+
+  /// Sends the remote part of a send to each server. Stale device lists
+  /// from several servers are reported together.
+  Future<void> _relayAll(
+    MessageRelay relay,
+    Map<String, List<Recipient>> remote, {
+    required String id,
+    required String sender,
+    required String senderDevice,
+    required bool urgent,
+    required bool ephemeral,
+  }) async {
+    final stale = <StaleAccountDevices>[];
+    for (final entry in remote.entries) {
+      try {
+        await relay.relay(
+          entry.key,
+          S2SMessageBatch(
+            id: id,
+            sender: sender,
+            senderDevice: senderDevice,
+            recipients: entry.value,
+            urgent: urgent,
+            ephemeral: ephemeral,
+          ),
+        );
+      } on ApiError catch (e) {
+        if (e.code != ErrorCode.deviceListStale || e.details == null) rethrow;
+        stale.addAll(StaleDevices.fromJson(JsonReader.of(e.details)).accounts);
+      }
+    }
+    if (stale.isNotEmpty) {
+      throw ApiError(
+        ErrorCode.deviceListStale,
+        message: 'the device list changed',
+        details: StaleDevices(accounts: stale).toJson(),
+      );
+    }
+  }
+
+  /// Validates recipients: local accounts become `addressed` and
+  /// `payloads`; with [allowRemote], `uuid@domain` accounts are grouped by
+  /// domain (with bare ids, as that server knows them).
+  _ParsedSend _parse(
+    String id,
+    List<Recipient> recipients, {
+    String? excludeDevice,
+    required bool allowRemote,
+  }) {
+    if (!Uuid.isValid(id)) {
       throw const ApiError(ErrorCode.invalidField, details: {'field': 'id'});
     }
-    if (req.recipients.isEmpty) {
+    if (recipients.isEmpty) {
       throw const ApiError(
         ErrorCode.invalidField,
         details: {'field': 'recipients'},
       );
     }
-    final previous = await _store.acceptedAt(context.db, req.id);
-    if (previous != null) {
-      return jsonResponse(
-        SendMessageResponse(acceptedAt: previous, replayed: true).toJson(),
-      );
-    }
-
+    final local = _relay?.localDomain;
     final payloads = <String, Uint8List>{};
     final addressed = <String, Set<String>>{};
-    for (final recipient in req.recipients) {
-      if (recipient.account.contains('@')) {
-        throw const ApiError(
-          ErrorCode.federationUnavailable,
-          message: 'messages to other servers arrive with federation',
-        );
+    final remote = <String, List<Recipient>>{};
+    final seen = <AccountAddress>{};
+    var deviceCount = 0;
+    for (final recipient in recipients) {
+      var address = AccountAddress.tryParse(recipient.account);
+      if (address != null && local != null) {
+        address = address.relativeTo(local);
       }
-      if (!Uuid.isValid(recipient.account) ||
-          addressed.containsKey(recipient.account)) {
+      if (address == null || !seen.add(address)) {
         throw const ApiError(
           ErrorCode.invalidField,
           details: {'field': 'recipients'},
         );
       }
-      final devices = addressed[recipient.account] = <String>{};
+      final devices = <String>{};
       for (final d in recipient.devices) {
         if (!Uuid.isValid(d.device) ||
             !devices.add(d.device) ||
-            d.device == me.deviceId) {
+            d.device == excludeDevice) {
           throw const ApiError(
             ErrorCode.invalidField,
             details: {'field': 'recipients.devices'},
@@ -135,28 +217,67 @@ final class MessagingModule extends ModuleBase
             d.payload.length > SendMessageRequest.maxPayloadBytes) {
           throw const ApiError(ErrorCode.payloadTooLarge);
         }
-        payloads[d.device] = d.payload;
+      }
+      deviceCount += devices.length;
+      if (address.isRemote) {
+        if (!allowRemote || local == null) {
+          throw const ApiError(
+            ErrorCode.federationUnavailable,
+            message: 'this server does not federate',
+          );
+        }
+        remote
+            .putIfAbsent(address.domain!, () => [])
+            .add(Recipient(account: address.id, devices: recipient.devices));
+      } else {
+        addressed[address.id] = devices;
+        for (final d in recipient.devices) {
+          payloads[d.device] = d.payload;
+        }
       }
     }
-    if (payloads.length > maxRecipients) {
+    if (deviceCount > maxRecipients) {
       throw const ApiError(
         ErrorCode.invalidField,
         message: 'too many recipient devices',
       );
     }
+    return _ParsedSend(addressed, payloads, remote);
+  }
 
-    await api.checkDevices(
-      context.db,
-      addressed,
-      senderAccount: me.accountId,
-      senderDevice: me.deviceId,
-    );
+  /// The shared acceptance path of local and relayed sends: replay check,
+  /// exact device lists, [beforeDelivery] (relays to other servers), block
+  /// policy, then storage (or live delivery for ephemeral sends).
+  Future<SendMessageResponse> _accept({
+    required String id,
+    required String senderAccount,
+    required String senderDevice,
+    required _ParsedSend parsed,
+    required bool urgent,
+    required bool ephemeral,
+    Future<void> Function()? beforeDelivery,
+  }) async {
+    final previous = await _store.acceptedAt(context.db, id);
+    if (previous != null) {
+      return SendMessageResponse(acceptedAt: previous, replayed: true);
+    }
+    final payloads = parsed.payloads;
+    final addressed = parsed.addressed;
+    if (addressed.isNotEmpty) {
+      await api.checkDevices(
+        context.db,
+        addressed,
+        senderAccount: senderAccount,
+        senderDevice: senderDevice,
+      );
+    }
+    await beforeDelivery?.call();
 
     // Recipients who blocked the sender get nothing; the sender is not told.
     final blockers = await api.blockedBy(
       context.db,
-      me.accountId,
-      addressed.keys.where((a) => a != me.accountId),
+      senderAccount,
+      addressed.keys.where((a) => a != senderAccount),
     );
     for (final account in blockers) {
       for (final device in addressed[account]!) {
@@ -166,34 +287,58 @@ final class MessagingModule extends ModuleBase
 
     final delivery = Delivery(
       kind: EnvelopeKind.message,
-      id: req.id,
-      from: EnvelopeSender(account: me.accountId, device: me.deviceId),
-      urgent: req.urgent,
+      id: id,
+      from: EnvelopeSender(account: senderAccount, device: senderDevice),
+      urgent: urgent,
     );
 
-    if (req.ephemeral) {
+    if (ephemeral) {
       await api.deliverEphemeral(payloads, delivery);
-      return jsonResponse(
-        SendMessageResponse(acceptedAt: context.clock.now()).toJson(),
-      );
+      return SendMessageResponse(acceptedAt: context.clock.now());
     }
 
     final accepted = await context.db.tx((tx) async {
-      final at = await _store.recordSend(tx, req.id, me.deviceId);
+      final at = await _store.recordSend(tx, id, senderDevice);
       if (at == null) return null;
       await api.deliver(tx, payloads, delivery);
       return at;
     });
     if (accepted == null) {
-      final at = await _store.acceptedAt(context.db, req.id);
-      return jsonResponse(
-        SendMessageResponse(
-          acceptedAt: at ?? context.clock.now(),
-          replayed: true,
-        ).toJson(),
+      final at = await _store.acceptedAt(context.db, id);
+      return SendMessageResponse(
+        acceptedAt: at ?? context.clock.now(),
+        replayed: true,
       );
     }
-    return jsonResponse(SendMessageResponse(acceptedAt: accepted).toJson());
+    return SendMessageResponse(acceptedAt: accepted);
+  }
+
+  Future<SendMessageResponse> _receive(
+    String domain,
+    S2SMessageBatch batch,
+  ) async {
+    final sender = AccountAddress.tryParse(batch.sender);
+    if (sender == null || sender.domain != domain) {
+      throw const ApiError(
+        ErrorCode.forbidden,
+        message: 'the sender must belong to the calling server',
+      );
+    }
+    if (!Uuid.isValid(batch.senderDevice)) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'sender_device'},
+      );
+    }
+    final parsed = _parse(batch.id, batch.recipients, allowRemote: false);
+    return _accept(
+      id: batch.id,
+      senderAccount: sender.toString(),
+      senderDevice: batch.senderDevice,
+      parsed: parsed,
+      urgent: batch.urgent,
+      ephemeral: batch.ephemeral,
+    );
   }
 
   Future<Response> _mailbox(HelixRequest q) async {
@@ -466,9 +611,32 @@ final class _MessagingFacade implements MessagingApi {
   void setBlockPolicy(BlockPolicy policy) => _m._blockPolicy = policy;
 
   @override
+  void setRelay(MessageRelay relay) => _m._relay = relay;
+
+  @override
+  String? get localDomain => _m._relay?.localDomain;
+
+  @override
+  Future<SendMessageResponse> receive(String domain, S2SMessageBatch batch) =>
+      _m._receive(domain, batch);
+
+  @override
   Future<Set<String>> blockedBy(
     SqlSession db,
     String sender,
     Iterable<String> recipients,
   ) => _m._blockPolicy(db, sender, recipients);
+}
+
+final class _ParsedSend {
+  _ParsedSend(this.addressed, this.payloads, this.remote);
+
+  /// Local account -> addressed device ids.
+  final Map<String, Set<String>> addressed;
+
+  /// Local device -> sealed payload.
+  final Map<String, Uint8List> payloads;
+
+  /// Domain -> recipients with that server's bare account ids.
+  final Map<String, List<Recipient>> remote;
 }

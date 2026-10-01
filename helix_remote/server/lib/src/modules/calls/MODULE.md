@@ -26,3 +26,11 @@
   Limited to 10 per device per hour; 503 `unavailable` if not configured.
 - **Metrics:** quality numbers keyed by call id only, kept 90 days.
 - **Limits:** 30 offers per account per 10 minutes.
+
+## Federation
+
+Signals to `uuid@domain` go through `CallRelay` before any local device
+rings, and they are synchronous (`federation_unavailable` if that server is
+down). Signals from other servers enter through `CallsApi.receive`, with
+offer limits keyed by the qualified caller. `pending_calls.caller_account`
+is `text` since migration 2.

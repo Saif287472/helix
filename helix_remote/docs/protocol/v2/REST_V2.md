@@ -184,16 +184,29 @@ member device (and to removed members, so they know).
 
 ## federation
 
+Accounts on other servers are `<uuid>@<domain>` (`AccountAddress`); the
+domain is the authority of the home server's public base URL. Clients use
+qualified addresses anywhere an account id goes (`POST /v1/messages`
+recipients, `GET /v1/keys/{account}`, blocks, call signals). Their own
+server relays.
+
+Every S2S request is signed. The headers are `x-helix-s2s-server` (the
+caller's domain), `x-helix-s2s-timestamp` (ms) and `x-helix-s2s-signature`:
+base64url Ed25519 over `helix-s2s-v1|<server>|<timestamp>|<METHOD>|<path?query>|<base64url(sha256(body))>`
+(`s2sSigningInput`). The receiving server rejects a skew of more than
+±5 minutes and any reused signature. The caller's key comes from
+`https://<domain>/.well-known/helix-server`.
+
 | Route | Body → response | Rules |
 |---|---|---|
-| `GET /.well-known/helix-server` | — → `ServerIdentityDocument` | |
-| `POST /v1/s2s/messages` | batch of envelopes for local devices | Signed S2S headers (Ed25519 over `server|timestamp|method|path|sha256(body)`), ±5 min skew, replay cache. Specified in detail in Phase S6. |
-| `GET /v1/s2s/keys/{account}` | → `AccountKeys` | |
-| `POST /v1/s2s/groups/{group_id}/messages` | group fan-out to local members | |
-| `GET /v1/s2s/groups/{group_id}` | → `Group` | Home server only. |
-| `POST /v1/s2s/groups/{group_id}/actions` | proxied member actions | Acting account's domain must match the caller. |
-| `POST /v1/s2s/groups/{group_id}/sync` | roster push from the home server | |
-| `POST /v1/s2s/calls/{call_id}/signals` | call signal relay | |
+| `GET /.well-known/helix-server` | — → `ServerIdentityDocument` | `server_id` = domain; `api_base` on the same authority. |
+| `POST /v1/s2s/messages` | `S2SMessageBatch` → `SendMessageResponse` | `sender` qualified with the caller's domain (`forbidden` otherwise); recipients are the receiver's bare ids. The rules of `POST /v1/messages` apply (exact device lists, blocks, quotas, idempotent ids). |
+| `GET /v1/s2s/keys/{account}` | `?device=` repeatable → `AccountKeys` | Consumes one-time prekeys. Per-server and per-(server, account) limits. |
+| `POST /v1/s2s/groups/{group_id}/messages` | group fan-out to local members | Phase S6c. |
+| `GET /v1/s2s/groups/{group_id}` | → `Group` | Home server only. Phase S6c. |
+| `POST /v1/s2s/groups/{group_id}/actions` | proxied member actions | Acting account's domain must match the caller. Phase S6c. |
+| `POST /v1/s2s/groups/{group_id}/sync` | roster push from the home server | Phase S6c. |
+| `POST /v1/s2s/calls/{call_id}/signals` | `S2SCallSignal` → `CallSignalResponse` | Live only; offers to offline devices become pending calls there. |
 
 ## admin
 

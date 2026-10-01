@@ -2,6 +2,7 @@ import 'package:helix_remote_server/src/modules/admin/module.dart';
 import 'package:helix_remote_server/src/modules/backup/module.dart';
 import 'package:helix_remote_server/src/modules/calls/module.dart';
 import 'package:helix_remote_server/src/modules/compliance/module.dart';
+import 'package:helix_remote_server/src/modules/federation/module.dart';
 import 'package:helix_remote_server/src/modules/groups/module.dart';
 import 'package:helix_remote_server/src/modules/identity/module.dart';
 import 'package:helix_remote_server/src/modules/identity/sms.dart';
@@ -25,6 +26,7 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
   late MessagingModule messaging;
   late MediaModule media;
   late PeopleModule people;
+  late CallsModule calls;
   final exporters = <ProvidesAccountExport>[];
   final factories = <ModuleFactory>[
     (c) => ops = OpsModule(c),
@@ -46,7 +48,18 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
       messaging: messaging.api,
       people: people.api,
     ),
-    (c) => CallsModule(c, identity: identity.api, messaging: messaging.api),
+    (c) => calls = CallsModule(
+      c,
+      identity: identity.api,
+      messaging: messaging.api,
+    ),
+    (c) => FederationModule(
+      c,
+      ops: ops.api,
+      messaging: messaging.api,
+      keys: keys.api,
+      calls: calls.api,
+    ),
     (c) => AdminModule(
       c,
       identity: identity.api,

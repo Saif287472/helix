@@ -30,5 +30,8 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   They survive account deletion as the moderation record (ids only).
 - **Export:** profile version, privacy, blocked accounts, contact count,
   reports filed.
+- **Remote accounts:** blocks accept `uuid@domain` (stored qualified;
+  `blocked` is `text` since migration 2). Messages and calls relayed from
+  that account are then dropped like local ones.
 - **Account deletion** purges every row about the account, including
   blocks and contacts on other accounts that name it.

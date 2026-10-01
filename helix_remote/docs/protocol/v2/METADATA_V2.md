@@ -26,6 +26,7 @@ users run.
 | Recipients of a message | yes | yes, until delivered |
 | Timing and size | yes | yes; sizes padded to 160-byte blocks |
 | IP addresses | request logs | request logs (redacted per `redacted_logger`); no IP in the database except rate-limit buckets (TTL) |
+| Federation (sender and recipient on different servers) | both servers see sender, recipients, devices, timing, size | the same: the sender's server sees the qualified recipient and device ids; the recipient's server sees the qualified sender and device. Ciphertext only. Undelivered relays wait in the sender server's job queue (at most 12 retries). Each server keeps a peer cache: domain, key, API base, last seen. |
 
 ## Claims v2 can make (once implemented and tested)
 

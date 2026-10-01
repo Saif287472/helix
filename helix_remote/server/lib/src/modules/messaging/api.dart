@@ -13,6 +13,19 @@ typedef BlockPolicy =
       Iterable<String> recipients,
     );
 
+/// Outbound federation for sends that address `uuid@domain` accounts
+/// (installed by the federation module).
+abstract interface class MessageRelay {
+  /// This server's domain: addresses qualified with it are local.
+  String get localDomain;
+
+  /// Hands [batch] to [domain]'s server. Returns once it is accepted there,
+  /// or queued for retry while that server is unreachable. Throws
+  /// `device_list_stale` (accounts qualified with [domain]) or `not_found`
+  /// as that server answers.
+  Future<void> relay(String domain, S2SMessageBatch batch);
+}
+
 /// What to deliver. Server-generated kinds use [data]; user kinds carry a
 /// sealed payload per device.
 final class Delivery {
@@ -81,6 +94,18 @@ abstract interface class MessagingApi {
   Future<Envelope?> takeEphemeral(String ref);
 
   void setBlockPolicy(BlockPolicy policy);
+
+  /// Enables sends to other servers.
+  void setRelay(MessageRelay relay);
+
+  /// The domain local accounts are qualified with, once federation is
+  /// installed.
+  String? get localDomain;
+
+  /// Accepts a send relayed by [domain]'s server (already authenticated)
+  /// for this server's devices: the same device-list, block, quota and
+  /// idempotency rules as a local send.
+  Future<SendMessageResponse> receive(String domain, S2SMessageBatch batch);
 
   /// Recipients (of [recipients]) who blocked [sender].
   Future<Set<String>> blockedBy(
