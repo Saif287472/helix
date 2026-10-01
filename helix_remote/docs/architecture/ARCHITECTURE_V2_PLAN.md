@@ -1,6 +1,9 @@
 # Helix Remote Architecture v2 — Plan of Record
 
-Status: **accepted plan, not started** · Written 2026-09-30 · Owner: hasan
+Status: **in progress — Phase 0 done, next: P1** · Written 2026-09-30 · Owner: hasan
+
+> **Authoritative copy:** this file on branch `architecture-v2` (worktree
+> `J:\hx2`). The copy on `main` is a snapshot from before Phase 0.
 
 This is the single plan for rebuilding Helix Remote so it can grow ~10× in
 features and serve millions of users without another architecture change.
@@ -639,7 +642,7 @@ user does.
 
 | Phase | Status | Date | Commit | Notes |
 |---|---|---|---|---|
-| 0 Decisions, tooling | not started | | | |
+| 0 Decisions, tooling | **done** | 2026-10-01 | Phase 0 commit on `architecture-v2` | ADRs 025–029. `helix_remote_architecture_rules` (20 tests). `server/` skeleton (7 tests: architecture rules plus a Postgres 17 smoke test that is green against the local DB). `postgres 3.5.17` locked (lockfile additions only). Postgres 17 service on CI `verify-linux` with `HELIX_REQUIRE_TEST_DATABASE=1`. Verify scripts cover `server/`. Local role and DBs created by the user. Known pre-existing failure: governance check (3 stale screen-capture controls, identical on `main`). |
 | P1 Protocol | not started | | | |
 | S1 Server platform | not started | | | |
 | S2 identity + keys | not started | | | |
@@ -666,15 +669,25 @@ C1 and C2 may run once P1 is done. C3 needs S3. A1 needs C3. X comes last.
 | Date | Change | Approved in |
 |---|---|---|
 | 2026-09-30 | Plan created (D1–D5). | this session |
+| 2026-10-01 | §13 recommendations accepted (history, locked chats, native Postgres). Phase 0: v2 CI coverage goes into the existing `verify-linux`/`verify-windows` jobs instead of separate jobs. `helix_remote_architecture_rules` is a test-only package (`testOnlyPackages`), importable only from `test/`. | this session |
 
 ## 13. Open questions (resolve in the named phase, record the answer here)
 
-- **P1:** new-device history only from transfer/backup (no server history)?
-  Recommended: yes.
-- **P1:** do locked chats need their own key beyond SQLCipher, or is the lock
-  a UI gate? Recommended: a UI gate, plus hiding the chat from the list and
-  notifications.
-- **S5/A3:** ship group calls in v2, or defer? Today their UI is not wired.
-- **S1:** S3 client dependency vs a small in-house SigV4 signer.
-- **Phase 0:** is Postgres in Docker or native on the PC? Recommended:
-  native.
+On 2026-09-30 the user accepted the recommendations ("continue as your
+recommendation"):
+
+- **Resolved — history:** a new device gets history only through
+  device-to-device transfer or the encrypted history backup. There is no
+  server history (ADR-028).
+- **Resolved — locked chats:** the lock is a UI gate plus hiding the chat
+  from the list and from notifications. There is no extra key beyond
+  SQLCipher.
+- **Resolved — Postgres:** it runs natively on the PC, as the existing
+  `postgresql-x64-17` service. The `helix` role and the `helix` and
+  `helix_test` databases come from `server/tool/setup_local_postgres.ps1`,
+  which the user runs. Agents never handle Postgres passwords.
+- **Still open:**
+  - **S5/A3:** ship group calls in v2, or defer? Their v1 UI is not wired.
+    Recommended: defer, unless the user asks for them.
+  - **S1:** an S3 client dependency vs a small in-house SigV4 signer
+    (candidates in the dependency risk register).

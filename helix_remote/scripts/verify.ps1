@@ -46,15 +46,15 @@ function Invoke-Step {
 
 if (-not (Test-BuildOnlyEnabled)) {
     Invoke-Step "Dart format check" {
-        dart format --output=none --set-exit-if-changed app admin backend packages tool
+        dart format --output=none --set-exit-if-changed app admin backend server packages tool
     }
 
     Invoke-Step "Flutter analyze" {
         flutter analyze @FlutterPubArgs
     }
 
-    Invoke-Step "Dart analyze (backend and tooling)" {
-        dart analyze backend tool
+    Invoke-Step "Dart analyze (backend, v2 server and tooling)" {
+        dart analyze backend server tool
     }
 
     Invoke-Step "Flutter tests (app)" {
@@ -77,6 +77,18 @@ if (-not (Test-BuildOnlyEnabled)) {
 
     Invoke-Step "Tests: backend" {
         Push-Location backend
+        try {
+            dart test
+        } finally {
+            Pop-Location
+        }
+    }
+
+    # v2 server (ARCHITECTURE_V2_PLAN.md). Database tests skip unless
+    # HELIX_TEST_DATABASE_URL is set; CI sets HELIX_REQUIRE_TEST_DATABASE=1
+    # on Linux so they cannot silently skip there.
+    Invoke-Step "Tests: server (v2)" {
+        Push-Location server
         try {
             dart test
         } finally {

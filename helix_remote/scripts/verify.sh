@@ -48,17 +48,22 @@ build_only_enabled() {
 }
 
 if ! build_only_enabled; then
-run_step "Dart format check" dart format --output=none --set-exit-if-changed app admin backend packages tool
+run_step "Dart format check" dart format --output=none --set-exit-if-changed app admin backend server packages tool
 
 run_step "Flutter analyze" flutter analyze "${flutter_pub_args[@]}"
 
-run_step "Dart analyze (backend and tooling)" dart analyze backend tool
+run_step "Dart analyze (backend, v2 server and tooling)" dart analyze backend server tool
 
 run_step "Flutter tests (app)" bash -c 'cd app && flutter test "$@"' _ "${flutter_pub_args[@]}"
 
 run_step "Flutter tests (admin)" bash -c 'cd admin && flutter test "$@"' _ "${flutter_pub_args[@]}"
 
 run_step "Tests: backend" bash -c 'cd backend && dart test'
+
+# v2 server (ARCHITECTURE_V2_PLAN.md). Database tests skip unless
+# HELIX_TEST_DATABASE_URL is set; CI sets HELIX_REQUIRE_TEST_DATABASE=1 so
+# they cannot silently skip there.
+run_step "Tests: server (v2)" bash -c 'cd server && dart test'
 
 for pkg in packages/*/; do
   [ -d "$pkg" ] || continue

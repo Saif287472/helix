@@ -8,6 +8,7 @@ workspace:
   - app
   - admin
   - backend
+  - server
   - tool
   - packages/helix_remote_domain
   - packages/helix_remote_api
@@ -18,6 +19,7 @@ workspace:
   - packages/helix_remote_groups
   - packages/helix_remote_cli
   - packages/helix_remote_ui
+  - packages/helix_remote_architecture_rules
 
 hooks:
   user_defines:

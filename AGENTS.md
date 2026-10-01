@@ -22,6 +22,18 @@ architecture needs a user-approved change-log entry (§12). v2 work happens on
 branch `architecture-v2` in a worktree; `main` and this checkout stay the live
 v1 until cutover, and the rest of this file describes v1.
 
+v2 working notes (branch `architecture-v2`, worktree `J:\hx2`):
+
+- The plan copy on this branch is authoritative (the tracker lives here).
+- v2 server: `helix_remote/server/` (package `helix_remote_server`); see its
+  `README.md`. Tests need PostgreSQL: `HELIX_TEST_DATABASE_URL` (a Windows
+  user env var, set by `server/tool/setup_local_postgres.ps1`, which the user
+  runs; never print or log it). Without it, database tests skip locally; CI
+  sets `HELIX_REQUIRE_TEST_DATABASE=1` so they fail there instead.
+- Boundaries: `packages/helix_remote_architecture_rules` (test-only). Every
+  v2 package has a `test/architecture_test.dart`; a new v2 package must be
+  added to `v2PackageDependencies` in the same change.
+
 ## Repository map
 
 Two separate Dart/Flutter workspaces; there is no root `pubspec.yaml`.
@@ -161,6 +173,12 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 None as of 2026-09-30 (app 486, backend 577, admin 109, api 46, storage 25,
 sync 13, calls 73 - all passing). Add any failure you confirm is pre-existing here,
 with the date.
+
+- 2026-10-01: `dart run tool/check_governance_controls.dart` exits 1 on three
+  stale screen-capture controls (MainActivity `screen_security` channel,
+  `windows/runner/screen_security.cpp`, its CMake entry). Identical on `main`;
+  the capture blocking was removed on purpose (screenshots allowed). Fix on
+  `main` by retiring those controls, not by restoring capture blocking.
 
 ## Working on Windows
 

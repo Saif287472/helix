@@ -3,6 +3,10 @@
 Status: accepted  
 Date: 2026-06-20
 
+> For the v2 server (`helix_remote/server/`, branch `architecture-v2`), the
+> storage and topology parts of this ADR are superseded by ADR-025. This ADR
+> keeps describing the live v1 `backend/` until the v2 cutover.
+
 ## Context
 
 The repository contains an executable Dart/Shelf backend under

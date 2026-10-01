@@ -5,6 +5,23 @@
 | `sqlite3_flutter_libs` | `0.6.0+eol` | EOL marker in resolved package version. Remote storage no longer depends on it after P2-01; Local storage still resolves it and must be reviewed separately. | storage-team | Keep visible until Local storage removes the obsolete shim or records a product-specific exception. |
 | `file_picker` | `12.0.0-beta.7` | **Directly declared** by Helix Remote at `helix_remote/app/pubspec.yaml`, as a prerelease *ahead of* the 11.x stable line, so no stability guarantee applies. Recorded as an accepted exception in [ADR-024](../../helix_remote/docs/adr/024-file-picker-prerelease-exception.md). The committed `helix_remote/pubspec.lock` is what pins it; the declared caret range does not. | platform-team | Hold at the locked resolution. Revisit when `file_picker` 12 reaches stable, and retire the exception then. |
 
+## Architecture v2 dependency intake (2026-09-30)
+
+These are the new direct dependencies for the Helix Remote v2 rebuild
+(`helix_remote/docs/architecture/ARCHITECTURE_V2_PLAN.md`, ADR-025/027). Each
+is added to a pubspec only in the plan phase that first uses it, and its
+lockfile change is reviewed then, not in advance. Versions are the latest
+stable releases checked on 2026-09-30.
+
+| Package | Version | Declared by | Phase | Risk | Owner | Remediation |
+|---|---:|---|---|---|---|---|
+| `postgres` | `3.5.17` | `helix_remote/server` (**added in Phase 0**) | 0 | The only maintained pure-Dart PostgreSQL driver, with a small maintainer base. All SQL for the v2 server goes through it. | server-team | The `Db`/`Tx` interface (Phase S1) keeps it replaceable. Pin via the lockfile. The Postgres test suites run in CI against a real `postgres:17` service. |
+| `drift` / `drift_dev` | `2.35.0` | `packages/helix_remote_db` | C1 | Code generation. Stale generated code could diverge from the schema. It must work with the `sqlite3` SQLCipher hook. | client-team | Commit the generated code, and have CI fail when `build_runner` output is stale. Carry over the SQLCipher wrong-key and no-plaintext tests (P2-01). Check drift schema dumps and migration tests in from the first release. |
+| `build_runner` | `2.16.1` | dev-only (`helix_remote_db`) | C1 | Dev tool only, with a large transitive tree. | client-team | Keep it in `dev_dependencies` only. It is not part of the shipped app. |
+| `flutter_riverpod` | `3.4.3` | `helix_remote/app` | A1 | Central to UI state. A major bump later would touch every feature. | client-team | Use plain providers, with no `riverpod_generator`, so there is less codegen to keep in step. Take upgrades on their own, with the widget suite. |
+| `go_router` | `18.0.2` | `helix_remote/app` | A1 | Routing and deep links (`helix://`, `/open` links). A regression breaks shared links silently. | client-team | Deep-link tests for both link forms, plus the hidden advanced-mode entry. |
+| S3 client (undecided) | — | `helix_remote/server` | S1 | Candidates: `aws_signature_v4` `0.6.13` (maintained, request signing only) or `minio` `3.5.8` (last release 2025-08, a staleness risk). | server-team | Decide in S1 (plan §13). The local-filesystem `ObjectStorage` ships first either way. |
+
 ## Deferred major upgrades (MED-8)
 
 The audit recorded several client dependencies as materially behind. The minor gaps

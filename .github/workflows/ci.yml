@@ -96,8 +96,29 @@ jobs:
     defaults:
       run:
         working-directory: helix_remote
+    # PostgreSQL for the v2 server tests (ADR-025). The credentials only exist
+    # inside this throwaway service container. HELIX_REQUIRE_TEST_DATABASE
+    # turns a missing database into a failure instead of skipped tests, so
+    # this job is where the database suites are guaranteed to run. The
+    # Windows job cannot run Linux service containers and skips them.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: helix
+          POSTGRES_PASSWORD: helix-ci
+          POSTGRES_DB: helix_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U helix -d helix_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       CI: "true"
+      HELIX_TEST_DATABASE_URL: postgresql://helix:helix-ci@127.0.0.1:5432/helix_test?sslmode=disable
+      HELIX_REQUIRE_TEST_DATABASE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
