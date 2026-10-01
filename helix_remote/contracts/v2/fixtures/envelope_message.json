@@ -1,0 +1,12 @@
+{
+  "id": "0192a4f0-0000-7000-8000-00000000000d",
+  "kind": "message",
+  "sent_at": 1790856000000,
+  "seq": 1042,
+  "from": {
+    "account": "0192a4f0-0000-7000-8000-00000000000a",
+    "device": "0192a4f0-0000-7000-8000-0000000000a1"
+  },
+  "payload": "Bg0UGyIpMDc-RUxTWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7AgkQFx4lLDM6QUhP",
+  "urgent": true
+}

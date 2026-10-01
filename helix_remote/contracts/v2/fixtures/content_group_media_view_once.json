@@ -1,0 +1,31 @@
+{
+  "v": 1,
+  "id": "0192a4f0-0000-7000-8000-00000000000d",
+  "ts": 1790856000000,
+  "conv": {
+    "kind": "group",
+    "group": "0192a4f0-0000-7000-8000-00000000000c"
+  },
+  "type": "media",
+  "body": {
+    "items": [
+      {
+        "kind": "image",
+        "media": {
+          "id": "0192a4f0-0000-7000-8000-0000000000ee",
+          "key": "BAsSGSAnLjU8Q0pRWF9mbXR7gomQl56lrLO6wcjP1t0",
+          "digest": "BQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-mrbS7wsnQ194",
+          "size": 52311,
+          "mime": "image/jpeg",
+          "blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        },
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  },
+  "exp": 604800,
+  "flags": {
+    "view_once": true
+  }
+}

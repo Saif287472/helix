@@ -33,6 +33,12 @@ v2 working notes (branch `architecture-v2`, worktree `J:\hx2`):
 - Boundaries: `packages/helix_remote_architecture_rules` (test-only). Every
   v2 package has a `test/architecture_test.dart`; a new v2 package must be
   added to `v2PackageDependencies` in the same change.
+- Wire contract: `packages/helix_remote_protocol` + `docs/protocol/v2/`.
+  Golden fixtures in `contracts/v2/fixtures/` change only deliberately
+  (`HELIX_UPDATE_FIXTURES=1 dart test` in the protocol package).
+- `flutter pub get` rewrites line endings of the generated plugin registrant
+  files under `app/windows/flutter` and `admin/{linux,macos,windows}`; they
+  are noise - `git checkout --` them before committing.
 
 ## Repository map
 

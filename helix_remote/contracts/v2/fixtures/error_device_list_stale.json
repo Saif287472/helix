@@ -1,0 +1,17 @@
+{
+  "error": {
+    "code": "device_list_stale",
+    "message": "The recipient has new devices.",
+    "details": {
+      "accounts": [
+        {
+          "account": "0192a4f0-0000-7000-8000-00000000000b",
+          "missing": [
+            "0192a4f0-0000-7000-8000-0000000000b1"
+          ],
+          "extra": []
+        }
+      ]
+    }
+  }
+}

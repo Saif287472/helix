@@ -20,6 +20,7 @@ workspace:
   - packages/helix_remote_cli
   - packages/helix_remote_ui
   - packages/helix_remote_architecture_rules
+  - packages/helix_remote_protocol
 
 hooks:
   user_defines:
