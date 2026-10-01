@@ -27,6 +27,7 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
   late MediaModule media;
   late PeopleModule people;
   late CallsModule calls;
+  late GroupsModule groups;
   final exporters = <ProvidesAccountExport>[];
   final factories = <ModuleFactory>[
     (c) => ops = OpsModule(c),
@@ -42,7 +43,7 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
     ),
     (c) => media = MediaModule(c, identity: identity.api),
     (c) => BackupModule(c, identity: identity.api, media: media.api),
-    (c) => GroupsModule(
+    (c) => groups = GroupsModule(
       c,
       identity: identity.api,
       messaging: messaging.api,
@@ -59,6 +60,7 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
       messaging: messaging.api,
       keys: keys.api,
       calls: calls.api,
+      groups: groups.api,
     ),
     (c) => AdminModule(
       c,

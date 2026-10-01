@@ -3,10 +3,12 @@ import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/kernel/crypto.dart';
+import 'package:helix_remote_server/src/kernel/relay.dart';
 import 'package:helix_remote_server/src/modules/calls/api.dart';
 import 'package:helix_remote_server/src/modules/federation/config.dart';
 import 'package:helix_remote_server/src/modules/federation/data/federation_store.dart';
 import 'package:helix_remote_server/src/modules/federation/peers.dart';
+import 'package:helix_remote_server/src/modules/groups/api.dart';
 import 'package:helix_remote_server/src/modules/keys/api.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
 import 'package:helix_remote_server/src/modules/ops/api.dart';
@@ -24,8 +26,8 @@ import 'package:shelf/shelf.dart';
 /// and relays for messages, key bundles and call signals. Accounts on other
 /// servers are `uuid@domain`. Schema `federation`.
 ///
-/// Group federation (home-server authority over remote members) is Phase
-/// S6c; its S2S routes answer `federation_unavailable` until then.
+/// Groups federate through their home server (groups module,
+/// `federation.dart`); this module carries its S2S calls.
 final class FederationModule extends ModuleBase
     implements ProvidesAuthentication {
   FederationModule(
@@ -34,6 +36,7 @@ final class FederationModule extends ModuleBase
     required this.messaging,
     required this.keys,
     required this.calls,
+    required this.groups,
     http.Client? httpClient,
   }) : config = FederationConfig.from(context.config),
        _http = httpClient ?? http.Client() {
@@ -52,12 +55,14 @@ final class FederationModule extends ModuleBase
     messaging.setRelay(relay);
     keys.setRemoteSource(relay);
     calls.setRelay(relay);
+    groups.setRelay(relay);
   }
 
   final OpsApi ops;
   final MessagingApi messaging;
   final KeysApi keys;
   final CallsApi calls;
+  final GroupsApi groups;
   final FederationConfig config;
   final http.Client _http;
   late final FederationStore _store;
@@ -148,14 +153,29 @@ final class FederationModule extends ModuleBase
         rateLimit: _signalsLimit,
         maxBodyBytes: 1024 * 1024,
       );
-    for (final route in [
-      Routes.s2sGroupMessages,
-      Routes.s2sGroup,
-      Routes.s2sGroupActions,
-      Routes.s2sGroupSync,
-    ]) {
-      r.add(name, route, _groupsLater);
-    }
+    r
+      ..add(
+        name,
+        Routes.s2sGroupMessages,
+        _inboundGroupMessage,
+        rateLimit: _messagesLimit,
+        maxBodyBytes: 8 * 1024 * 1024,
+      )
+      ..add(name, Routes.s2sGroup, _inboundGroup, rateLimit: _signalsLimit)
+      ..add(
+        name,
+        Routes.s2sGroupActions,
+        _inboundGroupAction,
+        rateLimit: _signalsLimit,
+        maxBodyBytes: 8 * 1024 * 1024,
+      )
+      ..add(
+        name,
+        Routes.s2sGroupSync,
+        _inboundGroupSync,
+        rateLimit: _signalsLimit,
+        maxBodyBytes: 1024 * 1024,
+      );
   }
 
   Future<bool> get enabled async => (await ops.settings()).federationEnabled;
@@ -217,10 +237,57 @@ final class FederationModule extends ModuleBase
     return jsonResponse(answer.toJson());
   }
 
-  Future<Response> _groupsLater(HelixRequest q) async => throw const ApiError(
-    ErrorCode.federationUnavailable,
-    message: 'group federation is not available on this server yet',
+  Future<Response> _inboundGroupMessage(HelixRequest q) async {
+    await groups.receiveMessage(
+      q.server.serverId,
+      q.uuidParam('group_id'),
+      q.json(S2SGroupMessage.fromJson),
+    );
+    return noContent();
+  }
+
+  Future<Response> _inboundGroup(HelixRequest q) async {
+    final group = await groups.viewFor(
+      q.server.serverId,
+      q.uuidParam('group_id'),
+    );
+    if (group == null) throw const ApiError(ErrorCode.notFound);
+    return jsonResponse(group.toJson());
+  }
+
+  Future<Response> _inboundGroupAction(HelixRequest q) async => jsonResponse(
+    (await groups.receiveAction(
+      q.server.serverId,
+      q.uuidParam('group_id'),
+      q.json(S2SGroupAction.fromJson),
+    )).toJson(),
   );
+
+  Future<Response> _inboundGroupSync(HelixRequest q) async => jsonResponse(
+    (await groups.receiveSync(
+      q.server.serverId,
+      q.uuidParam('group_id'),
+      q.json(S2SGroupSync.fromJson),
+    )).toJson(),
+  );
+
+  /// A group call: refusals become ApiError, unreachable servers
+  /// [RelayUnavailable] (queued group work retries on it).
+  Future<JsonReader?> _groupCall(
+    String domain,
+    String method,
+    String path, {
+    JsonMap? body,
+  }) async {
+    await _requireEnabled();
+    try {
+      return await client.call(domain, method, path, body: body);
+    } on PeerRefused catch (e) {
+      throw _mapRefusal(e.error, domain);
+    } on PeerUnavailable catch (e) {
+      throw RelayUnavailable(e.reason);
+    }
+  }
 
   // -------------------------------------------------------------- outbound
 
@@ -417,7 +484,8 @@ final class FederationModule extends ModuleBase
 }
 
 /// The hooks the federation module installs in messaging, keys and calls.
-final class _Relay implements MessageRelay, RemoteKeySource, CallRelay {
+final class _Relay
+    implements MessageRelay, RemoteKeySource, CallRelay, GroupRelay {
   _Relay(this._m);
 
   final FederationModule _m;
@@ -442,6 +510,68 @@ final class _Relay implements MessageRelay, RemoteKeySource, CallRelay {
     String callId,
     S2SCallSignal signal,
   ) => _m._relaySignal(domain, callId, signal);
+
+  @override
+  Future<S2SGroupActionResult> action(
+    String home,
+    String groupId,
+    S2SGroupAction action,
+  ) async {
+    final json = await _m._groupCall(
+      home,
+      'POST',
+      Routes.s2sGroupActions.expand({'group_id': groupId}),
+      body: action.toJson(),
+    );
+    if (json == null) throw const RelayUnavailable('empty action answer');
+    return S2SGroupActionResult.fromJson(json);
+  }
+
+  @override
+  Future<Group?> fetchGroup(String home, String groupId) async {
+    try {
+      final json = await _m._groupCall(
+        home,
+        'GET',
+        Routes.s2sGroup.expand({'group_id': groupId}),
+      );
+      return json == null ? null : Group.fromJson(json);
+    } on ApiError catch (e) {
+      if (e.code == ErrorCode.notFound) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<S2SGroupSyncResponse> sync(
+    String domain,
+    String groupId,
+    S2SGroupSync sync,
+  ) async {
+    final json = await _m._groupCall(
+      domain,
+      'POST',
+      Routes.s2sGroupSync.expand({'group_id': groupId}),
+      body: sync.toJson(),
+    );
+    return json == null
+        ? const S2SGroupSyncResponse()
+        : S2SGroupSyncResponse.fromJson(json);
+  }
+
+  @override
+  Future<void> message(
+    String domain,
+    String groupId,
+    S2SGroupMessage message,
+  ) async {
+    await _m._groupCall(
+      domain,
+      'POST',
+      Routes.s2sGroupMessages.expand({'group_id': groupId}),
+      body: message.toJson(),
+    );
+  }
 }
 
 final class _ServerAuthenticator implements Authenticator {

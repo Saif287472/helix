@@ -70,10 +70,9 @@ and `x-helix-s2s-signature`: Ed25519 over `s2sSigningInput`, which is
 | In: messages | same | `MessagingApi.receive`. The sender must be qualified with the calling domain (`forbidden` otherwise). Same device-list, block, quota and idempotency rules as a local send. |
 | Out/In: keys | `GET /v1/s2s/keys/{account}` | Consumes one-time prekeys on the home server. Inbound: 600 per minute per server, 30 per minute per (server, account). |
 | Out/In: call signals | `POST /v1/s2s/calls/{call_id}/signals` | Synchronous, no queue (calls are live). Unreachable is `federation_unavailable`. Offers to offline remote devices become pending calls on their server. |
-| Groups | `/v1/s2s/groups/…` | Phase S6c; `federation_unavailable` until then. |
+| Groups | `/v1/s2s/groups/{id}`, `…/actions`, `…/sync`, `…/messages` | Carried for the groups module (see its MODULE.md): member actions to the home (always answered 200 with the operation's own status and body inside), snapshots and fan-out from the home. Unreachable peers raise `RelayUnavailable` so queued group work retries. |
 
 ## Not covered
 
 - Remote profiles and presence (no S2S route in the catalog): clients show
   the address until profile exchange is designed (review item).
-- Group federation: S6c.

@@ -312,6 +312,9 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       case 'nobody':
         return false;
       default:
+        // Contacts are phone-book matches on this server; an account on
+        // another server is never one.
+        if (viewer.contains('@')) return false;
         final row = await context.db.queryOne(
           'SELECT 1 FROM $s.contacts WHERE account_id = @o:uuid AND contact = @v:uuid',
           {'o': owner, 'v': viewer},

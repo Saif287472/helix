@@ -202,10 +202,10 @@ base64url Ed25519 over `helix-s2s-v1|<server>|<timestamp>|<METHOD>|<path?query>|
 | `GET /.well-known/helix-server` | — → `ServerIdentityDocument` | `server_id` = domain; `api_base` on the same authority. |
 | `POST /v1/s2s/messages` | `S2SMessageBatch` → `SendMessageResponse` | `sender` qualified with the caller's domain (`forbidden` otherwise); recipients are the receiver's bare ids. The rules of `POST /v1/messages` apply (exact device lists, blocks, quotas, idempotent ids). |
 | `GET /v1/s2s/keys/{account}` | `?device=` repeatable → `AccountKeys` | Consumes one-time prekeys. Per-server and per-(server, account) limits. |
-| `POST /v1/s2s/groups/{group_id}/messages` | group fan-out to local members | Phase S6c. |
-| `GET /v1/s2s/groups/{group_id}` | → `Group` | Home server only. Phase S6c. |
-| `POST /v1/s2s/groups/{group_id}/actions` | proxied member actions | Acting account's domain must match the caller. Phase S6c. |
-| `POST /v1/s2s/groups/{group_id}/sync` | roster push from the home server | Phase S6c. |
+| `POST /v1/s2s/groups/{group_id}/messages` | `S2SGroupMessage` → 204 | Home → member server: a group message and its distributions for the receiver's member devices. Only the group's home may send. |
+| `GET /v1/s2s/groups/{group_id}` | → `Group` | Home server only, in the caller's frame, if the caller has members. |
+| `POST /v1/s2s/groups/{group_id}/actions` | `S2SGroupAction` → `S2SGroupActionResult` | Member server → home: runs the client route named by `action` for `actor`, whose domain must be the caller's. The result carries that route's status and body. `devices` reports a member's devices. |
+| `POST /v1/s2s/groups/{group_id}/sync` | `S2SGroupSync` → `S2SGroupSyncResponse` | Home → member server: the snapshot (null when deleted) and the change to deliver. The response lists members' devices and the accounts refused (unknown, privacy, blocks). Older `roster_version`s are ignored. |
 | `POST /v1/s2s/calls/{call_id}/signals` | `S2SCallSignal` → `CallSignalResponse` | Live only; offers to offline devices become pending calls there. |
 
 ## admin

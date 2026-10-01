@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -53,6 +54,39 @@ CREATE TABLE $s.join_requests (
 );
 ''';
 
+  /// Group federation (Phase S6c). On the home server, member, ban and join
+  /// request accounts may be `uuid@domain`, `roster_version` orders the
+  /// snapshots pushed to other servers, and `remote_devices` holds the
+  /// devices those servers report for their members. On a member's server,
+  /// `remote_groups` caches groups homed elsewhere that local accounts
+  /// belong to (`remote_members`).
+  static String federation(String s) =>
+      '''
+ALTER TABLE $s.members ALTER COLUMN account_id TYPE text USING account_id::text;
+ALTER TABLE $s.bans ALTER COLUMN account_id TYPE text USING account_id::text;
+ALTER TABLE $s.join_requests ALTER COLUMN account_id TYPE text USING account_id::text;
+ALTER TABLE $s.groups ADD COLUMN roster_version bigint NOT NULL DEFAULT 0;
+CREATE TABLE $s.remote_devices (
+  account text NOT NULL,
+  device_id uuid NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account, device_id)
+);
+CREATE TABLE $s.remote_groups (
+  group_id uuid PRIMARY KEY,
+  home_domain text NOT NULL,
+  roster_version bigint NOT NULL,
+  snapshot jsonb NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE $s.remote_members (
+  group_id uuid NOT NULL REFERENCES $s.remote_groups (group_id) ON DELETE CASCADE,
+  account_id uuid NOT NULL,
+  PRIMARY KEY (group_id, account_id)
+);
+CREATE INDEX remote_members_account ON $s.remote_members (account_id);
+''';
+
   Future<void> insertGroup(
     Tx tx, {
     required String id,
@@ -79,7 +113,7 @@ CREATE TABLE $s.join_requests (
     String id, {
     bool forUpdate = false,
   }) => db.queryOne(
-    'SELECT id, epoch, state_version, encrypted_state, add_members, edit_info, send_messages, created_at '
+    'SELECT id, epoch, state_version, encrypted_state, add_members, edit_info, send_messages, created_at, roster_version '
     'FROM $s.groups WHERE id = @id:uuid${forUpdate ? ' FOR UPDATE' : ''}',
     {'id': id},
   );
@@ -115,7 +149,7 @@ CREATE TABLE $s.join_requests (
     String accountId,
   ) async {
     final r = await db.queryOne(
-      'SELECT role FROM $s.members WHERE group_id = @g:uuid AND account_id = @a:uuid',
+      'SELECT role FROM $s.members WHERE group_id = @g:uuid AND account_id = @a:text',
       {'g': groupId, 'a': accountId},
     );
     return r == null
@@ -138,19 +172,19 @@ CREATE TABLE $s.join_requests (
     GroupRole role,
   ) async {
     await tx.execute(
-      'INSERT INTO $s.members (group_id, account_id, role) VALUES (@g:uuid, @a:uuid, @r:text) '
+      'INSERT INTO $s.members (group_id, account_id, role) VALUES (@g:uuid, @a:text, @r:text) '
       'ON CONFLICT DO NOTHING',
       {'g': groupId, 'a': accountId, 'r': role.wire},
     );
     await tx.execute(
-      'DELETE FROM $s.join_requests WHERE group_id = @g:uuid AND account_id = @a:uuid',
+      'DELETE FROM $s.join_requests WHERE group_id = @g:uuid AND account_id = @a:text',
       {'g': groupId, 'a': accountId},
     );
   }
 
   Future<bool> removeMember(Tx tx, String groupId, String accountId) async =>
       await tx.execute(
-        'DELETE FROM $s.members WHERE group_id = @g:uuid AND account_id = @a:uuid',
+        'DELETE FROM $s.members WHERE group_id = @g:uuid AND account_id = @a:text',
         {'g': groupId, 'a': accountId},
       ) ==
       1;
@@ -162,7 +196,7 @@ CREATE TABLE $s.join_requests (
     GroupRole role,
   ) async {
     await tx.execute(
-      'UPDATE $s.members SET role = @r:text WHERE group_id = @g:uuid AND account_id = @a:uuid',
+      'UPDATE $s.members SET role = @r:text WHERE group_id = @g:uuid AND account_id = @a:text',
       {'g': groupId, 'a': accountId, 'r': role.wire},
     );
   }
@@ -215,7 +249,7 @@ CREATE TABLE $s.join_requests (
   Future<List<GroupSummary>> groupsOf(SqlSession db, String accountId) async {
     final rows = await db.query(
       'SELECT g.id, g.epoch, g.state_version FROM $s.groups g JOIN $s.members m ON m.group_id = g.id '
-      'WHERE m.account_id = @a:uuid ORDER BY g.created_at',
+      'WHERE m.account_id = @a:text ORDER BY g.created_at',
       {'a': accountId},
     );
     return [
@@ -230,7 +264,7 @@ CREATE TABLE $s.join_requests (
 
   Future<List<String>> groupIdsOf(SqlSession db, String accountId) async {
     final rows = await db.query(
-      'SELECT group_id FROM $s.members WHERE account_id = @a:uuid',
+      'SELECT group_id FROM $s.members WHERE account_id = @a:text',
       {'a': accountId},
     );
     return [for (final r in rows) r.string('group_id')];
@@ -242,21 +276,21 @@ CREATE TABLE $s.join_requests (
     String accountId,
   ) async =>
       await db.queryOne(
-        'SELECT 1 FROM $s.bans WHERE group_id = @g:uuid AND account_id = @a:uuid',
+        'SELECT 1 FROM $s.bans WHERE group_id = @g:uuid AND account_id = @a:text',
         {'g': groupId, 'a': accountId},
       ) !=
       null;
 
   Future<void> ban(Tx tx, String groupId, String accountId) async {
     await tx.execute(
-      'INSERT INTO $s.bans (group_id, account_id) VALUES (@g:uuid, @a:uuid) ON CONFLICT DO NOTHING',
+      'INSERT INTO $s.bans (group_id, account_id) VALUES (@g:uuid, @a:text) ON CONFLICT DO NOTHING',
       {'g': groupId, 'a': accountId},
     );
   }
 
   Future<void> unban(SqlSession db, String groupId, String accountId) async {
     await db.execute(
-      'DELETE FROM $s.bans WHERE group_id = @g:uuid AND account_id = @a:uuid',
+      'DELETE FROM $s.bans WHERE group_id = @g:uuid AND account_id = @a:text',
       {'g': groupId, 'a': accountId},
     );
   }
@@ -306,7 +340,7 @@ CREATE TABLE $s.join_requests (
     String accountId,
   ) async {
     final r = await tx.queryOne(
-      'INSERT INTO $s.join_requests (id, group_id, account_id) VALUES (@id:uuid, @g:uuid, @a:uuid) '
+      'INSERT INTO $s.join_requests (id, group_id, account_id) VALUES (@id:uuid, @g:uuid, @a:text) '
       'ON CONFLICT (group_id, account_id) DO NOTHING RETURNING id',
       {'id': Uuid.v7(), 'g': groupId, 'a': accountId},
     );
@@ -338,5 +372,162 @@ CREATE TABLE $s.join_requests (
       {'id': requestId, 'g': groupId},
     );
     return r?.string('account_id');
+  }
+
+  // ------------------------------------------------- federation: home side
+
+  Future<int> bumpRosterVersion(Tx tx, String groupId) async {
+    final r = await tx.queryOne(
+      'UPDATE $s.groups SET roster_version = roster_version + 1 WHERE id = @g:uuid RETURNING roster_version',
+      {'g': groupId},
+    );
+    return r?.integer('roster_version') ?? 0;
+  }
+
+  Future<int> rosterVersion(SqlSession db, String groupId) async {
+    final r = await db.queryOne(
+      'SELECT roster_version FROM $s.groups WHERE id = @g:uuid',
+      {'g': groupId},
+    );
+    return r?.integer('roster_version') ?? 0;
+  }
+
+  /// Devices other servers reported for their accounts (stored form).
+  Future<Map<String, List<String>>> remoteDevicesOf(
+    SqlSession db,
+    Iterable<String> accounts,
+  ) async {
+    final list = accounts.toList();
+    if (list.isEmpty) return const {};
+    final rows = await db.query(
+      'SELECT account, device_id FROM $s.remote_devices WHERE account = ANY(@a:_text) ORDER BY device_id',
+      {'a': list},
+    );
+    final out = <String, List<String>>{};
+    for (final r in rows) {
+      out.putIfAbsent(r.string('account'), () => []).add(r.string('device_id'));
+    }
+    return out;
+  }
+
+  Future<void> setRemoteDevices(
+    Tx tx,
+    String account,
+    List<String> devices,
+  ) async {
+    await tx.execute('DELETE FROM $s.remote_devices WHERE account = @a:text', {
+      'a': account,
+    });
+    if (devices.isEmpty) return;
+    await tx.execute(
+      'INSERT INTO $s.remote_devices (account, device_id) SELECT @a:text, d FROM unnest(@d:_uuid) AS d',
+      {'a': account, 'd': devices},
+    );
+  }
+
+  /// Forgets a remote account's devices once it is in none of this
+  /// server's groups.
+  Future<void> forgetRemoteDevicesIfUnused(Tx tx, String account) async {
+    await tx.execute(
+      'DELETE FROM $s.remote_devices WHERE account = @a:text '
+      'AND NOT EXISTS (SELECT 1 FROM $s.members WHERE account_id = @a:text)',
+      {'a': account},
+    );
+  }
+
+  // ------------------------------------------ federation: member's server
+
+  Future<({String home, int version, Map<String, Object?> snapshot})?>
+  remoteGroup(SqlSession db, String groupId) async {
+    final r = await db.queryOne(
+      'SELECT home_domain, roster_version, snapshot FROM $s.remote_groups WHERE group_id = @g:uuid',
+      {'g': groupId},
+    );
+    return r == null
+        ? null
+        : (
+            home: r.string('home_domain'),
+            version: r.integer('roster_version'),
+            snapshot: r.json('snapshot'),
+          );
+  }
+
+  Future<String?> remoteHome(SqlSession db, String groupId) async {
+    final r = await db.queryOne(
+      'SELECT home_domain FROM $s.remote_groups WHERE group_id = @g:uuid',
+      {'g': groupId},
+    );
+    return r?.string('home_domain');
+  }
+
+  /// Replaces the cached group and its local members.
+  Future<void> saveRemoteGroup(
+    Tx tx, {
+    required String groupId,
+    required String home,
+    required int version,
+    required Map<String, Object?> snapshot,
+    required Iterable<String> members,
+  }) async {
+    await tx.execute(
+      'INSERT INTO $s.remote_groups (group_id, home_domain, roster_version, snapshot) '
+      'VALUES (@g:uuid, @h:text, @v:int8, @s:jsonb) ON CONFLICT (group_id) DO UPDATE SET '
+      'roster_version = excluded.roster_version, snapshot = excluded.snapshot, updated_at = now()',
+      {'g': groupId, 'h': home, 'v': version, 's': jsonEncode(snapshot)},
+    );
+    await tx.execute('DELETE FROM $s.remote_members WHERE group_id = @g:uuid', {
+      'g': groupId,
+    });
+    final list = members.toList();
+    if (list.isEmpty) return;
+    await tx.execute(
+      'INSERT INTO $s.remote_members (group_id, account_id) SELECT @g:uuid, a FROM unnest(@a:_uuid) AS a',
+      {'g': groupId, 'a': list},
+    );
+  }
+
+  Future<void> deleteRemoteGroup(Tx tx, String groupId) async {
+    await tx.execute('DELETE FROM $s.remote_groups WHERE group_id = @g:uuid', {
+      'g': groupId,
+    });
+  }
+
+  Future<Set<String>> remoteMembers(SqlSession db, String groupId) async {
+    final rows = await db.query(
+      'SELECT account_id FROM $s.remote_members WHERE group_id = @g:uuid',
+      {'g': groupId},
+    );
+    return {for (final r in rows) r.string('account_id')};
+  }
+
+  /// Remote groups [accountId] belongs to: id, home and cached versions.
+  Future<List<({String groupId, String home, int epoch, int stateVersion})>>
+  remoteGroupsOf(SqlSession db, String accountId) async {
+    final rows = await db.query(
+      'SELECT g.group_id, g.home_domain, g.snapshot FROM $s.remote_groups g '
+      'JOIN $s.remote_members m ON m.group_id = g.group_id WHERE m.account_id = @a:uuid '
+      'ORDER BY g.group_id',
+      {'a': accountId},
+    );
+    return [
+      for (final r in rows)
+        (
+          groupId: r.string('group_id'),
+          home: r.string('home_domain'),
+          epoch: (r.json('snapshot')['epoch'] as int?) ?? 0,
+          stateVersion: (r.json('snapshot')['state_version'] as int?) ?? 0,
+        ),
+    ];
+  }
+
+  Future<void> removeRemoteMember(Tx tx, String accountId) async {
+    await tx.execute(
+      'DELETE FROM $s.remote_members WHERE account_id = @a:uuid',
+      {'a': accountId},
+    );
+    await tx.execute(
+      'DELETE FROM $s.remote_groups g WHERE NOT EXISTS '
+      '(SELECT 1 FROM $s.remote_members m WHERE m.group_id = g.group_id)',
+    );
   }
 }

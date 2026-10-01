@@ -96,4 +96,90 @@ void main() {
       S2SCallSignal.fromJson,
     );
   });
+
+  test('group invite tokens name their group and home server', () {
+    final group = Uuid.v7();
+    expect(groupInviteTokenParts('grp_abc-_x.$group@Helix.Example:8443'), (
+      groupId: group,
+      domain: 'helix.example:8443',
+    ));
+    expect(groupInviteTokenParts('grp_abc'), (groupId: null, domain: null));
+    expect(groupInviteTokenParts('grp_abc.nope@helix.example'), (
+      groupId: null,
+      domain: null,
+    ));
+  });
+
+  test('group S2S DTOs round-trip', () {
+    final group = Uuid.v7();
+    expectRoundTrip(
+      S2SGroupAction(
+        actor: '$id@b.example',
+        actorDevice: Uuid.v7(),
+        action: 'add_members',
+        params: {'account': id},
+        body: const {'accounts': <String>[]},
+      ),
+      (v) => v.toJson(),
+      S2SGroupAction.fromJson,
+    );
+    expectRoundTrip(
+      const S2SGroupActionResult(status: 204),
+      (v) => v.toJson(),
+      S2SGroupActionResult.fromJson,
+    );
+    expectRoundTrip(
+      S2SGroupSync(
+        rosterVersion: 3,
+        group: Group(
+          groupId: group,
+          epoch: 1,
+          stateVersion: 2,
+          encryptedState: bytes(8),
+          settings: const GroupSettings(),
+          members: [
+            GroupMember(
+              account: id,
+              role: GroupRole.owner,
+              joinedAt: DateTime.utc(2026),
+            ),
+          ],
+          createdAt: DateTime.utc(2026),
+          homeServer: 'a.example',
+        ),
+        event: RosterChangeEvent(
+          groupId: group,
+          change: RosterChangeKind.added,
+          epoch: 1,
+          actor: '$id@a.example',
+          members: [id],
+        ),
+        notify: [id],
+      ),
+      (v) => v.toJson(),
+      S2SGroupSync.fromJson,
+    );
+    expectRoundTrip(
+      S2SGroupSyncResponse(
+        devices: {
+          id: [Uuid.v7()],
+        },
+        rejected: [Uuid.v7()],
+      ),
+      (v) => v.toJson(),
+      S2SGroupSyncResponse.fromJson,
+    );
+    expectRoundTrip(
+      S2SGroupMessage(
+        id: Uuid.v7(),
+        sender: '$id@a.example',
+        senderDevice: Uuid.v7(),
+        payload: bytes(16),
+        devices: [Uuid.v7()],
+        distributions: [DevicePayload(device: Uuid.v7(), payload: bytes(4))],
+      ),
+      (v) => v.toJson(),
+      S2SGroupMessage.fromJson,
+    );
+  });
 }
