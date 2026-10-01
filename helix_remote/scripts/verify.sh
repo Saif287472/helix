@@ -47,7 +47,23 @@ build_only_enabled() {
   return 1
 }
 
+codegen_check_skipped() {
+  case "${HELIX_VERIFY_SKIP_CODEGEN:-}" in
+    1|true|TRUE|yes|YES) return 0 ;;
+  esac
+  return 1
+}
+
 if ! build_only_enabled; then
+# Generated drift code is committed (ADR-027); fail when it is stale. CI runs
+# this as its own step and sets HELIX_VERIFY_SKIP_CODEGEN=1 here.
+if codegen_check_skipped; then
+  step "Generated drift code (helix_remote_db)"
+  echo "Skipped (HELIX_VERIFY_SKIP_CODEGEN=1)."
+else
+  run_step "Generated drift code (helix_remote_db)" bash -c 'cd packages/helix_remote_db && dart run tool/codegen.dart --check'
+fi
+
 run_step "Dart format check" dart format --output=none --set-exit-if-changed app admin backend server packages tool
 
 run_step "Flutter analyze" flutter analyze "${flutter_pub_args[@]}"

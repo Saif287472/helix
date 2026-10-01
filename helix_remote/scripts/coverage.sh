@@ -35,7 +35,10 @@ collect() {
   (cd "$dir" && flutter test --no-pub --coverage)
 
   if [ -f "${dir}/coverage/lcov.info" ]; then
-    cat "${dir}/coverage/lcov.info" >> "${OUT_DIR}/lcov.info"
+    # Generated code (drift's *.g.dart, committed per ADR-027) is not
+    # counted: most of it is API surface no caller uses.
+    awk '/^SF:/ { skip = ($0 ~ /\.g\.dart$/) } !skip { print } /^end_of_record/ { skip = 0 }' \
+      "${dir}/coverage/lcov.info" >> "${OUT_DIR}/lcov.info"
   fi
 }
 

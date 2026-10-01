@@ -1,0 +1,4 @@
+# Code generation compares bytes: keep sources and generated files LF on
+# every platform (core.autocrlf would otherwise change the .drift SQL and
+# the schema dump check).
+* text=auto eol=lf

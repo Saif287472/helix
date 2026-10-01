@@ -21,6 +21,7 @@ workspace:
   - packages/helix_remote_ui
   - packages/helix_remote_architecture_rules
   - packages/helix_remote_protocol
+  - packages/helix_remote_db
 
 hooks:
   user_defines:

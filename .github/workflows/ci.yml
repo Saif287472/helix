@@ -58,6 +58,8 @@ jobs:
     env:
       CI: "true"
       HELIX_VERIFY_BUILD: "1"
+      # The drift codegen check runs once, as its own step in verify-linux.
+      HELIX_VERIFY_SKIP_CODEGEN: "1"
     steps:
       - uses: actions/checkout@v4
       # Pinned rather than left to the runner image: the Android build needs a
@@ -119,6 +121,8 @@ jobs:
       CI: "true"
       HELIX_TEST_DATABASE_URL: postgresql://helix:helix-ci@127.0.0.1:5432/helix_test?sslmode=disable
       HELIX_REQUIRE_TEST_DATABASE: "1"
+      # Covered by the dedicated codegen step below.
+      HELIX_VERIFY_SKIP_CODEGEN: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -127,6 +131,12 @@ jobs:
           flutter-version: 3.44.8
           cache: true
       - run: flutter pub get --enforce-lockfile
+      # Generated drift code is committed (ADR-027). Regenerate it and fail if
+      # the result differs from the commit: a schema change without
+      # regenerated code, schema dump and schema helpers cannot merge.
+      - name: Verify generated drift code is current (helix_remote_db)
+        working-directory: helix_remote/packages/helix_remote_db
+        run: dart run tool/codegen.dart --check
       - name: Verify on Linux
         shell: bash
         run: ./scripts/verify.sh

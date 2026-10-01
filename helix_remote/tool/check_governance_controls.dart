@@ -163,6 +163,23 @@ const controls = <GovernanceControl>[
     'file_picker:',
     because: 'if this moves, the risk register entry needs to move with it.',
   ),
+  GovernanceControl(
+    'stale drift generated code fails CI',
+    '../.github/workflows/ci.yml',
+    'dart run tool/codegen.dart --check',
+    because:
+        'the risk register accepts drift_dev and build_runner on the '
+        'condition that committed generated code can never silently diverge '
+        'from the schema (ADR-027).',
+  ),
+  GovernanceControl(
+    'the v2 local database keeps the SQLCipher at-rest tests',
+    'packages/helix_remote_db/test/encryption_test.dart',
+    'P2-01 encrypted database rejects a wrong key',
+    because:
+        'the register carries the P2-01 wrong-key and no-plaintext tests '
+        'over to helix_remote_db; the at-rest promise depends on them.',
+  ),
 
   // --- MED-4: crash reporting ----------------------------------------------
   GovernanceControl(

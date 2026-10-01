@@ -45,6 +45,23 @@ function Invoke-Step {
 }
 
 if (-not (Test-BuildOnlyEnabled)) {
+    # Generated drift code is committed (ADR-027); fail when it is stale. CI
+    # runs this as its own step and sets HELIX_VERIFY_SKIP_CODEGEN=1 here.
+    if ($env:HELIX_VERIFY_SKIP_CODEGEN -in @("1", "true", "TRUE", "yes", "YES")) {
+        Write-Host ""
+        Write-Host "==> Generated drift code (helix_remote_db)"
+        Write-Host "Skipped (HELIX_VERIFY_SKIP_CODEGEN=1)."
+    } else {
+        Invoke-Step "Generated drift code (helix_remote_db)" {
+            Push-Location packages/helix_remote_db
+            try {
+                dart run tool/codegen.dart --check
+            } finally {
+                Pop-Location
+            }
+        }
+    }
+
     Invoke-Step "Dart format check" {
         dart format --output=none --set-exit-if-changed app admin backend server packages tool
     }
