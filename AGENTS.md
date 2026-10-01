@@ -20,7 +20,9 @@ any v2 work, read it and do only the next unfinished phase in its tracker
 (§11); update the tracker when the phase ends. Changing the target
 architecture needs a user-approved change-log entry (§12). v2 work happens on
 branch `architecture-v2` in a worktree; `main` and this checkout stay the live
-v1 until cutover, and the rest of this file describes v1.
+v1 until cutover, and the rest of this file describes v1. The plan copy on
+that branch (worktree `J:\hx2`) is authoritative and holds the live tracker;
+the copy on `main` is a pre-Phase-0 snapshot.
 
 ## Repository map
 
