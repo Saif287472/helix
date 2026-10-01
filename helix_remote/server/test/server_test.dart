@@ -67,6 +67,9 @@ void main() {
           'keys',
           'messaging',
           'realtime',
+          'people',
+          'media',
+          'backup',
         }),
         isEmpty,
       );

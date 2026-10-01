@@ -145,7 +145,7 @@ member device (and to removed members, so they know).
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `POST /v1/media` | `CreateUploadRequest` → `UploadTarget` | Size ≤ server max; account quota. |
+| `POST /v1/media` | `CreateUploadRequest` → `UploadTarget` | Size ≤ the kind's max; per-kind account quota. `url` is a server path for local storage, an absolute presigned URL for S3. |
 | `PUT /v1/media/{media_id}/content` | octet-stream, `Upload-Offset` → 204 | Owner only; resumable; completes when `size` bytes are stored. |
 | `HEAD /v1/media/{media_id}/content` | → `Upload-Offset`, `Upload-Length` | |
 | `GET /v1/media/{media_id}/content` | → bytes (`Range` supported) or `302` to a presigned URL | Any signed-in device: ids are random and content is encrypted, so knowing the id is the capability. |

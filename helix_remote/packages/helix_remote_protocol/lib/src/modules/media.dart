@@ -39,9 +39,10 @@ final class CreateUploadRequest {
   );
 }
 
-/// Where and how to upload. With local storage [url] is this server's
-/// `PUT /v1/media/{id}/content` (resumable with `Upload-Offset`); with S3 it
-/// is a presigned URL and [headers] must be sent as given.
+/// Where and how to upload. With local storage [url] is a path on this
+/// server (`/v1/media/{id}/content`, resolve it against the server base;
+/// resumable with `Upload-Offset`); with S3 it is an absolute presigned URL
+/// and [headers] must be sent as given.
 final class UploadTarget {
   const UploadTarget({
     required this.mediaId,

@@ -126,7 +126,16 @@ final class RouteRegistry {
       ),
     );
     final ordered = _registrations.values.toList()
-      ..sort((a, b) => _specificity(b.route).compareTo(_specificity(a.route)));
+      ..sort((a, b) {
+        final bySpecificity = _specificity(
+          b.route,
+        ).compareTo(_specificity(a.route));
+        if (bySpecificity != 0) return bySpecificity;
+        // HEAD before GET: shelf_router lets GET routes answer HEAD.
+        return (a.route.method == HttpMethod.head ? 0 : 1).compareTo(
+          b.route.method == HttpMethod.head ? 0 : 1,
+        );
+      });
     for (final registration in ordered) {
       router.add(
         registration.route.method.name.toUpperCase(),
