@@ -36,7 +36,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | Route | Body → response | Rules |
 |---|---|---|
 | `POST /v1/auth/phone/challenges` | `PhoneChallengeRequest` → `PhoneChallengeResponse` | Helix Global only. 6-digit code, 10 min, 5 attempts; per number 5/hour, per IP limits. The number is hashed; only the last 4 digits are kept. |
-| `POST /v1/auth/phone/verify` | `PhoneVerifyRequest` → `PhoneVerifyResponse` | Consumes the code; returns a single-use 15-minute `verification_token`. |
+| `POST /v1/auth/phone/verify` | `PhoneVerifyRequest` → `PhoneVerifyResponse` | Consumes the code; returns a single-use 15-minute `verification_token`, and the existing `account_id` when the number has an account (needed to certify a device for `replace_existing`). |
 | `POST /v1/auth/invites/lookup` | `InviteLookupRequest` → `InviteLookupResponse` | Rate-limited per IP. |
 | `POST /v1/auth/invites/self-issue` | — → `InviteSelfIssueResponse` | Helix Global only; 3/hour per IP. |
 | `POST /v1/auth/register` | `RegisterRequest` → `RegisterResponse` | Verifies the device certificate (AIK) and proof (DSK). Global: needs `verification_token`; existing account → `account_exists` unless `replace_existing`. Personal: needs `invite_code`, redeemed last. |

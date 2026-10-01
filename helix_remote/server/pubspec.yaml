@@ -14,6 +14,7 @@ dependencies:
   aws_common: ^0.7.15
   aws_signature_v4: ^0.6.13
   crypto: ^3.0.7
+  cryptography: ^2.9.0
   helix_remote_protocol:
     path: ../packages/helix_remote_protocol
   http: ^1.2.0

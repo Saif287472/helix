@@ -45,6 +45,7 @@ final class _Registration {
     required this.rateLimit,
     required this.maxBodyBytes,
     required this.streamBody,
+    required this.allowSuspended,
   });
 
   final String module;
@@ -53,6 +54,7 @@ final class _Registration {
   final RateLimitPolicy? rateLimit;
   final int maxBodyBytes;
   final bool streamBody;
+  final bool allowSuspended;
 }
 
 /// Where modules declare their routes (ADR-026). Only catalog routes
@@ -73,6 +75,7 @@ final class RouteRegistry {
     RateLimitPolicy? rateLimit,
     int maxBodyBytes = defaultMaxBody,
     bool streamBody = false,
+    bool allowSuspended = false,
   }) {
     final key = route.toString();
     if (!_catalog.any((r) => r.toString() == key)) {
@@ -94,6 +97,7 @@ final class RouteRegistry {
       rateLimit: rateLimit,
       maxBodyBytes: maxBodyBytes,
       streamBody: streamBody,
+      allowSuspended: allowSuspended,
     );
   }
 
@@ -167,6 +171,11 @@ final class RouteRegistry {
         clientIp,
         authenticator,
       );
+      if (principal is DevicePrincipal &&
+          principal.suspended &&
+          !registration.allowSuspended) {
+        throw const ApiError(ErrorCode.accountSuspended);
+      }
 
       final policy = registration.rateLimit;
       if (policy != null) {

@@ -315,6 +315,7 @@ final class PhoneVerifyResponse {
     required this.expiresAt,
     required this.accountExists,
     required this.hasPassword,
+    this.accountId,
   });
 
   final String verificationToken;
@@ -322,18 +323,25 @@ final class PhoneVerifyResponse {
   final bool accountExists;
   final bool hasPassword;
 
-  JsonMap toJson() => {
+  /// The existing account's id, when [accountExists]: the caller has just
+  /// proved they hold the number, and needs the id to certify a device for
+  /// `RegisterRequest.replaceExisting`.
+  final String? accountId;
+
+  JsonMap toJson() => compact({
     'verification_token': verificationToken,
     'expires_at': toWireTime(expiresAt),
     'account_exists': accountExists,
     'has_password': hasPassword,
-  };
+    'account_id': accountId,
+  });
 
   factory PhoneVerifyResponse.fromJson(JsonReader json) => PhoneVerifyResponse(
     verificationToken: json.nonEmpty('verification_token'),
     expiresAt: json.time('expires_at'),
     accountExists: json.boolean('account_exists'),
     hasPassword: json.boolean('has_password'),
+    accountId: json.optString('account_id'),
   );
 }
 

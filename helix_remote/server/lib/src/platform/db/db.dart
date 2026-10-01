@@ -8,7 +8,7 @@ import 'dart:typed_data';
 /// `WHERE id = @id:uuid AND body = @body:bytea`. Schema names are
 /// interpolated from [SchemaNames] (validated identifiers), never from
 /// request data.
-abstract interface class Session {
+abstract interface class SqlSession {
   /// Rows of a query.
   Future<List<Row>> query(String sql, [Map<String, Object?> params]);
 
@@ -21,13 +21,13 @@ abstract interface class Session {
 
 /// A session inside a transaction. Obtained only from [Db.tx]; passed down
 /// explicitly to repositories, which never start transactions themselves.
-abstract interface class Tx implements Session {
+abstract interface class Tx implements SqlSession {
   /// Runs [action] after a successful commit (publishing bus events,
   /// pushing to sockets). Never runs if the transaction rolls back.
   void afterCommit(Future<void> Function() action);
 }
 
-abstract interface class Db implements Session {
+abstract interface class Db implements SqlSession {
   /// Runs [body] in a transaction; commits if it completes, rolls back if it
   /// throws. Transactions do not nest: code that needs one takes a [Tx].
   ///

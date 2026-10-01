@@ -13,10 +13,18 @@ sealed class Principal {
 }
 
 final class DevicePrincipal extends Principal {
-  const DevicePrincipal({required this.accountId, required this.deviceId});
+  const DevicePrincipal({
+    required this.accountId,
+    required this.deviceId,
+    this.suspended = false,
+  });
 
   final String accountId;
   final String deviceId;
+
+  /// The account is suspended: only routes registered with
+  /// `allowSuspended` accept this principal.
+  final bool suspended;
 
   @override
   String get key => 'device:$deviceId';

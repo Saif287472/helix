@@ -63,6 +63,24 @@ void main() {
     ]);
   });
 
+  test('sessions are minted only in identity/application/sessions.dart', () {
+    final offenders = <String>[];
+    for (final file in Directory(
+      'lib',
+    ).listSync(recursive: true).whereType<File>()) {
+      final path = file.path.replaceAll(r'\', '/');
+      if (!path.endsWith('.dart')) continue;
+      if (path.endsWith('identity/application/sessions.dart') ||
+          path.endsWith('identity/domain/jwt.dart')) {
+        continue;
+      }
+      if (file.readAsStringSync().contains('AccessClaims(')) {
+        offenders.add(path);
+      }
+    }
+    expect(offenders, isEmpty, reason: 'AGENTS.md: one session mint point');
+  });
+
   test('is pure Dart', () {
     expectClean([
       ForbiddenDirectiveRule(

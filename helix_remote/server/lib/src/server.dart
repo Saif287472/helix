@@ -18,10 +18,13 @@ typedef ModuleFactory = HelixModule Function(ModuleContext context);
 
 /// One running server node: platform + modules + HTTP.
 final class HelixServer {
-  HelixServer._(this.platform, this.modules, this._http);
+  HelixServer._(this.platform, this.modules, this.routes, this._http);
 
   final HelixPlatform platform;
   final List<HelixModule> modules;
+
+  /// The routes this node serves (route-parity tests read it).
+  final RouteRegistry routes;
   final HttpServer _http;
 
   int get port => _http.port;
@@ -83,7 +86,7 @@ final class HelixServer {
       'port': http.port,
       'modules': [for (final m in modules) m.name],
     });
-    return HelixServer._(platform, modules, http);
+    return HelixServer._(platform, modules, routes, http);
   }
 
   /// Stops accepting requests, lets in-flight ones finish (up to [grace]),
