@@ -165,6 +165,9 @@ enum RosterChangeKind implements WireEnum {
   roleChanged('role_changed'),
   settingsChanged('settings_changed'),
   stateChanged('state_changed'),
+
+  /// Someone asked to join through an approval link (sent to admins).
+  joinRequested('join_requested'),
   deleted('deleted'),
   unknown('unknown');
 

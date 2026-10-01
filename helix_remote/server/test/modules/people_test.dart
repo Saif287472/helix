@@ -203,10 +203,12 @@ void main() {
       expect((await look()).online, isTrue);
 
       await socket.close();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      final offline = await look();
-      expect(offline.online, isFalse);
-      expect(offline.lastSeenAt, isNotNull);
+      late PresenceResponse offline;
+      await eventually(() async {
+        offline = await look();
+        expect(offline.online, isFalse);
+        expect(offline.lastSeenAt, isNotNull);
+      });
       expect(offline.lastSeenAt!.second, 0, reason: 'minute granularity');
 
       await h.api.call(

@@ -82,3 +82,21 @@ Future<MailboxPage> mailbox(Harness h, TestDevice d, {int after = 0}) async =>
         query: {'after': '$after'},
       )).json,
     );
+
+/// Retries [check] until it passes or [timeout] runs out (for effects that
+/// land asynchronously, such as socket acks).
+Future<void> eventually(
+  Future<void> Function() check, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (true) {
+    try {
+      await check();
+      return;
+    } on Object {
+      if (DateTime.now().isAfter(deadline)) rethrow;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+}

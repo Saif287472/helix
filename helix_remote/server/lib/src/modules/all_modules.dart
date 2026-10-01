@@ -1,4 +1,6 @@
 import 'package:helix_remote_server/src/modules/backup/module.dart';
+import 'package:helix_remote_server/src/modules/calls/module.dart';
+import 'package:helix_remote_server/src/modules/groups/module.dart';
 import 'package:helix_remote_server/src/modules/identity/module.dart';
 import 'package:helix_remote_server/src/modules/identity/sms.dart';
 import 'package:helix_remote_server/src/modules/keys/module.dart';
@@ -18,6 +20,7 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
   late KeysModule keys;
   late MessagingModule messaging;
   late MediaModule media;
+  late PeopleModule people;
   return [
     OpsModule.new,
     (c) => identity = IdentityModule(c, sms: sms),
@@ -25,8 +28,19 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
     (c) =>
         messaging = MessagingModule(c, identity: identity.api, keys: keys.api),
     (c) => RealtimeModule(c, messaging: messaging.api),
-    (c) => PeopleModule(c, identity: identity.api, messaging: messaging.api),
+    (c) => people = PeopleModule(
+      c,
+      identity: identity.api,
+      messaging: messaging.api,
+    ),
     (c) => media = MediaModule(c, identity: identity.api),
     (c) => BackupModule(c, identity: identity.api, media: media.api),
+    (c) => GroupsModule(
+      c,
+      identity: identity.api,
+      messaging: messaging.api,
+      people: people.api,
+    ),
+    (c) => CallsModule(c, identity: identity.api, messaging: messaging.api),
   ];
 }

@@ -70,6 +70,8 @@ void main() {
           'people',
           'media',
           'backup',
+          'groups',
+          'calls',
         }),
         isEmpty,
       );

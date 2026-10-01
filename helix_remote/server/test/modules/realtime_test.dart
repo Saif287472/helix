@@ -43,8 +43,9 @@ void main() {
         final second = await socket.envelope();
         expect([first.seq, second.seq], [1, 2]);
         socket.ack(2);
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        expect((await mailbox(h, b1)).envelopes, isEmpty);
+        await eventually(
+          () async => expect((await mailbox(h, b1)).envelopes, isEmpty),
+        );
         socket.ping('n1');
         expect(
           (await socket.next()) as PongFrame,
