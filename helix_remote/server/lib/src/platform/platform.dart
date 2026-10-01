@@ -11,6 +11,7 @@ import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
 import 'package:helix_remote_server/src/platform/observability/metrics.dart';
+import 'package:helix_remote_server/src/platform/push/push.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 
 /// The shared infrastructure of one server process, built from config.
@@ -32,6 +33,7 @@ final class HelixPlatform {
     required this.log,
     required this.metrics,
     required this.health,
+    required this.push,
   });
 
   static Future<HelixPlatform> open(
@@ -39,6 +41,7 @@ final class HelixPlatform {
     Log? log,
     Clock clock = const SystemClock(),
     ObjectStorage? blobs,
+    PushProvider? push,
   }) async {
     final logger = log ?? Log();
     final schemas = SchemaNames(prefix: config.schemaPrefix);
@@ -82,6 +85,7 @@ final class HelixPlatform {
       log: logger,
       metrics: metrics,
       health: health,
+      push: push ?? pushProviderFrom(config),
     );
   }
 
@@ -100,6 +104,7 @@ final class HelixPlatform {
   final Log log;
   final Metrics metrics;
   final HealthRegistry health;
+  final PushProvider push;
 
   ModuleContext moduleContext() => ModuleContext(
     config: config,
@@ -114,6 +119,7 @@ final class HelixPlatform {
     log: log,
     metrics: metrics,
     health: health,
+    push: push,
   );
 
   /// Platform housekeeping, run once per interval cluster-wide.

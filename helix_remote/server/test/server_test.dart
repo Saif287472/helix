@@ -61,7 +61,15 @@ void main() {
     });
 
     test('every catalog route of the finished modules is served', () {
-      expect(h.server.routes.missingFor({'identity', 'keys'}), isEmpty);
+      expect(
+        h.server.routes.missingFor({
+          'identity',
+          'keys',
+          'messaging',
+          'realtime',
+        }),
+        isEmpty,
+      );
     });
 
     test('device routes refuse requests without a session', () async {

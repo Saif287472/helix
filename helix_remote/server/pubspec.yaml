@@ -15,6 +15,7 @@ dependencies:
   aws_signature_v4: ^0.6.13
   crypto: ^3.0.7
   cryptography: ^2.9.0
+  googleapis_auth: ^2.3.3
   helix_remote_protocol:
     path: ../packages/helix_remote_protocol
   http: ^1.2.0
@@ -22,6 +23,8 @@ dependencies:
   postgres: ^3.5.17
   shelf: ^1.4.2
   shelf_router: ^1.1.4
+  shelf_web_socket: ^3.0.0
+  web_socket_channel: ^3.0.3
 
 dev_dependencies:
   helix_remote_architecture_rules:

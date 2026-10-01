@@ -60,8 +60,11 @@ u32(spk_id) ‖ SPK_pub)`.
 **AIK pinning.** The first AIK seen for an account is pinned (trust on first
 use). A different AIK later is a **key change**: the client stops using old
 sessions, shows "Safety number changed" in every conversation with that
-account, and resets its verified flag (§10). The server also announces it
-with a `key_change` envelope.
+account, and resets its verified flag (§10). The server keeps no record of
+who talks to whom, so it cannot announce key changes to contacts. Clients
+detect them when a bundle's AIK differs from the pinned one, or when a
+prekey message arrives whose device certificate verifies only under a new
+AIK. (`key_change` envelopes are reserved for the account's own devices.)
 
 ## 2a. Device linking (provisioning)
 

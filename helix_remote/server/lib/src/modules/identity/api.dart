@@ -97,7 +97,8 @@ typedef AccountSignalHook =
 
 /// Runs inside the transaction that changes an account's device list
 /// (messaging: `device_list_change` to people with sessions).
-typedef DeviceListChangedHook = Future<void> Function(Tx tx, String accountId);
+typedef DeviceListChangedHook =
+    Future<void> Function(Tx tx, String accountId, {String? exceptDevice});
 
 /// Runs inside the transaction that deletes an account.
 typedef AccountDeletedHook = Future<void> Function(Tx tx, String accountId);

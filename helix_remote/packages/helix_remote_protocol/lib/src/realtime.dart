@@ -211,6 +211,9 @@ abstract final class RealtimeCloseCode {
   /// Too many connection attempts. Back off (at least 30 s).
   static const rateLimited = 4029;
 
+  /// Nothing heard from the client for two heartbeat intervals.
+  static const idleTimeout = 4010;
+
   /// A frame broke the protocol (bad JSON, unknown required field).
   static const protocolError = 4400;
 

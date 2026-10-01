@@ -200,7 +200,7 @@ final class IdentityContext {
     await store.insertDevice(tx, accountId, device);
     final record = (await store.deviceById(tx, device.deviceId))!;
     await hooks.deviceAdded(tx, record, prekeys);
-    await hooks.deviceListChanged(tx, accountId);
+    await hooks.deviceListChanged(tx, accountId, exceptDevice: device.deviceId);
     await store.addEvent(
       tx,
       accountId,

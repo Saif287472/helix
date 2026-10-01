@@ -5,6 +5,7 @@ import 'package:helix_remote_server/helix_remote_server.dart';
 import 'package:helix_remote_server/src/platform/blobs/object_storage.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/db/postgres_db.dart';
+import 'package:helix_remote_server/src/platform/push/push.dart';
 import 'package:postgres/postgres.dart' as pg;
 
 import 'test_database.dart';
@@ -48,6 +49,7 @@ final class TestPlatform {
     Map<String, String> extra = const {},
     Clock clock = const SystemClock(),
     ObjectStorage? blobs,
+    PushProvider? push,
   }) async {
     final prefix = randomPrefix();
     final sink = MemorySink();
@@ -56,6 +58,7 @@ final class TestPlatform {
       log: Log(sink: sink, minLevel: LogLevel.debug),
       clock: clock,
       blobs: blobs,
+      push: push,
     );
     return TestPlatform._(platform, prefix, sink);
   }

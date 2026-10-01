@@ -2,6 +2,8 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/helix_remote_server.dart';
 import 'package:helix_remote_server/src/modules/identity/module.dart';
 import 'package:helix_remote_server/src/modules/identity/sms.dart';
+import 'package:helix_remote_server/src/modules/messaging/module.dart';
+import 'package:helix_remote_server/src/platform/push/push.dart';
 
 import 'test_client.dart';
 import 'test_platform.dart';
@@ -11,12 +13,16 @@ const testPepper = 'cGVwcGVyLWZvci10ZXN0cy1vbmx5LTMyLWJ5dGVzLWxvbmc';
 /// A running server with every module, a recording SMS provider and a
 /// client, on a fresh schema prefix.
 final class Harness {
-  Harness._(this.env, this.server, this.sms, this.api);
+  Harness._(this.env, this.server, this.sms, this.push, this.api);
 
   final TestPlatform env;
   final HelixServer server;
   final RecordingSmsProvider sms;
+  final RecordingPushProvider push;
   final TestApi api;
+
+  MessagingModule get messaging =>
+      server.modules.whereType<MessagingModule>().single;
 
   IdentityModule get identity =>
       server.modules.whereType<IdentityModule>().single;
@@ -25,7 +31,9 @@ final class Harness {
     bool global = true,
     Map<String, String> extra = const {},
   }) async {
+    final push = RecordingPushProvider();
     final env = await TestPlatform.open(
+      push: push,
       extra: {
         'HELIX_PHONE_PEPPER': testPepper,
         'HELIX_GLOBAL_MODE': '$global',
@@ -35,7 +43,7 @@ final class Harness {
     );
     final sms = RecordingSmsProvider();
     final server = await HelixServer.start(env.platform, allModules(sms: sms));
-    return Harness._(env, server, sms, TestApi(server.baseUri));
+    return Harness._(env, server, sms, push, TestApi(server.baseUri));
   }
 
   Future<void> stop() async {

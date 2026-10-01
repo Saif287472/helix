@@ -54,6 +54,14 @@ void main() {
             !path.startsWith('lib/src/platform/blobs/'),
       ),
       ForbiddenDirectiveRule(
+        name: 'push-isolation',
+        reason: 'use PushProvider; Google auth stays in platform/push.',
+        forbidden: anyPackage({'googleapis_auth'}),
+        appliesTo: (path) =>
+            path.startsWith('lib/') &&
+            !path.startsWith('lib/src/platform/push/'),
+      ),
+      ForbiddenDirectiveRule(
         name: 'modules-use-the-platform',
         reason:
             'modules get infrastructure from ModuleContext, not from shelf_io or dart:io servers.',

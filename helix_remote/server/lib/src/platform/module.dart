@@ -10,6 +10,7 @@ import 'package:helix_remote_server/src/platform/http/routes.dart';
 import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
 import 'package:helix_remote_server/src/platform/observability/metrics.dart';
+import 'package:helix_remote_server/src/platform/push/push.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 
 /// Readiness checks by name (`GET /v1/health/ready`).
@@ -50,6 +51,7 @@ final class ModuleContext {
     required this.log,
     required this.metrics,
     required this.health,
+    required this.push,
   });
 
   final ServerConfig config;
@@ -64,6 +66,9 @@ final class ModuleContext {
   final Log log;
   final Metrics metrics;
   final HealthRegistry health;
+
+  /// Data-only device wake-ups (FCM).
+  final PushProvider push;
 
   /// The schema of [module] (its own name for a module's own tables).
   String schema(String module) => schemas.of(module);

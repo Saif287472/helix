@@ -74,6 +74,9 @@ final class HttpPipeline {
       response = await inner(contextual);
       routeTemplate =
           response.context[HttpContextKeys.route] as String? ?? routeTemplate;
+    } on HijackException {
+      // A WebSocket upgrade took over the connection.
+      rethrow;
     } on ApiError catch (e) {
       response = errorResponse(e);
     } on ProtocolFormatException catch (e) {

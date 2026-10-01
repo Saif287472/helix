@@ -65,9 +65,13 @@ final class IdentityHooks {
     }
   }
 
-  Future<void> deviceListChanged(Tx tx, String accountId) async {
+  Future<void> deviceListChanged(
+    Tx tx,
+    String accountId, {
+    String? exceptDevice,
+  }) async {
     for (final h in _listChanged) {
-      await h(tx, accountId);
+      await h(tx, accountId, exceptDevice: exceptDevice);
     }
   }
 

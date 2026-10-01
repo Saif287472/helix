@@ -16,14 +16,15 @@ one Postgres database.
 | Outbox + jobs | `jobs/jobs.dart` | `platform.jobs`, `SKIP LOCKED` leases, backoff, dead letters | same |
 | Periodic jobs | `jobs/jobs.dart` | row-lease, once per interval cluster-wide | same |
 | Object storage | `blobs/object_storage.dart` | local directory | S3-compatible (SigV4) |
+| Push | `push/push.dart` | FCM HTTP v1, data-only wake-ups | + APNs |
 | HTTP | `http/routes.dart`, `pipeline.dart`, `request.dart`, `idempotency.dart` | shelf | same |
 | Observability | `observability/log.dart`, `metrics.dart` | JSON logs with redaction, Prometheus text | scrape per node |
 | Modules | `module.dart` | `HelixModule`, `ModuleBase`, `HealthRegistry` | — |
 
 ## Rules (enforced by `test/architecture_test.dart` where possible)
 
-- Only `platform/db/` imports the Postgres driver; only `platform/blobs/`
-  imports the AWS signer.
+- Only `platform/db/` imports the Postgres driver, only `platform/blobs/`
+  imports the AWS signer, and only `platform/push/` imports Google auth.
 - Transactions start only with `Db.tx`; repositories take a `Tx`/`Session`.
   Side effects after commit use `Tx.afterCommit` (never inside the
   transaction) or the outbox (when they must not be lost).

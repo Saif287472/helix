@@ -17,8 +17,9 @@ subprotocol name, negotiated alongside). Optional `?after=<seq>`: the last
   `heartbeat_s` seconds (a `ping` when idle).
 - **Close codes:** `4001` unauthorized (refresh, reconnect), `4003` device
   revoked (stop; sign out locally), `4004` suspended, `4008` superseded,
-  `4029` rate limited (back off ≥ 30 s), `4400` protocol error, `1001` server
-  going away (reconnect with backoff).
+  `4010` idle (no frame for two heartbeats), `4029` rate limited (back off
+  ≥ 30 s), `4400` protocol error, `1001` server going away (reconnect with
+  backoff).
 - **Reconnect backoff:** 1 s, doubling to 60 s, with ±20% jitter; reset after
   a connection lasts 60 s.
 
