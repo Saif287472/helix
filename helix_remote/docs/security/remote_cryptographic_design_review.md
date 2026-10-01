@@ -229,3 +229,52 @@ Ratchet property; it is a keyed lookup hash, nothing more.
     Helix Remote servers is out of scope by construction - each server has an
     independent salt, so a hash computed for one server is meaningless on
     another.
+
+## 11. v2 client crypto (Phase C2, 2026-10-02) - internal review note
+
+**Not externally reviewed.** This note is the author's own review, required
+by ARCHITECTURE_V2_PLAN.md §5. Nothing in v2 may be described as externally
+reviewed or Signal-equivalent until an independent review happens (ADR-028).
+
+- **Scope:** `packages/helix_remote_crypto/lib/v2.dart` implements
+  `docs/protocol/v2/CRYPTO_V2.md`. The v1 code above is unchanged and stays
+  in use until cutover.
+- **What changed from v1:**
+  - Full Double Ratchet with DH steps (post-compromise security), with
+    `MAX_SKIP` 1,000 per chain, 2,000 stored keys per session and a 30-day
+    expiry.
+  - Sessions per device pair, not per conversation.
+  - Device certificates under the AIK, checked before any DH. SPK
+    signatures under the DSK. No fallback to "the last SPK".
+  - Sender Keys with a per-message Ed25519 signature, rotation on removal or
+    device change, and one ciphertext per group message.
+  - Attachment STREAM with an authenticated header and a last-chunk flag.
+  - AAD on every backup AEAD.
+  - A working provisioning message for device linking.
+- **Invariants and tests (`test/v2/`):**
+  - Decrypt-before-commit: operations are pure and return state only after
+    the AEAD tag (and, for groups, the signature) verifies. Tests check
+    that a failure leaves the stored bytes unchanged.
+  - Replay of messages and of prekey messages is rejected, including
+    no-OPK prekey messages after their session was dropped.
+  - Tampered header, ciphertext or AD are rejected; wrong identities
+    (certificate, SPK signature, DIK mismatch, unknown device) are refused.
+  - Skip caps and eviction are enforced; previous sessions are capped at 5.
+  - §13a reset and simultaneous initiation converge; sender-key rotation
+    behaves as specified.
+  - Known-answer tests against RFC 5869, RFC 7748 and RFC 8032.
+  - Byte layouts are rebuilt by hand from CRYPTO_V2.md and compared with the
+    implementation.
+  - Golden vectors are regenerated and also consumed from the files.
+- **Spec deviation found:** CRYPTO_V2.md §9 derived the group-state and
+  profile-blob nonce from the key, which would repeat the GCM nonce across
+  versions. A random nonce is implemented instead (CRYPTO_V2.md §14,
+  proposed change-log entry).
+- **Residual risks:**
+  - Pure-Dart primitives from `package:cryptography` (not constant-time
+    audited).
+  - No header encryption or sealed sender (by design in v2.0).
+  - The server can roll group state back within an epoch.
+  - X3DH without an OPK is replayable at the X3DH level; this is mitigated
+    by remembered base keys and envelope de-duplication.
+  - Passwords are not Unicode-normalised.

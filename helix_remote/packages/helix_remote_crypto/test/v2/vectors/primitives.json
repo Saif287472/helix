@@ -1,0 +1,21 @@
+{
+  "kdf_rk": {
+    "rk": "FpnoXGwaw2ZLAhM90zUczMW8zN--O60VKIP8IMwjQaw",
+    "dh": "3l913hblpwuSEq6gg1Fnp6aL-pF3gv7AmvLqxcpUBeA",
+    "rk_out": "WKBzwPFRCbDphtTiaT0KuAX2HZzWCmf1tgno-oIq4uo",
+    "ck": "3czh7Xrlru8sMVPIGPVphx-STn_YxNsJHkKaXq88w_8"
+  },
+  "kdf_ck": {
+    "ck": "3czh7Xrlru8sMVPIGPVphx-STn_YxNsJHkKaXq88w_8",
+    "mk": "4C5mZOUHKcr4N6p7BaMXwCaL6fjdkYKp_L4GxHkma4Y",
+    "ck_out": "lQLepfOpRS0dE0sUBUBM_fTVhXXzWYLQPK_JB5U2F8k"
+  },
+  "message_key": {
+    "key": "g3vQyV8R2GEY6gICZ-0ZJ1R21kCifMGPKCIbkrcjGZc",
+    "nonce": "874Knmg9twTTkGAf"
+  },
+  "sender_key_message_key": {
+    "key": "eIr3NjmzVsF-64aQLtItZC8kSlXE02N9QjNHkXX1IaA",
+    "nonce": "JFFPko8mq5bN44Bx"
+  }
+}

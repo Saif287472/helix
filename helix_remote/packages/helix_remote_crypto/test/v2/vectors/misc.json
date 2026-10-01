@@ -1,0 +1,70 @@
+{
+  "attachment": {
+    "key": "alr3hTdM4tS04WV8KncUB_hdINwneMNx2h3Z5MUqJJI",
+    "chunk_size": 64,
+    "plaintext": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn-AgYKDhIWGh4iJiouMjY6PkJGSk5SV",
+    "ciphertext": "SFhTMgIAAABA6AYw7ACg6HY3NL8jgAo4CzWd_Uaioo5uvn1kBBAPV5mzsoA_BiK-2x33WAlP0zTda_2FdoYvOglH2X6UcRGJaRku5ByKET4ETH1UK53JmXyqp7tbxLYPF9xQ-eDDcpMllM3TnY4Rm16EGVRcC3qN_FBQZfMH5td2keJHiZwTW74jCPcTCvmoHhr5Mf5HezpZN5-e3Ny_WO_pHLbO9WZFoaD1Ls-BMx1ZxX5xKjCRX5cBApvhpv4r8VXdr3WJ_c0kKJxiwzep-lEyjmO8eQ",
+    "digest": "LSfAJNqpdCDPIEKWZhu6F8phUAsrSqErdIUyN4-8Ku0"
+  },
+  "profile_blob": {
+    "account": "0192a4f0-0000-7000-8000-00000000000a",
+    "version": 1,
+    "key": "zD9K4lVmpgNnjmMyHrmmyUym2fkxjwj6Y0iTodVkClo",
+    "blob": "AR9lbj-vC6FCE7v_jMYSIE3bVjuYdPF6WlSn0KCGsjzT8Coz_xftd4OZDfUpFicvbMZu_v0y5zgKcqjgI1Xukkiol6hYadHNmuDRTpEXcUjdMGLxVh-gns-V0W-37yGGYXC8tt6Ol2v3vkwqiJ803JeogKwznd7EZJHCD0R62FFVy7jxh6GSrOIrlHbFSDiBnslbHBj6zfq0TntUAF0l3kGdUuEiD_b3jEZ9nFvoOMqCDI-vfsrTKFO00IY1"
+  },
+  "provisioning": {
+    "link_id": "0192a4f0-0000-7000-8000-0000000000f1",
+    "e_new_private": "IYnIEvodcfX96UhkohdP9-wI6F-86HaCVX18HujiJxk",
+    "sealed": "lBbT9Q7cooc8xsrxKbC2x7r3qqgpyPhrkwVedl-gz1zvO8WX95FDdSzhUNUXscZ5J7HrUTCX5RcdaC-byFbeU6tQHNEbKBhoqq55bKnwBjFeHrp5X6p5AaZnfDLoIelPb6V73PCFfA6WhJqO_na7xsWJ8Djv7IboQuZbh4hOUYoSkeb7a_0yQ3ajlwIOjli07W7-j9ZT6YpnkypZTD4uZlW2qtB2WUiwuSW0hHINmNUFV8Oc_wE7mGNlR4OlsCPHJAiE8Aft5W-rYIifz_qwX232jcMksR5MNYtv76XGYYncHyeIWP0qUqoiyZSIHFWQg5XB8kshlMyE0VGd_vyU1XclHfWgoIq-qZ_1cV2Q2IW93HE6UOcG0FeUo0kcGKrdQ8Yknjt1P0A5AwN4r3LaBU72xJ7otmpOeRv6WqAif3KreYZwT9MlFaNT1wYOgM0Kye9TFZUxvkV1ag26RNBV"
+  },
+  "full_backup": {
+    "secret": "vector recovery secret words",
+    "envelope": {
+      "format": "helix.v2.backup",
+      "v": 3,
+      "backup_id": "0192a4f0-0000-7000-8000-0000000000bb",
+      "version": 1,
+      "created_at": 1790856000000,
+      "nonce": "AjoBxD9bnqxdlp6-",
+      "ciphertext": "-9zWp0Emuz3ku-zrs0lr1toD001sYL-oLVD2q3UT",
+      "key_wraps": [
+        {
+          "method": "recovery_secret",
+          "salt": "P8Fx4us7h1K5t1taM3mABDyNiMTsV2VkTiAcDbQ2KWg",
+          "kdf": {
+            "alg": "argon2id",
+            "memory_kib": 8192,
+            "iterations": 2,
+            "parallelism": 1,
+            "length": 32
+          },
+          "nonce": "g8lTb_f063YBfU6S",
+          "ciphertext": "yR54A8tPeF10zdXtcltEKbYe0hN3x_rHG5s1jeSnzkJwp2kB9Ypq7dJal84nlFAb"
+        }
+      ]
+    }
+  },
+  "history_backup": {
+    "aik_seed": "3pqJTNkhlL7smNpGyacYklGHcRTv4vt8WZXAiWmYTK0",
+    "account": "0192a4f0-0000-7000-8000-00000000000a",
+    "version": 1,
+    "data": "AYZneDzCy-ofrfVQyKqzs9Hm0VEToJsjYCPX4TAYaWDaUC0sjZ3jM8Q4Vn4"
+  },
+  "password": {
+    "password": "vector password",
+    "salt": "4bSwzTGIpBXAN4podHMuklqW1MPWZ-sCFEfJGiYzBrA",
+    "kdf": {
+      "alg": "argon2id",
+      "memory_kib": 19456,
+      "iterations": 2,
+      "parallelism": 1,
+      "length": 64
+    },
+    "auth_key": "vJHeRmwSFwla1WfUw_rFIiU1G1ccC6hzP7TvsF5cxMc",
+    "wrapped_aik": {
+      "nonce": "CyJ5dHRaOlm-thm9",
+      "ciphertext": "mUx5DZdKYOP576zN2jY_van-XwqYgYDZAVpxvjh_35g-quCcMDDWT6Tbz1Eic426"
+    },
+    "aik": "uFQwRtWuhh0qv3tmo5QhvPpDYKCdYC_w1sjb1W8KT6M"
+  }
+}

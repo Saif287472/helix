@@ -309,4 +309,110 @@ receiver shows a "waiting for this message" placeholder meanwhile.
 
 ## 14. Implementation notes and deviations
 
-(Filled in during Phase C2.)
+Implemented 2026-10-02 in Phase C2: `packages/helix_remote_crypto/lib/v2.dart`
+(`lib/src/v2/`), pure Dart on `package:cryptography` and `package:crypto`.
+Tests are under `test/v2/`, golden vectors in `test/v2/vectors/` (regenerate
+with `HELIX_UPDATE_VECTORS=1 dart test test/v2`). Still **not externally
+reviewed**.
+
+**Choices where this document was silent**
+
+- Every operation is pure. It reads state through a store interface
+  (`PairwiseSessionStore`, `LocalPrekeyStore`, `SenderKeyStore`) and returns
+  the new state. The engine commits that state in the same transaction as the
+  message's effect. Outgoing state must be committed before the ciphertext
+  leaves the device, because re-encrypting from uncommitted state would reuse
+  a message key. The engine serialises operations per remote device and per
+  group.
+- Randomness is injected (`CryptoRandom`); production uses `Random.secure`.
+- All-zero X25519 outputs (low-order points) are rejected.
+- **Federated accounts** (`uuid@domain`) contribute their 16 UUID bytes to
+  certificates, AD and safety numbers, as the certificate body already does.
+  The domain is not bound; AIK pinning is per qualified address.
+- **Prekey message sender check.** `PrekeyMessage` carries only the sender's
+  DIK. The receiver resolves the sending device's certified identity
+  (`DeviceIdentityResolver`, from its cache or `GET /v1/keys`), verifies the
+  certificate under the AIK and requires the DIK to match. Otherwise it
+  throws `UntrustedIdentityException`.
+- A session is identified by its base key (the initiator's EK). A repeated
+  prekey message decrypts in its existing session. Base keys of dropped
+  sessions are remembered (100 per device), so even a prekey message that
+  used no OPK cannot be replayed into a new session.
+- The initiator sends prekey messages until the responder's first message
+  decrypts (as Signal does).
+- **Simultaneous initiation:** a previous session that decrypts a message is
+  promoted to active (as Signal does), so both sides converge.
+- The last 20 remote ratchet keys are remembered, so a message from a
+  finished chain fails as "expired" rather than as tampering.
+- Errors carry `requestsSessionReset` for §13a. It is true for an unknown
+  session, an unknown prekey, a used or evicted key and an unknown sender
+  key. It is false for AEAD and signature failures (likely tampering) and for
+  identity failures.
+- Header counters are `u32`. A sending chain or sender key that reaches
+  `2^32` must be replaced (sender keys rotate long before that, at 10,000).
+- Sender keys:
+  - A message's `it` is the iteration of the chain key that produced it, so
+    the first message of a key has `it = 0`. A distribution carries the chain
+    key at its `iteration`.
+  - The signature is checked before any key derivation.
+  - A repeated distribution never replaces a held key. One with a different
+    signing key under the same `dist_id` is refused.
+  - Rotation happens at the next send: after a removal, a revoked device, any
+    change to the sender's own devices, 7 days or 10,000 messages.
+  - Devices are marked as holding the key only after the send succeeds
+    (`markDelivered`).
+- Prekey ids are 1..2^24-1 and wrap. When fewer than 20 remain, the device
+  uploads 100 (capped by the server's 1,000). An old SPK may be deleted 30
+  days after its successor was created.
+- The safety number QR payload is `"HXSN" ‖ u8(1) ‖ fingerprint(lower, 30) ‖
+  fingerprint(other, 30)`, so both devices show the same payload. Accounts
+  are ordered by UUID bytes, then by address.
+- Passwords are used as UTF-8 without Unicode normalisation. HKDF salts not
+  named here are 32 zero bytes. Argon2id parameters weaker than §11, and
+  salts outside 16-64 bytes, are refused whoever supplies them.
+- The wrapped AIK is `WrappedKey{nonce (random), ciphertext}`. Unwrapping
+  checks the seed against the account's AIK public key when it is known.
+- Attachments (§12):
+  - `header = "HXS2" ‖ u8(2) ‖ u32(chunk_size) ‖ prefix(7)`, followed
+    directly by the chunks.
+  - Every chunk but the last is exactly `chunk_size + 16` bytes; the last is
+    16..`chunk_size + 16`.
+  - There is no per-chunk length field. v1 had one, which needed its own
+    bounds checks.
+  - Chunk sizes of 64 B..1 MiB are accepted; 64 KiB is the default.
+- Backups (§13):
+  - Envelope v3 is JSON `{format: "helix.v2.backup", v: 3, backup_id,
+    version, created_at, nonce, ciphertext, key_wraps: [{method:
+    recovery_secret|platform_credential, salt?, kdf?, nonce, ciphertext}]}`.
+  - `backup_id` must be a UUID.
+  - The same AAD protects the payload and both wraps, which use different
+    keys.
+  - A KDF weaker than m = 8192 KiB, t = 2 is refused.
+  - The history backup is `u8(1) ‖ nonce ‖ ct` with AAD `"helix.v2.backup" ‖
+    account_id(16) ‖ u32(version)`; the account id takes the backup id's
+    place.
+- Provisioning: `link_id` enters the AAD as its 16 UUID bytes. The new device
+  checks that `identity_key` is the public key of `identity_key_private`.
+  The QR code is parsed from the right, because the origin contains colons.
+
+**Deviation (the safer option; proposed change-log entry)**
+
+- **§9 group state and profile blobs use a random nonce.** As written in §9,
+  both the AES key *and the nonce* come from `HKDF(GMK or profile key, info,
+  44)`. Every state or profile version sealed under the same key would
+  therefore reuse the GCM nonce, which breaks GCM completely. What is
+  implemented instead:
+  - `key = HKDF(secret, info, 32)`
+  - `blob = u8(1) ‖ nonce(12, random) ‖ AES-256-GCM(key, nonce,
+    padded_plaintext, aad as in §9)`
+
+  The plaintext is also padded (§6). The AADs are unchanged.
+
+**Open (for C3/C4 or review)**
+
+- The group state AAD binds the epoch but not the state version, so a server
+  can roll the state back within an epoch.
+- The receiver of a prekey message from an unknown device must fetch that
+  device's identity, and `GET /v1/keys` consumes a one-time prekey to do it. A
+  device-identity lookup that consumes nothing, or a certificate inside the
+  prekey message, would avoid this.

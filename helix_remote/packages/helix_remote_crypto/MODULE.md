@@ -45,3 +45,20 @@ code.
   delivery works within that bound and fails outside it.
 - **`docs/ai/AI_GUARDRAILS.md` lists the E2EE guarantees as
   non-negotiable.** Read it before changing anything in this package.
+
+## v2 (Phase C2, `lib/v2.dart`)
+
+`lib/v2.dart` (sources in `lib/src/v2/`) implements
+`docs/protocol/v2/CRYPTO_V2.md` for the v2 client stack. It is pure Dart: no
+Flutter, no `dart:io`, no storage, no v1 imports (`test/v2/architecture_test.dart`).
+It depends on `helix_remote_protocol` for wire types and padding. Every
+operation returns new state for the engine to commit; nothing writes. It is
+**not externally reviewed**.
+
+- Tests: `dart test test/v2`. The whole package (v1 needs Flutter):
+  `flutter test`.
+- Golden vectors live in `test/v2/vectors/`. Regenerate only deliberately,
+  with `HELIX_UPDATE_VECTORS=1 dart test test/v2`, and review the diff.
+- A crypto change needs vectors and a note in
+  `docs/security/remote_cryptographic_design_review.md` §11.
+- The v1 files stay unchanged until cutover (Phase X), when they are deleted.

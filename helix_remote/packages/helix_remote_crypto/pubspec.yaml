@@ -18,7 +18,12 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   helix_remote_domain:
     path: ../helix_remote_domain
+  helix_remote_protocol:
+    path: ../helix_remote_protocol
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  helix_remote_architecture_rules:
+    path: ../helix_remote_architecture_rules
+  test: ^1.31.0
