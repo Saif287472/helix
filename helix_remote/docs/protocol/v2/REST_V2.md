@@ -168,9 +168,9 @@ member device (and to removed members, so they know).
 |---|---|---|
 | `GET /v1/health/live` | — → `LiveResponse` | |
 | `GET /v1/health/ready` | — → `ReadyResponse` | 503 when not ready. |
-| `GET /v1/server` | — → `ServerInfo` | |
+| `GET /v1/server` | — → `ServerInfo` | `features`: allow-listed flags. |
 | `GET /v1/server/legal` | — → `LegalDocuments` | |
-| `POST /v1/telemetry/crash` | `CrashReport` → 204 | Opt-in; per-device limit. |
+| `POST /v1/telemetry/crash` | `CrashReport` → 204 | Opt-in, and only while the `crash_reporting_upload` flag is on (`forbidden` otherwise). 10 per hour per device. Logged redacted, never stored. |
 | `GET /v1/ops/metrics` | — → Prometheus text | Admin token. |
 | `GET /.well-known/assetlinks.json` | — → Android asset links | |
 | `GET /open` | — → HTML landing page for `#HLX-…` links | |
@@ -179,8 +179,8 @@ member device (and to removed members, so they know).
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `GET /v1/account/export` | — → JSON export of everything the server holds about the account | |
-| `DELETE /v1/account` | `DeleteAccountRequest` → 204 | Emits `identity.account_deleted`; every module purges its rows. |
+| `GET /v1/account/export` | — → `AccountExport` | One section per module; metadata only (encrypted things appear as versions, sizes, counts). 5 per day. Also while suspended. |
+| `DELETE /v1/account` | `DeleteAccountRequest` → 204 | Runs identity's deletion in one transaction: every module's hook purges its rows. Not a ban. Also while suspended. |
 
 ## federation
 
@@ -197,32 +197,34 @@ member device (and to removed members, so they know).
 
 ## admin
 
-DTOs are defined in Phase S6/AD (`modules/admin.dart`).
+DTOs in `modules/admin.dart`. Lists are cursor-paged `Page<T>` (`cursor`,
+`limit`). Every mutating route writes an audit row. Admin tokens and device
+tokens never open each other's routes.
 
-| Route | Purpose |
-|---|---|
-| `GET /v1/admin/setup` | First-run check (public). |
-| `POST /v1/admin/setup` | Set the first admin password (public, only before setup). |
-| `POST /v1/admin/sessions` | Admin sign-in → 12-hour admin token (public, rate-limited, lockout). |
-| `PUT /v1/admin/password` | Change the admin password. |
-| `GET /v1/admin/accounts` | List accounts (paged; no phone numbers, last 4 digits only). |
-| `GET /v1/admin/accounts/{account}` | One account with its devices. |
-| `PUT /v1/admin/accounts/{account}/suspension` | Suspend. |
-| `DELETE /v1/admin/accounts/{account}/suspension` | Unsuspend. |
-| `POST /v1/admin/accounts/{account}/ban` | Ban the phone hash and delete the account. |
-| `DELETE /v1/admin/accounts/{account}` | Delete the account. |
-| `DELETE /v1/admin/accounts/{account}/devices/{device_id}` | Revoke a device (full purge, unlike v1). |
-| `POST /v1/admin/accounts/{account}/recovery-codes` | Issue a 48-hour single-use recovery code. |
-| `GET /v1/admin/invites` | List invites. |
-| `POST /v1/admin/invites` | Create an invite. |
-| `DELETE /v1/admin/invites/{invite_id}` | Cancel an invite. |
-| `GET /v1/admin/reports` | List reports. |
-| `PUT /v1/admin/reports/{report_id}` | Resolve or dismiss. |
-| `GET /v1/admin/audit` | Audit log (paged). |
-| `GET /v1/admin/config` | Server configuration (no secrets). |
-| `PATCH /v1/admin/config` | Change server name, federation, maintenance mode. |
-| `GET /v1/admin/feature-flags` | Flags. |
-| `PUT /v1/admin/feature-flags/{name}` | Set a flag. |
-| `GET /v1/admin/logs` | Recent redacted log lines. |
-| `GET /v1/admin/logs/stream` | WebSocket of live redacted log lines. |
-| `POST /v1/admin/purge` | Purge dead letters and expired rows. |
+| Route | Body → response | Rules |
+|---|---|---|
+| `GET /v1/admin/setup` | — → `AdminSetupStatus` | Public. |
+| `POST /v1/admin/setup` | `AdminPasswordRequest` → 201 `AdminSession` | Public, only before setup (`already_exists` after). 5 per hour per IP. |
+| `POST /v1/admin/sessions` | `AdminPasswordRequest` → `AdminSession` | Public, 10 per minute per IP. Locks after 5 failures (`password_locked`). 12-hour token. |
+| `PUT /v1/admin/password` | `ChangeAdminPasswordRequest` → `AdminSession` | Ends every other admin session. |
+| `GET /v1/admin/accounts` | — → `Page<AdminAccount>` | `status`, `q` (name prefix or last 4 digits). Last 4 digits only. |
+| `GET /v1/admin/accounts/{account}` | — → `AdminAccountDetail` | |
+| `PUT /v1/admin/accounts/{account}/suspension` | optional `AdminActionRequest` → 204 | |
+| `DELETE /v1/admin/accounts/{account}/suspension` | — → 204 | |
+| `POST /v1/admin/accounts/{account}/ban` | optional `AdminActionRequest` → 204 | Bans the phone hash and deletes the account. |
+| `DELETE /v1/admin/accounts/{account}` | — → 204 | Full deletion through identity's hooks. |
+| `DELETE /v1/admin/accounts/{account}/devices/{device_id}` | — → 204 | Full revoke and purge (unlike v1). |
+| `POST /v1/admin/accounts/{account}/recovery-codes` | — → 201 `AdminRecoveryCode` | 48 hours, single use, shown once. |
+| `GET /v1/admin/invites` | — → `Page<AdminInvite>` | Codes are never listed. |
+| `POST /v1/admin/invites` | — → 201 `CreatedInvite` | Code shown once. |
+| `DELETE /v1/admin/invites/{invite_id}` | — → 204 | Open invites only. |
+| `GET /v1/admin/reports` | — → `Page<AdminReport>` | `status`. |
+| `PUT /v1/admin/reports/{report_id}` | `ResolveReportRequest` → 204 | `resolved` or `dismissed`; open reports only. |
+| `GET /v1/admin/audit` | — → `Page<AuditEntry>` | Newest first. |
+| `GET /v1/admin/config` | — → `AdminConfig` | No secrets. |
+| `PATCH /v1/admin/config` | `AdminConfigPatch` → `AdminConfig` | Server name, maintenance mode, federation switch. |
+| `GET /v1/admin/feature-flags` | — → `FeatureFlags` | |
+| `PUT /v1/admin/feature-flags/{name}` | `SetFeatureFlagRequest` → 204 | Allow-listed names only (`not_found`). |
+| `GET /v1/admin/logs` | — → `AdminLogLines` | `limit` 1–500. This node, redacted. |
+| `GET /v1/admin/logs/stream` | WebSocket of redacted JSON lines | |
+| `POST /v1/admin/purge` | — → `PurgeResult` | Dead jobs and expired identity rows. |

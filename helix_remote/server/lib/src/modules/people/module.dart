@@ -13,7 +13,7 @@ import 'package:shelf/shelf.dart';
 
 /// Profiles (encrypted), privacy, blocks, contacts, discovery, presence,
 /// reports. Schema `people`.
-final class PeopleModule extends ModuleBase {
+final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
   PeopleModule(
     super.context, {
     required this.identity,
@@ -112,6 +112,58 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
   }
 
   String get s => schema;
+
+  /// Reports stay after an account is deleted: they are the moderation
+  /// record (ids only; no content).
+  @override
+  Future<Object?> exportAccount(SqlSession db, String accountId) async {
+    final profile = await db.queryOne(
+      'SELECT version, updated_at FROM $s.profiles WHERE account_id = @a:uuid',
+      {'a': accountId},
+    );
+    final blocks = await db.query(
+      'SELECT blocked, created_at FROM $s.blocks WHERE account_id = @a:uuid ORDER BY created_at',
+      {'a': accountId},
+    );
+    final contacts = await db.queryOne(
+      'SELECT count(*)::int8 AS n FROM $s.contacts WHERE account_id = @a:uuid',
+      {'a': accountId},
+    );
+    final reports = await db.query(
+      'SELECT id, subject, category, status, created_at FROM $s.reports '
+      'WHERE reporter = @a:uuid ORDER BY id DESC LIMIT 500',
+      {'a': accountId},
+    );
+    return {
+      // The profile itself is end-to-end encrypted; only its version is
+      // meaningful here.
+      'profile': profile == null
+          ? null
+          : {
+              'version': profile.integer('version'),
+              'updated_at': toWireTime(profile.time('updated_at')),
+            },
+      'privacy': (await api.privacy(db, accountId)).toJson(),
+      'blocked': [
+        for (final r in blocks)
+          {
+            'account_id': r.string('blocked'),
+            'since': toWireTime(r.time('created_at')),
+          },
+      ],
+      'contacts': contacts!.integer('n'),
+      'reports_filed': [
+        for (final r in reports)
+          {
+            'report_id': r.string('id'),
+            'subject': r.string('subject'),
+            'category': r.string('category'),
+            'status': r.string('status'),
+            'created_at': toWireTime(r.time('created_at')),
+          },
+      ],
+    };
+  }
 
   Future<void> _purge(Tx tx, String accountId) async {
     for (final table in ['profiles', 'privacy', 'discovery_budget']) {
@@ -440,6 +492,78 @@ final class _PeopleFacade implements PeopleApi {
       online: audience(r.string('online')),
       groupAdd: audience(r.string('group_add')),
     );
+  }
+
+  @override
+  Future<Page<AdminReport>> reports(
+    SqlSession db, {
+    required PageRequest page,
+    ReportStatus? status,
+  }) async {
+    final cursor = page.cursor;
+    if (cursor != null && !Uuid.isValid(cursor)) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'cursor'},
+      );
+    }
+    final rows = await db.query(
+      'SELECT id, reporter, subject, category, note, status, created_at FROM ${_m.s}.reports '
+      'WHERE (@cursor:uuid IS NULL OR id < @cursor:uuid) '
+      'AND (@status:text IS NULL OR status = @status:text) '
+      'ORDER BY id DESC LIMIT @limit:int4',
+      {'cursor': cursor, 'status': status?.wire, 'limit': page.limit + 1},
+    );
+    final items = [
+      for (final r in rows.take(page.limit))
+        AdminReport(
+          reportId: r.string('id'),
+          reporter: r.string('reporter'),
+          subject: r.string('subject'),
+          category: ReportCategory.values.firstWhere(
+            (c) => c.wire == r.string('category'),
+            orElse: () => ReportCategory.other,
+          ),
+          status: ReportStatus.values.firstWhere(
+            (v) => v.wire == r.string('status'),
+            orElse: () => ReportStatus.unknown,
+          ),
+          createdAt: r.time('created_at'),
+          note: r.optString('note'),
+        ),
+    ];
+    return Page(
+      items: items,
+      nextCursor: rows.length > page.limit ? items.last.reportId : null,
+    );
+  }
+
+  @override
+  Future<bool> resolveReport(
+    SqlSession db,
+    String reportId,
+    ReportStatus to,
+  ) async {
+    if (to != ReportStatus.resolved && to != ReportStatus.dismissed) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        details: {'field': 'status'},
+      );
+    }
+    return await db.execute(
+          "UPDATE ${_m.s}.reports SET status = @to:text WHERE id = @id:uuid AND status = 'open'",
+          {'id': reportId, 'to': to.wire},
+        ) ==
+        1;
+  }
+
+  @override
+  Future<int> openReportsAbout(SqlSession db, String accountId) async {
+    final r = await db.queryOne(
+      "SELECT count(*)::int8 AS n FROM ${_m.s}.reports WHERE subject = @a:uuid AND status = 'open'",
+      {'a': accountId},
+    );
+    return r!.integer('n');
   }
 
   @override

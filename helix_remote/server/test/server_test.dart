@@ -72,6 +72,9 @@ void main() {
           'backup',
           'groups',
           'calls',
+          'ops',
+          'admin',
+          'compliance',
         }),
         isEmpty,
       );

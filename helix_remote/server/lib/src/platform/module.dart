@@ -127,3 +127,20 @@ abstract base class ModuleBase implements HelixModule {
 abstract interface class ProvidesAuthentication {
   Authenticator get authenticator;
 }
+
+/// Implemented by the module that owns maintenance mode (ops). While it is
+/// on, the pipeline answers `maintenance` to everything except health, ops
+/// and admin routes.
+abstract interface class ProvidesMaintenance {
+  Future<bool> maintenanceActive();
+}
+
+/// Implemented by every module that holds data about an account, for
+/// `GET /v1/account/export` (one section per module, under its name). A
+/// section never contains secrets, tokens, ciphertext, other people's phone
+/// numbers or key material other than the account's own public keys.
+abstract interface class ProvidesAccountExport {
+  String get name;
+
+  Future<Object?> exportAccount(SqlSession s, String accountId);
+}

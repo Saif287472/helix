@@ -17,7 +17,7 @@ import 'package:shelf/shelf.dart';
 /// Group roster authority (REST_V2.md "groups"). The server enforces who is
 /// in a group and what each role may do; names, pictures and messages are
 /// end-to-end encrypted (CRYPTO_V2.md §7, §9).
-final class GroupsModule extends ModuleBase {
+final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
   GroupsModule(
     super.context, {
     required this.identity,
@@ -43,6 +43,23 @@ final class GroupsModule extends ModuleBase {
     60,
     const Duration(hours: 1),
   );
+
+  /// Memberships and roles (group names and pictures are encrypted).
+  @override
+  Future<Object?> exportAccount(SqlSession s, String accountId) async {
+    final rows = await s.query(
+      'SELECT group_id, role, joined_at FROM $schema.members WHERE account_id = @a:uuid ORDER BY joined_at',
+      {'a': accountId},
+    );
+    return [
+      for (final r in rows)
+        {
+          'group_id': r.string('group_id'),
+          'role': r.string('role'),
+          'joined_at': toWireTime(r.time('joined_at')),
+        },
+    ];
+  }
 
   @override
   String get name => 'groups';

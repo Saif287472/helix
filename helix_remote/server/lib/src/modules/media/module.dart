@@ -12,7 +12,7 @@ import 'package:shelf/shelf.dart';
 
 /// Encrypted media objects (CRYPTO_V2.md §12). Random ids, no link to the
 /// messages that use them, expiry instead of reference counting.
-final class MediaModule extends ModuleBase {
+final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   MediaModule(super.context, {required IdentityApi identity}) {
     api = _MediaFacade(this);
     identity.onAccountDeleted(
@@ -36,6 +36,29 @@ final class MediaModule extends ModuleBase {
     MediaKind.backup => const Duration(days: 90),
     MediaKind.persistent => null,
   };
+
+  /// Sizes and dates of stored objects (contents are client-encrypted).
+  @override
+  Future<Object?> exportAccount(SqlSession s, String accountId) async {
+    final rows = await s.query(
+      'SELECT id, kind, size, completed_at, created_at, expires_at FROM $schema.objects '
+      'WHERE owner_account = @a:uuid ORDER BY id',
+      {'a': accountId},
+    );
+    return [
+      for (final r in rows)
+        compact({
+          'media_id': r.string('id'),
+          'kind': r.string('kind'),
+          'size': r.integer('size'),
+          'completed': !r.isNull('completed_at'),
+          'created_at': toWireTime(r.time('created_at')),
+          'expires_at': r.isNull('expires_at')
+              ? null
+              : toWireTime(r.time('expires_at')),
+        }),
+    ];
+  }
 
   @override
   String get name => 'media';

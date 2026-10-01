@@ -52,7 +52,7 @@ void main() {
             device: await d.registration(),
             prekeys: await d.prekeys(),
             verificationToken: verified.verificationToken,
-            termsVersion: '2026-09',
+            termsVersion: HelixLegalDocuments.termsVersion,
           ).toJson(),
         );
       }
@@ -100,7 +100,7 @@ void main() {
         final acct = await TestAccount.create();
         final d = await acct.newDevice();
         Future<TestResponse> attempt({
-          String? terms = '2026-09',
+          String? terms = HelixLegalDocuments.termsVersion,
           bool badCert = false,
         }) async => h.api.call(
           Routes.register,
@@ -154,7 +154,7 @@ void main() {
           device: await d.registration(),
           prekeys: await d.prekeys(),
           verificationToken: verified.verificationToken,
-          termsVersion: '2026-09',
+          termsVersion: HelixLegalDocuments.termsVersion,
         );
         expect(
           (await h.api.call(Routes.register, body: request.toJson())).errorCode,
@@ -510,7 +510,7 @@ void main() {
               device: await bobDevice.registration(),
               prekeys: await bobDevice.prekeys(),
               verificationToken: verified.verificationToken,
-              termsVersion: '2026-09',
+              termsVersion: HelixLegalDocuments.termsVersion,
             ).toJson(),
           )).json,
         ).session;

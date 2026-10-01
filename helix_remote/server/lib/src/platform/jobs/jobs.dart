@@ -49,6 +49,15 @@ final class Outbox {
       tx.afterCommit(() => _bus.publish(wakeTopic, const {}));
     }
   }
+
+  /// Jobs that ran out of attempts, for operators.
+  Future<int> deadCount(SqlSession s) async => (await s.queryOne(
+    "SELECT count(*)::int8 AS n FROM $_platformSchema.jobs WHERE status = 'dead'",
+  ))!.integer('n');
+
+  /// Deletes dead jobs (admin purge); returns how many.
+  Future<int> purgeDead(SqlSession s) =>
+      s.execute("DELETE FROM $_platformSchema.jobs WHERE status = 'dead'");
 }
 
 /// A job handler. Throwing schedules a retry with exponential backoff;

@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:helix_remote_protocol/helix_remote_protocol.dart';
-import 'package:helix_remote_server/src/modules/identity/domain/secrets.dart';
+import 'package:helix_remote_server/src/kernel/jwt.dart';
 
 /// Claims of a device access token.
 final class AccessClaims {
@@ -19,94 +17,41 @@ final class AccessClaims {
   final DateTime expiresAt;
 }
 
-/// HS256 JWTs with a key ring (`HELIX_JWT_KEYS`): signs with the active
-/// key, verifies with any key in the ring, so keys rotate without signing
-/// anyone out. Verification fails closed: wrong algorithm, unknown key id,
-/// bad signature, wrong audience or type, missing or past expiry.
+/// Device access tokens: [HmacJwt] with audience `helix.device`, type
+/// `access`, `sub` = account and `dev` = device.
 final class JwtCodec {
-  JwtCodec({required this._keys, required this.activeKid}) {
-    if (!_keys.containsKey(activeKid)) {
-      throw ArgumentError('active kid not in ring');
-    }
-  }
+  JwtCodec({required Map<String, Uint8List> keys, required String activeKid})
+    : _jwt = HmacJwt(keys: keys, activeKid: activeKid);
 
-  final Map<String, Uint8List> _keys;
-  final String activeKid;
+  final HmacJwt _jwt;
 
-  static const issuer = 'helix';
   static const audience = 'helix.device';
   static const type = 'access';
 
-  String _b64(List<int> bytes) => encodeBytes(bytes);
+  String sign(AccessClaims claims) => _jwt.sign(
+    audience: audience,
+    type: type,
+    issuedAt: claims.issuedAt,
+    expiresAt: claims.expiresAt,
+    claims: {'sub': claims.accountId, 'dev': claims.deviceId},
+  );
 
-  String sign(AccessClaims claims) {
-    final header = _b64(
-      utf8.encode(jsonEncode({'alg': 'HS256', 'typ': 'JWT', 'kid': activeKid})),
-    );
-    final payload = _b64(
-      utf8.encode(
-        jsonEncode({
-          'iss': issuer,
-          'aud': audience,
-          'typ': type,
-          'sub': claims.accountId,
-          'dev': claims.deviceId,
-          'iat': claims.issuedAt.millisecondsSinceEpoch ~/ 1000,
-          // Millisecond issue time, compared with a device's session cut-off
-          // (sign-out then sign-in within one second must still work).
-          'ims': claims.issuedAt.millisecondsSinceEpoch,
-          'exp': claims.expiresAt.millisecondsSinceEpoch ~/ 1000,
-        }),
-      ),
-    );
-    final signature = hmacSha256(
-      _keys[activeKid]!,
-      utf8.encode('$header.$payload'),
-    );
-    return '$header.$payload.${_b64(signature)}';
-  }
-
-  /// The claims of a valid token at [now], or null.
   AccessClaims? verify(String token, DateTime now) {
-    final parts = token.split('.');
-    if (parts.length != 3) return null;
-    try {
-      final header =
-          jsonDecode(utf8.decode(decodeBytes(parts[0])))
-              as Map<String, Object?>;
-      if (header['alg'] != 'HS256' || header['typ'] != 'JWT') return null;
-      final key = _keys[header['kid']];
-      if (key == null) return null;
-      final expected = hmacSha256(key, utf8.encode('${parts[0]}.${parts[1]}'));
-      if (!constantTimeEquals(expected, decodeBytes(parts[2]))) return null;
-      final payload =
-          jsonDecode(utf8.decode(decodeBytes(parts[1])))
-              as Map<String, Object?>;
-      if (payload['iss'] != issuer ||
-          payload['aud'] != audience ||
-          payload['typ'] != type) {
-        return null;
-      }
-      final exp = payload['exp'];
-      final iat = payload['ims'];
-      final sub = payload['sub'];
-      final dev = payload['dev'];
-      if (exp is! int || iat is! int || sub is! String || dev is! String) {
-        return null;
-      }
-      final expiresAt = DateTime.fromMillisecondsSinceEpoch(
-        exp * 1000,
-        isUtc: true,
-      );
-      if (!expiresAt.isAfter(now)) return null;
-      return AccessClaims(
-        accountId: sub,
-        deviceId: dev,
-        issuedAt: DateTime.fromMillisecondsSinceEpoch(iat, isUtc: true),
-        expiresAt: expiresAt,
-      );
-    } on Object {
-      return null;
-    }
+    final payload = _jwt.verify(
+      token,
+      audience: audience,
+      type: type,
+      now: now,
+    );
+    if (payload == null) return null;
+    final sub = payload['sub'];
+    final dev = payload['dev'];
+    if (sub is! String || dev is! String) return null;
+    return AccessClaims(
+      accountId: sub,
+      deviceId: dev,
+      issuedAt: HmacJwt.issuedAtOf(payload),
+      expiresAt: HmacJwt.expiresAtOf(payload),
+    );
   }
 }

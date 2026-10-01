@@ -13,6 +13,8 @@ export 'src/errors.dart';
 export 'src/headers.dart';
 export 'src/ids.dart';
 export 'src/json.dart';
+export 'src/legal.dart';
+export 'src/modules/admin.dart';
 export 'src/modules/backup.dart';
 export 'src/modules/calls.dart';
 export 'src/modules/groups.dart';

@@ -63,13 +63,16 @@ final class HelixServer {
       await module.start();
     }
 
-    final handler = platform.httpPipeline().wrap(
-      routes.build(
-        authenticator: authenticator ?? _authenticatorFrom(modules),
-        rateLimiter: platform.rateLimiter,
-        idempotency: platform.idempotency,
-      ),
-    );
+    final maintenance = modules.whereType<ProvidesMaintenance>().firstOrNull;
+    final handler = platform
+        .httpPipeline(maintenance: maintenance?.maintenanceActive)
+        .wrap(
+          routes.build(
+            authenticator: authenticator ?? _authenticatorFrom(modules),
+            rateLimiter: platform.rateLimiter,
+            idempotency: platform.idempotency,
+          ),
+        );
 
     final http = await shelf_io.serve(
       handler,
@@ -106,12 +109,14 @@ final class HelixServer {
 }
 
 extension on HelixPlatform {
-  HttpPipeline httpPipeline() => HttpPipeline(
-    log: log,
-    metrics: metrics,
-    rateLimiter: rateLimiter,
-    trustedProxies: config.trustedProxies,
-  );
+  HttpPipeline httpPipeline({Future<bool> Function()? maintenance}) =>
+      HttpPipeline(
+        log: log,
+        metrics: metrics,
+        rateLimiter: rateLimiter,
+        trustedProxies: config.trustedProxies,
+        maintenance: maintenance,
+      );
 }
 
 Authenticator _authenticatorFrom(List<HelixModule> modules) {

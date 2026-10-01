@@ -18,7 +18,8 @@ import 'package:shelf/shelf.dart';
 
 /// Mailbox delivery (REST_V2.md messaging, ADR-028): the server keeps only
 /// undelivered envelopes, one row per recipient device, deleted on ack.
-final class MessagingModule extends ModuleBase {
+final class MessagingModule extends ModuleBase
+    implements ProvidesAccountExport {
   MessagingModule(
     super.context, {
     required this.identity,
@@ -40,6 +41,21 @@ final class MessagingModule extends ModuleBase {
 
   static const pushJob = 'messaging.push';
   static const maxRecipients = 1100;
+
+  /// Undelivered envelopes are sealed; they are counted, never exported.
+  @override
+  Future<Object?> exportAccount(SqlSession s, String accountId) async {
+    final devices = await identity.activeDevices(s, accountId);
+    return {
+      'undelivered_envelopes': {
+        for (final d in devices)
+          d.id: (await s.queryOne(
+            'SELECT count(*)::int8 AS n FROM $schema.mailbox WHERE device_id = @d:uuid',
+            {'d': d.id},
+          ))!.integer('n'),
+      },
+    };
+  }
 
   @override
   String get name => 'messaging';

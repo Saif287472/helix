@@ -147,4 +147,52 @@ abstract interface class IdentityApi {
   void onDeviceListChanged(DeviceListChangedHook hook);
 
   void onAccountDeleted(AccountDeletedHook hook);
+
+  /// Operator actions (admin module only).
+  IdentityAdminApi get admin;
+}
+
+/// What the operator console may do with accounts, devices, invites and
+/// recovery codes. Never exposes phone numbers (last four digits only),
+/// codes after issue, or keys.
+abstract interface class IdentityAdminApi {
+  /// Newest first. [query] matches a `~Helix name` prefix, or the last four
+  /// digits when it is four digits.
+  Future<Page<AdminAccount>> accounts(
+    SqlSession s, {
+    required PageRequest page,
+    AccountStatus? status,
+    String? query,
+  });
+
+  /// The account, every device (active and revoked) and whether a password
+  /// is set; null if there is no such account.
+  Future<({AdminAccount account, List<AdminDevice> devices, bool hasPassword})?>
+  accountDetail(SqlSession s, String accountId);
+
+  /// False if there is no such account. Suspended accounts keep their
+  /// devices but may only use routes registered with `allowSuspended`.
+  Future<bool> setSuspended(Tx tx, String accountId, {required bool suspended});
+
+  /// Bans the account's phone number from signing up again and deletes the
+  /// account. False if there is no such account.
+  Future<bool> ban(Tx tx, String accountId);
+
+  /// Revokes and fully purges one device. False if it is not an active
+  /// device of [accountId].
+  Future<bool> revokeDevice(Tx tx, String accountId, String deviceId);
+
+  /// A 48-hour single-use recovery code (replaces any unused one).
+  Future<AdminRecoveryCode?> issueRecoveryCode(String accountId);
+
+  Future<Page<AdminInvite>> invites(SqlSession s, {required PageRequest page});
+
+  Future<CreatedInvite> createInvite();
+
+  /// False unless the invite exists and is still open.
+  Future<bool> cancelInvite(SqlSession s, String inviteId);
+
+  /// Removes expired refresh tokens, challenges, invites and recovery
+  /// codes; counts by kind.
+  Future<Map<String, int>> purgeExpired(SqlSession s);
 }

@@ -58,6 +58,7 @@ final class ServerInfo {
     required this.termsVersion,
     required this.privacyVersion,
     this.federationDomain,
+    this.features = const {},
   });
 
   final String name;
@@ -70,6 +71,9 @@ final class ServerInfo {
   final String privacyVersion;
   final String? federationDomain;
 
+  /// Feature flags clients act on (allow-listed by the server).
+  final Map<String, bool> features;
+
   JsonMap toJson() => compact({
     'name': name,
     'version': version,
@@ -78,21 +82,29 @@ final class ServerInfo {
     'terms_version': termsVersion,
     'privacy_version': privacyVersion,
     'federation_domain': federationDomain,
+    if (features.isNotEmpty) 'features': features,
   });
 
-  factory ServerInfo.fromJson(JsonReader json) => ServerInfo(
-    name: json.string('name'),
-    version: json.string('version'),
-    registration: json.enumValue(
-      'registration',
-      RegistrationMode.values,
-      orElse: RegistrationMode.unknown,
-    ),
-    maxAttachmentBytes: json.integer('max_attachment_bytes'),
-    termsVersion: json.string('terms_version'),
-    privacyVersion: json.string('privacy_version'),
-    federationDomain: json.optString('federation_domain'),
-  );
+  factory ServerInfo.fromJson(JsonReader json) {
+    final features = json.optObject('features');
+    return ServerInfo(
+      name: json.string('name'),
+      version: json.string('version'),
+      registration: json.enumValue(
+        'registration',
+        RegistrationMode.values,
+        orElse: RegistrationMode.unknown,
+      ),
+      maxAttachmentBytes: json.integer('max_attachment_bytes'),
+      termsVersion: json.string('terms_version'),
+      privacyVersion: json.string('privacy_version'),
+      federationDomain: json.optString('federation_domain'),
+      features: {
+        if (features != null)
+          for (final k in features.json.keys) k: features.boolean(k),
+      },
+    );
+  }
 }
 
 /// `GET /v1/server/legal`.
@@ -155,6 +167,34 @@ final class CrashReport {
       },
     );
   }
+}
+
+/// `GET /v1/account/export`: everything the server holds about the
+/// account, one section per module (module-defined JSON; no message
+/// content exists server-side beyond undelivered sealed envelopes, which
+/// are counted, not exported).
+final class AccountExport {
+  const AccountExport({
+    required this.accountId,
+    required this.exportedAt,
+    required this.sections,
+  });
+
+  final String accountId;
+  final DateTime exportedAt;
+  final Map<String, Object?> sections;
+
+  JsonMap toJson() => {
+    'account_id': accountId,
+    'exported_at': toWireTime(exportedAt),
+    'sections': sections,
+  };
+
+  factory AccountExport.fromJson(JsonReader json) => AccountExport(
+    accountId: json.nonEmpty('account_id'),
+    exportedAt: json.time('exported_at'),
+    sections: json.object('sections').json,
+  );
 }
 
 /// `DELETE /v1/account`: [confirmation] must be exactly `DELETE`.

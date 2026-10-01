@@ -264,10 +264,14 @@ final class IdentityStore {
   }
 
   /// Device, account status and session cut-off for authenticating a token.
+  /// The cut-off is cut to milliseconds, the precision of a token's issue
+  /// time, so a session minted in the same millisecond as the cut-off (a new
+  /// device, a sign-in right after sign-out) is valid.
   Future<({bool active, String accountStatus, DateTime tokensValidAfter})?>
   authState(SqlSession db, String deviceId) async {
     final r = await db.queryOne(
-      'SELECT d.status, d.tokens_valid_after, a.status AS account_status '
+      "SELECT d.status, date_trunc('milliseconds', d.tokens_valid_after) AS tokens_valid_after, "
+      'a.status AS account_status '
       'FROM $s.devices d JOIN $s.accounts a ON a.id = d.account_id WHERE d.id = @d:uuid',
       {'d': deviceId},
     );

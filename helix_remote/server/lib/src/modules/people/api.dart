@@ -19,4 +19,16 @@ abstract interface class PeopleApi {
   });
 
   Future<PrivacySettings> privacy(SqlSession db, String accountId);
+
+  /// Reports for the operator console, newest first.
+  Future<Page<AdminReport>> reports(
+    SqlSession db, {
+    required PageRequest page,
+    ReportStatus? status,
+  });
+
+  /// Marks an open report resolved or dismissed; false if it is not open.
+  Future<bool> resolveReport(SqlSession db, String reportId, ReportStatus to);
+
+  Future<int> openReportsAbout(SqlSession db, String accountId);
 }

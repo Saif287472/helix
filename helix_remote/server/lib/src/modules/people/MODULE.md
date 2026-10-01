@@ -26,6 +26,9 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   `Presence`). Last seen comes from the realtime gateway's record,
   truncated to the minute. Both are filtered by the target's audiences.
 - **Reports:** `reports` stores no message content. The admin console
-  (S6) reads it.
+  lists and resolves them through `PeopleApi.reports` / `resolveReport`.
+  They survive account deletion as the moderation record (ids only).
+- **Export:** profile version, privacy, blocked accounts, contact count,
+  reports filed.
 - **Account deletion** purges every row about the account, including
   blocks and contacts on other accounts that name it.

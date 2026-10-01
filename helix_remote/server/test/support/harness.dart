@@ -38,6 +38,7 @@ final class Harness {
         'HELIX_PHONE_PEPPER': testPepper,
         'HELIX_GLOBAL_MODE': '$global',
         'HELIX_OTP_RESEND_SECONDS': '0',
+        'HELIX_ADMIN_KDF_MEMORY_KIB': '256',
         ...extra,
       },
     );
@@ -97,7 +98,7 @@ final class Harness {
         device: await device.registration(),
         prekeys: await device.prekeys(oneTime: oneTime),
         verificationToken: verified.verificationToken,
-        termsVersion: '2026-09',
+        termsVersion: HelixLegalDocuments.termsVersion,
       ).toJson(),
     );
     if (response.status != 201) throw StateError('register failed: $response');

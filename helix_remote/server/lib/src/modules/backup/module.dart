@@ -13,7 +13,7 @@ import 'package:shelf/shelf.dart';
 /// Encrypted backups (F2, CRYPTO_V2.md §13). The server stores ciphertext
 /// it cannot open. The automatic history backup is keyed by the account
 /// identity key, so it is deleted whenever that key changes.
-final class BackupModule extends ModuleBase {
+final class BackupModule extends ModuleBase implements ProvidesAccountExport {
   BackupModule(
     super.context, {
     required IdentityApi identity,
@@ -33,6 +33,38 @@ final class BackupModule extends ModuleBase {
   }
 
   final MediaApi media;
+
+  /// Whether backups exist, with sizes and dates (both are encrypted).
+  @override
+  Future<Object?> exportAccount(SqlSession s, String accountId) async {
+    final history = await s.queryOne(
+      'SELECT version, length(data)::int8 AS size, updated_at FROM $schema.history_backups '
+      'WHERE account_id = @a:uuid',
+      {'a': accountId},
+    );
+    final full = await s.queryOne(
+      'SELECT backup_id, version, cardinality(media_ids)::int8 AS media, updated_at '
+      'FROM $schema.full_backups WHERE account_id = @a:uuid',
+      {'a': accountId},
+    );
+    return {
+      'history': history == null
+          ? null
+          : {
+              'version': history.integer('version'),
+              'size': history.integer('size'),
+              'updated_at': toWireTime(history.time('updated_at')),
+            },
+      'full': full == null
+          ? null
+          : {
+              'backup_id': full.string('backup_id'),
+              'version': full.integer('version'),
+              'media_objects': full.integer('media'),
+              'updated_at': toWireTime(full.time('updated_at')),
+            },
+    };
+  }
 
   @override
   String get name => 'backup';

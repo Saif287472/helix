@@ -12,7 +12,7 @@ import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:shelf/shelf.dart';
 
 /// Prekeys and bundles (X3DH key directory, CRYPTO_V2.md §3).
-final class KeysModule extends ModuleBase {
+final class KeysModule extends ModuleBase implements ProvidesAccountExport {
   KeysModule(super.context, {required this.identity}) {
     _store = PrekeyStore(schema);
     identity
@@ -40,6 +40,38 @@ final class KeysModule extends ModuleBase {
     600,
     const Duration(hours: 1),
   );
+
+  /// Public prekey material only, per active device.
+  @override
+  Future<Object?> exportAccount(SqlSession s, String accountId) async {
+    final devices = await identity.activeDevices(s, accountId);
+    return [
+      for (final d in devices)
+        {
+          'device_id': d.id,
+          'identity_key': encodeBytes(d.identityKey),
+          'signing_key': encodeBytes(d.signingKey),
+          'signed_prekey': await _signedPrekeyInfo(s, d.id),
+          'one_time_prekeys': (await s.queryOne(
+            'SELECT count(*)::int8 AS n FROM $schema.one_time_prekeys WHERE device_id = @d:uuid',
+            {'d': d.id},
+          ))!.integer('n'),
+        },
+    ];
+  }
+
+  Future<Object?> _signedPrekeyInfo(SqlSession s, String deviceId) async {
+    final r = await s.queryOne(
+      'SELECT key_id, updated_at FROM $schema.signed_prekeys WHERE device_id = @d:uuid',
+      {'d': deviceId},
+    );
+    return r == null
+        ? null
+        : {
+            'key_id': r.integer('key_id'),
+            'updated_at': toWireTime(r.time('updated_at')),
+          };
+  }
 
   @override
   String get name => 'keys';

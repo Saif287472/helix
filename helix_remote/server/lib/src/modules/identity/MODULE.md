@@ -77,3 +77,17 @@ Helix Global (`HELIX_GLOBAL_MODE=true`) refuses to start without SMS.
 flood of challenge requests for one device id can delay that device's
 sign-in. It is bounded by the per-IP limit. Revisit if it is ever seen in
 practice.
+
+## Operator actions (`IdentityAdminApi`, `api.admin`)
+
+Used only by the admin module: account list and detail (last four digits,
+never the number), suspend and unsuspend (status only; suspended principals
+reach `allowSuspended` routes), ban (phone hash into `banned_phones`, then
+full deletion), device revoke (same hooks and signals as a user revoke,
+reason `admin`), recovery codes, invites (list, create, cancel) and purging
+expired rows. The account export section comes from
+`data/admin_store.dart`: account, devices, push token kinds (never tokens),
+password date and security events.
+
+Session cut-offs are compared at millisecond precision (`authState`
+truncates `tokens_valid_after`), the precision of a token's issue time.

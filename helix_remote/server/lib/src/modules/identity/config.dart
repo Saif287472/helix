@@ -100,7 +100,7 @@ final class IdentityConfig {
       sms: provider,
       termsVersion: env['HELIX_TERMS_VERSION']?.trim().isNotEmpty == true
           ? env['HELIX_TERMS_VERSION']!.trim()
-          : '2026-09',
+          : HelixLegalDocuments.termsVersion,
       globalMode: config.globalMode,
       jwtKeys: config.jwtKeys,
       activeJwtKid: config.activeJwtKid,

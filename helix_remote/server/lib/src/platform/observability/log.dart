@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
@@ -29,6 +30,7 @@ final class Log {
   final LogSink _sink;
   final int _ringSize;
   final Queue<String> _ring = Queue();
+  final StreamController<String> _lines = StreamController.broadcast();
 
   /// A logger that adds [fields] to every line (module, request id).
   Log child(Map<String, Object?> fields) =>
@@ -60,11 +62,15 @@ final class Log {
       ...redactFields(fields),
     });
     _sink.write(line);
+    if (_lines.hasListener) _lines.add(line);
     _ring.addLast(line);
     while (_ring.length > _ringSize) {
       _ring.removeFirst();
     }
   }
+
+  /// Every line from now on (already redacted), for the admin log stream.
+  Stream<String> get lines => (_root ?? this)._lines.stream;
 
   /// The most recent lines (already redacted), for the admin log view.
   List<String> recent([int limit = 100]) {

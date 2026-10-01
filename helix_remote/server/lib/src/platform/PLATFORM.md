@@ -18,8 +18,8 @@ one Postgres database.
 | Object storage | `blobs/object_storage.dart` | local directory | S3-compatible (SigV4) |
 | Push | `push/push.dart` | FCM HTTP v1, data-only wake-ups | + APNs |
 | HTTP | `http/routes.dart`, `pipeline.dart`, `request.dart`, `idempotency.dart` | shelf | same |
-| Observability | `observability/log.dart`, `metrics.dart` | JSON logs with redaction, Prometheus text | scrape per node |
-| Modules | `module.dart` | `HelixModule`, `ModuleBase`, `HealthRegistry` | — |
+| Observability | `observability/log.dart`, `metrics.dart` | JSON logs with redaction (ring buffer + live `lines` stream for the admin console), Prometheus text | scrape per node |
+| Modules | `module.dart` | `HelixModule`, `ModuleBase`, `HealthRegistry`; capability interfaces `ProvidesAuthentication`, `ProvidesMaintenance`, `ProvidesAccountExport` | — |
 
 ## Rules (enforced by `test/architecture_test.dart` where possible)
 

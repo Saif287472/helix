@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/identity/application/accounts.dart';
+import 'package:helix_remote_server/src/modules/identity/application/administration.dart';
 import 'package:helix_remote_server/src/modules/identity/application/context.dart';
 import 'package:helix_remote_server/src/modules/identity/application/hooks.dart';
 import 'package:helix_remote_server/src/modules/identity/application/registration.dart';
@@ -9,6 +10,7 @@ import 'package:helix_remote_server/src/modules/identity/application/sessions.da
 import 'package:helix_remote_server/src/modules/identity/application/sign_in.dart';
 import 'package:helix_remote_server/src/modules/identity/application/sign_up.dart';
 import 'package:helix_remote_server/src/modules/identity/config.dart';
+import 'package:helix_remote_server/src/modules/identity/data/admin_store.dart';
 import 'package:helix_remote_server/src/modules/identity/data/credential_store.dart';
 import 'package:helix_remote_server/src/modules/identity/data/identity_store.dart';
 import 'package:helix_remote_server/src/modules/identity/domain/jwt.dart';
@@ -23,7 +25,7 @@ import 'package:helix_remote_server/src/platform/module.dart';
 
 /// Accounts, devices, sessions and every way of signing in (ADR-026).
 final class IdentityModule extends ModuleBase
-    implements ProvidesAuthentication {
+    implements ProvidesAuthentication, ProvidesAccountExport {
   IdentityModule(super.context, {SmsProvider? sms}) {
     final config = IdentityConfig.from(context.config, sms: sms);
     _store = IdentityStore(schema);
@@ -58,6 +60,14 @@ final class IdentityModule extends ModuleBase
       clock: context.clock,
     );
     api = _IdentityFacade(this);
+    _adminStore = AdminStore(schema);
+    administration = Administration(
+      _ctx,
+      store: _adminStore,
+      signUp: signUp,
+      registration: registration,
+      deleteAccount: api.deleteAccount,
+    );
   }
 
   final IdentityHooks _hooks = IdentityHooks();
@@ -68,6 +78,8 @@ final class IdentityModule extends ModuleBase
   late final Registration registration;
   late final SignIn signIn;
   late final Accounts accounts;
+  late final AdminStore _adminStore;
+  late final Administration administration;
 
   @override
   late final Authenticator authenticator;
@@ -89,6 +101,10 @@ final class IdentityModule extends ModuleBase
     signIn: signIn,
     accounts: accounts,
   );
+
+  @override
+  Future<Object?> exportAccount(SqlSession s, String accountId) =>
+      _adminStore.export(s, accountId);
 
   @override
   List<PeriodicJob> get periodic => [
@@ -174,4 +190,7 @@ final class _IdentityFacade implements IdentityApi {
   @override
   void onAccountDeleted(AccountDeletedHook hook) =>
       _m._hooks.onAccountDeleted(hook);
+
+  @override
+  IdentityAdminApi get admin => _m.administration;
 }
