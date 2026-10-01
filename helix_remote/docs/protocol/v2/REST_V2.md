@@ -21,8 +21,16 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
   with the HTTP status of the code (`errors.dart`). Clients branch on `code`.
 - **Idempotency:** every mutating request may carry `Idempotency-Key`; the
   server stores the result for 24 hours per principal and replays it (same key
-  with a different body: `idempotency_conflict`). Message sends are also
-  idempotent by their `id`.
+  with a different body: `idempotency_conflict`). Stored results are
+  encrypted at rest (some carry a secret once, such as an invite link).
+  Message sends are also idempotent by their `id`, per sending device.
+- **Bodies:** credentials (and, for S2S, the signature headers' shape and
+  clock skew) are checked before the body is read. Each route has a size
+  limit (`payload_too_large`); a node that is already buffering its limit of
+  request bodies answers `unavailable` (503, `Retry-After`). JSON bodies
+  nested deeper than 64 levels are `bad_request` before decoding. Values a
+  column cannot hold (an `int4` past 2^31 − 1) are `invalid_field`, never
+  500.
 - **Paging:** `?cursor=&limit=` (max 200), responses `{items, next_cursor?}`.
   No offsets.
 - **Unknown fields** are ignored by both sides; new optional fields are
@@ -41,18 +49,18 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `POST /v1/auth/invites/self-issue` | — → `InviteSelfIssueResponse` | Helix Global only; 3/hour per IP. |
 | `POST /v1/auth/register` | `RegisterRequest` → `RegisterResponse` | Verifies the device certificate (AIK) and proof (DSK). Global: needs `verification_token`; existing account → `account_exists` unless `replace_existing`. Personal: needs `invite_code`, redeemed last. |
 | `POST /v1/auth/password/params` | `PasswordParamsRequest` → `PasswordParamsResponse` | Decoy parameters for numbers without a password. |
-| `POST /v1/auth/password/sign-in` | `PasswordSignInRequest` → `PasswordSignInResponse` | Lockout: 5 failures → 15 min, doubling to 24 h (`password_locked`, `details.locked_until`). Wrong password and unknown number both give `invalid_credentials`. |
+| `POST /v1/auth/password/sign-in` | `PasswordSignInRequest` → `PasswordSignInResponse` | Lockout: 5 failures → 15 min, doubling to 24 h (`password_locked`, `details.locked_until`), shared with `PUT /v1/account/password`. Wrong password and unknown number both give `invalid_credentials`. |
 | `POST /v1/auth/links` | `LinkCreateRequest` → `LinkCreateResponse` | New device; 10-minute link. |
 | `GET /v1/auth/links/{link_id}` | bearer `poll_token`, `?wait_s=` ≤ 30 → `LinkPollResponse` | Long-poll. |
 | `POST /v1/auth/devices` | `AddDeviceRequest` → `Session` | Exactly one of `sign_in_token` / `link_token`. Certificate must verify under the account's AIK. Other devices get `account_signal`/`new_sign_in` and `device_list_change` is sent to everyone with a session. |
-| `POST /v1/auth/challenges` | `DeviceChallengeRequest` → `DeviceChallengeResponse` | Challenge kept 5 minutes in the ephemeral store. |
-| `POST /v1/auth/sessions` | `DeviceSignInRequest` → `Session` | DSK signature over `signInSignatureBody(challenge)`. |
-| `POST /v1/auth/sessions/refresh` | `RefreshRequest` → `Session` | Rotation; reuse of a used token revokes all of the device's tokens. |
+| `POST /v1/auth/challenges` | `DeviceChallengeRequest` → `DeviceChallengeResponse` | Challenge kept 5 minutes in the ephemeral store under a random `challenge_id` (never the public device id, so nobody else can replace or spend it). |
+| `POST /v1/auth/sessions` | `DeviceSignInRequest` → `Session` | `challenge_id` and `challenge` from the response, for the device it was issued to (single use); DSK signature over `signInSignatureBody(challenge)`. |
+| `POST /v1/auth/sessions/refresh` | `RefreshRequest` → `Session` | Rotation; reuse of a used token revokes all of the device's tokens and closes its socket (4001). |
 | `POST /v1/auth/recovery/lookup` | `RecoveryLookupRequest` → `RecoveryLookupResponse` | Rate-limited per IP. |
 | `POST /v1/auth/recovery/redeem` | `RecoveryRedeemRequest` → `Session` | New AIK; other devices revoked; history backup deleted; `key_change` to contacts. |
-| `DELETE /v1/auth/sessions/current` | — → 204 | Sign out this device's tokens (device stays registered). |
+| `DELETE /v1/auth/sessions/current` | — → 204 | Sign out this device's tokens (device stays registered); its socket closes (4001) on whichever node holds it. Other devices get `account_signal`/`signed_out`. |
 | `GET /v1/account` | — → `AccountInfo` | |
-| `PUT /v1/account/password` | `SetPasswordRequest` → 204 | Needs the current auth key or a fresh verification token. Other devices get `password_changed`. |
+| `PUT /v1/account/password` | `SetPasswordRequest` → 204 | Needs the current auth key or a fresh verification token. A wrong current auth key counts towards password sign-in's lockout (`password_locked`). 10 per hour per account. Other devices get `password_changed`. |
 | `PUT /v1/account/helix-name` | `SetHelixNameRequest` → 204 | `name_taken` on conflict. |
 | `DELETE /v1/account/helix-name` | — → 204 | |
 | `GET /v1/account/security-events` | paged → `Page<SecurityEvent>` | |
@@ -77,7 +85,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `POST /v1/messages` | `SendMessageRequest` → `SendMessageResponse` | Each recipient account must be addressed on **all** its active devices (the sender's own: all except the sending device) or the request fails with `device_list_stale` (`StaleDevices` details) and nothing is sent. Blocked-by-recipient: accepted and silently dropped. Payload ≤ 256 KiB. Mailbox quota per device: 10,000 undelivered envelopes (`quota_exceeded`). `ephemeral`: online devices only, never stored. |
+| `POST /v1/messages` | `SendMessageRequest` → `SendMessageResponse` | Each recipient account must be addressed on **all** its active devices (the sender's own: all except the sending device) or the request fails with `device_list_stale` (`StaleDevices` details) and nothing is sent. Blocked-by-recipient: accepted and silently dropped. Payload ≤ 256 KiB. Mailbox quota per device: 10,000 undelivered envelopes (`quota_exceeded`). `ephemeral`: online devices only, never stored. Rate-limited per device (200 burst, 5/s) and per account (400 burst, 10/s). |
 | `GET /v1/mailbox` | `?after=&limit=` → `MailboxPage` | Oldest first. |
 | `POST /v1/mailbox/ack` | `AckRequest` → `AckResponse` | Cumulative; deletes acked envelopes. Undelivered envelopes expire after 30 days. |
 
@@ -136,16 +144,16 @@ member device (and to removed members, so they know).
 | Route | Body → response | Rules |
 |---|---|---|
 | `GET /v1/calls/turn` | — → `TurnCredentials` | 1-hour credentials; 10/hour per device. |
-| `POST /v1/calls/{call_id}/signals` | `CallSignalRequest` → `CallSignalResponse` | Online devices get a `call_signal` envelope now; for `offer`, offline devices get a pending call (TTL ≤ 120 s) and a high-priority push. Blocked: dropped silently. |
-| `PUT /v1/calls/{call_id}/state` | `CallStateRequest` → 204 | Clears pending offers; other devices of the same account stop ringing. |
+| `POST /v1/calls/{call_id}/signals` | `CallSignalRequest` → `CallSignalResponse` | Online devices get a `call_signal` envelope now; for `offer`, offline devices get a pending call (TTL ≤ 120 s) and a high-priority push. A pending offer is refreshed only by the same caller device; anyone else's offer under that call id is not stored. `end` clears only pending offers the sender is in (as caller or callee). Blocked: dropped silently. |
+| `PUT /v1/calls/{call_id}/state` | `CallStateRequest` → 204 | Clears pending offers the account is in (as caller or callee); other devices of the same account stop ringing. |
 | `GET /v1/calls/pending` | — → `PendingCallList` | |
-| `POST /v1/calls/metrics` | `CallMetricsRequest` → 204 | |
+| `POST /v1/calls/metrics` | `CallMetricsRequest` → 204 | 100 per day per account. |
 
 ## media
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `POST /v1/media` | `CreateUploadRequest` → `UploadTarget` | Size ≤ the kind's max; per-kind account quota. `url` is a server path for local storage, an absolute presigned URL for S3. |
+| `POST /v1/media` | `CreateUploadRequest` → `UploadTarget` | Size ≤ the kind's max; per-kind account quota. `url` is a server path for local storage, an absolute presigned URL for S3. The S3 URL signs `content-length` = `size`: upload exactly `size` bytes in one `PUT`. |
 | `PUT /v1/media/{media_id}/content` | octet-stream, `Upload-Offset` → 204 | Owner only; resumable; completes when `size` bytes are stored. |
 | `HEAD /v1/media/{media_id}/content` | → `Upload-Offset`, `Upload-Length` | |
 | `GET /v1/media/{media_id}/content` | → bytes (`Range` supported) or `302` to a presigned URL | Any signed-in device: ids are random and content is encrypted, so knowing the id is the capability. |
@@ -158,7 +166,7 @@ member device (and to removed members, so they know).
 | `PUT /v1/backups/history` | `HistoryBackup` → 204 | `version` must increase; ≤ 16 MiB. |
 | `GET /v1/backups/history` | — → `HistoryBackup` | |
 | `DELETE /v1/backups/history` | — → 204 | |
-| `PUT /v1/backups/full` | `FullBackup` → 204 | Refuses envelopes containing `backup_key`, `passphrase`, `recovery_phrase`. |
+| `PUT /v1/backups/full` | `FullBackup` → 204 | Refuses envelopes containing `backup_key`, `passphrase`, `recovery_phrase`. ≤ 64 MiB envelope, at most 32 levels deep and 100,000 JSON values (`bad_request`). |
 | `GET /v1/backups/full` | — → `FullBackup` | |
 | `DELETE /v1/backups/full` | — → 204 | |
 
@@ -171,7 +179,7 @@ member device (and to removed members, so they know).
 | `GET /v1/server` | — → `ServerInfo` | `features`: allow-listed flags. |
 | `GET /v1/server/legal` | — → `LegalDocuments` | |
 | `POST /v1/telemetry/crash` | `CrashReport` → 204 | Opt-in, and only while the `crash_reporting_upload` flag is on (`forbidden` otherwise). 10 per hour per device. Logged redacted, never stored. |
-| `GET /v1/ops/metrics` | — → Prometheus text | Admin token. |
+| `GET /v1/ops/metrics` | — → Prometheus text | Admin token, or the server's `HELIX_METRICS_TOKEN` (opens this route only). |
 | `GET /.well-known/assetlinks.json` | — → Android asset links | |
 | `GET /open` | — → HTML landing page for `#HLX-…` links | |
 
@@ -195,17 +203,18 @@ caller's domain), `x-helix-s2s-timestamp` (ms) and `x-helix-s2s-signature`:
 base64url Ed25519 over `helix-s2s-v1|<server>|<timestamp>|<METHOD>|<path?query>|<base64url(sha256(body))>`
 (`s2sSigningInput`). The receiving server rejects a skew of more than
 ±5 minutes and any reused signature. The caller's key comes from
-`https://<domain>/.well-known/helix-server`.
+`https://<domain>/.well-known/helix-server`. S2S clients never follow
+redirects.
 
 | Route | Body → response | Rules |
 |---|---|---|
 | `GET /.well-known/helix-server` | — → `ServerIdentityDocument` | `server_id` = domain; `api_base` on the same authority. |
 | `POST /v1/s2s/messages` | `S2SMessageBatch` → `SendMessageResponse` | `sender` qualified with the caller's domain (`forbidden` otherwise); recipients are the receiver's bare ids. The rules of `POST /v1/messages` apply (exact device lists, blocks, quotas, idempotent ids). |
-| `GET /v1/s2s/keys/{account}` | `?device=` repeatable → `AccountKeys` | Consumes one-time prekeys. Per-server and per-(server, account) limits. |
-| `POST /v1/s2s/groups/{group_id}/messages` | `S2SGroupMessage` → 204 | Home → member server: a group message and its distributions for the receiver's member devices. Only the group's home may send. |
+| `GET /v1/s2s/keys/{account}` | `?device=` repeatable → `AccountKeys` | Consumes one-time prekeys. Per-server and per-(server, account) limits, plus the account's per-target limit shared with local fetches. |
+| `POST /v1/s2s/groups/{group_id}/messages` | `S2SGroupMessage` → 204 | Home → member server: a group message and its distributions for the receiver's member devices. Only the group's home may send. The sender must be a member in the receiver's snapshot and not one of the receiver's own accounts (`forbidden`): the home does not fan a message back to its sender's server, which delivers to its own members once the home accepts the send. |
 | `GET /v1/s2s/groups/{group_id}` | → `Group` | Home server only, in the caller's frame, if the caller has members. |
-| `POST /v1/s2s/groups/{group_id}/actions` | `S2SGroupAction` → `S2SGroupActionResult` | Member server → home: runs the client route named by `action` for `actor`, whose domain must be the caller's. The result carries that route's status and body. `devices` reports a member's devices. |
-| `POST /v1/s2s/groups/{group_id}/sync` | `S2SGroupSync` → `S2SGroupSyncResponse` | Home → member server: the snapshot (null when deleted) and the change to deliver. The response lists members' devices and the accounts refused (unknown, privacy, blocks). Older `roster_version`s are ignored. |
+| `POST /v1/s2s/groups/{group_id}/actions` | `S2SGroupAction` → `S2SGroupActionResult` | Member server → home: runs the client route named by `action` for `actor`, whose domain must be the caller's. The result carries that route's status and body. `devices` reports a member's devices (ids of the home's own devices or of another account: `invalid_field`). |
+| `POST /v1/s2s/groups/{group_id}/sync` | `S2SGroupSync` → `S2SGroupSyncResponse` | Home → member server: the snapshot (null when deleted) and the change to deliver. The response lists members' devices and the accounts refused. A local account new in the snapshot is refused unless it exists and either asked to join through the receiver or was added (`created`/`added`) by a snapshot member allowed to add people whom its privacy and blocks allow. Older `roster_version`s are ignored. |
 | `POST /v1/s2s/calls/{call_id}/signals` | `S2SCallSignal` → `CallSignalResponse` | Live only; offers to offline devices become pending calls there. |
 
 ## admin
@@ -218,7 +227,7 @@ tokens never open each other's routes.
 |---|---|---|
 | `GET /v1/admin/setup` | — → `AdminSetupStatus` | Public. |
 | `POST /v1/admin/setup` | `AdminPasswordRequest` → 201 `AdminSession` | Public, only before setup (`already_exists` after). 5 per hour per IP. |
-| `POST /v1/admin/sessions` | `AdminPasswordRequest` → `AdminSession` | Public, 10 per minute per IP. Locks after 5 failures (`password_locked`). 12-hour token. |
+| `POST /v1/admin/sessions` | `AdminPasswordRequest` → `AdminSession` | Public, 10 per minute per IP. Per IP, 5 failures lock that address (15 min, doubling to 24 h); 100 failures from anywhere since the last success lock sign-in for 15 min. Attempts are counted before the password is checked (`password_locked`). 12-hour token. |
 | `PUT /v1/admin/password` | `ChangeAdminPasswordRequest` → `AdminSession` | Ends every other admin session. |
 | `GET /v1/admin/accounts` | — → `Page<AdminAccount>` | `status`, `q` (name prefix or last 4 digits). Last 4 digits only. |
 | `GET /v1/admin/accounts/{account}` | — → `AdminAccountDetail` | |

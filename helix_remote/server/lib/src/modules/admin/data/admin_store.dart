@@ -6,7 +6,23 @@ import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 
 /// Schema `admin`: operator accounts and the audit log.
-const adminMigrations = [Migration(1, 'admin_baseline', _baseline)];
+const adminMigrations = [
+  Migration(1, 'admin_baseline', _baseline),
+  Migration(2, 'sign_in_failures', _signInFailures),
+];
+
+/// Failed sign-ins per client address, so an attacker elsewhere cannot lock
+/// the operator out for long (`admins.failed_attempts` becomes the global
+/// safety cap).
+String _signInFailures(String s) =>
+    '''
+CREATE TABLE $s.sign_in_failures (
+  ip text PRIMARY KEY,
+  failed_attempts integer NOT NULL DEFAULT 0,
+  locked_until timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+''';
 
 String _baseline(String s) =>
     '''
@@ -119,24 +135,78 @@ final class AdminStore {
     return true;
   }
 
-  Future<void> recordFailure(
-    SqlSession db,
-    String id, {
-    required DateTime? lockUntil,
+  /// Counts one sign-in attempt *before* the password is checked, in one
+  /// transaction with the admin row locked, so parallel requests cannot
+  /// get more guesses than the limits allow. Per [ip]: the [perIp]th
+  /// attempt locks that address for [firstLock], doubling per further
+  /// attempt up to [maxLock]. Globally: the [global]th attempt since the
+  /// last success locks every address for [globalLock] and restarts the
+  /// count. Returns the lock end if the attempt is refused (nothing is
+  /// counted then); a successful sign-in clears both counters.
+  Future<DateTime?> reserveAttempt(
+    Tx tx,
+    String id,
+    String ip, {
+    required int perIp,
+    required Duration firstLock,
+    required Duration maxLock,
+    required int global,
+    required Duration globalLock,
   }) async {
-    await db.execute(
-      'UPDATE $s.admins SET failed_attempts = failed_attempts + 1, '
-      'locked_until = COALESCE(@l:timestamptz, locked_until) WHERE id = @id:uuid',
-      {'id': id, 'l': lockUntil},
+    final admin = (await tx.queryOne(
+      'SELECT locked_until, coalesce(locked_until > now(), false) AS locked FROM $s.admins '
+      'WHERE id = @id:uuid FOR UPDATE',
+      {'id': id},
+    ))!;
+    if (admin.boolean('locked')) return admin.time('locked_until');
+    final counted = await tx.queryOne(
+      'INSERT INTO $s.sign_in_failures AS f (ip, failed_attempts) VALUES (@ip:text, 1) '
+      'ON CONFLICT (ip) DO UPDATE SET failed_attempts = f.failed_attempts + 1, '
+      'locked_until = CASE WHEN f.failed_attempts + 1 >= @n:int4 THEN now() + make_interval(secs => '
+      'least(@first:int8 * power(2, least(f.failed_attempts + 1 - @n:int4, 10)), @max:int8)) '
+      'ELSE f.locked_until END, updated_at = now() '
+      'WHERE f.locked_until IS NULL OR f.locked_until <= now() '
+      'RETURNING failed_attempts',
+      {
+        'ip': ip,
+        'n': perIp,
+        'first': firstLock.inSeconds,
+        'max': maxLock.inSeconds,
+      },
     );
+    if (counted == null) {
+      return (await tx.queryOne(
+        'SELECT locked_until FROM $s.sign_in_failures WHERE ip = @ip:text',
+        {'ip': ip},
+      ))!.time('locked_until');
+    }
+    await tx.execute(
+      'UPDATE $s.admins SET '
+      'locked_until = CASE WHEN failed_attempts + 1 >= @g:int4 '
+      'THEN now() + make_interval(secs => @gl:int8) ELSE locked_until END, '
+      'failed_attempts = CASE WHEN failed_attempts + 1 >= @g:int4 THEN 0 ELSE failed_attempts + 1 END '
+      'WHERE id = @id:uuid',
+      {'id': id, 'g': global, 'gl': globalLock.inSeconds},
+    );
+    return null;
   }
 
-  Future<void> recordSuccess(SqlSession db, String id) async {
+  /// Address-wide and global counters restart after a correct password.
+  Future<void> recordSuccess(SqlSession db, String id, String ip) async {
     await db.execute(
       'UPDATE $s.admins SET failed_attempts = 0, locked_until = NULL WHERE id = @id:uuid',
       {'id': id},
     );
+    await db.execute('DELETE FROM $s.sign_in_failures WHERE ip = @ip:text', {
+      'ip': ip,
+    });
   }
+
+  /// Forgets addresses that have been quiet and unlocked for two days.
+  Future<int> purgeSignInFailures(SqlSession db) => db.execute(
+    "DELETE FROM $s.sign_in_failures WHERE updated_at < now() - interval '2 days' "
+    'AND (locked_until IS NULL OR locked_until < now())',
+  );
 
   /// Replaces the password and ends every token issued before [validAfter].
   Future<void> setPassword(

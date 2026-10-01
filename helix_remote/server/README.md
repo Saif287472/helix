@@ -10,6 +10,17 @@ package is not deployed.
   `lib/src/platform/PLATFORM.md`). The only module so far is `ops` (health).
 - **Next:** Phase S2, the `identity` and `keys` modules.
 
+## Operating the server
+
+- [`../docs/operations/V2_SERVER_HANDOFF.md`](../docs/operations/V2_SERVER_HANDOFF.md):
+  what the server is, start and stop, every environment variable, Caddy,
+  coturn, push, SMS, storage, federation, admin first run, and the draft
+  cutover checklist.
+- [`../docs/operations/V2_OPERABILITY.md`](../docs/operations/V2_OPERABILITY.md):
+  health, metrics, logs, maintenance mode, feature flags, jobs and dead
+  letters, rate limits, backups and restore, disaster recovery, more than one
+  node, upgrades, and troubleshooting.
+
 ## Layout
 
 ```
@@ -62,5 +73,14 @@ dart test
   …), and `dropSchemas` cleans it up. Suites can share one database and run
   in parallel.
 - **Two nodes:** a second `HelixServer` on the same prefix acts as another
-  node (see `test/server_test.dart`).
+  node (see `test/server_test.dart`). `test/support/cluster.dart` starts
+  such a pair, and `test/e2e/two_node_test.dart` drives clients across it:
+  messages, calls, revocation, supersede, groups and jobs.
 - **Passwords:** the connection URL is never printed. Do not log it.
+
+## Load harness
+
+`dart run tool/load.dart --devices 1000 --rate 0.05 --duration 60` boots a
+node in-process on the test database, registers the devices through the real
+flow and measures send, delivery and ack latency. See
+`../docs/operations/LOAD_TESTING.md` ("v2 server").

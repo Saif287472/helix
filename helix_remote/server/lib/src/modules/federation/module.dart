@@ -39,7 +39,7 @@ final class FederationModule extends ModuleBase
     required this.groups,
     http.Client? httpClient,
   }) : config = FederationConfig.from(context.config),
-       _http = httpClient ?? http.Client() {
+       _httpOverride = httpClient {
     _store = FederationStore(schema);
     peers = PeerDirectory(
       config: config,
@@ -64,7 +64,8 @@ final class FederationModule extends ModuleBase
   final CallsApi calls;
   final GroupsApi groups;
   final FederationConfig config;
-  final http.Client _http;
+  final http.Client? _httpOverride;
+  late final http.Client _http = _httpOverride ?? federationHttpClient(config);
   late final FederationStore _store;
   late final PeerDirectory peers;
 
@@ -219,7 +220,7 @@ final class FederationModule extends ModuleBase
       throw ApiError(ErrorCode.rateLimited, retryAfter: decision.retryAfter);
     }
     final wanted = q.queryAll('device').toSet();
-    final bundles = await keys.bundles(
+    final bundles = await keys.remoteBundles(
       address.id,
       devices: wanted.isEmpty ? null : wanted,
     );

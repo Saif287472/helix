@@ -138,6 +138,19 @@ void main() {
           },
         );
         expect(bad.statusCode, 416);
+
+        // Numbers too long for an int: the header is ignored, never a 500.
+        final huge = await http.get(
+          h.server.baseUri.resolve(
+            Routes.downloadContent.expand({'media_id': target.mediaId}),
+          ),
+          headers: {
+            'authorization': 'Bearer ${bob.bearer}',
+            'range': 'bytes=99999999999999999999999-',
+          },
+        );
+        expect(huge.statusCode, 200);
+        expect(huge.bodyBytes, data);
       },
     );
 

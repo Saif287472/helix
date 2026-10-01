@@ -18,9 +18,17 @@ hash with its parameters, lockout counters, `tokens_valid_after`) and
   `HELIX_ADMIN_KDF_MEMORY_KIB` can lower the memory cost only in dev mode
   (tests).
 - **Sign-in:** `POST /v1/admin/sessions`, limited to 10 per minute per IP.
-  After 5 consecutive failures the password locks for 15 minutes, doubling
-  per further failure up to 24 hours (`password_locked` with
-  `Retry-After`).
+  Lockout is per client address (`sign_in_failures`, migration 2): after 5
+  failures that address locks for 15 minutes, doubling per further failure
+  up to 24 hours, so an attacker elsewhere cannot lock the operator out.
+  A global safety cap on `admins.failed_attempts`: 100 failures from
+  anywhere since the last success lock sign-in for 15 minutes, then the
+  count restarts. Each attempt is counted in SQL *before* the password is
+  checked, with the admin row locked, so parallel requests get no extra
+  guesses (`password_locked` with `Retry-After`). A success clears both.
+  Quiet unlocked addresses are purged after two days
+  (`admin.purge_sign_in_failures`). The log WebSocket closes with 4503 at
+  shutdown.
 - **Tokens:** `HmacJwt` with audience `helix.admin`, type `admin`,
   `sub` = admin id, valid for 12 hours, on the server's JWT key ring. The
   audience and type keep device and admin tokens apart in both

@@ -29,6 +29,8 @@ app/android/key.properties
 
 # Flutter generated build config (per-platform, per-app)
 **/ephemeral/
+# ...but not the server's ephemeral store (source code).
+!server/lib/src/platform/ephemeral/
 
 # Backend
 backend/build/

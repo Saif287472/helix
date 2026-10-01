@@ -90,6 +90,44 @@ final class StdoutSink implements LogSink {
   void write(String line) => stdout.writeln(line);
 }
 
+/// Appends lines to a file (`HELIX_LOG_FILE`). Opening fails early (a
+/// [FileSystemException]) if the file cannot be written. Rotate it with an
+/// external tool that copies and truncates.
+final class FileSink implements LogSink {
+  FileSink._(this._sink);
+
+  static FileSink open(String path) {
+    final file = File(path);
+    // Fails now, not on the first write, if the path is unusable.
+    file.openSync(mode: FileMode.append).closeSync();
+    return FileSink._(file.openWrite(mode: FileMode.append));
+  }
+
+  final IOSink _sink;
+
+  @override
+  void write(String line) => _sink.writeln(line);
+
+  Future<void> close() async {
+    await _sink.flush();
+    await _sink.close();
+  }
+}
+
+/// Writes every line to each of [sinks] (stdout and a file).
+final class TeeSink implements LogSink {
+  const TeeSink(this.sinks);
+
+  final List<LogSink> sinks;
+
+  @override
+  void write(String line) {
+    for (final sink in sinks) {
+      sink.write(line);
+    }
+  }
+}
+
 /// Collects lines in memory (tests).
 final class MemorySink implements LogSink {
   final List<String> lines = [];

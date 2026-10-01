@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/modules/identity/application/context.dart';
@@ -15,9 +14,9 @@ final class SignIn {
 
   final IdentityContext c;
 
-  static const maxFailures = 5;
-  static const firstLock = Duration(minutes: 15);
-  static const maxLock = Duration(hours: 24);
+  static const maxFailures = IdentityContext.passwordMaxFailures;
+  static const firstLock = IdentityContext.passwordFirstLock;
+  static const maxLock = IdentityContext.passwordMaxLock;
 
   // ---------------------------------------------------------------- password
 
@@ -53,41 +52,12 @@ final class SignIn {
       c.passwordVerifier(randomBytes(16), req.authKey);
       throw const ApiError(ErrorCode.invalidCredentials);
     }
-    final result = await c.db.tx<(Row?, ApiError?)>((tx) async {
-      final row = (await c.credentials.password(
-        tx,
-        account.id,
-        forUpdate: true,
-      ))!;
-      final lockedUntil = row.optTime('locked_until');
-      if (lockedUntil != null && lockedUntil.isAfter(c.clock.now())) {
-        return (null, _locked(lockedUntil));
-      }
-      final ok = constantTimeEquals(
-        row.bytes('verifier'),
-        c.passwordVerifier(row.bytes('verifier_salt'), req.authKey),
-      );
-      if (!ok) {
-        final failures = row.integer('failed_attempts') + 1;
-        final lock = failures >= maxFailures ? _lockFor(failures) : null;
-        await c.credentials.recordPasswordFailure(
-          tx,
-          account.id,
-          failures,
-          lock,
-        );
-        return (
-          null,
-          lock == null
-              ? const ApiError(ErrorCode.invalidCredentials)
-              : _locked(lock),
-        );
-      }
-      await c.credentials.clearPasswordFailures(tx, account.id);
-      return (row, null);
-    });
+    final result = await c.db.tx<(Row?, ApiError?)>(
+      (tx) => c.checkPassword(tx, account.id, req.authKey),
+    );
     if (result.$2 != null) throw result.$2!;
-    final row = result.$1!;
+    final row = result.$1;
+    if (row == null) throw const ApiError(ErrorCode.invalidCredentials);
     final record = (await c.store.account(c.db, account.id))!;
     final token = newToken('st');
     await c.ephemeral.put(
@@ -105,18 +75,6 @@ final class SignIn {
       expiresAt: c.clock.now().add(IdentityConfig.signInTokenLifetime),
     );
   }
-
-  DateTime _lockFor(int failures) {
-    final factor = math.pow(2, failures - maxFailures).toInt();
-    final lock = firstLock * factor;
-    return c.clock.now().add(lock > maxLock ? maxLock : lock);
-  }
-
-  ApiError _locked(DateTime until) => ApiError(
-    ErrorCode.passwordLocked,
-    details: {'locked_until': toWireTime(until)},
-    retryAfter: until.difference(c.clock.now()),
-  );
 
   // ------------------------------------------------------------- add device
 
@@ -262,27 +220,36 @@ final class SignIn {
       throw const ApiError(ErrorCode.invalidField);
     }
     final challenge = randomBytes(32);
+    final challengeId = Uuid.v7();
     // Issued for any id, so this route does not reveal which devices exist.
+    // Keyed by a random id, not the public device id, so nobody else can
+    // replace or spend this device's challenge.
     await c.ephemeral.put(
-      '${IdentityContext.challengePrefix}${req.deviceId}',
-      encodeBytes(challenge),
+      '${IdentityContext.challengePrefix}$challengeId',
+      jsonEncode({'d': req.deviceId, 'c': encodeBytes(challenge)}),
       IdentityConfig.challengeLifetime,
     );
     return DeviceChallengeResponse(
+      challengeId: challengeId,
       challenge: challenge,
       expiresAt: c.clock.now().add(IdentityConfig.challengeLifetime),
     );
   }
 
   Future<Session> deviceSignIn(DeviceSignInRequest req) async {
-    if (!Uuid.isValid(req.deviceId)) {
+    if (!Uuid.isValid(req.deviceId) || !Uuid.isValid(req.challengeId)) {
       throw const ApiError(ErrorCode.invalidCredentials);
     }
-    final stored = await c.ephemeral.take(
-      '${IdentityContext.challengePrefix}${req.deviceId}',
+    final raw = await c.ephemeral.take(
+      '${IdentityContext.challengePrefix}${req.challengeId}',
     );
+    final stored = raw == null ? null : jsonDecode(raw) as Map<String, Object?>;
     if (stored == null ||
-        !constantTimeEquals(decodeBytes(stored), req.challenge)) {
+        stored['d'] != req.deviceId ||
+        !constantTimeEquals(
+          decodeBytes(stored['c']! as String),
+          req.challenge,
+        )) {
       throw const ApiError(ErrorCode.invalidCredentials);
     }
     final device = await c.store.deviceById(c.db, req.deviceId);

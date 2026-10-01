@@ -35,7 +35,11 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
     (c) => keys = KeysModule(c, identity: identity.api),
     (c) =>
         messaging = MessagingModule(c, identity: identity.api, keys: keys.api),
-    (c) => RealtimeModule(c, messaging: messaging.api),
+    (c) => RealtimeModule(
+      c,
+      messaging: messaging.api,
+      authenticator: identity.authenticator,
+    ),
     (c) => people = PeopleModule(
       c,
       identity: identity.api,

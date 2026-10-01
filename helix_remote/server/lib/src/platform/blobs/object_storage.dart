@@ -34,7 +34,9 @@ abstract interface class ObjectStorage {
 
   Future<void> delete(String key);
 
-  Uri presignPut(String key, Duration ttl);
+  /// A presigned PUT for exactly [contentLength] bytes: the length is a
+  /// signed header, so the store refuses any other size.
+  Uri presignPut(String key, Duration ttl, {required int contentLength});
 
   Uri presignGet(String key, Duration ttl);
 
@@ -125,7 +127,7 @@ final class LocalObjectStorage implements ObjectStorage {
   }
 
   @override
-  Uri presignPut(String key, Duration ttl) =>
+  Uri presignPut(String key, Duration ttl, {required int contentLength}) =>
       throw UnsupportedError('local storage does not presign');
 
   @override
@@ -177,20 +179,31 @@ final class S3ObjectStorage implements ObjectStorage {
           path: '/',
         );
 
-  Uri _presign(AWSHttpMethod method, Uri uri, Duration ttl) =>
-      _signer.presignSync(
-        AWSHttpRequest(method: method, uri: uri),
-        credentialScope: _scope(),
-        serviceConfiguration: _service,
-        expiresIn: ttl,
-      );
+  Uri _presign(
+    AWSHttpMethod method,
+    Uri uri,
+    Duration ttl, {
+    Map<String, String> headers = const {},
+  }) => _signer.presignSync(
+    AWSHttpRequest(method: method, uri: uri, headers: headers),
+    credentialScope: _scope(),
+    serviceConfiguration: _service,
+    expiresIn: ttl,
+  );
 
   @override
   bool get supportsPresign => true;
 
   @override
-  Uri presignPut(String key, Duration ttl) =>
-      _presign(AWSHttpMethod.put, _objectUri(key), ttl);
+  Uri presignPut(String key, Duration ttl, {required int contentLength}) {
+    if (contentLength < 0) throw ArgumentError.value(contentLength);
+    return _presign(
+      AWSHttpMethod.put,
+      _objectUri(key),
+      ttl,
+      headers: {'content-length': '$contentLength'},
+    );
+  }
 
   @override
   Uri presignGet(String key, Duration ttl) =>

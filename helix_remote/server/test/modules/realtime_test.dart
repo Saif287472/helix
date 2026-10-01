@@ -2,7 +2,11 @@ import 'dart:io';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/helix_remote_server.dart';
+import 'package:helix_remote_server/src/kernel/presence.dart';
+import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/identity/sms.dart';
+import 'package:helix_remote_server/src/modules/messaging/api.dart';
+import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:test/test.dart';
 
 import '../support/flows.dart';
@@ -195,5 +199,280 @@ void main() {
         }
       },
     );
+
+    test(
+      'sign-out closes the socket on every node; a fresh session stays',
+      () async {
+        final second = await secondNode(h);
+        try {
+          final socket = await TestSocket.connect(second.baseUri, b1.bearer);
+          await socket.hello();
+          final ended = h.env.platform.bus
+              .subscribe(IdentityTopics.sessionsEnded)
+              .first;
+          expect(
+            (await h.api.call(Routes.signOut, bearer: b1.bearer)).status,
+            204,
+          );
+          expect(await socket.closed, RealtimeCloseCode.unauthorized);
+          final cutOff = await ended;
+          expect(cutOff['device'], b1.id);
+          expect(cutOff['before'], isA<int>());
+
+          b1.session = await deviceSignIn(h, b1);
+          final fresh = await TestSocket.connect(second.baseUri, b1.bearer);
+          await fresh.hello();
+          // The same cut-off arriving late must not end the new session.
+          await h.env.platform.bus.publish(
+            IdentityTopics.sessionsEnded,
+            cutOff,
+          );
+          expect(await fresh.silent(), isTrue);
+          await fresh.close();
+        } finally {
+          await stopNode(second);
+        }
+      },
+    );
+
+    test('refresh-token reuse closes the socket (theft response)', () async {
+      final first = b1.session!;
+      final rotated = Session.fromJson(
+        (await h.api.call(
+          Routes.refreshSession,
+          body: RefreshRequest(refreshToken: first.refreshToken).toJson(),
+        )).json,
+      );
+      final socket = await TestSocket.connect(
+        h.server.baseUri,
+        rotated.accessToken,
+      );
+      await socket.hello();
+      final reuse = await h.api.call(
+        Routes.refreshSession,
+        body: RefreshRequest(refreshToken: first.refreshToken).toJson(),
+      );
+      expect(reuse.status, 401);
+      expect(await socket.closed, RealtimeCloseCode.unauthorized);
+    });
+
+    test('the route refresh closes sockets of ended sessions', () async {
+      final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+      await socket.hello();
+      await h.realtime.refreshConnections();
+      expect(await socket.silent(), isTrue, reason: 'still a valid session');
+      // A cut-off written without a bus event (another path, a lost event).
+      await h.env.platform.db.execute(
+        "UPDATE ${h.env.platform.schemas.of('identity')}.devices "
+        "SET tokens_valid_after = now() + interval '1 second' WHERE id = @d:uuid",
+        {'d': b1.id},
+      );
+      await h.realtime.refreshConnections();
+      expect(await socket.closed, RealtimeCloseCode.unauthorized);
+    });
+
+    test(
+      'suspension closes live sockets with 4004; reconnecting works',
+      () async {
+        final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+        await socket.hello();
+        await h.env.platform.db.tx(
+          (tx) => h.identity.api.admin.setSuspended(
+            tx,
+            b1.accountId,
+            suspended: true,
+          ),
+        );
+        expect(await socket.closed, RealtimeCloseCode.suspended);
+        final again = await TestSocket.connect(h.server.baseUri, b1.bearer);
+        await again.hello();
+        await h.realtime.refreshConnections();
+        again.ping('still-open');
+        // Stored envelopes (the suspension signal) come first; a closed
+        // socket would make next() throw.
+        while (await again.next() is! PongFrame) {}
+        await again.close();
+      },
+    );
+
+    test('a late route refresh never overwrites a newer connection', () async {
+      final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+      await socket.hello();
+      final store = h.env.platform.ephemeral;
+      final key = Presence.routeKey(b1.id);
+      // A newer connection on another node, before its bus event arrives.
+      await store.put(key, 'other-node|newer', Presence.routeTtl);
+      await h.realtime.refreshConnections();
+      expect(await socket.closed, RealtimeCloseCode.superseded);
+      expect(
+        await store.get(key),
+        'other-node|newer',
+        reason: 'neither the refresh nor the close touched the newer route',
+      );
+    });
+
+    test("REST acks return the socket's window credit", () async {
+      for (var i = 0; i < 105; i++) {
+        await send(h, a1, {
+          b1.accountId: [b1.id],
+        }, urgent: false);
+      }
+      final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+      await socket.hello();
+      for (var i = 0; i < 100; i++) {
+        await socket.envelope();
+      }
+      expect(await socket.next(), isA<WakeFrame>());
+      final acked = await h.api.call(
+        Routes.ackMailbox,
+        bearer: b1.bearer,
+        body: const AckRequest(seq: 100).toJson(),
+      );
+      expect(acked.status, 200);
+      await h.realtime.refreshConnections();
+      final rest = [for (var i = 0; i < 5; i++) (await socket.envelope()).seq];
+      expect(rest, [101, 102, 103, 104, 105]);
+      await socket.close();
+    });
+
+    test('too many upgrades or frames close with 4029', () async {
+      for (var i = 0; i < 20; i++) {
+        final s = await TestSocket.connect(h.server.baseUri, a1.bearer);
+        await s.hello();
+        await s.close();
+      }
+      final limited = await TestSocket.connect(h.server.baseUri, a1.bearer);
+      expect(await limited.closed, RealtimeCloseCode.rateLimited);
+
+      final flood = await TestSocket.connect(h.server.baseUri, b1.bearer);
+      await flood.hello();
+      for (var i = 0; i < 400; i++) {
+        flood.ping();
+      }
+      expect(await flood.closed, RealtimeCloseCode.rateLimited);
+    });
+
+    test('a failed delivery closes the socket and drops its route', () async {
+      final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+      await socket.hello();
+      final key = Presence.routeKey(b1.id);
+      expect(await h.env.platform.ephemeral.get(key), isNotNull);
+      final mailbox = '${h.env.platform.schemas.of('messaging')}.mailbox';
+      await h.env.platform.db.execute(
+        'ALTER TABLE $mailbox RENAME TO mailbox_away',
+      );
+      try {
+        await h.env.platform.bus.publish(MailboxTopics.wake, {
+          'd': [b1.id],
+        });
+        expect(await socket.closed, RealtimeCloseCode.goingAway);
+        await eventually(
+          () async => expect(await h.env.platform.ephemeral.get(key), isNull),
+        );
+      } finally {
+        await h.env.platform.db.execute(
+          'ALTER TABLE ${h.env.platform.schemas.of('messaging')}.mailbox_away RENAME TO mailbox',
+        );
+      }
+    });
+
+    test('shutdown closes open sockets cleanly', () async {
+      final setup = await h.api.call(
+        Routes.adminSetup,
+        body: const AdminPasswordRequest(
+          password: 'operator password 1',
+        ).toJson(),
+      );
+      final adminToken = AdminSession.fromJson(setup.json).token;
+      final second = await secondNode(h);
+      final dir = second.platform.config.blobs.directory!;
+      final socket = await TestSocket.connect(second.baseUri, b1.bearer);
+      await socket.hello();
+      final logs = await WebSocket.connect(
+        second.baseUri
+            .replace(scheme: 'ws', path: Routes.adminLogStream.path)
+            .toString(),
+        headers: {'authorization': 'Bearer $adminToken'},
+      );
+      final logsClosed = logs.drain<void>().then((_) => logs.closeCode);
+      await second.stop();
+      Directory(dir).deleteSync(recursive: true);
+      expect(await socket.closed, RealtimeCloseCode.goingAway);
+      expect(
+        await logsClosed.timeout(const Duration(seconds: 5)),
+        RealtimeCloseCode.goingAway,
+      );
+    });
   });
+
+  group('realtime token expiry', skip: databaseTestSkipReason, () {
+    test('the route refresh closes sockets whose token expired', () async {
+      final clock = _OffsetClock();
+      final h = await Harness.start(clock: clock);
+      try {
+        final b1 = await h.registerGlobal(bobNumber);
+        final socket = await TestSocket.connect(h.server.baseUri, b1.bearer);
+        await socket.hello();
+        clock.offset = const Duration(minutes: 16);
+        await h.realtime.refreshConnections();
+        expect(await socket.closed, RealtimeCloseCode.unauthorized);
+      } finally {
+        await h.stop();
+      }
+    });
+  });
+}
+
+/// The system clock, moved forward by [offset].
+final class _OffsetClock implements Clock {
+  Duration offset = Duration.zero;
+
+  @override
+  DateTime now() => DateTime.now().toUtc().add(offset);
+}
+
+/// Another node on the same database and schema prefix as [h].
+Future<HelixServer> secondNode(Harness h) async => HelixServer.start(
+  await HelixPlatform.open(
+    testConfig(
+      prefix: h.env.prefix,
+      extra: {
+        'HELIX_PHONE_PEPPER': testPepper,
+        'HELIX_GLOBAL_MODE': 'true',
+        'HELIX_ADMIN_KDF_MEMORY_KIB': '256',
+      },
+    ),
+    log: Log(sink: MemorySink()),
+  ),
+  allModules(sms: RecordingSmsProvider()),
+);
+
+Future<void> stopNode(HelixServer node) async {
+  final dir = node.platform.config.blobs.directory!;
+  await node.stop();
+  Directory(dir).deleteSync(recursive: true);
+}
+
+/// Device-key sign-in (after a sign-out); returns the new session.
+Future<Session> deviceSignIn(Harness h, TestDevice d) async {
+  final challenge = DeviceChallengeResponse.fromJson(
+    (await h.api.call(
+      Routes.deviceChallenge,
+      body: DeviceChallengeRequest(
+        accountId: d.accountId,
+        deviceId: d.id,
+      ).toJson(),
+    )).json,
+  );
+  final response = await h.api.call(
+    Routes.deviceSignIn,
+    body: DeviceSignInRequest(
+      accountId: d.accountId,
+      deviceId: d.id,
+      challengeId: challenge.challengeId,
+      challenge: challenge.challenge,
+      signature: await sign(d.dsk, signInSignatureBody(challenge.challenge)),
+    ).toJson(),
+  );
+  return Session.fromJson(response.json);
 }

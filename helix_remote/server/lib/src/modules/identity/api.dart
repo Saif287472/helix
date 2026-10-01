@@ -3,6 +3,21 @@ import 'dart:typed_data';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 
+/// Event-bus topics identity publishes after its transactions commit.
+abstract final class IdentityTopics {
+  /// `{device}`: the device was revoked (sockets close with 4003).
+  static const deviceRevoked = 'device.revoked';
+
+  /// `{device, before}`: every session of the device issued before
+  /// `before` (epoch ms, the committed cut-off) ended: sign-out, refresh
+  /// token reuse. Sockets whose token predates it close with 4001.
+  static const sessionsEnded = 'identity.sessions_ended';
+
+  /// `{account}`: an operator suspended the account (sockets close with
+  /// 4004; the account may reconnect, read-only).
+  static const accountSuspended = 'identity.account_suspended';
+}
+
 /// What other modules may know about an account (ADR-026: this file is the
 /// only identity file other modules import).
 final class AccountRecord {

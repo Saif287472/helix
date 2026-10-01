@@ -7,6 +7,7 @@ import 'package:helix_remote_server/src/platform/db/postgres_db.dart';
 import 'package:helix_remote_server/src/platform/db/schema_names.dart';
 import 'package:helix_remote_server/src/platform/ephemeral/ephemeral_store.dart';
 import 'package:helix_remote_server/src/platform/http/idempotency.dart';
+import 'package:helix_remote_server/src/platform/http/routes.dart';
 import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
@@ -34,6 +35,8 @@ final class HelixPlatform {
     required this.metrics,
     required this.health,
     required this.push,
+    required this._ephemeralDb,
+    required this.bodyBudget,
   });
 
   static Future<HelixPlatform> open(
@@ -45,7 +48,22 @@ final class HelixPlatform {
   }) async {
     final logger = log ?? Log();
     final schemas = SchemaNames(prefix: config.schemaPrefix);
-    final db = await PostgresDb.open(config.databaseUrl);
+    // Config errors in the push section surface before any connection opens.
+    final pushProvider = push ?? pushProviderFrom(config);
+    final db = await PostgresDb.open(
+      config.databaseUrl,
+      maxConnections: config.dbPoolSize,
+    );
+    // The ephemeral store has its own small pool. Presence is read inside
+    // send transactions (messaging `deliver`); on the shared pool each
+    // in-flight send held one connection while waiting for a second, so
+    // ten concurrent sends deadlocked the node until the acquire timeout
+    // (S7 load harness). This pool never waits on the main one, which is
+    // also the scale-out shape (ephemeral store -> Redis).
+    final ephemeralDb = await PostgresDb.open(
+      config.databaseUrl,
+      maxConnections: 4,
+    );
     final metrics = Metrics();
     final bus = PostgresEventBus(db, prefix: config.schemaPrefix);
     final storage =
@@ -57,15 +75,33 @@ final class HelixPlatform {
     final health = HealthRegistry()
       ..add('database', db.ping)
       ..add('storage', storage.ping);
+    final outbox = Outbox(schemas.platform, bus);
+    final bodyBudget = BodyBudget(config.maxInFlightBodyBytes);
+    metrics
+      ..collectedGauge(
+        'helix_jobs_dead',
+        'Outbox jobs that ran out of attempts (cluster-wide)',
+        () async => (await outbox.deadCount(db)).toDouble(),
+      )
+      ..gauge(
+        'helix_http_body_bytes_in_flight',
+        'Request body bytes buffered on this node',
+        () => bodyBudget.inFlight.toDouble(),
+      );
     return HelixPlatform._(
       config: config,
       db: db,
       schemas: schemas,
       bus: bus,
-      ephemeral: PostgresEphemeralStore(db, schemas.platform),
+      ephemeral: PostgresEphemeralStore(ephemeralDb, schemas.platform),
       rateLimiter: PostgresRateLimiter(db, schemas.platform),
-      idempotency: PostgresIdempotencyStore(db, schemas.platform),
-      outbox: Outbox(schemas.platform, bus),
+      idempotency: PostgresIdempotencyStore(
+        db,
+        schemas.platform,
+        IdempotencySealer(config.jwtKeys, config.activeJwtKid),
+      ),
+      outbox: outbox,
+      bodyBudget: bodyBudget,
       jobs: JobRunner(
         db: db,
         platformSchema: schemas.platform,
@@ -85,7 +121,8 @@ final class HelixPlatform {
       log: logger,
       metrics: metrics,
       health: health,
-      push: push ?? pushProviderFrom(config),
+      push: pushProvider,
+      ephemeralDb: ephemeralDb,
     );
   }
 
@@ -105,6 +142,10 @@ final class HelixPlatform {
   final Metrics metrics;
   final HealthRegistry health;
   final PushProvider push;
+
+  /// Request body bytes this node buffers at once (`HELIX_MAX_INFLIGHT_BODY_BYTES`).
+  final BodyBudget bodyBudget;
+  final Db _ephemeralDb;
 
   ModuleContext moduleContext() => ModuleContext(
     config: config,
@@ -155,5 +196,6 @@ final class HelixPlatform {
     _closed = true;
     await bus.close();
     await db.close();
+    await _ephemeralDb.close();
   }
 }

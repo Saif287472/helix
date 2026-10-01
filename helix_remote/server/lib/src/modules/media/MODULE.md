@@ -13,7 +13,9 @@ Bytes live in `ObjectStorage` under `<kind>/<id>`.
   - Local storage returns the relative path `/v1/media/{id}/content`: a
     resumable `PUT` with `Upload-Offset` (a wrong offset gives 409 with
     the stored offset; a size over the declared one gives 413).
-  - S3 returns a presigned PUT URL valid for 15 minutes.
+  - S3 returns a presigned PUT URL valid for 15 minutes. It signs
+    `content-length` = the declared size, so the store refuses any other
+    size (one `PUT` of exactly `size` bytes).
 - **Status:** `HEAD …/content` returns `Upload-Offset` and
   `Upload-Length`.
 - **Download:** any signed-in device, because ids are random and content

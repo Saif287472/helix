@@ -3,6 +3,7 @@ import 'package:helix_remote_server/src/modules/identity/application/context.dar
 import 'package:helix_remote_server/src/modules/identity/domain/secrets.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
+import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 
 /// Signed-in account management: password, `~Helix name`, devices, push
 /// tokens, security history, sign-out.
@@ -10,6 +11,14 @@ final class Accounts {
   Accounts(this.c);
 
   final IdentityContext c;
+
+  /// Password changes per account. The current-password check also shares
+  /// password sign-in's failure counter and lockout.
+  static final passwordChangeLimit = RateLimitPolicy.per(
+    'identity.password_change',
+    10,
+    const Duration(hours: 1),
+  );
 
   static const _reservedNames = {
     'admin',
@@ -57,17 +66,14 @@ final class Accounts {
 
   Future<void> setPassword(DevicePrincipal me, SetPasswordRequest req) async {
     c.checkPasswordSetup(req.password);
+    await c.limit(passwordChangeLimit, me.accountId);
     final existing = await c.credentials.password(c.db, me.accountId);
     if (existing != null) {
       if (req.currentAuthKey != null) {
-        final ok = constantTimeEquals(
-          existing.bytes('verifier'),
-          c.passwordVerifier(
-            existing.bytes('verifier_salt'),
-            req.currentAuthKey!,
-          ),
+        final (_, error) = await c.db.tx<(Row?, ApiError?)>(
+          (tx) => c.checkPassword(tx, me.accountId, req.currentAuthKey!),
         );
-        if (!ok) throw const ApiError(ErrorCode.invalidCredentials);
+        if (error != null) throw error;
       } else {
         final verified = await c.verification(req.verificationToken);
         final phoneHash = await c.store.phoneHashOf(c.db, me.accountId);
@@ -245,7 +251,19 @@ final class Accounts {
   Future<void> clearPushToken(DevicePrincipal me) =>
       c.store.clearPushToken(c.db, me.deviceId);
 
-  /// Ends this device's sessions; the device stays registered.
-  Future<void> signOut(DevicePrincipal me) =>
-      c.store.invalidateSessions(c.db, me.deviceId);
+  /// Ends this device's sessions; the device stays registered. Its socket
+  /// closes (4001) and the account's other devices get `signed_out`.
+  Future<void> signOut(DevicePrincipal me) => c.db.tx((tx) async {
+    await c.sessions.endSessions(tx, c.store, me.deviceId);
+    await c.hooks.accountSignal(
+      tx,
+      me.accountId,
+      AccountSignalEvent(
+        signal: AccountSignalKind.signedOut,
+        at: c.clock.now(),
+        device: me.deviceId,
+      ),
+      exceptDevice: me.deviceId,
+    );
+  });
 }

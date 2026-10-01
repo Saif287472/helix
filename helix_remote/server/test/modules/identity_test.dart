@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
+import '../support/flows.dart';
 import '../support/harness.dart';
 import '../support/test_client.dart';
 import '../support/test_database.dart';
@@ -255,6 +258,7 @@ void main() {
         body: DeviceSignInRequest(
           accountId: device.accountId,
           deviceId: device.id,
+          challengeId: challenge.challengeId,
           challenge: challenge.challenge,
           signature: signature,
         ).toJson(),
@@ -271,6 +275,7 @@ void main() {
         body: DeviceSignInRequest(
           accountId: device.accountId,
           deviceId: device.id,
+          challengeId: challenge.challengeId,
           challenge: challenge.challenge,
           signature: signature,
         ).toJson(),
@@ -719,6 +724,143 @@ void main() {
       expect(listed.body, isNot(contains('fcm-token-value')));
       final target = await h.identity.api.pushTarget(h.env.platform.db, a.id);
       expect(target!.token, 'fcm-token-value');
+    });
+
+    test(
+      'device challenges are keyed by a random id, not the device',
+      () async {
+        final device = await h.registerGlobal(alice);
+        Future<DeviceChallengeResponse> challenge() async =>
+            DeviceChallengeResponse.fromJson(
+              (await h.api.call(
+                Routes.deviceChallenge,
+                body: DeviceChallengeRequest(
+                  accountId: device.accountId,
+                  deviceId: device.id,
+                ).toJson(),
+              )).json,
+            );
+        Future<TestResponse> signIn(
+          String id,
+          DeviceChallengeResponse c,
+        ) async => h.api.call(
+          Routes.deviceSignIn,
+          body: DeviceSignInRequest(
+            accountId: device.accountId,
+            deviceId: id,
+            challengeId: c.challengeId,
+            challenge: c.challenge,
+            signature: await sign(device.dsk, signInSignatureBody(c.challenge)),
+          ).toJson(),
+        );
+
+        final mine = await challenge();
+        // Anyone may ask for a challenge for this (public) device id.
+        final theirs = await challenge();
+        expect(theirs.challengeId, isNot(mine.challengeId));
+        expect(
+          (await signIn(device.id, mine)).status,
+          200,
+          reason: 'a second request neither replaces nor spends the first',
+        );
+        final other = await h.registerGlobal(bob);
+        expect(
+          (await signIn(other.id, theirs)).errorCode,
+          'invalid_credentials',
+          reason: 'a challenge only signs in the device it was issued for',
+        );
+        expect(
+          (await signIn(device.id, theirs)).errorCode,
+          'invalid_credentials',
+          reason: 'and a failed attempt spends it',
+        );
+      },
+    );
+
+    test(
+      'password change shares the sign-in lockout and is rate-limited',
+      () async {
+        final device = await h.registerGlobal(alice);
+        PasswordSetup setup(int seed) => PasswordSetup(
+          kdf: const KdfParams(),
+          salt: bytes(16, seed),
+          authKey: bytes(32, seed + 1),
+          wrappedIdentityKey: WrappedKey(
+            nonce: bytes(12, seed + 2),
+            ciphertext: bytes(48, seed + 3),
+          ),
+        );
+        final pw = setup(3);
+        Future<TestResponse> change(Uint8List current) => h.api.call(
+          Routes.setPassword,
+          bearer: device.bearer,
+          body: SetPasswordRequest(
+            password: setup(40),
+            currentAuthKey: current,
+          ).toJson(),
+        );
+        expect(
+          (await h.api.call(
+            Routes.setPassword,
+            bearer: device.bearer,
+            body: SetPasswordRequest(password: pw).toJson(),
+          )).status,
+          204,
+        );
+        final codes = [
+          for (var i = 0; i < 9; i++) (await change(bytes(32, 99))).errorCode,
+        ];
+        expect(codes.take(4), everyElement('invalid_credentials'));
+        expect(
+          codes.skip(4),
+          everyElement('password_locked'),
+          reason: 'wrong current passwords count as sign-in failures',
+        );
+        final signIn = await h.api.call(
+          Routes.passwordSignIn,
+          body: PasswordSignInRequest(
+            phoneNumber: alice,
+            authKey: pw.authKey,
+          ).toJson(),
+        );
+        expect(
+          signIn.errorCode,
+          'password_locked',
+          reason: 'one lockout for both routes',
+        );
+        expect(
+          (await change(pw.authKey)).errorCode,
+          'rate_limited',
+          reason: '10 password changes per account per hour',
+        );
+      },
+    );
+
+    test('signing out and suspension are signalled to the account', () async {
+      final a1 = await h.registerGlobal(alice);
+      final a2 = await secondDevice(h, a1, alice);
+      expect((await h.api.call(Routes.signOut, bearer: a2.bearer)).status, 204);
+      final db = h.env.platform.db;
+      final admin = h.identity.api.admin;
+      await db.tx(
+        (tx) => admin.setSuspended(tx, a1.accountId, suspended: true),
+      );
+      await db.tx(
+        (tx) => admin.setSuspended(tx, a1.accountId, suspended: false),
+      );
+      final signals = [
+        for (final e in (await mailbox(h, a1)).envelopes)
+          if (e.kind == EnvelopeKind.accountSignal)
+            AccountSignalEvent.fromJson(JsonReader(e.data!)).signal,
+      ];
+      expect(
+        signals,
+        containsAllInOrder([
+          AccountSignalKind.signedOut,
+          AccountSignalKind.suspended,
+          AccountSignalKind.unsuspended,
+        ]),
+      );
     });
   });
 

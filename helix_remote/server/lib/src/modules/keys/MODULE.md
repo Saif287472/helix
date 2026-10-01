@@ -10,7 +10,7 @@ The X3DH key directory (CRYPTO_V2.md §3). Schema `keys`. Facade:
 | `PUT /v1/keys/signed-prekey` | Ed25519 signature by the device's DSK over `signedPrekeySignatureBody`. |
 | `POST /v1/keys/one-time-prekeys` | At most 200 per call and 1,000 stored (`quota_exceeded`). Repeated ids are ignored, so retries are safe. |
 | `GET /v1/keys/status` | Remaining one-time prekeys and the current signed prekey id. |
-| `GET /v1/keys/{account}` | Bundles of the account's active devices; `?device=` repeatable. Each returned device gives up one one-time prekey (`FOR UPDATE SKIP LOCKED`, never handed out twice). Limits: 120/hour per requesting device, 600/hour per target account. |
+| `GET /v1/keys/{account}` | Bundles of the account's active devices; `?device=` repeatable. Each returned device gives up one one-time prekey (`FOR UPDATE SKIP LOCKED`, never handed out twice). Limits: 120/hour per requesting device, 600/hour per target account (shared with other servers' fetches through `KeysApi.remoteBundles`). |
 
 ## Behaviour
 

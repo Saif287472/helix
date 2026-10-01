@@ -14,6 +14,7 @@ import 'package:helix_remote_server/src/platform/http/routes.dart';
 import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/platform/push/push.dart';
+import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:shelf/shelf.dart';
 
 /// Mailbox delivery (REST_V2.md messaging, ADR-028): the server keeps only
@@ -32,6 +33,14 @@ final class MessagingModule extends ModuleBase
       ..onAccountSignal(_accountSignal)
       ..onDeviceListChanged(_deviceListChanged);
     keys.onPrekeysLow(_prekeysLow);
+    context.metrics.collectedGauge(
+      'helix_mailbox_backlog',
+      'Undelivered envelopes, cluster-wide (counted up to 1,000,000)',
+      () async => (await context.db.queryOne(
+        'SELECT count(*)::int8 AS n FROM '
+        '(SELECT 1 FROM $schema.mailbox LIMIT 1000000) b',
+      ))!.integer('n').toDouble(),
+    );
   }
 
   final IdentityApi identity;
@@ -42,6 +51,20 @@ final class MessagingModule extends ModuleBase
 
   static const pushJob = 'messaging.push';
   static const maxRecipients = 1100;
+
+  /// `POST /v1/messages` per device and per account (all its devices):
+  /// bursts for catching up after being offline, then a steady rate
+  /// (S7 #15). Over either, `rate_limited` with `Retry-After`.
+  static const sendPerDevice = RateLimitPolicy(
+    'messaging.send',
+    capacity: 200,
+    perSecond: 5,
+  );
+  static const sendPerAccount = RateLimitPolicy(
+    'messaging.send_account',
+    capacity: 400,
+    perSecond: 10,
+  );
 
   /// Undelivered envelopes are sealed; they are counted, never exported.
   @override
@@ -65,6 +88,7 @@ final class MessagingModule extends ModuleBase
   List<Migration> get migrations => const [
     Migration(1, 'mailbox_baseline', mailboxBaseline),
     Migration(2, 'federated_senders', _federatedSenders),
+    Migration(3, 'sends_by_sender', sendsBySender),
   ];
 
   /// Senders on other servers are stored qualified (`uuid@domain`).
@@ -86,7 +110,13 @@ final class MessagingModule extends ModuleBase
   @override
   void routes(RouteRegistry r) {
     r
-      ..add(name, Routes.sendMessage, _send, maxBodyBytes: 8 * 1024 * 1024)
+      ..add(
+        name,
+        Routes.sendMessage,
+        _send,
+        maxBodyBytes: 8 * 1024 * 1024,
+        rateLimit: sendPerDevice,
+      )
       ..add(name, Routes.mailbox, _mailbox, allowSuspended: true)
       ..add(name, Routes.ackMailbox, _ack, allowSuspended: true);
   }
@@ -95,6 +125,13 @@ final class MessagingModule extends ModuleBase
 
   Future<Response> _send(HelixRequest q) async {
     final me = q.device;
+    final perAccount = await context.rateLimiter.hit(
+      sendPerAccount,
+      'account:${me.accountId}',
+    );
+    if (!perAccount.allowed) {
+      throw ApiError(ErrorCode.rateLimited, retryAfter: perAccount.retryAfter);
+    }
     final req = q.json(SendMessageRequest.fromJson);
     final parsed = _parse(
       req.id,
@@ -257,7 +294,12 @@ final class MessagingModule extends ModuleBase
     required bool ephemeral,
     Future<void> Function()? beforeDelivery,
   }) async {
-    final previous = await _store.acceptedAt(context.db, id);
+    final previous = await _store.acceptedAt(
+      context.db,
+      id,
+      senderAccount: senderAccount,
+      senderDevice: senderDevice,
+    );
     if (previous != null) {
       return SendMessageResponse(acceptedAt: previous, replayed: true);
     }
@@ -298,13 +340,23 @@ final class MessagingModule extends ModuleBase
     }
 
     final accepted = await context.db.tx((tx) async {
-      final at = await _store.recordSend(tx, id, senderDevice);
+      final at = await _store.recordSend(
+        tx,
+        id,
+        senderAccount: senderAccount,
+        senderDevice: senderDevice,
+      );
       if (at == null) return null;
       await api.deliver(tx, payloads, delivery);
       return at;
     });
     if (accepted == null) {
-      final at = await _store.acceptedAt(context.db, id);
+      final at = await _store.acceptedAt(
+        context.db,
+        id,
+        senderAccount: senderAccount,
+        senderDevice: senderDevice,
+      );
       return SendMessageResponse(
         acceptedAt: at ?? context.clock.now(),
         replayed: true,

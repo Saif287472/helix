@@ -51,8 +51,29 @@ final class Administration implements IdentityAdminApi {
     String accountId, {
     required bool suspended,
   }) async {
-    if (await c.store.account(tx, accountId) == null) return false;
+    final account = await c.store.account(tx, accountId);
+    if (account == null) return false;
+    if (account.isSuspended == suspended) return true;
     await c.store.setStatus(tx, accountId, suspended ? 'suspended' : 'active');
+    // Every device learns of the change; live sockets close with 4004 so
+    // the app tells the user (it may reconnect, read-only).
+    await c.hooks.accountSignal(
+      tx,
+      accountId,
+      AccountSignalEvent(
+        signal: suspended
+            ? AccountSignalKind.suspended
+            : AccountSignalKind.unsuspended,
+        at: c.clock.now(),
+      ),
+    );
+    if (suspended) {
+      tx.afterCommit(
+        () => c.bus.publish(IdentityTopics.accountSuspended, {
+          'account': accountId,
+        }),
+      );
+    }
     return true;
   }
 

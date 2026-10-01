@@ -3,8 +3,11 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/federation/peers.dart';
+import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 
@@ -246,6 +249,124 @@ void main() {
       });
     });
 
+    test('a reused message id cannot suppress another sender', () async {
+      final carol = await b.registerGlobal('+8801711000003');
+      final id = Uuid.v7();
+      // Server A (or any co-recipient's server) sends id first...
+      expect(
+        (await send(a, alice, {
+          bobAt(): [bob.id],
+        }, id: id)).status,
+        200,
+      );
+      // ...and Carol's own message with that id still arrives.
+      final mine = await send(b, carol, {
+        bob.accountId: [bob.id],
+      }, id: id);
+      expect(mine.status, 200, reason: '$mine');
+      expect(SendMessageResponse.fromJson(mine.json).replayed, isFalse);
+      expect((await mailbox(b, bob)).envelopes.map((e) => e.from!.account), [
+        aliceAt(),
+        carol.accountId,
+      ]);
+      // Carol's retry is still a replay.
+      final again = await send(b, carol, {
+        bob.accountId: [bob.id],
+      }, id: id);
+      expect(SendMessageResponse.fromJson(again.json).replayed, isTrue);
+      expect((await mailbox(b, bob)).envelopes, hasLength(2));
+    });
+
+    test('remote key fetches count against the account\'s limit', () async {
+      // Drain Bob's per-account bundle bucket on B (local fetches share it).
+      final target = RateLimitPolicy.per(
+        'keys.bundle_target',
+        600,
+        const Duration(hours: 1),
+      );
+      for (var i = 0; i < 600; i += 50) {
+        await Future.wait([
+          for (var j = 0; j < 50; j++)
+            b.env.platform.rateLimiter.hit(target, bob.accountId),
+        ]);
+      }
+      final response = await a.api.call(
+        Routes.accountKeys,
+        params: {'account': bobAt()},
+        bearer: alice.bearer,
+      );
+      expect(response.errorCode, 'rate_limited');
+    });
+
+    group('outbound requests', () {
+      late HttpServer evil;
+      late HttpServer internal;
+      var internalHits = 0;
+      var redirectIdentity = false;
+
+      setUp(() async {
+        internalHits = 0;
+        redirectIdentity = false;
+        internal = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        internal.listen((r) {
+          internalHits++;
+          r.response
+            ..statusCode = 200
+            ..close();
+        });
+        evil = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final domain = '127.0.0.1:${evil.port}';
+        evil.listen((r) {
+          final wellKnown = r.uri.path == '/.well-known/helix-server';
+          if (wellKnown && !redirectIdentity) {
+            r.response
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode(
+                  ServerIdentityDocument(
+                    serverId: domain,
+                    publicKey: encodeBytes(bytes(32)),
+                    apiBase: 'http://$domain',
+                  ).toJson(),
+                ),
+              )
+              ..close();
+            return;
+          }
+          r.response
+            ..statusCode = 307
+            ..headers.set('location', 'http://127.0.0.1:${internal.port}/x')
+            ..close();
+        });
+      });
+      tearDown(() async {
+        await evil.close(force: true);
+        await internal.close(force: true);
+      });
+
+      test('never follow redirects', () async {
+        final domain = '127.0.0.1:${evil.port}';
+        redirectIdentity = true;
+        await expectLater(
+          a.federation.peers.resolve(domain),
+          throwsA(isA<PeerUnavailable>()),
+        );
+        expect(internalHits, 0);
+
+        redirectIdentity = false;
+        await expectLater(
+          a.federation.client.call(
+            domain,
+            'POST',
+            Routes.s2sMessages.path,
+            body: const {},
+          ),
+          throwsA(isA<PeerUnavailable>()),
+        );
+        expect(internalHits, 0);
+      });
+    });
+
     test('federation switched off refuses both directions', () async {
       await b.setFederation(false);
       final toB = await send(a, alice, {
@@ -277,6 +398,43 @@ void main() {
       );
       expect(jobs, hasLength(1));
       expect(jobs.single.json('payload')['domain'], '127.0.0.1:$port');
+    });
+  });
+
+  group('federation addresses', () {
+    bool refused(String ip, {bool allowPrivate = false}) =>
+        PeerDirectory.refuses(InternetAddress(ip), allowPrivate: allowPrivate);
+
+    test('IPv6 forms of IPv4 addresses are judged as IPv4', () {
+      // Metadata services are refused in every form, even on private LANs.
+      for (final ip in [
+        '169.254.169.254',
+        '::ffff:169.254.169.254',
+        '::169.254.169.254',
+        '64:ff9b::a9fe:a9fe',
+        '2002:a9fe:a9fe::1',
+        '0.0.0.0',
+        '::',
+        'fe80::1',
+      ]) {
+        expect(refused(ip, allowPrivate: true), isTrue, reason: ip);
+      }
+      for (final ip in [
+        '127.0.0.1',
+        '::ffff:127.0.0.1',
+        '::1',
+        '::ffff:10.0.0.1',
+        '64:ff9b::a00:1',
+        '64:ff9b:1::1',
+        '2002:c0a8:101::1',
+        'fd00::1',
+      ]) {
+        expect(refused(ip), isTrue, reason: ip);
+        expect(refused(ip, allowPrivate: true), isFalse, reason: ip);
+      }
+      for (final ip in ['8.8.8.8', '::ffff:8.8.8.8', '2606:4700::1111']) {
+        expect(refused(ip), isFalse, reason: ip);
+      }
     });
   });
 

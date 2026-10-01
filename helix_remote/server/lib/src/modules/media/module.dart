@@ -155,7 +155,13 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
     final target = _blobs.supportsPresign
         ? UploadTarget(
             mediaId: id,
-            url: _blobs.presignPut(_key(req.kind, id), presignTtl).toString(),
+            url: _blobs
+                .presignPut(
+                  _key(req.kind, id),
+                  presignTtl,
+                  contentLength: req.size,
+                )
+                .toString(),
             expiresAt: expires,
             resumable: false,
           )
@@ -300,10 +306,13 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
     );
   }
 
-  /// `bytes=a-b`, `bytes=a-` or `bytes=-n`; null if unsatisfiable.
+  /// `bytes=a-b`, `bytes=a-` or `bytes=-n`; null if unsatisfiable. A header
+  /// that does not parse (including numbers too long for an int) is ignored.
   static (int, int)? _parseRange(String? header, int size) {
     if (header == null) return (0, size - 1);
-    final m = RegExp(r'^bytes=(\d*)-(\d*)$').firstMatch(header.trim());
+    final m = RegExp(
+      r'^bytes=(\d{0,18})-(\d{0,18})$',
+    ).firstMatch(header.trim());
     if (m == null) return (0, size - 1);
     final a = m.group(1)!;
     final b = m.group(2)!;

@@ -258,14 +258,57 @@ void main() {
         ),
         now: () => DateTime.utc(2026, 10, 1),
       );
-      final put = storage.presignPut('media/x', const Duration(minutes: 15));
+      final put = storage.presignPut(
+        'media/x',
+        const Duration(minutes: 15),
+        contentLength: 1234,
+      );
       final get = storage.presignGet('media/x', const Duration(minutes: 15));
       expect(put.path, '/helix/media/x');
       expect(
         put.queryParameters['X-Amz-Signature'],
         isNot(get.queryParameters['X-Amz-Signature']),
       );
-      expect(storage.presignPut('media/x', const Duration(minutes: 15)), put);
+      expect(
+        storage.presignPut(
+          'media/x',
+          const Duration(minutes: 15),
+          contentLength: 1234,
+        ),
+        put,
+      );
+    });
+
+    test('presigned PUT signs the declared content length', () {
+      final storage = S3ObjectStorage(
+        S3Config(
+          endpoint: Uri.parse('http://127.0.0.1:9000'),
+          region: 'us-east-1',
+          bucket: 'helix',
+          accessKeyId: 'a',
+          secretAccessKey: 'b',
+        ),
+        now: () => DateTime.utc(2026, 10, 1),
+      );
+      final put = storage.presignPut(
+        'media/x',
+        const Duration(minutes: 15),
+        contentLength: 1234,
+      );
+      expect(
+        put.queryParameters['X-Amz-SignedHeaders']!.split(';'),
+        containsAll(['content-length', 'host']),
+      );
+      final other = storage.presignPut(
+        'media/x',
+        const Duration(minutes: 15),
+        contentLength: 1235,
+      );
+      expect(
+        other.queryParameters['X-Amz-Signature'],
+        isNot(put.queryParameters['X-Amz-Signature']),
+        reason: 'another length needs another signature',
+      );
     });
   });
 }

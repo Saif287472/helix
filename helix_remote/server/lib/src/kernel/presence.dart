@@ -14,14 +14,18 @@ abstract final class Presence {
   static Future<bool> isOnline(EphemeralStore store, String deviceId) async =>
       await store.get(routeKey(deviceId)) != null;
 
+  /// Which of [deviceIds] are online, in one store read (a send to many
+  /// devices must not cost one round trip each).
   static Future<Set<String>> online(
     EphemeralStore store,
     Iterable<String> deviceIds,
   ) async {
-    final out = <String>{};
-    for (final id in deviceIds) {
-      if (await isOnline(store, id)) out.add(id);
-    }
-    return out;
+    final ids = deviceIds.toList();
+    if (ids.isEmpty) return {};
+    final live = await store.getAll(ids.map(routeKey));
+    return {
+      for (final id in ids)
+        if (live.containsKey(routeKey(id))) id,
+    };
   }
 }

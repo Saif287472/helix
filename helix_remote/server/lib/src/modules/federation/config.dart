@@ -38,7 +38,7 @@ final class FederationConfig {
 
   factory FederationConfig.from(ServerConfig config) {
     final env = config.env;
-    bool flag(String name) => env[name]?.trim().toLowerCase() == 'true';
+    bool flag(String name) => envFlag(env, name);
     final base = config.publicBaseUrl;
     final host = base.host.toLowerCase();
     final domain = base.hasPort ? '$host:${base.port}' : host;

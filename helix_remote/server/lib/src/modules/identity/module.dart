@@ -35,6 +35,7 @@ final class IdentityModule extends ModuleBase
       jwt: jwt,
       credentials: _credentials,
       clock: context.clock,
+      bus: context.bus,
     );
     _ctx = IdentityContext(
       db: context.db,

@@ -71,6 +71,8 @@ final class HelixServer {
             authenticator: authenticator ?? _authenticatorFrom(modules),
             rateLimiter: platform.rateLimiter,
             idempotency: platform.idempotency,
+            bodyBudget: platform.bodyBudget,
+            clock: platform.clock,
           ),
         );
 
@@ -115,6 +117,7 @@ extension on HelixPlatform {
         metrics: metrics,
         rateLimiter: rateLimiter,
         trustedProxies: config.trustedProxies,
+        trustRealIp: config.trustRealIp,
         maintenance: maintenance,
       );
 }

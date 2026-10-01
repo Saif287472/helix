@@ -79,6 +79,29 @@ void main() {
       expect(await store.sweep(), greaterThanOrEqualTo(1));
     });
 
+    test('ephemeral store: compare-and-set replace and deleteIf', () async {
+      final store = PostgresEphemeralStore(db, schemas.platform);
+      final other = PostgresEphemeralStore(otherNode, schemas.platform);
+      const ttl = Duration(seconds: 30);
+
+      await store.put('route:d', 'node-a|c1', ttl);
+      await other.put('route:d', 'node-b|c2', ttl);
+      expect(
+        await store.replace('route:d', 'node-a|c1', 'node-a|c1', ttl),
+        isFalse,
+        reason: 'a newer value is never overwritten',
+      );
+      expect(await store.deleteIf('route:d', 'node-a|c1'), isFalse);
+      expect(await store.get('route:d'), 'node-b|c2');
+      expect(
+        await other.replace('route:d', 'node-b|c2', 'node-b|c2', ttl),
+        isTrue,
+      );
+      expect(await store.deleteIf('route:d', 'node-b|c2'), isTrue);
+      expect(await other.get('route:d'), isNull);
+      expect(await store.replace('route:d', 'node-b|c2', 'x', ttl), isFalse);
+    });
+
     test('rate limiter: capacity, refill, shared across nodes', () async {
       final a = PostgresRateLimiter(db, schemas.platform);
       final b = PostgresRateLimiter(otherNode, schemas.platform);

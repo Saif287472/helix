@@ -184,20 +184,34 @@ final class MailboxStore {
     });
   }
 
-  /// Records a send id; false if it was already accepted (a retry).
-  Future<DateTime?> recordSend(Tx tx, String id, String senderDevice) async {
+  /// Records a send by (sender account, sender device, id); null if it was
+  /// already accepted (a retry). Keyed on the sender too, so another
+  /// server reusing an id cannot suppress someone else's message.
+  Future<DateTime?> recordSend(
+    Tx tx,
+    String id, {
+    required String senderAccount,
+    required String senderDevice,
+  }) async {
     final r = await tx.queryOne(
-      'INSERT INTO $s.sends (id, sender_device) VALUES (@id:uuid, @d:uuid) '
-      'ON CONFLICT (id) DO NOTHING RETURNING accepted_at',
-      {'id': id, 'd': senderDevice},
+      'INSERT INTO $s.sends (sender_account, sender_device, id) '
+      'VALUES (@a:text, @d:uuid, @id:uuid) '
+      'ON CONFLICT (sender_account, sender_device, id) DO NOTHING RETURNING accepted_at',
+      {'a': senderAccount, 'd': senderDevice, 'id': id},
     );
     return r?.time('accepted_at');
   }
 
-  Future<DateTime?> acceptedAt(SqlSession db, String id) async {
+  Future<DateTime?> acceptedAt(
+    SqlSession db,
+    String id, {
+    required String senderAccount,
+    required String senderDevice,
+  }) async {
     final r = await db.queryOne(
-      'SELECT accepted_at FROM $s.sends WHERE id = @id:uuid',
-      {'id': id},
+      'SELECT accepted_at FROM $s.sends WHERE sender_account = @a:text '
+      'AND sender_device = @d:uuid AND id = @id:uuid',
+      {'a': senderAccount, 'd': senderDevice, 'id': id},
     );
     return r?.time('accepted_at');
   }
@@ -247,3 +261,13 @@ CREATE TABLE $s.sends (
 CREATE INDEX sends_accepted ON $s.sends (accepted_at);
 ''';
 }
+
+/// Migration 3: send ids are unique per sender, not globally (rows from
+/// before it keep an empty account and simply age out).
+String sendsBySender(String s) =>
+    '''
+ALTER TABLE $s.sends ADD COLUMN sender_account text NOT NULL DEFAULT '';
+ALTER TABLE $s.sends ALTER COLUMN sender_account DROP DEFAULT;
+ALTER TABLE $s.sends DROP CONSTRAINT sends_pkey;
+ALTER TABLE $s.sends ADD PRIMARY KEY (sender_account, sender_device, id);
+''';

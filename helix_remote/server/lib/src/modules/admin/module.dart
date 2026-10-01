@@ -13,6 +13,7 @@ import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
+import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
@@ -56,9 +57,17 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   static const sessionLifetime = Duration(hours: 12);
   static const audience = 'helix.admin';
   static const tokenType = 'admin';
+
+  /// Per client address: 5 failures lock it for 15 minutes, doubling per
+  /// further failure up to 24 hours.
   static const lockAfter = 5;
   static const firstLock = Duration(minutes: 15);
   static const maxLock = Duration(hours: 24);
+
+  /// Global safety cap, whatever the addresses: 100 failures since the last
+  /// success lock sign-in for 15 minutes (then the count restarts).
+  static const globalLockAfter = 100;
+  static const globalLock = Duration(minutes: 15);
 
   static final _setupLimit = RateLimitPolicy.per(
     'admin.setup',
@@ -96,6 +105,15 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
 
   @override
   List<Migration> get migrations => adminMigrations;
+
+  @override
+  List<PeriodicJob> get periodic => [
+    PeriodicJob(
+      'admin.purge_sign_in_failures',
+      const Duration(hours: 6),
+      () => _store.purgeSignInFailures(context.db),
+    ),
+  ];
 
   @override
   void routes(RouteRegistry r) {
@@ -159,7 +177,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   @override
   Future<void> stop() async {
     for (final ws in _logSockets.toList()) {
-      await ws.sink.close(1001, 'server shutting down');
+      await ws.sink.close(RealtimeCloseCode.goingAway, 'server shutting down');
     }
   }
 
@@ -242,33 +260,32 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     if (admin == null || req.password.length > AdminPasswordRequest.maxLength) {
       throw const ApiError(ErrorCode.invalidCredentials);
     }
-    final now = context.clock.now();
-    final locked = admin.lockedUntil;
-    if (locked != null && locked.isAfter(now)) {
+    final locked = await context.db.tx(
+      (tx) => _store.reserveAttempt(
+        tx,
+        admin.id,
+        q.clientIp,
+        perIp: lockAfter,
+        firstLock: firstLock,
+        maxLock: maxLock,
+        global: globalLockAfter,
+        globalLock: globalLock,
+      ),
+    );
+    if (locked != null) {
+      final wait = locked.difference(context.clock.now());
       throw ApiError(
         ErrorCode.passwordLocked,
-        retryAfter: locked.difference(now),
+        retryAfter: wait.isNegative ? Duration.zero : wait,
       );
     }
     if (!await admin.password.verify(req.password)) {
-      final failures = admin.failedAttempts + 1;
-      final lockUntil = failures >= lockAfter
-          ? now.add(_lockFor(failures - lockAfter))
-          : null;
-      await _store.recordFailure(context.db, admin.id, lockUntil: lockUntil);
-      log.warn('admin_sign_in_failed', {'failures': failures});
+      log.warn('admin_sign_in_failed');
       throw const ApiError(ErrorCode.invalidCredentials);
     }
-    await _store.recordSuccess(context.db, admin.id);
+    await _store.recordSuccess(context.db, admin.id, q.clientIp);
     await _store.audit(context.db, adminId: admin.id, action: 'admin.sign_in');
     return jsonResponse(_issue(admin.id).toJson());
-  }
-
-  /// 15 minutes, doubling with each further failure, at most a day.
-  static Duration _lockFor(int extraFailures) {
-    final minutes =
-        firstLock.inMinutes * math.pow(2, math.min(extraFailures, 10));
-    return Duration(minutes: math.min(minutes.toInt(), maxLock.inMinutes));
   }
 
   Future<Response> _changePassword(HelixRequest q) async {

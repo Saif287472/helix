@@ -269,6 +269,187 @@ void main() {
       expect(home.members.map((m) => m.account), contains(onB(carol)));
     });
 
+    test('a member server delivers its own senders\' messages', () async {
+      final g = await create([onB(bob), onB(carol)]);
+      final sent = await sendGroup(
+        b,
+        bob,
+        g.groupId,
+        {
+          onA(alice): [alice.id],
+          bob.accountId: [],
+          carol.accountId: [carol.id],
+        },
+        distributions: [
+          Recipient(
+            account: carol.accountId,
+            devices: [DevicePayload(device: carol.id, payload: bytes(60, 5))],
+          ),
+        ],
+      );
+      expect(sent.status, 200, reason: sent.body);
+      await settle([a, b]);
+      final atCarol = await envelopes(b, carol, EnvelopeKind.groupMessage);
+      expect(atCarol.single.from!.account, bob.accountId);
+      final keys = await envelopes(b, carol, EnvelopeKind.message);
+      expect(keys.single.from!.account, bob.accountId);
+      expect(keys.single.payload, bytes(60, 5));
+      expect(
+        (await envelopes(
+          a,
+          alice,
+          EnvelopeKind.groupMessage,
+        )).single.from!.account,
+        onB(bob),
+      );
+    });
+
+    group('a malicious home server', () {
+      late Group g;
+      var version = 100;
+
+      setUp(() async {
+        g = await create([onB(bob)]);
+      });
+
+      Future<S2SGroupSyncResponse> push(RosterChangeEvent? event) async {
+        final snapshot = Group(
+          groupId: g.groupId,
+          epoch: 0,
+          stateVersion: 1,
+          encryptedState: bytes(4),
+          settings: const GroupSettings(),
+          members: [
+            GroupMember(
+              account: onA(alice),
+              role: GroupRole.owner,
+              joinedAt: DateTime.utc(2026),
+            ),
+            for (final d in [bob, carol])
+              GroupMember(
+                account: d.accountId,
+                role: GroupRole.member,
+                joinedAt: DateTime.utc(2026),
+              ),
+          ],
+          createdAt: DateTime.utc(2026),
+          homeServer: a.domain,
+        );
+        final json = await a.federation.client.call(
+          b.domain,
+          'POST',
+          Routes.s2sGroupSync.expand({'group_id': g.groupId}),
+          body: S2SGroupSync(
+            rosterVersion: version++,
+            group: snapshot,
+            event: event,
+            notify: [carol.accountId],
+          ).toJson(),
+        );
+        return S2SGroupSyncResponse.fromJson(json!);
+      }
+
+      RosterChangeEvent change(RosterChangeKind kind, String? actor) =>
+          RosterChangeEvent(
+            groupId: g.groupId,
+            change: kind,
+            epoch: 0,
+            actor: actor,
+            members: [carol.accountId],
+          );
+
+      Future<bool> carolIn() async => GroupList.fromJson(
+        (await b.api.call(Routes.myGroups, bearer: carol.bearer)).json,
+      ).groups.any((x) => x.groupId == g.groupId);
+
+      test('cannot add people here without a legitimate adder', () async {
+        for (final event in [
+          null,
+          change(RosterChangeKind.stateChanged, onA(alice)),
+          change(RosterChangeKind.added, null),
+          change(RosterChangeKind.added, carol.accountId),
+          change(RosterChangeKind.added, '${Uuid.v7()}@${a.domain}'),
+        ]) {
+          final answer = await push(event);
+          expect(answer.rejected, [
+            carol.accountId,
+          ], reason: '${event?.toJson()}');
+          expect(await carolIn(), isFalse);
+        }
+        expect(await envelopes(b, carol, EnvelopeKind.rosterChange), isEmpty);
+
+        // The owner adding Carol, whose privacy allows it, is accepted.
+        final answer = await push(change(RosterChangeKind.added, onA(alice)));
+        expect(answer.rejected, isEmpty);
+        expect(await carolIn(), isTrue);
+      });
+
+      Future<void> fanOut(String sender) => a.federation.client.call(
+        b.domain,
+        'POST',
+        Routes.s2sGroupMessages.expand({'group_id': g.groupId}),
+        body: S2SGroupMessage(
+          id: Uuid.v7(),
+          sender: sender,
+          senderDevice: Uuid.v7(),
+          payload: bytes(40),
+          devices: [bob.id],
+          distributions: [DevicePayload(device: bob.id, payload: bytes(30))],
+        ).toJson(),
+      );
+
+      test('cannot send in the name of people here or non-members', () async {
+        for (final sender in [
+          carol.accountId,
+          onB(carol),
+          '${Uuid.v7()}@${a.domain}',
+        ]) {
+          await expectLater(
+            fanOut(sender),
+            throwsA(predicate((e) => '$e'.contains('forbidden'))),
+            reason: sender,
+          );
+        }
+        Future<List<Envelope>> messages() async => [
+          for (final e in (await mailbox(b, bob)).envelopes)
+            if (e.kind != EnvelopeKind.rosterChange) e,
+        ];
+        expect(await messages(), isEmpty);
+
+        await fanOut(onA(alice));
+        final got = await messages();
+        expect(got.map((e) => (e.kind, e.from!.account)), [
+          (EnvelopeKind.message, onA(alice)),
+          (EnvelopeKind.groupMessage, onA(alice)),
+        ]);
+      });
+    });
+
+    test('member servers cannot claim other people\'s devices', () async {
+      final g = await create([onB(bob)]);
+      final result = S2SGroupActionResult.fromJson(
+        (await b.federation.client.call(
+          a.domain,
+          'POST',
+          Routes.s2sGroupActions.expand({'group_id': g.groupId}),
+          body: S2SGroupAction(
+            actor: onB(bob),
+            action: 'devices',
+            body: {
+              'devices': [bob.id, alice.id],
+            },
+          ).toJson(),
+        ))!,
+      );
+      expect(result.status, 400);
+      // Bob's devices are unchanged and Alice's stays hers.
+      final sent = await sendGroup(a, alice, g.groupId, {
+        alice.accountId: [],
+        onB(bob): [bob.id],
+      });
+      expect(sent.status, 200, reason: sent.body);
+    });
+
     test('only the home server may push a group', () async {
       final g = await create([onB(bob)]);
       // A third server claiming the same group is refused by B.

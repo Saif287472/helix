@@ -14,9 +14,13 @@ federation use it).
 | `GET /v1/server` | public | `ops.probe` |
 | `GET /v1/server/legal` | public | `ops.probe` |
 | `POST /v1/telemetry/crash` | device | `ops.crash` 10/hour per device, 96 KiB |
-| `GET /v1/ops/metrics` | admin | — |
+| `GET /v1/ops/metrics` | admin, or `HELIX_METRICS_TOKEN` | — |
 | `GET /.well-known/assetlinks.json` | public | `ops.probe` |
 | `GET /open` | public | `ops.probe` |
+
+`metrics` also accepts `HELIX_METRICS_TOKEN` (constant-time compare; that
+token opens nothing else) and refreshes the collected gauges
+(`helix_jobs_dead`, `helix_mailbox_backlog`) before rendering.
 
 `ready` runs every check in the `HealthRegistry` (platform: `database`,
 `storage`; modules add their own) with a 3-second timeout each and answers
@@ -29,7 +33,10 @@ federation use it).
   `OpsApi.knownFlags` (`crash_reporting_upload`, `minimal_analytics`,
   `group_calls`; all off by default). Unknown flags cannot be set.
 - Cached per node for 30 seconds, and dropped on every node when a change
-  is published on the `ops.settings` bus topic after commit.
+  is published on the `ops.settings` bus topic after commit, or when the bus
+  reports `platform.resync` (its connection came back, hints were missed).
+- `HELIX_FEDERATION_ENABLED` (the default of `federation_enabled`) uses the
+  shared boolean parser (`1/true/yes`, `0/false/no`).
 - `GET /v1/server` lists the flags as `features`. `federation_domain` is
   the public host while federation is on.
 

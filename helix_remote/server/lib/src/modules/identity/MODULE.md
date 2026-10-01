@@ -28,6 +28,14 @@ import.
 - **Refresh rotation:** reusing an old refresh token ends every session of
   that device (theft response), and the cut-off is committed before the
   error is returned.
+- **Ending sessions** (sign-out, refresh reuse) goes through
+  `SessionIssuer.endSessions`: after commit it publishes
+  `identity.sessions_ended` with the device and the cut-off (epoch ms), and
+  realtime closes that device's socket (4001) on whichever node holds it.
+  Sign-out also signals `signed_out` to the account's other devices.
+- **Suspension** (operator): signals `suspended` / `unsuspended` to every
+  device; suspending publishes `identity.account_suspended` (sockets close
+  with 4004). Topics are in `api.dart` (`IdentityTopics`).
 - **Suspended accounts:** they authenticate with `suspended: true`. Only
   routes registered with `allowSuspended` accept them (account info,
   devices, sign-out, security events, push token, revoke).
@@ -45,7 +53,7 @@ the ephemeral store:
 | `identity:st:` | sign-in token → account |
 | `identity:lt:` | link token → account |
 | `identity:link:` | link state |
-| `identity:chal:` | device challenge |
+| `identity:chal:` | device challenge, by random challenge id (holds the device id and the challenge) |
 
 ## Routes and limits
 
@@ -53,7 +61,10 @@ All 28 identity routes from `Routes` are served. Every public route has a
 per-IP policy (`IdentityLimits` in `http/identity_routes.dart`). Codes also
 have per-number limits (5/hour, a resend gap of `HELIX_OTP_RESEND_SECONDS`,
 default 30) and 5 attempts per challenge. Passwords lock after 5 failures:
-15 minutes, doubling up to 24 hours.
+15 minutes, doubling up to 24 hours. Password sign-in and password change
+(a wrong current auth key) share that counter and lockout
+(`IdentityContext.checkPassword`); password changes are also limited to 10
+per hour per account.
 
 ## Hooks (all run inside identity's transaction)
 
@@ -72,11 +83,6 @@ envelopes; backup (S4) drops the AIK-keyed history backup on key change.
 | `HELIX_OTP_RESEND_SECONDS` | resend gap (default 30) |
 
 Helix Global (`HELIX_GLOBAL_MODE=true`) refuses to start without SMS.
-
-**Known limitation:** device challenges are keyed per device, so a
-flood of challenge requests for one device id can delay that device's
-sign-in. It is bounded by the per-IP limit. Revisit if it is ever seen in
-practice.
 
 ## Operator actions (`IdentityAdminApi`, `api.admin`)
 

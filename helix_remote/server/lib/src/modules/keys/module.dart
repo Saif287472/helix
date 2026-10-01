@@ -246,6 +246,21 @@ final class _KeysFacade implements KeysApi {
   void setRemoteSource(RemoteKeySource source) => _m._remote = source;
 
   @override
+  Future<AccountKeys?> remoteBundles(
+    String accountId, {
+    Set<String>? devices,
+  }) async {
+    final decision = await _m.context.rateLimiter.hit(
+      KeysModule._perTarget,
+      accountId,
+    );
+    if (!decision.allowed) {
+      throw ApiError(ErrorCode.rateLimited, retryAfter: decision.retryAfter);
+    }
+    return bundles(accountId, devices: devices);
+  }
+
+  @override
   Future<AccountKeys?> bundles(String accountId, {Set<String>? devices}) async {
     final db = _m.context.db;
     final account = await _m.identity.account(db, accountId);

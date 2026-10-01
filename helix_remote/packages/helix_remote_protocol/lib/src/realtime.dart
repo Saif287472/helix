@@ -217,6 +217,8 @@ abstract final class RealtimeCloseCode {
   /// A frame broke the protocol (bad JSON, unknown required field).
   static const protocolError = 4400;
 
-  /// Server node going away (deploy, restart). Reconnect with backoff.
-  static const goingAway = 1001;
+  /// Server node going away (deploy, restart) or could not deliver.
+  /// Reconnect with backoff. (Not 1001: WebSocket libraries only let
+  /// applications send 1000 or 3000-4999.)
+  static const goingAway = 4503;
 }

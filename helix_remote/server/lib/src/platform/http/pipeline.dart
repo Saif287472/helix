@@ -19,6 +19,7 @@ final class HttpPipeline {
     required Metrics metrics,
     required this.rateLimiter,
     required this.trustedProxies,
+    this.trustRealIp = false,
     this.globalLimit = const RateLimitPolicy(
       'ip',
       capacity: 600,
@@ -33,6 +34,7 @@ final class HttpPipeline {
   final Log log;
   final RateLimiter rateLimiter;
   final Set<String> trustedProxies;
+  final bool trustRealIp;
   final RateLimitPolicy globalLimit;
 
   /// Returns true while the server is in maintenance mode (ops module).
@@ -92,6 +94,12 @@ final class HttpPipeline {
         'kind': e.kind.name,
       });
       response = errorResponse(const ApiError(ErrorCode.conflict));
+    } on DbInvalidValue {
+      // A value the column cannot hold (an int4 overflow, say): the
+      // request's fault, never a 500.
+      response = errorResponse(
+        const ApiError(ErrorCode.invalidField, message: 'value out of range'),
+      );
     } on Object catch (e, stack) {
       log.error('unhandled_error', {
         'request_id': requestId,
@@ -130,15 +138,21 @@ final class HttpPipeline {
       path.startsWith('v1/ops');
 
   /// The peer address, or the forwarded client address when the peer is a
-  /// trusted proxy (Caddy on the same host).
+  /// trusted proxy (Caddy on the same host): the rightmost
+  /// `X-Forwarded-For` hop that is not a trusted proxy. Proxies append to
+  /// that header, so hops a client wrote itself are further left and never
+  /// chosen. `X-Real-IP` is a single client-settable value; it is believed
+  /// only with [trustRealIp] (a proxy that always overwrites it).
   String _clientIp(Request request) {
     final info = request.context['shelf.io.connection_info'];
     final peer = info is HttpConnectionInfo
         ? info.remoteAddress.address
         : 'unknown';
     if (!trustedProxies.contains(peer)) return peer;
-    final realIp = request.headers['x-real-ip'];
-    if (realIp != null && realIp.isNotEmpty) return realIp.trim();
+    if (trustRealIp) {
+      final realIp = request.headers['x-real-ip']?.trim();
+      if (realIp != null && realIp.isNotEmpty) return realIp;
+    }
     final forwarded = request.headers['x-forwarded-for'];
     if (forwarded != null && forwarded.isNotEmpty) {
       final hops = forwarded

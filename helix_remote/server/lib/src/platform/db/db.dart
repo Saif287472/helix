@@ -29,7 +29,11 @@ abstract interface class Tx implements SqlSession {
 
 abstract interface class Db implements SqlSession {
   /// Runs [body] in a transaction; commits if it completes, rolls back if it
-  /// throws. Transactions do not nest: code that needs one takes a [Tx].
+  /// throws. Code that needs one takes a [Tx]. A `tx` called while [body]
+  /// runs (directly or deeper in the call chain) joins it instead of taking
+  /// a second pool connection: it commits, rolls back and retries with the
+  /// outer transaction, and its [Tx.afterCommit] actions wait for the outer
+  /// commit.
   ///
   /// Serialization failures and deadlocks are retried up to [retries] times,
   /// so [body] must be safe to re-run (no side effects outside the database
@@ -38,8 +42,14 @@ abstract interface class Db implements SqlSession {
 
   /// Notifications on [channel]. Completes once `LISTEN` is active on a
   /// dedicated connection, so a `notify` issued afterwards is received.
-  /// Channel names are `[a-z0-9_]` identifiers.
+  /// Channel names are `[a-z0-9_]` identifiers. If that connection drops,
+  /// it is reopened with backoff and every channel is listened to again;
+  /// the streams stay open.
   Future<Stream<String>> listen(String channel);
+
+  /// Fires each time the `LISTEN` connection came back after a loss.
+  /// Notifications sent while it was down are gone, so listeners resync.
+  Stream<void> get listenRestored;
 
   Future<void> notify(String channel, String payload);
 
@@ -138,3 +148,16 @@ final class DbConstraintViolation implements Exception {
 }
 
 enum DbConstraintKind { unique, foreignKey, check, notNull }
+
+/// A parameter the column type cannot hold (an `int4` out of range, text
+/// that is not a valid value of the type). Request data caused it, so the
+/// HTTP pipeline answers 400 rather than 500.
+final class DbInvalidValue implements Exception {
+  const DbInvalidValue(this.parameter);
+
+  /// The parameter name, or null when Postgres refused the value.
+  final String? parameter;
+
+  @override
+  String toString() => 'DbInvalidValue($parameter)';
+}

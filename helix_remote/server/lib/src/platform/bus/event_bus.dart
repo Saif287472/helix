@@ -8,6 +8,11 @@ import 'package:helix_remote_server/src/platform/db/db.dart';
 /// lost goes through the outbox instead; a missed hint only delays work
 /// until the next poll or reconnect.
 abstract interface class EventBus {
+  /// Published locally (on this node only, message `{}`) when the bus may
+  /// have missed messages, e.g. after its database connection came back.
+  /// Anything that caches on bus hints drops its cache.
+  static const resyncTopic = 'platform.resync';
+
   /// Delivers [message] to every subscriber of [topic] on every node,
   /// including this one.
   Future<void> publish(String topic, Map<String, Object?> message);
@@ -59,11 +64,15 @@ final class PostgresEventBus implements EventBus {
   final String _channel;
   final Map<String, StreamController<Map<String, Object?>>> _topics = {};
   StreamSubscription<String>? _subscription;
+  StreamSubscription<void>? _restored;
   Future<void>? _listening;
 
   @override
   Future<void> get ready => _listening ??= _db.listen(_channel).then((stream) {
     _subscription = stream.listen(_deliver);
+    _restored = _db.listenRestored.listen((_) {
+      _topics[EventBus.resyncTopic]?.add(const {});
+    });
   });
 
   void _deliver(String raw) {
@@ -103,6 +112,7 @@ final class PostgresEventBus implements EventBus {
       // Closing anyway.
     }
     await _subscription?.cancel();
+    await _restored?.cancel();
     for (final c in _topics.values) {
       await c.close();
     }

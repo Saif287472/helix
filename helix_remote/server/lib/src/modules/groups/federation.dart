@@ -83,10 +83,11 @@ extension on GroupsModule {
             await _store.role(tx, groupId, account) == null) {
           continue;
         }
-        await _store.setRemoteDevices(tx, account, [
-          for (final d in entry.value.take(64))
-            if (Uuid.isValid(d)) d,
-        ]);
+        await _store.setRemoteDevices(
+          tx,
+          account,
+          await _foreignDevices(tx, account, entry.value.take(64)),
+        );
       }
       for (final bare in answer.rejected) {
         final account = '$bare@$domain';
@@ -217,10 +218,34 @@ extension on GroupsModule {
     }
     await context.db.tx((tx) async {
       await _requireMember(tx, id, actor.account);
-      await _store.setRemoteDevices(tx, actor.account, devices);
+      final foreign = await _foreignDevices(tx, actor.account, devices);
+      if (foreign.length != devices.toSet().length) {
+        throw const ApiError(
+          ErrorCode.invalidField,
+          message: 'a device id is already in use',
+          details: {'field': 'devices'},
+        );
+      }
+      await _store.setRemoteDevices(tx, actor.account, foreign);
     });
     return noContent();
   }
+
+  /// The ids of [devices] that may be [account]'s: well-formed, not a
+  /// device of this server, and not reported for another account. Otherwise
+  /// a member's server could have another person's copy of each group
+  /// message routed to it.
+  Future<List<String>> _foreignDevices(
+    Tx tx,
+    String account,
+    Iterable<String> devices,
+  ) async => [
+    for (final d in devices.toSet())
+      if (Uuid.isValid(d) &&
+          await identity.device(tx, d) == null &&
+          !await _store.remoteDeviceTaken(tx, d, account: account))
+        d,
+  ];
 
   Future<Group?> _viewFor(String domain, String groupId) async {
     final home = _home;
@@ -267,25 +292,44 @@ extension on GroupsModule {
         // An older or repeated snapshot: keep what is cached.
         keep = previous;
       } else {
-        final adding =
-            event != null &&
-            (event.change == RosterChangeKind.added ||
-                event.change == RosterChangeKind.created);
+        // Someone new here, whatever the event says, must exist and have
+        // either asked to join through this server, or been added (or the
+        // group created) by a member of the snapshot who may add people and
+        // whom their group-add privacy and blocks allow.
+        final adder = event?.actor;
+        GroupRole? adderRole;
+        for (final m in group.members) {
+          if (m.account == adder) adderRole = m.role;
+        }
+        final byAdder =
+            adder != null &&
+            adderRole != null &&
+            (event!.change == RosterChangeKind.added ||
+                event.change == RosterChangeKind.created) &&
+            _allowed(group.settings.addMembers, adderRole);
+        final expired = context.clock.now().subtract(
+          GroupsModule._joinMarkerLifetime,
+        );
         for (final member in group.members) {
           final account = member.account;
           if (account.contains('@') || !Uuid.isValid(account)) continue;
           if (!previous.contains(account)) {
-            // New here: the account must exist and allow the adder.
-            final adder = event?.actor;
-            if (await identity.account(tx, account) == null ||
-                (adding &&
-                    adder != null &&
-                    adder != account &&
-                    !await people.mayAddToGroup(
+            final allowed =
+                await identity.account(tx, account) != null &&
+                (await _store.takeRemoteJoin(
                       tx,
-                      adder: adder,
-                      target: account,
-                    ))) {
+                      groupId,
+                      account,
+                      expired: expired,
+                    ) ||
+                    (byAdder &&
+                        adder != account &&
+                        await people.mayAddToGroup(
+                          tx,
+                          adder: adder,
+                          target: account,
+                        )));
+            if (!allowed) {
               rejected.add(account);
               continue;
             }
@@ -345,10 +389,29 @@ extension on GroupsModule {
         ? await _store.remoteGroup(context.db, groupId)
         : null;
     if (cached == null || cached.home != domain) _notFound();
-    if (AccountAddress.tryParse(message.sender) == null ||
+    final sender = AccountAddress.tryParse(message.sender);
+    if (sender == null ||
         !Uuid.isValid(message.senderDevice) ||
         !Uuid.isValid(message.id)) {
       throw const ApiError(ErrorCode.invalidField);
+    }
+    // People here send through this server, which delivers to its own
+    // members itself (`_deliverOwnSend`): the home never speaks for them.
+    // Anyone else must be in the group as the home last described it.
+    if (sender.domain == null || sender.domain == _home) {
+      throw const ApiError(
+        ErrorCode.forbidden,
+        message: 'the sender cannot be on this server',
+      );
+    }
+    final snapshot = Group.fromJson(JsonReader.of(cached.snapshot));
+    if (!snapshot.members.any(
+      (m) => AccountAddress.tryParse(m.account) == sender,
+    )) {
+      throw const ApiError(
+        ErrorCode.forbidden,
+        message: 'the sender is not a member of the group',
+      );
     }
     if (message.payload.isEmpty ||
         message.payload.length > SendMessageRequest.maxPayloadBytes) {
@@ -370,19 +433,78 @@ extension on GroupsModule {
             d.payload.length <= SendMessageRequest.maxPayloadBytes)
           d.device: d.payload,
     };
-    final from = EnvelopeSender(
-      account: message.sender,
-      device: message.senderDevice,
+    await _deliverGroupMessage(
+      groupId,
+      id: message.id,
+      from: EnvelopeSender(
+        account: sender.toString(),
+        device: message.senderDevice,
+      ),
+      payload: message.payload,
+      targets: targets,
+      distributions: distributions,
+      urgent: message.urgent,
+      ephemeral: message.ephemeral,
     );
-    final fanOut = {for (final d in targets) d: message.payload};
+  }
+
+  /// A local member's message to a remote group that its home accepted:
+  /// this server delivers it to the group's local member devices.
+  Future<void> _deliverOwnSend(
+    String groupId,
+    _Actor actor,
+    JsonReader? body,
+  ) async {
+    final device = actor.device;
+    if (device == null) return;
+    final req = GroupMessageRequest.fromJson(body!);
+    final members = await _store.remoteMembers(context.db, groupId);
+    final targets = {
+      for (final list in (await identity.activeDevicesOf(
+        context.db,
+        members,
+      )).values)
+        for (final d in list)
+          if (d.id != device) d.id,
+    };
+    await _deliverGroupMessage(
+      groupId,
+      id: req.id,
+      from: EnvelopeSender(account: actor.account, device: device),
+      payload: req.payload,
+      targets: targets,
+      distributions: {
+        for (final r in req.distributions)
+          for (final d in r.devices)
+            if (targets.contains(d.device) &&
+                d.payload.length <= SendMessageRequest.maxPayloadBytes)
+              d.device: d.payload,
+      },
+      urgent: req.urgent,
+      ephemeral: req.ephemeral,
+    );
+  }
+
+  /// Distributions (pairwise, from [from]) first, then the group message.
+  Future<void> _deliverGroupMessage(
+    String groupId, {
+    required String id,
+    required EnvelopeSender from,
+    required Uint8List payload,
+    required Set<String> targets,
+    required Map<String, Uint8List?> distributions,
+    required bool urgent,
+    required bool ephemeral,
+  }) async {
+    final fanOut = {for (final d in targets) d: payload};
     final delivery = Delivery(
       kind: EnvelopeKind.groupMessage,
-      id: message.id,
+      id: id,
       from: from,
       groupId: groupId,
-      urgent: message.urgent,
+      urgent: urgent,
     );
-    if (message.ephemeral) {
+    if (ephemeral) {
       await messaging.deliverEphemeral(fanOut, delivery);
       return;
     }

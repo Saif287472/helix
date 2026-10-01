@@ -36,6 +36,35 @@ final class Metrics {
     _families[name] = _Family(name, help, 'gauge', read: read);
   }
 
+  final Map<String, Future<double> Function()> _collected = {};
+  final Map<String, double> _lastCollected = {};
+
+  /// A value that needs a query (dead letters, mailbox backlog). Read by
+  /// [collect] before each scrape; a failed or slow read keeps the last
+  /// value (NaN before the first).
+  void collectedGauge(
+    String name,
+    String help,
+    Future<double> Function() read,
+  ) {
+    _collected[name] = read;
+    gauge(name, help, () => _lastCollected[name] ?? double.nan);
+  }
+
+  /// Refreshes every [collectedGauge], each within [timeout].
+  Future<void> collect({Duration timeout = const Duration(seconds: 3)}) async {
+    await Future.wait([
+      for (final e in _collected.entries)
+        e
+            .value()
+            .timeout(timeout)
+            .then<void>(
+              (v) => _lastCollected[e.key] = v,
+              onError: (Object _) {},
+            ),
+    ]);
+  }
+
   String render() {
     final out = StringBuffer();
     for (final family in _families.values) {

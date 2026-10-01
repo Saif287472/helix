@@ -87,6 +87,23 @@ CREATE TABLE $s.remote_members (
 CREATE INDEX remote_members_account ON $s.remote_members (account_id);
 ''';
 
+  /// S7 hardening. On a member's server, `remote_joins` records that a
+  /// local account asked to join a remote group through this server (its
+  /// consent to be added without the adder check). On the home server,
+  /// reported devices are looked up by id so one id cannot belong to two
+  /// accounts.
+  static String hardening(String s) =>
+      '''
+CREATE TABLE $s.remote_joins (
+  group_id uuid NOT NULL,
+  account_id uuid NOT NULL,
+  created_at timestamptz NOT NULL,
+  PRIMARY KEY (group_id, account_id)
+);
+CREATE INDEX remote_joins_account ON $s.remote_joins (account_id);
+CREATE INDEX remote_devices_device ON $s.remote_devices (device_id);
+''';
+
   Future<void> insertGroup(
     Tx tx, {
     required String id,
@@ -425,6 +442,19 @@ CREATE INDEX remote_members_account ON $s.remote_members (account_id);
     );
   }
 
+  /// Whether [deviceId] is already reported for an account other than
+  /// [account].
+  Future<bool> remoteDeviceTaken(
+    SqlSession db,
+    String deviceId, {
+    required String account,
+  }) async =>
+      await db.queryOne(
+        'SELECT 1 AS x FROM $s.remote_devices WHERE device_id = @d:uuid AND account <> @a:text LIMIT 1',
+        {'d': deviceId, 'a': account},
+      ) !=
+      null;
+
   /// Forgets a remote account's devices once it is in none of this
   /// server's groups.
   Future<void> forgetRemoteDevicesIfUnused(Tx tx, String account) async {
@@ -520,7 +550,54 @@ CREATE INDEX remote_members_account ON $s.remote_members (account_id);
     ];
   }
 
+  /// Records that [accountId] asked to join [groupId] (homed elsewhere)
+  /// at [at], and drops its markers older than [expired].
+  Future<void> recordRemoteJoin(
+    SqlSession db,
+    String groupId,
+    String accountId, {
+    required DateTime at,
+    required DateTime expired,
+  }) async {
+    await db.execute(
+      'DELETE FROM $s.remote_joins WHERE account_id = @a:uuid AND created_at < @e:timestamptz',
+      {'a': accountId, 'e': expired},
+    );
+    await db.execute(
+      'INSERT INTO $s.remote_joins (group_id, account_id, created_at) '
+      'VALUES (@g:uuid, @a:uuid, @t:timestamptz) '
+      'ON CONFLICT (group_id, account_id) DO UPDATE SET created_at = excluded.created_at',
+      {'g': groupId, 'a': accountId, 't': at},
+    );
+  }
+
+  /// Consumes a join marker newer than [expired]; whether there was one.
+  Future<bool> takeRemoteJoin(
+    Tx tx,
+    String groupId,
+    String accountId, {
+    required DateTime expired,
+  }) async => (await tx.query(
+    'DELETE FROM $s.remote_joins WHERE group_id = @g:uuid AND account_id = @a:uuid '
+    'RETURNING created_at >= @e:timestamptz AS live',
+    {'g': groupId, 'a': accountId, 'e': expired},
+  )).any((r) => r.boolean('live'));
+
+  Future<void> dropRemoteJoin(
+    SqlSession db,
+    String groupId,
+    String accountId,
+  ) async {
+    await db.execute(
+      'DELETE FROM $s.remote_joins WHERE group_id = @g:uuid AND account_id = @a:uuid',
+      {'g': groupId, 'a': accountId},
+    );
+  }
+
   Future<void> removeRemoteMember(Tx tx, String accountId) async {
+    await tx.execute('DELETE FROM $s.remote_joins WHERE account_id = @a:uuid', {
+      'a': accountId,
+    });
     await tx.execute(
       'DELETE FROM $s.remote_members WHERE account_id = @a:uuid',
       {'a': accountId},

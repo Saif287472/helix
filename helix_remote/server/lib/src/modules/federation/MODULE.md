@@ -30,7 +30,13 @@ module.
   refused (cloud metadata). Loopback and private ranges are refused unless
   `HELIX_FEDERATION_ALLOW_PRIVATE=true`. Domains in addresses are user
   input, so this is the SSRF guard. It is checked for the identity
-  document and for every API call.
+  document and for every API call. IPv6 forms that carry an IPv4 address
+  (`::ffff:a.b.c.d`, `::a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4 `2002::/16`)
+  are judged by that address. Multicast and reserved ranges are refused.
+- **Connections:** the federation HTTP client never uses a proxy, never
+  follows redirects (a 3xx counts as unreachable), and connects only to an
+  address it vetted in the same lookup, so DNS rebinding cannot swap in an
+  internal address after the check. TLS still verifies the domain.
 - **Scheme:** `https`. `HELIX_FEDERATION_HTTP=true` uses `http`, in dev
   mode only (tests).
 
@@ -46,9 +52,10 @@ certificate.
 - **Re-fetching:** a signature that fails is re-fetched once, at most every
   10 minutes per domain, for key rotation. A changed key is logged
   (`peer_key_changed`).
-- **Failed lookups:** a failed lookup with nothing cached is not retried for
-  a minute (`fed:down:`), so forged headers cannot make this server hammer
-  a domain.
+- **Failed lookups:** a failed or refused lookup with nothing cached is
+  not retried for a minute (`fed:down:`), so forged headers cannot make
+  this server hammer a domain. Header shapes, skew and the allow list are
+  checked before any lookup.
 
 ## Signatures
 
@@ -68,7 +75,7 @@ and `x-helix-s2s-signature`: Ed25519 over `s2sSigningInput`, which is
 |---|---|---|
 | Out: messages | `POST /v1/s2s/messages` | Synchronous. Stale lists come back with accounts qualified; `not_found` passes through. Unreachable (network, timeout, 5xx): queued as `federation.relay`, retried up to 12 times with backoff, deduped per (domain, message id). Ephemeral sends are dropped. A retry the peer refuses is logged and dropped: the sender was already told it was accepted. |
 | In: messages | same | `MessagingApi.receive`. The sender must be qualified with the calling domain (`forbidden` otherwise). Same device-list, block, quota and idempotency rules as a local send. |
-| Out/In: keys | `GET /v1/s2s/keys/{account}` | Consumes one-time prekeys on the home server. Inbound: 600 per minute per server, 30 per minute per (server, account). |
+| Out/In: keys | `GET /v1/s2s/keys/{account}` | Consumes one-time prekeys on the home server. Inbound: 600 per minute per server, 30 per minute per (server, account), and the account's own `keys.bundle_target` limit shared with local fetches (`KeysApi.remoteBundles`). |
 | Out/In: call signals | `POST /v1/s2s/calls/{call_id}/signals` | Synchronous, no queue (calls are live). Unreachable is `federation_unavailable`. Offers to offline remote devices become pending calls on their server. |
 | Groups | `/v1/s2s/groups/{id}`, `…/actions`, `…/sync`, `…/messages` | Carried for the groups module (see its MODULE.md): member actions to the home (always answered 200 with the operation's own status and body inside), snapshots and fan-out from the home. Unreachable peers raise `RelayUnavailable` so queued group work retries. |
 

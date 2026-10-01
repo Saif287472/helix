@@ -22,7 +22,7 @@ stable releases checked on 2026-09-30.
 | `go_router` | `18.0.2` | `helix_remote/app` | A1 | Routing and deep links (`helix://`, `/open` links). A regression breaks shared links silently. | client-team | Deep-link tests for both link forms, plus the hidden advanced-mode entry. |
 | `aws_signature_v4` + `aws_common` | `0.6.13` / `0.7.15` | `helix_remote/server` (**added in S1**) | S1 | The user chose it on 2026-10-01 for S3-compatible storage. It pulls in `built_value`, `built_collection`, `http2` and `os_detect`, all server-only. A signing bug would surface as rejected uploads, not leaked data. | server-team | Confined to `platform/blobs/` (architecture test). Presign structure is tested against AWS's documented SigV4 parameters. Local storage is the default. |
 | `shelf`, `shelf_router`, `http` | `1.4.2` / `1.1.4` / `1.2.x` | `helix_remote/server` (S1) | S1 | Already used and reviewed by v1 `backend/`. | server-team | — |
-| `shelf_web_socket`, `web_socket_channel`, `googleapis_auth` | `3.0.0` / `3.0.3` / `2.3.3` | `helix_remote/server` (S3) | S3 | Already used and reviewed by v1 `backend/` (realtime relay, FCM token exchange). | server-team | Google auth is confined to `platform/push/` (architecture test). |
+| `shelf_web_socket`, `web_socket_channel`, `googleapis_auth`, `stream_channel` | `3.0.0` / `3.0.3` / `2.3.3` / `2.1.4` | `helix_remote/server` (S3; `stream_channel` S7) | S3 | Already used and reviewed by v1 `backend/` (realtime relay, FCM token exchange). `stream_channel` was already resolved transitively (shelf); S7 imports it directly to wrap the upgraded socket for the WebSocket frame limit. | server-team | Google auth is confined to `platform/push/` (architecture test). |
 
 ## Deferred major upgrades (MED-8)
 

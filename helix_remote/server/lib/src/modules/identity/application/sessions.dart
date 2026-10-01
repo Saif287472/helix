@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/identity/config.dart';
 import 'package:helix_remote_server/src/modules/identity/data/credential_store.dart';
 import 'package:helix_remote_server/src/modules/identity/data/identity_store.dart';
 import 'package:helix_remote_server/src/modules/identity/domain/jwt.dart';
 import 'package:helix_remote_server/src/modules/identity/domain/secrets.dart';
+import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
@@ -19,11 +21,13 @@ final class SessionIssuer {
     required this.jwt,
     required this.credentials,
     required this.clock,
+    required this.bus,
   });
 
   final JwtCodec jwt;
   final CredentialStore credentials;
   final Clock clock;
+  final EventBus bus;
 
   Future<Session> issue(
     SqlSession db, {
@@ -59,6 +63,24 @@ final class SessionIssuer {
     );
   }
 
+  /// Ends every session of [deviceId] (the device stays registered). After
+  /// commit, [IdentityTopics.sessionsEnded] carries the cut-off to every
+  /// node, which closes sockets opened with an older token (4001).
+  Future<void> endSessions(
+    Tx tx,
+    IdentityStore identity,
+    String deviceId,
+  ) async {
+    final cutOff = await identity.invalidateSessions(tx, deviceId);
+    if (cutOff == null) return;
+    tx.afterCommit(
+      () => bus.publish(IdentityTopics.sessionsEnded, {
+        'device': deviceId,
+        'before': cutOff.millisecondsSinceEpoch,
+      }),
+    );
+  }
+
   /// Rotates a refresh token. Presenting a token that was already used or
   /// revoked is treated as theft: every session of that device ends.
   Future<Session> refresh(Db db, IdentityStore identity, String token) async {
@@ -77,7 +99,7 @@ final class SessionIssuer {
       }
       final deviceId = row.string('device_id');
       if (!row.isNull('used_at') || !row.isNull('revoked_at')) {
-        await identity.invalidateSessions(tx, deviceId);
+        await endSessions(tx, identity, deviceId);
         return (
           null,
           const ApiError(

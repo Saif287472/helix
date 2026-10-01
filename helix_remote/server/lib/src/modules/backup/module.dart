@@ -172,8 +172,18 @@ CREATE TABLE $s.full_backups (
     _ => false,
   };
 
+  /// Shape limits of a full-backup body (S7 #1). The envelope is ciphertext
+  /// in a few fields, so real ones are shallow and small in values; without
+  /// limits a 64 MiB body of tiny values would decode into gigabytes.
+  static const maxEnvelopeDepth = 32;
+  static const maxEnvelopeValues = 100000;
+
   Future<Response> _putFull(HelixRequest q) async {
-    final req = q.json(FullBackup.fromJson);
+    final req = q.json(
+      FullBackup.fromJson,
+      maxDepth: maxEnvelopeDepth,
+      maxNodes: maxEnvelopeValues,
+    );
     if (!Uuid.isValid(req.backupId) ||
         req.mediaIds.any((id) => !Uuid.isValid(id))) {
       throw const ApiError(ErrorCode.invalidField);

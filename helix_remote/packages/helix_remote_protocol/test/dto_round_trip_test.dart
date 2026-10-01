@@ -138,11 +138,21 @@ void main() {
         DeviceSignInRequest(
           accountId: accountA,
           deviceId: deviceA1,
+          challengeId: 'c7a1b0e2-0000-7000-8000-000000000001',
           challenge: bytes(32),
           signature: bytes(64),
         ),
         (v) => v.toJson(),
         DeviceSignInRequest.fromJson,
+      );
+      expectRoundTrip(
+        DeviceChallengeResponse(
+          challengeId: 'c7a1b0e2-0000-7000-8000-000000000001',
+          challenge: bytes(32),
+          expiresAt: t0,
+        ),
+        (v) => v.toJson(),
+        DeviceChallengeResponse.fromJson,
       );
       expectRoundTrip(
         DeviceList(

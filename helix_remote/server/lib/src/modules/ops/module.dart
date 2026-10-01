@@ -3,7 +3,10 @@ import 'dart:convert';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/modules/ops/api.dart';
+import 'package:helix_remote_server/src/kernel/crypto.dart';
 import 'package:helix_remote_server/src/modules/ops/open_page.dart';
+import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
+import 'package:helix_remote_server/src/platform/config/server_config.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
@@ -24,7 +27,16 @@ final class OpsModule extends ModuleBase implements ProvidesMaintenance {
       'helix_client_crash_reports_total',
       'Opt-in crash reports received',
     );
+    _federationDefault = envFlag(
+      context.config.env,
+      'HELIX_FEDERATION_ENABLED',
+    );
+    final token = context.config.metricsToken;
+    _metricsToken = token == null ? null : utf8.encode(token);
   }
+
+  late final bool _federationDefault;
+  late final List<int>? _metricsToken;
 
   /// The facade other modules receive.
   late final OpsApi api;
@@ -81,7 +93,7 @@ CREATE TABLE $s.settings (
         rateLimit: _crashLimit,
         maxBodyBytes: 96 * 1024,
       )
-      ..add(name, Routes.metrics, _metrics)
+      ..add(name, Routes.metrics, _metrics, extraBearer: _metricsBearer)
       ..add(name, Routes.assetLinks, _assetLinks, rateLimit: _probe)
       ..add(name, Routes.openLink, _openLink, rateLimit: _probe);
   }
@@ -91,11 +103,18 @@ CREATE TABLE $s.settings (
     _changes = context.bus.subscribe(_changedTopic).listen((_) {
       _cached = null;
     });
+    // Changes announced while the bus was down were missed.
+    _resync = context.bus.subscribe(EventBus.resyncTopic).listen((_) {
+      _cached = null;
+    });
   }
+
+  StreamSubscription<Object?>? _resync;
 
   @override
   Future<void> stop() async {
     await _changes?.cancel();
+    await _resync?.cancel();
   }
 
   @override
@@ -121,11 +140,7 @@ CREATE TABLE $s.settings (
       federationEnabled: switch (stored['federation_enabled']) {
         'true' => true,
         'false' => false,
-        _ =>
-          context.config.env['HELIX_FEDERATION_ENABLED']
-                  ?.trim()
-                  .toLowerCase() ==
-              'true',
+        _ => _federationDefault,
       },
       flags: {
         for (final e in OpsApi.knownFlags.entries)
@@ -236,10 +251,23 @@ CREATE TABLE $s.settings (
     return noContent();
   }
 
-  Future<Response> _metrics(HelixRequest request) async => Response.ok(
-    api.renderMetrics(),
-    headers: {'content-type': 'text/plain; version=0.0.4; charset=utf-8'},
-  );
+  /// `HELIX_METRICS_TOKEN` opens the metrics route (and nothing else) for a
+  /// scraper; compared in constant time.
+  Future<Principal?> _metricsBearer(String token) async {
+    final expected = _metricsToken;
+    if (expected == null) return null;
+    return constantTimeEquals(utf8.encode(token), expected)
+        ? const AdminPrincipal(adminId: 'metrics-token')
+        : null;
+  }
+
+  Future<Response> _metrics(HelixRequest request) async {
+    await context.metrics.collect();
+    return Response.ok(
+      api.renderMetrics(),
+      headers: {'content-type': 'text/plain; version=0.0.4; charset=utf-8'},
+    );
+  }
 
   /// Android App Links (`HELIX_ANDROID_CERT_SHA256`, comma-separated
   /// `AB:CD:…` fingerprints of the app's signing certificates).

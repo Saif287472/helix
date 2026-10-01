@@ -27,6 +27,11 @@ abstract interface class KeysApi {
   /// unknown.
   Future<AccountKeys?> bundles(String accountId, {Set<String>? devices});
 
+  /// [bundles] for another server: also counts against the account's
+  /// per-target limit (`keys.bundle_target`) that local fetches share, so
+  /// many servers cannot together drain its one-time prekeys.
+  Future<AccountKeys?> remoteBundles(String accountId, {Set<String>? devices});
+
   void onPrekeysLow(PrekeysLowHook hook);
 
   void setRemoteSource(RemoteKeySource source);

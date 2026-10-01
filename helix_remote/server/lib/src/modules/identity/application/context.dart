@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -157,6 +158,57 @@ final class IdentityContext {
 
   Uint8List passwordVerifier(Uint8List verifierSalt, Uint8List authKey) =>
       hmacSha256(verifierSalt, [...utf8.encode(_verifierLabel), ...authKey]);
+
+  static const passwordMaxFailures = 5;
+  static const passwordFirstLock = Duration(minutes: 15);
+  static const passwordMaxLock = Duration(hours: 24);
+
+  /// Checks [authKey] against the account's password. Password sign-in and
+  /// password change share one failure counter and lockout: 5 failures
+  /// lock it for 15 minutes, doubling up to 24 hours. Returns the password
+  /// row, or the error to throw once [tx] has committed (so the failure is
+  /// recorded). Both null: the account has no password.
+  Future<(Row?, ApiError?)> checkPassword(
+    Tx tx,
+    String accountId,
+    Uint8List authKey,
+  ) async {
+    final row = await credentials.password(tx, accountId, forUpdate: true);
+    if (row == null) return (null, null);
+    final lockedUntil = row.optTime('locked_until');
+    if (lockedUntil != null && lockedUntil.isAfter(clock.now())) {
+      return (null, _locked(lockedUntil));
+    }
+    final ok = constantTimeEquals(
+      row.bytes('verifier'),
+      passwordVerifier(row.bytes('verifier_salt'), authKey),
+    );
+    if (!ok) {
+      final failures = row.integer('failed_attempts') + 1;
+      final lock = failures >= passwordMaxFailures ? _lockFor(failures) : null;
+      await credentials.recordPasswordFailure(tx, accountId, failures, lock);
+      return (
+        null,
+        lock == null
+            ? const ApiError(ErrorCode.invalidCredentials)
+            : _locked(lock),
+      );
+    }
+    await credentials.clearPasswordFailures(tx, accountId);
+    return (row, null);
+  }
+
+  DateTime _lockFor(int failures) {
+    final factor = math.pow(2, math.min(failures - passwordMaxFailures, 10));
+    final lock = passwordFirstLock * factor.toInt();
+    return clock.now().add(lock > passwordMaxLock ? passwordMaxLock : lock);
+  }
+
+  ApiError _locked(DateTime until) => ApiError(
+    ErrorCode.passwordLocked,
+    details: {'locked_until': toWireTime(until)},
+    retryAfter: until.difference(clock.now()),
+  );
 
   Future<void> storePassword(
     SqlSession db,

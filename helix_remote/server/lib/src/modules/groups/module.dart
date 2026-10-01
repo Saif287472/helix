@@ -77,6 +77,11 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     20,
     const Duration(days: 1),
   );
+
+  /// How long a request to join a remote group lets its home add the
+  /// account (approval may take a while).
+  static const _joinMarkerLifetime = Duration(days: 30);
+
   static final _previews = RateLimitPolicy.per(
     'groups.preview',
     60,
@@ -109,6 +114,7 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
   List<Migration> get migrations => const [
     Migration(1, 'groups_baseline', GroupStore.baseline),
     Migration(2, 'group_federation', GroupStore.federation),
+    Migration(3, 'group_federation_hardening', GroupStore.hardening),
   ];
 
   @override
@@ -194,7 +200,13 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     final relay = _relay;
     if (relay != null && await _store.group(context.db, id) == null) {
       final home = await _store.remoteHome(context.db, id);
-      if (home != null) return _proxy(relay, home, id, action, q);
+      if (home != null) {
+        final response = await _proxy(relay, home, id, action, q);
+        if (action == 'send' && response.statusCode == 200) {
+          await _deliverOwnSend(id, _actorOf(q), _bodyOf(q));
+        }
+        return response;
+      }
     }
     return _ops[action]!(_actorOf(q), _localFrame, q.params, _bodyOf(q));
   };
@@ -208,7 +220,26 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     if (relay != null &&
         parts.domain != null &&
         parts.domain != relay.localDomain) {
-      return _proxy(relay, parts.domain!, parts.groupId!, action, q);
+      final groupId = parts.groupId!;
+      final me = q.device.accountId;
+      if (action != 'join') {
+        return _proxy(relay, parts.domain!, groupId, action, q);
+      }
+      // The caller's consent to be added, for when the home's sync arrives
+      // (possibly before the answer).
+      final now = context.clock.now();
+      await _store.recordRemoteJoin(
+        context.db,
+        groupId,
+        me,
+        at: now,
+        expired: now.subtract(_joinMarkerLifetime),
+      );
+      final response = await _proxy(relay, parts.domain!, groupId, action, q);
+      if (response.statusCode >= 400) {
+        await _store.dropRemoteJoin(context.db, groupId, me);
+      }
+      return response;
     }
     return _ops[action]!(_actorOf(q), _localFrame, q.params, body);
   };
@@ -1085,6 +1116,9 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
       accountOf: accountOf,
       distributions: distributions,
     );
+    // A member on another server sent this through it, and that server
+    // delivers to its own members (it refuses its own senders from here).
+    if (!frame.isLocal) remoteMessages.remove(frame.viewer);
 
     if (req.ephemeral) {
       await messaging.deliverEphemeral(fanOut, message);

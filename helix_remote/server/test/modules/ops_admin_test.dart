@@ -219,6 +219,57 @@ void main() {
       expect(locked.headers['retry-after'], isNotNull);
     });
 
+    Future<TestResponse> attemptFrom(String ip, String password) => h.api.call(
+      Routes.adminSignIn,
+      headers: {'x-forwarded-for': ip},
+      body: AdminPasswordRequest(password: password).toJson(),
+    );
+
+    test(
+      'parallel guesses get no more than five; other addresses can still sign in',
+      () async {
+        await setUpAdmin();
+        final results = await Future.wait([
+          for (var i = 0; i < 9; i++)
+            attemptFrom('203.0.113.7', 'wrong password!!'),
+        ]);
+        final codes = results.map((r) => r.errorCode).toList();
+        expect(
+          codes.where((c) => c == 'invalid_credentials'),
+          hasLength(5),
+          reason: 'attempts are counted before the password is checked',
+        );
+        expect(codes.where((c) => c == 'password_locked'), hasLength(4));
+        expect(
+          (await attemptFrom('203.0.113.7', adminPassword)).errorCode,
+          'password_locked',
+        );
+        expect(
+          (await attemptFrom('198.51.100.20', adminPassword)).status,
+          200,
+          reason: 'the lockout is per address: the operator elsewhere is fine',
+        );
+      },
+    );
+
+    test('a global cap locks sign-in after 100 failures anywhere', () async {
+      await setUpAdmin();
+      for (var batch = 0; batch < 4; batch++) {
+        await Future.wait([
+          for (var ip = 0; ip < 5; ip++)
+            for (var i = 0; i < 5; i++)
+              attemptFrom('192.0.2.${batch * 5 + ip + 1}', 'wrong password!!'),
+        ]);
+      }
+      final capped = await attemptFrom('198.51.100.30', adminPassword);
+      expect(capped.errorCode, 'password_locked');
+      expect(
+        int.parse(capped.headers['retry-after']!),
+        lessThanOrEqualTo(15 * 60),
+        reason: 'the global lock is short',
+      );
+    });
+
     test('changing the password ends other admin sessions', () async {
       final first = await setUpAdmin();
       final second = AdminSession.fromJson(

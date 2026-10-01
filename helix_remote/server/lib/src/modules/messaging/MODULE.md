@@ -17,10 +17,19 @@ deliver through it.
   with `quota_exceeded`.
 - **Fan-out is two statements** for any number of devices: `unnest` over
   `_uuid` / `_int8` / `_bytea` arrays.
-- **Idempotency:** `sends` records each request id for 7 days. A retry
-  answers `replayed: true` and stores nothing.
+- **Idempotency:** `sends` records each request id for 7 days, per
+  (sender account, sender device, id) since migration 3, so another server
+  reusing an id cannot suppress someone else's message. A retry answers
+  `replayed: true` and stores nothing.
 
 ## Sending (`POST /v1/messages`)
+
+Limited per device (`messaging.send`: 200 at once, 5 per second, checked
+before the body is read) and per account (`messaging.send_account`: 400 at
+once, 10 per second); over either, `rate_limited`. Presence for urgent
+pushes and ephemeral delivery is read once per send (`Presence.online`,
+one `getAll`), not once per device. The `helix_mailbox_backlog` gauge counts
+undelivered rows at scrape time.
 
 1. **Validate:** ids, payload sizes (256 KiB per device), at most 1,100
    devices, never the sending device itself.

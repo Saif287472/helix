@@ -63,7 +63,11 @@ receiving server's frame (`Frame`): bare ids for that server's accounts,
 - **Remote members' actions:** S2S `actions` run the same operation code
   as the client routes, with the remote member as the actor.
   - The actor must belong to the calling server.
-  - `devices` is the member server reporting a member's devices.
+  - `devices` is the member server reporting a member's devices. Ids that
+    are this server's own devices, or already reported for another
+    account, are refused (`invalid_field`); in a sync answer they are
+    dropped. Otherwise a member's server could have someone else's copy of
+    each group message routed to it.
 - **Roster changes:** each `_announce` bumps `roster_version`. It queues
   one `groups.sync` per other server with members (or a removed member).
   - The job sends the current snapshot, rendered for that server, and the
@@ -77,6 +81,8 @@ receiving server's frame (`Frame`): bare ids for that server's accounts,
   over local devices plus `remote_devices`. Remote member devices get the
   message and their distributions through one queued `groups.fanout` per
   server (deduped per message). Ephemeral sends go out once, best effort.
+  A message from a member on another server is not fanned back to that
+  server: it delivers to its own members itself.
 - **Invite tokens:** `grp_<secret>.<group id>@<home>`, so people elsewhere
   can join through their own server.
 
@@ -92,8 +98,20 @@ receiving server's frame (`Frame`): bare ids for that server's accounts,
 - **Syncs:** only the group's home may push it, and an id that clashes
   with a local group is refused. Roster events go only to local accounts
   that are, or just were, members.
-- **Fan-outs:** only the group's home may send them. Devices revoked
-  meanwhile are skipped.
+- **Who may be added here:** every local account that is new in a
+  snapshot (whatever the event) must exist and either have asked to join
+  that group through this server (a `remote_joins` marker, recorded before
+  the join is proxied and kept for 30 days or until used), or have been
+  added by the event's actor: a member of the snapshot whose role may add
+  people (`created` or `added` events only), who is not the account itself,
+  and whom the account's group-add privacy and blocks allow. Anyone else is
+  listed in `rejected`, and the home removes them.
+- **Fan-outs:** only the group's home may send them. The sender must be a
+  member of the cached snapshot and never an account of this server
+  (`forbidden`): local members' messages go through this server, which
+  delivers them to its own member devices once the home accepts the send.
+  Distributions carry the checked sender. Devices revoked meanwhile are
+  skipped.
 - **Device changes:** a local member's device-list change queues
   `groups.devices` to each home.
 - **Account deletion:** it queues `groups.leave`.

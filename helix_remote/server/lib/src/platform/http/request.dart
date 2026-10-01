@@ -122,9 +122,19 @@ final class HelixRequest {
   List<String> queryAll(String name) =>
       raw.url.queryParametersAll[name] ?? const [];
 
+  /// Nesting any request body may have before it is decoded.
+  static const maxJsonDepth = 64;
+
   /// Decodes the JSON body with [decode]. Malformed bodies become
-  /// `invalid_field` / `bad_request` errors naming the field.
-  T json<T>(T Function(JsonReader json) decode) {
+  /// `invalid_field` / `bad_request` errors naming the field. Before
+  /// decoding, the body's nesting is checked against [maxDepth] and, with
+  /// [maxNodes], its number of values (objects, arrays, scalars), so a
+  /// small body cannot expand into a huge object tree.
+  T json<T>(
+    T Function(JsonReader json) decode, {
+    int maxDepth = maxJsonDepth,
+    int? maxNodes,
+  }) {
     final bytes = body;
     if (bytes == null || bytes.isEmpty) {
       throw const ApiError(
@@ -132,6 +142,7 @@ final class HelixRequest {
         message: 'a JSON body is required',
       );
     }
+    checkJsonShape(bytes, maxDepth: maxDepth, maxNodes: maxNodes);
     final String text;
     try {
       text = utf8.decode(bytes);
@@ -145,6 +156,62 @@ final class HelixRequest {
         ErrorCode.invalidField,
         message: e.path.isEmpty ? 'malformed body' : 'invalid ${e.path}',
         details: e.path.isEmpty ? null : {'field': e.path},
+      );
+    }
+  }
+}
+
+/// Scans JSON text without decoding it and refuses (`bad_request`) nesting
+/// deeper than [maxDepth] or, with [maxNodes], more values than that.
+/// Malformed JSON is left to the decoder.
+void checkJsonShape(List<int> bytes, {required int maxDepth, int? maxNodes}) {
+  var depth = 0;
+  var nodes = 0;
+  var inString = false;
+  var escaped = false;
+  // Whether the previous significant byte ended a value or started one, so
+  // each scalar is counted once.
+  var inScalar = false;
+  for (final b in bytes) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (b == 0x5c) {
+        escaped = true;
+      } else if (b == 0x22) {
+        inString = false;
+      }
+      continue;
+    }
+    switch (b) {
+      case 0x7b || 0x5b: // { [
+        inScalar = false;
+        nodes++;
+        if (++depth > maxDepth) {
+          throw const ApiError(
+            ErrorCode.badRequest,
+            message: 'the body is nested too deeply',
+          );
+        }
+      case 0x7d || 0x5d: // } ]
+        inScalar = false;
+        depth--;
+      case 0x22: // "
+        inString = true;
+        inScalar = false;
+        nodes++;
+      case 0x2c || 0x3a || 0x20 || 0x0a || 0x0d || 0x09: // , : whitespace
+        inScalar = false;
+      default:
+        if (!inScalar) {
+          inScalar = true;
+          nodes++;
+        }
+    }
+    if (maxNodes != null && nodes > maxNodes) {
+      throw const ApiError(
+        ErrorCode.badRequest,
+        message: 'the body has too many values',
       );
     }
   }

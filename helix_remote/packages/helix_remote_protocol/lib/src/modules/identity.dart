@@ -786,21 +786,29 @@ final class DeviceChallengeRequest {
 
 final class DeviceChallengeResponse {
   const DeviceChallengeResponse({
+    required this.challengeId,
     required this.challenge,
     required this.expiresAt,
   });
+
+  /// Random id of this challenge, sent back with the signature. Challenges
+  /// are not keyed by the (public) device id, so nobody else can replace
+  /// or spend a device's challenge.
+  final String challengeId;
 
   /// Random bytes; the device signs `signInSignatureBody(challenge)`.
   final Uint8List challenge;
   final DateTime expiresAt;
 
   JsonMap toJson() => {
+    'challenge_id': challengeId,
     'challenge': encodeBytes(challenge),
     'expires_at': toWireTime(expiresAt),
   };
 
   factory DeviceChallengeResponse.fromJson(JsonReader json) =>
       DeviceChallengeResponse(
+        challengeId: json.nonEmpty('challenge_id'),
         challenge: json.bytes('challenge'),
         expiresAt: json.time('expires_at'),
       );
@@ -811,18 +819,23 @@ final class DeviceSignInRequest {
   const DeviceSignInRequest({
     required this.accountId,
     required this.deviceId,
+    required this.challengeId,
     required this.challenge,
     required this.signature,
   });
 
   final String accountId;
   final String deviceId;
+
+  /// `DeviceChallengeResponse.challengeId`.
+  final String challengeId;
   final Uint8List challenge;
   final Uint8List signature;
 
   JsonMap toJson() => {
     'account_id': accountId,
     'device_id': deviceId,
+    'challenge_id': challengeId,
     'challenge': encodeBytes(challenge),
     'signature': encodeBytes(signature),
   };
@@ -830,6 +843,7 @@ final class DeviceSignInRequest {
   factory DeviceSignInRequest.fromJson(JsonReader json) => DeviceSignInRequest(
     accountId: json.nonEmpty('account_id'),
     deviceId: json.nonEmpty('device_id'),
+    challengeId: json.nonEmpty('challenge_id'),
     challenge: json.bytes('challenge'),
     signature: json.bytes('signature'),
   );

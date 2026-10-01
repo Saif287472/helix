@@ -251,16 +251,21 @@ final class IdentityStore {
     return device(r);
   }
 
-  /// Ends every session of a device without revoking it (sign-out).
-  Future<void> invalidateSessions(SqlSession db, String deviceId) async {
-    await db.execute(
-      'UPDATE $s.devices SET tokens_valid_after = now() WHERE id = @d:uuid',
+  /// Ends every session of a device without revoking it (sign-out). Use
+  /// `SessionIssuer.endSessions`, which also tells every node's sockets.
+  /// Returns the cut-off at the precision [authState] compares (null if
+  /// there is no such device).
+  Future<DateTime?> invalidateSessions(SqlSession db, String deviceId) async {
+    final r = await db.queryOne(
+      'UPDATE $s.devices SET tokens_valid_after = now() WHERE id = @d:uuid '
+      "RETURNING date_trunc('milliseconds', tokens_valid_after) AS cut_off",
       {'d': deviceId},
     );
     await db.execute(
       'UPDATE $s.refresh_tokens SET revoked_at = now() WHERE device_id = @d:uuid AND revoked_at IS NULL',
       {'d': deviceId},
     );
+    return r?.time('cut_off');
   }
 
   /// Device, account status and session cut-off for authenticating a token.

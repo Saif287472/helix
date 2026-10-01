@@ -122,11 +122,19 @@ final class JobRunner {
   }
 
   void start() {
-    _timer = Timer.periodic(settings.pollInterval, (_) => unawaited(tick()));
-    _wakeSub = _bus
-        .subscribe(Outbox.wakeTopic)
-        .listen((_) => unawaited(tick()));
+    _timer = Timer.periodic(settings.pollInterval, (_) => _background());
+    _wakeSub = _bus.subscribe(Outbox.wakeTopic).listen((_) => _background());
   }
+
+  /// A pass that fails (the pool timed out, the database blipped) is logged
+  /// and retried on the next poll. Left unhandled it would end the process.
+  void _background() => unawaited(
+    tick().then<void>(
+      (_) {},
+      onError: (Object e) =>
+          _log.warn('jobs_tick_failed', {'error': e.runtimeType.toString()}),
+    ),
+  );
 
   Future<void> stop() async {
     _stopped = true;
@@ -275,7 +283,18 @@ final class PeriodicScheduler {
         {'n': name},
       );
     }
-    _timer = Timer.periodic(checkInterval, (_) => unawaited(tick()));
+    _timer = Timer.periodic(
+      checkInterval,
+      (_) => unawaited(
+        tick().then<void>(
+          (_) {},
+          // Retried on the next check; never allowed to end the process.
+          onError: (Object e) => _log.warn('periodic_tick_failed', {
+            'error': e.runtimeType.toString(),
+          }),
+        ),
+      ),
+    );
   }
 
   Future<void> stop() async {

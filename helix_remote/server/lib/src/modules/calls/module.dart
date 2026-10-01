@@ -74,6 +74,11 @@ final class CallsModule extends ModuleBase {
     30,
     const Duration(minutes: 10),
   );
+  static final _metricsLimit = RateLimitPolicy.per(
+    'calls.metrics',
+    100,
+    const Duration(days: 1),
+  );
 
   @override
   String get name => 'calls';
@@ -333,10 +338,14 @@ CREATE TABLE $s.call_metrics (
         for (final device in payloads.keys.where(
           (d) => !delivered.contains(d),
         )) {
-          await tx.execute(
-            'INSERT INTO $schema.pending_calls (call_id, callee_device, caller_account, caller_device, payload, expires_at) '
+          // A repeated offer from the same caller device refreshes its
+          // pending row; anyone else's offer under this call id is ignored.
+          final stored = await tx.query(
+            'INSERT INTO $schema.pending_calls AS p (call_id, callee_device, caller_account, caller_device, payload, expires_at) '
             'VALUES (@c:text, @d:uuid, @a:text, @cd:uuid, @p:bytea, now() + make_interval(secs => @ttl:int8)) '
-            'ON CONFLICT (call_id, callee_device) DO UPDATE SET payload = excluded.payload, expires_at = excluded.expires_at',
+            'ON CONFLICT (call_id, callee_device) DO UPDATE SET payload = excluded.payload, expires_at = excluded.expires_at '
+            'WHERE p.caller_account = excluded.caller_account AND p.caller_device = excluded.caller_device '
+            'RETURNING callee_device',
             {
               'c': callId,
               'd': device,
@@ -346,6 +355,7 @@ CREATE TABLE $s.call_metrics (
               'ttl': capped.inSeconds,
             },
           );
+          if (stored.isEmpty) continue;
           await context.outbox.enqueue(
             tx,
             pushJob,
@@ -361,7 +371,20 @@ CREATE TABLE $s.call_metrics (
         }
       });
     } else if (kind == CallSignalKind.end) {
-      await _endPending(callId, notifyEnded: true);
+      await _endPending(
+        callId,
+        notifyEnded: true,
+        party: senderAccount,
+        partyDevices: senderAccount.contains('@')
+            ? const []
+            : [
+                for (final d in await identity.activeDevices(
+                  context.db,
+                  senderAccount,
+                ))
+                  d.id,
+              ],
+      );
     }
     return CallSignalResponse(delivered: delivered.toList(), pending: pending);
   }
@@ -410,17 +433,23 @@ CREATE TABLE $s.call_metrics (
     );
   }
 
-  /// Drops pending offers of [callId]; ringing devices get a `call_ended`
-  /// push so their notification stops.
+  /// Drops pending offers of [callId] that [party] is in: as the caller
+  /// ([party] is the caller account) or as the callee (the row's device is
+  /// one of [partyDevices]). Nobody else can clear a call they are not in.
+  /// Ringing devices get a `call_ended` push so their notification stops.
   Future<void> _endPending(
     String callId, {
     required bool notifyEnded,
+    required String party,
+    required List<String> partyDevices,
     String? except,
   }) async {
     await context.db.tx((tx) async {
       final rows = await tx.query(
-        'DELETE FROM $schema.pending_calls WHERE call_id = @c:text RETURNING callee_device',
-        {'c': callId},
+        'DELETE FROM $schema.pending_calls WHERE call_id = @c:text '
+        'AND (caller_account = @a:text OR callee_device = ANY(@ds:_uuid)) '
+        'RETURNING callee_device',
+        {'c': callId, 'a': party, 'ds': partyDevices},
       );
       if (!notifyEnded) return;
       for (final r in rows) {
@@ -447,11 +476,15 @@ CREATE TABLE $s.call_metrics (
     final callId = _checkCallId(q);
     final me = q.device;
     final state = q.json(CallStateRequest.fromJson).state;
-    await _endPending(callId, notifyEnded: true, except: me.deviceId);
-    final others = (await identity.activeDevices(
-      context.db,
-      me.accountId,
-    )).where((d) => d.id != me.deviceId);
+    final devices = await identity.activeDevices(context.db, me.accountId);
+    await _endPending(
+      callId,
+      notifyEnded: true,
+      party: me.accountId,
+      partyDevices: [for (final d in devices) d.id],
+      except: me.deviceId,
+    );
+    final others = devices.where((d) => d.id != me.deviceId);
     await messaging.deliverEphemeral(
       {for (final d in others) d.id: null},
       Delivery(
@@ -494,6 +527,7 @@ CREATE TABLE $s.call_metrics (
     if (!_callId.hasMatch(m.callId)) {
       throw const ApiError(ErrorCode.invalidField);
     }
+    await _limit(_metricsLimit, q.device.accountId);
     await context.db.execute(
       'INSERT INTO $schema.call_metrics (id, call_id, setup_ms, duration_s, reconnects, packet_loss_pct, rtt_ms, relayed, outcome) '
       'VALUES (@id:uuid, @c:text, @s:int4, @d:int4, @r:int4, @l:float8, @rtt:int4, @rel:boolean, @o:text)',

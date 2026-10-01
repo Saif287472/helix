@@ -39,11 +39,12 @@ void main() {
     Future<TestResponse> signal(
       String callId,
       CallSignalKind kind,
-      Map<String, List<String>> to,
-    ) => h.api.call(
+      Map<String, List<String>> to, {
+      TestDevice? from,
+    }) => h.api.call(
       Routes.sendCallSignal,
       params: {'call_id': callId},
-      bearer: alice.bearer,
+      bearer: (from ?? alice).bearer,
       body: CallSignalRequest(
         kind: kind,
         recipients: [
@@ -189,6 +190,58 @@ void main() {
         ).toJson(),
       );
       expect(m.status, 204);
+    });
+
+    test('call metrics are limited per account', () async {
+      Future<TestResponse> report() => h.api.call(
+        Routes.callMetrics,
+        bearer: alice.bearer,
+        body: const CallMetricsRequest(callId: 'call-metrics-2').toJson(),
+      );
+      for (var i = 0; i < 100; i++) {
+        expect((await report()).status, 204);
+      }
+      expect((await report()).errorCode, 'rate_limited');
+    });
+
+    test('only the parties can clear or replace a pending offer', () async {
+      final carol = await h.registerGlobal('+8801711000003');
+      final callId = 'call-${Uuid.v7()}';
+      await signal(callId, CallSignalKind.offer, {
+        bob1.accountId: [bob1.id, bob2.id],
+      });
+      Future<List<PendingCall>> pending() async => PendingCallList.fromJson(
+        (await h.api.call(Routes.pendingCalls, bearer: bob2.bearer)).json,
+      ).calls;
+      expect((await pending()).single.from.account, alice.accountId);
+
+      expect(
+        (await h.api.call(
+          Routes.setCallState,
+          params: {'call_id': callId},
+          bearer: carol.bearer,
+          body: const CallStateRequest(state: CallState.declined).toJson(),
+        )).status,
+        204,
+      );
+      await signal(callId, CallSignalKind.end, {
+        bob1.accountId: [bob1.id, bob2.id],
+      }, from: carol);
+      final replaced = CallSignalResponse.fromJson(
+        (await signal(callId, CallSignalKind.offer, {
+          bob1.accountId: [bob1.id, bob2.id],
+        }, from: carol)).json,
+      );
+      expect(replaced.pending, isEmpty, reason: 'not stored over the offer');
+      final still = (await pending()).single;
+      expect(still.from.account, alice.accountId);
+      expect(still.from.device, alice.id);
+      expect(still.payload, bytes(120, bob2.id.hashCode));
+
+      await signal(callId, CallSignalKind.end, {
+        bob1.accountId: [bob1.id, bob2.id],
+      });
+      expect(await pending(), isEmpty, reason: 'the caller can cancel');
     });
   });
 }
