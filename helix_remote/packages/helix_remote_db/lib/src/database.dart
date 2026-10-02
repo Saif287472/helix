@@ -85,6 +85,36 @@ class HelixDb extends _$HelixDb {
     },
   );
 
+  /// Deletes every row of every table (sign-out and revocation wipe): keys,
+  /// sessions, messages, people, settings, the outbox. The FTS index is
+  /// emptied by the triggers on `messages`. The file stays, encrypted and
+  /// empty, so the engine can be set up again on the same database.
+  Future<void> wipeAll() => transaction(() async {
+    for (final table in <TableInfo<Table, Object?>>[
+      outboxOps,
+      deferredActions,
+      processedEnvelopes,
+      inboxCursor,
+      messageReactions,
+      messageReceipts,
+      attachments,
+      messages,
+      conversationMembers,
+      conversations,
+      personDevices,
+      people,
+      senderKeys,
+      prekeys,
+      sessions,
+      identity,
+      selfDevices,
+      selfAccount,
+      settings,
+    ]) {
+      await delete(table).go();
+    }
+  });
+
   /// Opens (or creates) the encrypted database at [file].
   ///
   /// With [inBackground] (the default) every statement runs on a drift
@@ -96,6 +126,7 @@ class HelixDb extends _$HelixDb {
     required DatabaseKey key,
     bool inBackground = true,
   }) async {
+    _allowSeveralDatabases();
     refusePlaintextFile(file);
     final keyHex = keyHexOf(key);
     final executor = inBackground
@@ -122,6 +153,7 @@ class HelixDb extends _$HelixDb {
   /// An in-memory database for tests. Encrypted when [key] is given; nothing
   /// reaches disk either way.
   factory HelixDb.inMemory({DatabaseKey? key}) {
+    _allowSeveralDatabases();
     final keyHex = key == null ? null : keyHexOf(key);
     return HelixDb.withExecutor(
       NativeDatabase.memory(
@@ -130,5 +162,13 @@ class HelixDb extends _$HelixDb {
             : (db) => setUpEncryptedConnection(db, keyHex, wal: false),
       ),
     );
+  }
+
+  /// drift warns when a database class is instantiated twice in one isolate,
+  /// because two instances over the same executor would race. Every
+  /// [HelixDb] here has its own file or memory database (an engine per
+  /// account in tests and in the CLI), so the warning is a false alarm.
+  static void _allowSeveralDatabases() {
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   }
 }

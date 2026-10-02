@@ -101,6 +101,13 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     await refreshSummary(row.conversationId);
   });
 
+  /// Replaces the JSON [payload] (poll votes, RSVPs, placeholder state)
+  /// without marking the message edited.
+  Future<void> updatePayload(int rowid, String? payload) =>
+      (update(messages)..where((m) => m.localRowid.equals(rowid))).write(
+        MessagesCompanion(payload: Value(payload)),
+      );
+
   /// Delete for everyone: the row stays as "This message was deleted", its
   /// text, payload, reactions and media rows go. Returns the removed media
   /// rows so the caller can delete their local files.
@@ -217,6 +224,16 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
       updates: {messages},
       updateKind: UpdateKind.update,
     );
+  }
+
+  /// When the next disappearing message runs out; null if none is pending.
+  Future<DateTime?> nextExpiryAt() async {
+    final row = await customSelect(
+      'SELECT min(expires_at) AS at FROM messages WHERE expires_at IS NOT NULL',
+      readsFrom: {messages},
+    ).getSingle();
+    final at = row.readNullable<int>('at');
+    return at == null ? null : const EpochMs().fromSql(at);
   }
 
   /// Sets the view-once state (opened media is then deleted by the caller).

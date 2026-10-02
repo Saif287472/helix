@@ -18,10 +18,11 @@ void main() {
   });
 
   test('depends only on the packages declared for the server', () {
-    // test/client/ drives the server through the v2 client package (Phase
-    // C3a): the server itself never depends on it, so only those test
-    // files may import helix_remote_api, and nothing else beyond the
-    // server's own packages.
+    // test/client/ drives the server through the v2 client packages: the
+    // API clients (Phase C3a) and the engine with the packages it sits on
+    // (Phase C3b), plus the v2 CLI built on it. The server itself never depends on them, so only those
+    // test files may import them, and nothing else beyond the server's own
+    // packages.
     bool clientTest(SourceFile f) => f.path.startsWith('test/client/');
     final server = files.where((f) => !clientTest(f)).toList();
     final clientTests = files.where(clientTest).toList();
@@ -30,7 +31,14 @@ void main() {
       ...checkAll(clientTests, [
         InternalDependencyRule(
           selfPackage: 'helix_remote_server',
-          allowed: {'helix_remote_protocol', 'helix_remote_api'},
+          allowed: {
+            'helix_remote_protocol',
+            'helix_remote_api',
+            'helix_remote_cli',
+            'helix_remote_crypto',
+            'helix_remote_db',
+            'helix_remote_engine',
+          },
         ),
       ]),
     ];

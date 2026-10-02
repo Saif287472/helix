@@ -71,6 +71,55 @@ class OutboxDao extends DatabaseAccessor<HelixDb> with _$OutboxDaoMixin {
         .then((rows) => rows..sort((a, b) => a.id.compareTo(b.id)));
   });
 
+  /// Like [claimDue], but an op is claimed only when no earlier op of the
+  /// same conversation is still queued (pending, in flight or backing off),
+  /// so messages of one chat leave in the order they were written even when
+  /// an earlier one is being retried. Ops without a conversation never
+  /// wait. Failed ops do not hold up the chat.
+  Future<List<OutboxOpRow>> claimDueOrdered(
+    DateTime now, {
+    required DateTime leaseUntil,
+    int limit = 20,
+  }) => transaction(() async {
+    final nowMs = now.millisecondsSinceEpoch;
+    final queued =
+        await (select(outboxOps)
+              ..where(
+                (o) =>
+                    o.state.equalsValue(OutboxState.pending) |
+                    o.state.equalsValue(OutboxState.inFlight),
+              )
+              ..orderBy([(o) => OrderingTerm.asc(o.id)]))
+            .get();
+    final seen = <String>{};
+    final claim = <int>[];
+    for (final op in queued) {
+      final chat = op.conversationId;
+      final blocked = chat != null && !seen.add(chat);
+      final due = op.state == OutboxState.pending
+          ? op.nextAttemptAt.millisecondsSinceEpoch <= nowMs
+          : (op.leaseUntil?.millisecondsSinceEpoch ?? 0) <= nowMs;
+      if (!blocked && due && claim.length < limit) claim.add(op.id);
+    }
+    if (claim.isEmpty) return const [];
+    final rows = await (update(outboxOps)..where((o) => o.id.isIn(claim)))
+        .writeReturning(
+          OutboxOpsCompanion(
+            state: const Value(OutboxState.inFlight),
+            leaseUntil: Value(leaseUntil),
+          ),
+        );
+    return rows..sort((a, b) => a.id.compareTo(b.id));
+  });
+
+  Future<OutboxOpRow?> byId(int id) =>
+      (select(outboxOps)..where((o) => o.id.equals(id))).getSingleOrNull();
+
+  /// The queued or failed ops of a message (status, "retry" and cancel).
+  Future<List<OutboxOpRow>> forMessage(int messageRowid) => (select(
+    outboxOps,
+  )..where((o) => o.messageRowid.equals(messageRowid))).get();
+
   /// The op was sent: it leaves the queue.
   Future<void> complete(int id) =>
       (delete(outboxOps)..where((o) => o.id.equals(id))).go();
@@ -145,6 +194,26 @@ class OutboxDao extends DatabaseAccessor<HelixDb> with _$OutboxDaoMixin {
     ],
     readsFrom: {outboxOps},
   ).watchSingle().map((row) => row.read<int>('n'));
+
+  /// Changes whenever a queued op is added, retried, rescheduled or leaves
+  /// the queue, even when the count stays the same (an op completing as
+  /// another is enqueued). The worker's wake-up path.
+  Stream<String> watchQueueMark() =>
+      customSelect(
+        'SELECT coalesce(max(id), 0) AS newest, count(*) AS n, '
+        'coalesce(sum(attempts), 0) AS attempts, '
+        'coalesce(sum(next_attempt_at), 0) AS due FROM outbox_ops '
+        'WHERE state IN (?, ?)',
+        variables: [
+          Variable.withString(OutboxState.pending.name),
+          Variable.withString(OutboxState.inFlight.name),
+        ],
+        readsFrom: {outboxOps},
+      ).watchSingle().map(
+        (row) =>
+            '${row.read<int>('newest')}:${row.read<int>('n')}:'
+            '${row.read<int>('attempts')}:${row.read<int>('due')}',
+      );
 
   Future<List<OutboxOpRow>> failed() => (select(
     outboxOps,

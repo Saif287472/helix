@@ -32,4 +32,12 @@ dev_dependencies:
     path: ../packages/helix_remote_api
   helix_remote_architecture_rules:
     path: ../packages/helix_remote_architecture_rules
+  helix_remote_cli:
+    path: ../packages/helix_remote_cli
+  helix_remote_crypto:
+    path: ../packages/helix_remote_crypto
+  helix_remote_db:
+    path: ../packages/helix_remote_db
+  helix_remote_engine:
+    path: ../packages/helix_remote_engine
   test: ^1.31.0

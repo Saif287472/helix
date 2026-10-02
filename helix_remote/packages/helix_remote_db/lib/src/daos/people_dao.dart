@@ -27,6 +27,20 @@ class PeopleDao extends DatabaseAccessor<HelixDb> with _$PeopleDaoMixin {
     people,
   )..where((p) => p.accountId.isIn(accountIds.toList()))).get();
 
+  /// Everyone this device knows, blocked people included, by display order
+  /// (phone-book name, nickname, number, `~name`).
+  Future<List<PersonRow>> all() => _ordered().get();
+
+  Stream<List<PersonRow>> watchAll() => _ordered().watch();
+
+  SimpleSelectStatement<$PeopleTable, PersonRow> _ordered() =>
+      select(people)..orderBy([
+        (p) => OrderingTerm.asc(
+          coalesce([p.phonebookName, p.nickname, p.phoneNumber, p.helixName]),
+        ),
+        (p) => OrderingTerm.asc(p.accountId),
+      ]);
+
   Future<PersonRow?> byPhoneHash(String phoneHash) => (select(
     people,
   )..where((p) => p.phoneHash.equals(phoneHash))).getSingleOrNull();

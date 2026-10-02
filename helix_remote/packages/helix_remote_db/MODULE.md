@@ -67,6 +67,26 @@ Not here yet, by "tables arrive with the feature" (plan §3.8): `groups`,
 - `outbox_ops.last_error` holds an error code, never content. Nothing here
   logs.
 
+## Added for the engine (Phase C3b)
+
+No schema change; DAO methods only.
+
+- `HelixDb.wipeAll()`: deletes every row of every table (sign-out and
+  revocation); the FTS index follows through its triggers, the file stays
+  usable.
+- `OutboxDao.claimDueOrdered`: like `claimDue`, but an op is claimed only when
+  no earlier op of the same conversation is still queued, so a chat's messages
+  leave in order even while one backs off (failed ops do not block).
+  `watchQueueMark` changes on every enqueue, retry, reschedule and
+  completion, even when the count stays the same (the worker's wake-up).
+  `byId`, `forMessage`.
+- `MessagesDao.updatePayload` (poll votes, RSVPs) and `nextExpiryAt` (the
+  disappearing-message timer).
+- `PeopleDao.all` / `watchAll` in display order.
+- Several `HelixDb` instances may coexist in one isolate (an engine per
+  account in tests and the CLI): `open` and `inMemory` switch off drift's
+  multiple-instance warning, because each has its own file or memory database.
+
 ## Regenerating
 
 Generated code is committed: the `*.g.dart` parts, the schema dumps in

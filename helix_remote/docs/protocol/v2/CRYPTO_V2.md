@@ -395,6 +395,30 @@ reviewed**.
   checks that `identity_key` is the public key of `identity_key_private`.
   The QR code is parsed from the right, because the origin contains colons.
 
+**Engine policy for §13a (Phase C3b, `helix_remote_engine`)**
+
+- A re-send is requested after any pairwise decryption failure of a
+  user-visible message, authentication failures included. The crypto layer
+  keeps `requestsSessionReset` false for them because tampering looks the
+  same, but after a restore (or when a new session was started while a
+  message was in flight) a message encrypted under a lost session fails
+  authentication exactly like a tampered one, and without a re-send it would
+  be lost for good. Cost of being wrong: one session start per remote device
+  per 10 minutes and a re-send the sender authenticates anyway.
+- "User-visible" is the envelope's `urgent` flag. The engine sends receipts,
+  reactions, edits, deletes, votes, RSVPs, typing, `decryption_error` and
+  contact sync non-urgent (no push, no placeholder row, no repair request:
+  there is nothing the sender could re-send), and messages urgent.
+- `decryption_error.message_id` is the **envelope id** of the failed
+  envelope. A first send uses the content id as the request id, so the
+  receiver can name a message it cannot read; the sender looks the message
+  up by that id. A re-send has a new request id (the server de-duplicates
+  sends by sending device and id) and the same content id, and replaces the
+  receiver's placeholder row.
+- `decryption_error` is sent to every device of the sender's account (the
+  server requires every device of a listed account); only the device named in
+  `sender_device` acts on it.
+
 **Deviation (the safer option; proposed change-log entry)**
 
 - **§9 group state and profile blobs use a random nonce.** As written in §9,
