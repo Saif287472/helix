@@ -1,9 +1,30 @@
 library;
 
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
+import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+
+part 'src/chat_tokens.dart';
 part 'src/components.dart';
+part 'src/view_models.dart';
+part 'src/avatars.dart';
+part 'src/chat_list.dart';
+part 'src/message_bubble.dart';
+part 'src/message_media.dart';
+part 'src/conversation_parts.dart';
+part 'src/message_actions.dart';
+part 'src/composer.dart';
+part 'src/search_people.dart';
+part 'src/settings_banners.dart';
+part 'src/sheets_dialogs.dart';
+part 'src/security_views.dart';
+part 'src/shimmer.dart';
+part 'src/gallery.dart';
 
 abstract final class HelixColorTokens {
   static const brand = Color(0xFF166A64);
