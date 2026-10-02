@@ -1,0 +1,154 @@
+# helix_remote (app)
+
+The Helix Remote Flutter client, rebuilt on the v2 stack (ADR-027,
+`docs/architecture/ARCHITECTURE_V2_PLAN.md` §6.4). **Phase A1** replaced the
+v1 `lib/` with this one: the old composition root, `remote_rest_client.dart`,
+the onboarding notifier and every screen under `screens/` are gone from this
+branch. `main` keeps them for reference until cutover.
+
+## The shape
+
+```
+lib/
+  main.dart                     zones, error reporting, the FCM background
+                                handler registration, ProviderScope, the one
+                                MaterialApp.router
+  core/                         shared wiring, no feature state
+    engine/
+      helix_runtime.dart        owns the db + api + engine for one server;
+                                `headless` for the FCM isolate
+      runtime_providers.dart    the seam: RuntimeFactory, serverUrl,
+                                runtimeProvider
+      session_providers.dart    engine status -> AppAuthState, sign-out,
+                                destructive reset
+    router/app_router.dart      go_router, the redirect, deep-link routing
+    links/                      HelixDeepLink, the HLX-INV-/HLX-REC- codecs,
+                                the warm-start MethodChannel
+    platform/                   AppPaths, SecureKeyStore (SQLCipher key),
+                                ServerUrlStore, DevicePhoneBook
+    lifecycle/                  resume -> reconnect + syncOnce
+    security/                   AppLock + gate, AppSettings
+    notifications/              local notifications (wake-ups only)
+    push/                       the FCM background handler, PushTokenSource
+  features/<feature>/
+    application/                Riverpod Notifiers / StreamProviders, the
+                                value objects the screens draw
+    presentation/               screens and widgets, Stateless/Consumer only
+  shared/widgets/               cross-feature widgets, startup and reset
+                                screens, the link listener
+```
+
+**Every list is a `StreamProvider` over a drift watch query.** The engine owns
+the query; `application/` maps rows into the plain value objects in
+`helix_remote_ui`; a widget never sees a row, a column or a clock, and never
+formats a date.
+
+## What may import what
+
+Enforced by `test/architecture_test.dart`:
+
+- `presentation/` imports `dart:`/Flutter, its own feature, `shared/`,
+  `helix_remote_ui` and `helix_remote_domain`. **Nothing else** — not the
+  engine, the database, the crypto, the API or `core/`. Work goes in a Notifier
+  or StreamProvider; the screen receives plain values.
+- A feature never imports another feature. Shared state goes through a provider
+  in `core/` or a widget in `shared/`.
+- No v1 package (`helix_remote_storage`, `_sync`, `_groups`, `_backend`).
+- No `sqlite3`/`drift` outside `helix_remote_db`, no `http`/WebSocket outside
+  `helix_remote_api`.
+
+## The engine, and the one seam
+
+The app never constructs an `Engine` directly. It provides a `RuntimeFactory`,
+and everything above reads `runtimeProvider`:
+
+```dart
+final runtime = await ref.watch(runtimeProvider.future);
+runtime.engine.chats.watchChats();
+```
+
+That is what lets every test in this package run with no keystore, no database
+file and no network: override `runtimeFactoryProvider`. The widget suites use an
+in-memory encrypted database.
+
+`HelixRuntime.open(..., headless: true)` starts an engine with no socket and no
+timers, which is what the FCM background isolate needs - it calls `syncOnce()`
+and closes.
+
+## Sign-in
+
+`features/sign_in/application/sign_in_controller.dart` is the whole flow: the
+page machine, the validation, and the copy (`sign_in_copy.dart`). The screens
+read `SignInState` and call methods; they hold no rules, which is why the Global
+path and the personal-server path cannot drift apart.
+
+The rules that were true in v1 and are still true (each has a test in
+`test/sign_in_flow_test.dart` or `test/product_rules_test.dart`):
+
+- Opens on the plain **Helix Global** page: a phone number, `Next`, and a
+  `Terms & Privacy` link. No back button (nothing precedes it), and no
+  host-your-own-server copy anywhere.
+- **Personal servers are hidden.** Three taps in the bottom-right corner within
+  two seconds of each other reveal an `Advanced mode` button in the same
+  corner; a fourth tap opens it. `AdvancedModeCorner.tapWindow` and
+  `.tapsToReveal` are public because the rule is public.
+- A shared link (`https://helix.agiletechbd.com/open#HLX-…`, or
+  `helix://open?code=…`) opens advanced mode and checks its code at once. The
+  code travels in the **fragment**, so a browser never sends it to the server.
+- Only Helix Global asks for the Terms. A personal server has its own operator
+  policies.
+- Sign-in pages use `HelixThemes.signIn()` (the app icon's blue) as a local
+  `Theme`; the rest of the app stays on `HelixThemes.light()`.
+- No exception text ever reaches a screen: every failure is one of the
+  sentences in `sign_in_copy.dart`.
+- The password never leaves the device. The engine sends only the HKDF-derived
+  auth key.
+
+## The background isolate
+
+`core/push/push_background.dart` is registered before `runApp`. When a data-only
+message arrives with the app closed it builds its **own** engine, opens the same
+encrypted database with the key from the keystore, reads the mailbox over REST,
+applies everything, and raises one grouped local notification.
+
+It never reads content from the payload. The payload is only a wake-up; the
+message is decrypted by the engine, so nothing that crossed a push provider can
+land on the lock screen.
+
+This is also the reason the app keeps no SQLite outside the db package: the
+isolate has to reach the same file the UI isolate has.
+
+## Logging
+
+Two places may log, and each may report an **exception type only** - which
+`test/architecture_test.dart` asserts by inspecting the interpolated values:
+
+- `main.dart` (`FlutterError.onError`, the zone handler)
+- `core/push/push_background.dart` (an isolate that has no UI)
+
+Nothing else in `lib/` may contain `print`, `debugPrint` or `developer.log`.
+
+## Testing
+
+- `architecture_test.dart` — the import boundaries above.
+- `product_rules_test.dart` — the carried-over rules: design tokens, icon-button
+  tooltips, no clamped text scaling, screenshots allowed, English only, light
+  theme only, the Android manifest expectations.
+- `accessibility_test.dart` — the sign-in page and the shared controls against
+  Flutter's own `meetsGuideline` checks, at the default and largest text scale,
+  in the high-contrast theme.
+- `sign_in_flow_test.dart` — the page machine and the corner, headless.
+- `deep_link_test.dart` — every documented link form and what is refused.
+- `performance_budget_test.dart` — the plan §6.4 budgets (16 ms for a 5,000-chat
+  first page; a 1,000-row burst inside the CI budget).
+- `integration_test/onboarding_journey_test.dart` — the hidden corner on a real
+  device.
+
+## Not in A1
+
+Groups, calls, the conversation, the people search, media, backup and the
+settings pages are A2 and A3. The Calls tab is deliberately an honest empty
+state rather than a dead button. A1's job was the shell and the wiring, and the
+three tabs all read through the same `StreamProvider` pattern A2 will extend.
+
+Group calls stay deferred from v2 entirely (plan §13).
