@@ -18,11 +18,15 @@ import 'package:helix_remote_engine/src/settings_keys.dart';
 /// Prekey and device-list refreshes need the network; their failures are
 /// swallowed and retried on the next tick.
 final class MaintenanceService {
-  MaintenanceService(this._ctx, this._keys, this._devices);
+  MaintenanceService(this._ctx, this._keys, this._devices, {this._extraWork});
 
   final EngineContext _ctx;
   final KeyMaintenance _keys;
   final DeviceService _devices;
+
+  /// Other features' housekeeping (the backup feature's schedule), run at the
+  /// end of every pass. Must not throw.
+  final Future<void> Function()? _extraWork;
 
   Timer? _tick;
   Timer? _expiry;
@@ -67,6 +71,8 @@ final class MaintenanceService {
           _ctx.config.prekeyCheckInterval.inMilliseconds) {
         await _guarded(_devices.refresh);
       }
+      final extra = _extraWork;
+      if (extra != null) await _guarded(extra);
     } on Object {
       // The database closed under us, or a table is mid-wipe.
       return;

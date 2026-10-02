@@ -6,6 +6,8 @@ import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/src/account/account_service.dart';
 import 'package:helix_remote_engine/src/account/device_service.dart';
 import 'package:helix_remote_engine/src/account/key_maintenance.dart';
+import 'package:helix_remote_engine/src/backup/backup_service.dart';
+import 'package:helix_remote_engine/src/backup/options.dart';
 import 'package:helix_remote_engine/src/calls/call_media.dart';
 import 'package:helix_remote_engine/src/calls/calls_service.dart';
 import 'package:helix_remote_engine/src/calls/engine_call_signaling.dart';
@@ -81,6 +83,7 @@ final class Engine {
     BlobStore? blobs,
     MediaProcessor? mediaProcessor,
     TransferConfig transferConfig = const TransferConfig(),
+    BackupOptions backupOptions = const BackupOptions(),
   }) : _hasBlobs = blobs != null,
        _ctx = EngineContext(
          api: api,
@@ -96,8 +99,14 @@ final class Engine {
     _sender = MessageSender(ctx, _peers, _crypto, devices);
     _outbox = OutboxService(ctx);
     _inboundMedia = InboundMedia(ctx, transferConfig)..enabled = _hasBlobs;
+    backup = BackupService(ctx, _outbox, devices, options: backupOptions);
     _keys = KeyMaintenance(ctx);
-    _maintenance = MaintenanceService(ctx, _keys, devices);
+    _maintenance = MaintenanceService(
+      ctx,
+      _keys,
+      devices,
+      extraWork: backup.runMaintenance,
+    );
     presence = PresenceService(ctx, _sender);
     _inbound = InboundRunner(
       ctx,
@@ -234,6 +243,10 @@ final class Engine {
   /// The transfer queue as a whole.
   late final TransfersService transfers;
 
+  /// History backup and restore, the full backup, and device-to-device
+  /// history transfer.
+  late final BackupService backup;
+
   final StreamController<EngineStatus> _statuses = StreamController.broadcast();
   EngineStatus _status = EngineStatus.idle;
   bool _realtime = true;
@@ -315,6 +328,9 @@ final class Engine {
     if (_background) {
       _worker.start();
       _maintenance.start();
+      // The backup only needs a timer and the network; it must not hold a
+      // database file open in a headless isolate that is about to exit.
+      if (_background || _realtime) backup.start();
       if (_hasBlobs) {
         _transferWorker.start();
         _janitor.start();
@@ -350,6 +366,7 @@ final class Engine {
     await _callWakes?.cancel();
     _callWakes = null;
     await calls.release();
+    await backup.stop();
     await _inbound.stopRealtime();
     await _worker.stop();
     await _transferWorker.stop();
@@ -368,6 +385,7 @@ final class Engine {
   /// database and the API.
   Future<void> close() async {
     await stop();
+    await backup.close();
     await presence.close();
     await calls.close();
     await _statuses.close();
