@@ -18,7 +18,24 @@ void main() {
   });
 
   test('depends only on the packages declared for the server', () {
-    expectClean(v2PackageRules('helix_remote_server'));
+    // test/client/ drives the server through the v2 client package (Phase
+    // C3a): the server itself never depends on it, so only those test
+    // files may import helix_remote_api, and nothing else beyond the
+    // server's own packages.
+    bool clientTest(SourceFile f) => f.path.startsWith('test/client/');
+    final server = files.where((f) => !clientTest(f)).toList();
+    final clientTests = files.where(clientTest).toList();
+    final violations = [
+      ...checkAll(server, v2PackageRules('helix_remote_server')),
+      ...checkAll(clientTests, [
+        InternalDependencyRule(
+          selfPackage: 'helix_remote_server',
+          allowed: {'helix_remote_protocol', 'helix_remote_api'},
+        ),
+      ]),
+    ];
+    expect(violations, isEmpty, reason: describeViolations(violations));
+    expect(clientTests, isNotEmpty);
   });
 
   test('modules reach each other only through api.dart', () {

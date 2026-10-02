@@ -28,6 +28,8 @@ dependencies:
   web_socket_channel: ^3.0.3
 
 dev_dependencies:
+  helix_remote_api:
+    path: ../packages/helix_remote_api
   helix_remote_architecture_rules:
     path: ../packages/helix_remote_architecture_rules
   test: ^1.31.0

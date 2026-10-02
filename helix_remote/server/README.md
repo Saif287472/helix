@@ -31,7 +31,8 @@ lib/src/modules/<name>/  module.dart, api.dart, http/, application/, domain/,
                          data/, MODULE.md   (ADR-026)
 lib/src/modules/all_modules.dart   production module list
 lib/src/server.dart      HelixServer: migrate, register, start, stop
-test/                    platform/, per-module tests, architecture_test.dart
+test/                    platform/, per-module tests, e2e/, client/,
+                         architecture_test.dart
 ```
 
 ## Running a node locally
@@ -76,6 +77,11 @@ dart test
   node (see `test/server_test.dart`). `test/support/cluster.dart` starts
   such a pair, and `test/e2e/two_node_test.dart` drives clients across it:
   messages, calls, revocation, supersede, groups and jobs.
+- **Through the v2 client:** `test/client/` drives the server with
+  `helix_remote_api` (`package:helix_remote_api/v2.dart`): registration,
+  prekeys, socket delivery and acks, revocation (4003), refresh and
+  sign-out, media, and the admin console. It is the only place the server
+  package may import the client (dev dependency; `architecture_test.dart`).
 - **Passwords:** the connection URL is never printed. Do not log it.
 
 ## Load harness
