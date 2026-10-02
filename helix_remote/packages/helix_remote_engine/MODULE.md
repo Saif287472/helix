@@ -255,3 +255,151 @@ receiver skips).
   a refresh on resume.
 - **Contact-list upload** (`PUT /v1/people/contacts`, only for "contacts"
   audiences) is not wired; **profile-key rotation on block** is not done.
+
+## Media transfers (Phase C4-M)
+
+`lib/src/transfers/`. Attachments move through a **durable transfer queue**
+(`transfer_jobs`, one job per attachment) worked by `TransferWorker`; the
+outbound and inbound pipelines only write rows. The engine still does no file
+I/O of its own: bytes go through an injected `BlobStore`, image and video
+knowledge through an injected `MediaProcessor`, and the network through
+`HelixApi.media`.
+
+```dart
+final engine = Engine(api: api, db: db, clock: …, random: …,
+    blobs: AppBlobStore(dir),            // required for media; null = disabled
+    mediaProcessor: AppMediaProcessor(), // optional; default reads image sizes
+    transferConfig: const TransferConfig());
+```
+
+Without `blobs`, `engine.media.sendMedia` throws `StateError`, incoming
+attachments stay `remote` and nothing is queued (existing hosts compile and
+behave as before).
+
+### Public API (`engine.media`: `MediaService`, `engine.transfers`: `TransfersService`)
+
+| Call | What it does |
+|---|---|
+| `media.sendMedia(chatId, [MediaInput…], caption:, replyTo:, viewOnce:)` | 1-30 items (image, video, document, voice note with `waveform`, video note, gif; an "audio file" is a `document` with an audio mime). Returns the `pending` row at once |
+| `media.forward(messageRowid, toChatId)` | reuses the uploaded object (same id and key, **no upload**) while the original is younger than `forwardReuseWindow` (20 days; the server keeps objects 30), else uploads again from the local copy; not for view-once |
+| `media.watchMessage(rowid)` / `watchAttachment(id)` / `viewsOf(rowid)` | `AttachmentTransferView`: `phase` (`notDownloaded, queued, active, ready, failed`), `direction`, `bytesDone/bytesTotal/fraction` (ciphertext bytes), `failure` (`TransferFailure`), `lastError` while a retry waits, `localPath`, `thumbnailPath` |
+| `media.retry(messageRowid)` / `retryAttachment(id)` | failed uploads again (and the held send), or the send itself, or failed downloads; `ChatsService.retrySend` delegates here for media messages |
+| `media.cancel(attachmentId)` / `cancelSend(messageRowid)` | a download goes back to `notDownloaded`; cancelling an upload cancels the unsent message (rows, files, the queued send, the part-uploaded server objects) |
+| `media.downloadNow(attachmentId)` | download on demand |
+| `media.openLocalPath(id)` / `thumbnailPath(id)` | the file's `BlobStore` path, or null when it is not on this device |
+| `media.consumeViewOnce(messageRowid)` | after the viewer closed: deletes files, keys and the pointers (`payload`); the sender's side does this by itself once the `viewed` receipt arrives |
+| `transfers.watchQueue()` / `retryFailed()` / `drain()` / `registerStandalone(purpose, handler)` | the queue as a whole; `drain()` runs everything due (headless hosts, tests) |
+| `engine.drainTransfers()` | the same, from the engine |
+
+Settings (`MediaSettings`, typed through `engine.settings`): the largest size
+fetched automatically per kind, in bytes (`0` = only on request, `-1` =
+always): images and gifs 10 MiB, voice notes 10 MiB, videos 0, documents 0.
+Thumbnails are always fetched (a few KiB), except for view-once messages. The
+engine does not know Wi-Fi from mobile data; the app changes these settings
+when that changes.
+
+### Sending
+
+A send is one transaction: the message row (`pending`), one `attachments` row
+per item (`uploading`, with its own random key and the local copy), one upload
+job per item and one **held** outbox op (`OutboxDao.enqueueHeld`: pending,
+due in year 9999, placeholder payload) that keeps the message's place in the
+chat's order. Nothing sent later in that chat overtakes it
+(`claimDueOrdered` sees a queued earlier op), and messages sent before it are
+not held by it. The upload worker, per item:
+
+1. uploads the thumbnail (its own small object and key; the pointer is stored
+   on the attachment before the main upload starts);
+2. **encrypts the file once** into a staging file (`HXS2` STREAM, 64 KiB
+   chunks), so every resume sends the same bytes and the size for
+   `POST /v1/media` is exact;
+3. `POST /v1/media`; then chunks with `Upload-Offset` (after a failure `HEAD`
+   says how far the server got; a 409 names the stored offset and the upload
+   continues from it), or one presigned `PUT` of exactly `size` bytes for S3
+   (non-resumable: a failure starts a new object; the whole ciphertext is read
+   into memory for that request);
+4. in **one transaction**: the pointer (object id, digest = SHA-256 of the
+   ciphertext) goes on the attachment, the job is done, and, when it was the
+   message's last item, the real `MediaBody` is written to the message's
+   `payload` and the held op is **released** with the real content.
+
+A terminal failure fails the attachment, the held op and the message and emits
+`SendFailedEvent(errorCode)`; `retry` puts only the failed items back.
+Nothing half-made is ever sent: a held op's payload does not decode as a
+message, so even a mistaken retry ends as `bad_payload`.
+
+### Receiving
+
+`ContentApplier` creates the `attachments` rows (as before) and calls
+`InboundMedia.onMessageStored` in the same transaction: within the policy the
+file is queued (its thumbnail comes with it), otherwise only a `thumbnail`
+job. The download is **ranged `GET`s** into a staging file from the stored
+offset; the total length comes from the pointer's `size` and the file header's
+chunk size, so nothing the server sends can make it longer than the sender
+described (a different `Content-Range` total is `size_mismatch`); then the
+**digest of the whole ciphertext is checked first** (`digest_mismatch`), then
+the stream is decrypted into a plaintext staging file whose length must equal
+`size` (`decrypt_failed`, `size_mismatch`), moved to a random name in the media
+area, and the attachment row points at it in the same transaction that
+completes the job.
+
+### The worker
+
+`TransferWorker` claims due jobs with a lease (`TransfersDao.claim`, by kind,
+so uploads and downloads have separate limits: 2 and 3), renews it while a
+job runs, records the offset after every chunk, and wakes on the queue's own
+change stream plus a timer for the next retry (and a 1-minute idle poll for
+jobs queued from another isolate). A failure that may pass (network, 5xx, 429
+with `Retry-After`, 401) reschedules with exponential backoff (`Backoff`, 3 s
+doubling to 5 min), **keeps the progress** and gives up only after `maxAge`
+(3 days) as `gave_up`; a failure that cannot pass ends the job as `failed`
+with a `TransferFailure` code (`quota_exceeded`, `too_large`, `file_missing`,
+`digest_mismatch`, `decrypt_failed`, `size_mismatch`, `expired` (404 or 410:
+past the server's 30 days), `rejected`, `gave_up`, `unknown`). A worker that
+dies leaves a lease that runs out; the next claim resumes at the stored
+offset. `stop()` hands running jobs back (pending, no attempt counted).
+`registerStandalone` lets other features (group pictures, backup blobs) run
+jobs without an attachment under their `purpose`; jobs of a purpose nobody
+registered are left alone.
+
+### Files
+
+`BlobStore` (`namedPath`, `newPath`, `length`, `read(start, end)`,
+`openWrite(keep:)`, `move`, `copy`, `delete`, `list`, `clear`; paths are
+opaque) has two areas: `media` (what the UI opens) and `staging` (encrypted
+bytes in transit, named by job id so they are found again after a restart).
+The engine **copies** a file the user picked and never touches the original.
+`MediaJanitor` keeps one rule, **a file lives as long as something points at
+it**: it deletes store files that no attachment row and no live job refers to
+(older than `sweepGrace`), so deleting a message, a disappearing timer, a
+view-once consume, a cancelled send and a delete that died halfway all end the
+same way. It runs when the attachment count drops, on a timer, at start and
+from `media.sweep()` / `runMaintenance()`, and first calls
+`MediaService.upkeep`: queued sends whose message was deleted are dropped (a
+held op would hold the chat for good) and view-once media the recipient has
+seen goes from the sender's device. `signOut` and revocation call
+`BlobStore.clear()` before the database wipe.
+
+### Seams for the other C4 features and the app
+
+- **Groups:** `OutboundMedia._peerOf` is the one place that resolves a chat to
+  its audience and `conv` (it throws `UnsupportedError` for a group
+  conversation). The group send path supplies the audience there;
+  `InboundMedia.onMessageStored(row)` is what a group message handler calls
+  after inserting a media message.
+- **App:** supply a `BlobStore` over the app's private directory (random
+  names; `modifiedAt` must be the write time and `copy` must not keep the
+  source's time) and a `MediaProcessor` (dimensions, duration, a thumbnail, a
+  blurhash; a voice note's waveform comes with the input). Open files through
+  `openLocalPath`; show `watchMessage` in the bubble.
+- **Not done:** stickers (`StickerBody` has a `MediaPointer` but no row; the
+  bubble is deferred to A2), link-preview images, a server route to extend an
+  attachment's 30 days (none exists: an expired object fails as `expired` and
+  a forward uploads again), per-network auto-download (the app flips the
+  settings), a streaming presigned `PUT` (needs `MediaClient` to take a
+  stream).
+
+Tests: `test/transfers/` (unit, over `test/support/fake_media.dart`, an
+in-memory media server with offsets, 409s, ranges, redirects, presigned
+uploads and injectable faults) and `server/test/client/engine/media_test.dart`
+(two engines on the real server).

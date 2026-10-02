@@ -25,6 +25,17 @@ import 'package:helix_remote_engine/src/messaging/inbound.dart';
 import 'package:helix_remote_engine/src/messaging/inbound_runner.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_engine/src/messaging/sender.dart';
+import 'package:helix_remote_engine/src/transfers/blob_store.dart';
+import 'package:helix_remote_engine/src/transfers/download_runner.dart';
+import 'package:helix_remote_engine/src/transfers/inbound_media.dart';
+import 'package:helix_remote_engine/src/transfers/media_janitor.dart';
+import 'package:helix_remote_engine/src/transfers/media_processor.dart';
+import 'package:helix_remote_engine/src/transfers/media_service.dart';
+import 'package:helix_remote_engine/src/transfers/outbound_media.dart';
+import 'package:helix_remote_engine/src/transfers/transfer_config.dart';
+import 'package:helix_remote_engine/src/transfers/transfer_worker.dart';
+import 'package:helix_remote_engine/src/transfers/transfers_service.dart';
+import 'package:helix_remote_engine/src/transfers/upload_runner.dart';
 import 'package:helix_remote_engine/src/util/ids.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ContentMessage;
@@ -63,7 +74,11 @@ final class Engine {
     required CryptoRandom random,
     EngineConfig config = const EngineConfig(),
     PhoneBook? phoneBook,
-  }) : _ctx = EngineContext(
+    BlobStore? blobs,
+    MediaProcessor? mediaProcessor,
+    TransferConfig transferConfig = const TransferConfig(),
+  }) : _hasBlobs = blobs != null,
+       _ctx = EngineContext(
          api: api,
          db: db,
          clock: clock,
@@ -76,6 +91,7 @@ final class Engine {
     devices = DeviceService(ctx, _peers);
     _sender = MessageSender(ctx, _peers, _crypto, devices);
     _outbox = OutboxService(ctx);
+    _inboundMedia = InboundMedia(ctx, transferConfig)..enabled = _hasBlobs;
     _keys = KeyMaintenance(ctx);
     _maintenance = MaintenanceService(ctx, _keys, devices);
     presence = PresenceService(ctx, _sender);
@@ -84,7 +100,7 @@ final class Engine {
       InboundProcessor(
         ctx,
         _crypto,
-        ContentApplier(ctx, _outbox),
+        ContentApplier(ctx, _outbox, media: _inboundMedia),
         _outbox,
         _Hooks(this),
       ),
@@ -108,6 +124,42 @@ final class Engine {
     people = PeopleService(ctx, _outbox, phoneBook: phoneBook);
     settings = SettingsService(ctx);
     push = PushService(ctx);
+    final store = blobs ?? const NoBlobStore();
+    final outbound = OutboundMedia(
+      ctx,
+      _outbox,
+      store,
+      mediaProcessor ?? BasicMediaProcessor(store),
+      transferConfig,
+      onExpiryChanged: _maintenance.rescheduleExpiry,
+    );
+    _transferWorker = TransferWorker(
+      ctx,
+      transferConfig,
+      UploadRunner(ctx, store, transferConfig, outbound),
+      DownloadRunner(ctx, store, transferConfig),
+      outbound,
+      onDeviceRevoked: _handleRevoked,
+      onSessionEnded: _handleSessionEnded,
+    );
+    outbound.cancelJob = _transferWorker.cancelRunning;
+    _janitor = MediaJanitor(
+      ctx,
+      store,
+      transferConfig,
+      beforeSweep: () => media.upkeep(),
+    );
+    media = MediaService(
+      ctx,
+      blobs,
+      transferConfig,
+      outbound,
+      _outbox,
+      _janitor,
+      _transferWorker.cancelRunning,
+    );
+    transfers = TransfersService(ctx, _transferWorker, outbound);
+    chats.retryMediaHook = media.retryIfMedia;
   }
 
   final EngineContext _ctx;
@@ -115,6 +167,10 @@ final class Engine {
   late final PairwiseCrypto _crypto;
   late final MessageSender _sender;
   late final OutboxService _outbox;
+  late final InboundMedia _inboundMedia;
+  late final TransferWorker _transferWorker;
+  late final MediaJanitor _janitor;
+  final bool _hasBlobs;
   late final KeyMaintenance _keys;
   late final MaintenanceService _maintenance;
   late final InboundRunner _inbound;
@@ -140,6 +196,13 @@ final class Engine {
 
   /// Push-token registration.
   late final PushService push;
+
+  /// Attachments: send media, per-attachment progress, retry, cancel,
+  /// download on demand, forward. Needs a `blobs` store (see [Engine.new]).
+  late final MediaService media;
+
+  /// The transfer queue as a whole.
+  late final TransfersService transfers;
 
   final StreamController<EngineStatus> _statuses = StreamController.broadcast();
   EngineStatus _status = EngineStatus.idle;
@@ -222,6 +285,11 @@ final class Engine {
     if (_background) {
       _worker.start();
       _maintenance.start();
+      if (_hasBlobs) {
+        _transferWorker.start();
+        _janitor.start();
+        unawaited(media.consumeOpenedViewOnce());
+      }
     }
     if (_realtime) await _inbound.startRealtime();
   }
@@ -231,6 +299,8 @@ final class Engine {
     _workersRunning = false;
     await _inbound.stopRealtime();
     await _worker.stop();
+    await _transferWorker.stop();
+    await _janitor.stop();
     await _maintenance.stop();
   }
 
@@ -265,6 +335,11 @@ final class Engine {
   /// hosts and tests; the running worker does this by itself.
   Future<void> drainOutbox() => _worker.drain();
 
+  /// Runs every transfer that is due and waits for them (no waiting for
+  /// backoff). For headless hosts and tests; the running worker does this by
+  /// itself.
+  Future<void> drainTransfers() => _transferWorker.drain();
+
   /// Queues arbitrary [content] for [audience] without the checks the chat
   /// service applies (tests craft forged, late and newer-version content
   /// with it; C4 features build on the same outbox path).
@@ -284,7 +359,10 @@ final class Engine {
   }
 
   /// One housekeeping pass (expired messages, key upkeep).
-  Future<void> runMaintenance() => _maintenance.runOnce();
+  Future<void> runMaintenance() async {
+    await _maintenance.runOnce();
+    await media.sweep();
+  }
 
   /// Reconnects the socket (the app came to the foreground, or another
   /// connection had replaced this one).
@@ -304,6 +382,7 @@ final class Engine {
     await _stopWorkers();
     await account.leaveOnServer();
     await _ctx.api.auth.forget();
+    await media.wipeFiles();
     await _ctx.db.wipeAll();
     _forgetIdentity();
     _setStatus(EngineStatus.signedOut);
@@ -317,6 +396,7 @@ final class Engine {
     await _stopWorkers();
     await _ctx.api.auth.forget();
     if (_ctx.config.wipeOnRevocation) {
+      await media.wipeFiles();
       try {
         await _ctx.db.wipeAll();
       } on Object {

@@ -8,6 +8,7 @@ import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/messaging/content_codec.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
+import 'package:helix_remote_engine/src/transfers/inbound_media.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// What applying one content message did.
@@ -39,10 +40,14 @@ enum _Action { done, defer, ignore }
 /// Direct chats only (C3b). Group content (a group `conv`, sender keys,
 /// roster-related system bodies) is dropped as `group_content`; C4 adds it.
 final class ContentApplier {
-  ContentApplier(this._ctx, this._outbox);
+  ContentApplier(this._ctx, this._outbox, {this._media});
 
   final EngineContext _ctx;
   final OutboxService _outbox;
+
+  /// Decides what is fetched of an arriving attachment message (auto-download
+  /// policy, thumbnails); null when the host has no transfer queue.
+  final InboundMedia? _media;
 
   HelixDb get _db => _ctx.db;
 
@@ -201,6 +206,7 @@ final class ContentApplier {
           ? ContentCodec.attachments(body)
           : const [],
     );
+    await _media?.onMessageStored(row);
     if (body is SystemBody && body.kind == MessageKinds.timerChanged) {
       final seconds = body.fields['seconds'];
       await _db.conversationsDao.setDisappearingSeconds(

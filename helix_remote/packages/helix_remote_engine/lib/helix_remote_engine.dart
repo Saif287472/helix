@@ -19,6 +19,21 @@ export 'src/features/settings_service.dart' show SettingsService;
 export 'src/messaging/inbound_runner.dart' show SyncSummary;
 export 'src/messaging/kinds.dart' show MessageKinds;
 export 'src/settings_keys.dart' show EngineSettings;
+export 'src/transfers/blob_store.dart'
+    show BlobArea, BlobInfo, BlobSink, BlobStore, BlobStoreBytes, NoBlobStore;
+export 'src/transfers/media_processor.dart'
+    show BasicMediaProcessor, MediaProcessor, ProcessedMedia;
+export 'src/transfers/media_service.dart' show MediaService;
+export 'src/transfers/media_settings.dart' show MediaSettings;
+export 'src/transfers/memory_blob_store.dart' show MemoryBlobStore;
+export 'src/transfers/outbound_media.dart' show MediaInput;
+export 'src/transfers/transfer_config.dart' show TransferConfig;
+export 'src/transfers/transfer_failure.dart' show TransferFailure;
+export 'src/transfers/transfer_views.dart'
+    show AttachmentTransferView, TransferDirection, TransferPhase;
+export 'src/transfers/transfer_worker.dart'
+    show JobControl, StandaloneTransferHandler;
+export 'src/transfers/transfers_service.dart' show TransfersService;
 export 'src/util/backoff.dart' show Backoff;
 export 'src/util/ids.dart' show Clock;
 export 'src/util/masking.dart' show maskPhone, shortId;
