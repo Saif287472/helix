@@ -124,6 +124,23 @@ No schema change; DAO methods only.
   `dropTransfer`.
 - `wipeAll` covers the new tables.
 
+## Added for C4-M (media transfers)
+
+No schema change; DAO methods only.
+
+- `OutboxDao`: `enqueueHeld` (an op that keeps its place in its chat but is
+  due in year 9999), `hold`, `release` (real payload, due now; false if not
+  held), `heldOps`, `isHeld`. A held op blocks later ops of its chat in
+  `claimDueOrdered` like any queued op.
+- `TransfersDao`: `claim(kinds:)`, `renewLease`, `release` (hand a leased job
+  back without counting an attempt), `reschedule` (retry later, progress kept,
+  never gives up), `resetProgress`, `enqueueThumbnail` (never replaces a
+  download job), `live`/`watchLive` (everything but done).
+- `MessagesDao`: `attachmentById`, `setAttachmentPointer`,
+  `setAttachmentThumbnail`, `removeAttachments`, `attachmentPaths` (every local
+  file the rows name), `watchAttachmentCount`, `viewOnceWithMediaToConsume`
+  (opened incoming, viewed outgoing).
+
 ## Regenerating
 
 Generated code is committed: the `*.g.dart` parts, the schema dumps in

@@ -40,6 +40,98 @@ class OutboxDao extends DatabaseAccessor<HelixDb> with _$OutboxDaoMixin {
     )..where((o) => o.idempotencyKey.equals(idempotencyKey))).getSingle();
   });
 
+  /// Where a held op is parked (see [enqueueHeld]); far past any real time.
+  static final heldAt = DateTime.utc(9999, 12, 31);
+
+  /// Whether [op] is parked by [enqueueHeld] or [hold] and waits for
+  /// [release].
+  static bool isHeld(OutboxOpRow op) =>
+      op.state == OutboxState.pending &&
+      op.nextAttemptAt.millisecondsSinceEpoch >= heldAt.millisecondsSinceEpoch;
+
+  /// Adds an op that keeps its place in the chat's order but is not sent
+  /// until [release]: an attachment message whose upload is still running.
+  /// The held [payload] is a placeholder; a later [release] replaces it.
+  /// Like [enqueue], an existing op with the same key is kept.
+  Future<OutboxOpRow> enqueueHeld({
+    required String kind,
+    required String idempotencyKey,
+    required String payload,
+    String? conversationId,
+    int? messageRowid,
+    required DateTime now,
+  }) => transaction(() async {
+    await into(outboxOps).insert(
+      OutboxOpsCompanion.insert(
+        kind: kind,
+        idempotencyKey: idempotencyKey,
+        payload: payload,
+        conversationId: Value(conversationId),
+        messageRowid: Value(messageRowid),
+        state: OutboxState.pending,
+        nextAttemptAt: heldAt,
+        createdAt: now,
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+    return (select(
+      outboxOps,
+    )..where((o) => o.idempotencyKey.equals(idempotencyKey))).getSingle();
+  });
+
+  /// Ops parked by [enqueueHeld] or [hold], oldest first.
+  Future<List<OutboxOpRow>> heldOps() =>
+      (select(outboxOps)
+            ..where(
+              (o) =>
+                  o.state.equalsValue(OutboxState.pending) &
+                  o.nextAttemptAt.isBiggerOrEqualValue(
+                    heldAt.millisecondsSinceEpoch,
+                  ),
+            )
+            ..orderBy([(o) => OrderingTerm.asc(o.id)]))
+          .get();
+
+  /// Parks a pending or failed op again (an upload is being retried), with
+  /// its placeholder [payload].
+  Future<void> hold(int id, {required String payload}) =>
+      (update(outboxOps)..where((o) => o.id.equals(id))).write(
+        OutboxOpsCompanion(
+          state: const Value(OutboxState.pending),
+          nextAttemptAt: Value(heldAt),
+          leaseUntil: const Value(null),
+          attempts: const Value(0),
+          lastError: const Value(null),
+          payload: Value(payload),
+        ),
+      );
+
+  /// Releases a held op with its real [payload]: it is due now. Returns
+  /// false when the op is not held (gone, failed or already released), so a
+  /// duplicate release changes nothing.
+  Future<bool> release(
+    int id, {
+    required String payload,
+    required DateTime now,
+  }) async {
+    final changed =
+        await (update(outboxOps)..where(
+              (o) =>
+                  o.id.equals(id) &
+                  o.state.equalsValue(OutboxState.pending) &
+                  o.nextAttemptAt.isBiggerOrEqualValue(
+                    heldAt.millisecondsSinceEpoch,
+                  ),
+            ))
+            .write(
+              OutboxOpsCompanion(
+                nextAttemptAt: Value(now),
+                payload: Value(payload),
+              ),
+            );
+    return changed > 0;
+  }
+
   /// Claims up to [limit] due ops, oldest first, leasing them until
   /// [leaseUntil]. Ops whose lease ran out (a crashed worker) are due again.
   Future<List<OutboxOpRow>> claimDue(

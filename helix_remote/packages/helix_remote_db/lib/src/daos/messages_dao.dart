@@ -382,6 +382,91 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
     ),
   );
 
+  /// One attachment row.
+  Future<AttachmentRow?> attachmentById(int id) =>
+      (select(attachments)..where((a) => a.id.equals(id))).getSingleOrNull();
+
+  /// Fills in the pointer of an outgoing attachment once its upload is done:
+  /// the server object id, the ciphertext digest and, when there is one, the
+  /// thumbnail's pointer as JSON. [thumbnail] null leaves the stored one.
+  Future<void> setAttachmentPointer(
+    int id, {
+    required String mediaId,
+    required Uint8List digest,
+    String? thumbnail,
+  }) => (update(attachments)..where((a) => a.id.equals(id))).write(
+    AttachmentsCompanion(
+      mediaId: Value(mediaId),
+      digest: Value(digest),
+      thumbnail: thumbnail == null ? const Value.absent() : Value(thumbnail),
+    ),
+  );
+
+  /// Stores the thumbnail pointer (JSON) of an attachment.
+  Future<void> setAttachmentThumbnail(int id, String thumbnail) =>
+      (update(attachments)..where((a) => a.id.equals(id))).write(
+        AttachmentsCompanion(thumbnail: Value(thumbnail)),
+      );
+
+  /// Removes the media rows of a message (a view-once message after it was
+  /// seen) and returns them, so their files can be deleted.
+  Future<List<AttachmentRow>> removeAttachments(int messageRowid) =>
+      transaction(() async {
+        final rows = await (select(
+          attachments,
+        )..where((a) => a.messageRowid.equals(messageRowid))).get();
+        await (delete(
+          attachments,
+        )..where((a) => a.messageRowid.equals(messageRowid))).go();
+        return rows;
+      });
+
+  /// Every local file path the attachment rows point at (media and
+  /// thumbnails), for the file sweep.
+  Future<Set<String>> attachmentPaths() async {
+    final rows = await customSelect(
+      'SELECT local_path, thumbnail_path FROM attachments '
+      'WHERE local_path IS NOT NULL OR thumbnail_path IS NOT NULL',
+      readsFrom: {attachments},
+    ).get();
+    return {
+      for (final row in rows) ...[
+        ?row.readNullable<String>('local_path'),
+        ?row.readNullable<String>('thumbnail_path'),
+      ],
+    };
+  }
+
+  /// View-once messages whose media can go: incoming ones that were opened,
+  /// and outgoing ones the recipient has viewed. Only those that still have
+  /// media rows.
+  Future<List<({int rowid, bool outgoing})>>
+  viewOnceWithMediaToConsume() async {
+    final rows = await customSelect(
+      'SELECT m.local_rowid AS id, m.outgoing AS outgoing FROM messages m WHERE '
+      '((m.outgoing = 0 AND m.view_once_state = ?) OR '
+      '(m.outgoing = 1 AND m.view_once_state IS NOT NULL AND m.status = ?)) '
+      'AND EXISTS (SELECT 1 FROM attachments a '
+      'WHERE a.message_rowid = m.local_rowid)',
+      variables: [
+        Variable.withString(ViewOnceState.opened.name),
+        Variable.withString(MessageStatus.viewed.name),
+      ],
+      readsFrom: {messages, attachments},
+    ).get();
+    return [
+      for (final row in rows)
+        (rowid: row.read<int>('id'), outgoing: row.read<bool>('outgoing')),
+    ];
+  }
+
+  /// How many attachment rows exist; emits on every change. The file sweep
+  /// runs when it drops (a message was removed or expired).
+  Stream<int> watchAttachmentCount() => customSelect(
+    'SELECT count(*) AS n FROM attachments',
+    readsFrom: {attachments},
+  ).watchSingle().map((row) => row.read<int>('n'));
+
   // ------------------------------------------------------------- reads
 
   Future<MessageRow?> byRowid(int rowid) => (select(

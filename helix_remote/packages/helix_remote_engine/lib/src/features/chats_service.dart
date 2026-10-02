@@ -15,8 +15,8 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 /// the outbox op together (plan §6.3). Sending happens later, in the
 /// outbox worker; nothing here touches the network.
 ///
-/// Attachments (media content) are sent by C4's transfer queue; this
-/// service sends text, replies, mentions, reactions, edits, deletes,
+/// Attachments (media content) are sent through `Engine.media` (the transfer
+/// queue); this service sends text, replies, mentions, reactions, edits, deletes,
 /// receipts, locations, contacts, stickers-free kinds, polls and timer
 /// changes, i.e. every content type that needs no blob.
 final class ChatsService {
@@ -27,6 +27,10 @@ final class ChatsService {
   final void Function() _onExpiryChanged;
 
   HelixDb get _db => _ctx.db;
+
+  /// Retries a failed media message (its uploads, then its send); true when
+  /// it was one. Set by the engine; media is sent by `Engine.media`.
+  Future<bool> Function(int rowid)? retryMediaHook;
 
   // ------------------------------------------------------------- reading
 
@@ -118,8 +122,8 @@ final class ChatsService {
   }
 
   /// Sends a message of any content type that needs no blob: location,
-  /// contact card, poll, event, and so on. (Media goes through C4's transfer
-  /// queue.)
+  /// contact card, poll, event, and so on. (Media goes through
+  /// `Engine.media`.)
   Future<MessageRow> sendBody(
     String conversationId,
     ContentBody body, {
@@ -132,8 +136,8 @@ final class ChatsService {
       throw ArgumentError.value(
         body.type,
         'body',
-        'is not a message this service sends (media and stickers need '
-            'the transfer queue)',
+        'is not a message this service sends (media goes through '
+            'Engine.media, stickers are not sent yet)',
       );
     }
     return _sendVisible(
@@ -398,8 +402,9 @@ final class ChatsService {
   });
 
   /// The user opened a view-once message: it is marked opened and a
-  /// `viewed` receipt goes to the author. (Deleting the media is the
-  /// transfer queue's job.)
+  /// `viewed` receipt goes to the author. The app shows the media (through
+  /// `Engine.media`) and calls `MediaService.consumeViewOnce` when the viewer
+  /// closes, which deletes it.
   Future<void> openViewOnce(int rowid) => _db.transaction(() async {
     final target = await _requireMessage(rowid);
     if (target.viewOnceState != ViewOnceState.unopened) return;
@@ -446,6 +451,7 @@ final class ChatsService {
 
   /// Puts a failed message back in the queue.
   Future<void> retrySend(int rowid) async {
+    if (await retryMediaHook?.call(rowid) ?? false) return;
     for (final op in await _db.outboxDao.forMessage(rowid)) {
       if (op.state == OutboxState.failed) await _outbox.retry(op.id);
     }

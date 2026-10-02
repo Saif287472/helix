@@ -185,27 +185,124 @@ class TransfersDao extends DatabaseAccessor<HelixDb> with _$TransfersDaoMixin {
   /// it. Null when nothing is due (or somebody else holds what is). A job whose
   /// lease ran out (a worker that died) is due again and keeps its offset, so
   /// the next worker resumes it.
-  Future<TransferRow?> claim(DateTime now, {required Duration lease}) =>
-      transaction(() async {
-        final nowMs = now.millisecondsSinceEpoch;
-        for (final candidate in await due(now)) {
-          final taken =
-              await (update(transferJobs)..where(
-                    (t) =>
-                        t.id.equals(candidate.id) &
-                        (t.leaseUntil.isNull() |
-                            t.leaseUntil.isSmallerOrEqualValue(nowMs)),
-                  ))
-                  .write(
-                    TransferJobsCompanion(
-                      state: const Value(TransferState.inFlight),
-                      leaseUntil: Value(now.add(lease)),
-                    ),
-                  );
-          if (taken > 0) return byId(candidate.id);
-        }
-        return null;
-      });
+  ///
+  /// With [kinds], only jobs of those kinds are considered (a worker with
+  /// separate limits for uploads and downloads).
+  Future<TransferRow?> claim(
+    DateTime now, {
+    required Duration lease,
+    Set<String>? kinds,
+  }) => transaction(() async {
+    final nowMs = now.millisecondsSinceEpoch;
+    for (final candidate in await due(now)) {
+      if (kinds != null && !kinds.contains(candidate.kind)) continue;
+      final taken =
+          await (update(transferJobs)..where(
+                (t) =>
+                    t.id.equals(candidate.id) &
+                    (t.leaseUntil.isNull() |
+                        t.leaseUntil.isSmallerOrEqualValue(nowMs)),
+              ))
+              .write(
+                TransferJobsCompanion(
+                  state: const Value(TransferState.inFlight),
+                  leaseUntil: Value(now.add(lease)),
+                ),
+              );
+      if (taken > 0) return byId(candidate.id);
+    }
+    return null;
+  });
+
+  /// Extends the lease of a job a worker is still running. False when the
+  /// job is gone or no longer leased (cancelled, or taken over).
+  Future<bool> renewLease(int id, {required DateTime until}) async {
+    final changed =
+        await (update(transferJobs)..where(
+              (t) =>
+                  t.id.equals(id) & t.state.equalsValue(TransferState.inFlight),
+            ))
+            .write(TransferJobsCompanion(leaseUntil: Value(until)));
+    return changed > 0;
+  }
+
+  /// Gives a leased job back without counting an attempt (the worker is
+  /// stopping): pending again, due [at], with its progress kept.
+  Future<void> release(int id, {required DateTime at}) =>
+      (update(transferJobs)..where(
+            (t) =>
+                t.id.equals(id) & t.state.equalsValue(TransferState.inFlight),
+          ))
+          .write(
+            TransferJobsCompanion(
+              state: const Value(TransferState.pending),
+              nextAttemptAt: Value(at),
+              leaseUntil: const Value(null),
+            ),
+          );
+
+  /// The attempt failed for a reason that may pass (no network, a busy
+  /// server): pending again at [nextAttemptAt], progress kept, the attempt
+  /// counted. Unlike [fail] this never gives up by itself.
+  Future<void> reschedule(
+    int id, {
+    required DateTime nextAttemptAt,
+    required String code,
+  }) => customUpdate(
+    'UPDATE transfer_jobs SET state = ?, attempts = attempts + 1, '
+    'next_attempt_at = ?, lease_until = NULL, last_error = ? WHERE id = ?',
+    variables: [
+      Variable.withString(TransferState.pending.name),
+      Variable.withInt(nextAttemptAt.millisecondsSinceEpoch),
+      Variable.withString(code),
+      Variable.withInt(id),
+    ],
+    updates: {transferJobs},
+    updateKind: UpdateKind.update,
+  );
+
+  /// Forgets the progress and the server object of a job (the staged bytes
+  /// were lost, so the transfer starts again from nothing).
+  Future<void> resetProgress(int id) =>
+      (update(transferJobs)..where((t) => t.id.equals(id))).write(
+        const TransferJobsCompanion(offset: Value(0), mediaId: Value(null)),
+      );
+
+  /// Queues the download of an attachment's thumbnail, or returns the
+  /// existing job. The thumbnail is its own small object, so this job
+  /// carries the thumbnail's id and key.
+  Future<int> enqueueThumbnail({
+    required int attachmentRowid,
+    required String mediaId,
+    required Uint8List mediaKey,
+    required int size,
+    required DateTime now,
+  }) async {
+    final existing = await byAttachment(attachmentRowid);
+    if (existing != null && existing.kind == 'download') return existing.id;
+    return _enqueue(
+      kind: 'thumbnail',
+      attachmentRowid: attachmentRowid,
+      mediaId: mediaId,
+      mediaKey: mediaKey,
+      size: size,
+      now: now,
+    );
+  }
+
+  /// Jobs that are queued, running or failed (everything that may still own
+  /// staged bytes), oldest first.
+  Future<List<TransferRow>> live() =>
+      (select(transferJobs)
+            ..where((t) => t.state.equalsValue(TransferState.done).not())
+            ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+          .get();
+
+  Stream<List<TransferRow>> watchLive() =>
+      (select(transferJobs)
+            ..where((t) => t.state.equalsValue(TransferState.done).not())
+            ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+          .watch();
 
   /// Records progress after a chunk, so a resumed transfer continues. A null
   /// [mediaId] or [localPath] leaves the stored one as it is.
