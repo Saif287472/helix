@@ -371,6 +371,48 @@ private key**. See "Backups" in `V2_OPERABILITY.md`.
   no equivalent yet. The recovery steps (a SQL change by the operator) are in
   `V2_OPERABILITY.md`, "Troubleshooting".
 
+## Operator console (Helix Admin)
+
+`helix_remote/admin` is the operator console. It runs on the v2 admin API
+only (`/v1/admin/*` and `GET /v1/ops/metrics`); it cannot talk to a v1 server.
+It is a Flutter app for Android and Windows (a web build compiles, but see the
+log note below).
+
+- **Run it:** from `helix_remote/admin`, `flutter run -d windows`, or install
+  the Android build the user makes (agents do not build APKs). Nothing in
+  `.env` is needed for the console itself.
+- **Point it at the server:** type the public address (for example
+  `https://helix.agiletechbd.com`). It must be `https://`; plain `http://` is
+  accepted only for this machine (`localhost`, `127.0.0.1`, the Android
+  emulator's `10.0.2.2`), because the admin password travels to that address.
+  The console asks the server whether setup is done (`GET /v1/admin/setup`).
+- **First run:** if the server has no admin yet, the console shows
+  "First-time setup": choose a password of 12 to 256 characters, typed twice.
+  Skip this by seeding `HELIX_ADMIN_PASSWORD` (see "Admin: first run").
+- **Signing in:** admin password only. After five wrong passwords from one
+  address the server locks that address (15 minutes, doubling) and the
+  console says how long to wait, from the `Retry-After` header. The token
+  lasts 12 hours; after that, or after the admin password is changed
+  elsewhere, the console returns to sign-in with a note.
+- **Saved session:** the console keeps the token in platform secure storage
+  (Android Keystore, Windows credential store) and the server address in
+  preferences. "App lock" in Settings asks for the device's screen lock before
+  the saved session opens.
+- **What it does:** Overview (health, maintenance mode, federation switch,
+  feature flags, activity numbers from `/v1/ops/metrics` including dead jobs and
+  undelivered messages), Accounts (search by Helix name or the last four
+  digits, suspend or resume, ban, delete, revoke a device, create a recovery
+  code), Invites (only on servers that register by invite), Reports, the audit
+  log, the server log (recent lines and a live feed over the admin WebSocket),
+  and Settings (server name, admin password, purge dead jobs, sign out).
+- **Shown once:** invite and recovery codes appear in a dialog when created
+  and are not stored or listed again. The server keeps only hashes.
+- **Phone numbers:** the server sends only the last four digits; the console
+  shows nothing more.
+- **The live log on the web:** a browser cannot set the `Authorization`
+  header on a WebSocket, so the web build polls `GET /v1/admin/logs`
+  every 3 seconds instead of following the stream.
+
 ## Rotating secrets
 
 - **JWT key:** add a new entry to `HELIX_JWT_KEYS`, set

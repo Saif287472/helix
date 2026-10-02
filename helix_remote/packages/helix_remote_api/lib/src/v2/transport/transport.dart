@@ -214,7 +214,11 @@ final class HelixTransport {
         requestId: responseId,
       );
 
+      // `invalid_credentials` is also a 401, but it answers a wrong
+      // password in the body (the admin password change), not a rejected
+      // token: refreshing, or ending an admin session, would be wrong.
       if (status == 401 &&
+          error.code != ErrorCode.invalidCredentials &&
           usesAudience &&
           bearer == null &&
           !refreshed &&

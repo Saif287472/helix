@@ -1,7 +1,9 @@
 name: helix_admin
-description: "A new Flutter project."
+description: >-
+  Helix Admin: the operator console for a Helix Remote v2 server. It runs on
+  the v2 admin API only (helix_remote_api/v2.dart).
 publish_to: 'none'
-version: 0.1.0+1
+version: 2.0.0-dev+1
 
 environment:
   sdk: ^3.12.2
@@ -12,15 +14,14 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_secure_storage: ^11.2.0
-  http: ^1.6.0
-  local_auth: ^3.0.1
-  shared_preferences: ^2.5.3
-  retry: ^3.1.0
-  url_launcher: ^6.3.0
-  share_plus: ^13.1.0
-  web_socket_channel: ^3.0.1
+  helix_remote_api:
+    path: ../packages/helix_remote_api
+  helix_remote_protocol:
+    path: ../packages/helix_remote_protocol
   helix_remote_ui:
     path: ../packages/helix_remote_ui
+  local_auth: ^3.0.1
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -28,7 +29,9 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  url_launcher_platform_interface: ^2.3.2
+  helix_remote_architecture_rules:
+    path: ../packages/helix_remote_architecture_rules
+  http: ^1.6.0
 
 flutter:
   uses-material-design: true

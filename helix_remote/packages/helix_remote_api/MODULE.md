@@ -90,6 +90,9 @@ a `DeviceSessionAuth`; `HelixAdminApi(baseUrl)` the admin client to an
   `SignedOutException(refreshRejected)`, also published on `signedOut`. A
   refresh with no answer throws that error and keeps the session. Admin
   tokens are never refreshed: a 401 is `SignedOutException(sessionEnded)`.
+  A 401 with `invalid_credentials` is a wrong password in the request (the admin
+  password change), not a rejected token: it is thrown as an `ApiException`, with no
+  refresh and the admin session kept.
 - **Idempotency.** Every unsafe request carries an `Idempotency-Key`; sends
   use the message id.
 - **Retries** only for requests safe to repeat: `GET`/`HEAD`/`PUT`/`DELETE`

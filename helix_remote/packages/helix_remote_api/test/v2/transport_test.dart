@@ -263,6 +263,29 @@ void main() {
   });
 
   group('errors', () {
+    test('a 401 invalid_credentials is a wrong password, not a rejected '
+        'token: no refresh and the admin session stays', () async {
+      final admin = AdminTokenAuth(
+        session: AdminSession(
+          token: 'admin-token',
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+        ),
+      );
+      server.handler = (_) => apiError(ErrorCode.invalidCredentials);
+      await expectLater(
+        transport(withAuth: admin).send(Routes.adminPassword),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.code,
+            'code',
+            ErrorCode.invalidCredentials,
+          ),
+        ),
+      );
+      expect(admin.session, isNotNull);
+      expect(server.seen, hasLength(1));
+    });
+
     test('every protocol error code maps to a typed ApiException', () async {
       final t = transport(retry: RetryPolicy.none);
       for (final code in ErrorCode.values) {

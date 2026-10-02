@@ -63,3 +63,10 @@ First-run setup is public, as in v1: on a fresh public server the first
 caller of `POST /v1/admin/setup` becomes the operator. Set
 `HELIX_ADMIN_PASSWORD` before exposing a new server, or run setup
 straight away.
+
+## Clients
+
+The operator console is `helix_remote/admin` (Phase AD), on `HelixAdminApi` from
+`helix_remote_api/v2.dart`. Its screens are tested against a fake in `admin/test/`;
+`test/client/admin_console_v2_test.dart` drives the same calls against this module
+(setup, lockout, session rules, paging, one-time codes, redaction).
