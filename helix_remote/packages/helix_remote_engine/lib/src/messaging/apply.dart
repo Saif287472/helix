@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:helix_remote_crypto/v2.dart';
-import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_db/helix_remote_db.dart' hide GroupRole;
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/events.dart';
+import 'package:helix_remote_engine/src/groups/group_ids.dart';
 import 'package:helix_remote_engine/src/messaging/content_codec.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
@@ -27,6 +28,10 @@ final class ApplyResult {
 
 enum _Action { done, defer, ignore }
 
+/// The chat a content message belongs to: a direct chat ([peer] is the other
+/// person) or a group chat ([group] is its id, [peer] is empty).
+typedef _Chat = ({String peer, String id, String? group});
+
 /// Applies decrypted content to the database (plan §6.3 "apply"): the
 /// message row (with its summary and FTS entry, kept by the DAO), reactions,
 /// receipts, edits, deletes, poll votes, RSVPs, disappearing timers and
@@ -36,8 +41,11 @@ enum _Action { done, defer, ignore }
 /// session state and the `processed_envelopes` row, so an envelope is
 /// applied entirely or not at all.
 ///
-/// Direct chats only (C3b). Group content (a group `conv`, sender keys,
-/// roster-related system bodies) is dropped as `group_content`; C4 adds it.
+/// Direct chats and group chats. Group content (a group `conv`) is applied
+/// when it came through the group send (`viaGroup`, which the server checked
+/// for membership and the group's send permission), from a member of the
+/// stored roster; only receipts may arrive pairwise. Sender keys and group
+/// keys are handled by the group pipeline before this runs.
 final class ContentApplier {
   ContentApplier(this._ctx, this._outbox);
 
@@ -51,6 +59,7 @@ final class ContentApplier {
     required DeviceAddress sender,
     required ContentMessage content,
     required DateTime receivedAt,
+    bool viaGroup = false,
   }) async {
     final body = content.body;
     final self = _ctx.identity.accountId;
@@ -81,8 +90,12 @@ final class ContentApplier {
     }
 
     final chat = _chatOf(sender.account, content);
-    if (chat == null) return const ApplyResult.ignored('group_or_misaddressed');
-    if (sender.account != self) {
+    if (chat == null) return const ApplyResult.ignored('misaddressed');
+    final group = chat.group;
+    if (group != null) {
+      final refused = await _groupGate(sender, content, group, viaGroup);
+      if (refused != null) return ApplyResult.ignored(refused);
+    } else if (sender.account != self) {
       final person = await _db.peopleDao.byAccount(chat.peer);
       if (person?.blocked ?? false) return const ApplyResult.ignored('blocked');
     }
@@ -114,8 +127,15 @@ final class ContentApplier {
 
   // ------------------------------------------------------------- chats
 
-  ({String peer, String id})? _chatOf(String senderAccount, ContentMessage c) {
+  _Chat? _chatOf(String senderAccount, ContentMessage c) {
     final conversation = c.conversation;
+    if (conversation is GroupConversation) {
+      return (
+        peer: '',
+        id: GroupIds.conversationId(conversation.group),
+        group: conversation.group,
+      );
+    }
     if (conversation is! DirectConversation) return null;
     final self = _ctx.identity.accountId;
     final fromSelf = senderAccount == self;
@@ -125,8 +145,36 @@ final class ContentApplier {
       selfAccount: self,
     );
     if (peer == self) return null;
-    return (peer: peer, id: directConversationId(peer));
+    return (peer: peer, id: directConversationId(peer), group: null);
   }
+
+  /// Why content for a group chat is refused, or null when it may be
+  /// applied.
+  Future<String?> _groupGate(
+    DeviceAddress sender,
+    ContentMessage content,
+    String groupId,
+    bool viaGroup,
+  ) async {
+    if (await _db.groupsDao.byId(groupId) == null) return 'unknown_group';
+    final self = _ctx.identity.accountId;
+    final member = await _db.groupsDao.member(groupId, sender.account);
+    if (member == null && sender.account != self) return 'not_a_member';
+    final body = content.body;
+    // Only receipts may come pairwise: everything else has to go through
+    // the group send, where the server enforces membership and the group's
+    // send permission.
+    if (!viaGroup && body is! ReceiptBody) return 'group_content_not_via_group';
+    if (body is SystemBody) {
+      // Notices come from the server's roster envelopes, never from a
+      // member's message; the disappearing timer is the one setting sent.
+      if (body.kind != MessageKinds.timerChanged) return 'system_not_allowed';
+      if (!_isAdmin(member?.role)) return 'not_allowed';
+    }
+    return null;
+  }
+
+  bool _isAdmin(String? role) => role == 'owner' || role == 'admin';
 
   /// The author's clock may be wrong or hostile: a message cannot claim to
   /// be from the future (it would sort below everything forever).
@@ -140,7 +188,7 @@ final class ContentApplier {
   Future<ApplyResult> _insertMessage(
     DeviceAddress sender,
     ContentMessage content,
-    ({String peer, String id}) chat,
+    _Chat chat,
     DateTime now,
   ) async {
     final self = _ctx.identity.accountId;
@@ -156,16 +204,31 @@ final class ContentApplier {
       // The re-sent message (CRYPTO_V2.md §13a) replaces its placeholder.
       await _db.messagesDao.removeMessages([existing.localRowid]);
     }
-    await _db.conversationsDao.ensureDirect(chat.peer, now: now);
-    await _db.peopleDao.upsertPerson(
-      PeopleCompanion.insert(
-        accountId: chat.peer,
-        updatedAt: now,
-        profileKey: !fromSelf && content.profileKey != null
-            ? Value(content.profileKey)
-            : const Value.absent(),
-      ),
-    );
+    final group = chat.group;
+    if (group != null) {
+      final title = (await _db.groupsDao.byId(group))?.title;
+      await _db.conversationsDao.ensureGroup(
+        chat.id,
+        title: title == null || title.isEmpty ? null : title,
+        now: now,
+      );
+    } else {
+      await _db.conversationsDao.ensureDirect(chat.peer, now: now);
+    }
+    // The person this message tells us about: the peer of a direct chat, or
+    // the author of a message in a group (not this account's own).
+    final person = group == null ? chat.peer : sender.account;
+    if (group == null || !fromSelf) {
+      await _db.peopleDao.upsertPerson(
+        PeopleCompanion.insert(
+          accountId: person,
+          updatedAt: now,
+          profileKey: !fromSelf && content.profileKey != null
+              ? Value(content.profileKey)
+              : const Value.absent(),
+        ),
+      );
+    }
     final body = content.body;
     final stored = ContentCodec.split(body);
     final sentAt = _clamp(content.sentAt, now);
@@ -216,7 +279,7 @@ final class ContentApplier {
     }
     if (fromSelf) return const ApplyResult.applied();
 
-    await _delivered(chat, content.id, now);
+    await _delivered(chat, content.id, sender.account, now);
     final conversation = await _db.conversationsDao.byId(chat.id);
     final muted = conversation?.mutedUntil;
     return ApplyResult.applied(
@@ -229,26 +292,38 @@ final class ContentApplier {
         preview: MessagesDao.preview(row),
         muted: muted != null && muted.isAfter(now),
         sentAt: row.sentAt,
+        mentionsMe: row.mentionsMe,
       ),
     );
   }
 
   /// A `delivered` receipt for the author (CONTENT_V2.md §3), queued in the
-  /// transaction that stored the message.
+  /// transaction that stored the message. In a group it goes to the author
+  /// only, and not at all in a group too large for every member to send
+  /// one.
   Future<void> _delivered(
-    ({String peer, String id}) chat,
+    _Chat chat,
     String messageId,
+    String author,
     DateTime now,
-  ) {
+  ) async {
+    final group = chat.group;
+    if (group != null &&
+        (await _db.groupsDao.members(group)).length >
+            GroupLimits.receiptsMaxMembers) {
+      return;
+    }
     final receipt = ContentMessage(
       id: _ctx.ids.next(),
       sentAt: now,
-      conversation: DirectConversation(to: chat.peer),
+      conversation: group == null
+          ? DirectConversation(to: chat.peer)
+          : GroupConversation(group: group),
       body: ReceiptBody(kind: ReceiptKind.delivered, ids: [messageId]),
     );
-    return _outbox.enqueueContent(
+    await _outbox.enqueueContent(
       content: receipt,
-      audience: [chat.peer],
+      audience: [group == null ? chat.peer : author],
       urgent: false,
     );
   }
@@ -306,7 +381,7 @@ final class ContentApplier {
     required String senderAccount,
     required String? senderDevice,
     required ContentMessage content,
-    required ({String peer, String id}) chat,
+    required _Chat chat,
     required DateTime now,
   }) async {
     final body = content.body;
@@ -327,7 +402,12 @@ final class ContentApplier {
       case EditBody():
         return _edit(target, senderAccount, body, at);
       case DeleteBody():
-        return _delete(target, senderAccount, at, now);
+        // A group admin may delete anyone's message (CONTENT_V2.md §3).
+        final group = chat.group;
+        final admin =
+            group != null &&
+            _isAdmin((await _db.groupsDao.member(group, senderAccount))?.role);
+        return _delete(target, senderAccount, at, now, byAdmin: admin);
       case PollVoteBody():
         return _pollVote(target, senderAccount, body);
       case RsvpBody():
@@ -400,9 +480,10 @@ final class ContentApplier {
     MessageRow target,
     String deleter,
     DateTime at,
-    DateTime now,
-  ) async {
-    if (target.sender != deleter || target.deletedAt != null) {
+    DateTime now, {
+    bool byAdmin = false,
+  }) async {
+    if ((target.sender != deleter && !byAdmin) || target.deletedAt != null) {
       return _Action.ignore;
     }
     if (at.difference(target.sentAt) > ContentLimits.deleteWindow) {
@@ -465,11 +546,16 @@ final class ContentApplier {
     String senderAccount,
     ReceiptBody body,
     ContentMessage content,
-    ({String peer, String id}) chat,
+    _Chat chat,
     DateTime now,
   ) async {
     final self = _ctx.identity.accountId;
     final at = _clamp(content.sentAt, now);
+    final group = chat.group;
+    if (group != null) {
+      await _groupReceipt(senderAccount, body, chat, group, at);
+      return;
+    }
     if (senderAccount != self) {
       // The peer reports on messages this account sent.
       for (final id in body.ids) {
@@ -503,6 +589,79 @@ final class ContentApplier {
       }
     }
     if (newest != null) await _db.messagesDao.markReadUpTo(chat.id, newest);
+  }
+
+  /// A receipt in a group chat. A member reports on a message this account
+  /// sent: the message moves to `delivered` or `read` once every member that
+  /// was in the group when it was sent has reported, so the ticks mean
+  /// "everyone". This account's own other device reports reads: they are
+  /// kept in sync.
+  Future<void> _groupReceipt(
+    String senderAccount,
+    ReceiptBody body,
+    _Chat chat,
+    String groupId,
+    DateTime at,
+  ) async {
+    final self = _ctx.identity.accountId;
+    if (senderAccount == self) {
+      if (body.kind == ReceiptKind.delivered) return;
+      String? newest;
+      for (final id in body.ids) {
+        final message = await _db.messagesDao.findInConversation(chat.id, id);
+        if (message == null || message.outgoing) continue;
+        if (newest == null || message.sortKey.compareTo(newest) > 0) {
+          newest = message.sortKey;
+        }
+      }
+      if (newest != null) await _db.messagesDao.markReadUpTo(chat.id, newest);
+      return;
+    }
+    for (final id in body.ids) {
+      final message = await _db.messagesDao.find(id, sender: self);
+      if (message == null || message.conversationId != chat.id) continue;
+      await _db.messagesDao.recordReceipt(
+        message.localRowid,
+        account: senderAccount,
+        kind: body.kind,
+        at: at,
+      );
+      await _advanceGroupStatus(message, groupId);
+    }
+  }
+
+  Future<void> _advanceGroupStatus(MessageRow message, String groupId) async {
+    final self = _ctx.identity.accountId;
+    final audience = [
+      for (final m in await _db.groupsDao.members(groupId))
+        if (m.accountId != self &&
+            !(m.joinedAt?.isAfter(message.sentAt) ?? false))
+          m.accountId,
+    ];
+    if (audience.isEmpty) return;
+    final receipts = {
+      for (final r in await _db.messagesDao.receiptsFor(message.localRowid))
+        r.accountId: r,
+    };
+    bool everyone(bool Function(ReceiptRow r) reached) => audience.every((a) {
+      final r = receipts[a];
+      return r != null && reached(r);
+    });
+    final MessageStatus? status;
+    if (everyone((r) => r.viewedAt != null)) {
+      status = MessageStatus.viewed;
+    } else if (everyone((r) => r.readAt != null || r.viewedAt != null)) {
+      status = MessageStatus.read;
+    } else if (everyone(
+      (r) => r.deliveredAt != null || r.readAt != null || r.viewedAt != null,
+    )) {
+      status = MessageStatus.delivered;
+    } else {
+      status = null;
+    }
+    if (status != null) {
+      await _db.messagesDao.advanceStatus(message.localRowid, status);
+    }
   }
 
   // ------------------------------------------------- control messages
@@ -540,20 +699,23 @@ final class ContentApplier {
     DateTime now,
   ) async {
     if (body.senderDevice != _ctx.identity.deviceId) return;
-    await _resend(sender.account, [body.messageId], now);
+    await _resend(sender.account, [body.messageId], now, device: sender);
   }
 
   Future<void> _resendRequest(
     DeviceAddress sender,
     ResendRequestBody body,
     DateTime now,
-  ) => _resend(sender.account, body.ids, now);
+  ) => _resend(sender.account, body.ids, now, device: sender);
 
+  /// Sends own messages again. [device] is the one that could not read them:
+  /// for a group message it gets this device's sender key again with it.
   Future<void> _resend(
     String toAccount,
     List<String> messageIds,
-    DateTime now,
-  ) async {
+    DateTime now, {
+    DeviceAddress? device,
+  }) async {
     final self = _ctx.identity.accountId;
     final account = await _db.accountDao.current();
     final profileKey = account?.profileKey;
@@ -563,6 +725,29 @@ final class ContentApplier {
           row.deletedAt != null ||
           !row.outgoing ||
           now.difference(row.sentAt) > _ctx.config.resendWindow) {
+        continue;
+      }
+      if (GroupIds.isGroupConversation(row.conversationId)) {
+        final groupId = GroupIds.groupIdOf(row.conversationId);
+        // Only a member may ask for a group message to be sent again.
+        if (device == null ||
+            await _db.groupsDao.member(groupId, device.account) == null) {
+          continue;
+        }
+        await _outbox.enqueueGroupContent(
+          content: ContentCodec.rebuild(
+            row,
+            to: toAccount,
+            conversation: GroupConversation(group: groupId),
+            profileKey: profileKey == null
+                ? null
+                : Uint8List.fromList(profileKey),
+          ),
+          groupId: groupId,
+          conversationId: row.conversationId,
+          requestId: _ctx.ids.next(),
+          redistribute: [device],
+        );
         continue;
       }
       final peer = row.conversationId.substring('direct:'.length);

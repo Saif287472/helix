@@ -19,6 +19,8 @@ import 'package:helix_remote_engine/src/features/people_service.dart';
 import 'package:helix_remote_engine/src/features/presence_service.dart';
 import 'package:helix_remote_engine/src/features/push_service.dart';
 import 'package:helix_remote_engine/src/features/settings_service.dart';
+import 'package:helix_remote_engine/src/groups/group_pipeline.dart';
+import 'package:helix_remote_engine/src/groups/groups_service.dart';
 import 'package:helix_remote_engine/src/maintenance.dart';
 import 'package:helix_remote_engine/src/messaging/apply.dart';
 import 'package:helix_remote_engine/src/messaging/inbound.dart';
@@ -44,7 +46,7 @@ import 'package:meta/meta.dart';
 /// ```
 ///
 /// The services are the engine's public face: [account], [devices],
-/// [chats], [people], [settings], [presence], [push]. Each returns futures
+/// [chats], [people], [groups], [settings], [presence], [push]. Each returns futures
 /// and watch-query streams and holds no UI state.
 ///
 /// **Lifecycle.** [start] loads the identity. Signed in, it starts the
@@ -78,15 +80,27 @@ final class Engine {
     _outbox = OutboxService(ctx);
     _keys = KeyMaintenance(ctx);
     _maintenance = MaintenanceService(ctx, _keys, devices);
-    presence = PresenceService(ctx, _sender);
+    final hooks = _Hooks(this);
+    final applier = ContentApplier(ctx, _outbox);
+    _groupPipeline = GroupPipeline(
+      ctx: ctx,
+      peers: _peers,
+      crypto: _crypto,
+      outbox: _outbox,
+      applier: applier,
+      hooks: hooks,
+    );
+    groups = _groupPipeline.service;
+    presence = PresenceService(ctx, _sender, _groupPipeline.sender);
     _inbound = InboundRunner(
       ctx,
       InboundProcessor(
         ctx,
         _crypto,
-        ContentApplier(ctx, _outbox),
+        applier,
         _outbox,
-        _Hooks(this),
+        hooks,
+        groups: _groupPipeline.inbound,
       ),
       onDeviceRevoked: _handleRevoked,
       onSessionEnded: _handleSessionEnded,
@@ -98,6 +112,7 @@ final class Engine {
       _crypto,
       onDeviceRevoked: _handleRevoked,
       onSessionEnded: _handleSessionEnded,
+      groups: _groupPipeline,
     );
     account = AccountService(ctx, onSignedIn: _activate);
     chats = ChatsService(
@@ -119,6 +134,7 @@ final class Engine {
   late final MaintenanceService _maintenance;
   late final InboundRunner _inbound;
   late final OutboxWorker _worker;
+  late final GroupPipeline _groupPipeline;
 
   /// Registration, sign-in, linking (this device as the new one).
   late final AccountService account;
@@ -131,6 +147,10 @@ final class Engine {
 
   /// Discovery, profiles, names, blocks.
   late final PeopleService people;
+
+  /// Groups: create, rename, members, roles, invite links, join requests.
+  /// Messages in a group chat go through [chats].
+  late final GroupsService groups;
 
   /// Local preferences, server-side privacy, the `~Helix name`.
   late final SettingsService settings;
@@ -213,6 +233,12 @@ final class Engine {
       await people.syncBlocks();
     } on Object {
       // Offline: maintenance repeats the device refresh.
+    }
+    try {
+      // A new device learns the groups this account is in.
+      await groups.refreshAll();
+    } on Object {
+      // Offline: the roster envelopes and the next refresh catch up.
     }
   }
 
@@ -362,6 +388,9 @@ final class _Hooks implements InboundHooks {
   @override
   Future<void> onOwnDevicesChanged() async {
     await _engine.devices.refresh();
+    // A newly linked device has no group keys: the existing ones hand theirs
+    // over (a device that is gone changes nothing).
+    await _engine._groupPipeline.keys.shareAllWithOwnDevices();
     _engine._ctx.emit(const OwnDevicesChanged());
   }
 

@@ -70,6 +70,13 @@ final class FakeServer {
   int _tokens = 0;
   final Uint8List salt = Uint8List.fromList(List.generate(32, (i) => i + 1));
 
+  /// Handlers for routes this fake does not implement itself (groups live
+  /// in `fake_groups.dart`), asked before the built-in ones; null passes.
+  final List<
+    Future<http.Response?> Function(ApiRoute route, FakeRequest request)
+  >
+  extensions = [];
+
   final List<_Fault> _faults = [];
   final Map<String, _Link> _links = {};
   final Map<String, ({FakeDevice device, Uint8List challenge})> _challenges =
@@ -149,6 +156,7 @@ final class FakeServer {
     Uint8List? payload,
     JsonMap? data,
     String? id,
+    String? groupId,
     bool ephemeral = false,
     bool urgent = false,
   }) {
@@ -159,6 +167,7 @@ final class FakeServer {
       sentAt: _clock().toUtc(),
       seq: ephemeral ? null : target.nextSeq++,
       from: from,
+      groupId: groupId,
       payload: payload,
       data: data,
       urgent: urgent,
@@ -210,7 +219,7 @@ final class FakeServer {
       if (caller == null) return _error(ErrorCode.unauthenticated);
       if (caller.revoked) return _error(ErrorCode.deviceRevoked);
     }
-    final req = _Req(
+    final req = FakeRequest(
       params,
       request.url.queryParametersAll,
       request.body.isEmpty ? null : JsonReader.decode(request.body),
@@ -245,7 +254,11 @@ final class FakeServer {
     return null;
   }
 
-  Future<http.Response> _dispatch(ApiRoute route, _Req r) async {
+  Future<http.Response> _dispatch(ApiRoute route, FakeRequest r) async {
+    for (final extension in extensions) {
+      final handled = await extension(route, r);
+      if (handled != null) return handled;
+    }
     if (route == Routes.phoneChallenge) {
       return _ok(
         PhoneChallengeResponse(
@@ -558,7 +571,7 @@ final class FakeServer {
     );
   }
 
-  http.Response _accountKeys(_Req r) {
+  http.Response _accountKeys(FakeRequest r) {
     final account = accounts[r.params['account']];
     if (account == null) return _error(ErrorCode.notFound);
     final wanted = r.query['device'];
@@ -597,7 +610,7 @@ final class FakeServer {
     );
   }
 
-  http.Response _send(_Req r) {
+  http.Response _send(FakeRequest r) {
     final from = r.caller!;
     final request = SendMessageRequest.fromJson(r.json!);
     final stale = <StaleAccountDevices>[];
@@ -651,6 +664,14 @@ final class FakeServer {
     return _ok(SendMessageResponse(acceptedAt: _clock()).toJson());
   }
 
+  /// Response builders for [extensions].
+  http.Response ok(JsonMap json) => _ok(json);
+
+  http.Response empty() => _empty();
+
+  http.Response error(ErrorCode code, {JsonMap? details}) =>
+      _error(code, details: details);
+
   http.Response _ok(JsonMap json) => http.Response(
     jsonEncode(json),
     200,
@@ -699,8 +720,9 @@ final class _Link {
   String? accountId;
 }
 
-final class _Req {
-  _Req(this.params, this.query, this.json, this.caller);
+/// One request as the fake sees it (for [FakeServer.extensions]).
+final class FakeRequest {
+  FakeRequest(this.params, this.query, this.json, this.caller);
 
   final Map<String, String> params;
   final Map<String, List<String>> query;

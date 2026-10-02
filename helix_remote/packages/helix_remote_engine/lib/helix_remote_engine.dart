@@ -16,6 +16,17 @@ export 'src/features/phone_book.dart';
 export 'src/features/presence_service.dart' show PresenceService;
 export 'src/features/push_service.dart' show PushService;
 export 'src/features/settings_service.dart' show SettingsService;
+export 'src/groups/group_ids.dart' show GroupIds, GroupLimits, GroupNoticeKinds;
+export 'src/groups/group_invite_links.dart' show GroupInviteLinks;
+export 'src/groups/group_keyring.dart' show GroupMeta;
+export 'src/groups/groups_service.dart'
+    show
+        CreatedGroup,
+        GroupDetails,
+        GroupInviteLink,
+        GroupInvitePreview,
+        GroupsService,
+        JoinResult;
 export 'src/messaging/inbound_runner.dart' show SyncSummary;
 export 'src/messaging/kinds.dart' show MessageKinds;
 export 'src/settings_keys.dart' show EngineSettings;

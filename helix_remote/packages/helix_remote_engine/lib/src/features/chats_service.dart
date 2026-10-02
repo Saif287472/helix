@@ -2,18 +2,27 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_db/helix_remote_db.dart' hide GroupRole;
 import 'package:helix_remote_engine/src/context.dart';
+import 'package:helix_remote_engine/src/errors.dart';
+import 'package:helix_remote_engine/src/groups/group_ids.dart';
+import 'package:helix_remote_engine/src/groups/group_keyring.dart';
 import 'package:helix_remote_engine/src/messaging/content_codec.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
-/// Chats and messages (direct chats in C3b): lists as watch queries, and
-/// every user action as one transaction that writes the optimistic row and
-/// the outbox op together (plan §6.3). Sending happens later, in the
-/// outbox worker; nothing here touches the network.
+/// Chats and messages (direct chats and group chats): lists as watch
+/// queries, and every user action as one transaction that writes the
+/// optimistic row and the outbox op together (plan §6.3). Sending happens
+/// later, in the outbox worker; nothing here touches the network.
+///
+/// A group chat is the conversation `group:<group id>` (`GroupsService`
+/// creates and joins groups); it takes the same actions as a direct chat.
+/// A group message is encrypted once for the whole group and sent through
+/// the group endpoint; reactions, edits, deletes and votes go the same way,
+/// receipts go to their author only.
 ///
 /// Attachments (media content) are sent by C4's transfer queue; this
 /// service sends text, replies, mentions, reactions, edits, deletes,
@@ -99,7 +108,7 @@ final class ChatsService {
     String text, {
     MessageRef? replyTo,
     List<Mention> mentions = const [],
-  }) {
+  }) async {
     if (text.trim().isEmpty) {
       throw ArgumentError.value(text, 'text', 'is empty');
     }
@@ -110,11 +119,36 @@ final class ChatsService {
         'is too long',
       );
     }
+    if (mentions.isNotEmpty && GroupIds.isGroupConversation(conversationId)) {
+      await _checkMentions(conversationId, text, mentions);
+    }
     return _sendVisible(
       conversationId,
       TextBody(text: text, mentions: mentions),
       reply: replyTo,
     );
+  }
+
+  /// Mentions in a group name members and point inside the text.
+  Future<void> _checkMentions(
+    String conversationId,
+    String text,
+    List<Mention> mentions,
+  ) async {
+    final members = {
+      for (final m in await _db.groupsDao.members(
+        GroupIds.groupIdOf(conversationId),
+      ))
+        m.accountId,
+    };
+    for (final m in mentions) {
+      if (!members.contains(m.account) ||
+          m.start < 0 ||
+          m.length <= 0 ||
+          m.start + m.length > text.length) {
+        throw const GroupException(GroupFailure.badMention);
+      }
+    }
   }
 
   /// Sends a message of any content type that needs no blob: location,
@@ -166,7 +200,7 @@ final class ChatsService {
     bool viewOnce,
     bool applyTimer,
   ) async {
-    final peer = _peerOf(conversationId);
+    final route = await _routeOf(conversationId, sending: true);
     final chat = await _db.conversationsDao.byId(conversationId);
     if (chat == null) throw StateError('no such chat');
     final now = _ctx.now();
@@ -176,7 +210,7 @@ final class ChatsService {
     final content = ContentMessage(
       id: _ctx.ids.next(),
       sentAt: now,
-      conversation: DirectConversation(to: peer),
+      conversation: route.conversation,
       body: body,
       reply: reply,
       expireSeconds: expire,
@@ -211,10 +245,10 @@ final class ChatsService {
       ),
     );
     await _db.conversationsDao.setDraft(conversationId, null);
-    await _outbox.enqueueContent(
-      content: content,
-      audience: [peer, self.accountId],
-      conversationId: conversationId,
+    await _enqueue(
+      route,
+      conversationId,
+      content,
       messageRowid: row.localRowid,
     );
     return row;
@@ -351,7 +385,12 @@ final class ChatsService {
   Future<void> deleteForEveryone(int rowid) => _db.transaction(() async {
     final target = await _requireMessage(rowid);
     final now = _ctx.now();
-    if (!target.outgoing ||
+    // A group admin may delete anyone's message (CONTENT_V2.md §3).
+    final byAdmin =
+        !target.outgoing &&
+        GroupIds.isGroupConversation(target.conversationId) &&
+        await _isGroupAdmin(target.conversationId);
+    if ((!target.outgoing && !byAdmin) ||
         target.deletedAt != null ||
         now.difference(target.sentAt) > ContentLimits.deleteWindow) {
       throw StateError('this message can no longer be deleted for everyone');
@@ -378,9 +417,13 @@ final class ChatsService {
     if (chat == null || newest == null) return;
     final read = await _db.messagesDao.markReadUpTo(conversationId, newest);
     if (read.isEmpty) return;
-    final peer = _peerOf(conversationId);
     final toPeer = await _db.settingsDao.get(EngineSettings.sendReadReceipts);
     final self = _ctx.identity.accountId;
+    if (GroupIds.isGroupConversation(conversationId)) {
+      await _markGroupRead(conversationId, read, sendToAuthors: toPeer);
+      return;
+    }
+    final peer = _peerOf(conversationId);
     final ids = [for (final m in read) m.messageId];
     for (var i = 0; i < ids.length; i += ContentLimits.maxIdsPerReceipt) {
       final chunk = ids.skip(i).take(ContentLimits.maxIdsPerReceipt).toList();
@@ -405,15 +448,16 @@ final class ChatsService {
     if (target.viewOnceState != ViewOnceState.unopened) return;
     await _db.messagesDao.setViewOnceState(rowid, ViewOnceState.opened);
     if (target.outgoing) return;
-    final peer = _peerOf(target.conversationId);
+    final route = await _routeOf(target.conversationId);
     await _outbox.enqueueContent(
       content: ContentMessage(
         id: _ctx.ids.next(),
         sentAt: _ctx.now(),
-        conversation: DirectConversation(to: peer),
+        conversation: route.conversation,
         body: ReceiptBody(kind: ReceiptKind.viewed, ids: [target.messageId]),
       ),
-      audience: [peer, _ctx.identity.accountId],
+      // In a group the author hears about it, not everyone.
+      audience: [route.peer ?? target.sender, _ctx.identity.accountId],
       urgent: false,
     );
   });
@@ -477,10 +521,107 @@ final class ChatsService {
       throw ArgumentError.value(
         conversationId,
         'conversationId',
-        'is not a direct chat (groups arrive in C4)',
+        'is not a direct chat',
       );
     }
     return conversationId.substring(prefix.length);
+  }
+
+  /// Where a chat's content goes: the peer of a direct chat, or the group.
+  /// [sending] also checks that this account may send to the group (the
+  /// server enforces it too; this fails at once, not from the outbox).
+  Future<_Route> _routeOf(String conversationId, {bool sending = false}) async {
+    if (!GroupIds.isGroupConversation(conversationId)) {
+      return _Route.direct(_peerOf(conversationId));
+    }
+    final groupId = GroupIds.groupIdOf(conversationId);
+    final member = await _db.groupsDao.selfMembership(groupId);
+    if (member == null) throw const GroupException(GroupFailure.notAMember);
+    if (sending && member.role == 'member') {
+      final settings = (await GroupKeyring(_ctx).meta(groupId)).settings;
+      if (settings.sendMessages == GroupPermission.admins) {
+        throw const GroupException(GroupFailure.notAllowed);
+      }
+    }
+    return _Route.group(groupId);
+  }
+
+  Future<bool> _isGroupAdmin(String conversationId) async {
+    final role = (await _db.groupsDao.selfMembership(
+      GroupIds.groupIdOf(conversationId),
+    ))?.role;
+    return role == 'owner' || role == 'admin';
+  }
+
+  Future<void> _enqueue(
+    _Route route,
+    String conversationId,
+    ContentMessage content, {
+    int? messageRowid,
+    bool urgent = true,
+  }) {
+    final group = route.groupId;
+    if (group != null) {
+      return _outbox.enqueueGroupContent(
+        content: content,
+        groupId: group,
+        conversationId: conversationId,
+        messageRowid: messageRowid,
+        urgent: urgent,
+      );
+    }
+    return _outbox.enqueueContent(
+      content: content,
+      audience: [route.peer!, _ctx.identity.accountId],
+      conversationId: conversationId,
+      messageRowid: messageRowid,
+      urgent: urgent,
+    );
+  }
+
+  /// Read receipts of a group chat: this account's other devices learn
+  /// everything that was read; each author hears about their own messages
+  /// (when the setting allows, and not in a group too large for receipts).
+  Future<void> _markGroupRead(
+    String conversationId,
+    List<MessageRow> read, {
+    required bool sendToAuthors,
+  }) async {
+    final groupId = GroupIds.groupIdOf(conversationId);
+    final conversation = GroupConversation(group: groupId);
+    final self = _ctx.identity.accountId;
+    Future<void> receipt(
+      List<MessageRow> messages,
+      List<String> audience,
+    ) async {
+      final ids = [for (final m in messages) m.messageId];
+      for (var i = 0; i < ids.length; i += ContentLimits.maxIdsPerReceipt) {
+        await _outbox.enqueueContent(
+          content: ContentMessage(
+            id: _ctx.ids.next(),
+            sentAt: _ctx.now(),
+            conversation: conversation,
+            body: ReceiptBody(
+              kind: ReceiptKind.read,
+              ids: ids.skip(i).take(ContentLimits.maxIdsPerReceipt).toList(),
+            ),
+          ),
+          audience: audience,
+          urgent: false,
+        );
+      }
+    }
+
+    await receipt(read, [self]);
+    final size = (await _db.groupsDao.members(groupId)).length;
+    if (!sendToAuthors || size > GroupLimits.receiptsMaxMembers) return;
+    final byAuthor = <String, List<MessageRow>>{};
+    for (final m in read) {
+      if (m.sender != self) (byAuthor[m.sender] ??= []).add(m);
+    }
+    for (final entry in byAuthor.entries) {
+      await receipt(entry.value, [entry.key]);
+    }
   }
 
   Future<MessageRow> _requireMessage(int rowid) async {
@@ -491,19 +632,33 @@ final class ChatsService {
 
   /// Sends an action on [target]'s chat to the peer and this account's
   /// other devices.
-  Future<void> _sendAction(MessageRow target, ContentBody body) {
-    final peer = _peerOf(target.conversationId);
-    return _outbox.enqueueContent(
-      content: ContentMessage(
+  Future<void> _sendAction(MessageRow target, ContentBody body) async {
+    final route = await _routeOf(target.conversationId, sending: true);
+    return _enqueue(
+      route,
+      target.conversationId,
+      ContentMessage(
         id: _ctx.ids.next(),
         sentAt: _ctx.now(),
-        conversation: DirectConversation(to: peer),
+        conversation: route.conversation,
         body: body,
       ),
-      audience: [peer, _ctx.identity.accountId],
-      conversationId: target.conversationId,
       // Actions on a message are not worth waking the recipient's phone.
       urgent: false,
     );
   }
+}
+
+/// A chat's destination: [peer] for a direct chat, [groupId] for a group.
+final class _Route {
+  _Route.direct(String this.peer) : groupId = null;
+
+  _Route.group(String this.groupId) : peer = null;
+
+  final String? peer;
+  final String? groupId;
+
+  ConversationRef get conversation => groupId != null
+      ? GroupConversation(group: groupId!)
+      : DirectConversation(to: peer!);
 }

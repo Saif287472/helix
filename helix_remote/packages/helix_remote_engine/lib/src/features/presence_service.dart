@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/events.dart';
+import 'package:helix_remote_engine/src/groups/group_ids.dart';
+import 'package:helix_remote_engine/src/groups/group_sender.dart';
 import 'package:helix_remote_engine/src/messaging/sender.dart';
 import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -17,10 +19,11 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 /// yet, the signal is skipped (the first real message sets sessions up).
 /// Failures are ignored; typing is best effort.
 final class PresenceService {
-  PresenceService(this._ctx, this._sender);
+  PresenceService(this._ctx, this._sender, this._groups);
 
   final EngineContext _ctx;
   final MessageSender _sender;
+  final GroupMessageSender _groups;
 
   final Map<String, Map<String, Timer>> _typing = {};
   final StreamController<String> _changes = StreamController.broadcast();
@@ -60,11 +63,15 @@ final class PresenceService {
     if (!_changes.isClosed) _changes.add(conversationId);
   }
 
-  /// Tells the peer of [conversationId] (a direct chat) that this user
-  /// started or stopped typing.
+  /// Tells the peer of [conversationId] (a direct chat) or the members of
+  /// the group that this user started or stopped typing. A group indicator
+  /// is encrypted once under the sender key and delivered to online devices
+  /// only (it carries no key distribution, so a member that lacks the key
+  /// simply does not see it).
   Future<void> sendTyping(String conversationId, {required bool typing}) async {
     const prefix = 'direct:';
-    if (!conversationId.startsWith(prefix)) return;
+    final group = GroupIds.isGroupConversation(conversationId);
+    if (!group && !conversationId.startsWith(prefix)) return;
     if (!await _ctx.db.settingsDao.get(EngineSettings.sendTyping)) return;
     final now = _ctx.now();
     if (typing) {
@@ -76,6 +83,10 @@ final class PresenceService {
       _lastSent[conversationId] = now;
     } else {
       _lastSent.remove(conversationId);
+    }
+    if (group) {
+      await _sendGroupTyping(GroupIds.groupIdOf(conversationId), typing, now);
+      return;
     }
     final peer = conversationId.substring(prefix.length);
     try {
@@ -94,6 +105,33 @@ final class PresenceService {
         accounts: [peer],
         ephemeral: true,
         urgent: false,
+      );
+    } on Object {
+      // Best effort.
+    }
+  }
+
+  Future<void> _sendGroupTyping(
+    String groupId,
+    bool typing,
+    DateTime now,
+  ) async {
+    try {
+      if (await _ctx.db.groupsDao.byId(groupId) == null) return;
+      final content = ContentMessage(
+        id: _ctx.ids.next(),
+        sentAt: now,
+        conversation: GroupConversation(group: groupId),
+        body: TypingBody(
+          state: typing ? TypingState.started : TypingState.stopped,
+        ),
+      );
+      await _groups.send(
+        groupId: groupId,
+        requestId: content.id,
+        content: content,
+        urgent: false,
+        ephemeral: true,
       );
     } on Object {
       // Best effort.

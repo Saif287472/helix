@@ -46,10 +46,11 @@ abstract final class ContentCodec {
     MessageRow row, {
     required String to,
     required Uint8List? profileKey,
+    ConversationRef? conversation,
   }) => ContentMessage(
     id: row.messageId,
     sentAt: row.sentAt,
-    conversation: DirectConversation(to: to),
+    conversation: conversation ?? DirectConversation(to: to),
     body: join(row),
     reply: row.replyToId == null || row.replyToAuthor == null
         ? null

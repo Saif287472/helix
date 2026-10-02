@@ -124,6 +124,62 @@ class CryptoDao extends DatabaseAccessor<HelixDb> with _$CryptoDaoMixin {
           ))
           .getSingleOrNull();
 
+  /// The newest sender key of one device in a group (this device's own
+  /// sending key, or the latest key received from another device).
+  Future<SenderKeyRow?> latestSenderKey({
+    required String groupId,
+    required String account,
+    required String device,
+  }) =>
+      (select(senderKeys)
+            ..where(
+              (k) =>
+                  k.groupId.equals(groupId) &
+                  k.accountId.equals(account) &
+                  k.deviceId.equals(device),
+            )
+            ..orderBy([
+              (k) => OrderingTerm.desc(k.createdAt),
+              (k) => OrderingTerm.desc(k.updatedAt),
+            ])
+            ..limit(1))
+          .getSingleOrNull();
+
+  /// Every sender key of one device in a group, newest first.
+  Future<List<SenderKeyRow>> senderKeysOf({
+    required String groupId,
+    required String account,
+    required String device,
+  }) =>
+      (select(senderKeys)
+            ..where(
+              (k) =>
+                  k.groupId.equals(groupId) &
+                  k.accountId.equals(account) &
+                  k.deviceId.equals(device),
+            )
+            ..orderBy([
+              (k) => OrderingTerm.desc(k.createdAt),
+              (k) => OrderingTerm.desc(k.updatedAt),
+            ]))
+          .get();
+
+  /// Deletes one sender key.
+  Future<void> deleteSenderKey({
+    required String groupId,
+    required String account,
+    required String device,
+    required String distId,
+  }) =>
+      (delete(senderKeys)..where(
+            (k) =>
+                k.groupId.equals(groupId) &
+                k.accountId.equals(account) &
+                k.deviceId.equals(device) &
+                k.distId.equals(distId),
+          ))
+          .go();
+
   Future<void> saveSenderKey(SenderKeysCompanion key) =>
       into(senderKeys).insertOnConflictUpdate(key);
 

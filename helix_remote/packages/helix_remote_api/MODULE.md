@@ -94,7 +94,11 @@ a `DeviceSessionAuth`; `HelixAdminApi(baseUrl)` the admin client to an
   password change), not a rejected token: it is thrown as an `ApiException`, with no
   refresh and the admin session kept.
 - **Idempotency.** Every unsafe request carries an `Idempotency-Key`; sends
-  use the message id.
+  use the message id. `GroupsClient.sendMessage` takes an optional
+  `idempotencyKey`: a retry whose ciphertext differs (after
+  `device_list_stale`) needs its own key, because the server answers a
+  repeated key with another body `idempotency_conflict`, and stores a 4xx
+  answer relayed from a group's home server under the key.
 - **Retries** only for requests safe to repeat: `GET`/`HEAD`/`PUT`/`DELETE`
   and device `POST`/`PATCH` (the server replays their key). Public `POST`s
   are never repeated (a repeated refresh is token reuse and revokes the
