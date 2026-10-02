@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_engine/src/backup/inbox.dart';
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/messaging/content_codec.dart';
@@ -73,6 +74,17 @@ final class ContentApplier {
       case ResendRequestBody():
         await _resendRequest(sender, body, receivedAt);
         return const ApplyResult.applied();
+      case DeviceTransferOfferBody():
+        // Own devices only; recorded here, fetched by the backup feature.
+        final recorded = await TransferInbox.apply(
+          _ctx,
+          sender,
+          body,
+          receivedAt,
+        );
+        return recorded
+            ? const ApplyResult.applied()
+            : const ApplyResult.ignored('transfer_offer');
       case SenderKeyDistributionBody() || GroupKeyBody():
         return const ApplyResult.ignored('group_content');
       case TypingBody():

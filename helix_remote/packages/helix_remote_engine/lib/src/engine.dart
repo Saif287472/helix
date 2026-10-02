@@ -6,6 +6,8 @@ import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/src/account/account_service.dart';
 import 'package:helix_remote_engine/src/account/device_service.dart';
 import 'package:helix_remote_engine/src/account/key_maintenance.dart';
+import 'package:helix_remote_engine/src/backup/backup_service.dart';
+import 'package:helix_remote_engine/src/backup/options.dart';
 import 'package:helix_remote_engine/src/config.dart';
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/crypto/local_identity.dart';
@@ -63,6 +65,7 @@ final class Engine {
     required CryptoRandom random,
     EngineConfig config = const EngineConfig(),
     PhoneBook? phoneBook,
+    BackupOptions backupOptions = const BackupOptions(),
   }) : _ctx = EngineContext(
          api: api,
          db: db,
@@ -76,8 +79,14 @@ final class Engine {
     devices = DeviceService(ctx, _peers);
     _sender = MessageSender(ctx, _peers, _crypto, devices);
     _outbox = OutboxService(ctx);
+    backup = BackupService(ctx, _outbox, devices, options: backupOptions);
     _keys = KeyMaintenance(ctx);
-    _maintenance = MaintenanceService(ctx, _keys, devices);
+    _maintenance = MaintenanceService(
+      ctx,
+      _keys,
+      devices,
+      extraWork: backup.runMaintenance,
+    );
     presence = PresenceService(ctx, _sender);
     _inbound = InboundRunner(
       ctx,
@@ -140,6 +149,10 @@ final class Engine {
 
   /// Push-token registration.
   late final PushService push;
+
+  /// History backup and restore, the full backup, and device-to-device
+  /// history transfer.
+  late final BackupService backup;
 
   final StreamController<EngineStatus> _statuses = StreamController.broadcast();
   EngineStatus _status = EngineStatus.idle;
@@ -223,12 +236,14 @@ final class Engine {
       _worker.start();
       _maintenance.start();
     }
+    if (_background || _realtime) backup.start();
     if (_realtime) await _inbound.startRealtime();
   }
 
   Future<void> _stopWorkers() async {
     if (!_workersRunning) return;
     _workersRunning = false;
+    await backup.stop();
     await _inbound.stopRealtime();
     await _worker.stop();
     await _maintenance.stop();
@@ -245,6 +260,7 @@ final class Engine {
   /// database and the API.
   Future<void> close() async {
     await stop();
+    await backup.close();
     await presence.close();
     await _statuses.close();
     await _ctx.close();

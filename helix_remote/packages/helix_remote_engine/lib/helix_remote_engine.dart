@@ -5,6 +5,17 @@ library;
 export 'src/account/account_service.dart' show AccountService, NewDeviceLink;
 export 'src/account/device_service.dart' show DeviceService;
 export 'src/account/session_token_store.dart' show DbSessionTokenStore;
+export 'src/backup/backup_service.dart' show BackupService;
+export 'src/backup/errors.dart' show BackupException, BackupFailure;
+export 'src/backup/models.dart';
+export 'src/backup/options.dart'
+    show
+        BackupOptions,
+        BackupRemote,
+        RelayStore,
+        ApiBackupRemote,
+        ApiRelayStore;
+export 'src/backup/snapshot.dart' show ArchiveSecrets;
 export 'src/config.dart' show EngineConfig;
 export 'src/engine.dart' show Engine;
 export 'src/errors.dart';

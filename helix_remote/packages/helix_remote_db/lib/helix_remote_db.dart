@@ -16,6 +16,7 @@ export 'src/daos/people_dao.dart';
 export 'src/daos/settings_dao.dart';
 export 'src/daos/transfers_dao.dart';
 export 'src/database.dart';
+export 'src/history_store.dart';
 export 'src/opening.dart'
     show DatabaseKey, DbEncryptionException, hasPlaintextSqliteHeader;
 export 'src/setting.dart';
