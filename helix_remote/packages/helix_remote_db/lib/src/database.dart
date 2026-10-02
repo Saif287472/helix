@@ -7,21 +7,27 @@ import 'package:drift/native.dart';
 // ignore: experimental_member_use
 import 'package:drift/remote.dart';
 import 'package:helix_remote_db/src/daos/account_dao.dart';
+import 'package:helix_remote_db/src/daos/calls_dao.dart';
 import 'package:helix_remote_db/src/daos/conversations_dao.dart';
 import 'package:helix_remote_db/src/daos/crypto_dao.dart';
+import 'package:helix_remote_db/src/daos/groups_dao.dart';
 import 'package:helix_remote_db/src/daos/inbox_dao.dart';
 import 'package:helix_remote_db/src/daos/messages_dao.dart';
 import 'package:helix_remote_db/src/daos/outbox_dao.dart';
 import 'package:helix_remote_db/src/daos/people_dao.dart';
 import 'package:helix_remote_db/src/daos/settings_dao.dart';
+import 'package:helix_remote_db/src/daos/transfers_dao.dart';
+import 'package:helix_remote_db/src/database.steps.dart';
 import 'package:helix_remote_db/src/opening.dart';
 import 'package:helix_remote_db/src/tables/account.dart';
 import 'package:helix_remote_db/src/tables/conversations.dart';
 import 'package:helix_remote_db/src/tables/crypto.dart';
+import 'package:helix_remote_db/src/tables/groups.dart';
 import 'package:helix_remote_db/src/tables/messages.dart';
 import 'package:helix_remote_db/src/tables/people.dart';
 import 'package:helix_remote_db/src/tables/settings.dart';
 import 'package:helix_remote_db/src/tables/sync.dart';
+import 'package:helix_remote_db/src/tables/transfers.dart';
 import 'package:helix_remote_db/src/values.dart';
 
 part 'database.g.dart';
@@ -52,6 +58,12 @@ part 'database.g.dart';
     ProcessedEnvelopes,
     OutboxOps,
     DeferredActions,
+    TransferJobs,
+    TransferChunks,
+    Groups,
+    GroupMembers,
+    GroupBans,
+    CallLog,
     Settings,
   ],
   include: {'fts.drift'},
@@ -64,6 +76,9 @@ part 'database.g.dart';
     InboxDao,
     OutboxDao,
     SettingsDao,
+    GroupsDao,
+    TransfersDao,
+    CallsDao,
   ],
 )
 class HelixDb extends _$HelixDb {
@@ -75,14 +90,31 @@ class HelixDb extends _$HelixDb {
   /// `dart run drift_dev make-migrations`, and fill in the generated test
   /// (MODULE.md, "Changing the schema").
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
-    onUpgrade: (m, from, to) async {
-      throw UnsupportedError('no migration from schema $from to $to');
-    },
+    onUpgrade: stepByStep(
+      // Schema 2 (C4) added the group, call-log and transfer tables. It is
+      // additive: nothing in schema 1 changes shape, so a device that was on
+      // 1 keeps every row it had and finds the new tables empty. Entities are
+      // created one by one from the frozen version-2 schema (not from the live
+      // table classes, which a later version may change), parents first.
+      from1To2: (m, schema) async {
+        await m.create(schema.transferJobs);
+        await m.create(schema.transferJobsState);
+        await m.create(schema.transferChunks);
+        await m.create(schema.transferChunksTransfer);
+        await m.create(schema.groups);
+        await m.create(schema.groupsList);
+        await m.create(schema.groupMembers);
+        await m.create(schema.groupMembersAccount);
+        await m.create(schema.groupBans);
+        await m.create(schema.callLog);
+        await m.create(schema.callLogAt);
+      },
+    ),
   );
 
   /// Deletes every row of every table (sign-out and revocation wipe): keys,
@@ -93,6 +125,8 @@ class HelixDb extends _$HelixDb {
     for (final table in <TableInfo<Table, Object?>>[
       outboxOps,
       deferredActions,
+      transferChunks,
+      transferJobs,
       processedEnvelopes,
       inboxCursor,
       messageReactions,
@@ -109,6 +143,10 @@ class HelixDb extends _$HelixDb {
       identity,
       selfDevices,
       selfAccount,
+      groupBans,
+      groupMembers,
+      groups,
+      callLog,
       settings,
     ]) {
       await delete(table).go();

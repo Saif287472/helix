@@ -106,6 +106,17 @@ Future<void> _run(List<String> args) async {
   final code = await process.exitCode;
   if (code != 0) {
     stderr.writeln('dart ${args.join(' ')} failed (exit $code)');
+    if (args.contains('build_runner')) {
+      // source_gen's combining builder fails with an empty message when a
+      // library it must stitch a part into has a syntax error (for example
+      // `await` in a non-async function): drift_dev's own analysis tolerates
+      // that, so the error surfaces one builder later and says nothing.
+      stderr.writeln(
+        'If the log above shows an empty "E source_gen:combining_builder on '
+        '<file>" error, <file> has a syntax error: run `dart analyze` on it '
+        '(the missing generated parts add noise; look for parse errors).',
+      );
+    }
     exit(code);
   }
 }

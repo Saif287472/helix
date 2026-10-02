@@ -21,7 +21,7 @@ all open it. May depend only on `helix_remote_domain` and
 - `DatabaseKey.toString()` is redacted; the key lives in the platform
   keystore and is never logged.
 
-## Schema (version 1)
+## Schema (version 2)
 
 Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 
@@ -33,11 +33,20 @@ Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 | Messages | `messages` (decrypted once: `kind`, `body` text/caption, `payload` JSON for the rest of the content body, reply, status, edit/delete, disappearing, view-once), `message_reactions`, `message_receipts`, `attachments`, `messages_fts` (FTS5, external content, triggers in `fts.drift`) |
 | Crypto | `identity` (one row), `sessions` (per device pair, slot 0 active + 5 previous), `prekeys`, `sender_keys` |
 | Sync | `inbox_cursor` (one row), `processed_envelopes`, `outbox_ops`, `deferred_actions` (actions waiting up to 7 days for their target) |
+| Groups (v2) | `groups` (title, role, roster `epoch`, encrypted state blob, the chat-list summary columns), `group_members` (the server's roster; `devices_json` is the member's device ids as JSON), `group_bans` |
+| Calls (v2) | `call_log` (the fact and timings of a call; never SDP or ICE) |
+| Transfers (v2) | `transfer_jobs` (durable, resumable attachment queue with a lease and a byte `offset`), `transfer_chunks` (device-to-device history chunks) |
 | Settings | `settings` (typed through `Setting<T>`) |
 
-Not here yet, by "tables arrive with the feature" (plan §3.8): `groups`,
-`group_members`, `group_settings`, `call_log` and `transfer_jobs` land in C4.
-`sender_keys` is here because the crypto store is built with C2/C3.
+Not here yet, by "tables arrive with the feature" (plan §3.8): `group_settings`
+(a group's settings live in the encrypted `groups.state` blob until a feature
+needs them queryable). `sender_keys` is here because the crypto store is built
+with C2/C3.
+
+Schema 2 (C4) is additive: `from1To2` (in `HelixDb.migration`, over the
+generated `stepByStep`) creates the new tables and their indexes from the
+frozen version-2 schema. `test/drift/helix/migration_test.dart` checks the
+path and that schema-1 rows survive.
 
 ## Rules
 
@@ -87,6 +96,34 @@ No schema change; DAO methods only.
   account in tests and the CLI): `open` and `inMemory` switch off drift's
   multiple-instance warning, because each has its own file or memory database.
 
+## Added for C4 (schema 2)
+
+- `GroupsDao`: `byId`, `all`/`watchAll` (newest activity first, archived
+  split), `watch`, `upsert` (pass a full companion), `setArchived`, `setMuted`,
+  `saveState`; roster `members`/`watchMembers`/`member`/`selfMembership`/
+  `selfRole` (unknown or missing means `member`); `replaceRoster(groupId,
+  members, epoch:)` is one transaction, refuses a roster older than the stored
+  epoch (returns false) and never moves the epoch back; `saveMemberDevices`,
+  `memberDevices`, `devicesByAccount`, `rosterDevices`, `rosterDigest` (the
+  protocol `membersDigest` over the stored ids); `bans`, `isBanned`, `addBan`,
+  `removeBan`; `forget`. `decodeDeviceIds` reads a stored list and answers
+  empty for anything unreadable: a corrupt row must never widen an audience.
+- `CallsDao`: `start`, `answered`, `end`, `byId`, `recent`/`watchRecent`,
+  `watchWithPeer`, `unfinished`, `forget`; `durationSeconds` is measured from
+  the answer, and `wasMissed` is true only for an unanswered incoming call.
+- `TransfersDao`: `enqueueUpload`, `enqueueDownload` (one job per attachment;
+  asking again returns the same job and leaves an in-flight one in flight),
+  `enqueueStandalone` (one per `purpose`), `byId`/`byAttachment`/`byPurpose`,
+  `pending`/`watchPending`, `due`, `claim(now, lease:)` (oldest due job under a
+  lease; an expired lease is claimable again and keeps its `offset`),
+  `setProgress` (null keeps the stored value), `markDone`, `fail` (linear
+  backoff, gives up after `maxAttempts`, error code only), `remove` (also
+  deletes the file). Chunks: `addChunk` (idempotent per sequence), `chunks`,
+  `missingSequences` (null until a chunk fixes the total), `isComplete`,
+  `assemble` (null on any gap or on chunks that disagree about the total),
+  `dropTransfer`.
+- `wipeAll` covers the new tables.
+
 ## Regenerating
 
 Generated code is committed: the `*.g.dart` parts, the schema dumps in
@@ -100,15 +137,26 @@ dart run tool/codegen.dart --check   # the same, failing if anything changed
 ```
 
 CI (`verify-linux`) and `scripts/verify.*` run the check; the governance
-check asserts that CI does.
+check asserts that CI does. It works from a clean checkout: `codegen.dart`
+deletes the generated parts first and `build_runner` recreates them; there is
+no placeholder step. `.gitattributes` keeps every file LF so the byte
+comparison is stable on Windows.
+
+If `build_runner` ends with an empty `E source_gen:combining_builder on
+<file>:` error, `<file>` has a **syntax error** (for example `await` in a
+function that is not `async`). drift_dev's own analysis tolerates it, and the
+combining builder, which parses the library to stitch its `.g.dart` part in,
+fails without a message. Fix the parse error (`dart analyze` shows it among the
+noise from the missing parts), then run the tool again.
 
 ## Changing the schema
 
 1. Change the tables, bump `HelixDb.schemaVersion`, and add the step to
    `HelixDb.migration` (`stepByStep` from the generated
-   `database.steps.dart` once it exists).
+   `database.steps.dart`; create each new table and index from the `schema`
+   argument, parents first).
 2. Run `dart run tool/codegen.dart`. It dumps the new version next to the
    old ones (never edit or delete a dump) and regenerates the helpers.
 3. `test/drift/helix/migration_test.dart` already checks every path between
    dumped versions; add a data-integrity test for the new step there.
-4. Update this file and AGENTS.md's schema version.
+4. Update this file.

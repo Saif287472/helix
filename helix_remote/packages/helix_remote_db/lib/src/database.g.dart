@@ -11085,6 +11085,3756 @@ class DeferredActionsCompanion extends UpdateCompanion<DeferredActionRow> {
   }
 }
 
+class $TransferJobsTable extends TransferJobs
+    with TableInfo<$TransferJobsTable, TransferRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TransferJobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attachmentRowidMeta = const VerificationMeta(
+    'attachmentRowid',
+  );
+  @override
+  late final GeneratedColumn<int> attachmentRowid = GeneratedColumn<int>(
+    'attachment_rowid',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES attachments (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _mediaIdMeta = const VerificationMeta(
+    'mediaId',
+  );
+  @override
+  late final GeneratedColumn<String> mediaId = GeneratedColumn<String>(
+    'media_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _localPathMeta = const VerificationMeta(
+    'localPath',
+  );
+  @override
+  late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
+    'local_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sizeMeta = const VerificationMeta('size');
+  @override
+  late final GeneratedColumn<int> size = GeneratedColumn<int>(
+    'size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _offsetMeta = const VerificationMeta('offset');
+  @override
+  late final GeneratedColumn<int> offset = GeneratedColumn<int>(
+    'offset',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mediaKeyMeta = const VerificationMeta(
+    'mediaKey',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> mediaKey = GeneratedColumn<Uint8List>(
+    'media_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _purposeMeta = const VerificationMeta(
+    'purpose',
+  );
+  @override
+  late final GeneratedColumn<String> purpose = GeneratedColumn<String>(
+    'purpose',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<TransferState, String> state =
+      GeneratedColumn<String>(
+        'state',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<TransferState>($TransferJobsTable.$converterstate);
+  static const VerificationMeta _attemptsMeta = const VerificationMeta(
+    'attempts',
+  );
+  @override
+  late final GeneratedColumn<int> attempts = GeneratedColumn<int>(
+    'attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> nextAttemptAt =
+      GeneratedColumn<int>(
+        'next_attempt_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($TransferJobsTable.$converternextAttemptAt);
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> leaseUntil =
+      GeneratedColumn<int>(
+        'lease_until',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($TransferJobsTable.$converterleaseUntiln);
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'last_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> createdAt =
+      GeneratedColumn<int>(
+        'created_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($TransferJobsTable.$convertercreatedAt);
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    kind,
+    attachmentRowid,
+    mediaId,
+    localPath,
+    size,
+    offset,
+    mediaKey,
+    purpose,
+    state,
+    attempts,
+    nextAttemptAt,
+    leaseUntil,
+    lastError,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'transfer_jobs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TransferRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('attachment_rowid')) {
+      context.handle(
+        _attachmentRowidMeta,
+        attachmentRowid.isAcceptableOrUnknown(
+          data['attachment_rowid']!,
+          _attachmentRowidMeta,
+        ),
+      );
+    }
+    if (data.containsKey('media_id')) {
+      context.handle(
+        _mediaIdMeta,
+        mediaId.isAcceptableOrUnknown(data['media_id']!, _mediaIdMeta),
+      );
+    }
+    if (data.containsKey('local_path')) {
+      context.handle(
+        _localPathMeta,
+        localPath.isAcceptableOrUnknown(data['local_path']!, _localPathMeta),
+      );
+    }
+    if (data.containsKey('size')) {
+      context.handle(
+        _sizeMeta,
+        size.isAcceptableOrUnknown(data['size']!, _sizeMeta),
+      );
+    }
+    if (data.containsKey('offset')) {
+      context.handle(
+        _offsetMeta,
+        offset.isAcceptableOrUnknown(data['offset']!, _offsetMeta),
+      );
+    }
+    if (data.containsKey('media_key')) {
+      context.handle(
+        _mediaKeyMeta,
+        mediaKey.isAcceptableOrUnknown(data['media_key']!, _mediaKeyMeta),
+      );
+    }
+    if (data.containsKey('purpose')) {
+      context.handle(
+        _purposeMeta,
+        purpose.isAcceptableOrUnknown(data['purpose']!, _purposeMeta),
+      );
+    }
+    if (data.containsKey('attempts')) {
+      context.handle(
+        _attemptsMeta,
+        attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('last_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {attachmentRowid},
+  ];
+  @override
+  TransferRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TransferRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      attachmentRowid: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attachment_rowid'],
+      ),
+      mediaId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}media_id'],
+      ),
+      localPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_path'],
+      ),
+      size: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size'],
+      )!,
+      offset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}offset'],
+      )!,
+      mediaKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}media_key'],
+      ),
+      purpose: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}purpose'],
+      ),
+      state: $TransferJobsTable.$converterstate.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}state'],
+        )!,
+      ),
+      attempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempts'],
+      )!,
+      nextAttemptAt: $TransferJobsTable.$converternextAttemptAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}next_attempt_at'],
+        )!,
+      ),
+      leaseUntil: $TransferJobsTable.$converterleaseUntiln.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}lease_until'],
+        ),
+      ),
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error'],
+      ),
+      createdAt: $TransferJobsTable.$convertercreatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}created_at'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $TransferJobsTable createAlias(String alias) {
+    return $TransferJobsTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<TransferState, String, String> $converterstate =
+      const EnumNameConverter<TransferState>(TransferState.values);
+  static TypeConverter<DateTime, int> $converternextAttemptAt = const EpochMs();
+  static TypeConverter<DateTime, int> $converterleaseUntil = const EpochMs();
+  static TypeConverter<DateTime?, int?> $converterleaseUntiln =
+      NullAwareTypeConverter.wrap($converterleaseUntil);
+  static TypeConverter<DateTime, int> $convertercreatedAt = const EpochMs();
+}
+
+class TransferRow extends DataClass implements Insertable<TransferRow> {
+  final int id;
+
+  /// `upload`, `download`, `thumbnail` or `delete`.
+  final String kind;
+
+  /// The attachment this moves. Null for a standalone transfer (a group
+  /// avatar, a backup blob).
+  final int? attachmentRowid;
+
+  /// Server object id, once the upload target has been created.
+  final String? mediaId;
+
+  /// Where the bytes are, on this device.
+  final String? localPath;
+  final int size;
+
+  /// How many bytes are already uploaded or downloaded, so a resumed transfer
+  /// continues rather than restarting.
+  final int offset;
+
+  /// The key that decrypts the object (CRYPTO_V2.md §12), so a resumed
+  /// download does not have to re-read the message row.
+  final Uint8List? mediaKey;
+
+  /// What this is for when it is not a plain attachment: `history_backup`,
+  /// `full_backup`, `group_avatar`.
+  final String? purpose;
+  final TransferState state;
+  final int attempts;
+  final DateTime nextAttemptAt;
+  final DateTime? leaseUntil;
+
+  /// An error code only, never content.
+  final String? lastError;
+  final DateTime createdAt;
+  const TransferRow({
+    required this.id,
+    required this.kind,
+    this.attachmentRowid,
+    this.mediaId,
+    this.localPath,
+    required this.size,
+    required this.offset,
+    this.mediaKey,
+    this.purpose,
+    required this.state,
+    required this.attempts,
+    required this.nextAttemptAt,
+    this.leaseUntil,
+    this.lastError,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['kind'] = Variable<String>(kind);
+    if (!nullToAbsent || attachmentRowid != null) {
+      map['attachment_rowid'] = Variable<int>(attachmentRowid);
+    }
+    if (!nullToAbsent || mediaId != null) {
+      map['media_id'] = Variable<String>(mediaId);
+    }
+    if (!nullToAbsent || localPath != null) {
+      map['local_path'] = Variable<String>(localPath);
+    }
+    map['size'] = Variable<int>(size);
+    map['offset'] = Variable<int>(offset);
+    if (!nullToAbsent || mediaKey != null) {
+      map['media_key'] = Variable<Uint8List>(mediaKey);
+    }
+    if (!nullToAbsent || purpose != null) {
+      map['purpose'] = Variable<String>(purpose);
+    }
+    {
+      map['state'] = Variable<String>(
+        $TransferJobsTable.$converterstate.toSql(state),
+      );
+    }
+    map['attempts'] = Variable<int>(attempts);
+    {
+      map['next_attempt_at'] = Variable<int>(
+        $TransferJobsTable.$converternextAttemptAt.toSql(nextAttemptAt),
+      );
+    }
+    if (!nullToAbsent || leaseUntil != null) {
+      map['lease_until'] = Variable<int>(
+        $TransferJobsTable.$converterleaseUntiln.toSql(leaseUntil),
+      );
+    }
+    if (!nullToAbsent || lastError != null) {
+      map['last_error'] = Variable<String>(lastError);
+    }
+    {
+      map['created_at'] = Variable<int>(
+        $TransferJobsTable.$convertercreatedAt.toSql(createdAt),
+      );
+    }
+    return map;
+  }
+
+  TransferJobsCompanion toCompanion(bool nullToAbsent) {
+    return TransferJobsCompanion(
+      id: Value(id),
+      kind: Value(kind),
+      attachmentRowid: attachmentRowid == null && nullToAbsent
+          ? const Value.absent()
+          : Value(attachmentRowid),
+      mediaId: mediaId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mediaId),
+      localPath: localPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(localPath),
+      size: Value(size),
+      offset: Value(offset),
+      mediaKey: mediaKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mediaKey),
+      purpose: purpose == null && nullToAbsent
+          ? const Value.absent()
+          : Value(purpose),
+      state: Value(state),
+      attempts: Value(attempts),
+      nextAttemptAt: Value(nextAttemptAt),
+      leaseUntil: leaseUntil == null && nullToAbsent
+          ? const Value.absent()
+          : Value(leaseUntil),
+      lastError: lastError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastError),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory TransferRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TransferRow(
+      id: serializer.fromJson<int>(json['id']),
+      kind: serializer.fromJson<String>(json['kind']),
+      attachmentRowid: serializer.fromJson<int?>(json['attachmentRowid']),
+      mediaId: serializer.fromJson<String?>(json['mediaId']),
+      localPath: serializer.fromJson<String?>(json['localPath']),
+      size: serializer.fromJson<int>(json['size']),
+      offset: serializer.fromJson<int>(json['offset']),
+      mediaKey: serializer.fromJson<Uint8List?>(json['mediaKey']),
+      purpose: serializer.fromJson<String?>(json['purpose']),
+      state: $TransferJobsTable.$converterstate.fromJson(
+        serializer.fromJson<String>(json['state']),
+      ),
+      attempts: serializer.fromJson<int>(json['attempts']),
+      nextAttemptAt: serializer.fromJson<DateTime>(json['nextAttemptAt']),
+      leaseUntil: serializer.fromJson<DateTime?>(json['leaseUntil']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'kind': serializer.toJson<String>(kind),
+      'attachmentRowid': serializer.toJson<int?>(attachmentRowid),
+      'mediaId': serializer.toJson<String?>(mediaId),
+      'localPath': serializer.toJson<String?>(localPath),
+      'size': serializer.toJson<int>(size),
+      'offset': serializer.toJson<int>(offset),
+      'mediaKey': serializer.toJson<Uint8List?>(mediaKey),
+      'purpose': serializer.toJson<String?>(purpose),
+      'state': serializer.toJson<String>(
+        $TransferJobsTable.$converterstate.toJson(state),
+      ),
+      'attempts': serializer.toJson<int>(attempts),
+      'nextAttemptAt': serializer.toJson<DateTime>(nextAttemptAt),
+      'leaseUntil': serializer.toJson<DateTime?>(leaseUntil),
+      'lastError': serializer.toJson<String?>(lastError),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  TransferRow copyWith({
+    int? id,
+    String? kind,
+    Value<int?> attachmentRowid = const Value.absent(),
+    Value<String?> mediaId = const Value.absent(),
+    Value<String?> localPath = const Value.absent(),
+    int? size,
+    int? offset,
+    Value<Uint8List?> mediaKey = const Value.absent(),
+    Value<String?> purpose = const Value.absent(),
+    TransferState? state,
+    int? attempts,
+    DateTime? nextAttemptAt,
+    Value<DateTime?> leaseUntil = const Value.absent(),
+    Value<String?> lastError = const Value.absent(),
+    DateTime? createdAt,
+  }) => TransferRow(
+    id: id ?? this.id,
+    kind: kind ?? this.kind,
+    attachmentRowid: attachmentRowid.present
+        ? attachmentRowid.value
+        : this.attachmentRowid,
+    mediaId: mediaId.present ? mediaId.value : this.mediaId,
+    localPath: localPath.present ? localPath.value : this.localPath,
+    size: size ?? this.size,
+    offset: offset ?? this.offset,
+    mediaKey: mediaKey.present ? mediaKey.value : this.mediaKey,
+    purpose: purpose.present ? purpose.value : this.purpose,
+    state: state ?? this.state,
+    attempts: attempts ?? this.attempts,
+    nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+    leaseUntil: leaseUntil.present ? leaseUntil.value : this.leaseUntil,
+    lastError: lastError.present ? lastError.value : this.lastError,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  TransferRow copyWithCompanion(TransferJobsCompanion data) {
+    return TransferRow(
+      id: data.id.present ? data.id.value : this.id,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      attachmentRowid: data.attachmentRowid.present
+          ? data.attachmentRowid.value
+          : this.attachmentRowid,
+      mediaId: data.mediaId.present ? data.mediaId.value : this.mediaId,
+      localPath: data.localPath.present ? data.localPath.value : this.localPath,
+      size: data.size.present ? data.size.value : this.size,
+      offset: data.offset.present ? data.offset.value : this.offset,
+      mediaKey: data.mediaKey.present ? data.mediaKey.value : this.mediaKey,
+      purpose: data.purpose.present ? data.purpose.value : this.purpose,
+      state: data.state.present ? data.state.value : this.state,
+      attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      nextAttemptAt: data.nextAttemptAt.present
+          ? data.nextAttemptAt.value
+          : this.nextAttemptAt,
+      leaseUntil: data.leaseUntil.present
+          ? data.leaseUntil.value
+          : this.leaseUntil,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TransferRow(')
+          ..write('id: $id, ')
+          ..write('kind: $kind, ')
+          ..write('attachmentRowid: $attachmentRowid, ')
+          ..write('mediaId: $mediaId, ')
+          ..write('localPath: $localPath, ')
+          ..write('size: $size, ')
+          ..write('offset: $offset, ')
+          ..write('mediaKey: $mediaKey, ')
+          ..write('purpose: $purpose, ')
+          ..write('state: $state, ')
+          ..write('attempts: $attempts, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('leaseUntil: $leaseUntil, ')
+          ..write('lastError: $lastError, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    kind,
+    attachmentRowid,
+    mediaId,
+    localPath,
+    size,
+    offset,
+    $driftBlobEquality.hash(mediaKey),
+    purpose,
+    state,
+    attempts,
+    nextAttemptAt,
+    leaseUntil,
+    lastError,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TransferRow &&
+          other.id == this.id &&
+          other.kind == this.kind &&
+          other.attachmentRowid == this.attachmentRowid &&
+          other.mediaId == this.mediaId &&
+          other.localPath == this.localPath &&
+          other.size == this.size &&
+          other.offset == this.offset &&
+          $driftBlobEquality.equals(other.mediaKey, this.mediaKey) &&
+          other.purpose == this.purpose &&
+          other.state == this.state &&
+          other.attempts == this.attempts &&
+          other.nextAttemptAt == this.nextAttemptAt &&
+          other.leaseUntil == this.leaseUntil &&
+          other.lastError == this.lastError &&
+          other.createdAt == this.createdAt);
+}
+
+class TransferJobsCompanion extends UpdateCompanion<TransferRow> {
+  final Value<int> id;
+  final Value<String> kind;
+  final Value<int?> attachmentRowid;
+  final Value<String?> mediaId;
+  final Value<String?> localPath;
+  final Value<int> size;
+  final Value<int> offset;
+  final Value<Uint8List?> mediaKey;
+  final Value<String?> purpose;
+  final Value<TransferState> state;
+  final Value<int> attempts;
+  final Value<DateTime> nextAttemptAt;
+  final Value<DateTime?> leaseUntil;
+  final Value<String?> lastError;
+  final Value<DateTime> createdAt;
+  const TransferJobsCompanion({
+    this.id = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.attachmentRowid = const Value.absent(),
+    this.mediaId = const Value.absent(),
+    this.localPath = const Value.absent(),
+    this.size = const Value.absent(),
+    this.offset = const Value.absent(),
+    this.mediaKey = const Value.absent(),
+    this.purpose = const Value.absent(),
+    this.state = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.leaseUntil = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  TransferJobsCompanion.insert({
+    this.id = const Value.absent(),
+    required String kind,
+    this.attachmentRowid = const Value.absent(),
+    this.mediaId = const Value.absent(),
+    this.localPath = const Value.absent(),
+    this.size = const Value.absent(),
+    this.offset = const Value.absent(),
+    this.mediaKey = const Value.absent(),
+    this.purpose = const Value.absent(),
+    required TransferState state,
+    this.attempts = const Value.absent(),
+    required DateTime nextAttemptAt,
+    this.leaseUntil = const Value.absent(),
+    this.lastError = const Value.absent(),
+    required DateTime createdAt,
+  }) : kind = Value(kind),
+       state = Value(state),
+       nextAttemptAt = Value(nextAttemptAt),
+       createdAt = Value(createdAt);
+  static Insertable<TransferRow> custom({
+    Expression<int>? id,
+    Expression<String>? kind,
+    Expression<int>? attachmentRowid,
+    Expression<String>? mediaId,
+    Expression<String>? localPath,
+    Expression<int>? size,
+    Expression<int>? offset,
+    Expression<Uint8List>? mediaKey,
+    Expression<String>? purpose,
+    Expression<String>? state,
+    Expression<int>? attempts,
+    Expression<int>? nextAttemptAt,
+    Expression<int>? leaseUntil,
+    Expression<String>? lastError,
+    Expression<int>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (kind != null) 'kind': kind,
+      if (attachmentRowid != null) 'attachment_rowid': attachmentRowid,
+      if (mediaId != null) 'media_id': mediaId,
+      if (localPath != null) 'local_path': localPath,
+      if (size != null) 'size': size,
+      if (offset != null) 'offset': offset,
+      if (mediaKey != null) 'media_key': mediaKey,
+      if (purpose != null) 'purpose': purpose,
+      if (state != null) 'state': state,
+      if (attempts != null) 'attempts': attempts,
+      if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
+      if (leaseUntil != null) 'lease_until': leaseUntil,
+      if (lastError != null) 'last_error': lastError,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  TransferJobsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? kind,
+    Value<int?>? attachmentRowid,
+    Value<String?>? mediaId,
+    Value<String?>? localPath,
+    Value<int>? size,
+    Value<int>? offset,
+    Value<Uint8List?>? mediaKey,
+    Value<String?>? purpose,
+    Value<TransferState>? state,
+    Value<int>? attempts,
+    Value<DateTime>? nextAttemptAt,
+    Value<DateTime?>? leaseUntil,
+    Value<String?>? lastError,
+    Value<DateTime>? createdAt,
+  }) {
+    return TransferJobsCompanion(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      attachmentRowid: attachmentRowid ?? this.attachmentRowid,
+      mediaId: mediaId ?? this.mediaId,
+      localPath: localPath ?? this.localPath,
+      size: size ?? this.size,
+      offset: offset ?? this.offset,
+      mediaKey: mediaKey ?? this.mediaKey,
+      purpose: purpose ?? this.purpose,
+      state: state ?? this.state,
+      attempts: attempts ?? this.attempts,
+      nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+      leaseUntil: leaseUntil ?? this.leaseUntil,
+      lastError: lastError ?? this.lastError,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (attachmentRowid.present) {
+      map['attachment_rowid'] = Variable<int>(attachmentRowid.value);
+    }
+    if (mediaId.present) {
+      map['media_id'] = Variable<String>(mediaId.value);
+    }
+    if (localPath.present) {
+      map['local_path'] = Variable<String>(localPath.value);
+    }
+    if (size.present) {
+      map['size'] = Variable<int>(size.value);
+    }
+    if (offset.present) {
+      map['offset'] = Variable<int>(offset.value);
+    }
+    if (mediaKey.present) {
+      map['media_key'] = Variable<Uint8List>(mediaKey.value);
+    }
+    if (purpose.present) {
+      map['purpose'] = Variable<String>(purpose.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(
+        $TransferJobsTable.$converterstate.toSql(state.value),
+      );
+    }
+    if (attempts.present) {
+      map['attempts'] = Variable<int>(attempts.value);
+    }
+    if (nextAttemptAt.present) {
+      map['next_attempt_at'] = Variable<int>(
+        $TransferJobsTable.$converternextAttemptAt.toSql(nextAttemptAt.value),
+      );
+    }
+    if (leaseUntil.present) {
+      map['lease_until'] = Variable<int>(
+        $TransferJobsTable.$converterleaseUntiln.toSql(leaseUntil.value),
+      );
+    }
+    if (lastError.present) {
+      map['last_error'] = Variable<String>(lastError.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(
+        $TransferJobsTable.$convertercreatedAt.toSql(createdAt.value),
+      );
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TransferJobsCompanion(')
+          ..write('id: $id, ')
+          ..write('kind: $kind, ')
+          ..write('attachmentRowid: $attachmentRowid, ')
+          ..write('mediaId: $mediaId, ')
+          ..write('localPath: $localPath, ')
+          ..write('size: $size, ')
+          ..write('offset: $offset, ')
+          ..write('mediaKey: $mediaKey, ')
+          ..write('purpose: $purpose, ')
+          ..write('state: $state, ')
+          ..write('attempts: $attempts, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('leaseUntil: $leaseUntil, ')
+          ..write('lastError: $lastError, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TransferChunksTable extends TransferChunks
+    with TableInfo<$TransferChunksTable, TransferChunkRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TransferChunksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _transferIdMeta = const VerificationMeta(
+    'transferId',
+  );
+  @override
+  late final GeneratedColumn<String> transferId = GeneratedColumn<String>(
+    'transfer_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sequenceMeta = const VerificationMeta(
+    'sequence',
+  );
+  @override
+  late final GeneratedColumn<int> sequence = GeneratedColumn<int>(
+    'sequence',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> payload = GeneratedColumn<Uint8List>(
+    'payload',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _totalMeta = const VerificationMeta('total');
+  @override
+  late final GeneratedColumn<int> total = GeneratedColumn<int>(
+    'total',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isFinalMeta = const VerificationMeta(
+    'isFinal',
+  );
+  @override
+  late final GeneratedColumn<bool> isFinal = GeneratedColumn<bool>(
+    'is_final',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_final" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> receivedAt =
+      GeneratedColumn<int>(
+        'received_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($TransferChunksTable.$converterreceivedAt);
+  @override
+  List<GeneratedColumn> get $columns => [
+    transferId,
+    sequence,
+    payload,
+    total,
+    isFinal,
+    receivedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'transfer_chunks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TransferChunkRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('transfer_id')) {
+      context.handle(
+        _transferIdMeta,
+        transferId.isAcceptableOrUnknown(data['transfer_id']!, _transferIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_transferIdMeta);
+    }
+    if (data.containsKey('sequence')) {
+      context.handle(
+        _sequenceMeta,
+        sequence.isAcceptableOrUnknown(data['sequence']!, _sequenceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sequenceMeta);
+    }
+    if (data.containsKey('payload')) {
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadMeta);
+    }
+    if (data.containsKey('total')) {
+      context.handle(
+        _totalMeta,
+        total.isAcceptableOrUnknown(data['total']!, _totalMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_totalMeta);
+    }
+    if (data.containsKey('is_final')) {
+      context.handle(
+        _isFinalMeta,
+        isFinal.isAcceptableOrUnknown(data['is_final']!, _isFinalMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {transferId, sequence};
+  @override
+  TransferChunkRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TransferChunkRow(
+      transferId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}transfer_id'],
+      )!,
+      sequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence'],
+      )!,
+      payload: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}payload'],
+      )!,
+      total: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total'],
+      )!,
+      isFinal: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_final'],
+      )!,
+      receivedAt: $TransferChunksTable.$converterreceivedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}received_at'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $TransferChunksTable createAlias(String alias) {
+    return $TransferChunksTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, int> $converterreceivedAt = const EpochMs();
+}
+
+class TransferChunkRow extends DataClass
+    implements Insertable<TransferChunkRow> {
+  final String transferId;
+  final int sequence;
+  final Uint8List payload;
+
+  /// Total chunks, so a gap is detectable rather than silently accepted.
+  final int total;
+  final bool isFinal;
+  final DateTime receivedAt;
+  const TransferChunkRow({
+    required this.transferId,
+    required this.sequence,
+    required this.payload,
+    required this.total,
+    required this.isFinal,
+    required this.receivedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['transfer_id'] = Variable<String>(transferId);
+    map['sequence'] = Variable<int>(sequence);
+    map['payload'] = Variable<Uint8List>(payload);
+    map['total'] = Variable<int>(total);
+    map['is_final'] = Variable<bool>(isFinal);
+    {
+      map['received_at'] = Variable<int>(
+        $TransferChunksTable.$converterreceivedAt.toSql(receivedAt),
+      );
+    }
+    return map;
+  }
+
+  TransferChunksCompanion toCompanion(bool nullToAbsent) {
+    return TransferChunksCompanion(
+      transferId: Value(transferId),
+      sequence: Value(sequence),
+      payload: Value(payload),
+      total: Value(total),
+      isFinal: Value(isFinal),
+      receivedAt: Value(receivedAt),
+    );
+  }
+
+  factory TransferChunkRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TransferChunkRow(
+      transferId: serializer.fromJson<String>(json['transferId']),
+      sequence: serializer.fromJson<int>(json['sequence']),
+      payload: serializer.fromJson<Uint8List>(json['payload']),
+      total: serializer.fromJson<int>(json['total']),
+      isFinal: serializer.fromJson<bool>(json['isFinal']),
+      receivedAt: serializer.fromJson<DateTime>(json['receivedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'transferId': serializer.toJson<String>(transferId),
+      'sequence': serializer.toJson<int>(sequence),
+      'payload': serializer.toJson<Uint8List>(payload),
+      'total': serializer.toJson<int>(total),
+      'isFinal': serializer.toJson<bool>(isFinal),
+      'receivedAt': serializer.toJson<DateTime>(receivedAt),
+    };
+  }
+
+  TransferChunkRow copyWith({
+    String? transferId,
+    int? sequence,
+    Uint8List? payload,
+    int? total,
+    bool? isFinal,
+    DateTime? receivedAt,
+  }) => TransferChunkRow(
+    transferId: transferId ?? this.transferId,
+    sequence: sequence ?? this.sequence,
+    payload: payload ?? this.payload,
+    total: total ?? this.total,
+    isFinal: isFinal ?? this.isFinal,
+    receivedAt: receivedAt ?? this.receivedAt,
+  );
+  TransferChunkRow copyWithCompanion(TransferChunksCompanion data) {
+    return TransferChunkRow(
+      transferId: data.transferId.present
+          ? data.transferId.value
+          : this.transferId,
+      sequence: data.sequence.present ? data.sequence.value : this.sequence,
+      payload: data.payload.present ? data.payload.value : this.payload,
+      total: data.total.present ? data.total.value : this.total,
+      isFinal: data.isFinal.present ? data.isFinal.value : this.isFinal,
+      receivedAt: data.receivedAt.present
+          ? data.receivedAt.value
+          : this.receivedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TransferChunkRow(')
+          ..write('transferId: $transferId, ')
+          ..write('sequence: $sequence, ')
+          ..write('payload: $payload, ')
+          ..write('total: $total, ')
+          ..write('isFinal: $isFinal, ')
+          ..write('receivedAt: $receivedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    transferId,
+    sequence,
+    $driftBlobEquality.hash(payload),
+    total,
+    isFinal,
+    receivedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TransferChunkRow &&
+          other.transferId == this.transferId &&
+          other.sequence == this.sequence &&
+          $driftBlobEquality.equals(other.payload, this.payload) &&
+          other.total == this.total &&
+          other.isFinal == this.isFinal &&
+          other.receivedAt == this.receivedAt);
+}
+
+class TransferChunksCompanion extends UpdateCompanion<TransferChunkRow> {
+  final Value<String> transferId;
+  final Value<int> sequence;
+  final Value<Uint8List> payload;
+  final Value<int> total;
+  final Value<bool> isFinal;
+  final Value<DateTime> receivedAt;
+  final Value<int> rowid;
+  const TransferChunksCompanion({
+    this.transferId = const Value.absent(),
+    this.sequence = const Value.absent(),
+    this.payload = const Value.absent(),
+    this.total = const Value.absent(),
+    this.isFinal = const Value.absent(),
+    this.receivedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TransferChunksCompanion.insert({
+    required String transferId,
+    required int sequence,
+    required Uint8List payload,
+    required int total,
+    this.isFinal = const Value.absent(),
+    required DateTime receivedAt,
+    this.rowid = const Value.absent(),
+  }) : transferId = Value(transferId),
+       sequence = Value(sequence),
+       payload = Value(payload),
+       total = Value(total),
+       receivedAt = Value(receivedAt);
+  static Insertable<TransferChunkRow> custom({
+    Expression<String>? transferId,
+    Expression<int>? sequence,
+    Expression<Uint8List>? payload,
+    Expression<int>? total,
+    Expression<bool>? isFinal,
+    Expression<int>? receivedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (transferId != null) 'transfer_id': transferId,
+      if (sequence != null) 'sequence': sequence,
+      if (payload != null) 'payload': payload,
+      if (total != null) 'total': total,
+      if (isFinal != null) 'is_final': isFinal,
+      if (receivedAt != null) 'received_at': receivedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TransferChunksCompanion copyWith({
+    Value<String>? transferId,
+    Value<int>? sequence,
+    Value<Uint8List>? payload,
+    Value<int>? total,
+    Value<bool>? isFinal,
+    Value<DateTime>? receivedAt,
+    Value<int>? rowid,
+  }) {
+    return TransferChunksCompanion(
+      transferId: transferId ?? this.transferId,
+      sequence: sequence ?? this.sequence,
+      payload: payload ?? this.payload,
+      total: total ?? this.total,
+      isFinal: isFinal ?? this.isFinal,
+      receivedAt: receivedAt ?? this.receivedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (transferId.present) {
+      map['transfer_id'] = Variable<String>(transferId.value);
+    }
+    if (sequence.present) {
+      map['sequence'] = Variable<int>(sequence.value);
+    }
+    if (payload.present) {
+      map['payload'] = Variable<Uint8List>(payload.value);
+    }
+    if (total.present) {
+      map['total'] = Variable<int>(total.value);
+    }
+    if (isFinal.present) {
+      map['is_final'] = Variable<bool>(isFinal.value);
+    }
+    if (receivedAt.present) {
+      map['received_at'] = Variable<int>(
+        $TransferChunksTable.$converterreceivedAt.toSql(receivedAt.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TransferChunksCompanion(')
+          ..write('transferId: $transferId, ')
+          ..write('sequence: $sequence, ')
+          ..write('payload: $payload, ')
+          ..write('total: $total, ')
+          ..write('isFinal: $isFinal, ')
+          ..write('receivedAt: $receivedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $GroupsTable extends Groups with TableInfo<$GroupsTable, GroupRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GroupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _avatarMeta = const VerificationMeta('avatar');
+  @override
+  late final GeneratedColumn<Uint8List> avatar = GeneratedColumn<Uint8List>(
+    'avatar',
+    aliasedName,
+    true,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+    'role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _epochMeta = const VerificationMeta('epoch');
+  @override
+  late final GeneratedColumn<int> epoch = GeneratedColumn<int>(
+    'epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<Uint8List> state = GeneratedColumn<Uint8List>(
+    'state',
+    aliasedName,
+    true,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stateVersionMeta = const VerificationMeta(
+    'stateVersion',
+  );
+  @override
+  late final GeneratedColumn<int> stateVersion = GeneratedColumn<int>(
+    'state_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _mutedMeta = const VerificationMeta('muted');
+  @override
+  late final GeneratedColumn<bool> muted = GeneratedColumn<bool>(
+    'muted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("muted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lastMessageRowidMeta = const VerificationMeta(
+    'lastMessageRowid',
+  );
+  @override
+  late final GeneratedColumn<int> lastMessageRowid = GeneratedColumn<int>(
+    'last_message_rowid',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastMessageSortKeyMeta =
+      const VerificationMeta('lastMessageSortKey');
+  @override
+  late final GeneratedColumn<String> lastMessageSortKey =
+      GeneratedColumn<String>(
+        'last_message_sort_key',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> lastMessageAt =
+      GeneratedColumn<int>(
+        'last_message_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($GroupsTable.$converterlastMessageAtn);
+  static const VerificationMeta _lastMessagePreviewMeta =
+      const VerificationMeta('lastMessagePreview');
+  @override
+  late final GeneratedColumn<String> lastMessagePreview =
+      GeneratedColumn<String>(
+        'last_message_preview',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _unreadCountMeta = const VerificationMeta(
+    'unreadCount',
+  );
+  @override
+  late final GeneratedColumn<int> unreadCount = GeneratedColumn<int>(
+    'unread_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mentionCountMeta = const VerificationMeta(
+    'mentionCount',
+  );
+  @override
+  late final GeneratedColumn<int> mentionCount = GeneratedColumn<int>(
+    'mention_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> createdAt =
+      GeneratedColumn<int>(
+        'created_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($GroupsTable.$convertercreatedAt);
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    title,
+    avatar,
+    role,
+    epoch,
+    state,
+    stateVersion,
+    archived,
+    muted,
+    lastMessageRowid,
+    lastMessageSortKey,
+    lastMessageAt,
+    lastMessagePreview,
+    unreadCount,
+    mentionCount,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'groups';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GroupRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('avatar')) {
+      context.handle(
+        _avatarMeta,
+        avatar.isAcceptableOrUnknown(data['avatar']!, _avatarMeta),
+      );
+    }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roleMeta);
+    }
+    if (data.containsKey('epoch')) {
+      context.handle(
+        _epochMeta,
+        epoch.isAcceptableOrUnknown(data['epoch']!, _epochMeta),
+      );
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    }
+    if (data.containsKey('state_version')) {
+      context.handle(
+        _stateVersionMeta,
+        stateVersion.isAcceptableOrUnknown(
+          data['state_version']!,
+          _stateVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('muted')) {
+      context.handle(
+        _mutedMeta,
+        muted.isAcceptableOrUnknown(data['muted']!, _mutedMeta),
+      );
+    }
+    if (data.containsKey('last_message_rowid')) {
+      context.handle(
+        _lastMessageRowidMeta,
+        lastMessageRowid.isAcceptableOrUnknown(
+          data['last_message_rowid']!,
+          _lastMessageRowidMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_message_sort_key')) {
+      context.handle(
+        _lastMessageSortKeyMeta,
+        lastMessageSortKey.isAcceptableOrUnknown(
+          data['last_message_sort_key']!,
+          _lastMessageSortKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_message_preview')) {
+      context.handle(
+        _lastMessagePreviewMeta,
+        lastMessagePreview.isAcceptableOrUnknown(
+          data['last_message_preview']!,
+          _lastMessagePreviewMeta,
+        ),
+      );
+    }
+    if (data.containsKey('unread_count')) {
+      context.handle(
+        _unreadCountMeta,
+        unreadCount.isAcceptableOrUnknown(
+          data['unread_count']!,
+          _unreadCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('mention_count')) {
+      context.handle(
+        _mentionCountMeta,
+        mentionCount.isAcceptableOrUnknown(
+          data['mention_count']!,
+          _mentionCountMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  GroupRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GroupRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      avatar: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}avatar'],
+      ),
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}role'],
+      )!,
+      epoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}epoch'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}state'],
+      ),
+      stateVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}state_version'],
+      )!,
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}archived'],
+      )!,
+      muted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}muted'],
+      )!,
+      lastMessageRowid: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_message_rowid'],
+      ),
+      lastMessageSortKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_message_sort_key'],
+      ),
+      lastMessageAt: $GroupsTable.$converterlastMessageAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}last_message_at'],
+        ),
+      ),
+      lastMessagePreview: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_message_preview'],
+      ),
+      unreadCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}unread_count'],
+      )!,
+      mentionCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}mention_count'],
+      )!,
+      createdAt: $GroupsTable.$convertercreatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}created_at'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $GroupsTable createAlias(String alias) {
+    return $GroupsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, int> $converterlastMessageAt = const EpochMs();
+  static TypeConverter<DateTime?, int?> $converterlastMessageAtn =
+      NullAwareTypeConverter.wrap($converterlastMessageAt);
+  static TypeConverter<DateTime, int> $convertercreatedAt = const EpochMs();
+}
+
+class GroupRow extends DataClass implements Insertable<GroupRow> {
+  final String id;
+  final String title;
+  final Uint8List? avatar;
+
+  /// `GroupRole` wire name (`owner`, `admin`, `member`).
+  final String role;
+
+  /// The server's monotonic roster version. A send presenting an older roster
+  /// is refused (`device_list_stale`), so it is stored and compared.
+  final int epoch;
+
+  /// The group's encrypted state blob and its version.
+  final Uint8List? state;
+  final int stateVersion;
+  final bool archived;
+  final bool muted;
+
+  /// `messages.local_rowid` of the newest message, kept as with a direct chat
+  /// so the chat list reads one table.
+  final int? lastMessageRowid;
+  final String? lastMessageSortKey;
+  final DateTime? lastMessageAt;
+  final String? lastMessagePreview;
+  final int unreadCount;
+  final int mentionCount;
+  final DateTime createdAt;
+  const GroupRow({
+    required this.id,
+    required this.title,
+    this.avatar,
+    required this.role,
+    required this.epoch,
+    this.state,
+    required this.stateVersion,
+    required this.archived,
+    required this.muted,
+    this.lastMessageRowid,
+    this.lastMessageSortKey,
+    this.lastMessageAt,
+    this.lastMessagePreview,
+    required this.unreadCount,
+    required this.mentionCount,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || avatar != null) {
+      map['avatar'] = Variable<Uint8List>(avatar);
+    }
+    map['role'] = Variable<String>(role);
+    map['epoch'] = Variable<int>(epoch);
+    if (!nullToAbsent || state != null) {
+      map['state'] = Variable<Uint8List>(state);
+    }
+    map['state_version'] = Variable<int>(stateVersion);
+    map['archived'] = Variable<bool>(archived);
+    map['muted'] = Variable<bool>(muted);
+    if (!nullToAbsent || lastMessageRowid != null) {
+      map['last_message_rowid'] = Variable<int>(lastMessageRowid);
+    }
+    if (!nullToAbsent || lastMessageSortKey != null) {
+      map['last_message_sort_key'] = Variable<String>(lastMessageSortKey);
+    }
+    if (!nullToAbsent || lastMessageAt != null) {
+      map['last_message_at'] = Variable<int>(
+        $GroupsTable.$converterlastMessageAtn.toSql(lastMessageAt),
+      );
+    }
+    if (!nullToAbsent || lastMessagePreview != null) {
+      map['last_message_preview'] = Variable<String>(lastMessagePreview);
+    }
+    map['unread_count'] = Variable<int>(unreadCount);
+    map['mention_count'] = Variable<int>(mentionCount);
+    {
+      map['created_at'] = Variable<int>(
+        $GroupsTable.$convertercreatedAt.toSql(createdAt),
+      );
+    }
+    return map;
+  }
+
+  GroupsCompanion toCompanion(bool nullToAbsent) {
+    return GroupsCompanion(
+      id: Value(id),
+      title: Value(title),
+      avatar: avatar == null && nullToAbsent
+          ? const Value.absent()
+          : Value(avatar),
+      role: Value(role),
+      epoch: Value(epoch),
+      state: state == null && nullToAbsent
+          ? const Value.absent()
+          : Value(state),
+      stateVersion: Value(stateVersion),
+      archived: Value(archived),
+      muted: Value(muted),
+      lastMessageRowid: lastMessageRowid == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastMessageRowid),
+      lastMessageSortKey: lastMessageSortKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastMessageSortKey),
+      lastMessageAt: lastMessageAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastMessageAt),
+      lastMessagePreview: lastMessagePreview == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastMessagePreview),
+      unreadCount: Value(unreadCount),
+      mentionCount: Value(mentionCount),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory GroupRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GroupRow(
+      id: serializer.fromJson<String>(json['id']),
+      title: serializer.fromJson<String>(json['title']),
+      avatar: serializer.fromJson<Uint8List?>(json['avatar']),
+      role: serializer.fromJson<String>(json['role']),
+      epoch: serializer.fromJson<int>(json['epoch']),
+      state: serializer.fromJson<Uint8List?>(json['state']),
+      stateVersion: serializer.fromJson<int>(json['stateVersion']),
+      archived: serializer.fromJson<bool>(json['archived']),
+      muted: serializer.fromJson<bool>(json['muted']),
+      lastMessageRowid: serializer.fromJson<int?>(json['lastMessageRowid']),
+      lastMessageSortKey: serializer.fromJson<String?>(
+        json['lastMessageSortKey'],
+      ),
+      lastMessageAt: serializer.fromJson<DateTime?>(json['lastMessageAt']),
+      lastMessagePreview: serializer.fromJson<String?>(
+        json['lastMessagePreview'],
+      ),
+      unreadCount: serializer.fromJson<int>(json['unreadCount']),
+      mentionCount: serializer.fromJson<int>(json['mentionCount']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'title': serializer.toJson<String>(title),
+      'avatar': serializer.toJson<Uint8List?>(avatar),
+      'role': serializer.toJson<String>(role),
+      'epoch': serializer.toJson<int>(epoch),
+      'state': serializer.toJson<Uint8List?>(state),
+      'stateVersion': serializer.toJson<int>(stateVersion),
+      'archived': serializer.toJson<bool>(archived),
+      'muted': serializer.toJson<bool>(muted),
+      'lastMessageRowid': serializer.toJson<int?>(lastMessageRowid),
+      'lastMessageSortKey': serializer.toJson<String?>(lastMessageSortKey),
+      'lastMessageAt': serializer.toJson<DateTime?>(lastMessageAt),
+      'lastMessagePreview': serializer.toJson<String?>(lastMessagePreview),
+      'unreadCount': serializer.toJson<int>(unreadCount),
+      'mentionCount': serializer.toJson<int>(mentionCount),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  GroupRow copyWith({
+    String? id,
+    String? title,
+    Value<Uint8List?> avatar = const Value.absent(),
+    String? role,
+    int? epoch,
+    Value<Uint8List?> state = const Value.absent(),
+    int? stateVersion,
+    bool? archived,
+    bool? muted,
+    Value<int?> lastMessageRowid = const Value.absent(),
+    Value<String?> lastMessageSortKey = const Value.absent(),
+    Value<DateTime?> lastMessageAt = const Value.absent(),
+    Value<String?> lastMessagePreview = const Value.absent(),
+    int? unreadCount,
+    int? mentionCount,
+    DateTime? createdAt,
+  }) => GroupRow(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    avatar: avatar.present ? avatar.value : this.avatar,
+    role: role ?? this.role,
+    epoch: epoch ?? this.epoch,
+    state: state.present ? state.value : this.state,
+    stateVersion: stateVersion ?? this.stateVersion,
+    archived: archived ?? this.archived,
+    muted: muted ?? this.muted,
+    lastMessageRowid: lastMessageRowid.present
+        ? lastMessageRowid.value
+        : this.lastMessageRowid,
+    lastMessageSortKey: lastMessageSortKey.present
+        ? lastMessageSortKey.value
+        : this.lastMessageSortKey,
+    lastMessageAt: lastMessageAt.present
+        ? lastMessageAt.value
+        : this.lastMessageAt,
+    lastMessagePreview: lastMessagePreview.present
+        ? lastMessagePreview.value
+        : this.lastMessagePreview,
+    unreadCount: unreadCount ?? this.unreadCount,
+    mentionCount: mentionCount ?? this.mentionCount,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  GroupRow copyWithCompanion(GroupsCompanion data) {
+    return GroupRow(
+      id: data.id.present ? data.id.value : this.id,
+      title: data.title.present ? data.title.value : this.title,
+      avatar: data.avatar.present ? data.avatar.value : this.avatar,
+      role: data.role.present ? data.role.value : this.role,
+      epoch: data.epoch.present ? data.epoch.value : this.epoch,
+      state: data.state.present ? data.state.value : this.state,
+      stateVersion: data.stateVersion.present
+          ? data.stateVersion.value
+          : this.stateVersion,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      muted: data.muted.present ? data.muted.value : this.muted,
+      lastMessageRowid: data.lastMessageRowid.present
+          ? data.lastMessageRowid.value
+          : this.lastMessageRowid,
+      lastMessageSortKey: data.lastMessageSortKey.present
+          ? data.lastMessageSortKey.value
+          : this.lastMessageSortKey,
+      lastMessageAt: data.lastMessageAt.present
+          ? data.lastMessageAt.value
+          : this.lastMessageAt,
+      lastMessagePreview: data.lastMessagePreview.present
+          ? data.lastMessagePreview.value
+          : this.lastMessagePreview,
+      unreadCount: data.unreadCount.present
+          ? data.unreadCount.value
+          : this.unreadCount,
+      mentionCount: data.mentionCount.present
+          ? data.mentionCount.value
+          : this.mentionCount,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupRow(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('avatar: $avatar, ')
+          ..write('role: $role, ')
+          ..write('epoch: $epoch, ')
+          ..write('state: $state, ')
+          ..write('stateVersion: $stateVersion, ')
+          ..write('archived: $archived, ')
+          ..write('muted: $muted, ')
+          ..write('lastMessageRowid: $lastMessageRowid, ')
+          ..write('lastMessageSortKey: $lastMessageSortKey, ')
+          ..write('lastMessageAt: $lastMessageAt, ')
+          ..write('lastMessagePreview: $lastMessagePreview, ')
+          ..write('unreadCount: $unreadCount, ')
+          ..write('mentionCount: $mentionCount, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    title,
+    $driftBlobEquality.hash(avatar),
+    role,
+    epoch,
+    $driftBlobEquality.hash(state),
+    stateVersion,
+    archived,
+    muted,
+    lastMessageRowid,
+    lastMessageSortKey,
+    lastMessageAt,
+    lastMessagePreview,
+    unreadCount,
+    mentionCount,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GroupRow &&
+          other.id == this.id &&
+          other.title == this.title &&
+          $driftBlobEquality.equals(other.avatar, this.avatar) &&
+          other.role == this.role &&
+          other.epoch == this.epoch &&
+          $driftBlobEquality.equals(other.state, this.state) &&
+          other.stateVersion == this.stateVersion &&
+          other.archived == this.archived &&
+          other.muted == this.muted &&
+          other.lastMessageRowid == this.lastMessageRowid &&
+          other.lastMessageSortKey == this.lastMessageSortKey &&
+          other.lastMessageAt == this.lastMessageAt &&
+          other.lastMessagePreview == this.lastMessagePreview &&
+          other.unreadCount == this.unreadCount &&
+          other.mentionCount == this.mentionCount &&
+          other.createdAt == this.createdAt);
+}
+
+class GroupsCompanion extends UpdateCompanion<GroupRow> {
+  final Value<String> id;
+  final Value<String> title;
+  final Value<Uint8List?> avatar;
+  final Value<String> role;
+  final Value<int> epoch;
+  final Value<Uint8List?> state;
+  final Value<int> stateVersion;
+  final Value<bool> archived;
+  final Value<bool> muted;
+  final Value<int?> lastMessageRowid;
+  final Value<String?> lastMessageSortKey;
+  final Value<DateTime?> lastMessageAt;
+  final Value<String?> lastMessagePreview;
+  final Value<int> unreadCount;
+  final Value<int> mentionCount;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const GroupsCompanion({
+    this.id = const Value.absent(),
+    this.title = const Value.absent(),
+    this.avatar = const Value.absent(),
+    this.role = const Value.absent(),
+    this.epoch = const Value.absent(),
+    this.state = const Value.absent(),
+    this.stateVersion = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.muted = const Value.absent(),
+    this.lastMessageRowid = const Value.absent(),
+    this.lastMessageSortKey = const Value.absent(),
+    this.lastMessageAt = const Value.absent(),
+    this.lastMessagePreview = const Value.absent(),
+    this.unreadCount = const Value.absent(),
+    this.mentionCount = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GroupsCompanion.insert({
+    required String id,
+    required String title,
+    this.avatar = const Value.absent(),
+    required String role,
+    this.epoch = const Value.absent(),
+    this.state = const Value.absent(),
+    this.stateVersion = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.muted = const Value.absent(),
+    this.lastMessageRowid = const Value.absent(),
+    this.lastMessageSortKey = const Value.absent(),
+    this.lastMessageAt = const Value.absent(),
+    this.lastMessagePreview = const Value.absent(),
+    this.unreadCount = const Value.absent(),
+    this.mentionCount = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       title = Value(title),
+       role = Value(role),
+       createdAt = Value(createdAt);
+  static Insertable<GroupRow> custom({
+    Expression<String>? id,
+    Expression<String>? title,
+    Expression<Uint8List>? avatar,
+    Expression<String>? role,
+    Expression<int>? epoch,
+    Expression<Uint8List>? state,
+    Expression<int>? stateVersion,
+    Expression<bool>? archived,
+    Expression<bool>? muted,
+    Expression<int>? lastMessageRowid,
+    Expression<String>? lastMessageSortKey,
+    Expression<int>? lastMessageAt,
+    Expression<String>? lastMessagePreview,
+    Expression<int>? unreadCount,
+    Expression<int>? mentionCount,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (avatar != null) 'avatar': avatar,
+      if (role != null) 'role': role,
+      if (epoch != null) 'epoch': epoch,
+      if (state != null) 'state': state,
+      if (stateVersion != null) 'state_version': stateVersion,
+      if (archived != null) 'archived': archived,
+      if (muted != null) 'muted': muted,
+      if (lastMessageRowid != null) 'last_message_rowid': lastMessageRowid,
+      if (lastMessageSortKey != null)
+        'last_message_sort_key': lastMessageSortKey,
+      if (lastMessageAt != null) 'last_message_at': lastMessageAt,
+      if (lastMessagePreview != null)
+        'last_message_preview': lastMessagePreview,
+      if (unreadCount != null) 'unread_count': unreadCount,
+      if (mentionCount != null) 'mention_count': mentionCount,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GroupsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? title,
+    Value<Uint8List?>? avatar,
+    Value<String>? role,
+    Value<int>? epoch,
+    Value<Uint8List?>? state,
+    Value<int>? stateVersion,
+    Value<bool>? archived,
+    Value<bool>? muted,
+    Value<int?>? lastMessageRowid,
+    Value<String?>? lastMessageSortKey,
+    Value<DateTime?>? lastMessageAt,
+    Value<String?>? lastMessagePreview,
+    Value<int>? unreadCount,
+    Value<int>? mentionCount,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return GroupsCompanion(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      avatar: avatar ?? this.avatar,
+      role: role ?? this.role,
+      epoch: epoch ?? this.epoch,
+      state: state ?? this.state,
+      stateVersion: stateVersion ?? this.stateVersion,
+      archived: archived ?? this.archived,
+      muted: muted ?? this.muted,
+      lastMessageRowid: lastMessageRowid ?? this.lastMessageRowid,
+      lastMessageSortKey: lastMessageSortKey ?? this.lastMessageSortKey,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
+      unreadCount: unreadCount ?? this.unreadCount,
+      mentionCount: mentionCount ?? this.mentionCount,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (avatar.present) {
+      map['avatar'] = Variable<Uint8List>(avatar.value);
+    }
+    if (role.present) {
+      map['role'] = Variable<String>(role.value);
+    }
+    if (epoch.present) {
+      map['epoch'] = Variable<int>(epoch.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<Uint8List>(state.value);
+    }
+    if (stateVersion.present) {
+      map['state_version'] = Variable<int>(stateVersion.value);
+    }
+    if (archived.present) {
+      map['archived'] = Variable<bool>(archived.value);
+    }
+    if (muted.present) {
+      map['muted'] = Variable<bool>(muted.value);
+    }
+    if (lastMessageRowid.present) {
+      map['last_message_rowid'] = Variable<int>(lastMessageRowid.value);
+    }
+    if (lastMessageSortKey.present) {
+      map['last_message_sort_key'] = Variable<String>(lastMessageSortKey.value);
+    }
+    if (lastMessageAt.present) {
+      map['last_message_at'] = Variable<int>(
+        $GroupsTable.$converterlastMessageAtn.toSql(lastMessageAt.value),
+      );
+    }
+    if (lastMessagePreview.present) {
+      map['last_message_preview'] = Variable<String>(lastMessagePreview.value);
+    }
+    if (unreadCount.present) {
+      map['unread_count'] = Variable<int>(unreadCount.value);
+    }
+    if (mentionCount.present) {
+      map['mention_count'] = Variable<int>(mentionCount.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(
+        $GroupsTable.$convertercreatedAt.toSql(createdAt.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupsCompanion(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('avatar: $avatar, ')
+          ..write('role: $role, ')
+          ..write('epoch: $epoch, ')
+          ..write('state: $state, ')
+          ..write('stateVersion: $stateVersion, ')
+          ..write('archived: $archived, ')
+          ..write('muted: $muted, ')
+          ..write('lastMessageRowid: $lastMessageRowid, ')
+          ..write('lastMessageSortKey: $lastMessageSortKey, ')
+          ..write('lastMessageAt: $lastMessageAt, ')
+          ..write('lastMessagePreview: $lastMessagePreview, ')
+          ..write('unreadCount: $unreadCount, ')
+          ..write('mentionCount: $mentionCount, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $GroupMembersTable extends GroupMembers
+    with TableInfo<$GroupMembersTable, GroupMemberRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GroupMembersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES "groups" (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _qualifiedIdMeta = const VerificationMeta(
+    'qualifiedId',
+  );
+  @override
+  late final GeneratedColumn<String> qualifiedId = GeneratedColumn<String>(
+    'qualified_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _displayNameMeta = const VerificationMeta(
+    'displayName',
+  );
+  @override
+  late final GeneratedColumn<String> displayName = GeneratedColumn<String>(
+    'display_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+    'role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isSelfMeta = const VerificationMeta('isSelf');
+  @override
+  late final GeneratedColumn<bool> isSelf = GeneratedColumn<bool>(
+    'is_self',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_self" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _devicesJsonMeta = const VerificationMeta(
+    'devicesJson',
+  );
+  @override
+  late final GeneratedColumn<String> devicesJson = GeneratedColumn<String>(
+    'devices_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> devicesFetchedAt =
+      GeneratedColumn<int>(
+        'devices_fetched_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>(
+        $GroupMembersTable.$converterdevicesFetchedAtn,
+      );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> joinedAt =
+      GeneratedColumn<int>(
+        'joined_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($GroupMembersTable.$converterjoinedAtn);
+  @override
+  List<GeneratedColumn> get $columns => [
+    groupId,
+    accountId,
+    qualifiedId,
+    displayName,
+    role,
+    isSelf,
+    devicesJson,
+    devicesFetchedAt,
+    joinedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'group_members';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GroupMemberRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('qualified_id')) {
+      context.handle(
+        _qualifiedIdMeta,
+        qualifiedId.isAcceptableOrUnknown(
+          data['qualified_id']!,
+          _qualifiedIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_qualifiedIdMeta);
+    }
+    if (data.containsKey('display_name')) {
+      context.handle(
+        _displayNameMeta,
+        displayName.isAcceptableOrUnknown(
+          data['display_name']!,
+          _displayNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roleMeta);
+    }
+    if (data.containsKey('is_self')) {
+      context.handle(
+        _isSelfMeta,
+        isSelf.isAcceptableOrUnknown(data['is_self']!, _isSelfMeta),
+      );
+    }
+    if (data.containsKey('devices_json')) {
+      context.handle(
+        _devicesJsonMeta,
+        devicesJson.isAcceptableOrUnknown(
+          data['devices_json']!,
+          _devicesJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_devicesJsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {groupId, accountId};
+  @override
+  GroupMemberRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GroupMemberRow(
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      qualifiedId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}qualified_id'],
+      )!,
+      displayName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}display_name'],
+      ),
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}role'],
+      )!,
+      isSelf: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_self'],
+      )!,
+      devicesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}devices_json'],
+      )!,
+      devicesFetchedAt: $GroupMembersTable.$converterdevicesFetchedAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}devices_fetched_at'],
+        ),
+      ),
+      joinedAt: $GroupMembersTable.$converterjoinedAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}joined_at'],
+        ),
+      ),
+    );
+  }
+
+  @override
+  $GroupMembersTable createAlias(String alias) {
+    return $GroupMembersTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, int> $converterdevicesFetchedAt =
+      const EpochMs();
+  static TypeConverter<DateTime?, int?> $converterdevicesFetchedAtn =
+      NullAwareTypeConverter.wrap($converterdevicesFetchedAt);
+  static TypeConverter<DateTime, int> $converterjoinedAt = const EpochMs();
+  static TypeConverter<DateTime?, int?> $converterjoinedAtn =
+      NullAwareTypeConverter.wrap($converterjoinedAt);
+}
+
+class GroupMemberRow extends DataClass implements Insertable<GroupMemberRow> {
+  final String groupId;
+  final String accountId;
+
+  /// `uuid@domain` for a member on another server (federation, S6c).
+  final String qualifiedId;
+  final String? displayName;
+
+  /// `GroupRole` wire name.
+  final String role;
+  final bool isSelf;
+
+  /// The server's device list for this member, as JSON. Compared by digest, so
+  /// a stale send can be detected without this device learning anything about
+  /// anybody's devices beyond their ids.
+  final String devicesJson;
+  final DateTime? devicesFetchedAt;
+  final DateTime? joinedAt;
+  const GroupMemberRow({
+    required this.groupId,
+    required this.accountId,
+    required this.qualifiedId,
+    this.displayName,
+    required this.role,
+    required this.isSelf,
+    required this.devicesJson,
+    this.devicesFetchedAt,
+    this.joinedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['group_id'] = Variable<String>(groupId);
+    map['account_id'] = Variable<String>(accountId);
+    map['qualified_id'] = Variable<String>(qualifiedId);
+    if (!nullToAbsent || displayName != null) {
+      map['display_name'] = Variable<String>(displayName);
+    }
+    map['role'] = Variable<String>(role);
+    map['is_self'] = Variable<bool>(isSelf);
+    map['devices_json'] = Variable<String>(devicesJson);
+    if (!nullToAbsent || devicesFetchedAt != null) {
+      map['devices_fetched_at'] = Variable<int>(
+        $GroupMembersTable.$converterdevicesFetchedAtn.toSql(devicesFetchedAt),
+      );
+    }
+    if (!nullToAbsent || joinedAt != null) {
+      map['joined_at'] = Variable<int>(
+        $GroupMembersTable.$converterjoinedAtn.toSql(joinedAt),
+      );
+    }
+    return map;
+  }
+
+  GroupMembersCompanion toCompanion(bool nullToAbsent) {
+    return GroupMembersCompanion(
+      groupId: Value(groupId),
+      accountId: Value(accountId),
+      qualifiedId: Value(qualifiedId),
+      displayName: displayName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(displayName),
+      role: Value(role),
+      isSelf: Value(isSelf),
+      devicesJson: Value(devicesJson),
+      devicesFetchedAt: devicesFetchedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(devicesFetchedAt),
+      joinedAt: joinedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(joinedAt),
+    );
+  }
+
+  factory GroupMemberRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GroupMemberRow(
+      groupId: serializer.fromJson<String>(json['groupId']),
+      accountId: serializer.fromJson<String>(json['accountId']),
+      qualifiedId: serializer.fromJson<String>(json['qualifiedId']),
+      displayName: serializer.fromJson<String?>(json['displayName']),
+      role: serializer.fromJson<String>(json['role']),
+      isSelf: serializer.fromJson<bool>(json['isSelf']),
+      devicesJson: serializer.fromJson<String>(json['devicesJson']),
+      devicesFetchedAt: serializer.fromJson<DateTime?>(
+        json['devicesFetchedAt'],
+      ),
+      joinedAt: serializer.fromJson<DateTime?>(json['joinedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'groupId': serializer.toJson<String>(groupId),
+      'accountId': serializer.toJson<String>(accountId),
+      'qualifiedId': serializer.toJson<String>(qualifiedId),
+      'displayName': serializer.toJson<String?>(displayName),
+      'role': serializer.toJson<String>(role),
+      'isSelf': serializer.toJson<bool>(isSelf),
+      'devicesJson': serializer.toJson<String>(devicesJson),
+      'devicesFetchedAt': serializer.toJson<DateTime?>(devicesFetchedAt),
+      'joinedAt': serializer.toJson<DateTime?>(joinedAt),
+    };
+  }
+
+  GroupMemberRow copyWith({
+    String? groupId,
+    String? accountId,
+    String? qualifiedId,
+    Value<String?> displayName = const Value.absent(),
+    String? role,
+    bool? isSelf,
+    String? devicesJson,
+    Value<DateTime?> devicesFetchedAt = const Value.absent(),
+    Value<DateTime?> joinedAt = const Value.absent(),
+  }) => GroupMemberRow(
+    groupId: groupId ?? this.groupId,
+    accountId: accountId ?? this.accountId,
+    qualifiedId: qualifiedId ?? this.qualifiedId,
+    displayName: displayName.present ? displayName.value : this.displayName,
+    role: role ?? this.role,
+    isSelf: isSelf ?? this.isSelf,
+    devicesJson: devicesJson ?? this.devicesJson,
+    devicesFetchedAt: devicesFetchedAt.present
+        ? devicesFetchedAt.value
+        : this.devicesFetchedAt,
+    joinedAt: joinedAt.present ? joinedAt.value : this.joinedAt,
+  );
+  GroupMemberRow copyWithCompanion(GroupMembersCompanion data) {
+    return GroupMemberRow(
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      qualifiedId: data.qualifiedId.present
+          ? data.qualifiedId.value
+          : this.qualifiedId,
+      displayName: data.displayName.present
+          ? data.displayName.value
+          : this.displayName,
+      role: data.role.present ? data.role.value : this.role,
+      isSelf: data.isSelf.present ? data.isSelf.value : this.isSelf,
+      devicesJson: data.devicesJson.present
+          ? data.devicesJson.value
+          : this.devicesJson,
+      devicesFetchedAt: data.devicesFetchedAt.present
+          ? data.devicesFetchedAt.value
+          : this.devicesFetchedAt,
+      joinedAt: data.joinedAt.present ? data.joinedAt.value : this.joinedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupMemberRow(')
+          ..write('groupId: $groupId, ')
+          ..write('accountId: $accountId, ')
+          ..write('qualifiedId: $qualifiedId, ')
+          ..write('displayName: $displayName, ')
+          ..write('role: $role, ')
+          ..write('isSelf: $isSelf, ')
+          ..write('devicesJson: $devicesJson, ')
+          ..write('devicesFetchedAt: $devicesFetchedAt, ')
+          ..write('joinedAt: $joinedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    groupId,
+    accountId,
+    qualifiedId,
+    displayName,
+    role,
+    isSelf,
+    devicesJson,
+    devicesFetchedAt,
+    joinedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GroupMemberRow &&
+          other.groupId == this.groupId &&
+          other.accountId == this.accountId &&
+          other.qualifiedId == this.qualifiedId &&
+          other.displayName == this.displayName &&
+          other.role == this.role &&
+          other.isSelf == this.isSelf &&
+          other.devicesJson == this.devicesJson &&
+          other.devicesFetchedAt == this.devicesFetchedAt &&
+          other.joinedAt == this.joinedAt);
+}
+
+class GroupMembersCompanion extends UpdateCompanion<GroupMemberRow> {
+  final Value<String> groupId;
+  final Value<String> accountId;
+  final Value<String> qualifiedId;
+  final Value<String?> displayName;
+  final Value<String> role;
+  final Value<bool> isSelf;
+  final Value<String> devicesJson;
+  final Value<DateTime?> devicesFetchedAt;
+  final Value<DateTime?> joinedAt;
+  final Value<int> rowid;
+  const GroupMembersCompanion({
+    this.groupId = const Value.absent(),
+    this.accountId = const Value.absent(),
+    this.qualifiedId = const Value.absent(),
+    this.displayName = const Value.absent(),
+    this.role = const Value.absent(),
+    this.isSelf = const Value.absent(),
+    this.devicesJson = const Value.absent(),
+    this.devicesFetchedAt = const Value.absent(),
+    this.joinedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GroupMembersCompanion.insert({
+    required String groupId,
+    required String accountId,
+    required String qualifiedId,
+    this.displayName = const Value.absent(),
+    required String role,
+    this.isSelf = const Value.absent(),
+    required String devicesJson,
+    this.devicesFetchedAt = const Value.absent(),
+    this.joinedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : groupId = Value(groupId),
+       accountId = Value(accountId),
+       qualifiedId = Value(qualifiedId),
+       role = Value(role),
+       devicesJson = Value(devicesJson);
+  static Insertable<GroupMemberRow> custom({
+    Expression<String>? groupId,
+    Expression<String>? accountId,
+    Expression<String>? qualifiedId,
+    Expression<String>? displayName,
+    Expression<String>? role,
+    Expression<bool>? isSelf,
+    Expression<String>? devicesJson,
+    Expression<int>? devicesFetchedAt,
+    Expression<int>? joinedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (groupId != null) 'group_id': groupId,
+      if (accountId != null) 'account_id': accountId,
+      if (qualifiedId != null) 'qualified_id': qualifiedId,
+      if (displayName != null) 'display_name': displayName,
+      if (role != null) 'role': role,
+      if (isSelf != null) 'is_self': isSelf,
+      if (devicesJson != null) 'devices_json': devicesJson,
+      if (devicesFetchedAt != null) 'devices_fetched_at': devicesFetchedAt,
+      if (joinedAt != null) 'joined_at': joinedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GroupMembersCompanion copyWith({
+    Value<String>? groupId,
+    Value<String>? accountId,
+    Value<String>? qualifiedId,
+    Value<String?>? displayName,
+    Value<String>? role,
+    Value<bool>? isSelf,
+    Value<String>? devicesJson,
+    Value<DateTime?>? devicesFetchedAt,
+    Value<DateTime?>? joinedAt,
+    Value<int>? rowid,
+  }) {
+    return GroupMembersCompanion(
+      groupId: groupId ?? this.groupId,
+      accountId: accountId ?? this.accountId,
+      qualifiedId: qualifiedId ?? this.qualifiedId,
+      displayName: displayName ?? this.displayName,
+      role: role ?? this.role,
+      isSelf: isSelf ?? this.isSelf,
+      devicesJson: devicesJson ?? this.devicesJson,
+      devicesFetchedAt: devicesFetchedAt ?? this.devicesFetchedAt,
+      joinedAt: joinedAt ?? this.joinedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (qualifiedId.present) {
+      map['qualified_id'] = Variable<String>(qualifiedId.value);
+    }
+    if (displayName.present) {
+      map['display_name'] = Variable<String>(displayName.value);
+    }
+    if (role.present) {
+      map['role'] = Variable<String>(role.value);
+    }
+    if (isSelf.present) {
+      map['is_self'] = Variable<bool>(isSelf.value);
+    }
+    if (devicesJson.present) {
+      map['devices_json'] = Variable<String>(devicesJson.value);
+    }
+    if (devicesFetchedAt.present) {
+      map['devices_fetched_at'] = Variable<int>(
+        $GroupMembersTable.$converterdevicesFetchedAtn.toSql(
+          devicesFetchedAt.value,
+        ),
+      );
+    }
+    if (joinedAt.present) {
+      map['joined_at'] = Variable<int>(
+        $GroupMembersTable.$converterjoinedAtn.toSql(joinedAt.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupMembersCompanion(')
+          ..write('groupId: $groupId, ')
+          ..write('accountId: $accountId, ')
+          ..write('qualifiedId: $qualifiedId, ')
+          ..write('displayName: $displayName, ')
+          ..write('role: $role, ')
+          ..write('isSelf: $isSelf, ')
+          ..write('devicesJson: $devicesJson, ')
+          ..write('devicesFetchedAt: $devicesFetchedAt, ')
+          ..write('joinedAt: $joinedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $GroupBansTable extends GroupBans
+    with TableInfo<$GroupBansTable, GroupBanRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GroupBansTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES "groups" (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> bannedAt =
+      GeneratedColumn<int>(
+        'banned_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($GroupBansTable.$converterbannedAt);
+  @override
+  List<GeneratedColumn> get $columns => [groupId, accountId, bannedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'group_bans';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GroupBanRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {groupId, accountId};
+  @override
+  GroupBanRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GroupBanRow(
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      bannedAt: $GroupBansTable.$converterbannedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}banned_at'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $GroupBansTable createAlias(String alias) {
+    return $GroupBansTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, int> $converterbannedAt = const EpochMs();
+}
+
+class GroupBanRow extends DataClass implements Insertable<GroupBanRow> {
+  final String groupId;
+  final String accountId;
+  final DateTime bannedAt;
+  const GroupBanRow({
+    required this.groupId,
+    required this.accountId,
+    required this.bannedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['group_id'] = Variable<String>(groupId);
+    map['account_id'] = Variable<String>(accountId);
+    {
+      map['banned_at'] = Variable<int>(
+        $GroupBansTable.$converterbannedAt.toSql(bannedAt),
+      );
+    }
+    return map;
+  }
+
+  GroupBansCompanion toCompanion(bool nullToAbsent) {
+    return GroupBansCompanion(
+      groupId: Value(groupId),
+      accountId: Value(accountId),
+      bannedAt: Value(bannedAt),
+    );
+  }
+
+  factory GroupBanRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GroupBanRow(
+      groupId: serializer.fromJson<String>(json['groupId']),
+      accountId: serializer.fromJson<String>(json['accountId']),
+      bannedAt: serializer.fromJson<DateTime>(json['bannedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'groupId': serializer.toJson<String>(groupId),
+      'accountId': serializer.toJson<String>(accountId),
+      'bannedAt': serializer.toJson<DateTime>(bannedAt),
+    };
+  }
+
+  GroupBanRow copyWith({
+    String? groupId,
+    String? accountId,
+    DateTime? bannedAt,
+  }) => GroupBanRow(
+    groupId: groupId ?? this.groupId,
+    accountId: accountId ?? this.accountId,
+    bannedAt: bannedAt ?? this.bannedAt,
+  );
+  GroupBanRow copyWithCompanion(GroupBansCompanion data) {
+    return GroupBanRow(
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      bannedAt: data.bannedAt.present ? data.bannedAt.value : this.bannedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupBanRow(')
+          ..write('groupId: $groupId, ')
+          ..write('accountId: $accountId, ')
+          ..write('bannedAt: $bannedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(groupId, accountId, bannedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GroupBanRow &&
+          other.groupId == this.groupId &&
+          other.accountId == this.accountId &&
+          other.bannedAt == this.bannedAt);
+}
+
+class GroupBansCompanion extends UpdateCompanion<GroupBanRow> {
+  final Value<String> groupId;
+  final Value<String> accountId;
+  final Value<DateTime> bannedAt;
+  final Value<int> rowid;
+  const GroupBansCompanion({
+    this.groupId = const Value.absent(),
+    this.accountId = const Value.absent(),
+    this.bannedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GroupBansCompanion.insert({
+    required String groupId,
+    required String accountId,
+    required DateTime bannedAt,
+    this.rowid = const Value.absent(),
+  }) : groupId = Value(groupId),
+       accountId = Value(accountId),
+       bannedAt = Value(bannedAt);
+  static Insertable<GroupBanRow> custom({
+    Expression<String>? groupId,
+    Expression<String>? accountId,
+    Expression<int>? bannedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (groupId != null) 'group_id': groupId,
+      if (accountId != null) 'account_id': accountId,
+      if (bannedAt != null) 'banned_at': bannedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GroupBansCompanion copyWith({
+    Value<String>? groupId,
+    Value<String>? accountId,
+    Value<DateTime>? bannedAt,
+    Value<int>? rowid,
+  }) {
+    return GroupBansCompanion(
+      groupId: groupId ?? this.groupId,
+      accountId: accountId ?? this.accountId,
+      bannedAt: bannedAt ?? this.bannedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (bannedAt.present) {
+      map['banned_at'] = Variable<int>(
+        $GroupBansTable.$converterbannedAt.toSql(bannedAt.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GroupBansCompanion(')
+          ..write('groupId: $groupId, ')
+          ..write('accountId: $accountId, ')
+          ..write('bannedAt: $bannedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CallLogTable extends CallLog with TableInfo<$CallLogTable, CallLogRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CallLogTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _callIdMeta = const VerificationMeta('callId');
+  @override
+  late final GeneratedColumn<String> callId = GeneratedColumn<String>(
+    'call_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _peerAccountIdMeta = const VerificationMeta(
+    'peerAccountId',
+  );
+  @override
+  late final GeneratedColumn<String> peerAccountId = GeneratedColumn<String>(
+    'peer_account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _peerDisplayNameMeta = const VerificationMeta(
+    'peerDisplayName',
+  );
+  @override
+  late final GeneratedColumn<String> peerDisplayName = GeneratedColumn<String>(
+    'peer_display_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _directionMeta = const VerificationMeta(
+    'direction',
+  );
+  @override
+  late final GeneratedColumn<String> direction = GeneratedColumn<String>(
+    'direction',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _videoMeta = const VerificationMeta('video');
+  @override
+  late final GeneratedColumn<bool> video = GeneratedColumn<bool>(
+    'video',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("video" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> startedAt =
+      GeneratedColumn<int>(
+        'started_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($CallLogTable.$converterstartedAt);
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> answeredAt =
+      GeneratedColumn<int>(
+        'answered_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($CallLogTable.$converteransweredAtn);
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> endedAt =
+      GeneratedColumn<int>(
+        'ended_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($CallLogTable.$converterendedAtn);
+  @override
+  List<GeneratedColumn> get $columns => [
+    callId,
+    peerAccountId,
+    peerDisplayName,
+    kind,
+    direction,
+    video,
+    state,
+    startedAt,
+    answeredAt,
+    endedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'call_log';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CallLogRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('call_id')) {
+      context.handle(
+        _callIdMeta,
+        callId.isAcceptableOrUnknown(data['call_id']!, _callIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_callIdMeta);
+    }
+    if (data.containsKey('peer_account_id')) {
+      context.handle(
+        _peerAccountIdMeta,
+        peerAccountId.isAcceptableOrUnknown(
+          data['peer_account_id']!,
+          _peerAccountIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_peerAccountIdMeta);
+    }
+    if (data.containsKey('peer_display_name')) {
+      context.handle(
+        _peerDisplayNameMeta,
+        peerDisplayName.isAcceptableOrUnknown(
+          data['peer_display_name']!,
+          _peerDisplayNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('direction')) {
+      context.handle(
+        _directionMeta,
+        direction.isAcceptableOrUnknown(data['direction']!, _directionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_directionMeta);
+    }
+    if (data.containsKey('video')) {
+      context.handle(
+        _videoMeta,
+        video.isAcceptableOrUnknown(data['video']!, _videoMeta),
+      );
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {callId};
+  @override
+  CallLogRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CallLogRow(
+      callId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}call_id'],
+      )!,
+      peerAccountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_account_id'],
+      )!,
+      peerDisplayName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_display_name'],
+      ),
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      direction: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}direction'],
+      )!,
+      video: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}video'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      startedAt: $CallLogTable.$converterstartedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}started_at'],
+        )!,
+      ),
+      answeredAt: $CallLogTable.$converteransweredAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}answered_at'],
+        ),
+      ),
+      endedAt: $CallLogTable.$converterendedAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}ended_at'],
+        ),
+      ),
+    );
+  }
+
+  @override
+  $CallLogTable createAlias(String alias) {
+    return $CallLogTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, int> $converterstartedAt = const EpochMs();
+  static TypeConverter<DateTime, int> $converteransweredAt = const EpochMs();
+  static TypeConverter<DateTime?, int?> $converteransweredAtn =
+      NullAwareTypeConverter.wrap($converteransweredAt);
+  static TypeConverter<DateTime, int> $converterendedAt = const EpochMs();
+  static TypeConverter<DateTime?, int?> $converterendedAtn =
+      NullAwareTypeConverter.wrap($converterendedAt);
+}
+
+class CallLogRow extends DataClass implements Insertable<CallLogRow> {
+  final String callId;
+  final String peerAccountId;
+  final String? peerDisplayName;
+
+  /// `direct` or `group`. Group calls are deferred from v2 (plan §13), but the
+  /// column exists so adding them is a data change, not a redesign.
+  final String kind;
+
+  /// `incoming`, `outgoing`, `missed`, `declined`, `failed`.
+  final String direction;
+  final bool video;
+
+  /// `active`, `ended`, `declined`, `missed`, `cancelled`, `unanswered`.
+  final String state;
+  final DateTime startedAt;
+  final DateTime? answeredAt;
+  final DateTime? endedAt;
+  const CallLogRow({
+    required this.callId,
+    required this.peerAccountId,
+    this.peerDisplayName,
+    required this.kind,
+    required this.direction,
+    required this.video,
+    required this.state,
+    required this.startedAt,
+    this.answeredAt,
+    this.endedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['call_id'] = Variable<String>(callId);
+    map['peer_account_id'] = Variable<String>(peerAccountId);
+    if (!nullToAbsent || peerDisplayName != null) {
+      map['peer_display_name'] = Variable<String>(peerDisplayName);
+    }
+    map['kind'] = Variable<String>(kind);
+    map['direction'] = Variable<String>(direction);
+    map['video'] = Variable<bool>(video);
+    map['state'] = Variable<String>(state);
+    {
+      map['started_at'] = Variable<int>(
+        $CallLogTable.$converterstartedAt.toSql(startedAt),
+      );
+    }
+    if (!nullToAbsent || answeredAt != null) {
+      map['answered_at'] = Variable<int>(
+        $CallLogTable.$converteransweredAtn.toSql(answeredAt),
+      );
+    }
+    if (!nullToAbsent || endedAt != null) {
+      map['ended_at'] = Variable<int>(
+        $CallLogTable.$converterendedAtn.toSql(endedAt),
+      );
+    }
+    return map;
+  }
+
+  CallLogCompanion toCompanion(bool nullToAbsent) {
+    return CallLogCompanion(
+      callId: Value(callId),
+      peerAccountId: Value(peerAccountId),
+      peerDisplayName: peerDisplayName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(peerDisplayName),
+      kind: Value(kind),
+      direction: Value(direction),
+      video: Value(video),
+      state: Value(state),
+      startedAt: Value(startedAt),
+      answeredAt: answeredAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(answeredAt),
+      endedAt: endedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endedAt),
+    );
+  }
+
+  factory CallLogRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CallLogRow(
+      callId: serializer.fromJson<String>(json['callId']),
+      peerAccountId: serializer.fromJson<String>(json['peerAccountId']),
+      peerDisplayName: serializer.fromJson<String?>(json['peerDisplayName']),
+      kind: serializer.fromJson<String>(json['kind']),
+      direction: serializer.fromJson<String>(json['direction']),
+      video: serializer.fromJson<bool>(json['video']),
+      state: serializer.fromJson<String>(json['state']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      answeredAt: serializer.fromJson<DateTime?>(json['answeredAt']),
+      endedAt: serializer.fromJson<DateTime?>(json['endedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'callId': serializer.toJson<String>(callId),
+      'peerAccountId': serializer.toJson<String>(peerAccountId),
+      'peerDisplayName': serializer.toJson<String?>(peerDisplayName),
+      'kind': serializer.toJson<String>(kind),
+      'direction': serializer.toJson<String>(direction),
+      'video': serializer.toJson<bool>(video),
+      'state': serializer.toJson<String>(state),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'answeredAt': serializer.toJson<DateTime?>(answeredAt),
+      'endedAt': serializer.toJson<DateTime?>(endedAt),
+    };
+  }
+
+  CallLogRow copyWith({
+    String? callId,
+    String? peerAccountId,
+    Value<String?> peerDisplayName = const Value.absent(),
+    String? kind,
+    String? direction,
+    bool? video,
+    String? state,
+    DateTime? startedAt,
+    Value<DateTime?> answeredAt = const Value.absent(),
+    Value<DateTime?> endedAt = const Value.absent(),
+  }) => CallLogRow(
+    callId: callId ?? this.callId,
+    peerAccountId: peerAccountId ?? this.peerAccountId,
+    peerDisplayName: peerDisplayName.present
+        ? peerDisplayName.value
+        : this.peerDisplayName,
+    kind: kind ?? this.kind,
+    direction: direction ?? this.direction,
+    video: video ?? this.video,
+    state: state ?? this.state,
+    startedAt: startedAt ?? this.startedAt,
+    answeredAt: answeredAt.present ? answeredAt.value : this.answeredAt,
+    endedAt: endedAt.present ? endedAt.value : this.endedAt,
+  );
+  CallLogRow copyWithCompanion(CallLogCompanion data) {
+    return CallLogRow(
+      callId: data.callId.present ? data.callId.value : this.callId,
+      peerAccountId: data.peerAccountId.present
+          ? data.peerAccountId.value
+          : this.peerAccountId,
+      peerDisplayName: data.peerDisplayName.present
+          ? data.peerDisplayName.value
+          : this.peerDisplayName,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      direction: data.direction.present ? data.direction.value : this.direction,
+      video: data.video.present ? data.video.value : this.video,
+      state: data.state.present ? data.state.value : this.state,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      answeredAt: data.answeredAt.present
+          ? data.answeredAt.value
+          : this.answeredAt,
+      endedAt: data.endedAt.present ? data.endedAt.value : this.endedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CallLogRow(')
+          ..write('callId: $callId, ')
+          ..write('peerAccountId: $peerAccountId, ')
+          ..write('peerDisplayName: $peerDisplayName, ')
+          ..write('kind: $kind, ')
+          ..write('direction: $direction, ')
+          ..write('video: $video, ')
+          ..write('state: $state, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('answeredAt: $answeredAt, ')
+          ..write('endedAt: $endedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    callId,
+    peerAccountId,
+    peerDisplayName,
+    kind,
+    direction,
+    video,
+    state,
+    startedAt,
+    answeredAt,
+    endedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CallLogRow &&
+          other.callId == this.callId &&
+          other.peerAccountId == this.peerAccountId &&
+          other.peerDisplayName == this.peerDisplayName &&
+          other.kind == this.kind &&
+          other.direction == this.direction &&
+          other.video == this.video &&
+          other.state == this.state &&
+          other.startedAt == this.startedAt &&
+          other.answeredAt == this.answeredAt &&
+          other.endedAt == this.endedAt);
+}
+
+class CallLogCompanion extends UpdateCompanion<CallLogRow> {
+  final Value<String> callId;
+  final Value<String> peerAccountId;
+  final Value<String?> peerDisplayName;
+  final Value<String> kind;
+  final Value<String> direction;
+  final Value<bool> video;
+  final Value<String> state;
+  final Value<DateTime> startedAt;
+  final Value<DateTime?> answeredAt;
+  final Value<DateTime?> endedAt;
+  final Value<int> rowid;
+  const CallLogCompanion({
+    this.callId = const Value.absent(),
+    this.peerAccountId = const Value.absent(),
+    this.peerDisplayName = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.direction = const Value.absent(),
+    this.video = const Value.absent(),
+    this.state = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.answeredAt = const Value.absent(),
+    this.endedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CallLogCompanion.insert({
+    required String callId,
+    required String peerAccountId,
+    this.peerDisplayName = const Value.absent(),
+    required String kind,
+    required String direction,
+    this.video = const Value.absent(),
+    required String state,
+    required DateTime startedAt,
+    this.answeredAt = const Value.absent(),
+    this.endedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : callId = Value(callId),
+       peerAccountId = Value(peerAccountId),
+       kind = Value(kind),
+       direction = Value(direction),
+       state = Value(state),
+       startedAt = Value(startedAt);
+  static Insertable<CallLogRow> custom({
+    Expression<String>? callId,
+    Expression<String>? peerAccountId,
+    Expression<String>? peerDisplayName,
+    Expression<String>? kind,
+    Expression<String>? direction,
+    Expression<bool>? video,
+    Expression<String>? state,
+    Expression<int>? startedAt,
+    Expression<int>? answeredAt,
+    Expression<int>? endedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (callId != null) 'call_id': callId,
+      if (peerAccountId != null) 'peer_account_id': peerAccountId,
+      if (peerDisplayName != null) 'peer_display_name': peerDisplayName,
+      if (kind != null) 'kind': kind,
+      if (direction != null) 'direction': direction,
+      if (video != null) 'video': video,
+      if (state != null) 'state': state,
+      if (startedAt != null) 'started_at': startedAt,
+      if (answeredAt != null) 'answered_at': answeredAt,
+      if (endedAt != null) 'ended_at': endedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CallLogCompanion copyWith({
+    Value<String>? callId,
+    Value<String>? peerAccountId,
+    Value<String?>? peerDisplayName,
+    Value<String>? kind,
+    Value<String>? direction,
+    Value<bool>? video,
+    Value<String>? state,
+    Value<DateTime>? startedAt,
+    Value<DateTime?>? answeredAt,
+    Value<DateTime?>? endedAt,
+    Value<int>? rowid,
+  }) {
+    return CallLogCompanion(
+      callId: callId ?? this.callId,
+      peerAccountId: peerAccountId ?? this.peerAccountId,
+      peerDisplayName: peerDisplayName ?? this.peerDisplayName,
+      kind: kind ?? this.kind,
+      direction: direction ?? this.direction,
+      video: video ?? this.video,
+      state: state ?? this.state,
+      startedAt: startedAt ?? this.startedAt,
+      answeredAt: answeredAt ?? this.answeredAt,
+      endedAt: endedAt ?? this.endedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (callId.present) {
+      map['call_id'] = Variable<String>(callId.value);
+    }
+    if (peerAccountId.present) {
+      map['peer_account_id'] = Variable<String>(peerAccountId.value);
+    }
+    if (peerDisplayName.present) {
+      map['peer_display_name'] = Variable<String>(peerDisplayName.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (direction.present) {
+      map['direction'] = Variable<String>(direction.value);
+    }
+    if (video.present) {
+      map['video'] = Variable<bool>(video.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<int>(
+        $CallLogTable.$converterstartedAt.toSql(startedAt.value),
+      );
+    }
+    if (answeredAt.present) {
+      map['answered_at'] = Variable<int>(
+        $CallLogTable.$converteransweredAtn.toSql(answeredAt.value),
+      );
+    }
+    if (endedAt.present) {
+      map['ended_at'] = Variable<int>(
+        $CallLogTable.$converterendedAtn.toSql(endedAt.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CallLogCompanion(')
+          ..write('callId: $callId, ')
+          ..write('peerAccountId: $peerAccountId, ')
+          ..write('peerDisplayName: $peerDisplayName, ')
+          ..write('kind: $kind, ')
+          ..write('direction: $direction, ')
+          ..write('video: $video, ')
+          ..write('state: $state, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('answeredAt: $answeredAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SettingsTable extends Settings
     with TableInfo<$SettingsTable, SettingRow> {
   @override
@@ -11409,6 +15159,12 @@ abstract class _$HelixDb extends GeneratedDatabase {
   late final $DeferredActionsTable deferredActions = $DeferredActionsTable(
     this,
   );
+  late final $TransferJobsTable transferJobs = $TransferJobsTable(this);
+  late final $TransferChunksTable transferChunks = $TransferChunksTable(this);
+  late final $GroupsTable groups = $GroupsTable(this);
+  late final $GroupMembersTable groupMembers = $GroupMembersTable(this);
+  late final $GroupBansTable groupBans = $GroupBansTable(this);
+  late final $CallLogTable callLog = $CallLogTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
   late final Index peoplePhoneHash = Index(
     'people_phone_hash',
@@ -11430,6 +15186,26 @@ abstract class _$HelixDb extends GeneratedDatabase {
     'deferred_actions_expiry',
     'CREATE INDEX deferred_actions_expiry ON deferred_actions (expires_at)',
   );
+  late final Index transferJobsState = Index(
+    'transfer_jobs_state',
+    'CREATE INDEX transfer_jobs_state ON transfer_jobs (state, next_attempt_at)',
+  );
+  late final Index transferChunksTransfer = Index(
+    'transfer_chunks_transfer',
+    'CREATE INDEX transfer_chunks_transfer ON transfer_chunks (transfer_id, sequence)',
+  );
+  late final Index groupsList = Index(
+    'groups_list',
+    'CREATE INDEX groups_list ON "groups" (archived)',
+  );
+  late final Index groupMembersAccount = Index(
+    'group_members_account',
+    'CREATE INDEX group_members_account ON group_members (account_id)',
+  );
+  late final Index callLogAt = Index(
+    'call_log_at',
+    'CREATE INDEX call_log_at ON call_log (started_at)',
+  );
   late final AccountDao accountDao = AccountDao(this as HelixDb);
   late final PeopleDao peopleDao = PeopleDao(this as HelixDb);
   late final ConversationsDao conversationsDao = ConversationsDao(
@@ -11440,6 +15216,9 @@ abstract class _$HelixDb extends GeneratedDatabase {
   late final InboxDao inboxDao = InboxDao(this as HelixDb);
   late final OutboxDao outboxDao = OutboxDao(this as HelixDb);
   late final SettingsDao settingsDao = SettingsDao(this as HelixDb);
+  late final GroupsDao groupsDao = GroupsDao(this as HelixDb);
+  late final TransfersDao transfersDao = TransfersDao(this as HelixDb);
+  late final CallsDao callsDao = CallsDao(this as HelixDb);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -11472,12 +15251,23 @@ abstract class _$HelixDb extends GeneratedDatabase {
     processedEnvelopes,
     outboxOps,
     deferredActions,
+    transferJobs,
+    transferChunks,
+    groups,
+    groupMembers,
+    groupBans,
+    callLog,
     settings,
     peoplePhoneHash,
     processedEnvelopesAt,
     outboxOpsDue,
     deferredActionsTarget,
     deferredActionsExpiry,
+    transferJobsState,
+    transferChunksTransfer,
+    groupsList,
+    groupMembersAccount,
+    callLogAt,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -11550,6 +15340,27 @@ abstract class _$HelixDb extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('outbox_ops', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'attachments',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('transfer_jobs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'groups',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('group_members', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'groups',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('group_bans', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -14171,6 +17982,24 @@ final class $$AttachmentsTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static MultiTypedResultKey<$TransferJobsTable, List<TransferRow>>
+  _transferJobsRefsTable(_$HelixDb db) => MultiTypedResultKey.fromTable(
+    db.transferJobs,
+    aliasName: 'attachments__id__transfer_jobs__attachment_rowid',
+  );
+
+  $$TransferJobsTableProcessedTableManager get transferJobsRefs {
+    final manager = $$TransferJobsTableTableManager(
+      $_db,
+      $_db.transferJobs,
+    ).filter((f) => f.attachmentRowid.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_transferJobsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$AttachmentsTableFilterComposer
@@ -14299,6 +18128,31 @@ class $$AttachmentsTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> transferJobsRefs(
+    Expression<bool> Function($$TransferJobsTableFilterComposer f) f,
+  ) {
+    final $$TransferJobsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.transferJobs,
+      getReferencedColumn: (t) => t.attachmentRowid,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransferJobsTableFilterComposer(
+            $db: $db,
+            $table: $db.transferJobs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 }
 
@@ -14522,6 +18376,31 @@ class $$AttachmentsTableAnnotationComposer
     );
     return composer;
   }
+
+  Expression<T> transferJobsRefs<T extends Object>(
+    Expression<T> Function($$TransferJobsTableAnnotationComposer a) f,
+  ) {
+    final $$TransferJobsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.transferJobs,
+      getReferencedColumn: (t) => t.attachmentRowid,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransferJobsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.transferJobs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$AttachmentsTableTableManager
@@ -14537,7 +18416,7 @@ class $$AttachmentsTableTableManager
           $$AttachmentsTableUpdateCompanionBuilder,
           (AttachmentRow, $$AttachmentsTableReferences),
           AttachmentRow,
-          PrefetchHooks Function({bool messageRowid})
+          PrefetchHooks Function({bool messageRowid, bool transferJobsRefs})
         > {
   $$AttachmentsTableTableManager(_$HelixDb db, $AttachmentsTable table)
     : super(
@@ -14646,47 +18525,74 @@ class $$AttachmentsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({messageRowid = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (messageRowid) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.messageRowid,
-                                referencedTable: $$AttachmentsTableReferences
-                                    ._messageRowidTable(db),
-                                referencedColumn: $$AttachmentsTableReferences
-                                    ._messageRowidTable(db)
-                                    .localRowid,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({messageRowid = false, transferJobsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (transferJobsRefs) db.transferJobs,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (messageRowid) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.messageRowid,
+                                    referencedTable:
+                                        $$AttachmentsTableReferences
+                                            ._messageRowidTable(db),
+                                    referencedColumn:
+                                        $$AttachmentsTableReferences
+                                            ._messageRowidTable(db)
+                                            .localRowid,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (transferJobsRefs)
+                        await $_getPrefetchedData<
+                          AttachmentRow,
+                          $AttachmentsTable,
+                          TransferRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AttachmentsTableReferences
+                              ._transferJobsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AttachmentsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).transferJobsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.attachmentRowid == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -14703,7 +18609,7 @@ typedef $$AttachmentsTableProcessedTableManager =
       $$AttachmentsTableUpdateCompanionBuilder,
       (AttachmentRow, $$AttachmentsTableReferences),
       AttachmentRow,
-      PrefetchHooks Function({bool messageRowid})
+      PrefetchHooks Function({bool messageRowid, bool transferJobsRefs})
     >;
 typedef $$ConversationMembersTableCreateCompanionBuilder =
     ConversationMembersCompanion Function({
@@ -18436,6 +22342,2342 @@ typedef $$DeferredActionsTableProcessedTableManager =
       DeferredActionRow,
       PrefetchHooks Function()
     >;
+typedef $$TransferJobsTableCreateCompanionBuilder =
+    TransferJobsCompanion Function({
+      Value<int> id,
+      required String kind,
+      Value<int?> attachmentRowid,
+      Value<String?> mediaId,
+      Value<String?> localPath,
+      Value<int> size,
+      Value<int> offset,
+      Value<Uint8List?> mediaKey,
+      Value<String?> purpose,
+      required TransferState state,
+      Value<int> attempts,
+      required DateTime nextAttemptAt,
+      Value<DateTime?> leaseUntil,
+      Value<String?> lastError,
+      required DateTime createdAt,
+    });
+typedef $$TransferJobsTableUpdateCompanionBuilder =
+    TransferJobsCompanion Function({
+      Value<int> id,
+      Value<String> kind,
+      Value<int?> attachmentRowid,
+      Value<String?> mediaId,
+      Value<String?> localPath,
+      Value<int> size,
+      Value<int> offset,
+      Value<Uint8List?> mediaKey,
+      Value<String?> purpose,
+      Value<TransferState> state,
+      Value<int> attempts,
+      Value<DateTime> nextAttemptAt,
+      Value<DateTime?> leaseUntil,
+      Value<String?> lastError,
+      Value<DateTime> createdAt,
+    });
+
+final class $$TransferJobsTableReferences
+    extends BaseReferences<_$HelixDb, $TransferJobsTable, TransferRow> {
+  $$TransferJobsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $AttachmentsTable _attachmentRowidTable(_$HelixDb db) => db.attachments
+      .createAlias('transfer_jobs__attachment_rowid__attachments__id');
+
+  $$AttachmentsTableProcessedTableManager? get attachmentRowid {
+    final $_column = $_itemColumn<int>('attachment_rowid');
+    if ($_column == null) return null;
+    final manager = $$AttachmentsTableTableManager(
+      $_db,
+      $_db.attachments,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_attachmentRowidTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$TransferJobsTableFilterComposer
+    extends Composer<_$HelixDb, $TransferJobsTable> {
+  $$TransferJobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mediaId => $composableBuilder(
+    column: $table.mediaId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localPath => $composableBuilder(
+    column: $table.localPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get offset => $composableBuilder(
+    column: $table.offset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get mediaKey => $composableBuilder(
+    column: $table.mediaKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get purpose => $composableBuilder(
+    column: $table.purpose,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<TransferState, TransferState, String>
+  get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get nextAttemptAt =>
+      $composableBuilder(
+        column: $table.nextAttemptAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get leaseUntil =>
+      $composableBuilder(
+        column: $table.leaseUntil,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get createdAt =>
+      $composableBuilder(
+        column: $table.createdAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  $$AttachmentsTableFilterComposer get attachmentRowid {
+    final $$AttachmentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attachmentRowid,
+      referencedTable: $db.attachments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AttachmentsTableFilterComposer(
+            $db: $db,
+            $table: $db.attachments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TransferJobsTableOrderingComposer
+    extends Composer<_$HelixDb, $TransferJobsTable> {
+  $$TransferJobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mediaId => $composableBuilder(
+    column: $table.mediaId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localPath => $composableBuilder(
+    column: $table.localPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get offset => $composableBuilder(
+    column: $table.offset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get mediaKey => $composableBuilder(
+    column: $table.mediaKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get purpose => $composableBuilder(
+    column: $table.purpose,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get leaseUntil => $composableBuilder(
+    column: $table.leaseUntil,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AttachmentsTableOrderingComposer get attachmentRowid {
+    final $$AttachmentsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attachmentRowid,
+      referencedTable: $db.attachments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AttachmentsTableOrderingComposer(
+            $db: $db,
+            $table: $db.attachments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TransferJobsTableAnnotationComposer
+    extends Composer<_$HelixDb, $TransferJobsTable> {
+  $$TransferJobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get mediaId =>
+      $composableBuilder(column: $table.mediaId, builder: (column) => column);
+
+  GeneratedColumn<String> get localPath =>
+      $composableBuilder(column: $table.localPath, builder: (column) => column);
+
+  GeneratedColumn<int> get size =>
+      $composableBuilder(column: $table.size, builder: (column) => column);
+
+  GeneratedColumn<int> get offset =>
+      $composableBuilder(column: $table.offset, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get mediaKey =>
+      $composableBuilder(column: $table.mediaKey, builder: (column) => column);
+
+  GeneratedColumn<String> get purpose =>
+      $composableBuilder(column: $table.purpose, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<TransferState, String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<int> get attempts =>
+      $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get nextAttemptAt =>
+      $composableBuilder(
+        column: $table.nextAttemptAt,
+        builder: (column) => column,
+      );
+
+  GeneratedColumnWithTypeConverter<DateTime?, int> get leaseUntil =>
+      $composableBuilder(
+        column: $table.leaseUntil,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$AttachmentsTableAnnotationComposer get attachmentRowid {
+    final $$AttachmentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.attachmentRowid,
+      referencedTable: $db.attachments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AttachmentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.attachments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TransferJobsTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $TransferJobsTable,
+          TransferRow,
+          $$TransferJobsTableFilterComposer,
+          $$TransferJobsTableOrderingComposer,
+          $$TransferJobsTableAnnotationComposer,
+          $$TransferJobsTableCreateCompanionBuilder,
+          $$TransferJobsTableUpdateCompanionBuilder,
+          (TransferRow, $$TransferJobsTableReferences),
+          TransferRow,
+          PrefetchHooks Function({bool attachmentRowid})
+        > {
+  $$TransferJobsTableTableManager(_$HelixDb db, $TransferJobsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TransferJobsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TransferJobsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TransferJobsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int?> attachmentRowid = const Value.absent(),
+                Value<String?> mediaId = const Value.absent(),
+                Value<String?> localPath = const Value.absent(),
+                Value<int> size = const Value.absent(),
+                Value<int> offset = const Value.absent(),
+                Value<Uint8List?> mediaKey = const Value.absent(),
+                Value<String?> purpose = const Value.absent(),
+                Value<TransferState> state = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<DateTime> nextAttemptAt = const Value.absent(),
+                Value<DateTime?> leaseUntil = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => TransferJobsCompanion(
+                id: id,
+                kind: kind,
+                attachmentRowid: attachmentRowid,
+                mediaId: mediaId,
+                localPath: localPath,
+                size: size,
+                offset: offset,
+                mediaKey: mediaKey,
+                purpose: purpose,
+                state: state,
+                attempts: attempts,
+                nextAttemptAt: nextAttemptAt,
+                leaseUntil: leaseUntil,
+                lastError: lastError,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String kind,
+                Value<int?> attachmentRowid = const Value.absent(),
+                Value<String?> mediaId = const Value.absent(),
+                Value<String?> localPath = const Value.absent(),
+                Value<int> size = const Value.absent(),
+                Value<int> offset = const Value.absent(),
+                Value<Uint8List?> mediaKey = const Value.absent(),
+                Value<String?> purpose = const Value.absent(),
+                required TransferState state,
+                Value<int> attempts = const Value.absent(),
+                required DateTime nextAttemptAt,
+                Value<DateTime?> leaseUntil = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                required DateTime createdAt,
+              }) => TransferJobsCompanion.insert(
+                id: id,
+                kind: kind,
+                attachmentRowid: attachmentRowid,
+                mediaId: mediaId,
+                localPath: localPath,
+                size: size,
+                offset: offset,
+                mediaKey: mediaKey,
+                purpose: purpose,
+                state: state,
+                attempts: attempts,
+                nextAttemptAt: nextAttemptAt,
+                leaseUntil: leaseUntil,
+                lastError: lastError,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$TransferJobsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({attachmentRowid = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (attachmentRowid) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.attachmentRowid,
+                                referencedTable: $$TransferJobsTableReferences
+                                    ._attachmentRowidTable(db),
+                                referencedColumn: $$TransferJobsTableReferences
+                                    ._attachmentRowidTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$TransferJobsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $TransferJobsTable,
+      TransferRow,
+      $$TransferJobsTableFilterComposer,
+      $$TransferJobsTableOrderingComposer,
+      $$TransferJobsTableAnnotationComposer,
+      $$TransferJobsTableCreateCompanionBuilder,
+      $$TransferJobsTableUpdateCompanionBuilder,
+      (TransferRow, $$TransferJobsTableReferences),
+      TransferRow,
+      PrefetchHooks Function({bool attachmentRowid})
+    >;
+typedef $$TransferChunksTableCreateCompanionBuilder =
+    TransferChunksCompanion Function({
+      required String transferId,
+      required int sequence,
+      required Uint8List payload,
+      required int total,
+      Value<bool> isFinal,
+      required DateTime receivedAt,
+      Value<int> rowid,
+    });
+typedef $$TransferChunksTableUpdateCompanionBuilder =
+    TransferChunksCompanion Function({
+      Value<String> transferId,
+      Value<int> sequence,
+      Value<Uint8List> payload,
+      Value<int> total,
+      Value<bool> isFinal,
+      Value<DateTime> receivedAt,
+      Value<int> rowid,
+    });
+
+class $$TransferChunksTableFilterComposer
+    extends Composer<_$HelixDb, $TransferChunksTable> {
+  $$TransferChunksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get transferId => $composableBuilder(
+    column: $table.transferId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get total => $composableBuilder(
+    column: $table.total,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isFinal => $composableBuilder(
+    column: $table.isFinal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get receivedAt =>
+      $composableBuilder(
+        column: $table.receivedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+}
+
+class $$TransferChunksTableOrderingComposer
+    extends Composer<_$HelixDb, $TransferChunksTable> {
+  $$TransferChunksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get transferId => $composableBuilder(
+    column: $table.transferId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get total => $composableBuilder(
+    column: $table.total,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isFinal => $composableBuilder(
+    column: $table.isFinal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TransferChunksTableAnnotationComposer
+    extends Composer<_$HelixDb, $TransferChunksTable> {
+  $$TransferChunksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get transferId => $composableBuilder(
+    column: $table.transferId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sequence =>
+      $composableBuilder(column: $table.sequence, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => column);
+
+  GeneratedColumn<int> get total =>
+      $composableBuilder(column: $table.total, builder: (column) => column);
+
+  GeneratedColumn<bool> get isFinal =>
+      $composableBuilder(column: $table.isFinal, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get receivedAt =>
+      $composableBuilder(
+        column: $table.receivedAt,
+        builder: (column) => column,
+      );
+}
+
+class $$TransferChunksTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $TransferChunksTable,
+          TransferChunkRow,
+          $$TransferChunksTableFilterComposer,
+          $$TransferChunksTableOrderingComposer,
+          $$TransferChunksTableAnnotationComposer,
+          $$TransferChunksTableCreateCompanionBuilder,
+          $$TransferChunksTableUpdateCompanionBuilder,
+          (
+            TransferChunkRow,
+            BaseReferences<_$HelixDb, $TransferChunksTable, TransferChunkRow>,
+          ),
+          TransferChunkRow,
+          PrefetchHooks Function()
+        > {
+  $$TransferChunksTableTableManager(_$HelixDb db, $TransferChunksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TransferChunksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TransferChunksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TransferChunksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> transferId = const Value.absent(),
+                Value<int> sequence = const Value.absent(),
+                Value<Uint8List> payload = const Value.absent(),
+                Value<int> total = const Value.absent(),
+                Value<bool> isFinal = const Value.absent(),
+                Value<DateTime> receivedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TransferChunksCompanion(
+                transferId: transferId,
+                sequence: sequence,
+                payload: payload,
+                total: total,
+                isFinal: isFinal,
+                receivedAt: receivedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String transferId,
+                required int sequence,
+                required Uint8List payload,
+                required int total,
+                Value<bool> isFinal = const Value.absent(),
+                required DateTime receivedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TransferChunksCompanion.insert(
+                transferId: transferId,
+                sequence: sequence,
+                payload: payload,
+                total: total,
+                isFinal: isFinal,
+                receivedAt: receivedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TransferChunksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $TransferChunksTable,
+      TransferChunkRow,
+      $$TransferChunksTableFilterComposer,
+      $$TransferChunksTableOrderingComposer,
+      $$TransferChunksTableAnnotationComposer,
+      $$TransferChunksTableCreateCompanionBuilder,
+      $$TransferChunksTableUpdateCompanionBuilder,
+      (
+        TransferChunkRow,
+        BaseReferences<_$HelixDb, $TransferChunksTable, TransferChunkRow>,
+      ),
+      TransferChunkRow,
+      PrefetchHooks Function()
+    >;
+typedef $$GroupsTableCreateCompanionBuilder =
+    GroupsCompanion Function({
+      required String id,
+      required String title,
+      Value<Uint8List?> avatar,
+      required String role,
+      Value<int> epoch,
+      Value<Uint8List?> state,
+      Value<int> stateVersion,
+      Value<bool> archived,
+      Value<bool> muted,
+      Value<int?> lastMessageRowid,
+      Value<String?> lastMessageSortKey,
+      Value<DateTime?> lastMessageAt,
+      Value<String?> lastMessagePreview,
+      Value<int> unreadCount,
+      Value<int> mentionCount,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$GroupsTableUpdateCompanionBuilder =
+    GroupsCompanion Function({
+      Value<String> id,
+      Value<String> title,
+      Value<Uint8List?> avatar,
+      Value<String> role,
+      Value<int> epoch,
+      Value<Uint8List?> state,
+      Value<int> stateVersion,
+      Value<bool> archived,
+      Value<bool> muted,
+      Value<int?> lastMessageRowid,
+      Value<String?> lastMessageSortKey,
+      Value<DateTime?> lastMessageAt,
+      Value<String?> lastMessagePreview,
+      Value<int> unreadCount,
+      Value<int> mentionCount,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+final class $$GroupsTableReferences
+    extends BaseReferences<_$HelixDb, $GroupsTable, GroupRow> {
+  $$GroupsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$GroupMembersTable, List<GroupMemberRow>>
+  _groupMembersRefsTable(_$HelixDb db) => MultiTypedResultKey.fromTable(
+    db.groupMembers,
+    aliasName: 'groups__id__group_members__group_id',
+  );
+
+  $$GroupMembersTableProcessedTableManager get groupMembersRefs {
+    final manager = $$GroupMembersTableTableManager(
+      $_db,
+      $_db.groupMembers,
+    ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_groupMembersRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$GroupBansTable, List<GroupBanRow>>
+  _groupBansRefsTable(_$HelixDb db) => MultiTypedResultKey.fromTable(
+    db.groupBans,
+    aliasName: 'groups__id__group_bans__group_id',
+  );
+
+  $$GroupBansTableProcessedTableManager get groupBansRefs {
+    final manager = $$GroupBansTableTableManager(
+      $_db,
+      $_db.groupBans,
+    ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_groupBansRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$GroupsTableFilterComposer extends Composer<_$HelixDb, $GroupsTable> {
+  $$GroupsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get avatar => $composableBuilder(
+    column: $table.avatar,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get stateVersion => $composableBuilder(
+    column: $table.stateVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get muted => $composableBuilder(
+    column: $table.muted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastMessageRowid => $composableBuilder(
+    column: $table.lastMessageRowid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastMessageSortKey => $composableBuilder(
+    column: $table.lastMessageSortKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get lastMessageAt =>
+      $composableBuilder(
+        column: $table.lastMessageAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<String> get lastMessagePreview => $composableBuilder(
+    column: $table.lastMessagePreview,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get unreadCount => $composableBuilder(
+    column: $table.unreadCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get mentionCount => $composableBuilder(
+    column: $table.mentionCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get createdAt =>
+      $composableBuilder(
+        column: $table.createdAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  Expression<bool> groupMembersRefs(
+    Expression<bool> Function($$GroupMembersTableFilterComposer f) f,
+  ) {
+    final $$GroupMembersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.groupMembers,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupMembersTableFilterComposer(
+            $db: $db,
+            $table: $db.groupMembers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> groupBansRefs(
+    Expression<bool> Function($$GroupBansTableFilterComposer f) f,
+  ) {
+    final $$GroupBansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.groupBans,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupBansTableFilterComposer(
+            $db: $db,
+            $table: $db.groupBans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$GroupsTableOrderingComposer extends Composer<_$HelixDb, $GroupsTable> {
+  $$GroupsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get avatar => $composableBuilder(
+    column: $table.avatar,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get stateVersion => $composableBuilder(
+    column: $table.stateVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get muted => $composableBuilder(
+    column: $table.muted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastMessageRowid => $composableBuilder(
+    column: $table.lastMessageRowid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastMessageSortKey => $composableBuilder(
+    column: $table.lastMessageSortKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastMessageAt => $composableBuilder(
+    column: $table.lastMessageAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastMessagePreview => $composableBuilder(
+    column: $table.lastMessagePreview,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get unreadCount => $composableBuilder(
+    column: $table.unreadCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get mentionCount => $composableBuilder(
+    column: $table.mentionCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$GroupsTableAnnotationComposer
+    extends Composer<_$HelixDb, $GroupsTable> {
+  $$GroupsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get avatar =>
+      $composableBuilder(column: $table.avatar, builder: (column) => column);
+
+  GeneratedColumn<String> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+
+  GeneratedColumn<int> get epoch =>
+      $composableBuilder(column: $table.epoch, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<int> get stateVersion => $composableBuilder(
+    column: $table.stateVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<bool> get muted =>
+      $composableBuilder(column: $table.muted, builder: (column) => column);
+
+  GeneratedColumn<int> get lastMessageRowid => $composableBuilder(
+    column: $table.lastMessageRowid,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastMessageSortKey => $composableBuilder(
+    column: $table.lastMessageSortKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<DateTime?, int> get lastMessageAt =>
+      $composableBuilder(
+        column: $table.lastMessageAt,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get lastMessagePreview => $composableBuilder(
+    column: $table.lastMessagePreview,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get unreadCount => $composableBuilder(
+    column: $table.unreadCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get mentionCount => $composableBuilder(
+    column: $table.mentionCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  Expression<T> groupMembersRefs<T extends Object>(
+    Expression<T> Function($$GroupMembersTableAnnotationComposer a) f,
+  ) {
+    final $$GroupMembersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.groupMembers,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupMembersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.groupMembers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> groupBansRefs<T extends Object>(
+    Expression<T> Function($$GroupBansTableAnnotationComposer a) f,
+  ) {
+    final $$GroupBansTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.groupBans,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupBansTableAnnotationComposer(
+            $db: $db,
+            $table: $db.groupBans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$GroupsTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $GroupsTable,
+          GroupRow,
+          $$GroupsTableFilterComposer,
+          $$GroupsTableOrderingComposer,
+          $$GroupsTableAnnotationComposer,
+          $$GroupsTableCreateCompanionBuilder,
+          $$GroupsTableUpdateCompanionBuilder,
+          (GroupRow, $$GroupsTableReferences),
+          GroupRow,
+          PrefetchHooks Function({bool groupMembersRefs, bool groupBansRefs})
+        > {
+  $$GroupsTableTableManager(_$HelixDb db, $GroupsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GroupsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GroupsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GroupsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<Uint8List?> avatar = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<int> epoch = const Value.absent(),
+                Value<Uint8List?> state = const Value.absent(),
+                Value<int> stateVersion = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<bool> muted = const Value.absent(),
+                Value<int?> lastMessageRowid = const Value.absent(),
+                Value<String?> lastMessageSortKey = const Value.absent(),
+                Value<DateTime?> lastMessageAt = const Value.absent(),
+                Value<String?> lastMessagePreview = const Value.absent(),
+                Value<int> unreadCount = const Value.absent(),
+                Value<int> mentionCount = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupsCompanion(
+                id: id,
+                title: title,
+                avatar: avatar,
+                role: role,
+                epoch: epoch,
+                state: state,
+                stateVersion: stateVersion,
+                archived: archived,
+                muted: muted,
+                lastMessageRowid: lastMessageRowid,
+                lastMessageSortKey: lastMessageSortKey,
+                lastMessageAt: lastMessageAt,
+                lastMessagePreview: lastMessagePreview,
+                unreadCount: unreadCount,
+                mentionCount: mentionCount,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String title,
+                Value<Uint8List?> avatar = const Value.absent(),
+                required String role,
+                Value<int> epoch = const Value.absent(),
+                Value<Uint8List?> state = const Value.absent(),
+                Value<int> stateVersion = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<bool> muted = const Value.absent(),
+                Value<int?> lastMessageRowid = const Value.absent(),
+                Value<String?> lastMessageSortKey = const Value.absent(),
+                Value<DateTime?> lastMessageAt = const Value.absent(),
+                Value<String?> lastMessagePreview = const Value.absent(),
+                Value<int> unreadCount = const Value.absent(),
+                Value<int> mentionCount = const Value.absent(),
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => GroupsCompanion.insert(
+                id: id,
+                title: title,
+                avatar: avatar,
+                role: role,
+                epoch: epoch,
+                state: state,
+                stateVersion: stateVersion,
+                archived: archived,
+                muted: muted,
+                lastMessageRowid: lastMessageRowid,
+                lastMessageSortKey: lastMessageSortKey,
+                lastMessageAt: lastMessageAt,
+                lastMessagePreview: lastMessagePreview,
+                unreadCount: unreadCount,
+                mentionCount: mentionCount,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) =>
+                    (e.readTable(table), $$GroupsTableReferences(db, table, e)),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({groupMembersRefs = false, groupBansRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (groupMembersRefs) db.groupMembers,
+                    if (groupBansRefs) db.groupBans,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (groupMembersRefs)
+                        await $_getPrefetchedData<
+                          GroupRow,
+                          $GroupsTable,
+                          GroupMemberRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GroupsTableReferences
+                              ._groupMembersRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GroupsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).groupMembersRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.groupId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (groupBansRefs)
+                        await $_getPrefetchedData<
+                          GroupRow,
+                          $GroupsTable,
+                          GroupBanRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GroupsTableReferences
+                              ._groupBansRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GroupsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).groupBansRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.groupId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$GroupsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $GroupsTable,
+      GroupRow,
+      $$GroupsTableFilterComposer,
+      $$GroupsTableOrderingComposer,
+      $$GroupsTableAnnotationComposer,
+      $$GroupsTableCreateCompanionBuilder,
+      $$GroupsTableUpdateCompanionBuilder,
+      (GroupRow, $$GroupsTableReferences),
+      GroupRow,
+      PrefetchHooks Function({bool groupMembersRefs, bool groupBansRefs})
+    >;
+typedef $$GroupMembersTableCreateCompanionBuilder =
+    GroupMembersCompanion Function({
+      required String groupId,
+      required String accountId,
+      required String qualifiedId,
+      Value<String?> displayName,
+      required String role,
+      Value<bool> isSelf,
+      required String devicesJson,
+      Value<DateTime?> devicesFetchedAt,
+      Value<DateTime?> joinedAt,
+      Value<int> rowid,
+    });
+typedef $$GroupMembersTableUpdateCompanionBuilder =
+    GroupMembersCompanion Function({
+      Value<String> groupId,
+      Value<String> accountId,
+      Value<String> qualifiedId,
+      Value<String?> displayName,
+      Value<String> role,
+      Value<bool> isSelf,
+      Value<String> devicesJson,
+      Value<DateTime?> devicesFetchedAt,
+      Value<DateTime?> joinedAt,
+      Value<int> rowid,
+    });
+
+final class $$GroupMembersTableReferences
+    extends BaseReferences<_$HelixDb, $GroupMembersTable, GroupMemberRow> {
+  $$GroupMembersTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GroupsTable _groupIdTable(_$HelixDb db) =>
+      db.groups.createAlias('group_members__group_id__groups__id');
+
+  $$GroupsTableProcessedTableManager get groupId {
+    final $_column = $_itemColumn<String>('group_id')!;
+
+    final manager = $$GroupsTableTableManager(
+      $_db,
+      $_db.groups,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$GroupMembersTableFilterComposer
+    extends Composer<_$HelixDb, $GroupMembersTable> {
+  $$GroupMembersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get qualifiedId => $composableBuilder(
+    column: $table.qualifiedId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSelf => $composableBuilder(
+    column: $table.isSelf,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get devicesJson => $composableBuilder(
+    column: $table.devicesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int>
+  get devicesFetchedAt => $composableBuilder(
+    column: $table.devicesFetchedAt,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get joinedAt =>
+      $composableBuilder(
+        column: $table.joinedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  $$GroupsTableFilterComposer get groupId {
+    final $$GroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GroupMembersTableOrderingComposer
+    extends Composer<_$HelixDb, $GroupMembersTable> {
+  $$GroupMembersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get qualifiedId => $composableBuilder(
+    column: $table.qualifiedId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isSelf => $composableBuilder(
+    column: $table.isSelf,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get devicesJson => $composableBuilder(
+    column: $table.devicesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get devicesFetchedAt => $composableBuilder(
+    column: $table.devicesFetchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get joinedAt => $composableBuilder(
+    column: $table.joinedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GroupsTableOrderingComposer get groupId {
+    final $$GroupsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableOrderingComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GroupMembersTableAnnotationComposer
+    extends Composer<_$HelixDb, $GroupMembersTable> {
+  $$GroupMembersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get accountId =>
+      $composableBuilder(column: $table.accountId, builder: (column) => column);
+
+  GeneratedColumn<String> get qualifiedId => $composableBuilder(
+    column: $table.qualifiedId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSelf =>
+      $composableBuilder(column: $table.isSelf, builder: (column) => column);
+
+  GeneratedColumn<String> get devicesJson => $composableBuilder(
+    column: $table.devicesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<DateTime?, int> get devicesFetchedAt =>
+      $composableBuilder(
+        column: $table.devicesFetchedAt,
+        builder: (column) => column,
+      );
+
+  GeneratedColumnWithTypeConverter<DateTime?, int> get joinedAt =>
+      $composableBuilder(column: $table.joinedAt, builder: (column) => column);
+
+  $$GroupsTableAnnotationComposer get groupId {
+    final $$GroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GroupMembersTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $GroupMembersTable,
+          GroupMemberRow,
+          $$GroupMembersTableFilterComposer,
+          $$GroupMembersTableOrderingComposer,
+          $$GroupMembersTableAnnotationComposer,
+          $$GroupMembersTableCreateCompanionBuilder,
+          $$GroupMembersTableUpdateCompanionBuilder,
+          (GroupMemberRow, $$GroupMembersTableReferences),
+          GroupMemberRow,
+          PrefetchHooks Function({bool groupId})
+        > {
+  $$GroupMembersTableTableManager(_$HelixDb db, $GroupMembersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GroupMembersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GroupMembersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GroupMembersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> groupId = const Value.absent(),
+                Value<String> accountId = const Value.absent(),
+                Value<String> qualifiedId = const Value.absent(),
+                Value<String?> displayName = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<bool> isSelf = const Value.absent(),
+                Value<String> devicesJson = const Value.absent(),
+                Value<DateTime?> devicesFetchedAt = const Value.absent(),
+                Value<DateTime?> joinedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupMembersCompanion(
+                groupId: groupId,
+                accountId: accountId,
+                qualifiedId: qualifiedId,
+                displayName: displayName,
+                role: role,
+                isSelf: isSelf,
+                devicesJson: devicesJson,
+                devicesFetchedAt: devicesFetchedAt,
+                joinedAt: joinedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String groupId,
+                required String accountId,
+                required String qualifiedId,
+                Value<String?> displayName = const Value.absent(),
+                required String role,
+                Value<bool> isSelf = const Value.absent(),
+                required String devicesJson,
+                Value<DateTime?> devicesFetchedAt = const Value.absent(),
+                Value<DateTime?> joinedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupMembersCompanion.insert(
+                groupId: groupId,
+                accountId: accountId,
+                qualifiedId: qualifiedId,
+                displayName: displayName,
+                role: role,
+                isSelf: isSelf,
+                devicesJson: devicesJson,
+                devicesFetchedAt: devicesFetchedAt,
+                joinedAt: joinedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$GroupMembersTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({groupId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (groupId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.groupId,
+                                referencedTable: $$GroupMembersTableReferences
+                                    ._groupIdTable(db),
+                                referencedColumn: $$GroupMembersTableReferences
+                                    ._groupIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$GroupMembersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $GroupMembersTable,
+      GroupMemberRow,
+      $$GroupMembersTableFilterComposer,
+      $$GroupMembersTableOrderingComposer,
+      $$GroupMembersTableAnnotationComposer,
+      $$GroupMembersTableCreateCompanionBuilder,
+      $$GroupMembersTableUpdateCompanionBuilder,
+      (GroupMemberRow, $$GroupMembersTableReferences),
+      GroupMemberRow,
+      PrefetchHooks Function({bool groupId})
+    >;
+typedef $$GroupBansTableCreateCompanionBuilder =
+    GroupBansCompanion Function({
+      required String groupId,
+      required String accountId,
+      required DateTime bannedAt,
+      Value<int> rowid,
+    });
+typedef $$GroupBansTableUpdateCompanionBuilder =
+    GroupBansCompanion Function({
+      Value<String> groupId,
+      Value<String> accountId,
+      Value<DateTime> bannedAt,
+      Value<int> rowid,
+    });
+
+final class $$GroupBansTableReferences
+    extends BaseReferences<_$HelixDb, $GroupBansTable, GroupBanRow> {
+  $$GroupBansTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GroupsTable _groupIdTable(_$HelixDb db) =>
+      db.groups.createAlias('group_bans__group_id__groups__id');
+
+  $$GroupsTableProcessedTableManager get groupId {
+    final $_column = $_itemColumn<String>('group_id')!;
+
+    final manager = $$GroupsTableTableManager(
+      $_db,
+      $_db.groups,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$GroupBansTableFilterComposer
+    extends Composer<_$HelixDb, $GroupBansTable> {
+  $$GroupBansTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get bannedAt =>
+      $composableBuilder(
+        column: $table.bannedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  $$GroupsTableFilterComposer get groupId {
+    final $$GroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GroupBansTableOrderingComposer
+    extends Composer<_$HelixDb, $GroupBansTable> {
+  $$GroupBansTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bannedAt => $composableBuilder(
+    column: $table.bannedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GroupsTableOrderingComposer get groupId {
+    final $$GroupsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableOrderingComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GroupBansTableAnnotationComposer
+    extends Composer<_$HelixDb, $GroupBansTable> {
+  $$GroupBansTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get accountId =>
+      $composableBuilder(column: $table.accountId, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get bannedAt =>
+      $composableBuilder(column: $table.bannedAt, builder: (column) => column);
+
+  $$GroupsTableAnnotationComposer get groupId {
+    final $$GroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$GroupBansTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $GroupBansTable,
+          GroupBanRow,
+          $$GroupBansTableFilterComposer,
+          $$GroupBansTableOrderingComposer,
+          $$GroupBansTableAnnotationComposer,
+          $$GroupBansTableCreateCompanionBuilder,
+          $$GroupBansTableUpdateCompanionBuilder,
+          (GroupBanRow, $$GroupBansTableReferences),
+          GroupBanRow,
+          PrefetchHooks Function({bool groupId})
+        > {
+  $$GroupBansTableTableManager(_$HelixDb db, $GroupBansTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GroupBansTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GroupBansTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GroupBansTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> groupId = const Value.absent(),
+                Value<String> accountId = const Value.absent(),
+                Value<DateTime> bannedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GroupBansCompanion(
+                groupId: groupId,
+                accountId: accountId,
+                bannedAt: bannedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String groupId,
+                required String accountId,
+                required DateTime bannedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => GroupBansCompanion.insert(
+                groupId: groupId,
+                accountId: accountId,
+                bannedAt: bannedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$GroupBansTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({groupId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (groupId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.groupId,
+                                referencedTable: $$GroupBansTableReferences
+                                    ._groupIdTable(db),
+                                referencedColumn: $$GroupBansTableReferences
+                                    ._groupIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$GroupBansTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $GroupBansTable,
+      GroupBanRow,
+      $$GroupBansTableFilterComposer,
+      $$GroupBansTableOrderingComposer,
+      $$GroupBansTableAnnotationComposer,
+      $$GroupBansTableCreateCompanionBuilder,
+      $$GroupBansTableUpdateCompanionBuilder,
+      (GroupBanRow, $$GroupBansTableReferences),
+      GroupBanRow,
+      PrefetchHooks Function({bool groupId})
+    >;
+typedef $$CallLogTableCreateCompanionBuilder =
+    CallLogCompanion Function({
+      required String callId,
+      required String peerAccountId,
+      Value<String?> peerDisplayName,
+      required String kind,
+      required String direction,
+      Value<bool> video,
+      required String state,
+      required DateTime startedAt,
+      Value<DateTime?> answeredAt,
+      Value<DateTime?> endedAt,
+      Value<int> rowid,
+    });
+typedef $$CallLogTableUpdateCompanionBuilder =
+    CallLogCompanion Function({
+      Value<String> callId,
+      Value<String> peerAccountId,
+      Value<String?> peerDisplayName,
+      Value<String> kind,
+      Value<String> direction,
+      Value<bool> video,
+      Value<String> state,
+      Value<DateTime> startedAt,
+      Value<DateTime?> answeredAt,
+      Value<DateTime?> endedAt,
+      Value<int> rowid,
+    });
+
+class $$CallLogTableFilterComposer extends Composer<_$HelixDb, $CallLogTable> {
+  $$CallLogTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get callId => $composableBuilder(
+    column: $table.callId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get peerAccountId => $composableBuilder(
+    column: $table.peerAccountId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get peerDisplayName => $composableBuilder(
+    column: $table.peerDisplayName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get direction => $composableBuilder(
+    column: $table.direction,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get video => $composableBuilder(
+    column: $table.video,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get startedAt =>
+      $composableBuilder(
+        column: $table.startedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get answeredAt =>
+      $composableBuilder(
+        column: $table.answeredAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get endedAt =>
+      $composableBuilder(
+        column: $table.endedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+}
+
+class $$CallLogTableOrderingComposer
+    extends Composer<_$HelixDb, $CallLogTable> {
+  $$CallLogTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get callId => $composableBuilder(
+    column: $table.callId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get peerAccountId => $composableBuilder(
+    column: $table.peerAccountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get peerDisplayName => $composableBuilder(
+    column: $table.peerDisplayName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get direction => $composableBuilder(
+    column: $table.direction,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get video => $composableBuilder(
+    column: $table.video,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get answeredAt => $composableBuilder(
+    column: $table.answeredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CallLogTableAnnotationComposer
+    extends Composer<_$HelixDb, $CallLogTable> {
+  $$CallLogTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get callId =>
+      $composableBuilder(column: $table.callId, builder: (column) => column);
+
+  GeneratedColumn<String> get peerAccountId => $composableBuilder(
+    column: $table.peerAccountId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get peerDisplayName => $composableBuilder(
+    column: $table.peerDisplayName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get direction =>
+      $composableBuilder(column: $table.direction, builder: (column) => column);
+
+  GeneratedColumn<bool> get video =>
+      $composableBuilder(column: $table.video, builder: (column) => column);
+
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime?, int> get answeredAt =>
+      $composableBuilder(
+        column: $table.answeredAt,
+        builder: (column) => column,
+      );
+
+  GeneratedColumnWithTypeConverter<DateTime?, int> get endedAt =>
+      $composableBuilder(column: $table.endedAt, builder: (column) => column);
+}
+
+class $$CallLogTableTableManager
+    extends
+        RootTableManager<
+          _$HelixDb,
+          $CallLogTable,
+          CallLogRow,
+          $$CallLogTableFilterComposer,
+          $$CallLogTableOrderingComposer,
+          $$CallLogTableAnnotationComposer,
+          $$CallLogTableCreateCompanionBuilder,
+          $$CallLogTableUpdateCompanionBuilder,
+          (CallLogRow, BaseReferences<_$HelixDb, $CallLogTable, CallLogRow>),
+          CallLogRow,
+          PrefetchHooks Function()
+        > {
+  $$CallLogTableTableManager(_$HelixDb db, $CallLogTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CallLogTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CallLogTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CallLogTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> callId = const Value.absent(),
+                Value<String> peerAccountId = const Value.absent(),
+                Value<String?> peerDisplayName = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> direction = const Value.absent(),
+                Value<bool> video = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<DateTime?> answeredAt = const Value.absent(),
+                Value<DateTime?> endedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CallLogCompanion(
+                callId: callId,
+                peerAccountId: peerAccountId,
+                peerDisplayName: peerDisplayName,
+                kind: kind,
+                direction: direction,
+                video: video,
+                state: state,
+                startedAt: startedAt,
+                answeredAt: answeredAt,
+                endedAt: endedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String callId,
+                required String peerAccountId,
+                Value<String?> peerDisplayName = const Value.absent(),
+                required String kind,
+                required String direction,
+                Value<bool> video = const Value.absent(),
+                required String state,
+                required DateTime startedAt,
+                Value<DateTime?> answeredAt = const Value.absent(),
+                Value<DateTime?> endedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CallLogCompanion.insert(
+                callId: callId,
+                peerAccountId: peerAccountId,
+                peerDisplayName: peerDisplayName,
+                kind: kind,
+                direction: direction,
+                video: video,
+                state: state,
+                startedAt: startedAt,
+                answeredAt: answeredAt,
+                endedAt: endedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CallLogTableProcessedTableManager =
+    ProcessedTableManager<
+      _$HelixDb,
+      $CallLogTable,
+      CallLogRow,
+      $$CallLogTableFilterComposer,
+      $$CallLogTableOrderingComposer,
+      $$CallLogTableAnnotationComposer,
+      $$CallLogTableCreateCompanionBuilder,
+      $$CallLogTableUpdateCompanionBuilder,
+      (CallLogRow, BaseReferences<_$HelixDb, $CallLogTable, CallLogRow>),
+      CallLogRow,
+      PrefetchHooks Function()
+    >;
 typedef $$SettingsTableCreateCompanionBuilder =
     SettingsCompanion Function({
       required String key,
@@ -18635,6 +24877,18 @@ class $HelixDbManager {
       $$OutboxOpsTableTableManager(_db, _db.outboxOps);
   $$DeferredActionsTableTableManager get deferredActions =>
       $$DeferredActionsTableTableManager(_db, _db.deferredActions);
+  $$TransferJobsTableTableManager get transferJobs =>
+      $$TransferJobsTableTableManager(_db, _db.transferJobs);
+  $$TransferChunksTableTableManager get transferChunks =>
+      $$TransferChunksTableTableManager(_db, _db.transferChunks);
+  $$GroupsTableTableManager get groups =>
+      $$GroupsTableTableManager(_db, _db.groups);
+  $$GroupMembersTableTableManager get groupMembers =>
+      $$GroupMembersTableTableManager(_db, _db.groupMembers);
+  $$GroupBansTableTableManager get groupBans =>
+      $$GroupBansTableTableManager(_db, _db.groupBans);
+  $$CallLogTableTableManager get callLog =>
+      $$CallLogTableTableManager(_db, _db.callLog);
   $$SettingsTableTableManager get settings =>
       $$SettingsTableTableManager(_db, _db.settings);
 }

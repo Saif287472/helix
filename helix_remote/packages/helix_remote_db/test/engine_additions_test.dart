@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:test/test.dart';
 
@@ -43,6 +45,83 @@ void main() {
         textMessage(again.id, 'm2', sentAt: at(2), body: 'second life'),
       );
       expect(await db.messagesDao.search('second'), hasLength(1));
+    });
+
+    test('empties the group, call-log and transfer tables too', () async {
+      final db = memoryDb();
+      final chat = await directChat(db, 'bob');
+      final message = await db.messagesDao.insertMessage(
+        textMessage(chat.id, 'm1', sentAt: at(1)),
+        media: [
+          AttachmentsCompanion.insert(
+            messageRowid: 0,
+            position: 0,
+            kind: 'image',
+            mediaId: 'media-1',
+            mediaKey: Uint8List(32),
+            digest: Uint8List(32),
+            mime: 'image/jpeg',
+            size: 10,
+            transfer: AttachmentTransfer.remote,
+          ),
+        ],
+      );
+      final attachment = (await db.messagesDao.attachmentsFor([
+        message.localRowid,
+      ])).single;
+      await db.groupsDao.upsert(
+        GroupsCompanion.insert(
+          id: 'g1',
+          title: 'Team',
+          role: 'owner',
+          createdAt: t0,
+        ),
+      );
+      await db.groupsDao.replaceRoster('g1', [
+        const GroupMemberRow(
+          groupId: 'g1',
+          accountId: 'alice',
+          qualifiedId: 'alice',
+          role: 'owner',
+          isSelf: true,
+          devicesJson: '["a1"]',
+        ),
+      ], epoch: 1);
+      await db.groupsDao.addBan('g1', 'mallory', now: t0);
+      await db.callsDao.start(
+        CallLogCompanion.insert(
+          callId: 'c1',
+          peerAccountId: 'bob',
+          kind: 'direct',
+          direction: 'incoming',
+          state: 'ended',
+          startedAt: t0,
+        ),
+      );
+      await db.transfersDao.enqueueDownload(
+        attachmentRowid: attachment.id,
+        mediaId: 'media-1',
+        mediaKey: Uint8List(32),
+        size: 10,
+        now: t0,
+      );
+      await db.transfersDao.addChunk(
+        transferId: 't1',
+        sequence: 0,
+        payload: Uint8List(4),
+        total: 2,
+        isFinal: false,
+        now: t0,
+      );
+
+      await db.wipeAll();
+
+      expect(await db.groupsDao.byId('g1'), isNull);
+      expect(await db.groupsDao.members('g1'), isEmpty);
+      expect(await db.groupsDao.bans('g1'), isEmpty);
+      expect(await db.callsDao.recent(), isEmpty);
+      expect(await db.transfersDao.pending(), isEmpty);
+      expect(await db.transfersDao.chunks('t1'), isEmpty);
     });
   });
 

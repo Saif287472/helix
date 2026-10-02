@@ -60,6 +60,38 @@ enum DeviceTrust { trusted, stale }
 
 enum AttachmentTransfer { remote, downloading, uploading, ready, failed }
 
+/// Where an attachment transfer has got to.
+///
+/// A transfer is its own queue rather than an outbox op because it is
+/// long-running, resumable and cancellable, where an outbox op is one request
+/// with a retry.
+enum TransferState {
+  /// Waiting to start, or waiting for its retry time.
+  pending,
+
+  /// A worker holds a lease on it.
+  inFlight,
+
+  /// The bytes are in place and the attachment row points at them.
+  done,
+
+  /// Given up on; the UI offers a retry.
+  failed,
+}
+
+/// What somebody can do in a group.
+enum GroupRole {
+  owner,
+  admin,
+  member;
+
+  /// Whether this role may add or remove members, and change roles.
+  bool get managesMembers => this != member;
+
+  /// Whether this role may change the group's settings.
+  bool get managesSettings => this == owner;
+}
+
 enum PrekeyKind { signed, oneTime }
 
 /// What happened to an envelope this device processed.
