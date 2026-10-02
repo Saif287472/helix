@@ -713,6 +713,24 @@ recommendation"):
 - **Resolved 2026-10-01 — S3:** `aws_signature_v4` signs requests to any
   S3-compatible store. The local-filesystem `ObjectStorage` ships first.
 
+### Cutover decisions (2026-10-02, answered by the user)
+
+- **Federation:** off at cutover (single server). It can be switched on later
+  from the admin console.
+- **Admin setup:** `HELIX_ADMIN_PASSWORD` in `.env`, not the public first-run page.
+- **Uploads:** local disk next to the server, backed up with the database.
+- **Merge:** merge `architecture-v2` into `main` keeping every commit, and
+  tag the last v1 commit (`v1-final`).
+- **SMS:** v2 calls BulkSMSBD by POST. The user tests one real code on
+  cutover day; if the gateway refuses it, switch back to GET.
+- **TURN:** `start-turn.ps1` reads the secret from the new server's `.env`
+  (same secret, so calls keep working). It must change before Phase X
+  deletes `backend/`.
+- **Phones:** same app id and signing key. Uninstall the old app, then
+  install the new one (old chats cannot carry over).
+- **Rollback:** the user wants no rollback plan (no real users, fix forward).
+  The `v1-final` tag still exists as a by-product of the merge.
+
 ### Autonomous run (2026-10-01)
 
 The user is away and asked for the phases to continue without them:
