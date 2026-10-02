@@ -72,6 +72,17 @@ final class FakeServer {
 
   final List<_Fault> _faults = [];
   final Map<String, _Link> _links = {};
+
+  /// Recovery codes an operator issued: code to account and whether the
+  /// redeem wants a phone verification token.
+  final Map<String, ({String account, bool needsVerification})> recoveryCodes =
+      {};
+
+  /// The last recovery redeem the server accepted.
+  RecoveryRedeemRequest? lastRedeem;
+
+  /// Leave `account_id` out of the recovery lookup (a server from before it).
+  bool omitRecoveryAccountId = false;
   final Map<String, ({FakeDevice device, Uint8List challenge})> _challenges =
       {};
   final Map<String, EncryptedProfile> profiles = {};
@@ -284,6 +295,41 @@ final class FakeServer {
           session: _addDevice(account, req.device, req.prekeys),
         ).toJson(),
       );
+    }
+    if (route == Routes.recoveryLookup) {
+      final code = RecoveryLookupRequest.fromJson(r.json!).recoveryCode;
+      final known = recoveryCodes[code];
+      if (known == null) {
+        return _ok(const RecoveryLookupResponse(valid: false).toJson());
+      }
+      return _ok(
+        RecoveryLookupResponse(
+          valid: true,
+          verificationRequired: known.needsVerification,
+          accountId: omitRecoveryAccountId ? null : known.account,
+        ).toJson(),
+      );
+    }
+    if (route == Routes.recoveryRedeem) {
+      final req = RecoveryRedeemRequest.fromJson(r.json!);
+      final known = recoveryCodes[req.recoveryCode];
+      if (known == null ||
+          (known.needsVerification && req.verificationToken == null)) {
+        return _error(ErrorCode.invalidCode);
+      }
+      // The certificate must name the account the code belongs to.
+      if (req.device.deviceId.isEmpty || !accounts.containsKey(known.account)) {
+        return _error(ErrorCode.invalidCode);
+      }
+      recoveryCodes.remove(req.recoveryCode);
+      lastRedeem = req;
+      final account = accounts[known.account]!;
+      for (final d in account.devices.values) {
+        d.revoked = true;
+      }
+      account.devices.clear();
+      account.identityKey = req.identityKey;
+      return _ok(_addDevice(account, req.device, req.prekeys).toJson());
     }
     if (route == Routes.linkCreate) {
       final id = Uuid.v7();

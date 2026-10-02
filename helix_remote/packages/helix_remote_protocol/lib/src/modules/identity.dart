@@ -886,6 +886,7 @@ final class RecoveryLookupResponse {
     required this.valid,
     this.verificationRequired = false,
     this.serverName,
+    this.accountId,
   });
 
   final bool valid;
@@ -894,10 +895,20 @@ final class RecoveryLookupResponse {
   final bool verificationRequired;
   final String? serverName;
 
+  /// The account the code belongs to; present only when [valid]. A recovery
+  /// code names no account of its own, and the new device's certificate must
+  /// (CRYPTO_V2.md §2), so the client takes the id from here. Holding a valid
+  /// code is the whole authority to learn it (the code is an unguessable
+  /// bearer secret and the id is not secret), so there is nothing to
+  /// enumerate: an unknown, used or expired code answers `valid: false` with
+  /// no other field.
+  final String? accountId;
+
   JsonMap toJson() => compact({
     'valid': valid,
     'verification_required': verificationRequired,
     'server_name': serverName,
+    'account_id': accountId,
   });
 
   factory RecoveryLookupResponse.fromJson(JsonReader json) =>
@@ -905,6 +916,7 @@ final class RecoveryLookupResponse {
         valid: json.boolean('valid'),
         verificationRequired: json.flag('verification_required'),
         serverName: json.optString('server_name'),
+        accountId: json.optString('account_id'),
       );
 }
 

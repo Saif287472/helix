@@ -6,6 +6,9 @@ import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/src/account/account_service.dart';
 import 'package:helix_remote_engine/src/account/device_service.dart';
 import 'package:helix_remote_engine/src/account/key_maintenance.dart';
+import 'package:helix_remote_engine/src/calls/call_media.dart';
+import 'package:helix_remote_engine/src/calls/calls_service.dart';
+import 'package:helix_remote_engine/src/calls/engine_call_signaling.dart';
 import 'package:helix_remote_engine/src/config.dart';
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/crypto/local_identity.dart';
@@ -27,7 +30,7 @@ import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_engine/src/messaging/sender.dart';
 import 'package:helix_remote_engine/src/util/ids.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
-    show ContentMessage;
+    show ContentMessage, Envelope;
 import 'package:meta/meta.dart';
 
 /// The Helix Remote messaging engine (ADR-027, plan §6): everything between
@@ -63,6 +66,7 @@ final class Engine {
     required CryptoRandom random,
     EngineConfig config = const EngineConfig(),
     PhoneBook? phoneBook,
+    CallMediaFactory? callMedia,
   }) : _ctx = EngineContext(
          api: api,
          db: db,
@@ -108,6 +112,22 @@ final class Engine {
     people = PeopleService(ctx, _outbox, phoneBook: phoneBook);
     settings = SettingsService(ctx);
     push = PushService(ctx);
+    _callSignaling = EngineCallSignaling(ctx, _sender, _crypto);
+    calls = CallsService(
+      db: ctx.db,
+      signaling: _callSignaling,
+      clock: ctx.clock,
+      ids: ctx.ids,
+      selfAccount: () => ctx.identity.accountId,
+      postLog: (peer, body) async {
+        final chat = await chats.openDirect(peer);
+        await chats.sendBody(chat.id, body);
+      },
+      emit: ctx.emit,
+      config: config.calls,
+      mediaFactory: callMedia,
+    );
+    _callSignaling.sink = calls;
   }
 
   final EngineContext _ctx;
@@ -119,6 +139,8 @@ final class Engine {
   late final MaintenanceService _maintenance;
   late final InboundRunner _inbound;
   late final OutboxWorker _worker;
+  late final EngineCallSignaling _callSignaling;
+  StreamSubscription<RealtimeState>? _callWakes;
 
   /// Registration, sign-in, linking (this device as the new one).
   late final AccountService account;
@@ -140,6 +162,11 @@ final class Engine {
 
   /// Push-token registration.
   late final PushService push;
+
+  /// 1:1 calls: the signalling state machine, the call log, pending calls
+  /// for a device woken by a call push. The media comes from the host
+  /// (`calls.mediaFactory`).
+  late final CallsService calls;
 
   final StreamController<EngineStatus> _statuses = StreamController.broadcast();
   EngineStatus _status = EngineStatus.idle;
@@ -223,12 +250,35 @@ final class Engine {
       _worker.start();
       _maintenance.start();
     }
-    if (_realtime) await _inbound.startRealtime();
+    if (_realtime) {
+      // A foreground engine owns the calls of this database: whatever the
+      // log still shows as ringing or live is left over from a crash.
+      await calls.recoverUnfinished();
+      await _inbound.startRealtime();
+      // Offers that came while this device was offline wait on the server;
+      // ring them whenever the socket (re)connects.
+      _callWakes = _ctx.api.realtime.states.listen((state) {
+        if (state.phase == RealtimePhase.connected) {
+          unawaited(_ringPendingCalls());
+        }
+      });
+    }
+  }
+
+  Future<void> _ringPendingCalls() async {
+    try {
+      await calls.fetchPending();
+    } on Object {
+      // Offline or signed out: the next connect tries again.
+    }
   }
 
   Future<void> _stopWorkers() async {
     if (!_workersRunning) return;
     _workersRunning = false;
+    await _callWakes?.cancel();
+    _callWakes = null;
+    await calls.release();
     await _inbound.stopRealtime();
     await _worker.stop();
     await _maintenance.stop();
@@ -246,6 +296,7 @@ final class Engine {
   Future<void> close() async {
     await stop();
     await presence.close();
+    await calls.close();
     await _statuses.close();
     await _ctx.close();
   }
@@ -258,7 +309,13 @@ final class Engine {
     if (!_ctx.isSignedIn) throw const NotSignedInException();
     final summary = await _inbound.fetchOnce();
     await _worker.drain();
-    return summary;
+    try {
+      // Offers waiting for this device (a call push woke it): who is
+      // calling, for the notification. Opening them is the app's job.
+      return summary.withPendingCalls(await calls.peekPending());
+    } on Object {
+      return summary; // Offline for the calls route only: nothing to ring.
+    }
   }
 
   /// Sends everything that is due (no waiting for backoff). For headless
@@ -367,6 +424,10 @@ final class _Hooks implements InboundHooks {
 
   @override
   Future<void> onThisDeviceRevoked() => _engine._handleRevoked();
+
+  @override
+  Future<void> onCallSignal(Envelope envelope) =>
+      _engine._callSignaling.onEnvelope(envelope);
 
   @override
   void onTyping(

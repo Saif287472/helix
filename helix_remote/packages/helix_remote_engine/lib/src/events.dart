@@ -1,3 +1,4 @@
+import 'package:helix_remote_engine/src/calls/call_models.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:meta/meta.dart';
 
@@ -125,4 +126,25 @@ final class SuspensionChanged extends EngineEvent {
   const SuspensionChanged({required this.suspended});
 
   final bool suspended;
+}
+
+/// A call is ringing on this device (a live offer, or one fetched after a
+/// push). The UI shows its incoming-call screen; [call] follows the call
+/// through `CallsService.watchCurrent`.
+final class IncomingCallEvent extends EngineEvent {
+  const IncomingCallEvent(this.call);
+
+  final CallSnapshot call;
+}
+
+/// A call rang here and nobody answered it (or it was cancelled), so the
+/// user missed it. [notice] is shaped like a message notice
+/// (`kind: 'missed_call'`, `messageId` the call id, `messageRowid` 0 because
+/// there is no message row yet) so one notification path serves both. Calls
+/// that this device never saw ring reach it as an `IncomingNotice` for the
+/// caller's `call_log` message instead.
+final class MissedCallEvent extends EngineEvent {
+  const MissedCallEvent(this.notice);
+
+  final IncomingNotice notice;
 }

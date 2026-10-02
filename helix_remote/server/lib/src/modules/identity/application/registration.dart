@@ -162,9 +162,17 @@ final class Registration {
       hashToken(req.recoveryCode),
     );
     if (accountId == null) return const RecoveryLookupResponse(valid: false);
+    // The id is for the holder of the code: the new device's certificate must
+    // name the account (CRYPTO_V2.md §2). It is not secret (anyone who knows
+    // the phone number can find it through discovery), the code is a 256-bit
+    // bearer secret, the route is rate limited per IP, and an unknown, used
+    // or expired code answers the same bare `valid: false`, so this is no
+    // enumeration oracle. Redeeming still needs the phone verification when
+    // the server has SMS.
     return RecoveryLookupResponse(
       valid: true,
       verificationRequired: await _needsVerification(accountId),
+      accountId: accountId,
     );
   }
 

@@ -43,17 +43,43 @@ final class MessageSender {
     bool ephemeral = false,
     bool urgent = true,
   }) async {
+    final response = await sendSealed<SendMessageResponse>(
+      content: content,
+      accounts: accounts,
+      post: (recipients) => _ctx.api.messaging.send(
+        SendMessageRequest(
+          id: requestId,
+          urgent: urgent,
+          ephemeral: ephemeral,
+          recipients: recipients,
+        ),
+      ),
+    );
+    // Nobody to send to (an account with no other devices).
+    return response ?? SendMessageResponse(acceptedAt: _ctx.now());
+  }
+
+  /// The plan, encrypt-and-commit and stale-list loop behind [send], for any
+  /// route that takes per-device sealed payloads (call signals use it too).
+  /// [post] receives the recipients and makes the request; its result is
+  /// returned, or null when there was nobody to send to. With [onlyDevices]
+  /// each listed account's audience shrinks to those of its devices (a call
+  /// answer goes to the one device that offered); an account's devices not
+  /// yet known are fetched first.
+  Future<T?> sendSealed<T>({
+    required Uint8List content,
+    required Iterable<String> accounts,
+    required Future<T> Function(List<Recipient> recipients) post,
+    Set<String>? onlyDevices,
+  }) async {
     final audience = accounts.toSet().toList()..sort();
     var attempts = _ctx.config.staleListRetries + 1;
     // Fetching a bundle takes a one-time prekey from the recipient, so a
     // bundle fetched while planning is kept for starting the session.
     final fetched = <DeviceAddress, VerifiedPrekeyBundle>{};
     while (true) {
-      final plan = await _plan(audience, fetched);
-      if (plan.isEmpty) {
-        // Nobody to send to (an account with no other devices).
-        return SendMessageResponse(acceptedAt: _ctx.now());
-      }
+      final plan = await _plan(audience, fetched, only: onlyDevices);
+      if (plan.isEmpty) return null;
       final devices = [for (final list in plan.values) ...list];
       final bundles = await _bundlesFor(
         await _crypto.withoutSession(devices),
@@ -79,23 +105,18 @@ final class MessageSender {
         content,
         bundles: bundles,
       );
-      final request = SendMessageRequest(
-        id: requestId,
-        urgent: urgent,
-        ephemeral: ephemeral,
-        recipients: [
-          for (final entry in plan.entries)
-            Recipient(
-              account: entry.key,
-              devices: [
-                for (final d in entry.value)
-                  DevicePayload(device: d.device, payload: payloads[d]!),
-              ],
-            ),
-        ],
-      );
+      final recipients = [
+        for (final entry in plan.entries)
+          Recipient(
+            account: entry.key,
+            devices: [
+              for (final d in entry.value)
+                DevicePayload(device: d.device, payload: payloads[d]!),
+            ],
+          ),
+      ];
       try {
-        return await _ctx.api.messaging.send(request);
+        return await post(recipients);
       } on ApiException catch (e) {
         final stale = e.staleDevices;
         if (stale == null || --attempts <= 0) rethrow;
@@ -125,8 +146,9 @@ final class MessageSender {
 
   Future<Map<String, List<DeviceAddress>>> _plan(
     List<String> accounts,
-    Map<DeviceAddress, VerifiedPrekeyBundle> fetched,
-  ) async {
+    Map<DeviceAddress, VerifiedPrekeyBundle> fetched, {
+    Set<String>? only,
+  }) async {
     final self = _ctx.identity;
     final plan = <String, List<DeviceAddress>>{};
     for (final account in accounts) {
@@ -148,7 +170,17 @@ final class MessageSender {
         continue;
       }
       var rows = await _peers.devicesOf(account);
-      if (rows.isEmpty) {
+      if (only != null) {
+        final missing = only.difference({for (final r in rows) r.deviceId});
+        if (missing.isNotEmpty) {
+          _keep(fetched, await _peers.fetch(account, devices: missing));
+          rows = await _peers.devicesOf(account);
+        }
+        rows = [
+          for (final r in rows)
+            if (only.contains(r.deviceId)) r,
+        ];
+      } else if (rows.isEmpty) {
         _keep(fetched, await _peers.fetch(account));
         rows = await _peers.devicesOf(account);
       }

@@ -85,6 +85,28 @@ void main() {
         (v) => v.toJson(),
         RecoveryRedeemRequest.fromJson,
       );
+      expectRoundTrip(
+        const RecoveryLookupResponse(
+          valid: true,
+          verificationRequired: true,
+          serverName: 'Helix Global',
+          accountId: accountA,
+        ),
+        (v) => v.toJson(),
+        RecoveryLookupResponse.fromJson,
+      );
+    });
+
+    test('a recovery lookup that predates account_id still parses', () {
+      final old = RecoveryLookupResponse.fromJson(
+        JsonReader.of({'valid': true, 'verification_required': true}),
+      );
+      expect(old.valid, isTrue);
+      expect(old.accountId, isNull);
+      expect(const RecoveryLookupResponse(valid: false).toJson(), {
+        'valid': false,
+        'verification_required': false,
+      });
     });
 
     test('phone, password, links, challenges', () {
@@ -458,6 +480,80 @@ void main() {
       );
       expect(decoded.kind, CallSignalKind.unknown);
       expect(decoded.ttl, const Duration(seconds: 60));
+    });
+
+    test('sealed call signal plaintext round trips and stays bounded', () {
+      final offer = expectRoundTrip(
+        const CallSignalPayload(
+          type: CallSignalType.offer,
+          callId: 'call-0192a4f0',
+          media: CallMedia.video,
+          sdp: 'v=0',
+        ),
+        (v) => v.toJson(),
+        CallSignalPayload.fromJson,
+      );
+      expect(offer.type.routedAs, CallSignalKind.offer);
+      final ice = expectRoundTrip(
+        const CallSignalPayload(
+          type: CallSignalType.ice,
+          callId: 'call-0192a4f0',
+          candidates: [
+            IceCandidatePayload(
+              candidate: 'candidate:1 1 udp 1 10.0.0.1 9 typ host',
+              sdpMid: '0',
+              sdpMLineIndex: 0,
+            ),
+          ],
+        ),
+        (v) => v.toJson(),
+        CallSignalPayload.fromJson,
+      );
+      expect(ice.type.routedAs, CallSignalKind.update);
+      final end = CallSignalPayload.decode(
+        const CallSignalPayload(
+          type: CallSignalType.end,
+          callId: 'call-0192a4f0',
+          reason: CallEndReason.answeredElsewhere,
+        ).encode(),
+      );
+      expect(end.reason, CallEndReason.answeredElsewhere);
+      expect(end.type.routedAs, CallSignalKind.end);
+
+      // Newer peers: unknown types and reasons decode, never throw.
+      final future = CallSignalPayload.fromJson(
+        JsonReader.decode(
+          '{"v":2,"type":"hologram","call_id":"c","reason":"vapor"}',
+        ),
+      );
+      expect(future.type, CallSignalType.unknown);
+      expect(future.reason, CallEndReason.unknown);
+
+      expect(
+        () => CallSignalPayload.fromJson(
+          JsonReader.of({
+            'type': 'offer',
+            'call_id': 'c',
+            'sdp': 'x' * (CallSignalPayload.maxSdpLength + 1),
+          }),
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => CallSignalPayload.fromJson(
+          JsonReader.of({
+            'type': 'ice',
+            'call_id': 'c',
+            'candidates': [
+              for (var i = 0; i <= CallSignalPayload.maxCandidates; i++)
+                {'candidate': 'c$i'},
+            ],
+          }),
+        ),
+        throwsFormatException,
+      );
+      // Nothing secret in a stringified signal.
+      expect(offer.toString(), isNot(contains('v=0')));
     });
   });
 

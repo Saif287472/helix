@@ -32,6 +32,16 @@
 - **Limits:** 30 offers per account per 10 minutes; 100 metric reports per
   account per day (at most 9,000 rows per account kept).
 
+## Client side
+
+The engine's `CallsService` (`helix_remote_engine`, see its MODULE.md) is the
+only client of this module: it seals `CallSignalPayload` (REST_V2.md "calls")
+per device, sends an offer to every active device of the callee and everything
+else to the one device the call talks to, calls `PUT …/state` when a device
+answers or declines, and reads `GET /v1/calls/pending` after a push or a socket
+connect. Pending rows are not deleted when read (the TTL or an `end` clears
+them), so a client must remember the calls it already rang.
+
 ## Federation
 
 Signals to `uuid@domain` go through `CallRelay` before any local device

@@ -1,4 +1,5 @@
 import 'package:helix_remote_crypto/v2.dart' show PrekeyPolicy;
+import 'package:helix_remote_engine/src/calls/call_config.dart';
 import 'package:helix_remote_engine/src/util/backoff.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:meta/meta.dart';
@@ -28,6 +29,7 @@ final class EngineConfig {
     this.wipeOnRevocation = true,
     this.maxFetchPages = 20,
     this.initialOneTimePrekeys = PrekeyPolicy.initialOneTimePrekeys,
+    this.calls = const CallConfig(),
   });
 
   /// A copy with the given fields replaced.
@@ -49,6 +51,7 @@ final class EngineConfig {
     bool? wipeOnRevocation,
     int? maxFetchPages,
     int? initialOneTimePrekeys,
+    CallConfig? calls,
   }) => EngineConfig(
     deviceName: deviceName ?? this.deviceName,
     platform: platform ?? this.platform,
@@ -67,6 +70,7 @@ final class EngineConfig {
     wipeOnRevocation: wipeOnRevocation ?? this.wipeOnRevocation,
     maxFetchPages: maxFetchPages ?? this.maxFetchPages,
     initialOneTimePrekeys: initialOneTimePrekeys ?? this.initialOneTimePrekeys,
+    calls: calls ?? this.calls,
   );
 
   /// Name shown in the device list when this device registers or links.
@@ -119,4 +123,7 @@ final class EngineConfig {
   /// One-time prekeys a new device publishes (CRYPTO_V2.md §3: 100). Tests
   /// lower it to reach the replenishment threshold quickly.
   final int initialOneTimePrekeys;
+
+  /// Call timers and limits (`CallsService`).
+  final CallConfig calls;
 }

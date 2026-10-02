@@ -15,6 +15,10 @@ abstract final class MessageKinds {
   static const safetyNumberChanged = 'safety_number_changed';
   static const timerChanged = 'timer_changed';
 
+  /// `IncomingNotice.kind` of a missed call this device saw ring (there is
+  /// no message row behind it).
+  static const missedCall = 'missed_call';
+
   /// Types this engine renders. Anything else is shown as "needs a newer
   /// version" (CONTENT_V2.md §1).
   static const known = {

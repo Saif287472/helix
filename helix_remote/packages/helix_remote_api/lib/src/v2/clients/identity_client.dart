@@ -116,6 +116,9 @@ final class IdentityClient {
     json: RefreshRequest(refreshToken: refreshToken).toJson(),
   );
 
+  /// Checks a recovery code. A valid one answers whether the redeem needs a
+  /// phone verification and the account id the new device must certify
+  /// (`RecoveryLookupResponse.accountId`); an invalid one only `valid: false`.
   Future<RecoveryLookupResponse> recoveryLookup(String recoveryCode) => _t.call(
     Routes.recoveryLookup,
     RecoveryLookupResponse.fromJson,

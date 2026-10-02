@@ -66,6 +66,16 @@ default 30) and 5 attempts per challenge. Passwords lock after 5 failures:
 (`IdentityContext.checkPassword`); password changes are also limited to 10
 per hour per account.
 
+**Recovery lookup** (`POST /v1/auth/recovery/lookup`, 10 per hour per IP) tells the
+holder of a valid code whether a phone verification must accompany the redeem
+and which account the code belongs to (`account_id`): the new device's
+certificate must name the account, and a code names none. That is not
+an enumeration oracle: the code is a 256-bit bearer secret, the account id is
+not secret (discovery gives it to anyone who knows the number), and an unknown,
+used or expired code gets the same bare `{"valid": false}`. The redeem itself
+still demands the SMS verification of the account's own number when SMS is
+configured, so the id alone (or the code alone) takes nothing over.
+
 ## Hooks (all run inside identity's transaction)
 
 `onDeviceAdded` (keys stores prekeys), `onDeviceRevoked`,

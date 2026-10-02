@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_engine/src/calls/call_log_mirror.dart';
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/messaging/content_codec.dart';
@@ -214,9 +215,26 @@ final class ContentApplier {
     )) {
       await _applyDeferred(waiting, now);
     }
+    // A call's log message teaches this device a call it never saw ring.
+    final callLog = body is CallLogBody && !unsupported ? body : null;
+    final unseenCall =
+        callLog != null &&
+        await CallLogMirror.record(
+          _db,
+          peer: chat.peer,
+          fromSelf: fromSelf,
+          body: callLog,
+          sentAt: sentAt,
+        );
     if (fromSelf) return const ApplyResult.applied();
 
     await _delivered(chat, content.id, now);
+    // Only a missed call this device did not see ring alerts the user (one
+    // that rang here already did, and the others were answered or declined).
+    if (callLog != null &&
+        !(unseenCall && callLog.outcome == CallOutcome.missed)) {
+      return const ApplyResult.applied();
+    }
     final conversation = await _db.conversationsDao.byId(chat.id);
     final muted = conversation?.mutedUntil;
     return ApplyResult.applied(
@@ -226,7 +244,11 @@ final class ContentApplier {
         messageId: row.messageId,
         sender: sender.account,
         kind: row.kind,
-        preview: MessagesDao.preview(row),
+        preview: callLog == null
+            ? MessagesDao.preview(row)
+            : (callLog.media == CallMedia.video
+                  ? 'Missed video call'
+                  : 'Missed voice call'),
         muted: muted != null && muted.isAfter(now),
         sentAt: row.sentAt,
       ),

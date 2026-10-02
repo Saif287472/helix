@@ -56,7 +56,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `POST /v1/auth/challenges` | `DeviceChallengeRequest` → `DeviceChallengeResponse` | Challenge kept 5 minutes in the ephemeral store under a random `challenge_id` (never the public device id, so nobody else can replace or spend it). |
 | `POST /v1/auth/sessions` | `DeviceSignInRequest` → `Session` | `challenge_id` and `challenge` from the response, for the device it was issued to (single use); DSK signature over `signInSignatureBody(challenge)`. |
 | `POST /v1/auth/sessions/refresh` | `RefreshRequest` → `Session` | Rotation; reuse of a used token revokes all of the device's tokens and closes its socket (4001). |
-| `POST /v1/auth/recovery/lookup` | `RecoveryLookupRequest` → `RecoveryLookupResponse` | Rate-limited per IP. |
+| `POST /v1/auth/recovery/lookup` | `RecoveryLookupRequest` → `RecoveryLookupResponse` | Rate-limited per IP. A valid code answers `valid`, `verification_required` and `account_id` (the id the new device's certificate must name; an invalid, used or expired code answers only `valid: false`, so the id is no enumeration oracle). |
 | `POST /v1/auth/recovery/redeem` | `RecoveryRedeemRequest` → `Session` | New AIK; other devices revoked; history backup deleted; `key_change` to contacts. |
 | `DELETE /v1/auth/sessions/current` | — → 204 | Sign out this device's tokens (device stays registered); its socket closes (4001) on whichever node holds it. Other devices get `account_signal`/`signed_out`. |
 | `GET /v1/account` | — → `AccountInfo` | |
@@ -148,6 +148,20 @@ member device (and to removed members, so they know).
 | `PUT /v1/calls/{call_id}/state` | `CallStateRequest` → 204 | Clears pending offers the account is in (as caller or callee); other devices of the same account stop ringing. |
 | `GET /v1/calls/pending` | — → `PendingCallList` | |
 | `POST /v1/calls/metrics` | `CallMetricsRequest` → 204 | 100 per day per account. |
+
+**The sealed signal** (`CallSignalPayload`, JSON, padded and sealed per device
+like a content message): `{"v":1,"type":"offer|answer|ice|ringing|end","call_id", "media":"audio|video" (offer), "sdp" (offer, answer), "candidates":[{"candidate","mid","index"}] (ice), "reason":"hangup|declined|busy|cancelled|answered_elsewhere|failed|glare" (end)}`.
+`offer` is routed as `offer`, `end` as `end`, everything else as `update`; the
+inner `call_id` must equal the one the signal arrived under. An `offer` names
+every active device of the callee (`device_list_stale` otherwise). The call id is a
+UUIDv7 chosen by the caller. The answering device is the only device the caller
+sends ICE to.
+`PUT state` with `answered` or `declined` is how a callee device stops its
+siblings ringing; the server delivers that to them as a `call_signal` envelope
+with no payload and `data: {kind: end, state}`, and a device honours it only
+for a call that is still ringing here. Glare (two calls at once between the
+same pair) is settled locally and identically on both ends: the call with the
+smaller id survives, the other ends with reason `glare`.
 
 ## media
 

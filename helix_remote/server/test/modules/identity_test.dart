@@ -626,6 +626,24 @@ void main() {
         );
         expect(lookup.valid, isTrue);
         expect(lookup.verificationRequired, isTrue);
+        expect(
+          lookup.accountId,
+          first.accountId,
+          reason: 'the new device must certify the account',
+        );
+
+        // A wrong code is no oracle: the bare `valid: false`, no account.
+        final wrong = await h.api.call(
+          Routes.recoveryLookup,
+          body: const RecoveryLookupRequest(
+            recoveryCode: 'rec_not-a-real-code',
+          ).toJson(),
+        );
+        expect(wrong.status, 200);
+        expect(wrong.json.json, {
+          'valid': false,
+          'verification_required': false,
+        });
 
         final verified = await h.verifyPhone(
           alice,
@@ -660,6 +678,7 @@ void main() {
           )).json,
         );
         expect(again.valid, isFalse, reason: 'single use');
+        expect(again.accountId, isNull);
       },
     );
 

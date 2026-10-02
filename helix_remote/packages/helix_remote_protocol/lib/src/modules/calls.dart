@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:helix_remote_protocol/src/content/bodies.dart';
 import 'package:helix_remote_protocol/src/envelope.dart';
 import 'package:helix_remote_protocol/src/json.dart';
 import 'package:helix_remote_protocol/src/modules/messaging.dart';
@@ -227,4 +229,192 @@ final class CallMetricsRequest {
       outcome: json.optString('outcome'),
     );
   }
+}
+
+// ------------------------------------------------- the sealed signal itself
+
+/// What a sealed call signal says. The server's [CallSignalKind] only sees
+/// `offer`, `update` (everything but offer and end) and `end`.
+enum CallSignalType implements WireEnum {
+  /// The caller's session description; rings the callee's devices.
+  offer('offer'),
+
+  /// A callee device took the call: its session description.
+  answer('answer'),
+
+  /// Trickled ICE candidates, either direction.
+  ice('ice'),
+
+  /// A callee device is ringing (live only; the caller shows "ringing").
+  ringing('ringing'),
+
+  /// Hang-up, decline, busy, cancel: [CallSignalPayload.reason] says which.
+  end('end'),
+  unknown('unknown');
+
+  const CallSignalType(this.wire);
+
+  @override
+  final String wire;
+
+  /// The kind the server routes it as.
+  CallSignalKind get routedAs => switch (this) {
+    offer => CallSignalKind.offer,
+    end => CallSignalKind.end,
+    _ => CallSignalKind.update,
+  };
+}
+
+/// Why a call ended, for [CallSignalType.end].
+enum CallEndReason implements WireEnum {
+  /// The other side hung up an answered call.
+  hangup('hangup'),
+
+  /// The callee declined.
+  declined('declined'),
+
+  /// The callee is in another call.
+  busy('busy'),
+
+  /// The caller gave up before an answer (or the offer timed out).
+  cancelled('cancelled'),
+
+  /// Another device of the callee took the call.
+  answeredElsewhere('answered_elsewhere'),
+
+  /// Media never connected or broke for good.
+  failed('failed'),
+
+  /// Both sides called each other at once and this call lost (the smaller
+  /// call id wins on both ends).
+  glare('glare'),
+  unknown('unknown');
+
+  const CallEndReason(this.wire);
+
+  @override
+  final String wire;
+}
+
+/// One ICE candidate, as the platform's WebRTC reports it.
+final class IceCandidatePayload {
+  const IceCandidatePayload({
+    required this.candidate,
+    this.sdpMid,
+    this.sdpMLineIndex,
+  });
+
+  final String candidate;
+  final String? sdpMid;
+  final int? sdpMLineIndex;
+
+  JsonMap toJson() =>
+      compact({'candidate': candidate, 'mid': sdpMid, 'index': sdpMLineIndex});
+
+  factory IceCandidatePayload.fromJson(JsonReader json) {
+    final candidate = json.nonEmpty('candidate');
+    if (candidate.length > CallSignalPayload.maxCandidateLength) {
+      throw ProtocolFormatException('too long', path: 'candidate');
+    }
+    return IceCandidatePayload(
+      candidate: candidate,
+      sdpMid: json.optString('mid'),
+      sdpMLineIndex: json.optInt('index'),
+    );
+  }
+
+  @override
+  String toString() => 'IceCandidatePayload(redacted)';
+}
+
+/// The plaintext of a call signal: JSON, padded and sealed pairwise per
+/// device (CRYPTO_V2.md §5-7) exactly like a content message, so the server
+/// sees only the call id, the parties and the routed kind. SDP, ICE
+/// candidates and the audio/video choice never reach it, and none of it is
+/// ever stored locally either (`call_log` keeps the fact and the timings).
+final class CallSignalPayload {
+  const CallSignalPayload({
+    required this.type,
+    required this.callId,
+    this.media,
+    this.sdp,
+    this.candidates = const [],
+    this.reason,
+    this.version = currentVersion,
+  });
+
+  static const currentVersion = 1;
+  static const maxSdpLength = 32 * 1024;
+  static const maxCandidateLength = 1024;
+  static const maxCandidates = 32;
+
+  final int version;
+  final CallSignalType type;
+
+  /// Repeats the id the server routes by; a signal whose inner id differs
+  /// from the one it arrived under is dropped.
+  final String callId;
+
+  /// `offer` only.
+  final CallMedia? media;
+
+  /// `offer` and `answer`.
+  final String? sdp;
+
+  /// `ice`.
+  final List<IceCandidatePayload> candidates;
+
+  /// `end`.
+  final CallEndReason? reason;
+
+  JsonMap toJson() => compact({
+    'v': version,
+    'type': type.wire,
+    'call_id': callId,
+    'media': media?.wire,
+    'sdp': sdp,
+    'candidates': candidates.isEmpty
+        ? null
+        : [for (final c in candidates) c.toJson()],
+    'reason': reason?.wire,
+  });
+
+  Uint8List encode() => Uint8List.fromList(utf8.encode(jsonEncode(toJson())));
+
+  factory CallSignalPayload.decode(Uint8List bytes) =>
+      CallSignalPayload.fromJson(JsonReader.decode(utf8.decode(bytes)));
+
+  factory CallSignalPayload.fromJson(JsonReader json) {
+    final sdp = json.optString('sdp');
+    if (sdp != null && sdp.length > maxSdpLength) {
+      throw ProtocolFormatException('too long', path: 'sdp');
+    }
+    final candidates = json.optObjects(
+      'candidates',
+      IceCandidatePayload.fromJson,
+    );
+    if (candidates.length > maxCandidates) {
+      throw ProtocolFormatException('too many', path: 'candidates');
+    }
+    return CallSignalPayload(
+      version: json.has('v') ? json.integer('v') : currentVersion,
+      type: json.enumValue(
+        'type',
+        CallSignalType.values,
+        orElse: CallSignalType.unknown,
+      ),
+      callId: json.nonEmpty('call_id'),
+      media: json.optEnum('media', CallMedia.values),
+      sdp: sdp,
+      candidates: candidates,
+      reason: json.optEnum(
+        'reason',
+        CallEndReason.values,
+        orElse: CallEndReason.unknown,
+      ),
+    );
+  }
+
+  @override
+  String toString() => 'CallSignalPayload(${type.wire}, redacted)';
 }

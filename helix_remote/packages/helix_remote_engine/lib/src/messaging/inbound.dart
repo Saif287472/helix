@@ -25,6 +25,10 @@ abstract interface class InboundHooks {
 
   /// A contact started or stopped typing.
   void onTyping(String conversationId, String account, {required bool typing});
+
+  /// A `call_signal` envelope (sealed signal, or the server's "answered on
+  /// another of your devices" notice). Ephemeral: never stored or acked.
+  Future<void> onCallSignal(Envelope envelope);
 }
 
 /// The result of processing one envelope.
@@ -106,12 +110,16 @@ final class InboundProcessor {
           await _bestEffort(() => _hooks.onPrekeysLow(remaining));
         }
         return _record(envelope, EnvelopeOutcome.applied);
+      case EnvelopeKind.callSignal:
+        // Call signals are ephemeral (no seq, nothing to record): the calls
+        // service opens and acts on them.
+        await _bestEffort(() => _hooks.onCallSignal(envelope));
+        return _record(envelope, EnvelopeOutcome.ignored);
       case EnvelopeKind.groupMessage ||
-          EnvelopeKind.callSignal ||
           EnvelopeKind.rosterChange ||
           EnvelopeKind.unknown:
-        // Groups and calls arrive in C4; an unknown kind is acked and
-        // ignored (REALTIME_V2.md).
+        // Groups arrive in C4; an unknown kind is acked and ignored
+        // (REALTIME_V2.md).
         return _record(envelope, EnvelopeOutcome.ignored);
     }
   }

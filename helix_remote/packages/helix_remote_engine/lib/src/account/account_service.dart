@@ -140,6 +140,105 @@ final class AccountService {
     );
   }
 
+  // ------------------------------------------------------ recovery code
+
+  /// Asks the server about a recovery code (an operator issued it; it is good
+  /// for 48 hours and one use). A valid one says whether the redeem needs the
+  /// SMS verification of the account's phone number and which account it is
+  /// for; an invalid one only `valid: false`.
+  Future<RecoveryLookupResponse> lookupRecoveryCode(String recoveryCode) =>
+      _ctx.api.identity.recoveryLookup(recoveryCode);
+
+  /// Recovers the account onto this (new) device with a recovery code
+  /// (CRYPTO_V2.md §2: AIK rotation; REST_V2.md `recovery/redeem`).
+  ///
+  /// The account keeps its id and phone number but gets a **new identity
+  /// key**: this device makes it, certifies its own device keys with it and
+  /// the server moves the account over, signs every other device out (they
+  /// find out as revocations), deletes the password and the history backup
+  /// (both were keyed to the old identity), and tells the account's contacts
+  /// about the key change, so their safety numbers change and they see it.
+  /// Nothing of the old account's messages or sessions comes along; contacts
+  /// start fresh sessions with this device.
+  ///
+  /// When the server has SMS and the account has a phone number, the redeem
+  /// needs a [verificationToken] for that number: [requestPhoneCode] with
+  /// `PhonePurpose.recover`, then [verifyPhone]. Without it this throws
+  /// `SignInException(verificationRequired)` before touching anything. An
+  /// optional new [password] wraps the new identity key as in [register]
+  /// (the old password is gone either way).
+  ///
+  /// The account id comes from the lookup (`account_id`); [accountId] (what
+  /// [verifyPhone] returned) is used when an older server does not send it.
+  /// Server refusals arrive as `ApiException` (`invalid_code`, rate limits).
+  Future<void> recoverWithCode({
+    required String recoveryCode,
+    String? verificationToken,
+    String? password,
+    String? accountId,
+    String? phoneNumber,
+    String? deviceName,
+  }) async {
+    await _requireEmpty();
+    final lookup = await lookupRecoveryCode(recoveryCode);
+    if (!lookup.valid) {
+      throw const SignInException(
+        SignInFailure.invalidRecoveryCode,
+        'the recovery code is not valid',
+      );
+    }
+    if (lookup.verificationRequired && verificationToken == null) {
+      throw const SignInException(
+        SignInFailure.verificationRequired,
+        'verify the account phone number first',
+      );
+    }
+    final id = lookup.accountId ?? accountId;
+    if (id == null) {
+      throw const SignInException(
+        SignInFailure.unknownAccount,
+        'the server did not say which account the code is for',
+      );
+    }
+    final now = _ctx.now();
+    final aik = await Ed25519KeyPair.generate(_ctx.random);
+    final keys = await LocalDeviceKeys.create(
+      accountIdentityKey: aik,
+      address: DeviceAddress(id, _ctx.ids.next()),
+      createdAt: now,
+      random: _ctx.random,
+    );
+    final prekeys = await KeyMaintenance.initial(
+      signingKey: keys.signingKey,
+      random: _ctx.random,
+      now: now,
+      oneTimeCount: _ctx.config.initialOneTimePrekeys,
+    );
+    final session = await _ctx.api.identity.recoveryRedeem(
+      RecoveryRedeemRequest(
+        recoveryCode: recoveryCode,
+        identityKey: aik.publicKey,
+        device: await keys.registration(
+          name: deviceName ?? _ctx.config.deviceName,
+          platform: _ctx.config.platform,
+        ),
+        prekeys: prekeys.toUpload(),
+        verificationToken: verificationToken,
+        password: password == null
+            ? null
+            : await _passwordSetup(password, aik, id),
+      ),
+    );
+    await _persist(
+      keys: keys,
+      accountKey: aik,
+      prekeys: prekeys,
+      session: session,
+      profileKey: newSymmetricKey(_ctx.random),
+      phoneNumber: phoneNumber,
+    );
+  }
+
   // ------------------------------------------------------ password sign-in
 
   /// Signs in on this (new) device with the account's phone number and

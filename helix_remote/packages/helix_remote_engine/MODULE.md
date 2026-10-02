@@ -255,3 +255,86 @@ receiver skips).
   a refresh on resume.
 - **Contact-list upload** (`PUT /v1/people/contacts`, only for "contacts"
   audiences) is not wired; **profile-key rotation on block** is not done.
+
+
+## Calls and account recovery (Phase C4-K)
+
+### Calls (`lib/src/calls/`, `engine.calls`)
+
+`CallsService` is the 1:1 call **state machine**; the media is not here. The
+host gives it a `CallMediaFactory` (`engine.calls.mediaFactory`, or
+`Engine(callMedia:)`), whose `CallMediaSession` is a pure-Dart interface over
+one WebRTC peer connection (offer/answer as SDP strings, remote and local ICE
+candidates, mute, camera, connection state, close). The Flutter calls package
+implements it in Phase A3; `package:helix_remote_engine/testing.dart` has the
+deterministic `FakeCallMediaFactory`.
+
+- **Wire:** `CallSignalPayload` (protocol, REST_V2.md "calls"): `offer`,
+  `answer`, `ice`, `ringing`, `end` with a reason, JSON sealed per recipient
+  device through the pairwise session manager (`EngineCallSignaling` ->
+  `MessageSender.sendSealed` -> `POST /v1/calls/{id}/signals`). An offer
+  addresses every active device of the callee (the stale-list retry of the
+  message path repairs an incomplete list); the answer, the ICE and the
+  hang-up of an answered call go to the one device the call talks to.
+- **Receiving:** a `call_signal` envelope is opened under the sender device's
+  lock, the ratchet is committed, and the signal goes to the state machine; one
+  that cannot be opened is dropped (ephemeral: no repair request, no
+  placeholder row). The server's payload-less "answered/declined on another
+  device" notice is honoured only from this account and only for a call that
+  still rings here.
+- **State:** one call at a time; `current` / `watchCurrent()` give a
+  `CallSnapshot` (`CallPhase`: `calling`, `ringing`, `connecting`, `active`,
+  `ended` with a `CallEnd`, then `null`). Actions: `startCall(peer, video:)`,
+  `accept()`, `decline()`, `hangUp()` (cancel, decline or hang up, whichever
+  fits), `setMuted`, `setCameraEnabled`. All run on one queue with the incoming
+  signals. Failures are `CallFailedException(CallFailure)`.
+- **Rules:** a second offer while in a call gets `busy` and is logged as
+  missed; **glare** (both call at once) is settled the same way on both ends,
+  the smaller call id survives and the loser's row is forgotten; a second
+  answering device is told `answered_elsewhere`; `end` from a device the call
+  is not bound to is ignored; ring timeout (`CallConfig.ringTimeout`, 60 s),
+  connect timeout (30 s), media failure all end the call and tell the peer.
+  Calling someone this user blocked throws `blocked`; a blocked caller's offer
+  is dropped without a ring or a row; the server drops a call from someone the
+  callee blocked silently, so that caller sees an ordinary unanswered call.
+- **Pending calls:** an offer for a device that was offline waits on the server
+  (TTL up to 120 s) and a high-priority push wakes it. `Engine.syncOnce()`
+  (headless, FCM isolate) returns `SyncSummary.pendingCalls` (who is calling,
+  until when) **without opening** them; opening moves the ratchet and the SDP
+  must not be written down, so the running app rings them with
+  `calls.fetchPending()`, which the engine also runs whenever the socket
+  connects. An offer rings once (the call log remembers it); an expired offer,
+  one the caller already cancelled and one from a blocked caller never ring.
+- **Call log:** `call_log` rows (`direction`: `incoming|outgoing|missed`,
+  `state`: `ringing|active|ended|declined|cancelled|unanswered|missed|failed|
+  answered_elsewhere`) with the answer and end times; never SDP, ICE or a
+  name. Watch it with `calls.watchLog()` / `watchLogWith(peer)`. The **caller's
+  device** also posts the `call_log` content message to the chat (outcome and
+  duration), so both sides' chats and the callee's other devices agree: a
+  device that never saw the call ring writes the matching `call_log` row from
+  that message (`CallLogMirror`), and only a *missed* call it never saw alerts
+  (one `IncomingNotice` through `SyncSummary.notices`).
+- **Events** (`Engine.events`): `IncomingCallEvent(CallSnapshot)` when a call
+  rings here and `MissedCallEvent(IncomingNotice)` (`kind: 'missed_call'`,
+  `messageId` = call id, `messageRowid` 0) when a call that rang here went
+  unanswered.
+- **Privacy:** SDP/ICE live only in memory for the length of a call, are never
+  stored or logged (`toString` of the payloads and TURN credentials is
+  redacted), and the engine sends no call metrics.
+- **Shutdown:** `stop()`, revocation and `signOut()` end a live call (a hang-up
+  is tried for `CallConfig.signalTimeout`). A foreground engine marks log rows
+  left ringing/active by a crash as `failed` when it starts.
+
+### Account recovery (`AccountService`)
+
+`lookupRecoveryCode(code)` and `recoverWithCode(...)`: the lookup names the
+account (additive `account_id` on `RecoveryLookupResponse`, REST_V2.md), the
+engine makes a **new AIK**, certifies a new device under it for that account id
+and redeems. With SMS configured the phone must be verified first
+(`requestPhoneCode(purpose: recover)` then `verifyPhone`, pass the token), else
+`SignInException(verificationRequired)` is thrown before anything is sent. The
+server signs every other device out (they see revocation and wipe), deletes
+the password and the history backup, and tells contacts about the key change,
+which their engines pin and announce in the chat. An optional new password
+wraps the new AIK as at registration. The old account's messages and sessions
+are not recoverable this way (restore is the backup phase's job).

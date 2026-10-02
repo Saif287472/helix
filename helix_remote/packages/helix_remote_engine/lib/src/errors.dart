@@ -40,6 +40,18 @@ enum SignInFailure {
 
   /// The server answered with keys that do not belong to the account.
   untrustedAccountKey,
+
+  /// The recovery code is unknown, used or expired.
+  invalidRecoveryCode,
+
+  /// The recovery needs the SMS verification of the account's phone number
+  /// first (`AccountService.requestPhoneCode` with `PhonePurpose.recover`,
+  /// then `verifyPhone`).
+  verificationRequired,
+
+  /// The server did not say which account the code belongs to, and the
+  /// caller gave none.
+  unknownAccount,
 }
 
 /// Something went wrong that retrying later may fix (no network, a server
@@ -55,4 +67,35 @@ final class TransientEngineException extends EngineException {
 /// verify, or keys that claim another account.
 final class UntrustedPeerException extends EngineException {
   const UntrustedPeerException(super.message);
+}
+
+/// A call could not be placed or answered (`CallsService`). [reason] says
+/// why in terms a UI can show; the message never names a person or a device.
+final class CallFailedException extends EngineException {
+  const CallFailedException(this.reason, [String? message])
+    : super(message ?? 'the call could not be set up');
+
+  final CallFailure reason;
+}
+
+enum CallFailure {
+  /// This device is already in a call.
+  busy,
+
+  /// This user blocked the person: unblock first.
+  blocked,
+
+  /// No network, a server that is down, or a recipient that cannot be
+  /// reached.
+  unavailable,
+
+  /// Too many calls placed (the server limits offers); try later.
+  rateLimited,
+
+  /// There is no call to act on (nothing ringing, nothing live).
+  noCall,
+
+  /// The platform could not provide media (no media factory, microphone or
+  /// camera refused).
+  noMedia,
 }

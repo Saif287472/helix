@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:helix_remote_api/v2.dart';
+import 'package:helix_remote_engine/src/calls/call_models.dart';
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
@@ -14,6 +15,7 @@ final class SyncSummary {
     required this.processed,
     required this.notices,
     required this.complete,
+    this.pendingCalls = const [],
   });
 
   /// Envelopes processed (replays not counted).
@@ -25,6 +27,18 @@ final class SyncSummary {
   /// False if the run stopped early: no network while looking up a sender's
   /// keys, or the page limit was reached. The mailbox keeps the rest.
   final bool complete;
+
+  /// Calls that ring this device but that the headless run could not open
+  /// (`Engine.syncOnce` fills it): show an incoming-call notification for
+  /// each; the running app rings them with `CallsService.fetchPending`.
+  final List<PendingCallNotice> pendingCalls;
+
+  SyncSummary withPendingCalls(List<PendingCallNotice> calls) => SyncSummary(
+    processed: processed,
+    notices: notices,
+    complete: complete,
+    pendingCalls: calls,
+  );
 }
 
 /// Feeds envelopes to the [InboundProcessor] in order and acks them.
