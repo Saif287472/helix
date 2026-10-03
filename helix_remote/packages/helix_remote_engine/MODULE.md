@@ -240,16 +240,10 @@ receiver skips).
 
 ## Not here yet (C4 and later) and open items
 
-- **Groups** (sender keys, group state, roster envelopes), **calls**
-  (signaling state), **attachment transfers** (media rows are stored with
-  `transfer: remote`; sending media needs the transfer queue), **history
-  backup and device-to-device transfer**, **live-location updates**
-  (only the `start` content becomes a row).
-- **Recovery codes:** the API exists, but `RecoveryLookupResponse` carries no
-  account id and a device certificate must name the account, so the client
-  cannot build the redeem request without a verified phone. Needs an additive
-  `account_id` on the lookup response (spec change) or the A1 flow through
-  `PhoneVerifyResponse.accountId`.
+- Groups, calls, attachment transfers, history backup and device-to-device
+  transfer, and recovery codes landed in Phase C4 (sections below).
+  Still not built: **live-location updates** (only the `start` content
+  becomes a row) and group calls (deferred from v2).
 - **Profile key after password sign-in:** a device that signs in with only a
   password has no profile key (it travels by link provisioning or backup); it
   makes a new one on the first `setOwnProfile`.
