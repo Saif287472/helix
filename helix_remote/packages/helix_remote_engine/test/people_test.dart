@@ -378,8 +378,13 @@ void main() {
         throwsArgumentError,
       );
       expect(
-        () => alice.engine.chats.sendText('group:abc', 'x'),
+        () => alice.engine.chats.sendText('channel:abc', 'x'),
         throwsArgumentError,
+      );
+      // A group this account is not in cannot be sent to.
+      expect(
+        () => alice.engine.chats.sendText('group:abc', 'x'),
+        throwsA(isA<GroupException>()),
       );
       // Nothing was queued.
       expect(await alice.db.outboxDao.failed(), isEmpty);

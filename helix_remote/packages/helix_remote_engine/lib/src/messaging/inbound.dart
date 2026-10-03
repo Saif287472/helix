@@ -7,6 +7,7 @@ import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/crypto/pairwise_crypto.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
+import 'package:helix_remote_engine/src/groups/group_inbound.dart';
 import 'package:helix_remote_engine/src/messaging/apply.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
@@ -63,6 +64,9 @@ final class InboundResult {
 /// keys) leaves the envelope unprocessed, because the cumulative ack cannot
 /// skip it.
 ///
+/// Group envelopes (`group_message`, `roster_change`) and group key material
+/// go to [GroupInbound], which uses the same bookkeeping.
+///
 /// Nothing here needs the UI, a socket or a timer, so the FCM background
 /// isolate runs the same code (`Engine.syncOnce`).
 final class InboundProcessor {
@@ -71,14 +75,16 @@ final class InboundProcessor {
     this._crypto,
     this._applier,
     this._outbox,
-    this._hooks,
-  );
+    this._hooks, {
+    this._groups,
+  });
 
   final EngineContext _ctx;
   final PairwiseCrypto _crypto;
   final ContentApplier _applier;
   final OutboxService _outbox;
   final InboundHooks _hooks;
+  final GroupInbound? _groups;
 
   HelixDb get _db => _ctx.db;
 
@@ -115,11 +121,19 @@ final class InboundProcessor {
         // service opens and acts on them.
         await _bestEffort(() => _hooks.onCallSignal(envelope));
         return _record(envelope, EnvelopeOutcome.ignored);
-      case EnvelopeKind.groupMessage ||
-          EnvelopeKind.rosterChange ||
-          EnvelopeKind.unknown:
-        // Groups arrive in C4; an unknown kind is acked and ignored
-        // (REALTIME_V2.md).
+      case EnvelopeKind.groupMessage:
+        final groups = _groups;
+        return groups == null
+            ? _record(envelope, EnvelopeOutcome.ignored)
+            : groups.groupMessage(envelope, _mark);
+      case EnvelopeKind.rosterChange:
+        final groups = _groups;
+        return groups == null
+            ? _record(envelope, EnvelopeOutcome.ignored)
+            : groups.rosterChange(envelope, _mark);
+      case EnvelopeKind.unknown:
+        // An unknown kind is acked and ignored (REALTIME_V2.md) so a newer
+        // server cannot wedge this client's stream.
         return _record(envelope, EnvelopeOutcome.ignored);
     }
   }
@@ -228,6 +242,11 @@ final class InboundProcessor {
       _typing(sender, content);
       return const InboundResult(EnvelopeOutcome.ignored);
     }
+    // Group content needs the group's roster (and, for an unknown group or
+    // sender, the network) before the transaction; a failure here leaves
+    // the envelope unprocessed, nothing was committed.
+    final groups = _groups;
+    if (groups != null) await groups.prepare(sender, content);
 
     late ApplyResult applied;
     await _db.transaction(() async {
@@ -245,11 +264,13 @@ final class InboundProcessor {
           ),
         );
       }
-      applied = await _applier.apply(
-        sender: sender,
-        content: content,
-        receivedAt: now,
-      );
+      applied = groups != null && groups.isControl(content.body)
+          ? await groups.applyControl(sender, content, now)
+          : await _applier.apply(
+              sender: sender,
+              content: content,
+              receivedAt: now,
+            );
       await _mark(
         envelope,
         applied.wasIgnored ? EnvelopeOutcome.ignored : EnvelopeOutcome.applied,

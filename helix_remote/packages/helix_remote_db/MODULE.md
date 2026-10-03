@@ -140,6 +140,20 @@ No schema change; DAO methods only.
   `setAttachmentThumbnail`, `removeAttachments`, `attachmentPaths` (every local
   file the rows name), `watchAttachmentCount`, `viewOnceWithMediaToConsume`
   (opened incoming, viewed outgoing).
+## Added for group chats (Phase C4-G)
+
+No schema change; DAO methods only.
+
+- `ConversationsDao.ensureGroup(id, {title, avatar, now})`: the group chat
+  `group:<group id>` (kind `group`), created if missing, with title and avatar
+  written when given. The chat list reads `conversations`; the `groups` summary
+  columns stay unused.
+- `CryptoDao.latestSenderKey`, `senderKeysOf` (newest first) and
+  `deleteSenderKey`: this device's own sending key per group (one row, replaced
+  on rotation) and the newest keys received from each member device.
+- `MessagesDao.findInConversation(conversationId, messageId)`: a message of a
+  chat whoever wrote it (a group read receipt names messages of several
+  authors).
 
 ## Regenerating
 

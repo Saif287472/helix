@@ -480,6 +480,19 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
           ))
           .getSingleOrNull();
 
+  /// A message of [conversationId] by its id, whoever wrote it (group chats:
+  /// own-device read sync names messages of several authors).
+  Future<MessageRow?> findInConversation(
+    String conversationId,
+    String messageId,
+  ) =>
+      (select(messages)..where(
+            (m) =>
+                m.conversationId.equals(conversationId) &
+                m.messageId.equals(messageId),
+          ))
+          .getSingleOrNull();
+
   /// Messages older than [before] (or the newest ones), oldest first.
   Future<MessagePage> pageOlder(
     String conversationId, {

@@ -117,16 +117,21 @@ final class GroupsClient {
   );
 
   /// Fans one sender-key message out to every member device. The message id
-  /// is the idempotency key. A digest that does not match the server's
+  /// is the idempotency key unless [idempotencyKey] says otherwise (a retry
+  /// with a different body, a new ciphertext after `device_list_stale`, needs
+  /// its own key: the server answers a repeated key with another body
+  /// `idempotency_conflict`, and keeps a 4xx answer relayed from a group's
+  /// home server under the key). A digest that does not match the server's
   /// member devices throws `device_list_stale` listing every member device.
   Future<SendMessageResponse> sendMessage(
     String groupId,
-    GroupMessageRequest request,
-  ) => _t.call(
+    GroupMessageRequest request, {
+    String? idempotencyKey,
+  }) => _t.call(
     Routes.sendGroupMessage,
     SendMessageResponse.fromJson,
     params: {'group_id': groupId},
     json: request.toJson(),
-    idempotencyKey: request.id,
+    idempotencyKey: idempotencyKey ?? request.id,
   );
 }

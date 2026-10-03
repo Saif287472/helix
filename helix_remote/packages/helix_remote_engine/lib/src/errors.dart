@@ -99,3 +99,36 @@ enum CallFailure {
   /// camera refused).
   noMedia,
 }
+
+/// A group operation could not be done (not a member, no group key, a link
+/// that does not parse, too many version conflicts). [reason] is a code, never
+/// content.
+final class GroupException extends EngineException {
+  const GroupException(this.reason, [String? message])
+    : super(message ?? 'group operation failed');
+
+  final GroupFailure reason;
+}
+
+enum GroupFailure {
+  /// This device is not in the group (or no longer is).
+  notAMember,
+
+  /// This account's role does not allow the action (checked locally before
+  /// asking the server, which enforces it too).
+  notAllowed,
+
+  /// The group's key for the current epoch has not reached this device, so
+  /// its name and picture cannot be read or changed yet.
+  noGroupKey,
+
+  /// The state kept changing under us (`version_conflict` after several
+  /// retries).
+  versionConflict,
+
+  /// An invite link that is malformed or not a group link.
+  badLink,
+
+  /// A mention of someone who is not in the group.
+  badMention,
+}

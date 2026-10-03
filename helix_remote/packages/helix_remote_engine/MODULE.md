@@ -42,7 +42,8 @@ and `runMaintenance()`.
 |---|---|
 | `account` | phone code, register (Global or personal server, password optional, SMS takeover), password sign-in, link as the new device (`beginLink` -> `NewDeviceLink`), device-key sign-in (wired as `HelixApi.auth.reauthenticate`) |
 | `devices` | device list (watch), rename, revoke, revoke others, security events, approve another device's link (`approveLink`) |
-| `chats` | chat list, messages, search (watch queries); send text/reply/mentions and the blob-free content types; react, edit, delete, vote, RSVP; mark read (read receipts), view-once, disappearing timer, pin/mute/archive/draft, retry a failed send |
+| `chats` | chat list, messages, search (watch queries); send text/reply/mentions and the blob-free content types; react, edit, delete, vote, RSVP; mark read (read receipts), view-once, disappearing timer, pin/mute/archive/draft, retry a failed send; the same for group chats (`group:<id>`) |
+| `groups` | create, rename, description, picture, settings, add/remove members, roles, leave, ban/unban, delete, invite links (create, preview, join, revoke), join requests, refresh; see "Groups (Phase C4-G)" |
 | `people` | phone-book discovery by salted hash (`PhoneBook` is injected), lookup by number or `~name`, profiles (encrypted), nickname (synced to own devices and written to the phone book), block/unblock, safety number and verified flag, display-name order helper `PersonNaming` |
 | `settings` | typed local settings (`EngineSettings`, any `Setting<T>`), server-side privacy, the `~Helix name` |
 | `presence` | typing indicators in both directions (ephemeral) |
@@ -82,6 +83,8 @@ lib/src/
                                     ContentCodec, MessageKinds
   features/                         ChatsService, PeopleService, PresenceService,
                                     SettingsService, PushService, PhoneBook
+  groups/                           GroupsService, roster sync, sender keys, group
+                                    send and inbound (see "Groups (Phase C4-G)")
   util/                             KeyedLock, Backoff, IdFactory/RandomAdapter, masking
 ```
 
@@ -137,8 +140,9 @@ Rules:
 - **Ephemeral envelopes** (typing) are decrypted (the ratchet moves and is
   committed), reported through `TypingEvent`, and never stored or acked.
 - **Blocked senders** are decrypted and ignored (the ratchet must move).
-- Group content (`group_message`, sender keys, group `conv`) and call
-  signals are acked and ignored in C3b.
+- Call signals are acked and ignored until the calls feature lands. Group
+  envelopes and group key material are handled by the group pipeline (see
+  "Groups (Phase C4-G)" at the end).
 
 ## Outbound pipeline
 
@@ -485,3 +489,124 @@ Tests: `test/transfers/` (unit, over `test/support/fake_media.dart`, an
 in-memory media server with offsets, 409s, ranges, redirects, presigned
 uploads and injectable faults) and `server/test/client/engine/media_test.dart`
 (two engines on the real server).
+## Groups (Phase C4-G)
+
+Sender-key groups end to end (CRYPTO_V2.md §7 and §9, REST_V2.md "groups").
+Code in `lib/src/groups/`; the public face is `Engine.groups`
+(`GroupsService`), and group chats take the same `ChatsService` actions as
+direct chats. Supersedes the Groups bullet of "Not here yet".
+
+```
+group_ids.dart          GroupIds (conversation id `group:<id>`), GroupLimits, notice kinds
+group_keyring.dart      group master keys per epoch + GroupMeta (settings, description) in `settings`;
+                        sealing and opening the state blob (SealedBlobCipher.groupState)
+sender_key_store.dart   SenderKeyStore over `sender_keys`; commits GroupCryptoWrites
+group_roster.dart       GroupRosterSync: server roster -> groups / group_members / conversation;
+                        stale-digest adoption; forgetting a group; the send roster and digest
+group_sender.dart       GroupMessageSender: encrypt once, distribute, digest, stale retry
+group_rekey.dart        GroupKeyDistributor: hand out the group key, rotate it (`group_rekey` op)
+group_inbound.dart      GroupInbound: group_message, roster_change, sender_key_distribution, group_key
+group_notices.dart      local `system` rows for roster changes
+group_ops.dart          outbox kinds and payloads (`send_group_content`, `group_rekey`)
+group_pipeline.dart     wiring (GroupPipeline implements the worker's GroupOutbox)
+group_invite_links.dart `https://<server>/open#HLX-GRP-<b64url token>.<b64url preview key>`
+groups_service.dart     GroupsService and its value objects
+```
+
+**Where the chat list comes from.** A group chat is a row in `conversations`
+(`group:<group id>`: title, avatar, members, summary, unread and mention
+counts), so the chat list reads one table (`ChatsService.watchChats`). The
+`groups` table's own summary columns (`last_message_*`, `unread_count`,
+`mention_count`) stay unused; `groups` holds the title, role, epoch and the
+state blob, `group_members` the roster. A chat whose `groups` row is gone is a
+group this account left or was removed from: read-only history. `groups.avatar`
+and `conversations.avatar` hold the picture's `MediaPointer` JSON until the
+transfer queue and the app resolve it.
+
+**State kept in `settings`** (no schema change): `group.keys.<id>` (epoch to
+group master key, newest 4 epochs) and `group.meta.<id>` (the plain
+`GroupSettings`, the decrypted description and picture pointer, home server).
+
+**Roster.** The server is the authority. `GroupRosterSync.refresh` reads
+`GET /v1/groups/{id}` and replaces the roster in one transaction;
+`replaceRoster` refuses an epoch older than the stored one (a late answer
+cannot put a removed member back), and a refresh keeps each retained member's
+cached device list. Member **devices** cannot be read from the group; they
+come from the server's `device_list_stale` answer (every member's devices) and
+are what the send digest is taken over. A roster change reaches a device as a
+`roster_change` envelope: the group is read again, a notice row is written
+(`group_created`, `member_added`, `member_removed`, `member_left`,
+`role_changed`, `group_renamed`, `join_requested`, `you_were_removed`,
+`group_deleted`; ids are the envelope id, so a replay adds nothing), a removed
+member's sender keys are dropped, and `GroupMembershipLost` /
+`GroupJoinRequested` are emitted. Removal, leave, ban and delete forget the
+group (roster, keys, sender keys) and keep the chat. Bans are known only to the
+device that made them: the server has no ban list to read.
+
+**Sending.** `ChatsService` writes the optimistic row and a
+`send_group_content` op (`conversation_id = group:<id>`, so the chat's ops stay
+in order, back off together and share the single wake-up path). The worker runs
+`GroupMessageSender`: roster from the stored copy; one ciphertext through the
+sender-key protocol (`SenderKeyGroupProtocol`), which creates or **rotates**
+the key (member removed or left, a member's or this account's own device list
+changed, 7 days, 10,000 messages; adding a member does not); pairwise
+`sender_key_distribution` (own sessions, bundles fetched where there is none) to
+the member devices without the key in the same request; the new key state and
+the used ratchet states are committed before the request leaves; devices count
+as holding the key only after the request succeeded. `device_list_stale` makes
+the device adopt the lists (reading the group again when the accounts differ)
+and re-plan, so a device added or removed mid-send, or a removal this device has
+not heard of, is handled before anything leaves. Each attempt has its own HTTP
+idempotency key (the ciphertext differs per attempt; the message id keeps the
+delivery idempotent). Typing in a group is an ephemeral group send without
+distributions.
+
+**Receiving.** `group_message` envelopes are decrypted under the sending
+device's sender key (signature first) and applied by the same `ContentApplier`
+as direct chats in one transaction with the new key state. Only content that
+came through the group send is accepted (membership and the send permission are
+the server's checks); a pairwise group message is dropped, except receipts. The
+sender must be in the stored roster (a refresh is tried first for an unknown
+sender or group). Group `system` messages are dropped except `timer_changed`
+from an admin; notices come from roster envelopes. **Quarantine:** an unreadable
+group message becomes a visible placeholder; a missing sender key or an
+authentication failure also queues a `session_reset` op (a `decryption_error`
+to the sender, CRYPTO_V2.md §13a), and the sender re-sends that message to the
+group with its sender key distributed again to the device that asked
+(`redistribute`). A bad signature or a replay asks for nothing.
+
+**Message features in groups.** Replies, reactions, edits, deletes, polls,
+RSVPs and the disappearing timer go through the group send (not urgent for
+actions). Mentions (`mention_count`, `IncomingNotice.mentionsMe`) must name
+members. A group admin can delete anyone's message. Receipts go pairwise to
+the author only; a group message is `delivered` / `read` / `viewed` when
+**every** member that was in the group when it was sent has reported; groups
+above `GroupLimits.receiptsMaxMembers` (64) send none.
+
+**Group master key (CRYPTO_V2.md §9).** Whoever adds a member sends them a
+`group_key` (pairwise); the creator sends it to the first members; for a link
+join, where the joiner added themselves, the first admin by account id does.
+After a removal the remover (else the first admin, for a leave or a
+server-side removal) runs the `group_rekey` op: a new key for the new epoch,
+queued to every member, the state re-sealed under it with the optimistic
+`expected_version` (retried on `version_conflict`). The blob stays sealed under
+the epoch it was written in, so opening tries the held epochs newest first. A
+`group_key` is accepted from a member, never for an epoch the server has not
+reached, and never replaces a key that opens the stored state with one that
+does not. A newly linked device gets the keys from the account's other devices
+(`GroupKeyDistributor.shareAllWithOwnDevices`, on the device-list change) and
+reads the group list when sign-in finishes (`GroupsService.refreshAll`).
+
+**Invite links.** `createInviteLink` seals the group's name, description and
+picture with a fresh random preview key that only the link carries (in the
+fragment); the server keeps the token's hash and the sealed preview.
+`previewInvite` and `joinWithLink` take the link; an approval link answers
+`JoinStatus.pending` and admins see `GroupJoinRequested`.
+
+**Known limits.** The group state AAD binds the epoch, not the version (CRYPTO_V2.md
+§14). A member that is not an admin can hand a new member a wrong key; the name
+stays unreadable until an admin's key arrives. If the first admin never comes
+online after a leave, nobody rotates the key (`GroupsService.rotateKey` does it
+by hand). A device that has no key from a member can read that member's
+messages only after the member's next send or a repair. Bans made on other
+devices are not known.

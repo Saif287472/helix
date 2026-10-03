@@ -9,6 +9,7 @@ import 'package:helix_remote_engine/src/crypto/pairwise_crypto.dart';
 import 'package:helix_remote_engine/src/crypto/peer_directory.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
+import 'package:helix_remote_engine/src/groups/group_ops.dart';
 import 'package:helix_remote_engine/src/messaging/sender.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
@@ -116,6 +117,39 @@ final class OutboxService {
     now: _ctx.now(),
   );
 
+  /// Queues [content] for the group [groupId]: encrypted once under this
+  /// device's sender key when the op is sent, one op at a time per group
+  /// chat (the `conversationId` orders it with the chat's other ops).
+  Future<OutboxOpRow> enqueueGroupContent({
+    required ContentMessage content,
+    required String groupId,
+    required String conversationId,
+    int? messageRowid,
+    String? requestId,
+    bool urgent = true,
+    List<DeviceAddress> redistribute = const [],
+  }) => _ctx.db.outboxDao.enqueue(
+    kind: GroupOutboxKinds.sendGroupContent,
+    idempotencyKey: requestId ?? content.id,
+    payload: SendGroupContentPayload(
+      groupId: groupId,
+      content: content,
+      urgent: urgent,
+      redistribute: redistribute,
+    ).encode(),
+    conversationId: conversationId,
+    messageRowid: messageRowid,
+    now: _ctx.now(),
+  );
+
+  /// Queues the rotation of [groupId]'s master key (after a removal).
+  Future<OutboxOpRow> enqueueRekey(String groupId) => _ctx.db.outboxDao.enqueue(
+    kind: GroupOutboxKinds.groupRekey,
+    idempotencyKey: _ctx.ids.next(),
+    payload: GroupRekeyPayload(groupId: groupId).encode(),
+    now: _ctx.now(),
+  );
+
   Future<OutboxOpRow> enqueueReset(SessionResetPayload payload) =>
       _ctx.db.outboxDao.enqueue(
         kind: OutboxKinds.sessionReset,
@@ -178,6 +212,12 @@ OpFailure classifyOpError(Object error) {
       return const RetryLater('transient');
     case UntrustedPeerException():
       return const GiveUp('untrusted_peer');
+    case GroupException():
+      return GiveUp(
+        error.reason == GroupFailure.notAMember
+            ? 'not_a_member'
+            : 'group_${error.reason.name}',
+      );
     case CryptoV2Exception():
       return const GiveUp('crypto');
     case ApiException():
@@ -211,12 +251,14 @@ final class OutboxWorker {
     this._crypto, {
     required this.onDeviceRevoked,
     required this.onSessionEnded,
+    this._groups,
   });
 
   final EngineContext _ctx;
   final MessageSender _sender;
   final PeerDirectory _peers;
   final PairwiseCrypto _crypto;
+  final GroupOutbox? _groups;
 
   /// The server said this device is revoked.
   final Future<void> Function() onDeviceRevoked;
@@ -320,6 +362,15 @@ final class OutboxWorker {
           );
         case OutboxKinds.sessionReset:
           await _reset(SessionResetPayload.decode(op.payload));
+        case GroupOutboxKinds.sendGroupContent:
+          await (_groups ?? (throw const _UnknownOp())).sendContent(
+            SendGroupContentPayload.decode(op.payload),
+            op.idempotencyKey,
+          );
+        case GroupOutboxKinds.groupRekey:
+          await (_groups ?? (throw const _UnknownOp())).rekey(
+            GroupRekeyPayload.decode(op.payload),
+          );
         default:
           throw const _UnknownOp();
       }

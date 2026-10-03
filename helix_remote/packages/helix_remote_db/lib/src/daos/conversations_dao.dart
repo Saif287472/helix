@@ -79,6 +79,34 @@ class ConversationsDao extends DatabaseAccessor<HelixDb>
     return (await byId(id))!;
   });
 
+  /// The group chat [id] (`group:<group id>`), created if missing. The
+  /// title and avatar are written when given; existing members stay.
+  Future<ConversationRow> ensureGroup(
+    String id, {
+    String? title,
+    Uint8List? avatar,
+    required DateTime now,
+  }) => transaction(() async {
+    await into(conversations).insert(
+      ConversationsCompanion.insert(
+        id: id,
+        kind: ConversationKind.group,
+        createdAt: now,
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+    if (title != null || avatar != null) {
+      await _write(
+        id,
+        ConversationsCompanion(
+          title: title == null ? const Value.absent() : Value(title),
+          avatar: avatar == null ? const Value.absent() : Value(avatar),
+        ),
+      );
+    }
+    return (await byId(id))!;
+  });
+
   Future<ConversationRow?> byId(String id) =>
       (select(conversations)..where((c) => c.id.equals(id))).getSingleOrNull();
 

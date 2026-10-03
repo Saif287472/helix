@@ -37,6 +37,7 @@ final class IncomingNotice {
     required this.preview,
     required this.muted,
     required this.sentAt,
+    this.mentionsMe = false,
   });
 
   final String conversationId;
@@ -55,6 +56,10 @@ final class IncomingNotice {
   /// The chat is muted: record the message, show no alert.
   final bool muted;
   final DateTime sentAt;
+
+  /// The message mentions this account (a group chat's `mention_count`); a
+  /// host may still alert for it in a muted chat.
+  final bool mentionsMe;
 }
 
 /// Things that happen while the engine runs, for UI and notifications.
@@ -147,4 +152,25 @@ final class MissedCallEvent extends EngineEvent {
   const MissedCallEvent(this.notice);
 
   final IncomingNotice notice;
+}
+
+/// This device is no longer in a group: it was removed, the group was
+/// deleted, or this account left on another device. The chat stays as
+/// read-only history; keys and roster are gone.
+final class GroupMembershipLost extends EngineEvent {
+  const GroupMembershipLost({required this.groupId, required this.reason});
+
+  final String groupId;
+
+  /// `removed`, `left` or `deleted`.
+  final String reason;
+}
+
+/// Someone asked to join through an approval link (this account is an
+/// admin). `GroupsService.joinRequests` lists the requests.
+final class GroupJoinRequested extends EngineEvent {
+  const GroupJoinRequested({required this.groupId, required this.account});
+
+  final String groupId;
+  final String account;
 }
