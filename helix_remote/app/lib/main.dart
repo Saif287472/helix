@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/crash_reporter.dart';
+import 'package:helix_remote/core/calls/call_host.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/lifecycle/app_lifecycle_host.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
+import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/push/push_background.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
@@ -41,8 +43,12 @@ Future<void> main(List<String> args) async {
 
       registerPushBackgroundHandler();
       await LocalNotifications.init();
+      await CallNotifications.init();
 
-      runApp(HelixRemoteApp(initialLink: _initialLink(args)));
+      // Every screen below is a ConsumerWidget, so the scope is the root.
+      runApp(
+        ProviderScope(child: HelixRemoteApp(initialLink: _initialLink(args))),
+      );
     },
     (error, stack) {
       debugPrint('[helix] uncaught: ${error.runtimeType}');
@@ -136,10 +142,14 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       themeMode: ThemeMode.light,
       routerConfig: router,
       builder: (context, child) => AppLifecycleHost(
-        child: PhoneBookSyncHost(
-          child: AppLockGate(
-            child: AppLinkListener(
-              child: AppTextScale(child: child ?? const SizedBox.shrink()),
+        // The call host keeps calls working under every screen and opens the
+        // full-screen call; the lock lets a live call through.
+        child: CallHost(
+          child: PhoneBookSyncHost(
+            child: AppLockGate(
+              child: AppLinkListener(
+                child: AppTextScale(child: child ?? const SizedBox.shrink()),
+              ),
             ),
           ),
         ),

@@ -15,6 +15,34 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
     private var linksChannel: MethodChannel? = null
 
+    // Screen off while the phone is against the ear on a voice call.
+    private var proximityLock: PowerManager.WakeLock? = null
+
+    private fun setProximityScreenOff(enabled: Boolean) {
+        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (enabled) {
+            if (proximityLock == null &&
+                power.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)
+            ) {
+                proximityLock = power.newWakeLock(
+                    PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK,
+                    "helix:call-proximity"
+                )
+            }
+            val lock = proximityLock
+            // A timeout, so a call that never reports its end cannot hold it.
+            if (lock != null && !lock.isHeld) lock.acquire(3 * 60 * 60 * 1000L)
+        } else {
+            val lock = proximityLock
+            if (lock != null && lock.isHeld) lock.release()
+        }
+    }
+
+    override fun onDestroy() {
+        setProximityScreenOff(false)
+        super.onDestroy()
+    }
+
     override fun getInitialRoute(): String? {
         return intent?.dataString ?: super.getInitialRoute()
     }
@@ -80,6 +108,10 @@ class MainActivity : FlutterFragmentActivity() {
                         // Android 12+ refuses a foreground service started
                         // from the background. The call itself carries on.
                     }
+                    result.success(null)
+                }
+                "setProximityScreenOff" -> {
+                    setProximityScreenOff(call.argument<Boolean>("enabled") ?: false)
                     result.success(null)
                 }
                 "stopForegroundCall" -> {

@@ -3,7 +3,18 @@ import 'package:helix_remote/core/links/helix_code.dart';
 /// Parsed target for the `helix://` protocol registered by the mobile and
 /// Windows clients. Keeping parsing independent of platform channels makes
 /// incoming links straightforward to validate and test before navigation.
-enum HelixDeepLinkKind { invite, serverCode, call, groupJoin, contactAdd }
+enum HelixDeepLinkKind {
+  invite,
+  serverCode,
+  call,
+  groupJoin,
+
+  /// A group invite link: `https://<server>/open#HLX-GRP-…` or
+  /// `helix://open?code=HLX-GRP-…`. [HelixDeepLink.code] is the whole
+  /// `HLX-GRP-…` code (the group token and the key that opens the preview).
+  groupLink,
+  contactAdd,
+}
 
 /// The host of shared invite and recovery links. Always Helix Global's, even
 /// for a personal server's code: the code travels in the URL fragment, which
@@ -120,6 +131,11 @@ class HelixDeepLink {
   static HelixDeepLink? _serverCode(String? code) {
     final trimmed = code?.trim() ?? '';
     final upper = trimmed.toUpperCase();
+    if (upper.startsWith('HLX-GRP-')) {
+      // The group link's token and preview key are case-sensitive base64url:
+      // the code is passed on exactly as it arrived.
+      return HelixDeepLink._(kind: HelixDeepLinkKind.groupLink, code: trimmed);
+    }
     if (!upper.startsWith('HLX-INV-') && !upper.startsWith('HLX-REC-')) {
       return null;
     }

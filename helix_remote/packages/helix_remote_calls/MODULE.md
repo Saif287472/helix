@@ -17,7 +17,13 @@ drive 1:1 and group call state.
 
 `lib/helix_remote_calls.dart` exports `ice_config`, `call_engine`,
 `call_quality`, `call_video_view`, `remote_call_service`,
-`remote_group_call_service`, `web_rtc_call_engine`.
+`remote_group_call_service`, `web_rtc_call_engine`, `call_devices`.
+
+`call_devices` (v2 app, Phase A3a) is the app's only door to the plugin for
+audio output selection (`WebRtcAudioOutputs`), the microphone/camera permission
+probe (`WebRtcMediaPermissions`) and `RemoteVideoSource` (in `call_video_view`),
+so the app never imports `flutter_webrtc` itself. The v2 app implements the
+engine's `CallMediaFactory` over `RemoteWebRtcCallEngine`.
 
 ## Who may depend on this
 

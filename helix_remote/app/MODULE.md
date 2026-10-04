@@ -211,3 +211,26 @@ no engine, database or network.
   Sign-in also falls back to Helix Global when no server has been chosen.
 - Engine: `AccountService.changePassword` (additive; covered by
   `server/test/client/engine/devices_test.dart`).
+
+## Phase A3a: calls and groups
+
+Two features, each with its own `FEATURE.md`.
+
+- `features/calls`: the Calls tab (real call log, folding, call detail, delete,
+  call back, a people-search seam), the full-screen call (incoming, dialing,
+  live voice and video, ended reasons), and the runtime: the engine's
+  `CallMediaFactory` over `helix_remote_calls`, audio routing, permissions,
+  ringing, foreground service, proximity, lock-screen flags.
+  `core/calls/call_host.dart` keeps it all running under every screen;
+  `core/calls/place_call.dart` is the seam every call button reads.
+- `features/groups`: create, info, settings, invite links, join requests, bans,
+  add members, join by link (`HLX-GRP-` links), encrypted picture and
+  description editing.
+
+Shared additions: `core/people/name_lookup.dart` (the replaceable naming
+adapter), `core/notifications/call_notifications.dart` (ringing notification,
+also used by the FCM isolate), `HomeScreen(callsTab:)` (the tab is handed in
+by the router), `HelixDeepLinkKind.groupLink`, and `ProviderScope` at the root
+of `main.dart` (it was missing). Tests: `test/calls/` (includes the engine's real
+`CallsService` over an in-memory network) and `test/groups/`, with fakes in
+`test/support/`.

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/links/link_channel.dart';
 import 'package:helix_remote/core/router/app_router.dart';
@@ -48,9 +49,26 @@ class _AppLinkListenerState extends ConsumerState<AppLinkListener> {
 
   void _onLink(HelixDeepLink link) {
     ref.read(pendingLinkProvider.notifier).set(link);
+    // A group link needs an account: it waits (parked in the provider) until
+    // the person is signed in, and is routed then.
+    if (_needsAccount(link) && !_signedIn) return;
     routeDeepLink(ref.read(appRouterProvider), link);
+    if (_needsAccount(link)) ref.read(pendingLinkProvider.notifier).take();
   }
 
+  static bool _needsAccount(HelixDeepLink link) =>
+      link.kind == HelixDeepLinkKind.groupLink ||
+      link.kind == HelixDeepLinkKind.groupJoin;
+
+  bool get _signedIn => ref.read(authStateProvider).value == AppAuthState.ready;
+
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    ref.listen(authStateProvider, (_, next) {
+      if (next.value != AppAuthState.ready) return;
+      final pending = ref.read(pendingLinkProvider);
+      if (pending != null && _needsAccount(pending)) _onLink(pending);
+    });
+    return widget.child;
+  }
 }

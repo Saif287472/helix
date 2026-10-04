@@ -4,11 +4,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
+import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
+import 'package:helix_remote_engine/helix_remote_engine.dart' show PersonNaming;
 
 /// The FirebaseMessaging background handler.
 ///
@@ -74,6 +76,23 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
                   audible.first.preview.isNotEmpty
               ? audible.first.preview
               : null,
+        );
+      }
+      if (summary.pendingCalls.isNotEmpty) {
+        await CallNotifications.init();
+      }
+      // A call that rang while the app was closed: the offer waits on the
+      // server and is opened by the running app, so all this knows is who is
+      // calling. The notification takes the screen over a locked phone and
+      // its buttons open the app, which rings the call.
+      for (final call in summary.pendingCalls) {
+        final person = await runtime.engine.people.person(call.caller);
+        await CallNotifications.showIncoming(
+          callId: call.callId,
+          callerName: person == null
+              ? 'Helix user'
+              : PersonNaming.displayName(person),
+          fullScreen: true,
         );
       }
     } finally {

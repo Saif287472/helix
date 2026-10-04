@@ -146,9 +146,9 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
   void _attach(AppLockSetting setting) {
     AppLock.attach(
       read: () => (setting.enabled, setting.relockAfterSeconds),
-      // A live call keeps the phone awake, so the lock must not cover it.
-      // Calls arrive with the engine's call state in C4.
-      callActive: () => false,
+      // A live call keeps the phone awake, so the lock must not cover it
+      // (the call host sets this from the engine's call state).
+      callActive: () => AppLock.callInProgress.value,
     );
   }
 

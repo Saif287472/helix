@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,9 @@ import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/features/backup/backup_routes.dart';
 import 'package:helix_remote/features/devices/devices_routes.dart';
+import 'package:helix_remote/features/calls/calls_routes.dart';
+import 'package:helix_remote/features/calls/presentation/calls_tab.dart';
+import 'package:helix_remote/features/groups/groups_routes.dart';
 import 'package:helix_remote/features/home/presentation/home_screen.dart';
 import 'package:helix_remote/features/people/people_routes.dart';
 import 'package:helix_remote/features/profile/profile_routes.dart';
@@ -79,9 +84,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) =>
-            const HomeScreen(settingsTab: SettingsTab()),
+        builder: (context, state) => const HomeScreen(
+          callsTab: CallsTabScreen(),
+          settingsTab: SettingsTab(),
+        ),
       ),
+      ...callsRoutes,
+      ...groupsRoutes,
       ...settingsRoutes,
       ...profileRoutes,
       ...devicesRoutes,
@@ -144,9 +153,12 @@ void routeDeepLink(GoRouter router, HelixDeepLink link) {
   }
   switch (link.kind) {
     case HelixDeepLinkKind.call:
-      router.go('${AppRoutes.home}/calls/${link.callId}');
+      unawaited(router.push(CallRoutes.detail(link.callId ?? '')));
+    case HelixDeepLinkKind.groupLink:
+      // The preview and an explicit Join button: opening a link never joins.
+      unawaited(router.push(GroupRoutes.join, extra: link.code));
     case HelixDeepLinkKind.groupJoin:
-      router.go('${AppRoutes.home}/groups/${link.groupId}');
+      unawaited(router.push(GroupRoutes.join, extra: link.inviteCode));
     case HelixDeepLinkKind.contactAdd:
       router.go('${AppRoutes.home}/people');
     case HelixDeepLinkKind.invite || HelixDeepLinkKind.serverCode:

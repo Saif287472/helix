@@ -43,6 +43,17 @@ abstract final class LocalNotifications {
 
   static FlutterLocalNotificationsPlugin? _plugin;
 
+  /// The plugin once [init] has run, for the other notification families
+  /// (incoming calls) that share its one initialisation.
+  static FlutterLocalNotificationsPlugin? get plugin => _plugin;
+
+  static final StreamController<NotificationResponse> _responses =
+      StreamController<NotificationResponse>.broadcast();
+
+  /// A notification, or one of its action buttons, was tapped while the app
+  /// was running (an incoming call's Answer and Decline arrive here).
+  static Stream<NotificationResponse> get responses => _responses.stream;
+
   /// Must run before the first frame. Safe to call more than once.
   static Future<void> init() async {
     if (_plugin != null) return;
@@ -51,6 +62,7 @@ abstract final class LocalNotifications {
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
+      onDidReceiveNotificationResponse: _responses.add,
     );
     final android = plugin
         .resolvePlatformSpecificImplementation<
