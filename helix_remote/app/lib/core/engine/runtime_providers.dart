@@ -4,7 +4,9 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
+import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
+import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show DevicePlatform;
@@ -55,8 +57,18 @@ final class DeviceRuntimeFactory implements RuntimeFactory {
 }
 
 final runtimeFactoryProvider = Provider<RuntimeFactory>(
-  (ref) => DeviceRuntimeFactory(),
+  (ref) => DeviceRuntimeFactory(
+    phoneBook: DevicePhoneBook(
+      access: ref.watch(contactsAccessProvider),
+      country: ref.watch(phoneCountryProvider),
+    ),
+  ),
 );
+
+/// The country code bare national numbers are read in (the prefix of this
+/// account's own number), shared by the address-book adapter the engine holds
+/// and the people search. See [PhoneCountry].
+final phoneCountryProvider = Provider<PhoneCountry>((ref) => PhoneCountry());
 
 /// The remembered server URL, in the keystore. Overridden in tests so nothing
 /// writes to the platform.

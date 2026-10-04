@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/features/home/presentation/home_screen.dart';
+import 'package:helix_remote/features/people/people_routes.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
 import 'package:helix_remote/shared/widgets/reset_screen.dart';
 
@@ -65,6 +66,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.reset,
         builder: (context, state) => const ResetScreen(),
       ),
+      ...peopleRoutes,
     ],
   );
   ref.onDispose(router.dispose);

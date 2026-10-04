@@ -216,6 +216,11 @@ final class PeopleService {
       final content = ProfileContent.fromJson(
         JsonReader.decode(utf8.decode(plain)),
       );
+      await _db.settingsDao.set(
+        _aboutSetting(account),
+        content.about,
+        now: _ctx.now(),
+      );
       await _db.peopleDao.upsertPerson(
         PeopleCompanion.insert(
           accountId: account,
@@ -232,6 +237,17 @@ final class PeopleService {
       return null;
     }
   }
+
+  /// The "about" line from [account]'s decrypted profile, as of the last
+  /// [refreshProfile] (null when there is none).
+  Future<String?> aboutOf(String account) =>
+      _db.settingsDao.get(_aboutSetting(account));
+
+  Stream<String?> watchAbout(String account) =>
+      _db.settingsDao.watch(_aboutSetting(account));
+
+  static Setting<String?> _aboutSetting(String account) =>
+      Setting<String?>('people.about:$account', null);
 
   /// Publishes this account's name and about line, encrypted with the
   /// profile key (created on first use).
@@ -297,7 +313,18 @@ final class PeopleService {
     });
     final number = person?.phoneNumber;
     if (value != null && number != null) {
-      await _phoneBook.saveName(number, value);
+      // The phone-book name outranks the nickname, so when the phone took
+      // the new name it is also the name shown here; otherwise the old
+      // phone-book name would hide the rename until the next sync.
+      if (await _phoneBook.saveName(number, value)) {
+        await _db.peopleDao.upsertPerson(
+          PeopleCompanion.insert(
+            accountId: account,
+            phonebookName: Value(value),
+            updatedAt: _ctx.now(),
+          ),
+        );
+      }
     }
   }
 
@@ -328,6 +355,28 @@ final class PeopleService {
         await _db.peopleDao.setBlocked(account, true, now: now);
       }
     });
+  }
+
+  /// Reports [account] to the server's operators (spam, abuse,
+  /// impersonation, other). A report carries no message content; [note] is
+  /// the reporter's own words (at most [ReportRequest.maxNoteLength]).
+  Future<void> report(
+    String account,
+    ReportCategory category, {
+    String? note,
+  }) async {
+    final trimmed = note?.trim();
+    await _ctx.api.people.report(
+      ReportRequest(
+        account: account,
+        category: category,
+        note: trimmed == null || trimmed.isEmpty
+            ? null
+            : trimmed.length <= ReportRequest.maxNoteLength
+            ? trimmed
+            : trimmed.substring(0, ReportRequest.maxNoteLength),
+      ),
+    );
   }
 
   Future<PresenceResponse> presence(String account) =>

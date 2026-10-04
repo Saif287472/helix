@@ -102,6 +102,9 @@ final class FakeServer {
       {};
   final Map<String, EncryptedProfile> profiles = {};
 
+  /// Reports filed through `POST /v1/people/reports`.
+  final List<ReportRequest> reports = [];
+
   /// Ends the device's session (tokens stop working) without revoking it.
   void invalidateSession(String deviceId) {
     final d = device(deviceId);
@@ -590,6 +593,10 @@ final class FakeServer {
     if (route == Routes.unblock) {
       accounts[r.caller!.accountId]!.blocked.remove(r.params['account']);
       return _empty();
+    }
+    if (route == Routes.report) {
+      reports.add(ReportRequest.fromJson(r.json!));
+      return _ok(const ReportResponse(reportId: 'report-1').toJson());
     }
     if (route == Routes.setPushToken || route == Routes.clearPushToken) {
       return _empty();

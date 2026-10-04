@@ -152,3 +152,28 @@ state rather than a dead button. A1's job was the shell and the wiring, and the
 three tabs all read through the same `StreamProvider` pattern A2 will extend.
 
 Group calls stay deferred from v2 entirely (plan §13).
+
+## People (Phase A2b)
+
+`features/people/` (see its `FEATURE.md`): the naming helper, phone-book
+integration, people search and the contact info screen. What other features
+consume lives outside the feature folder, because features never import each
+other:
+
+- `core/people/people_names.dart` - `peopleDirectoryProvider`,
+  `personNameProvider(id)`, `PersonName` / `PeopleDirectory`: phone-book name,
+  then nickname, then number, then `~Helix name`, reactive.
+- `shared/widgets/people_search_panel.dart` - `PeopleSearchPanel`, mounted
+  under the Chats (A2a) and Calls (A3a) search fields.
+- `shared/navigation/conversation_seams.dart` - `ConversationSeams`:
+  `openChat` (A2a), `openSharedMedia` (A2a), `startCall` (A3a);
+  `people_paths.dart` has the routes into contact info and search.
+- `core/platform/` - `ContactsAccess` (the only user of `flutter_contacts`),
+  `DevicePhoneBook` over it, `phone_numbers.dart` (E.164, country of the
+  account's own number). `shared/widgets/phone_book_sync_host.dart` runs
+  discovery on start, resume, hourly and after address-book changes, within the
+  5,000/day budget; `shared/widgets/qr_scanner_view.dart` owns the camera.
+
+Tests: `people_names_test`, `phone_numbers_test`, `phone_book_test`,
+`people_search_test`, `contact_info_test`, `people_rules_test`,
+`people_performance_test`; fakes in `test/support/people_fakes.dart`.

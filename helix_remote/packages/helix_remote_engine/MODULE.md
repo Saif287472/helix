@@ -44,7 +44,7 @@ and `runMaintenance()`.
 | `devices` | device list (watch), rename, revoke, revoke others, security events, approve another device's link (`approveLink`) |
 | `chats` | chat list, messages, search (watch queries); send text/reply/mentions and the blob-free content types; react, edit, delete, vote, RSVP; mark read (read receipts), view-once, disappearing timer, pin/mute/archive/draft, retry a failed send; the same for group chats (`group:<id>`) |
 | `groups` | create, rename, description, picture, settings, add/remove members, roles, leave, ban/unban, delete, invite links (create, preview, join, revoke), join requests, refresh; see "Groups (Phase C4-G)" |
-| `people` | phone-book discovery by salted hash (`PhoneBook` is injected), lookup by number or `~name`, profiles (encrypted), nickname (synced to own devices and written to the phone book), block/unblock, safety number and verified flag, display-name order helper `PersonNaming` |
+| `people` | phone-book discovery by salted hash (`PhoneBook` is injected), lookup by number or `~name`, profiles (encrypted), nickname (synced to own devices and written to the phone book), block/unblock, report (`report`), the profile's about line (`aboutOf`/`watchAbout`), safety number and verified flag, display-name order helper `PersonNaming` (a rename the phone accepted also updates the stored phone-book name) |
 | `settings` | typed local settings (`EngineSettings`, any `Setting<T>`), server-side privacy, the `~Helix name` |
 | `presence` | typing indicators in both directions (ephemeral) |
 | `push` | push-token registration |

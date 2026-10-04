@@ -11,6 +11,7 @@ import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
 import 'package:helix_remote/shared/widgets/app_link_listener.dart';
+import 'package:helix_remote/shared/widgets/phone_book_sync_host.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// The app entry point.
@@ -125,8 +126,10 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       themeMode: ThemeMode.light,
       routerConfig: router,
       builder: (context, child) => AppLifecycleHost(
-        child: AppLockGate(
-          child: AppLinkListener(child: child ?? const SizedBox.shrink()),
+        child: PhoneBookSyncHost(
+          child: AppLockGate(
+            child: AppLinkListener(child: child ?? const SizedBox.shrink()),
+          ),
         ),
       ),
     );

@@ -176,6 +176,14 @@ void main() {
         'Bobby',
       );
       expect(book.saved, {'+8801711000002': 'Bobby'});
+      // The phone took the name, so it is also the name shown here: the old
+      // phone-book name must not outrank the rename.
+      expect(
+        alice1.engine.people.displayName(
+          (await alice1.engine.people.person(bob.account))!,
+        ),
+        'Bobby',
+      );
 
       await alice1.engine.people.setNickname(bob.account, null);
       await alice1.engine.drainOutbox();
@@ -238,6 +246,7 @@ void main() {
           (await bob.engine.people.person(alice.account))!.profileName,
           'Alice A.',
         );
+        expect(await bob.engine.people.aboutOf(alice.account), 'hi');
         // A newer version is picked up, the same one is not fetched again.
         await alice.engine.people.setOwnProfile(name: 'Alice B.');
         expect(
@@ -248,8 +257,24 @@ void main() {
           (await bob.engine.people.person(alice.account))!.profileVersion,
           2,
         );
+        expect(await bob.engine.people.aboutOf(alice.account), isNull);
       },
     );
+
+    test('a report names the account and category and nothing else', () async {
+      final alice = await peers.register('alice', phone: '+8801711000001');
+      final bob = await peers.register('bob', phone: '+8801711000002');
+      await alice.engine.people.report(
+        bob.account,
+        ReportCategory.spam,
+        note: '  sells things  ',
+      );
+      await alice.engine.people.report(bob.account, ReportCategory.other);
+      expect(peers.server.reports.map((r) => (r.account, r.category, r.note)), [
+        (bob.account, ReportCategory.spam, 'sells things'),
+        (bob.account, ReportCategory.other, null),
+      ]);
+    });
   });
 
   group('trust', () {
