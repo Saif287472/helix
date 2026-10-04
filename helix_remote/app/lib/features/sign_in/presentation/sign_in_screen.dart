@@ -198,6 +198,10 @@ class _PasswordPage extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
+          TextButton(
+            onPressed: state.isLoading ? null : notifier.linkFromAnotherDevice,
+            child: const Text('Link from another device instead'),
+          ),
         ],
       ),
     );
@@ -265,7 +269,14 @@ class _NamePage extends StatelessWidget {
                   : () => notifier.completeSetup(skip: true),
               child: const Text('Skip'),
             )
-          : null,
+          // Continuing signs the account's other devices out. Linking from one
+          // of them does not, so it is offered first.
+          : TextButton(
+              onPressed: state.isLoading
+                  ? null
+                  : notifier.linkFromAnotherDevice,
+              child: const Text('Link from another device instead'),
+            ),
       primaryLabel: newAccount ? 'Create account' : 'Continue',
       onPrimary: () => notifier.completeSetup(),
       child: Column(

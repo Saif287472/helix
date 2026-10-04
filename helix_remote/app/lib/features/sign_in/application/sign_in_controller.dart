@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/global_server.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
+import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/links/helix_code.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
+import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
 import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
@@ -11,7 +14,7 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
 
 /// The Helix Global server. Sign-in opens here and nowhere else unless a
 /// code, a link or the hidden corner says otherwise.
-final kHelixGlobalServer = Uri.parse('https://helix.agiletechbd.com');
+final kHelixGlobalServer = kGlobalServerUrl;
 
 /// Drives sign-in: the page machine, the validation and every call to the
 /// engine's [AccountService].
@@ -195,7 +198,7 @@ final class SignInController extends Notifier<SignInState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final runtime = await ref.read(runtimeProvider.future);
+      final runtime = await _currentRuntime();
       final challenge = await runtime.engine.account.requestPhoneCode(number);
       _challengeId = challenge.challengeId;
       state = state.copyWith(page: SignInPage.otp, isLoading: false);
@@ -220,7 +223,7 @@ final class SignInController extends Notifier<SignInState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final runtime = await ref.read(runtimeProvider.future);
+      final runtime = await _currentRuntime();
       final verified = await runtime.engine.account.verifyPhone(
         challengeId,
         state.otpCode,
@@ -252,7 +255,7 @@ final class SignInController extends Notifier<SignInState> {
     if (number == null) return false;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final runtime = await ref.read(runtimeProvider.future);
+      final runtime = await _currentRuntime();
       final challenge = await runtime.engine.account.requestPhoneCode(number);
       _challengeId = challenge.challengeId;
       state = state.copyWith(otpCode: '', isLoading: false);
@@ -273,7 +276,11 @@ final class SignInController extends Notifier<SignInState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final runtime = await ref.read(runtimeProvider.future);
+      final runtime = await _currentRuntime();
+      // The account may already have a history on another device or in a
+      // backup, so the restore step is asked for before the engine signs in:
+      // the router acts on it the moment the session exists.
+      ref.read(postSignInProvider.notifier).offerRestore();
       await runtime.engine.account.signInWithPassword(
         phoneNumber: number,
         password: state.password,
@@ -288,6 +295,7 @@ final class SignInController extends Notifier<SignInState> {
       );
       return true;
     } on Object catch (error) {
+      ref.read(postSignInProvider.notifier).done();
       return _fail(SignInCopy.passwordRejected(error), loading: false);
     }
   }
@@ -321,7 +329,7 @@ final class SignInController extends Notifier<SignInState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final runtime = await ref.read(runtimeProvider.future);
+      final runtime = await _currentRuntime();
       final invite = state.codeType == SignInCodeType.invitation
           ? decodeHelixInviteCode(state.codeString)?.inviteCode
           : null;
@@ -358,6 +366,23 @@ final class SignInController extends Notifier<SignInState> {
   }
 
   // -------------------------------------------------------------- internals
+
+  /// The runtime for the server this sign-in is on. Sign-in opens on Helix
+  /// Global, so a device that has not chosen another server (a first install,
+  /// or one that just signed out) is pointed at it before anything is asked.
+  Future<HelixRuntime> _currentRuntime() {
+    if (ref.read(serverUrlProvider) == null) {
+      ref.read(serverUrlProvider.notifier).use(kGlobalServerUrl);
+    }
+    return ref.read(runtimeProvider.future);
+  }
+
+  /// "Link from another device instead": shows this device's QR code for a
+  /// signed-in device to scan, which signs in without a password or an SMS
+  /// code and without signing any other device out.
+  void linkFromAnotherDevice() {
+    ref.read(appRouterProvider).push(RoutePaths.linkThisDevice);
+  }
 
   /// The runtime for [serverUrl], switching servers if needed. Changing the
   /// server tears the old runtime down first, so two never hold the database.

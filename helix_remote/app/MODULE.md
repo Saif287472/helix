@@ -177,3 +177,37 @@ other:
 Tests: `people_names_test`, `phone_numbers_test`, `phone_book_test`,
 `people_search_test`, `contact_info_test`, `people_rules_test`,
 `people_performance_test`; fakes in `test/support/people_fakes.dart`.
+
+## Settings, devices, backup and profile (Phase A3b)
+
+Four features on the same pattern: `application/` holds a **gateway interface**
+(the only code that touches the engine or API, with an `Engine...Gateway`
+implementation) plus Riverpod notifiers that turn what it returns into
+sentences and state; `presentation/` draws it. Tests replace the gateway with
+a fake from `test/support/a3b_fakes.dart`, so a page's real notifier runs with
+no engine, database or network.
+
+- `features/settings/` the tab and Account, Privacy, Notifications, Chats,
+  Storage, About (+ legal) and Advanced pages. See its `FEATURE.md`.
+- `features/devices/` device list, approving a device, security activity, and
+  the new device's QR page. See its `FEATURE.md`.
+- `features/backup/` Backup settings, restore (also the post-sign-in step),
+  device transfer, recovery backup. See its `FEATURE.md`.
+- `features/profile/` your name, about, `~name` and picture. See its
+  `FEATURE.md`.
+- `shared/route_paths.dart` the paths these pages link to each other with
+  (features may not import features); `shared/widgets/inline_notice.dart`,
+  `app_text_scale.dart`; `shared/format.dart` (sizes, "5 minutes ago").
+- `core/` additions: `engine/local_settings.dart` (typed settings seam),
+  `failure_copy.dart` (error to sentence), `post_sign_in.dart`, `clock.dart`,
+  `backup_policy.dart`, `crash_reporter.dart`, `global_server.dart`;
+  `platform/` adapters behind interfaces with fakes (`qr_encoder`,
+  `qr_scanner`, `share_adapter`, `network_probe`, `storage_usage`,
+  `profile_image_source`); `security/device_auth.dart`;
+  `notifications/notification_permission.dart`.
+- Router: the three feature route lists are spread in, and `refreshListenable`
+  now follows `authStateProvider` and `postSignInProvider` (before, `redirect`
+  only ran on navigation, so a finished sign-in did not leave the sign-in page).
+  Sign-in also falls back to Helix Global when no server has been chosen.
+- Engine: `AccountService.changePassword` (additive; covered by
+  `server/test/client/engine/devices_test.dart`).

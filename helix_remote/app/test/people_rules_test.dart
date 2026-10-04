@@ -116,13 +116,17 @@ void main() {
       expect(offenders, isEmpty);
     });
 
-    test('the camera plugin is touched in exactly one file', () {
+    test('the camera plugin is touched only in the two scanner adapters', () {
+      // People code scans through shared/widgets/qr_scanner_view.dart, the
+      // device-link code through core/platform/qr_scanner.dart.
+      const adapters = [
+        'shared/widgets/qr_scanner_view.dart',
+        'core/platform/qr_scanner.dart',
+      ];
       final offenders = [
         for (final file in sources('lib'))
           if (file.readAsStringSync().contains('package:mobile_scanner') &&
-              !file.path
-                  .replaceAll(r'\', '/')
-                  .endsWith('shared/widgets/qr_scanner_view.dart'))
+              !adapters.any((a) => file.path.replaceAll(r'\', '/').endsWith(a)))
             file.path,
       ];
       expect(offenders, isEmpty);

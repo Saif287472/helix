@@ -293,6 +293,66 @@ final class AccountService {
     );
   }
 
+  // ------------------------------------------------------ change password
+
+  /// Sets or changes the account password from this signed-in device
+  /// (`PUT /v1/account/password`).
+  ///
+  /// The new password is turned into an auth key and a wrapped copy of the
+  /// account identity key on this device; the server sees only those. Changing
+  /// an existing password needs the proof the server asks for: the
+  /// [currentPassword] (this device derives its auth key from the server's
+  /// stored parameters for [phoneNumber], else the number this device signed
+  /// in with) or a [verificationToken] from a fresh phone verification.
+  /// Setting a first password needs neither.
+  ///
+  /// Wrong-password and lockout answers arrive as `ApiException`
+  /// (`invalid_credentials`, `password_locked`); the new password never
+  /// leaves this method except as the derived keys.
+  Future<void> changePassword({
+    required String newPassword,
+    String? currentPassword,
+    String? verificationToken,
+    String? phoneNumber,
+  }) async {
+    final self = _ctx.identity;
+    Uint8List? currentAuthKey;
+    if (currentPassword != null) {
+      final number =
+          phoneNumber ?? (await _ctx.db.accountDao.current())?.phoneNumber;
+      if (number == null) {
+        throw const SignInException(
+          SignInFailure.wrongPassword,
+          'the phone number is needed to check the current password',
+        );
+      }
+      final params = await _ctx.api.identity.passwordParams(number);
+      try {
+        currentAuthKey = (await PasswordKeys.derive(
+          password: currentPassword,
+          salt: params.salt,
+          params: params.kdf,
+        )).authKey;
+      } on CryptoV2Exception {
+        throw const SignInException(
+          SignInFailure.untrustedAccountKey,
+          'the server asked for weaker password hashing than Helix allows',
+        );
+      }
+    }
+    await _ctx.api.identity.setPassword(
+      SetPasswordRequest(
+        password: await _passwordSetup(
+          newPassword,
+          self.accountKey,
+          self.accountId,
+        ),
+        currentAuthKey: currentAuthKey,
+        verificationToken: verificationToken,
+      ),
+    );
+  }
+
   // --------------------------------------------------------- linking
 
   /// Starts linking this (new) device to an existing account (CRYPTO_V2.md

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/crash_reporter.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/lifecycle/app_lifecycle_host.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
@@ -10,8 +11,10 @@ import 'package:helix_remote/core/push/push_background.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
+import 'package:helix_remote/features/settings/application/media_policy_sync.dart';
 import 'package:helix_remote/shared/widgets/app_link_listener.dart';
 import 'package:helix_remote/shared/widgets/phone_book_sync_host.dart';
+import 'package:helix_remote/shared/widgets/app_text_scale.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// The app entry point.
@@ -29,6 +32,7 @@ Future<void> main(List<String> args) async {
     // token or a full phone number.
     FlutterError.presentError(details);
     debugPrint('[helix] flutter error: ${details.exception.runtimeType}');
+    CrashReporter.report(details.exception);
   };
 
   await runZonedGuarded(
@@ -42,6 +46,7 @@ Future<void> main(List<String> args) async {
     },
     (error, stack) {
       debugPrint('[helix] uncaught: ${error.runtimeType}');
+      CrashReporter.report(error);
     },
   );
 }
@@ -84,7 +89,12 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_restoreServer());
+      if (!mounted) return;
+      unawaited(_restoreServer());
+      // Both stay alive for the whole run: crash reports (opt-in) and the
+      // auto-download limits that follow the network.
+      ref.read(crashReporterInstallProvider);
+      ref.listenManual(mediaPolicySyncProvider, (_, _) {});
     });
   }
 
@@ -128,7 +138,9 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       builder: (context, child) => AppLifecycleHost(
         child: PhoneBookSyncHost(
           child: AppLockGate(
-            child: AppLinkListener(child: child ?? const SizedBox.shrink()),
+            child: AppLinkListener(
+              child: AppTextScale(child: child ?? const SizedBox.shrink()),
+            ),
           ),
         ),
       ),

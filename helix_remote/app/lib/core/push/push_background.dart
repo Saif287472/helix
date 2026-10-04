@@ -8,6 +8,7 @@ import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
+import 'package:helix_remote/core/security/app_settings.dart';
 
 /// The FirebaseMessaging background handler.
 ///
@@ -48,8 +49,33 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     );
     try {
       final summary = await runtime.engine.syncOnce();
-      await LocalNotifications.init();
-      await LocalNotifications.showMessages(count: summary.notices.length);
+      // Alerts are settings (Settings > Notifications): off still records the
+      // message, it only stays quiet. A muted chat never alerts.
+      final settings = runtime.engine.settings;
+      final direct = await settings.get(AppSettings.notifyMessages);
+      final groups = await settings.get(AppSettings.notifyGroups);
+      final audible = [
+        for (final notice in summary.notices)
+          if (!notice.muted &&
+              (notice.conversationId.startsWith('group:') ? groups : direct))
+            notice,
+      ];
+      if (audible.isNotEmpty) {
+        await LocalNotifications.init();
+        await LocalNotifications.showMessages(
+          count: audible.length,
+          sound: await settings.get(AppSettings.notifySound),
+          vibrate: await settings.get(AppSettings.notifyVibrate),
+          // Only when the person opted in, and only for one message: the text
+          // comes from this phone's own decrypted copy, never from the push.
+          preview:
+              audible.length == 1 &&
+                  await settings.get(AppSettings.notificationsPreview) &&
+                  audible.first.preview.isNotEmpty
+              ? audible.first.preview
+              : null,
+        );
+      }
     } finally {
       await runtime.close();
     }

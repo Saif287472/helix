@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/home/application/home_tab.dart';
 import 'package:helix_remote/features/home/presentation/calls_tab.dart';
 import 'package:helix_remote/features/home/presentation/chats_tab.dart';
-import 'package:helix_remote/features/home/presentation/settings_tab.dart';
 
 /// Home: three swipeable tabs and nothing else.
 ///
@@ -12,7 +11,11 @@ import 'package:helix_remote/features/home/presentation/settings_tab.dart';
 /// swipe away and back. The bar below jumps between them with the same
 /// animation.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, required this.settingsTab});
+
+  /// The Settings tab. It belongs to the settings feature, and a feature may
+  /// not import another, so the router (which may) hands it in.
+  final Widget settingsTab;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -44,10 +47,10 @@ class _HomeScreenState extends State<HomeScreen> {
       body: PageView(
         controller: _pages,
         onPageChanged: (index) => setState(() => _tab = HomeTab.values[index]),
-        children: const [
-          HomeTabKeepAlive(child: ChatsTab()),
-          HomeTabKeepAlive(child: CallsTab()),
-          HomeTabKeepAlive(child: SettingsTab()),
+        children: [
+          const HomeTabKeepAlive(child: ChatsTab()),
+          const HomeTabKeepAlive(child: CallsTab()),
+          HomeTabKeepAlive(child: widget.settingsTab),
         ],
       ),
       bottomNavigationBar: _HomeBar(selected: _tab, onSelected: _select),

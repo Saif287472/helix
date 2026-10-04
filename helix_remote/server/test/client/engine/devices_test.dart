@@ -1,5 +1,7 @@
+import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
+import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
 import '../../support/flows.dart';
@@ -243,6 +245,48 @@ void main() {
       final chat = await second.engine.chats.openDirect(bob.account);
       await second.engine.chats.sendText(chat.id, 'from the laptop');
       await waitForText(bob, second, 'from the laptop');
+    });
+
+    test('changing the password needs the current one, and the new one '
+        'signs in on another device', () async {
+      final alice = await world.register(
+        'alice',
+        aliceNumber,
+        password: 'correct horse battery staple',
+      );
+      // A wrong current password is refused and nothing changes.
+      await expectLater(
+        alice.engine.account.changePassword(
+          newPassword: 'a brand new passphrase here',
+          currentPassword: 'not the password',
+        ),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.code,
+            'code',
+            ErrorCode.invalidCredentials,
+          ),
+        ),
+      );
+      await alice.engine.account.changePassword(
+        newPassword: 'a brand new passphrase here',
+        currentPassword: 'correct horse battery staple',
+      );
+
+      final second = await world.create('alice2');
+      await expectLater(
+        second.engine.account.signInWithPassword(
+          phoneNumber: aliceNumber,
+          password: 'correct horse battery staple',
+        ),
+        throwsA(isA<Object>()),
+      );
+      final third = await world.create('alice3');
+      await third.engine.account.signInWithPassword(
+        phoneNumber: aliceNumber,
+        password: 'a brand new passphrase here',
+      );
+      expect(third.account, alice.account);
     });
 
     test('device management: rename, security events, push token, revoke '

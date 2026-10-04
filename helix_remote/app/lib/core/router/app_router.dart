@@ -1,10 +1,18 @@
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
+import 'package:helix_remote/features/backup/backup_routes.dart';
+import 'package:helix_remote/features/devices/devices_routes.dart';
 import 'package:helix_remote/features/home/presentation/home_screen.dart';
 import 'package:helix_remote/features/people/people_routes.dart';
+import 'package:helix_remote/features/profile/profile_routes.dart';
+import 'package:helix_remote/features/settings/presentation/settings_tab.dart';
+import 'package:helix_remote/features/settings/settings_routes.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
+import 'package:helix_remote/shared/route_paths.dart';
 import 'package:helix_remote/shared/widgets/reset_screen.dart';
 
 /// Every route in the app. A1 ships sign-in, the home tabs shell and the two
@@ -49,8 +57,19 @@ final class PendingLink extends Notifier<HelixDeepLink?> {
 /// build a router must not, or the back stack resets on every rebuild).
 /// The redirect is the only thing that decides between sign-in and home.
 final appRouterProvider = Provider<GoRouter>((ref) {
+  // `redirect` only runs on navigation, so a change of state that should move
+  // the person (signed in, signed out, the restore step set or cleared) has to
+  // ask for it. This is what takes sign-in to the home tabs once the engine
+  // reports a session.
+  final refresh = ValueNotifier<int>(0);
+  void poke() => refresh.value++;
+  ref.listen(authStateProvider, (_, _) => poke());
+  ref.listen(postSignInProvider, (_, _) => poke());
+  ref.onDispose(refresh.dispose);
+
   final router = GoRouter(
     initialLocation: AppRoutes.signIn,
+    refreshListenable: refresh,
     // A [Ref], not a [WidgetRef]: the redirect runs outside the widget tree.
     redirect: (context, state) => _redirectFor(ref, state.matchedLocation),
     routes: [
@@ -60,8 +79,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) => const HomeScreen(),
+        builder: (context, state) =>
+            const HomeScreen(settingsTab: SettingsTab()),
       ),
+      ...settingsRoutes,
+      ...profileRoutes,
+      ...devicesRoutes,
+      ...backupRoutes,
       GoRoute(
         path: AppRoutes.reset,
         builder: (context, state) => const ResetScreen(),
@@ -90,9 +114,20 @@ String? _redirectFor(Ref ref, String location) {
   final state = auth.value;
   if (state == null) return null; // Still opening the database.
   if (state == AppAuthState.ready) {
+    // The step after signing in on a new device comes before the tabs, once.
+    final step = ref.read(postSignInProvider);
+    if (step == PostSignInStep.offerRestore) {
+      return at == RoutePaths.restoreAfterSignIn
+          ? null
+          : RoutePaths.restoreAfterSignIn;
+    }
+    if (at == RoutePaths.restoreAfterSignIn) return AppRoutes.home;
+    if (at == RoutePaths.linkThisDevice) return AppRoutes.home;
     return at == AppRoutes.signIn ? AppRoutes.home : null;
   }
-  // signedOut or revoked.
+  // signedOut or revoked. Linking this device shows a QR code while signed
+  // out, so it is the one other place a signed-out device may be.
+  if (at == RoutePaths.linkThisDevice) return null;
   return at == AppRoutes.signIn ? null : AppRoutes.signIn;
 }
 

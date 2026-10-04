@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:helix_remote/core/engine/backup_policy.dart';
+import 'package:helix_remote/core/platform/network_probe.dart';
+import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_crypto/v2.dart' show SecureCryptoRandom;
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -43,6 +46,7 @@ final class HelixRuntime {
     required PhoneBook phoneBook,
     required EngineConfig config,
     bool headless = false,
+    NetworkProbe network = const DeviceNetworkProbe(),
   }) async {
     final db = await HelixDb.open(dbFile, key: key);
     final api = HelixApi(
@@ -57,6 +61,25 @@ final class HelixRuntime {
       random: SecureCryptoRandom(),
       config: config,
       phoneBook: phoneBook,
+      backupOptions: BackupOptions(
+        // gzip is `dart:io`'s, which the engine may not import: without it a
+        // history backup fits far fewer messages into the server's 16 MiB.
+        gzip: gzip,
+        // Offers from the account's other devices wait for the person: the
+        // restore step and Settings > Backup > Transfer show them, with
+        // accept, decline and pause. (Automatic import would make pause
+        // pointless: the engine would start it again at once.)
+        autoAcceptTransfers: false,
+        remote: PolicyBackupRemote(
+          ApiBackupRemote(api.backup),
+          mayUpload: () async {
+            if (await db.settingsDao.get(AppSettings.backupOverMobile)) {
+              return true;
+            }
+            return await network.current() != NetworkKind.mobile;
+          },
+        ),
+      ),
     );
     await engine.start(realtime: !headless, background: !headless);
     return HelixRuntime._(

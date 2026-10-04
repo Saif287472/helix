@@ -25,6 +25,16 @@ abstract final class AppPaths {
       ..createSync(recursive: true);
   }
 
+  /// The profile picture chosen on this phone (PNG). Not synced: the engine
+  /// does not publish avatars yet, so it is only ever shown on this device.
+  static Future<File> profileAvatarFile() async {
+    final dir = await _base();
+    return File(p.join(dir.path, 'profile_avatar.png'));
+  }
+
+  /// Everything the app keeps on disk, for the storage page.
+  static Future<Directory> appDirectory() => _base();
+
   static Future<Directory> _base() async {
     final documents = await getApplicationDocumentsDirectory();
     return Directory(p.join(documents.path, 'helix_remote'))
