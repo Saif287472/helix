@@ -154,3 +154,6 @@ then review every PNG in `test/goldens/` and commit them. To look at the output
 on another OS without committing, run with `HELIX_GOLDENS_ANY_PLATFORM=1` and
 `--update-goldens`, and delete the PNGs afterwards: text and icon rasterisation
 differs per platform.
+
+Addition (A2a): `HelixMessage.copyWith({content, status, highlighted})`, for
+bubbles whose content or highlight comes from outside the list row.

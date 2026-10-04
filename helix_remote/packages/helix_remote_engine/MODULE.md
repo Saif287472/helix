@@ -604,3 +604,12 @@ online after a leave, nobody rotates the key (`GroupsService.rotateKey` does it
 by hand). A device that has no key from a member can read that member's
 messages only after the member's next send or a repair. Bans made on other
 devices are not known.
+
+## Chat screen reads (Phase A2a)
+
+Additive helpers for the app's chat list and conversation: `chats.watchMessagesFrom`
+(a live window from a sort key), `watchReactionsSince`, `watchAttachments`,
+`findMessage(conversation, messageId)`, `clearChat` (messages go, the chat
+stays) and `presence.watchAllTyping()` (who is typing, in every chat). The db
+package gained the matching `MessagesDao.watchReactionsSince` and
+`clearConversation`.

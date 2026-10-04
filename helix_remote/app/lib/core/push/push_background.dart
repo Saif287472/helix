@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
+import 'package:helix_remote/core/platform/app_blob_store.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
@@ -42,6 +43,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       key: key,
       serverUrl: uri,
       phoneBook: const DevicePhoneBook(),
+      blobs: AppBlobStore(await AppPaths.attachmentCache()),
       config: engineConfigFor(
         deviceName: 'Helix device',
         platform: pushDevicePlatform,

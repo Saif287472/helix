@@ -42,6 +42,20 @@ final class PresenceService {
     }
   }
 
+  /// Emits who is typing, in every chat where anybody is, whenever it
+  /// changes (and once at the start): what a chat list shows.
+  Stream<Map<String, Set<String>>> watchAllTyping() async* {
+    Map<String, Set<String>> snapshot() => {
+      for (final entry in _typing.entries)
+        if (entry.value.isNotEmpty)
+          entry.key: Set.unmodifiable(entry.value.keys),
+    };
+    yield snapshot();
+    await for (final _ in _changes.stream) {
+      yield snapshot();
+    }
+  }
+
   /// Called by the inbound pipeline.
   void onTyping(String conversationId, String account, {required bool typing}) {
     final chat = _typing.putIfAbsent(conversationId, () => {});

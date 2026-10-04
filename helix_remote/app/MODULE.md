@@ -234,3 +234,31 @@ by the router), `HelixDeepLinkKind.groupLink`, and `ProviderScope` at the root
 of `main.dart` (it was missing). Tests: `test/calls/` (includes the engine's real
 `CallsService` over an in-memory network) and `test/groups/`, with fakes in
 `test/support/`.
+
+## Chats and conversation (Phase A2a)
+
+`features/chats` is the Chats tab and `features/conversation` is the
+conversation screen (see each `FEATURE.md`). What they share is in `core/`
+because features may not import each other:
+
+- `core/chat/chat_gateway.dart` - everything a chat screen asks of the engine,
+  in one class. Tests subclass it: reads stay the engine's real watch queries
+  over an in-memory database, writes are simulated (`test/support/chat_harness.dart`).
+- `core/chat/chat_people.dart` - the people-naming adapter (`chatPeopleProvider`).
+- `core/chat/message_semantics.dart`, `chat_naming.dart`, `search_snippet.dart`,
+  `core/format/labels.dart` - pure helpers (preview kinds, notices, time labels).
+- `core/platform/` - `AppBlobStore` (the engine's file store, now passed to
+  `HelixRuntime.open(blobs:)` and the FCM isolate), the attachment picker, voice
+  recorder, audio player and share-sheet adapters.
+- `core/calls/call_launcher.dart` - the seam the calls feature fills.
+- `shared/navigation/chat_locations.dart` - route paths any feature can open;
+  `shared/widgets/mute_choice.dart` - the mute sheet.
+
+`HomeScreen` takes the Chats tab as a constructor argument (`chatsTab`), built
+in `core/router/app_router.dart`, so home does not import the chats feature.
+
+Tests: `chat_list_test.dart`, `conversation_test.dart`, `chat_logic_test.dart`,
+`chat_performance_test.dart` (5,000 chats; first page of 100,000 messages; a
+1,000-message burst - build-count and relative-cost checks, no wall-clock
+asserts). Widget tests that touch the database run real async work inside
+`tester.runAsync` (see `settle`/`chatTest` in the harness).

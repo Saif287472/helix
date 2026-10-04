@@ -566,6 +566,40 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
             ..limit(limit))
           .watch();
 
+  /// Every reaction on the messages of [conversationId] from [fromSortKey]
+  /// onwards (the window a conversation screen shows), live. Reactions on
+  /// older messages are not read: a screen asks again when it scrolls back.
+  Stream<List<ReactionRow>> watchReactionsSince(
+    String conversationId,
+    String fromSortKey,
+  ) {
+    final query =
+        select(messageReactions).join([
+            innerJoin(
+              messages,
+              messages.localRowid.equalsExp(messageReactions.messageRowid),
+            ),
+          ])
+          ..where(
+            messages.conversationId.equals(conversationId) &
+                messages.sortKey.isBiggerOrEqualValue(fromSortKey),
+          )
+          ..orderBy([OrderingTerm.asc(messageReactions.reactedAt)]);
+    return query.watch().map(
+      (rows) => [for (final row in rows) row.readTable(messageReactions)],
+    );
+  }
+
+  /// Removes every message of [conversationId] from this device and resets
+  /// the chat's summary (the chat itself stays). Returns how many went.
+  Future<int> clearConversation(String conversationId) => transaction(() async {
+    final removed = await (delete(
+      messages,
+    )..where((m) => m.conversationId.equals(conversationId))).go();
+    await refreshSummary(conversationId);
+    return removed;
+  });
+
   /// Full-text search over message text and captions, newest first.
   /// [query] is plain user input: every word must match, as a prefix
   /// (`hel wor` finds "hello world"). Deleted messages never match.

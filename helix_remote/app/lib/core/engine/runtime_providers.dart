@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
+import 'package:helix_remote/core/platform/app_blob_store.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
@@ -52,6 +53,7 @@ final class DeviceRuntimeFactory implements RuntimeFactory {
       serverUrl: serverUrl,
       phoneBook: _phoneBook,
       config: await _config(),
+      blobs: AppBlobStore(await AppPaths.attachmentCache()),
     );
   }
 }

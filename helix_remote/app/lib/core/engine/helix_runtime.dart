@@ -36,6 +36,8 @@ final class HelixRuntime {
   /// plaintext, and [KeyUnavailable] when there is no key at all for an
   /// existing database — both leave the caller's next step clear.
   ///
+  /// [blobs] is where attachments live (`AppBlobStore` in the app).
+  ///
   /// With [headless] the engine starts no socket and no timers, which is what
   /// the FCM background isolate and a one-shot CLI want: they call
   /// [Engine.syncOnce] themselves and there is nothing left running to close.
@@ -45,6 +47,7 @@ final class HelixRuntime {
     required Uri serverUrl,
     required PhoneBook phoneBook,
     required EngineConfig config,
+    BlobStore? blobs,
     bool headless = false,
     NetworkProbe network = const DeviceNetworkProbe(),
   }) async {
@@ -80,6 +83,9 @@ final class HelixRuntime {
           },
         ),
       ),
+      // Without a file store the engine cannot send attachments and leaves
+      // incoming ones undownloaded.
+      blobs: blobs,
     );
     await engine.start(realtime: !headless, background: !headless);
     return HelixRuntime._(

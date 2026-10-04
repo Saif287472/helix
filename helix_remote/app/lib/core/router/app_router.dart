@@ -11,6 +11,9 @@ import 'package:helix_remote/features/devices/devices_routes.dart';
 import 'package:helix_remote/features/calls/calls_routes.dart';
 import 'package:helix_remote/features/calls/presentation/calls_tab.dart';
 import 'package:helix_remote/features/groups/groups_routes.dart';
+import 'package:helix_remote/features/chats/chats_routes.dart';
+import 'package:helix_remote/features/chats/presentation/chats_tab.dart';
+import 'package:helix_remote/features/conversation/conversation_routes.dart';
 import 'package:helix_remote/features/home/presentation/home_screen.dart';
 import 'package:helix_remote/features/people/people_routes.dart';
 import 'package:helix_remote/features/profile/profile_routes.dart';
@@ -84,11 +87,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.home,
+        // The home shell lays the tabs out; each tab's content is its
+        // feature's.
         builder: (context, state) => const HomeScreen(
+          chatsTab: ChatsTab(),
           callsTab: CallsTabScreen(),
           settingsTab: SettingsTab(),
         ),
       ),
+      ...chatsRoutes,
+      ...conversationRoutes,
       ...callsRoutes,
       ...groupsRoutes,
       ...settingsRoutes,

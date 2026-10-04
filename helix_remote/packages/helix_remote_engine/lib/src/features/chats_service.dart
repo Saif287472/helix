@@ -60,6 +60,30 @@ final class ChatsService {
     int limit = 50,
   }) => _db.messagesDao.watchLatest(conversationId, limit: limit);
 
+  /// Up to [limit] messages from [fromSortKey] (inclusive) onwards, oldest
+  /// first, live: a window the user jumped to (a search hit, a quoted
+  /// message, the first unread one).
+  Stream<List<MessageRow>> watchMessagesFrom(
+    String conversationId,
+    String fromSortKey, {
+    int limit = 100,
+  }) => _db.messagesDao.watchFrom(conversationId, fromSortKey, limit: limit);
+
+  /// The reactions on the messages from [fromSortKey] onwards, live.
+  Stream<List<ReactionRow>> watchReactionsSince(
+    String conversationId,
+    String fromSortKey,
+  ) => _db.messagesDao.watchReactionsSince(conversationId, fromSortKey);
+
+  /// The attachments of [rowids], live (transfer state, local paths).
+  Stream<List<AttachmentRow>> watchAttachments(Iterable<int> rowids) =>
+      _db.messagesDao.watchAttachmentsFor(rowids);
+
+  /// A message of [conversationId] by its content id, whoever wrote it (a
+  /// reply quote or a read receipt names it that way).
+  Future<MessageRow?> findMessage(String conversationId, String messageId) =>
+      _db.messagesDao.findInConversation(conversationId, messageId);
+
   /// One page back in time, for scrolling up.
   Future<MessagePage> pageOlder(
     String conversationId, {
@@ -514,6 +538,12 @@ final class ChatsService {
 
   Future<void> setDraft(String id, String? draft) =>
       _db.conversationsDao.setDraft(id, draft);
+
+  /// Removes every message of the chat from this device; the chat stays.
+  Future<void> clearChat(String id) async {
+    await _db.messagesDao.clearConversation(id);
+    _onExpiryChanged();
+  }
 
   /// Deletes the chat and its messages from this device.
   Future<void> deleteChat(String id) =>

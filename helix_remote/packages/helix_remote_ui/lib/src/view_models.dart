@@ -682,6 +682,32 @@ class HelixMessage extends HelixValue {
   /// Briefly highlighted after jumping to it from a quote or search.
   final bool highlighted;
 
+  /// This message with some fields replaced: what an app does when a bubble's
+  /// content or highlight comes from somewhere other than the list row (media
+  /// transfer state, a jump).
+  HelixMessage copyWith({
+    HelixMessageContent? content,
+    HelixDeliveryStatus? status,
+    bool? highlighted,
+  }) => HelixMessage(
+    id: id,
+    outgoing: outgoing,
+    content: content ?? this.content,
+    timeLabel: timeLabel,
+    authorId: authorId,
+    authorName: authorName,
+    authorColorIndex: authorColorIndex,
+    sentAtMs: sentAtMs,
+    status: status ?? this.status,
+    reply: reply,
+    forwarded: forwarded,
+    edited: edited,
+    reactions: reactions,
+    expiresLabel: expiresLabel,
+    starred: starred,
+    highlighted: highlighted ?? this.highlighted,
+  );
+
   @override
   List<Object?> get props => [
     id,
