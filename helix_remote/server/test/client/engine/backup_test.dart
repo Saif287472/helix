@@ -281,7 +281,7 @@ void main() {
             );
           }
           final offers = await laptop.engine.backup.offers();
-          expect(offers.single.phase, TransferPhase.done);
+          expect(offers.single.phase, HistoryTransferPhase.done);
 
           // Both keep working after the transfer.
           await laptop.engine.chats.sendText(chat, 'sent from the laptop');
@@ -333,7 +333,7 @@ void main() {
         expect(await HistoryStore(laptop.db).messageCount(), 0);
         expect(
           (await laptop.engine.backup.offers()).single.phase,
-          TransferPhase.failed,
+          HistoryTransferPhase.failed,
         );
 
         // Sending again gives a fresh transfer, which completes.
