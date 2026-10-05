@@ -60,6 +60,15 @@ dependencies:
   device_info_plus: ^13.2.0
   url_launcher: ^6.3.2
   local_auth: ^3.0.1
+  # Media (see docs/dependencies/DEPENDENCY_RISK_REGISTER.md, "Media plugins").
+  # Each is used in exactly one file under lib/core/platform/ behind an
+  # interface; test/media_plugins_rules_test.dart enforces it.
+  image_picker: ^1.2.3
+  record: ^7.1.1
+  audioplayers: ^6.8.1
+  video_player: ^2.14.1
+  fc_native_video_thumbnail: ^3.0.1
+  image: ^4.10.1
 
 dev_dependencies:
   flutter_test:

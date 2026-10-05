@@ -8,6 +8,7 @@ import 'package:helix_remote/core/platform/app_blob_store.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
+import 'package:helix_remote/core/platform/flutter_media_processor.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
@@ -55,6 +56,7 @@ final class DeviceRuntimeFactory implements RuntimeFactory {
       phoneBook: _phoneBook,
       config: await _config(),
       blobs: AppBlobStore(await AppPaths.attachmentCache()),
+      mediaProcessor: FlutterMediaProcessor(),
     );
   }
 }

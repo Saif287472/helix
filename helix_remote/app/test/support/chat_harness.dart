@@ -46,6 +46,14 @@ class TestChatGateway extends ChatGateway {
   final List<String> log = [];
   int _n = 0;
 
+  /// Where attachments "are on the device" (attachment id to path), for the
+  /// audio and video tests.
+  final Map<int, String> localPaths = {};
+
+  @override
+  Future<String?> localPathOf(int attachmentId) async =>
+      localPaths[attachmentId];
+
   Future<void> close() async {
     await engine.close();
     await db.close();
@@ -139,6 +147,12 @@ class TestChatGateway extends ChatGateway {
     );
   }
 
+  /// Makes every media send fail (the engine refused or the disk is full).
+  bool failMedia = false;
+
+  /// The paths of the items of every media send, in order.
+  final List<String?> sentPaths = [];
+
   @override
   Future<void> sendMedia(
     String conversationId,
@@ -146,7 +160,11 @@ class TestChatGateway extends ChatGateway {
     String? caption,
     MessageRef? replyTo,
     bool viewOnce = false,
-  }) async => log.add('sendMedia:$conversationId:${items.length}');
+  }) async {
+    if (failMedia) throw StateError('refused');
+    sentPaths.addAll([for (final i in items) i.path]);
+    log.add('sendMedia:$conversationId:${items.length}');
+  }
 
   @override
   Future<void> react(int rowid, String? emoji) async {

@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/conversation/application/media_content.dart';
 import 'package:helix_remote/features/conversation/application/media_viewer.dart';
+import 'package:helix_remote/features/conversation/presentation/video_player_view.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// Full-screen view of the photos and videos of one message.
 ///
-/// Photos zoom and pan. There is no video player in this build, so a video is
-/// handed to the system (share sheet) to play. A view-once message is opened
+/// Photos zoom and pan. A video opens in the in-app player (play / pause, seek,
+/// speed); where the device has no player it is handed to the system (share
+/// sheet) instead. A view-once message is opened
 /// here exactly once: opening marks it as viewed and tells the sender, and
 /// closing the viewer deletes the file.
 class MediaViewerScreen extends ConsumerStatefulWidget {
@@ -129,7 +131,8 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen> {
         controller: _pages,
         itemCount: visual.length,
         onPageChanged: (i) => setState(() => _index = i),
-        itemBuilder: (context, index) => _MediaPage(part: visual[index]),
+        itemBuilder: (context, index) =>
+            _MediaPage(part: visual[index], active: index == _index),
       ),
     );
   }
@@ -201,9 +204,12 @@ class _Frame extends StatelessWidget {
 }
 
 class _MediaPage extends ConsumerWidget {
-  const _MediaPage({required this.part});
+  const _MediaPage({required this.part, required this.active});
 
   final MediaPart part;
+
+  /// The page on screen; a video plays only on this one.
+  final bool active;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -218,23 +224,12 @@ class _MediaPage extends ConsumerWidget {
     }
     final isVideo = part.row.kind == 'video' || part.row.kind == 'video_note';
     if (isVideo) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.play_circle_outline,
-              size: 72,
-              color: HelixScrimColors.onBackdrop,
-            ),
-            const SizedBox(height: HelixSpace.sm),
-            FilledButton.icon(
-              onPressed: () => ref.read(mediaActionsProvider).share(part),
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Open video'),
-            ),
-          ],
-        ),
+      return VideoPlayerView(
+        key: ValueKey(path),
+        path: path,
+        active: active,
+        thumbnail: mediaThumbnailOf(part),
+        onOpenElsewhere: () => ref.read(mediaActionsProvider).share(part),
       );
     }
     return InteractiveViewer(

@@ -15,9 +15,13 @@ application/
                             reactions, mentions)
   media_content.dart        per-message attachments + transfers -> media /
                             audio / document content (watched per row)
-  audio_playback.dart       one player, speed 1/1.5/2, played marks
+  audio_playback.dart       one player, speed 1/1.5/2, played marks, failure
+  video_session.dart        the full-screen video player's state (autoDispose
+                            per file; stops a playing voice note)
   composer_notifier.dart    reply/edit, drafts, typing (throttled), mentions,
-                            files, voice notes
+                            camera/gallery picks, cleaning and sending files,
+                            voice notes (permission, lock/cancel, interruption,
+                            background, 10 minute limit)
   message_actions.dart      menu rules (edit 15 min, delete-for-everyone 2 days,
                             admins), react toggle, forward, selection
   read_tracker.dart         mark read only when foreground + at bottom;
@@ -31,7 +35,7 @@ presentation/
   timeline_row.dart         one row; widgets are reused while the entry is equal
   composer_bar.dart, emoji_panel.dart, conversation_app_bar.dart,
   in_chat_search_view.dart, forward_screen.dart, message_info_screen.dart,
-  media_viewer_screen.dart, send_files_screen.dart,
+  media_viewer_screen.dart, video_player_view.dart, send_files_screen.dart,
   conversation_settings_screen.dart
 conversation_routes.dart    /chat/:id and its sub-routes
 ```
@@ -48,14 +52,18 @@ conversation_routes.dart    /chat/:id and its sub-routes
   in a grid, documents, links; from the menu, the settings and the contact info
   (`ConversationSeams.openSharedMedia`). Backed by the engine's
   `watchSharedAttachments` / `watchMessagesWithLinks`.
-- **Platform adapters** (`core/platform/`): `AttachmentPicker` (file_picker;
-  no camera plugin in the build), `VoiceRecorder`, `AudioPlayerAdapter`
-  (both `Unavailable*` until a plugin is chosen), `FileActions` (share sheet).
+- **Platform adapters** (`core/platform/`, each plugin in one file): `AttachmentPicker`
+  (`file_picker` for the gallery and files, `image_picker` camera through `CameraCapture`),
+  `MediaSanitizer` (EXIF/location/time removed before the engine copies a photo or video; a photo that
+  cannot be cleaned is not sent), `VoiceRecorder` (`record`), `AudioPlayerAdapter` (`audioplayers`),
+  `VideoPlayers` (`video_player`; share sheet where unsupported), `FileActions` (share sheet),
+  `MediaTemp` (the cache folders for captures, recordings and cleaned copies, and their deletion). The
+  engine's previews come from `FlutterMediaProcessor`.
 - **Group management** (members, roles, links) is the groups feature's; the
   settings screen links to its info page.
 
 ## Not here
 
 Polls, events, stickers and live-location bubbles (polls and events draw as
-text, the others as "needs a newer version"), a video player (videos open
-through the share sheet), starred messages (the engine keeps none), report.
+text, the others as "needs a newer version"), proximity/earpiece playback,
+video notes recorded in app, starred messages (the engine keeps none), report.

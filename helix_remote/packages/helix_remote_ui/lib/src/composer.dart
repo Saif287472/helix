@@ -594,21 +594,24 @@ class HelixComposer extends StatelessWidget {
                             onPressed: hasText ? onSend : null,
                           );
                         }
-                        if (rec == null) return mic;
+                        // One shape for both states: the microphone keeps its
+                        // place in the tree when recording starts, so the
+                        // finger that is holding it is still its gesture.
                         return Stack(
                           clipBehavior: Clip.none,
                           children: [
                             mic,
-                            PositionedDirectional(
-                              bottom: HelixChatMetrics.minTarget + 8,
-                              start: 0,
-                              end: 0,
-                              child: Center(
-                                child: HelixVoiceLockHint(
-                                  progress: rec.lockProgress,
+                            if (rec != null)
+                              PositionedDirectional(
+                                bottom: HelixChatMetrics.minTarget + 8,
+                                start: 0,
+                                end: 0,
+                                child: Center(
+                                  child: HelixVoiceLockHint(
+                                    progress: rec.lockProgress,
+                                  ),
                                 ),
                               ),
-                            ),
                           ],
                         );
                       },

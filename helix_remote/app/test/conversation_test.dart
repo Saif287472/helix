@@ -316,23 +316,6 @@ void main() {
     expect(find.byType(TextField), findsNothing);
   });
 
-  chatTest('the microphone says so when recording is unavailable', (
-    tester,
-    gateway,
-  ) async {
-    final chat = (await tester.runAsync(
-      () => gateway.chatWith('bob', name: 'Bob'),
-    ))!;
-    await open(tester, gateway, chat);
-    final mic = find.bySemanticsLabel('Record voice message');
-    await tester.longPress(mic);
-    await settle(tester);
-    expect(
-      find.text('Voice messages are not available on this device.'),
-      findsOneWidget,
-    );
-  });
-
   chatTest('lays out at 2x text and keeps 48 px targets', (
     tester,
     gateway,

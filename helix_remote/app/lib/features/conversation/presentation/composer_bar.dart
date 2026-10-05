@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,7 +23,8 @@ class ComposerBar extends ConsumerStatefulWidget {
   ConsumerState<ComposerBar> createState() => ComposerBarState();
 }
 
-class ComposerBarState extends ConsumerState<ComposerBar> {
+class ComposerBarState extends ConsumerState<ComposerBar>
+    with WidgetsBindingObserver {
   final TextEditingController _text = TextEditingController();
   final FocusNode _focus = FocusNode();
   bool _emojiOpen = false;
@@ -45,14 +48,32 @@ class ComposerBarState extends ConsumerState<ComposerBar> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _notifier = ref.read(composerProvider(widget.conversationId).notifier);
     _focus.addListener(() {
       if (_focus.hasFocus && _emojiOpen) setState(() => _emojiOpen = false);
     });
   }
 
+  /// A recording cannot continue behind the app: a held one is dropped, a
+  /// locked one waits until the person is back.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        unawaited(_notifier.appBackgrounded());
+      case AppLifecycleState.resumed:
+        unawaited(_notifier.appResumed());
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // The draft is saved even if the person leaves in the middle of typing.
     _notifier.flushDraft(_text.text);
     _text.dispose();
@@ -85,22 +106,56 @@ class ComposerBarState extends ConsumerState<ComposerBar> {
     _changed(next);
   }
 
-  Future<void> _attach({AttachmentSource? preset}) async {
-    var source = preset;
-    if (source == null) {
-      final id = await showHelixAttachmentSheet(
-        context,
-        options: _attachmentOptions(),
-      );
-      source = switch (id) {
-        'document' => AttachmentSource.document,
-        'camera' => AttachmentSource.camera,
-        'gallery' => AttachmentSource.gallery,
-        'audio' => AttachmentSource.audio,
-        _ => null,
-      };
-    }
-    if (source == null) return;
+  /// The attach sheet: the person picks a source, then the files.
+  Future<void> _attach() async {
+    final id = await showHelixAttachmentSheet(
+      context,
+      options: _attachmentOptions(),
+    );
+    if (!mounted) return;
+    final source = switch (id) {
+      'document' => AttachmentSource.document,
+      'camera' => await _chooseCamera(),
+      'gallery' => AttachmentSource.gallery,
+      'audio' => AttachmentSource.audio,
+      _ => null,
+    };
+    if (source != null) await _pickFrom(source);
+  }
+
+  /// The camera shortcut in the field: photo or video, then the camera.
+  Future<void> _openCamera() async {
+    final source = await _chooseCamera();
+    if (source != null) await _pickFrom(source);
+  }
+
+  Future<AttachmentSource?> _chooseCamera() {
+    return showModalBottomSheet<AttachmentSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () =>
+                  Navigator.of(sheet).pop(AttachmentSource.cameraPhoto),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Record a video'),
+              onTap: () =>
+                  Navigator.of(sheet).pop(AttachmentSource.cameraVideo),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFrom(AttachmentSource source) async {
     final files = await _composer.pick(source);
     if (files.isEmpty || !mounted) return;
     ref
@@ -175,7 +230,7 @@ class ComposerBarState extends ConsumerState<ComposerBar> {
             }
           },
           onAttach: () => _attach(),
-          onCamera: () => _attach(preset: AttachmentSource.camera),
+          onCamera: _openCamera,
           onChanged: _changed,
           mentionCandidates: state.mentionCandidates,
           onMentionSelected: (candidate) {

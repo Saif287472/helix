@@ -26,6 +26,28 @@ stable releases checked on 2026-09-30.
 | `fake_async` | `1.3.3` | dev-only (`packages/helix_remote_api`, **added in C3a**) | C3a | Test-only, already resolved through the Flutter SDK's test packages. | client-team | — |
 | `shelf_web_socket`, `web_socket_channel`, `googleapis_auth`, `stream_channel` | `3.0.0` / `3.0.3` / `2.3.3` / `2.1.4` | `helix_remote/server` (S3; `stream_channel` S7) | S3 | Already used and reviewed by v1 `backend/` (realtime relay, FCM token exchange). `stream_channel` was already resolved transitively (shelf); S7 imports it directly to wrap the upgraded socket for the WebSocket frame limit. | server-team | Google auth is confined to `platform/push/` (architecture test). |
 
+## Media plugins (v2 app, 2026-10-05)
+
+Camera and photo capture, voice notes, audio and video playback, previews for photos and videos. The user
+approved adding plugins. Each is declared by `helix_remote/app`, used in **one** file under
+`app/lib/core/platform/` behind an interface, and faked in the tests (`app/test/media_plugins_rules_test.dart`
+asserts the one-file rule). The lockfile gained only these packages and their transitive dependencies
+(`audioplayers_*`, `image_picker_*`, `record_*`, `video_player_*`, `file_selector_*`, `csslib`, `html`); no
+existing entry moved. Versions are the latest stable releases checked on 2026-10-05; all resolve on Flutter 3.44.
+
+| Package | Version | Why | Risk | Mitigation |
+|---|---:|---|---|---|
+| `image_picker` | `1.2.3` | First-party (flutter.dev) camera capture for a photo or a video through the system camera app, so there is no in-app camera screen to maintain and the camera permission is asked only when the person taps Camera. | Camera apps embed GPS and device details in what they save, and the plugin hands the file over unchanged. Android can kill the app while the camera is open (the capture is then lost). | Every photo and video is cleaned (`MediaSanitizer`) before the engine copies it, and a photo that cannot be cleaned is not sent. The capture is moved into an app-owned cache folder and deleted after the send. Lost-capture recovery is not implemented (device-only check). |
+| `record` | `7.1.1` | The maintained cross-platform recorder (Android, iOS, Windows). AAC in MP4, loudness readings for the waveform, pause and resume, and audio-focus handling so a call pauses the recording. | Microphone access: a bug that leaves it open is a privacy failure. Single-maintainer package (llfbandit). Android silences a background app's microphone. | `DeviceVoiceRecorder` owns it: cancel on leaving the conversation, pause when the app goes to the background, delete the file after the send, and `RecordBackend` fake tests of the clock, pause, permission and cleanup paths. Permission is requested on the first hold, never at start-up. |
+| `audioplayers` | `6.8.1` | Voice-note and audio playback with speed and seek on Android and Windows (native Windows support, unlike `just_audio`), with an audio-focus request. | Large native surface; focus behaviour differs by OEM. | `DeviceAudioPlayer` over an `AudioBackend` interface; one player, one note at a time; playback state machine tested with a fake. |
+| `video_player` | `2.14.1` | First-party (flutter.dev, Flutter Favorite) inline and full-screen video playback via ExoPlayer. | No Windows implementation (it reports unsupported there). Hardware decoders differ by device. | `DeviceVideoPlayers.isSupported` is false off Android/iOS and the viewer then offers the share sheet, as before. A failed initialise shows the same fallback. The player is created only for the page on screen and disposed with it. |
+| `fc_native_video_thumbnail` | `3.0.1` | One still frame from a video (Android `MediaMetadataRetriever`, Windows Media Foundation) for the chat thumbnail and BlurHash, without bundling FFmpeg. | Small package (47 likes); Linux would need system libraries (Linux is not a Helix target). | Behind `VideoFrameSource`; a failure or missing platform means the video is sent without a thumbnail, never that the send fails. |
+| `image` | `4.10.1` (already resolved transitively) | Pure-Dart JPEG encoding of the small thumbnail the chat sends (a PNG thumbnail is ten times larger) and of the re-encode fallback for photo formats that cannot be cleaned in place (HEIC). | Pure-Dart encoding is slow for big pictures. | Only 320 px thumbnails and the rare fallback go through it, in a background isolate (`IsolateThumbnailEncoder`). The lockfile entry already existed; it is now also a direct dependency of the app. |
+
+New native build steps on Windows (`audioplayers_windows`, `record_windows`, `fc_native_video_thumbnail`,
+`file_selector_windows`) appear in `app/windows/flutter/generated_plugins.cmake`; they have not been compiled
+(no builds were run), so the next Windows build is the first check.
+
 ## Deferred major upgrades (MED-8)
 
 The audit recorded several client dependencies as materially behind. The minor gaps

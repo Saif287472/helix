@@ -138,6 +138,16 @@ final class PlaybackNotifier extends Notifier<PlaybackState> {
     );
     await _adapter.setSpeed(state.speed);
     _sub = _adapter.states.listen((playback) {
+      if (playback.failed) {
+        // The file broke off (or the output went away): nothing is playing.
+        state = state.copyWith(
+          messageRowid: () => null,
+          playing: false,
+          position: Duration.zero,
+          notice: 'This audio could not be played.',
+        );
+        return;
+      }
       final finished = playback.completed;
       state = state.copyWith(
         playing: playback.playing && !finished,

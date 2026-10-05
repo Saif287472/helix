@@ -8,7 +8,9 @@ import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/attachment_picker.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
+import 'package:helix_remote/core/platform/media_sanitizer.dart';
 import 'package:helix_remote/core/platform/voice_recorder.dart';
+import 'package:helix_remote/features/conversation/application/audio_playback.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart' show MediaInput;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
@@ -166,6 +168,17 @@ final class ComposerNotifier extends Notifier<ComposerState> {
   int _voiceElapsedMs = 0;
   String _lastDraft = '';
 
+  // Voice-note state that is not drawn: whether the person still wants the
+  // recording (their finger is down, or it is locked), whether the microphone
+  // is still opening, what the recorder is doing and whether the app, not the
+  // system, paused it.
+  bool _voiceWanted = false;
+  bool _voiceOpening = false;
+  VoicePhase _voicePhase = VoicePhase.idle;
+  bool _voicePausedByApp = false;
+  StreamSubscription<VoicePhase>? _voicePhaseSub;
+  VoiceRecorder? _recorder;
+
   /// Typing is announced at most this often while the text changes.
   static const typingEvery = Duration(seconds: 4);
 
@@ -179,6 +192,12 @@ final class ComposerNotifier extends Notifier<ComposerState> {
     ref.onDispose(() {
       _draftTimer?.cancel();
       _typingStop?.cancel();
+      unawaited(_voicePhaseSub?.cancel());
+      // Leaving the conversation mid-recording throws the recording away; the
+      // microphone must never stay open behind a screen that is gone.
+      if (_voiceWanted || (_voiceTick?.isActive ?? false)) {
+        unawaited(_recorder?.cancel());
+      }
       _voiceTick?.cancel();
     });
     return const ComposerState();
@@ -425,31 +444,103 @@ final class ComposerNotifier extends Notifier<ComposerState> {
         files = await picker.pickDocuments();
       case AttachmentSource.audio:
         files = await picker.pickAudio();
-      case AttachmentSource.camera:
+      case AttachmentSource.cameraPhoto:
+      case AttachmentSource.cameraVideo:
         if (!picker.cameraAvailable) {
-          _notice('The camera is not available in this build.');
+          _notice('The camera is not available on this device.');
           return const [];
         }
-        final photo = await picker.takePhoto();
-        files = photo == null ? const [] : [photo];
+        try {
+          final shot = source == AttachmentSource.cameraPhoto
+              ? await picker.takePhoto()
+              : await picker.recordVideo();
+          files = shot == null ? const [] : [shot];
+        } on AttachmentPermissionDenied {
+          _notice(
+            'Allow camera access in your phone settings to take photos '
+            'and videos.',
+          );
+          return const [];
+        }
     }
     return [for (final f in files) AttachmentDraft(f)];
   }
 
   /// Sends picked files: photos and videos as one album with [caption],
   /// every document or audio file as a message of its own.
+  ///
+  /// Photos and videos first lose their location, time and camera details
+  /// (`MediaSanitizer`); a photo whose details cannot be removed is not sent.
+  /// The copies made for that, and the camera's own file, are deleted as soon
+  /// as the engine has taken its copy.
   Future<bool> sendFiles(
     List<AttachmentDraft> drafts, {
     String caption = '',
     bool viewOnce = false,
   }) async {
     if (drafts.isEmpty) return false;
-    final files = [for (final d in drafts) d.file];
     final gateway = await _gateway;
     if (!gateway.canSendMedia) {
       _notice('Sending files is not available on this device.');
       return false;
     }
+    final sanitizer = ref.read(mediaSanitizerProvider);
+    final temp = ref.read(mediaTempProvider);
+    // Deleted whatever happens: the cleaned copies (made again on a retry).
+    final copies = <String>[];
+    // Deleted once the send worked: the camera's own files.
+    final originals = <String>[];
+    final files = <PickedFile>[];
+    var refused = 0;
+    try {
+      for (final draft in drafts) {
+        final original = draft.file;
+        final result = await sanitizer.sanitize(original);
+        if (result.outcome == SanitizeOutcome.failed) {
+          refused++;
+          continue;
+        }
+        if (result.file.path != original.path) copies.add(result.file.path);
+        if (original.temporary) originals.add(original.path);
+        files.add(result.file);
+      }
+      if (files.isEmpty) {
+        _notice(
+          'These files could not be prepared, so nothing was sent. Photos '
+          'are only sent once their location details have been removed.',
+        );
+        return false;
+      }
+      final sent = await _sendPrepared(
+        gateway,
+        files,
+        caption: caption,
+        viewOnce: viewOnce,
+      );
+      if (sent) {
+        await temp.deleteAll(originals);
+        if (refused > 0) {
+          _notice(
+            refused == 1
+                ? 'One file was not sent: its location details could not be '
+                      'removed.'
+                : '$refused files were not sent: their location details '
+                      'could not be removed.',
+          );
+        }
+      }
+      return sent;
+    } finally {
+      await temp.deleteAll(copies);
+    }
+  }
+
+  Future<bool> _sendPrepared(
+    ChatGateway gateway,
+    List<PickedFile> files, {
+    required String caption,
+    required bool viewOnce,
+  }) async {
     final reply = state.reply;
     final replyRef = reply == null
         ? null
@@ -509,36 +600,83 @@ final class ComposerNotifier extends Notifier<ComposerState> {
   // ------------------------------------------------------------ voice notes
 
   /// The finger went down on the microphone.
+  ///
+  /// The first time, the system asks for the microphone while the finger is
+  /// still down, which usually ends the gesture; `_voiceWanted` tells us when
+  /// the recording that then opens is no longer wanted, and it is dropped.
   Future<void> startVoice() async {
     final recorder = ref.read(voiceRecorderProvider);
+    _recorder = recorder;
     if (!recorder.isAvailable) {
       _notice('Voice messages are not available on this device.');
       return;
     }
+    if (_voiceOpening || state.recording != null) return;
+    _voiceOpening = true;
+    _voiceWanted = true;
+    // A voice note and a playing one would record each other.
+    unawaited(ref.read(playbackProvider.notifier).stop());
     try {
       await recorder.start();
+    } on VoiceRecorderPermissionDenied {
+      _voiceOpening = false;
+      _voiceWanted = false;
+      _notice(
+        'Allow microphone access in your phone settings to record voice '
+        'messages.',
+      );
+      return;
     } on VoiceRecorderUnavailable {
+      _voiceOpening = false;
+      _voiceWanted = false;
       _notice('Voice messages are not available on this device.');
       return;
     }
+    _voiceOpening = false;
+    if (!_voiceWanted) {
+      await recorder.cancel();
+      _notice('Hold the microphone to record, then let go to send.');
+      return;
+    }
     _voiceElapsedMs = 0;
+    _voicePhase = VoicePhase.recording;
+    _voicePausedByApp = false;
     state = state.copyWith(
       recording: () => const HelixVoiceRecordState(elapsedLabel: '0:00'),
     );
+    await _voicePhaseSub?.cancel();
+    _voicePhaseSub = recorder.phases.listen((phase) {
+      // A call or another app took the microphone, or gave it back: the clock
+      // stops and starts with it.
+      _voicePhase = phase;
+    });
     _voiceTick?.cancel();
-    _voiceTick = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      _voiceElapsedMs += 100;
-      final current = state.recording;
-      if (current == null) return;
+    _voiceTick = Timer.periodic(_voiceStep, (_) => _voiceTicked());
+  }
+
+  static const _voiceStep = Duration(milliseconds: 100);
+
+  void _voiceTicked() {
+    if (_voicePhase != VoicePhase.recording) return;
+    final before = formatDurationMs(_voiceElapsedMs);
+    _voiceElapsedMs += _voiceStep.inMilliseconds;
+    final current = state.recording;
+    if (current == null) return;
+    final label = formatDurationMs(_voiceElapsedMs);
+    if (label != before) {
       state = state.copyWith(
         recording: () => HelixVoiceRecordState(
-          elapsedLabel: formatDurationMs(_voiceElapsedMs),
+          elapsedLabel: label,
           cancelProgress: current.cancelProgress,
           lockProgress: current.lockProgress,
           locked: current.locked,
         ),
       );
-    });
+    }
+    if (_voiceElapsedMs >= VoiceRecorder.maxDuration.inMilliseconds) {
+      _notice('That is the longest a voice message can be, so it was sent.');
+      unawaited(endVoice(send: true));
+    }
   }
 
   /// The finger moved: how far towards cancel and towards lock.
@@ -567,10 +705,38 @@ final class ComposerNotifier extends Notifier<ComposerState> {
     );
   }
 
+  /// The app left the foreground. Android takes the microphone from a
+  /// background app, so a recording the person is holding is dropped (their
+  /// finger is gone too) and a locked one is paused until they are back.
+  Future<void> appBackgrounded() async {
+    final current = state.recording;
+    final recorder = _recorder;
+    if (current == null || recorder == null) return;
+    if (current.locked) {
+      _voicePausedByApp = true;
+      await recorder.pause();
+    } else {
+      await endVoice(send: false);
+      _notice('The recording was stopped because you left the app.');
+    }
+  }
+
+  /// The app is back: a recording paused by [appBackgrounded] carries on.
+  Future<void> appResumed() async {
+    if (!_voicePausedByApp) return;
+    _voicePausedByApp = false;
+    if (state.recording == null) return;
+    await _recorder?.resume();
+  }
+
   /// Stop recording and send it ([send]) or throw it away.
   Future<void> endVoice({required bool send}) async {
+    _voiceWanted = false;
     if (state.recording == null) return;
     _voiceTick?.cancel();
+    unawaited(_voicePhaseSub?.cancel());
+    _voicePhaseSub = null;
+    _voicePausedByApp = false;
     final recorder = ref.read(voiceRecorderProvider);
     state = state.copyWith(recording: () => null);
     if (!send) {
@@ -578,37 +744,47 @@ final class ComposerNotifier extends Notifier<ComposerState> {
       return;
     }
     final result = await recorder.stop();
-    if (result == null || result.durationMs < 700) {
-      _notice('Hold the microphone to record, then let go to send.');
+    if (result == null) {
+      _notice('Nothing was recorded. Hold the microphone and speak.');
       return;
     }
-    final gateway = await _gateway;
-    final reply = state.reply;
+    final temp = ref.read(mediaTempProvider);
     try {
-      await gateway.sendMedia(
-        conversationId,
-        [
-          MediaInput.file(
-            path: result.path,
-            kind: MediaItemKind.voiceNote,
-            mime: result.mime,
-            durationMs: result.durationMs,
-            waveform: result.waveform,
-          ),
-        ],
-        replyTo: reply == null
-            ? null
-            : MessageRef(id: reply.messageId, author: reply.author),
-      );
-      state = state.copyWith(reply: () => null);
-    } on Object {
-      _notice('The voice message could not be sent.');
+      if (result.durationMs < 700) {
+        _notice('Hold the microphone to record, then let go to send.');
+        return;
+      }
+      final gateway = await _gateway;
+      final reply = state.reply;
+      try {
+        await gateway.sendMedia(
+          conversationId,
+          [
+            MediaInput.file(
+              path: result.path,
+              kind: MediaItemKind.voiceNote,
+              mime: result.mime,
+              durationMs: result.durationMs,
+              waveform: result.waveform.isEmpty ? null : result.waveform,
+            ),
+          ],
+          replyTo: reply == null
+              ? null
+              : MessageRef(id: reply.messageId, author: reply.author),
+        );
+        state = state.copyWith(reply: () => null);
+      } on Object {
+        _notice('The voice message could not be sent.');
+      }
+    } finally {
+      // The engine has its own copy; the recording must not outlive the send.
+      await temp.delete(result.path);
     }
   }
 }
 
 /// Where an attachment comes from.
-enum AttachmentSource { gallery, document, audio, camera }
+enum AttachmentSource { gallery, document, audio, cameraPhoto, cameraVideo }
 
 final composerProvider = NotifierProvider.autoDispose
     .family<ComposerNotifier, ComposerState, String>(ComposerNotifier.new);
@@ -632,10 +808,26 @@ final class PendingAttachments extends Notifier<List<AttachmentDraft>> {
 
   void set(List<AttachmentDraft> files) => state = files;
 
-  void remove(AttachmentDraft file) => state = [
-    for (final f in state)
-      if (f != file) f,
-  ];
+  void remove(AttachmentDraft file) {
+    state = [
+      for (final f in state)
+        if (f != file) f,
+    ];
+    unawaited(ref.read(mediaTempProvider).delete(file.path));
+  }
+
+  /// The person left the preview without sending: the camera's files and the
+  /// copies the app made go with it. Their own files are never touched.
+  Future<void> discard() async {
+    final files = state;
+    // Not in this call: it may run while the preview screen is being taken
+    // down, when a provider must not notify the widgets.
+    scheduleMicrotask(() => state = const []);
+    await ref.read(mediaTempProvider).deleteAll([
+      for (final f in files)
+        if (f.file.temporary) f.path,
+    ]);
+  }
 }
 
 /// Not auto-disposed: the files are set on one screen and read on the next,

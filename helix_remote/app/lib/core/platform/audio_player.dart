@@ -5,6 +5,7 @@ final class AudioPlayback {
     this.duration = Duration.zero,
     this.playing = false,
     this.completed = false,
+    this.failed = false,
   });
 
   final Duration position;
@@ -13,6 +14,10 @@ final class AudioPlayback {
 
   /// Played to the end.
   final bool completed;
+
+  /// Playback broke off (the file could not be decoded, or the output went
+  /// away). Nothing is playing any more.
+  final bool failed;
 }
 
 /// Thrown by [AudioPlayerAdapter.load] when this device cannot play audio

@@ -308,16 +308,50 @@ is the final wiring; `test/journeys/` walks it.
   failure, shared media, group create/info/add member, settings to devices and
   back, `HLX-GRP` link preview and join, and the whole `HelixRemoteApp`).
 
-### Left unwired on purpose (needs a decision)
+### Media plugins (filled after the integration)
 
-These need a plugin that is not in the build; no dependency was added.
+The three seams that had no plugin are now filled, each behind its interface in
+`core/platform/` (the plugin is imported by exactly one file; `test/media_plugins_rules_test.dart`):
 
-- **Voice notes**: recording (`VoiceRecorder`) and playback (`AudioPlayerAdapter`)
-  are `Unavailable*`; the microphone button says so.
-- **Camera capture** for photos and video messages (`AttachmentPicker` has no
-  camera source) and for a profile picture.
-- **Video playback**: a video opens through the share sheet.
-- Also open: the group member picker is its own list (it reads the same people
+- **Camera and photo capture**: `AttachmentPicker.takePhoto` / `recordVideo` over `CameraCapture`
+  (`device_camera.dart`, `image_picker`, the system camera app). Camera permission is asked by the
+  plugin when Camera is tapped; a refusal is `AttachmentPermissionDenied` and one sentence. The attach
+  sheet's Camera and the field's camera button ask photo or video first. Captures live in
+  `<cache>/helix_capture` (`MediaTemp`), are swept after 6 h, and deleted after the send or when the
+  preview is left.
+- **Metadata stripping**: `MediaSanitizer` (`media_sanitizer.dart`) runs in `ComposerNotifier.sendFiles`
+  *before* the engine copies a file (the engine records the copy's size first, so the engine's processor
+  cannot rewrite it). JPEG/PNG/WebP are cleaned losslessly in an isolate (`image_metadata.dart`: EXIF,
+  XMP, IPTC, comments, trailers; a JPEG keeps a one-tag orientation block); MP4/MOV/3GP get location
+  and tag boxes turned into `free` and their time stamps zeroed (`mp4_metadata.dart`); a format that
+  cannot be cleaned in place (HEIC) is decoded and re-encoded as JPEG; a photo that cannot be cleaned is
+  **not sent**. WebM/MKV videos and GIFs pass unchanged (documented limits). Originals are never changed.
+- **Previews**: `FlutterMediaProcessor` (`flutter_media_processor.dart`) is the engine's `MediaProcessor`
+  (passed through `HelixRuntime.open(mediaProcessor:)`): dimensions, a 320 px JPEG thumbnail
+  (`dart:ui` decode scaled while decoding, JPEG encode and BlurHash in a background isolate), video length
+  and size from the MP4 boxes and a frame from `fc_native_video_thumbnail`. It never throws.
+- **Voice notes**: `VoiceRecorder` over `DeviceVoiceRecorder` (`record`): AAC-LC mono in `.m4a`
+  (`audio/mp4`), loudness readings every 100 ms turned into a waveform of at most 72 bytes, a clock that
+  does not count pauses, 10 minute limit (the composer stops and sends), `VoicePhase` stream so a call
+  that pauses the microphone stops the clock. The composer handles permission denied, a finger lifted
+  while the permission prompt or the microphone was opening, background (held recording dropped, locked
+  one paused and resumed), and leaving the conversation. The file is deleted after the send.
+- **Playback**: `AudioPlayerAdapter` over `DeviceAudioPlayer` (`audioplayers`, audio focus requested);
+  `PlaybackNotifier` plays one note at a time (starting a recording or a video stops it), speed 1/1.5/2,
+  seek, played marks, failure sentence. Video: `VideoPlayers` over `DeviceVideoPlayers` (`video_player`);
+  `VideoSession` / `VideoPlayerView` is the full-screen player (play/pause, seek bar, time, speed, replay,
+  pauses in the background). Where there is no player (Windows) or the decoder refuses the file the
+  viewer offers the share sheet as before.
+- A fix found on the way: `HelixComposer` re-parented the microphone button when recording started, which
+  dropped the finger's gesture (release never sent); it now keeps one tree shape (`helix_remote_ui`).
+
+Only a real phone can show: the system camera round trip and its permission prompt (and a capture lost
+when Android kills the app), the microphone prompt on first hold, recording quality and the waveform,
+call and background interruptions, audio focus and ducking, ExoPlayer decoding of real videos, video
+frame extraction and the EXIF orientation of thumbnails, and the Windows native build of the new plugins.
+Proximity/earpiece playback is not done.
+
+- Still open: the group member picker is its own list (it reads the same people
   table as the search, so it was not swapped for the panel); a minimised
   return-to-call bar; group calls (deferred, plan section 13).
 

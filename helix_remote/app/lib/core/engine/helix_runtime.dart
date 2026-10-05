@@ -48,7 +48,9 @@ final class HelixRuntime {
   /// A runtime for Helix Global is certificate-pinned ([TlsPinPolicy]); the
   /// REST client and the realtime socket both go through the pinned client.
   ///
-  /// [blobs] is where attachments live (`AppBlobStore` in the app).
+  /// [blobs] is where attachments live (`AppBlobStore` in the app);
+  /// [mediaProcessor] makes their thumbnails, BlurHash, sizes and lengths
+  /// (`FlutterMediaProcessor`; the engine's header-only default when null).
   ///
   /// With [headless] the engine starts no socket and no timers, which is what
   /// the FCM background isolate and a one-shot CLI want: they call
@@ -60,6 +62,7 @@ final class HelixRuntime {
     required PhoneBook phoneBook,
     required EngineConfig config,
     BlobStore? blobs,
+    MediaProcessor? mediaProcessor,
     bool headless = false,
     NetworkProbe network = const DeviceNetworkProbe(),
     TlsPinPolicy? pinning,
@@ -80,6 +83,7 @@ final class HelixRuntime {
         phoneBook: phoneBook,
         config: config,
         blobs: blobs,
+        mediaProcessor: mediaProcessor,
         headless: headless,
         network: network,
         pinning: pinning ?? TlsPinPolicy.forThisBuild(),
@@ -98,6 +102,7 @@ final class HelixRuntime {
     required PhoneBook phoneBook,
     required EngineConfig config,
     required BlobStore? blobs,
+    required MediaProcessor? mediaProcessor,
     required bool headless,
     required NetworkProbe network,
     required TlsPinPolicy pinning,
@@ -142,6 +147,7 @@ final class HelixRuntime {
       // Without a file store the engine cannot send attachments and leaves
       // incoming ones undownloaded.
       blobs: blobs,
+      mediaProcessor: mediaProcessor,
     );
     await engine.start(realtime: !headless, background: !headless);
     return HelixRuntime._(

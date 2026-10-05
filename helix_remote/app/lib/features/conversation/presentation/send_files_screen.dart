@@ -22,10 +22,24 @@ class _SendFilesScreenState extends ConsumerState<SendFilesScreen> {
   final TextEditingController _caption = TextEditingController();
   bool _viewOnce = false;
   bool _sending = false;
+  bool _sent = false;
+
+  // Kept in a field: `ref` cannot be used from `dispose`.
+  late final PendingAttachments _pending;
+
+  @override
+  void initState() {
+    super.initState();
+    _pending = ref.read(
+      pendingAttachmentsProvider(widget.conversationId).notifier,
+    );
+  }
 
   @override
   void dispose() {
     _caption.dispose();
+    // Backing out without sending: the camera's files are not kept.
+    if (!_sent) _pending.discard();
     super.dispose();
   }
 
@@ -37,9 +51,8 @@ class _SendFilesScreenState extends ConsumerState<SendFilesScreen> {
         .sendFiles(files, caption: _caption.text, viewOnce: _viewOnce);
     if (!mounted) return;
     if (sent) {
-      ref
-          .read(pendingAttachmentsProvider(widget.conversationId).notifier)
-          .set(const []);
+      _sent = true;
+      _pending.set(const []);
       Navigator.of(context).pop();
     } else {
       setState(() => _sending = false);
@@ -103,13 +116,7 @@ class _SendFilesScreenState extends ConsumerState<SendFilesScreen> {
                         trailing: IconButton(
                           icon: const Icon(Icons.close),
                           tooltip: 'Remove ${file.name}',
-                          onPressed: () => ref
-                              .read(
-                                pendingAttachmentsProvider(
-                                  widget.conversationId,
-                                ).notifier,
-                              )
-                              .remove(file),
+                          onPressed: () => _pending.remove(file),
                         ),
                       );
                     },
