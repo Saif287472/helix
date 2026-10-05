@@ -32,3 +32,25 @@ the password page and on the take-over confirmation.
 
 Renaming and removal use the server list; a revoked device finds out through
 the engine's revocation path (wipe), not this feature.
+
+## Is this your account? (new device)
+
+After the other device approves, the engine hands over a `LinkProposal` before
+it keeps anything. `LinkThisDeviceController` turns it into the
+`LinkThisStep.confirming` step: masked phone, `~name` and the key code, with
+"Yes, this is my account" and "No, cancel". Yes registers the device; No, the
+close button, leaving the page and 5 minutes without an answer
+(`linkConfirmTimeoutProvider`) discard the approval (the engine's
+`SignInException(linkDeclined)`), take back the restore step and offer a new
+code. An approval that does not verify (`untrusted`), an expired code and an
+offline sign-in each have a sentence. `LinkRequest.accountKeyCode` is what the
+approving device shows so the two codes can be compared.
+
+## Sending history after a link
+
+History transfers are never automatic. When the approval is done the approve
+page offers "Send history to this device": the controller remembers the account's
+device ids before approving and sends only to the device that has appeared since
+(`sendHistoryToNewDevice`); if it has not finished joining the sentence says to
+wait and the button can be pressed again. The new device accepts or declines
+under the restore step or Settings > Backup.

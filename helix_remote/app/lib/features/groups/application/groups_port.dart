@@ -75,8 +75,20 @@ abstract interface class GroupsPort {
   /// Reads the group from the server again.
   Future<void> refresh(String groupId);
 
+  /// Members of [groupId] the server's roster has but this device has not
+  /// confirmed, live (empty when there are none).
+  Stream<List<PendingMemberInfo>> watchPendingMembers(String groupId);
+
+  /// The person accepts [account]: they get this device's keys from now on.
+  /// False when they were no longer waiting.
+  Future<bool> confirmMember(String groupId, String account);
+
   /// Things that happen to [groupId] that a screen reacts to.
   Stream<GroupSignal> signals(String groupId);
+
+  /// A member waiting for confirmation appeared in any group, for the
+  /// in-app banner.
+  Stream<GroupMemberUnconfirmedArrived> unconfirmedMembers();
 }
 
 /// [GroupsPort] over the engine.
@@ -403,16 +415,34 @@ final class EngineGroupsPort implements GroupsPort {
   Future<void> refresh(String groupId) => _groups.refresh(groupId);
 
   @override
+  Stream<List<PendingMemberInfo>> watchPendingMembers(String groupId) =>
+      _groups.watchPendingMembers(groupId).map((pending) {
+        final members = [
+          for (final entry in pending.entries)
+            PendingMemberInfo(
+              account: entry.key,
+              reason: PendingReason.parse(entry.value),
+            ),
+        ]..sort((a, b) => a.account.compareTo(b.account));
+        return members;
+      });
+
+  @override
+  Future<bool> confirmMember(String groupId, String account) =>
+      _groups.confirmMember(groupId, account);
+
+  @override
   Stream<GroupSignal> signals(String groupId) => _engine.events
       .where(
         (event) => switch (event) {
           engine.GroupMembershipLost(groupId: final id) => id == groupId,
           engine.GroupJoinRequested(groupId: final id) => id == groupId,
+          engine.GroupMemberUnconfirmed(groupId: final id) => id == groupId,
           _ => false,
         },
       )
-      .map<GroupSignal>(
-        (event) => switch (event) {
+      .asyncMap<GroupSignal>(
+        (event) async => switch (event) {
           engine.GroupMembershipLost() => GroupMembershipEnded(
             event.groupId,
             event.reason,
@@ -421,9 +451,33 @@ final class EngineGroupsPort implements GroupsPort {
             event.groupId,
             event.account,
           ),
+          engine.GroupMemberUnconfirmed() => await _unconfirmed(event),
           _ => throw StateError('filtered'),
         },
       );
+
+  @override
+  Stream<GroupMemberUnconfirmedArrived> unconfirmedMembers() => _engine.events
+      .where((event) => event is engine.GroupMemberUnconfirmed)
+      .cast<engine.GroupMemberUnconfirmed>()
+      .asyncMap(_unconfirmed);
+
+  Future<GroupMemberUnconfirmedArrived> _unconfirmed(
+    engine.GroupMemberUnconfirmed event,
+  ) async {
+    String title = '';
+    try {
+      title = (await _groups.details(event.groupId))?.title ?? '';
+    } on Object {
+      // The name is a nicety; the banner works without it.
+    }
+    return GroupMemberUnconfirmedArrived(
+      event.groupId,
+      event.account,
+      PendingReason.parse(event.reason),
+      groupTitle: title,
+    );
+  }
 }
 
 /// The live groups service, with the picture store.

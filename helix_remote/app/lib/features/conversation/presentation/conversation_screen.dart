@@ -18,8 +18,12 @@ import 'package:helix_remote/features/conversation/presentation/in_chat_search_v
 import 'package:helix_remote/features/conversation/presentation/timeline_row.dart';
 import 'package:helix_remote/features/conversation/presentation/timeline_view.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
+import 'package:helix_remote/shared/widgets/pending_members_prompt.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+/// A group conversation's id is `group:<group id>`.
+const _groupPrefix = 'group:';
 
 /// One conversation: the app bar, the messages and the composer.
 ///
@@ -337,6 +341,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
         appBar: appBar,
         body: Column(
           children: [
+            // A group member the server's roster added without an admin's
+            // announcement waits for this person's yes (not while selecting
+            // or searching, which have the screen's attention).
+            if (_id.startsWith(_groupPrefix) && !_searching && !selecting)
+              PendingMembersPrompt(groupId: _id.substring(_groupPrefix.length)),
             Expanded(
               child: _searching
                   ? InChatSearchView(

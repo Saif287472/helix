@@ -119,6 +119,20 @@ final class GroupActions {
         return '${_names.displayOf(account)} was removed.';
       });
 
+  /// The person accepts a member the server's roster added without an
+  /// announcement: from now on they get this device's keys. A member who is no
+  /// longer waiting (confirmed on another device, or gone) is said, not an
+  /// error.
+  Future<GroupResult> confirmMember(String groupId, String account) =>
+      _run((port) async {
+        final confirmed = await port.confirmMember(groupId, account);
+        final name = _names.displayOf(account);
+        return confirmed
+            ? '$name was confirmed. They get your messages in this group '
+                  'from now on.'
+            : '$name is no longer waiting for confirmation.';
+      });
+
   Future<GroupResult> ban(String groupId, String account) => _run((port) async {
     await port.ban(groupId, account);
     return '${_names.displayOf(account)} was removed and banned.';

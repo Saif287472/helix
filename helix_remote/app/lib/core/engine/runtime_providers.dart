@@ -57,6 +57,7 @@ final class DeviceRuntimeFactory implements RuntimeFactory {
       config: await _config(),
       blobs: AppBlobStore(await AppPaths.attachmentCache()),
       mediaProcessor: FlutterMediaProcessor(),
+      keys: _keys,
     );
   }
 }

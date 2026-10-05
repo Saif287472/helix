@@ -5,6 +5,7 @@ import 'package:helix_remote/features/settings/presentation/advanced_page.dart';
 import 'package:helix_remote/features/settings/presentation/blocked_page.dart';
 import 'package:helix_remote/features/settings/presentation/change_password_page.dart';
 import 'package:helix_remote/features/settings/presentation/chats_page.dart';
+import 'package:helix_remote/features/settings/presentation/delete_account_page.dart';
 import 'package:helix_remote/features/settings/presentation/legal_page.dart';
 import 'package:helix_remote/features/settings/presentation/notifications_page.dart';
 import 'package:helix_remote/features/settings/presentation/privacy_page.dart';
@@ -21,6 +22,10 @@ final List<RouteBase> settingsRoutes = [
   GoRoute(
     path: RoutePaths.changePassword,
     builder: (context, state) => const ChangePasswordPage(),
+  ),
+  GoRoute(
+    path: RoutePaths.deleteAccount,
+    builder: (context, state) => const DeleteAccountPage(),
   ),
   GoRoute(
     path: RoutePaths.privacy,

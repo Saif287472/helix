@@ -24,6 +24,13 @@ class FakeGroupsPort implements GroupsPort {
       StreamController<GroupSignal>.broadcast();
   final StreamController<List<GroupCandidate>> _people =
       StreamController<List<GroupCandidate>>.broadcast();
+  final StreamController<List<PendingMemberInfo>> _pendingChanges =
+      StreamController<List<PendingMemberInfo>>.broadcast();
+  final StreamController<GroupMemberUnconfirmedArrived> _unconfirmed =
+      StreamController<GroupMemberUnconfirmedArrived>.broadcast();
+
+  /// Members waiting for the person's confirmation (change with [setPending]).
+  List<PendingMemberInfo> pending = const [];
 
   List<GroupCandidate> candidates = const [];
   List<JoinRequestInfo> requests = const [];
@@ -62,6 +69,16 @@ class FakeGroupsPort implements GroupsPort {
   }
 
   void signal(GroupSignal signal) => _signals.add(signal);
+
+  void setPending(List<PendingMemberInfo> next) {
+    pending = next;
+    _pendingChanges.add(next);
+  }
+
+  /// The engine's `GroupMemberUnconfirmed` event, as the app-wide banner gets
+  /// it.
+  void announceUnconfirmed(GroupMemberUnconfirmedArrived event) =>
+      _unconfirmed.add(event);
 
   void _maybeFail() {
     final failure = failWith;
@@ -272,7 +289,31 @@ class FakeGroupsPort implements GroupsPort {
   Future<void> refresh(String groupId) async {}
 
   @override
+  Stream<List<PendingMemberInfo>> watchPendingMembers(String groupId) async* {
+    yield pending;
+    yield* _pendingChanges.stream;
+  }
+
+  @override
+  Future<bool> confirmMember(String groupId, String account) async {
+    calls.add('confirm $account');
+    _maybeFail();
+    final waiting = pending.any((p) => p.account == account);
+    if (waiting) {
+      setPending([
+        for (final p in pending)
+          if (p.account != account) p,
+      ]);
+    }
+    return waiting;
+  }
+
+  @override
   Stream<GroupSignal> signals(String groupId) => _signals.stream;
+
+  @override
+  Stream<GroupMemberUnconfirmedArrived> unconfirmedMembers() =>
+      _unconfirmed.stream;
 }
 
 /// A real 1x1 PNG, so a picked picture decodes.

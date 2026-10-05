@@ -391,3 +391,55 @@ Proximity/earpiece playback is not done.
   previews on; otherwise "Helix" and `private`.
 - Link handling: the router ignores the platform's start URL; a link's code
   stays in `pendingLinkProvider`, never in a route location.
+
+## Engine security follow-ups (v2-appfix2)
+
+The engine's security-review pass (CRYPTO_V2.md section 14, engine
+`MODULE.md`) changed its API; this is how the app follows. Each item has tests.
+
+- **Linking asks "Is this your account?"** (`features/devices`). The engine's
+  `NewDeviceLink.complete` now needs a `confirm`. The new device shows the
+  masked number, the `~Helix name` and a key code from the approval and keeps
+  nothing until Yes; No, closing the page and a 5-minute silence
+  (`linkConfirmTimeoutProvider`) all discard it. The approving device shows the
+  same key code on its review step (`shared/widgets/key_code_display.dart`;
+  read from the public half of the account key, `DevicesGateway.inspectLink`)
+  so the two can be compared.
+- **Unconfirmed group members** (`features/groups`, `shared/widgets`). A member
+  the server's roster added with no explaining admin action (or who joined by a
+  link) is held back by the engine. The chat shows the `member_unconfirmed`
+  notice (`core/groups/pending_member_copy.dart`), group info and the group
+  conversation show `PendingMembersPrompt` ("Confirm NAME?", Confirm for
+  everyone, Remove only where the group's rules allow), and
+  `UnconfirmedMemberHost` (mounted in `main.dart`) shows an app-wide banner on
+  the `GroupMemberUnconfirmed` event.
+- **Hard wipe** (`core/engine/helix_runtime.dart`). The runtime builds
+  `Engine(hardWipe:)`: after the engine has deleted every row, the database is
+  closed, `destroyDatabaseFiles` overwrites and deletes the file, the keystore
+  key goes, and so do the avatar, downloaded attachments and the picker's
+  copies (`HelixRuntime.hardWipe`, `appWipe`). It runs on sign-out, on deleting
+  the account and on a revocation that wipes; every step is tried even if one
+  fails. `SignOutAction` also calls `runtime.ensureWiped()` (an engine with
+  nothing to sign out returns early) and `wipedRuntimeResetProvider` opens a new
+  runtime after a revocation wipe, so the next sign-in gets a new file and key.
+  The push isolate gets the hook too (it is the default of `HelixRuntime.open`).
+- **History transfers are opt-in** and stay so: `backupOptionsFor` passes both
+  `autoTransferToNewDevices` and `autoAcceptTransfers` as false. After
+  approving a link the old device offers "Send history to this device"
+  (`DevicesGateway.sendHistoryToNewDevice`: only the device that appeared since
+  the approval); the new device shows Accept / Decline / Pause in the restore
+  step and Settings > Backup > Transfer.
+- **Recovery secrets are the engine's** (`BackupGateway.generateRecoverySecret`):
+  shown once with Copy (cleared from the clipboard after a minute,
+  `core/platform/secret_clipboard.dart`) and Share, an "I saved it" box, never
+  stored, logged or chosen by the person; gone from memory once the backup is
+  made.
+- **Account deletion proves ownership** (`features/settings`,
+  `delete_account_providers.dart`, `delete_account_page.dart`): password for an
+  account that has one (the number is asked once on a linked device), a code
+  texted to the number when the server answers `invalid_credentials` listing
+  `verification_token`, otherwise this phone signs a challenge (no prompt).
+  The DELETE confirmation stays. The engine then wipes the device.
+- **Privacy**: turning "find me by phone number" back on sends the account's
+  number (the engine's own, or typed once with its country code); a server
+  refusal is said in plain words.

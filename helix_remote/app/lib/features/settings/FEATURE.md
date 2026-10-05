@@ -48,8 +48,29 @@ another); every row opens a page registered in `settings_routes.dart`.
 - App lock: the control "Lock again" is a grace period (see `app/MODULE.md`);
   the footer says the app also asks on every fresh open.
 - Images auto-download on Wi-Fi only by default (`AppSettings.mediaImages`).
-- Account deletion: the UI still sends the bare `DeleteAccountRequest`. The
-  server now wants a fresh proof (`current_auth_key`, `verification_token`,
-  `device_proof`); the DTO, api client and engine method are not in this
-  branch, so the re-auth step in `account_page.dart` is a follow-up once they
-  land (J:\hx2fixc).
+- Account deletion: see "Deleting the account" below (the re-auth follow-up is
+  done).
+
+## Deleting the account
+
+Account > Delete my account: the export offer and warning, then
+`DeleteAccountPage` (`/settings/account/delete`). It asks for the word DELETE
+and for the proof the engine's `deleteAccount` takes, chosen like the server
+does: **password** for an account that has one (the number is asked once, with
+its country code, when this phone does not remember it); **a texted code** for an
+account without a password on a server that texts (found out from the server's
+`invalid_credentials` answer, which lists `verification_token`: the code is
+requested, then entered); otherwise **nothing**, and this phone signs a
+challenge with its key. A wrong password, a lockout, a wrong code, offline and a
+refusal are each a sentence; success shows "Your account was deleted" while the
+engine's hard wipe and `signOutProvider` clean up and the router moves to
+sign-in. `DeleteAccountController` holds the code's challenge in memory only.
+
+## Privacy: finding me by phone number
+
+Turning "Find me by phone number" back on sends the account's own number with
+the setting (`setPrivacy(phoneNumber:)`): the engine uses the number it
+registered with; on a linked device it throws before sending and the page asks
+for the number once (a country code is required), then retries. A server
+refusal says Helix checks the number against the one the account was verified
+with.

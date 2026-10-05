@@ -8,6 +8,8 @@ import 'package:helix_remote/core/platform/qr_encoder.dart';
 import 'package:helix_remote/shared/widgets/qr_scanner_view.dart';
 import 'package:helix_remote/features/devices/application/devices_gateway.dart';
 import 'package:helix_remote/features/devices/application/devices_models.dart';
+import 'package:helix_remote/features/devices/application/devices_providers.dart'
+    show linkConfirmTimeoutProvider;
 import 'package:helix_remote/features/devices/presentation/approve_device_page.dart';
 import 'package:helix_remote/features/devices/presentation/devices_page.dart';
 import 'package:helix_remote/features/devices/presentation/link_this_device_page.dart';
@@ -263,6 +265,58 @@ void main() {
       expect(find.textContaining('is joining your account'), findsOneWidget);
     });
 
+    testWidgets('the review shows the account key code to compare', (
+      tester,
+    ) async {
+      final (devices, _) = await open(tester);
+      devices.request = const LinkRequest(
+        serverHost: 'helix.example.org',
+        check: '482 913',
+        accountKeyCode: 'a1b2 c3d4 e5f6 a7b8 c9d0',
+      );
+      await paste(tester, 'helix-link:1:ok');
+      expect(find.text('Your account key code'), findsOneWidget);
+      expect(find.text('a1b2 c3d4 e5f6 a7b8 c9d0'), findsOneWidget);
+    });
+
+    testWidgets('history is only sent when asked, to the new device alone', (
+      tester,
+    ) async {
+      final (devices, _) = await open(tester);
+      await paste(tester, 'helix-link:1:ok');
+      await tester.tap(find.text('Approve'));
+      await settle(tester);
+
+      // Approved. Nothing was sent by itself.
+      expect(devices.calls, isNot(contains('sendHistoryToNewDevice')));
+      expect(find.text('Send history to this device'), findsOneWidget);
+
+      await tester.tap(find.text('Send history to this device'));
+      await settle(tester);
+      expect(devices.historySentTo, {'d3'});
+      expect(find.textContaining('on its way'), findsOneWidget);
+      expect(find.text('Send history to this device'), findsNothing);
+    });
+
+    testWidgets('sending history before the device has joined says to wait', (
+      tester,
+    ) async {
+      final (devices, _) = await open(tester);
+      devices.idsAfter = {'d1', 'd2'};
+      await paste(tester, 'helix-link:1:ok');
+      await tester.tap(find.text('Approve'));
+      await settle(tester);
+
+      await tester.tap(find.text('Send history to this device'));
+      await settle(tester);
+      expect(find.textContaining('not finished joining'), findsOneWidget);
+      // It can be tried again.
+      devices.idsAfter = {'d1', 'd2', 'd3'};
+      await tester.tap(find.text('Send history to this device'));
+      await settle(tester);
+      expect(devices.historySentTo, {'d3'});
+    });
+
     testWidgets('no screen lock on the phone: approval still needs a tap', (
       tester,
     ) async {
@@ -306,6 +360,7 @@ void main() {
     testWidgets('shows a QR code and the check number, then signs in', (
       tester,
     ) async {
+      useTallWindow(tester);
       final devices = FakeDevicesGateway();
       final container = ProviderContainer(
         overrides: a3bOverrides(
@@ -329,9 +384,190 @@ void main() {
       // router needs no second hop.
       expect(container.read(postSignInProvider), PostSignInStep.offerRestore);
 
-      devices.session!.done.complete();
+      // The other device approves: nothing is kept yet, the person is asked.
+      devices.session!.approval.complete(FakeLinkSession.proposal);
       await settle(tester);
+      expect(find.text('Is this your account?'), findsOneWidget);
+      expect(find.text('+88017*****01'), findsOneWidget);
+      expect(find.text('~anna.k'), findsOneWidget);
+      expect(find.text('a1b2 c3d4 e5f6 a7b8 c9d0'), findsOneWidget);
+      expect(find.byType(HelixQrDisplay), findsNothing);
+      expect(devices.session!.signedIn, isFalse);
+
+      await tester.tap(find.text('Yes, this is my account'));
+      await settle(tester);
+      expect(devices.session!.answer, isTrue);
+      expect(devices.session!.signedIn, isTrue);
       expect(container.read(postSignInProvider), PostSignInStep.offerRestore);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('"No" discards everything and offers a new code', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      final devices = FakeDevicesGateway();
+      final container = ProviderContainer(
+        overrides: a3bOverrides(
+          devices: devices,
+          extra: [engineConfigNameOverride],
+        ),
+      );
+      addTearDown(container.dispose);
+      await pumpPage(tester, const LinkThisDevicePage(), container: container);
+      await settle(tester);
+
+      devices.session!.approval.complete(FakeLinkSession.proposal);
+      await settle(tester);
+      await tester.tap(find.text('No, cancel'));
+      await settle(tester);
+
+      expect(devices.session!.answer, isFalse);
+      expect(devices.session!.signedIn, isFalse);
+      expect(find.textContaining('not your account'), findsOneWidget);
+      expect(find.textContaining('nothing was kept'), findsOneWidget);
+      // The restore step that was asked for in advance is taken back.
+      expect(container.read(postSignInProvider), PostSignInStep.none);
+
+      await tester.tap(find.text('Show a new code'));
+      await settle(tester);
+      expect(devices.calls.where((c) => c == 'beginLink'), hasLength(2));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('closing the question counts as no', (tester) async {
+      useTallWindow(tester);
+      final devices = FakeDevicesGateway();
+      final container = ProviderContainer(
+        overrides: a3bOverrides(
+          devices: devices,
+          extra: [engineConfigNameOverride],
+        ),
+      );
+      addTearDown(container.dispose);
+      await pumpPage(tester, const LinkThisDevicePage(), container: container);
+      await settle(tester);
+      devices.session!.approval.complete(FakeLinkSession.proposal);
+      await settle(tester);
+
+      await tester.tap(find.byTooltip('Cancel'));
+      await settle(tester);
+
+      expect(devices.session!.answer, isFalse);
+      expect(devices.session!.signedIn, isFalse);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('an unanswered question times out as no', (tester) async {
+      final devices = FakeDevicesGateway();
+      final container = ProviderContainer(
+        overrides: a3bOverrides(
+          devices: devices,
+          extra: [
+            engineConfigNameOverride,
+            linkConfirmTimeoutProvider.overrideWithValue(
+              const Duration(seconds: 30),
+            ),
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+      await pumpPage(tester, const LinkThisDevicePage(), container: container);
+      await settle(tester);
+      devices.session!.approval.complete(FakeLinkSession.proposal);
+      await settle(tester);
+      expect(find.text('Is this your account?'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 31));
+      await settle(tester);
+
+      expect(devices.session!.answer, isFalse);
+      expect(devices.session!.signedIn, isFalse);
+      expect(find.textContaining('Nobody answered'), findsOneWidget);
+      expect(find.text('Show a new code'), findsOneWidget);
+      expect(container.read(postSignInProvider), PostSignInStep.none);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('a failure after "Yes" is explained and keeps nothing', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      final devices = FakeDevicesGateway();
+      final container = ProviderContainer(
+        overrides: a3bOverrides(
+          devices: devices,
+          extra: [engineConfigNameOverride],
+        ),
+      );
+      addTearDown(container.dispose);
+      await pumpPage(tester, const LinkThisDevicePage(), container: container);
+      await settle(tester);
+      final session = devices.session!..signIn = Completer<void>();
+      session.approval.complete(FakeLinkSession.proposal);
+      await settle(tester);
+
+      await tester.tap(find.text('Yes, this is my account'));
+      await settle(tester);
+      expect(find.textContaining('Approved. Signing in'), findsOneWidget);
+      session.signIn!.completeError(
+        const LinkProblemException(LinkProblem.offline),
+      );
+      await settle(tester);
+
+      expect(find.textContaining('You are offline'), findsOneWidget);
+      expect(container.read(postSignInProvider), PostSignInStep.none);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('an approval that does not verify is refused', (tester) async {
+      final devices = FakeDevicesGateway();
+      final container = ProviderContainer(
+        overrides: a3bOverrides(
+          devices: devices,
+          extra: [engineConfigNameOverride],
+        ),
+      );
+      addTearDown(container.dispose);
+      await pumpPage(tester, const LinkThisDevicePage(), container: container);
+      await settle(tester);
+
+      devices.session!.approval.completeError(
+        const LinkProblemException(LinkProblem.untrusted),
+      );
+      await settle(tester);
+      expect(find.textContaining('could not be verified'), findsOneWidget);
+      expect(find.text('Is this your account?'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('the question fits at 2x text', (tester) async {
+      useTallWindow(tester);
+      final devices = FakeDevicesGateway();
+      await pumpPage(
+        tester,
+        const LinkThisDevicePage(),
+        textScale: 2,
+        overrides: a3bOverrides(
+          devices: devices,
+          extra: [engineConfigNameOverride],
+        ),
+      );
+      await settle(tester);
+      devices.session!.approval.complete(FakeLinkSession.proposal);
+      await settle(tester);
+      expect(find.text('Is this your account?'), findsOneWidget);
+      expect(find.text('Yes, this is my account'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      // Answering ends the question (and its timer).
+      await tester.tap(find.text('No, cancel'));
+      await settle(tester);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 2));
     });
@@ -348,7 +584,7 @@ void main() {
       await pumpPage(tester, const LinkThisDevicePage(), container: container);
       await settle(tester);
 
-      devices.session!.done.completeError(
+      devices.session!.approval.completeError(
         const LinkProblemException(LinkProblem.expired),
       );
       await settle(tester);

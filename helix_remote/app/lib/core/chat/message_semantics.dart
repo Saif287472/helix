@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart' show IconData, Icons;
+import 'package:helix_remote/core/groups/pending_member_copy.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -163,6 +164,11 @@ String? systemNoticeText(
           : '$actor renamed the group to "$title"';
     case 'group_picture_changed':
       return '$actor changed the group picture';
+    case 'member_unconfirmed':
+      return memberUnconfirmedNoticeText(
+        members.isEmpty ? 'Someone' : who,
+        payload['reason'] as String?,
+      );
     case 'join_requested':
       return '$actor asked to join the group';
     case 'you_were_removed':

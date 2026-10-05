@@ -32,7 +32,8 @@ String backupProblemText(BackupProblem problem) => switch (problem) {
   BackupProblem.conflict =>
     'Another device was backing up at the same time. Try again in a moment.',
   BackupProblem.weakSecret =>
-    'A recovery secret needs at least 16 characters, or 6 words.',
+    'That recovery secret is too weak to protect your backup. Use the one '
+        'Helix makes for you.',
   BackupProblem.noOtherDevices =>
     'This is your only device. Sign in on another device first.',
   BackupProblem.incomplete =>

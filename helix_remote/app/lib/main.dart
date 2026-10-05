@@ -6,6 +6,7 @@ import 'package:helix_remote/core/engine/crash_reporter.dart';
 import 'package:helix_remote/core/calls/call_host.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
+import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/lifecycle/app_lifecycle_host.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
@@ -17,6 +18,7 @@ import 'package:helix_remote/core/security/app_lock.dart';
 import 'package:helix_remote/features/settings/application/media_policy_sync.dart';
 import 'package:helix_remote/shared/widgets/app_link_listener.dart';
 import 'package:helix_remote/shared/widgets/phone_book_sync_host.dart';
+import 'package:helix_remote/shared/widgets/unconfirmed_member_host.dart';
 import 'package:helix_remote/shared/widgets/app_text_scale.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
@@ -101,6 +103,7 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
       // Both stay alive for the whole run: crash reports (opt-in) and the
       // auto-download limits that follow the network.
       ref.read(crashReporterInstallProvider);
+      ref.read(wipedRuntimeResetProvider);
       ref.listenManual(mediaPolicySyncProvider, (_, _) {});
     });
   }
@@ -154,7 +157,9 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
           child: PhoneBookSyncHost(
             child: AppLockGate(
               child: AppLinkListener(
-                child: AppTextScale(child: child ?? const SizedBox.shrink()),
+                child: UnconfirmedMemberHost(
+                  child: AppTextScale(child: child ?? const SizedBox.shrink()),
+                ),
               ),
             ),
           ),

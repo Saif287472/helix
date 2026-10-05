@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +7,6 @@ import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/backup/application/backup_copy.dart';
 import 'package:helix_remote/features/backup/application/backup_models.dart';
-import 'package:helix_remote/features/backup/application/backup_providers.dart';
 import 'package:helix_remote/features/backup/presentation/backup_page.dart';
 import 'package:helix_remote/features/backup/presentation/recovery_backup_page.dart';
 import 'package:helix_remote/features/backup/presentation/restore_history_page.dart';
@@ -506,7 +504,101 @@ void main() {
   });
 
   group('Recovery backup', () {
-    testWidgets('shows a secret once, asks for confirmation, then creates', (
+    // The engine's format: eight groups of four, 39 characters.
+    final enginePattern = RegExp(r'^([A-Z0-9]{4}-){7}[A-Z0-9]{4}$');
+
+    Finder secretText() => find.byWidgetPredicate(
+      (w) => w is Text && enginePattern.hasMatch(w.data ?? ''),
+    );
+
+    testWidgets('shows the engine\'s secret once, asks for confirmation, then '
+        'creates', (tester) async {
+      final backup = FakeBackupGateway();
+      await pumpPage(
+        tester,
+        const RecoveryBackupPage(),
+        overrides: a3bOverrides(backup: backup),
+      );
+      await settle(tester);
+
+      // The secret is the engine's, not one the app made up.
+      expect(backup.calls, contains('generateRecoverySecret'));
+      expect(secretText(), findsOneWidget);
+      final secret = tester.widget<Text>(secretText()).data!;
+      expect(secret, startsWith('BBBB-'));
+      expect(secret.length, 39);
+
+      // Not creatable until the person says they saved it.
+      final create = find.widgetWithText(
+        FilledButton,
+        'Create recovery backup',
+      );
+      expect(tester.widget<FilledButton>(create).onPressed, isNull);
+
+      await tester.tap(find.text('I saved it'));
+      await settle(tester);
+      expect(tester.widget<FilledButton>(create).onPressed, isNotNull);
+      await tester.tap(create);
+      await settle(tester);
+
+      expect(backup.calls, contains('createRecoveryBackup'));
+      expect(backup.lastSecret, secret);
+      expect(find.text('Recovery backup created.'), findsOneWidget);
+      // Shown once: after the backup exists the secret is off the screen.
+      expect(secretText(), findsNothing);
+      expect(find.text('I saved it'), findsNothing);
+    });
+
+    testWidgets('the person cannot choose their own secret', (tester) async {
+      await pumpPage(
+        tester,
+        const RecoveryBackupPage(),
+        overrides: a3bOverrides(backup: FakeBackupGateway()),
+      );
+      await settle(tester);
+      expect(find.text('Type my own instead'), findsNothing);
+      expect(find.text('Your own secret'), findsNothing);
+      // The only text field on the create tab does not exist at all.
+      expect(find.byType(TextField), findsNothing);
+    });
+
+    testWidgets('Copy and Share hand the same secret over, once each tap', (
+      tester,
+    ) async {
+      final handoff = FakeSecretHandoff();
+      await pumpPage(
+        tester,
+        const RecoveryBackupPage(),
+        overrides: a3bOverrides(backup: FakeBackupGateway(), secrets: handoff),
+      );
+      await settle(tester);
+      final secret = tester.widget<Text>(secretText()).data!;
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Copy'));
+      await settle(tester);
+      expect(handoff.copied, [secret]);
+      expect(find.textContaining('leaves the clipboard in a minute'), findsOne);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Share'));
+      await settle(tester);
+      expect(handoff.shared, [secret]);
+      expect(find.textContaining('Shared.'), findsOneWidget);
+    });
+
+    testWidgets('a share that did not happen is said', (tester) async {
+      final handoff = FakeSecretHandoff()..shareWorks = false;
+      await pumpPage(
+        tester,
+        const RecoveryBackupPage(),
+        overrides: a3bOverrides(backup: FakeBackupGateway(), secrets: handoff),
+      );
+      await settle(tester);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Share'));
+      await settle(tester);
+      expect(find.textContaining('could not be shared'), findsOneWidget);
+    });
+
+    testWidgets('the secret is not kept: a new page gets a new one', (
       tester,
     ) async {
       final backup = FakeBackupGateway();
@@ -516,48 +608,22 @@ void main() {
         overrides: a3bOverrides(backup: backup),
       );
       await settle(tester);
+      final first = tester.widget<Text>(secretText()).data!;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
 
-      // Six groups of four, no lookalike characters.
-      final secretFinder = find.byWidgetPredicate(
-        (w) =>
-            w is Text &&
-            RegExp(r'^([A-Z2-9]{4}-){5}[A-Z2-9]{4}$').hasMatch(w.data ?? ''),
-      );
-      expect(secretFinder, findsOneWidget);
-      final secret = (tester.widget<Text>(secretFinder)).data!;
-
-      // Not creatable until the person says they wrote it down.
-      final create = find.widgetWithText(
-        FilledButton,
-        'Create recovery backup',
-      );
-      expect(tester.widget<FilledButton>(create).onPressed, isNull);
-
-      await tester.tap(find.text('I have written it down'));
-      await settle(tester);
-      expect(tester.widget<FilledButton>(create).onPressed, isNotNull);
-      await tester.tap(create);
-      await settle(tester);
-
-      expect(backup.calls, contains('createRecoveryBackup'));
-      expect(backup.lastSecret, secret);
-      expect(find.text('Recovery backup created.'), findsOneWidget);
-      expect(find.textContaining('not stored anywhere'), findsOneWidget);
-    });
-
-    testWidgets('the secret is never offered for copying', (tester) async {
       await pumpPage(
         tester,
         const RecoveryBackupPage(),
-        overrides: a3bOverrides(backup: FakeBackupGateway()),
+        overrides: a3bOverrides(backup: backup),
       );
       await settle(tester);
-      expect(find.byTooltip('Copy'), findsNothing);
-      expect(find.textContaining('Copy'), findsNothing);
-      expect(find.textContaining('written'), findsWidgets);
+      expect(tester.widget<Text>(secretText()).data, isNot(first));
     });
 
-    testWidgets('a secret the engine refuses is explained', (tester) async {
+    testWidgets('an engine that refuses is explained, with no secret shown', (
+      tester,
+    ) async {
       final backup = FakeBackupGateway()
         ..recoveryCreateFails = BackupProblem.weakSecret;
       await pumpPage(
@@ -567,10 +633,7 @@ void main() {
       );
       await settle(tester);
 
-      await tester.tap(find.text('Type my own instead'));
-      await settle(tester);
-      await tester.enterText(find.byType(TextField), 'short');
-      await tester.tap(find.text('I have written it down'));
+      await tester.tap(find.text('I saved it'));
       await settle(tester);
       await tester.tap(
         find.widgetWithText(FilledButton, 'Create recovery backup'),
@@ -580,6 +643,20 @@ void main() {
         find.text(backupProblemText(BackupProblem.weakSecret)),
         findsOneWidget,
       );
+      // It can be tried again with the same secret on screen.
+      expect(secretText(), findsOneWidget);
+    });
+
+    testWidgets('the secret fits at 2x text', (tester) async {
+      await pumpPage(
+        tester,
+        const RecoveryBackupPage(),
+        textScale: 2,
+        overrides: a3bOverrides(backup: FakeBackupGateway()),
+      );
+      await settle(tester);
+      expect(secretText(), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('restoring with the wrong secret says so', (tester) async {
@@ -636,23 +713,6 @@ void main() {
   });
 
   group('helpers', () {
-    test('a generated recovery secret meets the engine\'s policy', () {
-      final secret = generateRecoverySecret(_Counter());
-      expect(secret.length, greaterThanOrEqualTo(16));
-      expect(
-        RegExp(r'^([A-Z2-9]{4}-){5}[A-Z2-9]{4}$').hasMatch(secret),
-        isTrue,
-      );
-      // No lookalikes.
-      expect(secret.contains(RegExp('[01OIL]')), isFalse);
-    });
-
-    test('two generated secrets differ', () {
-      final a = generateRecoverySecret(_Counter(0));
-      final b = generateRecoverySecret(_Counter(7));
-      expect(a, isNot(b));
-    });
-
     test('sizes and times read the way a person says them', () {
       final now = DateTime(2026, 10, 3, 12);
       expect(formatBytes(512), '512 B');
@@ -672,20 +732,4 @@ void main() {
       );
     });
   });
-}
-
-/// A deterministic [Random] for the secret generator.
-class _Counter implements Random {
-  _Counter([this._n = 0]);
-
-  int _n;
-
-  @override
-  int nextInt(int max) => (_n++ * 7 + 3) % max;
-
-  @override
-  bool nextBool() => nextInt(2) == 0;
-
-  @override
-  double nextDouble() => nextInt(1000) / 1000;
 }

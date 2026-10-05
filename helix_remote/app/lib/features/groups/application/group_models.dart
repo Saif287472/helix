@@ -294,6 +294,42 @@ final class GroupCandidate {
   final bool blocked;
 }
 
+/// Why the server's roster has a member that this device does not trust yet.
+enum PendingReason {
+  /// No admin's announced action explains them.
+  unattributed,
+
+  /// They joined by themselves through an invite link.
+  linkJoin;
+
+  /// The engine's wire word (`unattributed`, `link_join`); anything else (a
+  /// newer engine) counts as unattributed, the cautious reading.
+  static PendingReason parse(String? wire) =>
+      wire == 'link_join' ? linkJoin : unattributed;
+
+  String get wire => this == linkJoin ? 'link_join' : 'unattributed';
+}
+
+/// A member the server's roster lists but this device has not confirmed: it
+/// sends them neither its sender key nor the group key until the person says
+/// yes (`GroupsService.confirmMember`).
+@immutable
+final class PendingMemberInfo {
+  const PendingMemberInfo({required this.account, required this.reason});
+
+  final String account;
+  final PendingReason reason;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PendingMemberInfo &&
+      other.account == account &&
+      other.reason == reason;
+
+  @override
+  int get hashCode => Object.hash(account, reason);
+}
+
 /// Something that happened to a group that a screen should react to.
 sealed class GroupSignal {
   const GroupSignal(this.groupId);
@@ -314,4 +350,20 @@ final class GroupJoinRequestArrived extends GroupSignal {
   const GroupJoinRequestArrived(super.groupId, this.account);
 
   final String account;
+}
+
+/// The server's roster gained a member nothing explains (or one who joined by
+/// a link): they wait for the person's confirmation. [groupTitle] is empty
+/// while the group's name has not arrived.
+final class GroupMemberUnconfirmedArrived extends GroupSignal {
+  const GroupMemberUnconfirmedArrived(
+    super.groupId,
+    this.account,
+    this.reason, {
+    this.groupTitle = '',
+  });
+
+  final String account;
+  final PendingReason reason;
+  final String groupTitle;
 }

@@ -1,10 +1,9 @@
 import 'dart:async';
-import 'dart:math';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/format/labels.dart';
+import 'package:helix_remote/core/platform/secret_clipboard.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/backup/application/backup_copy.dart';
 import 'package:helix_remote/features/backup/application/backup_gateway.dart';
@@ -405,27 +404,6 @@ final class OfferActionsController extends Notifier<OfferActionsState> {
 
 // ---------------------------------------------------------- recovery backup
 
-/// Random numbers for a generated recovery secret; replaceable in tests.
-final secretRandomProvider = Provider<Random>((ref) => Random.secure());
-
-/// Characters with no lookalikes (no 0/O, 1/I/L): a person copies this by
-/// hand.
-const _secretAlphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
-/// `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX`: 24 characters of a 31-character alphabet,
-/// about 119 bits, well past the engine's 16-character rule.
-String generateRecoverySecret(Random random) {
-  final groups = <String>[];
-  for (var g = 0; g < 6; g++) {
-    final buffer = StringBuffer();
-    for (var i = 0; i < 4; i++) {
-      buffer.write(_secretAlphabet[random.nextInt(_secretAlphabet.length)]);
-    }
-    groups.add(buffer.toString());
-  }
-  return groups.join('-');
-}
-
 enum RecoveryStage { choose, creating, created, restoring, restored }
 
 class RecoveryBackupState {
@@ -436,19 +414,25 @@ class RecoveryBackupState {
     this.error,
     this.created,
     this.restored,
+    this.handoffNote,
   });
 
   final RecoveryStage stage;
 
-  /// The secret on screen. Held in memory for as long as the page is open and
-  /// nowhere else: not stored, not logged, not sent.
+  /// The secret on screen, made by the engine. Held in memory for as long as
+  /// the page shows it and nowhere else: not stored, not logged, not sent. It
+  /// is dropped the moment the backup is made, so it is shown once.
   final String secret;
 
-  /// "I have written it down."
+  /// "I saved it."
   final bool written;
   final String? error;
   final BackupOutcome? created;
   final RestoreOutcome? restored;
+
+  /// What copying or sharing did ("Copied. It is cleared from the clipboard in
+  /// a minute.").
+  final String? handoffNote;
 
   bool get busy =>
       stage == RecoveryStage.creating || stage == RecoveryStage.restoring;
@@ -461,6 +445,8 @@ class RecoveryBackupState {
     bool clearError = false,
     BackupOutcome? created,
     RestoreOutcome? restored,
+    String? handoffNote,
+    bool clearHandoffNote = false,
   }) => RecoveryBackupState(
     stage: stage ?? this.stage,
     secret: secret ?? this.secret,
@@ -468,40 +454,85 @@ class RecoveryBackupState {
     error: clearError ? null : (error ?? this.error),
     created: created ?? this.created,
     restored: restored ?? this.restored,
+    handoffNote: clearHandoffNote ? null : (handoffNote ?? this.handoffNote),
   );
 }
 
 /// The recovery backup: sealed under a secret only the person holds, so it can
-/// be opened on a new phone even when no other device is at hand.
+/// be opened on a new phone even when no other device is at hand. The secret is
+/// always the engine's own random one: a phrase a person chooses can be
+/// guessed offline by anyone who gets hold of the stored backup.
 final recoveryBackupProvider =
     NotifierProvider.autoDispose<RecoveryBackupController, RecoveryBackupState>(
       RecoveryBackupController.new,
     );
 
 final class RecoveryBackupController extends Notifier<RecoveryBackupState> {
+  var _disposed = false;
+
   @override
-  RecoveryBackupState build() => RecoveryBackupState(
-    secret: generateRecoverySecret(ref.read(secretRandomProvider)),
-  );
+  RecoveryBackupState build() {
+    ref.onDispose(() => _disposed = true);
+    Future.microtask(_generate);
+    return const RecoveryBackupState();
+  }
 
-  void regenerate() => state = RecoveryBackupState(
-    secret: generateRecoverySecret(ref.read(secretRandomProvider)),
-  );
-
-  /// The person typed their own secret instead.
-  void useOwn(String secret) =>
-      state = state.copyWith(secret: secret, written: false, clearError: true);
+  Future<void> _generate() async {
+    try {
+      final secret = await ref
+          .read(backupGatewayProvider)
+          .generateRecoverySecret();
+      if (_disposed) return;
+      state = state.copyWith(secret: secret, clearError: true);
+    } on BackupProblemException catch (e) {
+      if (_disposed) return;
+      state = state.copyWith(error: backupProblemText(e.problem));
+    }
+  }
 
   void setWritten(bool value) => state = state.copyWith(written: value);
 
+  /// Copies the secret to the clipboard (cleared again after a minute).
+  Future<void> copy() async {
+    final secret = state.secret;
+    if (secret.isEmpty) return;
+    await ref.read(secretHandoffProvider).copy(secret);
+    if (_disposed) return;
+    state = state.copyWith(
+      handoffNote:
+          'Copied. Put it somewhere safe now: it leaves the clipboard in a '
+          'minute.',
+    );
+  }
+
+  /// Opens the share sheet with the secret.
+  Future<void> share() async {
+    final secret = state.secret;
+    if (secret.isEmpty) return;
+    final shared = await ref
+        .read(secretHandoffProvider)
+        .share(secret, subject: 'Helix recovery secret');
+    if (_disposed) return;
+    state = state.copyWith(
+      handoffNote: shared
+          ? 'Shared. Check that it reached somewhere only you can open.'
+          : 'It could not be shared from this device.',
+    );
+  }
+
   Future<void> create() async {
-    if (state.busy) return;
+    if (state.busy || state.secret.isEmpty) return;
     state = state.copyWith(stage: RecoveryStage.creating, clearError: true);
     try {
       final outcome = await ref
           .read(backupGatewayProvider)
           .createRecoveryBackup(state.secret);
-      state = state.copyWith(stage: RecoveryStage.created, created: outcome);
+      // Shown once: from here the secret is gone from this phone's memory.
+      state = RecoveryBackupState(
+        stage: RecoveryStage.created,
+        created: outcome,
+        written: true,
+      );
     } on BackupProblemException catch (e) {
       state = state.copyWith(
         stage: RecoveryStage.choose,

@@ -63,3 +63,19 @@ the flow, never logged or put in a notification; `InviteLinkInfo.toString` redac
   is a `persistent` media object encrypted with its own key (created in the app
   layer: the engine has no standalone-image upload yet).
 - Open: no QR for links, no per-member "message" shortcut, no group call.
+
+## Unconfirmed members
+
+The server's roster can list a member that no admin action explains, or one who
+joined by themselves through a link. The engine holds them back (no sender key,
+no group key) and writes a `member_unconfirmed` notice. `group_pending.dart`
+turns `watchPendingMembers` into `PendingMemberView`s ("Confirm NAME?", the
+reason in plain English, `canRemove` from the viewer's role) and
+`shared/widgets/pending_members_prompt.dart` draws them in group info and above
+the group conversation: Confirm (`GroupActions.confirmMember`) for everybody,
+Remove (the existing `removeMember`, with its confirmation) only where the
+group's rules allow it. A plain member also sees "Only an admin can remove
+someone. If you do not know them, you can leave the group." The roster row says
+"Not confirmed". `GroupMemberUnconfirmed` events reach the info screen as a
+snackbar and every screen through `UnconfirmedMemberHost`, whose banner opens
+the group's info.

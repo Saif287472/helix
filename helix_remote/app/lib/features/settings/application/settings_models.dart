@@ -23,6 +23,38 @@ final class AccountOverview {
   final bool phoneKnownOnDevice;
 }
 
+/// The server refused to delete the account on this device's word alone: it
+/// wants a code texted to the account's phone number (the account has no
+/// password and the server sends texts). Thrown by
+/// `SettingsGateway.deleteAccount`; the Delete page then asks for the code.
+final class DeletionNeedsCode implements Exception {
+  const DeletionNeedsCode();
+
+  @override
+  String toString() => 'DeletionNeedsCode';
+}
+
+/// The account's phone number is needed and this device does not know it (it
+/// was linked, not signed in with a number): ask for it once. Thrown by the
+/// gateway before anything is sent.
+final class PhoneNumberNeeded implements Exception {
+  const PhoneNumberNeeded();
+
+  @override
+  String toString() => 'PhoneNumberNeeded';
+}
+
+/// A code was texted for confirming the deletion.
+@immutable
+final class DeletionCodeRequest {
+  const DeletionCodeRequest({required this.challengeId, required this.sentTo});
+
+  final String challengeId;
+
+  /// The number it went to, masked (`+88017*****01`).
+  final String sentTo;
+}
+
 /// Who may see something.
 enum AudienceChoice { everyone, contacts, nobody }
 

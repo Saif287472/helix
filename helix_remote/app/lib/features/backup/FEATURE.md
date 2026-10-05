@@ -36,3 +36,20 @@ engine's `BackupService`.
 `core/engine/post_sign_in.dart` holds the step. The password sign-in (and
 linking) ask for `offerRestore` before the engine signs in; the router
 redirects to `/restore` once, and `RestoreStep.finish()` clears it.
+
+## Recovery secret (changed)
+
+The recovery backup's secret is made by the engine
+(`BackupService.generateRecoverySecret`, 160 bits) and cannot be chosen: a
+chosen phrase can be guessed offline by anyone who gets the stored backup. It is
+shown once with Copy (cleared from the clipboard after a minute) and Share,
+"I saved it" enables Create, and it is dropped from memory when the backup is
+made. Restoring still takes the typed secret.
+
+## History transfers
+
+Both directions are opt-in (the runtime passes `autoTransferToNewDevices: false`
+and `autoAcceptTransfers: false`, `test/history_transfer_defaults_test.dart`).
+The sending side is offered from the device approval page (devices feature) and
+"Send my history" on the transfer page; the receiving side is the offer list
+with Accept / Decline / Pause.

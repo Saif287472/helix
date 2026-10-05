@@ -172,59 +172,6 @@ void main() {
       await settle(tester);
       expect(find.textContaining('You are offline'), findsOneWidget);
     });
-
-    testWidgets(
-      'deleting needs the word DELETE, and nothing is sent without it',
-      (tester) async {
-        final g = await open(tester);
-        await reveal(tester, find.text('Delete my account'));
-        await tester.tap(find.text('Delete my account'));
-        await settle(tester);
-        expect(find.text('Delete your account?'), findsOneWidget);
-        await tester.tap(find.text('Continue'));
-        await settle(tester);
-        await tester.enterText(find.byType(TextField), 'delete');
-        await tester.tap(find.text('Delete account'));
-        await settle(tester);
-        expect(g.calls, isNot(contains('deleteAccount')));
-        expect(
-          find.textContaining('Type DELETE in capital letters'),
-          findsOneWidget,
-        );
-      },
-    );
-
-    testWidgets('delete can start with an export', (tester) async {
-      final share = FakeShareAdapter();
-      final g = await open(tester, share: share);
-      await reveal(tester, find.text('Delete my account'));
-      await tester.tap(find.text('Delete my account'));
-      await settle(tester);
-      await tester.tap(find.text('Export first'));
-      await settle(tester);
-      expect(g.calls, contains('export'));
-      expect(share.shared, hasLength(1));
-      expect(find.text('Type DELETE to confirm'), findsOneWidget);
-    });
-
-    testWidgets('a refused delete is explained', (tester) async {
-      final g = FakeSettingsGateway()
-        ..deleteFails = const ApiException(
-          status: 503,
-          code: ErrorCode.maintenance,
-        );
-      await open(tester, gateway: g);
-      await reveal(tester, find.text('Delete my account'));
-      await tester.tap(find.text('Delete my account'));
-      await settle(tester);
-      await tester.tap(find.text('Continue'));
-      await settle(tester);
-      await tester.enterText(find.byType(TextField), 'DELETE');
-      await tester.tap(find.text('Delete account'));
-      await settle(tester);
-      expect(g.calls, contains('deleteAccount'));
-      expect(find.textContaining('not available right now'), findsOneWidget);
-    });
   });
 
   group('Change password', () {

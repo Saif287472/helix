@@ -5,10 +5,16 @@ import 'package:helix_remote/features/devices/application/devices_models.dart';
 import 'package:helix_remote_api/v2.dart'
     show ApiException, NetworkException, SignedOutException;
 import 'package:helix_remote_crypto/v2.dart'
-    show CryptoV2Exception, LinkCode, Sha256Accumulator;
+    show CryptoV2Exception, LinkCode, Provisioning, Sha256Accumulator;
 import 'package:helix_remote_engine/helix_remote_engine.dart'
     as engine
-    show NewDeviceLink, SignInException, SignInFailure;
+    show
+        BackupException,
+        BackupFailure,
+        LinkProposal,
+        NewDeviceLink,
+        SignInException,
+        SignInFailure;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ErrorCode, SecurityEventKind;
 
@@ -41,6 +47,16 @@ abstract interface class DevicesGateway {
 
   /// Approves the link: seals the account's keys to the new device.
   Future<void> approveLink(String code);
+
+  /// The ids of this account's devices, read from the server: taken before an
+  /// approval, so [sendHistoryToNewDevice] can tell which one is new.
+  Future<Set<String>> deviceIds();
+
+  /// Sends this device's history to the device(s) that are on the account now
+  /// and were not in [knownBefore] (history transfers are never automatic).
+  /// Returns the transfer id. Throws [LinkProblemException] (`notLinkedYet`
+  /// when the new device has not finished joining, `offline`, `notAllowed`).
+  Future<String> sendHistoryToNewDevice(Set<String> knownBefore);
 
   /// Starts linking **this** (new) device.
   Future<LinkSession> beginLink({String? deviceName});
@@ -148,7 +164,20 @@ final class EngineDevicesGateway implements DevicesGateway {
     return LinkRequest(
       serverHost: Uri.parse(link.serverOrigin).host,
       check: linkCheckNumber(link),
+      accountKeyCode: await _ownKeyCode(runtime),
     );
+  }
+
+  /// This account's key code, from the public half of the account key that
+  /// this device holds (the new device shows the same code, computed from what
+  /// the approval carries). Only the public key is read.
+  Future<String?> _ownKeyCode(HelixRuntime runtime) async {
+    try {
+      final identity = await runtime.db.cryptoDao.identityKeys();
+      return identity == null ? null : Provisioning.keyCode(identity.aikPublic);
+    } on Object {
+      return null;
+    }
   }
 
   @override
@@ -171,6 +200,49 @@ final class EngineDevicesGateway implements DevicesGateway {
       throw const LinkProblemException(LinkProblem.offline);
     } on SignedOutException {
       throw const LinkProblemException(LinkProblem.notAllowed);
+    }
+  }
+
+  @override
+  Future<Set<String>> deviceIds() async {
+    try {
+      final devices = (await _runtime).engine.devices;
+      await devices.refresh();
+      return {for (final d in await devices.list()) d.deviceId};
+    } on NetworkException {
+      throw const LinkProblemException(LinkProblem.offline);
+    } on ApiException catch (e) {
+      throw LinkProblemException(
+        e.isRetryable ? LinkProblem.offline : LinkProblem.notAllowed,
+      );
+    }
+  }
+
+  @override
+  Future<String> sendHistoryToNewDevice(Set<String> knownBefore) async {
+    try {
+      final eng = (await _runtime).engine;
+      await eng.devices.refresh();
+      final fresh = [
+        for (final d in await eng.devices.list())
+          if (!d.isThisDevice && !knownBefore.contains(d.deviceId)) d.deviceId,
+      ];
+      if (fresh.isEmpty) {
+        throw const LinkProblemException(LinkProblem.notLinkedYet);
+      }
+      return await eng.backup.sendHistory(devices: fresh);
+    } on engine.BackupException catch (e) {
+      throw LinkProblemException(switch (e.failure) {
+        engine.BackupFailure.noOtherDevices => LinkProblem.notLinkedYet,
+        engine.BackupFailure.offline => LinkProblem.offline,
+        _ => LinkProblem.notAllowed,
+      });
+    } on NetworkException {
+      throw const LinkProblemException(LinkProblem.offline);
+    } on ApiException catch (e) {
+      throw LinkProblemException(
+        e.isRetryable ? LinkProblem.offline : LinkProblem.notAllowed,
+      );
     }
   }
 
@@ -206,15 +278,24 @@ final class _EngineLinkSession implements LinkSession {
   DateTime get expiresAt => _link.expiresAt;
 
   @override
-  Future<void> complete() async {
+  Future<void> complete({required LinkConfirm confirm}) async {
     try {
-      await _link.complete();
-    } on engine.SignInException catch (e) {
-      throw LinkProblemException(
-        e.reason == engine.SignInFailure.linkExpired
-            ? LinkProblem.expired
-            : LinkProblem.notAllowed,
+      await _link.complete(
+        confirm: (engine.LinkProposal proposal) => confirm(
+          LinkProposalView(
+            phoneMask: proposal.phoneMask,
+            helixName: proposal.helixName,
+            keyCode: proposal.fingerprint,
+          ),
+        ),
       );
+    } on engine.SignInException catch (e) {
+      throw LinkProblemException(switch (e.reason) {
+        engine.SignInFailure.linkExpired => LinkProblem.expired,
+        engine.SignInFailure.linkDeclined => LinkProblem.declined,
+        engine.SignInFailure.untrustedAccountKey => LinkProblem.untrusted,
+        _ => LinkProblem.notAllowed,
+      });
     } on NetworkException {
       throw const LinkProblemException(LinkProblem.offline);
     } on ApiException catch (e) {

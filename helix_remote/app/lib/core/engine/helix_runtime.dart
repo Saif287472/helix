@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 
 import 'package:helix_remote/core/engine/backup_policy.dart';
 import 'package:helix_remote/core/engine/server_policy.dart';
+import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
+import 'package:helix_remote/core/platform/picker_cleanup.dart';
 import 'package:helix_remote/core/platform/tls_pinning.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote_api/v2.dart';
@@ -31,7 +33,11 @@ final class HelixRuntime {
     required this.engine,
     required this.serverUrl,
     required EngineLease? lease,
-  }) : _lease = lease;
+    required _WipeRecord wipe,
+    required Future<void> Function() runHardWipe,
+  }) : _lease = lease,
+       _wipe = wipe,
+       _runHardWipe = runHardWipe;
 
   /// Opens the database at [dbFile] with [key] and starts an engine against
   /// [serverUrl].
@@ -55,6 +61,14 @@ final class HelixRuntime {
   /// With [headless] the engine starts no socket and no timers, which is what
   /// the FCM background isolate and a one-shot CLI want: they call
   /// [Engine.syncOnce] themselves and there is nothing left running to close.
+  ///
+  /// **Hard wipe.** The engine deletes every row and vacuums on sign-out and on
+  /// a revocation that wipes; the rest is this app's (`Engine(hardWipe:)`, see
+  /// [hardWipe]): the database is closed and its files overwritten and
+  /// deleted, the SQLCipher key leaves [keys] (which is what makes anything
+  /// left on the flash unreadable), and the avatar, downloaded attachments and
+  /// the file picker's copies go. [keys] defaults to the platform keystore;
+  /// [afterWipe] replaces the last two steps (tests).
   static Future<HelixRuntime> open({
     required File dbFile,
     required DatabaseKey key,
@@ -66,6 +80,8 @@ final class HelixRuntime {
     bool headless = false,
     NetworkProbe network = const DeviceNetworkProbe(),
     TlsPinPolicy? pinning,
+    SecureKeyStore? keys,
+    Future<void> Function()? afterWipe,
   }) async {
     final problem = ServerPolicy.check(serverUrl);
     if (problem != null) throw InsecureServerUrl(problem);
@@ -87,6 +103,7 @@ final class HelixRuntime {
         headless: headless,
         network: network,
         pinning: pinning ?? TlsPinPolicy.forThisBuild(),
+        afterWipe: afterWipe ?? appWipe(keys ?? SecureKeyStore()),
       );
     } on Object {
       await lease.release();
@@ -106,8 +123,16 @@ final class HelixRuntime {
     required bool headless,
     required NetworkProbe network,
     required TlsPinPolicy pinning,
+    required Future<void> Function() afterWipe,
   }) async {
     final db = await HelixDb.open(dbFile, key: key);
+    final wipe = _WipeRecord();
+    Future<void> runHardWipe() => hardWipe(
+      db: db,
+      dbFile: dbFile,
+      afterWipe: afterWipe,
+      onDatabaseDestroyed: () => wipe.databaseDestroyed = true,
+    );
     final pinned = pinning.appliesTo(serverUrl);
     HelixApi build() => HelixApi(
       baseUrl: serverUrl,
@@ -125,29 +150,12 @@ final class HelixRuntime {
       random: SecureCryptoRandom(),
       config: config,
       phoneBook: phoneBook,
-      backupOptions: BackupOptions(
-        // gzip is `dart:io`'s, which the engine may not import: without it a
-        // history backup fits far fewer messages into the server's 16 MiB.
-        gzip: gzip,
-        // Offers from the account's other devices wait for the person: the
-        // restore step and Settings > Backup > Transfer show them, with
-        // accept, decline and pause. (Automatic import would make pause
-        // pointless: the engine would start it again at once.)
-        autoAcceptTransfers: false,
-        remote: PolicyBackupRemote(
-          ApiBackupRemote(api.backup),
-          mayUpload: () async {
-            if (await db.settingsDao.get(AppSettings.backupOverMobile)) {
-              return true;
-            }
-            return await network.current() != NetworkKind.mobile;
-          },
-        ),
-      ),
+      backupOptions: backupOptionsFor(db: db, api: api, network: network),
       // Without a file store the engine cannot send attachments and leaves
       // incoming ones undownloaded.
       blobs: blobs,
       mediaProcessor: mediaProcessor,
+      hardWipe: runHardWipe,
     );
     await engine.start(realtime: !headless, background: !headless);
     return HelixRuntime._(
@@ -156,14 +164,110 @@ final class HelixRuntime {
       engine: engine,
       serverUrl: serverUrl,
       lease: lease,
+      wipe: wipe,
+      runHardWipe: runHardWipe,
     );
   }
 
+  /// What the app passes the engine for backups and history transfers.
+  ///
+  /// **History transfers are the person's choice, both ways.** The engine's
+  /// defaults are off (a device that has just been linked would otherwise
+  /// receive the whole history unasked, and whoever links a device, or holds a
+  /// stolen session, could pull it); this app keeps them off: the old device
+  /// offers "Send history to this device" after approving a link, and the new
+  /// one shows the offer with Accept, Decline and Pause (the restore step and
+  /// Settings > Backup > Transfer). Nothing here may switch either to on.
+  @visibleForTesting
+  static BackupOptions backupOptionsFor({
+    required HelixDb db,
+    required HelixApi api,
+    required NetworkProbe network,
+  }) => BackupOptions(
+    // gzip is `dart:io`'s, which the engine may not import: without it a
+    // history backup fits far fewer messages into the server's 16 MiB.
+    gzip: gzip,
+    autoTransferToNewDevices: false,
+    // Offers wait for the person (automatic import would also make Pause
+    // pointless: the engine would start it again at once).
+    autoAcceptTransfers: false,
+    remote: PolicyBackupRemote(
+      ApiBackupRemote(api.backup),
+      mayUpload: () async {
+        if (await db.settingsDao.get(AppSettings.backupOverMobile)) {
+          return true;
+        }
+        return await network.current() != NetworkKind.mobile;
+      },
+    ),
+  );
+
+  /// The app's half of a hard wipe, run by the engine after it has deleted
+  /// every row (see [HardWipe]): close the database, overwrite and delete its
+  /// files, then [afterWipe] (the keystore key and the plaintext files).
+  ///
+  /// Every step is tried even when an earlier one fails, because stopping at
+  /// the first error would leave the rest on the phone; the first error is
+  /// rethrown afterwards so the caller knows.
+  @visibleForTesting
+  static Future<void> hardWipe({
+    required HelixDb db,
+    required File dbFile,
+    required Future<void> Function() afterWipe,
+    void Function()? onDatabaseDestroyed,
+  }) async {
+    Object? first;
+    StackTrace? firstStack;
+    Future<void> step(Future<void> Function() run) async {
+      try {
+        await run();
+      } on Object catch (error, stack) {
+        first ??= error;
+        firstStack ??= stack;
+      }
+    }
+
+    // Closed first: a file that is open cannot be overwritten on Windows.
+    await step(db.close);
+    await step(() => destroyDatabaseFiles(dbFile));
+    onDatabaseDestroyed?.call();
+    await step(afterWipe);
+    if (first != null) Error.throwWithStackTrace(first!, firstStack!);
+  }
+
+  /// What this app deletes besides the database after a hard wipe: the
+  /// SQLCipher key in [keys], the profile picture and downloaded attachments,
+  /// and the file picker's temporary copies. Each part is tried on its own.
+  static Future<void> Function() appWipe(SecureKeyStore keys) => () async {
+    try {
+      await keys.forget();
+    } on Object {
+      // Tried again by sign-out; the files below must still go.
+    }
+    await AppPaths.wipeLocalFiles();
+    await PickerTemporaryFiles.clear();
+  };
+
   final EngineLease? _lease;
+  final _WipeRecord _wipe;
+  final Future<void> Function() _runHardWipe;
   final HelixDb db;
   final HelixApi api;
   final Engine engine;
   final Uri serverUrl;
+
+  /// The engine wiped this device (sign-out, deleting the account or a
+  /// revocation) and the database file is gone: this runtime is spent, and
+  /// whatever opens next gets a new file and a new key.
+  bool get wasWiped => _wipe.databaseDestroyed;
+
+  /// Makes sure the hard wipe has run: the engine's own sign-out does it, but
+  /// an engine that was already signed out returns early, and the app's
+  /// sign-out must leave no database file and no key either way. A no-op once
+  /// done.
+  Future<void> ensureWiped() async {
+    if (!wasWiped) await _runHardWipe();
+  }
 
   /// Closes the engine, then the client and the database, in that order: the
   /// engine owns neither.
@@ -171,11 +275,17 @@ final class HelixRuntime {
     try {
       await engine.close();
       await api.close();
-      await db.close();
+      // A wiped database was closed by the wipe.
+      if (!wasWiped) await db.close();
     } finally {
       await _lease?.release();
     }
   }
+}
+
+/// Set by the hard-wipe hook, read by [HelixRuntime.wasWiped].
+final class _WipeRecord {
+  bool databaseDestroyed = false;
 }
 
 /// The platform this build is running on, as the server records it.

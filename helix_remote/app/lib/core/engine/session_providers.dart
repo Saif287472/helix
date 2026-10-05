@@ -66,6 +66,10 @@ final class SignOutAction {
   Future<void> call() async {
     final runtime = await _ref.read(runtimeProvider.future);
     await runtime.engine.signOut();
+    // The engine's sign-out ends in the hard wipe (database file destroyed,
+    // key and plaintext files deleted, see `HelixRuntime.hardWipe`); this
+    // covers an engine that had nothing to sign out.
+    await runtime.ensureWiped();
     await _ref.read(secureKeyStoreProvider).forget();
     await _ref.read(serverUrlStoreProvider).clear();
     await _wipeLeftovers();
@@ -83,6 +87,20 @@ final class SignOutAction {
     await PickerTemporaryFiles.clear();
   }
 }
+
+/// After a revocation that wiped this device, the runtime is spent (its
+/// database file is gone and its key deleted): open a new one, so the
+/// sign-in that follows gets a fresh file and a fresh key.
+///
+/// A signed-out device is handled by [SignOutAction]; this is for the one
+/// wipe nobody on this phone asked for. Read once, by the app root.
+final wipedRuntimeResetProvider = Provider<void>((ref) {
+  ref.listen(authStateProvider, (_, next) {
+    if (next.value != AppAuthState.revoked) return;
+    final runtime = ref.read(runtimeProvider).value;
+    if (runtime != null && runtime.wasWiped) ref.invalidate(runtimeProvider);
+  });
+});
 
 /// Deletes the encrypted database and the key, so a device that cannot open
 /// its own data can start again. Only ever offered behind an explicit

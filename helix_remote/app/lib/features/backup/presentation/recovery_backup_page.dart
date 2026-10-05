@@ -8,9 +8,11 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 ///
 /// A recovery backup is sealed under a secret that only the person holds, so
 /// chats can come back on a new phone with no other device to copy from. The
-/// secret is shown once, here, and never stored, sent or logged by the app:
-/// there is no copy button for it either, because a clipboard is not a safe
-/// place for it. Helix cannot recover it, and the page says so.
+/// secret is made by the engine (random, not chosen: a chosen phrase can be
+/// guessed offline by anyone who gets the stored backup) and shown once, here,
+/// with Copy and Share to put it somewhere safe. It is never stored, sent or
+/// logged by the app, and it is gone from this phone once the backup is made.
+/// Helix cannot recover it, and the page says so.
 class RecoveryBackupPage extends ConsumerStatefulWidget {
   const RecoveryBackupPage({super.key});
 
@@ -22,13 +24,10 @@ enum _Mode { create, restore }
 
 class _RecoveryBackupPageState extends ConsumerState<RecoveryBackupPage> {
   _Mode _mode = _Mode.create;
-  bool _typingOwn = false;
-  final TextEditingController _own = TextEditingController();
   final TextEditingController _restoreSecret = TextEditingController();
 
   @override
   void dispose() {
-    _own.dispose();
     _restoreSecret.dispose();
     super.dispose();
   }
@@ -89,35 +88,44 @@ class _RecoveryBackupPageState extends ConsumerState<RecoveryBackupPage> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final done = state.stage == RecoveryStage.created;
+    final ready = state.secret.isNotEmpty;
     return [
-      const PageIntro(
-        text:
-            'Write this secret down and keep it somewhere safe, away from '
-            'this phone. You will need it to open the backup on a new phone. '
-            'It is shown only here, and only now.',
-      ),
-      if (!_typingOwn)
-        Padding(
-          padding: const EdgeInsets.all(HelixSpace.md),
-          child: Semantics(
-            label: 'Your recovery secret',
-            value: state.secret.split('').join(' '),
-            child: ExcludeSemantics(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerLow,
-                  borderRadius: HelixRadius.card,
-                  border: Border.all(color: scheme.outlineVariant),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(HelixSpace.md),
-                  child: Center(
-                    child: Text(
-                      state.secret,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontFamily: 'monospace',
-                        letterSpacing: 1,
+      if (!done) ...[
+        const PageIntro(
+          text:
+              'Helix made a secret for this backup. Save it somewhere safe, '
+              'away from this phone: a password manager or a note kept with '
+              'your papers. You will need it to open the backup on a new '
+              'phone. It is shown only here, and only now.',
+        ),
+        if (!ready && state.error == null)
+          const Padding(
+            padding: EdgeInsets.all(HelixSpace.md),
+            child: LinearProgressIndicator(),
+          ),
+        if (ready)
+          Padding(
+            padding: const EdgeInsets.all(HelixSpace.md),
+            child: Semantics(
+              label: 'Your recovery secret',
+              value: state.secret.replaceAll('-', ' ').split('').join(' '),
+              child: ExcludeSemantics(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerLow,
+                    borderRadius: HelixRadius.card,
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(HelixSpace.md),
+                    child: Center(
+                      child: Text(
+                        state.secret,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontFamily: 'monospace',
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
                   ),
@@ -125,75 +133,47 @@ class _RecoveryBackupPageState extends ConsumerState<RecoveryBackupPage> {
               ),
             ),
           ),
-        )
-      else
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: HelixSpace.md),
-          child: TextField(
-            controller: _own,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: const InputDecoration(
-              labelText: 'Your own secret',
-              helperText: 'At least 16 characters, or 6 words',
+        if (ready)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: HelixSpace.md),
+            child: Wrap(
+              spacing: HelixSpace.xs,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: state.busy ? null : controller.copy,
+                  icon: const Icon(Icons.copy_outlined),
+                  label: const Text('Copy'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: state.busy ? null : controller.share,
+                  icon: const Icon(Icons.ios_share),
+                  label: const Text('Share'),
+                ),
+              ],
             ),
-            onChanged: controller.useOwn,
           ),
-        ),
-      if (!done)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: HelixSpace.md),
-          child: Wrap(
-            spacing: HelixSpace.xs,
-            children: [
-              if (!_typingOwn)
-                TextButton(
-                  onPressed: state.busy ? null : controller.regenerate,
-                  child: const Text('Generate another'),
-                ),
-              TextButton(
-                onPressed: state.busy
-                    ? null
-                    : () {
-                        setState(() => _typingOwn = !_typingOwn);
-                        if (_typingOwn) {
-                          _own.clear();
-                          controller.useOwn('');
-                        } else {
-                          controller.regenerate();
-                        }
-                      },
-                child: Text(
-                  _typingOwn ? 'Use a generated secret' : 'Type my own instead',
-                ),
-              ),
-            ],
-          ),
-        ),
-      if (!done)
+        if (state.handoffNote != null)
+          InlineNotice(message: state.handoffNote!),
         CheckboxListTile(
           value: state.written,
-          onChanged: state.busy
+          onChanged: state.busy || !ready
               ? null
               : (value) => controller.setWritten(value ?? false),
-          title: const Text('I have written it down'),
+          title: const Text('I saved it'),
           controlAffinity: ListTileControlAffinity.leading,
         ),
-      if (done)
+        BusyFilledButton(
+          label: 'Create recovery backup',
+          icon: Icons.key_outlined,
+          busy: state.stage == RecoveryStage.creating,
+          onPressed: state.written && ready ? controller.create : null,
+        ),
+      ] else
         InlineNotice(
           kind: InlineNoticeKind.success,
           message: state.created!.skipped
               ? 'There was no history to back up yet.'
               : 'Recovery backup created.',
-        )
-      else
-        BusyFilledButton(
-          label: 'Create recovery backup',
-          icon: Icons.key_outlined,
-          busy: state.stage == RecoveryStage.creating,
-          onPressed: state.written && state.secret.trim().isNotEmpty
-              ? controller.create
-              : null,
         ),
     ];
   }

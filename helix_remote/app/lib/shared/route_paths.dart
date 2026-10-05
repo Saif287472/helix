@@ -33,6 +33,7 @@ abstract final class RoutePaths {
   // Settings pages
   static const account = '/settings/account';
   static const changePassword = '/settings/account/password';
+  static const deleteAccount = '/settings/account/delete';
   static const privacy = '/settings/privacy';
   static const blocked = '/settings/privacy/blocked';
   static const notifications = '/settings/notifications';

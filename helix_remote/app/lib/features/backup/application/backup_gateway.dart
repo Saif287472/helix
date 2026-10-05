@@ -35,6 +35,10 @@ abstract interface class BackupGateway {
 
   Future<RestoreOutcome> restoreHistory();
 
+  /// A new random recovery secret from the engine (160 bits). Nothing is
+  /// stored; the caller shows it once.
+  Future<String> generateRecoverySecret();
+
   /// Seals the history and the account's secrets under [recoverySecret]. The
   /// secret is used and dropped: it is never stored or sent.
   Future<BackupOutcome> createRecoveryBackup(String recoverySecret);
@@ -193,6 +197,10 @@ final class EngineBackupGateway implements BackupGateway {
     final result = await (await _backup).restoreHistory();
     return _outcome(result);
   });
+
+  @override
+  Future<String> generateRecoverySecret() =>
+      _guard(() async => (await _backup).generateRecoverySecret());
 
   @override
   Future<BackupOutcome> createRecoveryBackup(String recoverySecret) =>

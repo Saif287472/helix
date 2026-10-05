@@ -30,6 +30,7 @@ final class GroupMemberView {
     required this.isSelf,
     required this.actions,
     this.server,
+    this.unconfirmed = false,
   });
 
   final String account;
@@ -47,11 +48,16 @@ final class GroupMemberView {
   /// the name so a federated member is recognisable.
   final String? server;
 
+  /// The server's roster lists them but this device has not confirmed them
+  /// (see `group_pending.dart`): they get no keys from this device yet.
+  final bool unconfirmed;
+
   String get title => isSelf ? 'You' : names.display;
 
   /// The line under the name: the role, the server and the number or
   /// `~Helix name`.
   String get subtitle => [
+    if (unconfirmed) 'Not confirmed',
     if (role != GroupMemberRole.member) role.label,
     ?server,
     if (!isSelf) ?names.secondary,
@@ -70,10 +76,12 @@ final class GroupMemberView {
       other.role == role &&
       other.isSelf == isSelf &&
       listEquals(other.actions, actions) &&
-      other.server == server;
+      other.server == server &&
+      other.unconfirmed == unconfirmed;
 
   @override
-  int get hashCode => Object.hash(account, names, role, isSelf, server);
+  int get hashCode =>
+      Object.hash(account, names, role, isSelf, server, unconfirmed);
 }
 
 /// A group, ready to draw.
@@ -140,7 +148,11 @@ List<MemberAction> _actionsFor(GroupMemberRole viewer, GroupMemberInfo target) {
 
 /// Builds the screen's view of [snapshot]: members named by the
 /// people-naming order, owner first, then admins, then everyone else by name.
-GroupInfoView buildGroupInfo(GroupSnapshot snapshot, PeopleDirectory names) {
+GroupInfoView buildGroupInfo(
+  GroupSnapshot snapshot,
+  PeopleDirectory names, {
+  Set<String> unconfirmed = const {},
+}) {
   final members = [
     for (final m in snapshot.members)
       GroupMemberView(
@@ -150,6 +162,7 @@ GroupInfoView buildGroupInfo(GroupSnapshot snapshot, PeopleDirectory names) {
         isSelf: m.isSelf,
         actions: _actionsFor(snapshot.selfRole, m),
         server: m.server,
+        unconfirmed: unconfirmed.contains(m.account),
       ),
   ];
   int rank(GroupMemberView m) => switch (m.role) {
@@ -183,6 +196,15 @@ final groupSnapshotProvider = StreamProvider.family<GroupSnapshot?, String>((
   yield* port.watch(groupId);
 });
 
+/// The accounts waiting for confirmation in [groupId], live.
+final pendingAccountsProvider = StreamProvider.autoDispose
+    .family<List<String>, String>((ref, groupId) async* {
+      final port = await ref.watch(groupsPortProvider.future);
+      yield* port
+          .watchPendingMembers(groupId)
+          .map((pending) => [for (final p in pending) p.account]);
+    });
+
 /// The group screens' view of a group.
 final groupInfoProvider = Provider.family<AsyncValue<GroupInfoView?>, String>((
   ref,
@@ -191,7 +213,15 @@ final groupInfoProvider = Provider.family<AsyncValue<GroupInfoView?>, String>((
   final snapshot = ref.watch(groupSnapshotProvider(groupId));
   final names =
       ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
+  final unconfirmed = {
+    for (final p
+        in ref.watch(pendingAccountsProvider(groupId)).value ??
+            const <String>[])
+      p,
+  };
   return snapshot.whenData(
-    (value) => value == null ? null : buildGroupInfo(value, names),
+    (value) => value == null
+        ? null
+        : buildGroupInfo(value, names, unconfirmed: unconfirmed),
   );
 });

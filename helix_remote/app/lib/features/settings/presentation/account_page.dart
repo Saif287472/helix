@@ -161,7 +161,8 @@ class AccountPage extends ConsumerWidget {
   }
 
   /// Deleting is the one action that cannot be undone, so it takes three
-  /// steps: an offer to export first, a warning, and typing DELETE.
+  /// steps: an offer to export first, a warning, and then the page that asks
+  /// for DELETE and proof that this is the account's owner.
   Future<void> _confirmDelete(
     BuildContext context,
     WidgetRef ref,
@@ -201,14 +202,9 @@ class AccountPage extends ConsumerWidget {
       await actions.exportData();
     }
     if (!context.mounted) return;
-    final typed = await showHelixTextInputDialog(
-      context,
-      title: 'Type DELETE to confirm',
-      label: 'DELETE',
-      confirmLabel: 'Delete account',
-    );
-    if (typed == null) return;
-    await actions.deleteAccount(typed);
+    // The last step (the word DELETE and the proof of ownership) is its own
+    // page, because what it asks for depends on the account.
+    await context.push(RoutePaths.deleteAccount);
   }
 }
 

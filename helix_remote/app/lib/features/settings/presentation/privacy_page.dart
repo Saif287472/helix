@@ -20,8 +20,37 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 class PrivacyPage extends ConsumerWidget {
   const PrivacyPage({super.key});
 
+  /// Turning "find me by phone number" back on needs the account's own number
+  /// (the server rebuilds the entry from it and checks it against the verified
+  /// one). The engine knows it on a device that registered with it; otherwise
+  /// the person types it once.
+  Future<void> _askForNumber(BuildContext context, WidgetRef ref) async {
+    final controller = ref.read(privacyProvider.notifier);
+    while (context.mounted) {
+      final text = await showHelixTextInputDialog(
+        context,
+        title: 'Your phone number',
+        label: 'With its country code, like +88017XXXXXXXX',
+        confirmLabel: 'Turn on',
+      );
+      if (text == null) {
+        controller.cancelNumber();
+        return;
+      }
+      if (await controller.submitNumber(text)) return;
+      if (!context.mounted) return;
+      showHelixSnackBar(
+        context,
+        'Enter the number with its country code, like +88017XXXXXXXX.',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(privacyProvider.select((s) => s.needsNumber), (was, now) {
+      if (now && !(was ?? false)) _askForNumber(context, ref);
+    });
     final privacy = ref.watch(privacyProvider);
     final controller = ref.read(privacyProvider.notifier);
     final prefs = privacy.prefs;

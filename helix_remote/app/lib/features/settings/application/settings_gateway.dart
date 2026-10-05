@@ -6,8 +6,11 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
+import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_engine/helix_remote_engine.dart' show maskPhone;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart' as proto;
+import 'package:helix_remote_protocol/helix_remote_protocol.dart'
+    show ErrorCode, PhonePurpose;
 
 /// The account-level calls the settings pages make: who this account is,
 /// changing the password, exporting and deleting.
@@ -35,15 +38,43 @@ abstract interface class SettingsGateway {
   /// only: the server holds no message content.
   Future<Uint8List> exportAccount();
 
-  /// Deletes the account on the server. Not reversible. The caller signs this
-  /// device out afterwards.
-  Future<void> deleteAccount();
+  /// Deletes the account on the server and wipes this device (the engine's
+  /// `deleteAccount`). Not reversible. Proves ownership the way the server
+  /// accepts for this account: [password] (an account with one; [phoneNumber]
+  /// only when this device does not remember the number), else
+  /// [verificationToken] (a code texted to the account's number, see
+  /// [requestDeletionCode]), else neither: this device signs a server
+  /// challenge with its key. Throws [DeletionNeedsCode] when the server wants
+  /// the code and none was given; whatever the API throws otherwise (a wrong
+  /// password is `invalid_credentials`, a lockout `password_locked`).
+  Future<void> deleteAccount({
+    String? password,
+    String? verificationToken,
+    String? phoneNumber,
+  });
+
+  /// Texts a code to the account's phone number to confirm the deletion.
+  /// [phoneNumber] (E.164) is only for a device that does not know it; without
+  /// one it throws [PhoneNumberNeeded].
+  Future<DeletionCodeRequest> requestDeletionCode({String? phoneNumber});
+
+  /// Checks the code and returns the single-use verification token for
+  /// [deleteAccount].
+  Future<String> verifyDeletionCode({
+    required String challengeId,
+    required String code,
+  });
 
   // ------------------------------------------------------------- privacy
 
   Future<PrivacyPrefs> privacy();
 
-  Future<void> setPrivacy(PrivacyPrefs prefs);
+  /// Saves the settings. Turning "find me by phone number" back on needs the
+  /// account's own number: the server rebuilds the entry from it. The engine
+  /// knows the number this device registered with; [phoneNumber] (E.164) is for
+  /// a device that does not. Throws [PhoneNumberNeeded] when it is required
+  /// and unknown, before anything is sent.
+  Future<void> setPrivacy(PrivacyPrefs prefs, {String? phoneNumber});
 
   Stream<List<BlockedPerson>> watchBlocked();
 
@@ -135,9 +166,64 @@ final class EngineSettingsGateway implements SettingsGateway {
   }
 
   @override
-  Future<void> deleteAccount() async {
-    final api = (await _ref.read(runtimeProvider.future)).api;
-    await api.compliance.deleteAccount();
+  Future<void> deleteAccount({
+    String? password,
+    String? verificationToken,
+    String? phoneNumber,
+  }) async {
+    final engine = (await _ref.read(runtimeProvider.future)).engine;
+    try {
+      await engine.deleteAccount(
+        password: password,
+        verificationToken: verificationToken,
+        phoneNumber: phoneNumber,
+      );
+    } on ApiException catch (e) {
+      // The server lists what it would have accepted. With no proof given,
+      // "a code texted to the number" means: ask for one.
+      final accepted = e.details?['accepted'];
+      if (e.code == ErrorCode.invalidCredentials &&
+          password == null &&
+          verificationToken == null &&
+          accepted is List &&
+          accepted.contains('verification_token')) {
+        throw const DeletionNeedsCode();
+      }
+      rethrow;
+    }
+  }
+
+  /// The number to text: the one this device registered with, else [typed].
+  Future<String> _numberForCode(String? typed) async {
+    final engine = (await _ref.read(runtimeProvider.future)).engine;
+    final known = (await engine.account.current())?.phoneNumber;
+    final number = known ?? typed;
+    if (number == null || number.isEmpty) throw const PhoneNumberNeeded();
+    return number;
+  }
+
+  @override
+  Future<DeletionCodeRequest> requestDeletionCode({String? phoneNumber}) async {
+    final engine = (await _ref.read(runtimeProvider.future)).engine;
+    final number = await _numberForCode(phoneNumber);
+    final challenge = await engine.account.requestPhoneCode(
+      number,
+      purpose: PhonePurpose.signIn,
+    );
+    return DeletionCodeRequest(
+      challengeId: challenge.challengeId,
+      sentTo: maskPhone(number),
+    );
+  }
+
+  @override
+  Future<String> verifyDeletionCode({
+    required String challengeId,
+    required String code,
+  }) async {
+    final engine = (await _ref.read(runtimeProvider.future)).engine;
+    final verified = await engine.account.verifyPhone(challengeId, code);
+    return verified.verificationToken;
   }
 
   @override
@@ -154,17 +240,24 @@ final class EngineSettingsGateway implements SettingsGateway {
   }
 
   @override
-  Future<void> setPrivacy(PrivacyPrefs prefs) async {
+  Future<void> setPrivacy(PrivacyPrefs prefs, {String? phoneNumber}) async {
     final engine = (await _ref.read(runtimeProvider.future)).engine;
-    await engine.settings.setPrivacy(
-      proto.PrivacySettings(
-        discoverableByPhone: prefs.discoverableByPhone,
-        discoverableByName: prefs.discoverableByName,
-        lastSeen: _wire(prefs.lastSeen),
-        online: _wire(prefs.online),
-        groupAdd: _wire(prefs.groupAdd),
-      ),
-    );
+    try {
+      await engine.settings.setPrivacy(
+        proto.PrivacySettings(
+          discoverableByPhone: prefs.discoverableByPhone,
+          discoverableByName: prefs.discoverableByName,
+          lastSeen: _wire(prefs.lastSeen),
+          online: _wire(prefs.online),
+          groupAdd: _wire(prefs.groupAdd),
+        ),
+        phoneNumber: phoneNumber,
+      );
+    } on ArgumentError {
+      // The engine's way of saying it has no number for the account: before
+      // anything was sent. (Nothing else it throws here is an ArgumentError.)
+      throw const PhoneNumberNeeded();
+    }
   }
 
   @override

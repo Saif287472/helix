@@ -172,37 +172,6 @@ final class AccountActions extends Notifier<AccountActionState> {
     }
   }
 
-  /// Deletes the account on the server, then signs this device out and wipes
-  /// it. [confirmation] must be exactly `DELETE`: the same word the operator's
-  /// console asks for, so it cannot be done by a stray tap.
-  Future<bool> deleteAccount(String confirmation) async {
-    if (state.busy) return false;
-    if (confirmation.trim() != 'DELETE') {
-      state = const AccountActionState(
-        error: 'Type DELETE in capital letters to confirm.',
-      );
-      return false;
-    }
-    state = const AccountActionState(busy: true);
-    try {
-      await ref.read(settingsGatewayProvider).deleteAccount();
-    } on Object catch (error) {
-      state = AccountActionState(
-        error: describeFailure(error, now: ref.read(clockProvider)()).message,
-      );
-      return false;
-    }
-    // The account is gone. Signing out here wipes the phone's copy; if the
-    // server says the session is already over, the wipe still happens.
-    try {
-      await ref.read(signOutProvider)();
-    } on Object {
-      // Nothing more to do: the router moves to sign-in when the engine
-      // reports signed out.
-    }
-    return true;
-  }
-
   Future<void> signOut() async {
     if (state.busy) return;
     state = const AccountActionState(busy: true);

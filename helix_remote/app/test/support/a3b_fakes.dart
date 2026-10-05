@@ -12,6 +12,7 @@ import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/notifications/notification_permission.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
 import 'package:helix_remote/core/platform/profile_image_source.dart';
+import 'package:helix_remote/core/platform/secret_clipboard.dart';
 import 'package:helix_remote/core/platform/share_adapter.dart';
 import 'package:helix_remote/core/platform/storage_usage.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
@@ -23,8 +24,11 @@ import 'package:helix_remote/features/devices/application/devices_models.dart';
 import 'package:helix_remote/features/profile/application/profile_gateway.dart';
 import 'package:helix_remote/features/settings/application/settings_gateway.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
+import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart' show EngineConfig;
+import 'package:helix_remote_protocol/helix_remote_protocol.dart'
+    show ErrorCode;
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// Fakes for the settings-side features (Phase A3b).
@@ -92,6 +96,22 @@ class FakeDeviceAuthenticator implements DeviceAuthenticator {
   Future<bool> confirm(String reason) async {
     asked.add(reason);
     return passes;
+  }
+}
+
+/// Records what the recovery page hands to the clipboard and the share sheet.
+class FakeSecretHandoff implements SecretHandoff {
+  final List<String> copied = [];
+  final List<String> shared = [];
+  var shareWorks = true;
+
+  @override
+  Future<void> copy(String secret) async => copied.add(secret);
+
+  @override
+  Future<bool> share(String secret, {required String subject}) async {
+    shared.add(secret);
+    return shareWorks;
   }
 }
 
@@ -212,6 +232,17 @@ class FakeBackupGateway implements BackupGateway {
 
   final List<String> calls = [];
   String? lastSecret;
+
+  /// What the engine's generator hands out next (a different one each time).
+  var _secrets = 0;
+
+  @override
+  Future<String> generateRecoverySecret() async {
+    calls.add('generateRecoverySecret');
+    _secrets++;
+    final tag = String.fromCharCode(0x41 + _secrets % 26) * 4;
+    return '$tag-EFGH-JKMN-PQRS-TUVW-XYZ2-3456-789A';
+  }
 
   @override
   Stream<BackupSummary> watchSummary() => summary.stream;
@@ -369,6 +400,13 @@ class FakeDevicesGateway implements DevicesGateway {
   FakeLinkSession? session;
   LinkProblem? beginFails;
 
+  /// The devices the account has when [deviceIds] is asked, and the ones that
+  /// have appeared by the time [sendHistoryToNewDevice] runs.
+  Set<String> idsBefore = {'d1', 'd2'};
+  Set<String> idsAfter = {'d1', 'd2', 'd3'};
+  LinkProblem? sendHistoryFails;
+  Set<String>? historySentTo;
+
   @override
   Stream<List<DeviceItem>> watch() => devices.stream;
 
@@ -416,6 +454,26 @@ class FakeDevicesGateway implements DevicesGateway {
   }
 
   @override
+  Future<Set<String>> deviceIds() async {
+    calls.add('deviceIds');
+    return idsBefore;
+  }
+
+  @override
+  Future<String> sendHistoryToNewDevice(Set<String> knownBefore) async {
+    calls.add('sendHistoryToNewDevice');
+    if (sendHistoryFails != null) {
+      throw LinkProblemException(sendHistoryFails!);
+    }
+    final fresh = idsAfter.difference(knownBefore);
+    if (fresh.isEmpty) {
+      throw const LinkProblemException(LinkProblem.notLinkedYet);
+    }
+    historySentTo = fresh;
+    return 't1';
+  }
+
+  @override
   Future<LinkSession> beginLink({String? deviceName}) async {
     calls.add('beginLink');
     if (beginFails != null) throw LinkProblemException(beginFails!);
@@ -423,9 +481,25 @@ class FakeDevicesGateway implements DevicesGateway {
   }
 }
 
+/// The new device's side of a link. A test plays the other device with
+/// [approval] (complete it with a proposal, or fail it with a
+/// [LinkProblemException] for an expiry), answers "Is this your account?"
+/// through the page, and may hold the final sign-in with [signIn].
 class FakeLinkSession implements LinkSession {
-  final Completer<void> done = Completer<void>();
+  final Completer<LinkProposalView> approval = Completer<LinkProposalView>();
+  Completer<void>? signIn;
   var cancelled = false;
+
+  /// What the question showed, and the answer it got (null until asked).
+  LinkProposalView? asked;
+  bool? answer;
+  bool signedIn = false;
+
+  static const proposal = LinkProposalView(
+    phoneMask: '+88017*****01',
+    helixName: 'anna.k',
+    keyCode: 'a1b2 c3d4 e5f6 a7b8 c9d0',
+  );
 
   @override
   String get code =>
@@ -438,7 +512,14 @@ class FakeLinkSession implements LinkSession {
   DateTime get expiresAt => DateTime(2026, 10, 3, 10, 10);
 
   @override
-  Future<void> complete() => done.future;
+  Future<void> complete({required LinkConfirm confirm}) async {
+    final offered = await approval.future;
+    asked = offered;
+    answer = await confirm(offered);
+    if (answer != true) throw const LinkProblemException(LinkProblem.declined);
+    await signIn?.future;
+    signedIn = true;
+  }
 
   @override
   void cancel() => cancelled = true;
@@ -571,6 +652,29 @@ class FakeSettingsGateway implements SettingsGateway {
   String? changedTo;
   String? changedCurrent;
 
+  // ---- account deletion: what the server would accept, and what it got
+
+  /// The password the account has; a different one is `invalid_credentials`.
+  String? accountPassword;
+
+  /// The server texts: with no proof given it asks for a code.
+  var serverWantsCode = false;
+  String correctCode = '123456';
+  Object? codeRequestFails;
+  var knownNumber = true;
+  final List<String> sentCodesTo = [];
+  String? deletedWithPassword;
+  String? deletedWithToken;
+  String? deletedWithNumber;
+  var deletedWithDeviceKey = false;
+
+  // ---- privacy: the number the account needs to be found by phone again
+
+  /// The engine has no number for the account, so turning phone discovery on
+  /// needs one typed.
+  var privacyNeedsNumber = false;
+  String? privacyNumber;
+
   @override
   Stream<SettingsHeader> watchHeader() => header.stream;
 
@@ -600,9 +704,58 @@ class FakeSettingsGateway implements SettingsGateway {
   }
 
   @override
-  Future<void> deleteAccount() async {
+  Future<void> deleteAccount({
+    String? password,
+    String? verificationToken,
+    String? phoneNumber,
+  }) async {
     calls.add('deleteAccount');
     if (deleteFails != null) throw deleteFails!;
+    if (password != null) {
+      if (accountPassword != null && password != accountPassword) {
+        throw const ApiException(
+          status: 401,
+          code: ErrorCode.invalidCredentials,
+        );
+      }
+      deletedWithPassword = password;
+      deletedWithNumber = phoneNumber;
+    } else if (verificationToken != null) {
+      if (verificationToken != 'token-ok') {
+        throw const ApiException(
+          status: 401,
+          code: ErrorCode.invalidCredentials,
+        );
+      }
+      deletedWithToken = verificationToken;
+    } else {
+      if (serverWantsCode) throw const DeletionNeedsCode();
+      deletedWithDeviceKey = true;
+    }
+  }
+
+  @override
+  Future<DeletionCodeRequest> requestDeletionCode({String? phoneNumber}) async {
+    calls.add('requestDeletionCode');
+    if (codeRequestFails != null) throw codeRequestFails!;
+    if (!knownNumber && phoneNumber == null) throw const PhoneNumberNeeded();
+    sentCodesTo.add(phoneNumber ?? 'known');
+    return const DeletionCodeRequest(
+      challengeId: 'challenge-1',
+      sentTo: '+88017*****01',
+    );
+  }
+
+  @override
+  Future<String> verifyDeletionCode({
+    required String challengeId,
+    required String code,
+  }) async {
+    calls.add('verifyDeletionCode');
+    if (code != correctCode) {
+      throw const ApiException(status: 400, code: ErrorCode.invalidCode);
+    }
+    return 'token-ok';
   }
 
   @override
@@ -612,9 +765,14 @@ class FakeSettingsGateway implements SettingsGateway {
   }
 
   @override
-  Future<void> setPrivacy(PrivacyPrefs next) async {
+  Future<void> setPrivacy(PrivacyPrefs next, {String? phoneNumber}) async {
     calls.add('setPrivacy');
+    final turningOn = next.discoverableByPhone && !prefs.discoverableByPhone;
+    if (turningOn && privacyNeedsNumber && phoneNumber == null) {
+      throw const PhoneNumberNeeded();
+    }
     if (privacySaveFails != null) throw privacySaveFails!;
+    if (turningOn) privacyNumber = phoneNumber;
     savedPrefs = next;
     prefs = next;
   }
@@ -671,6 +829,7 @@ List<Override> a3bOverrides({
   FakeSettingsGateway? settingsGateway,
   FakeDeviceAuthenticator? auth,
   FakeShareAdapter? share,
+  FakeSecretHandoff? secrets,
   FakeNetworkProbe? network,
   FakeStorageProbe? storage,
   FakeNotificationPermission? permission,
@@ -707,6 +866,7 @@ List<Override> a3bOverrides({
       auth ?? FakeDeviceAuthenticator(),
     ),
     shareAdapterProvider.overrideWithValue(share ?? FakeShareAdapter()),
+    secretHandoffProvider.overrideWithValue(secrets ?? FakeSecretHandoff()),
     networkProbeProvider.overrideWithValue(network ?? FakeNetworkProbe()),
     storageUsageProbeProvider.overrideWithValue(storage ?? FakeStorageProbe()),
     notificationPermissionSourceProvider.overrideWithValue(

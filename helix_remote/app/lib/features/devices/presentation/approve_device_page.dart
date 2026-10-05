@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/devices/application/devices_providers.dart';
 import 'package:helix_remote/shared/widgets/inline_notice.dart';
+import 'package:helix_remote/shared/widgets/key_code_display.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// Settings > Devices > Link a new device.
@@ -85,33 +86,27 @@ class _ApproveDevicePageState extends ConsumerState<ApproveDevicePage> {
             ),
             Padding(
               padding: const EdgeInsets.all(HelixSpace.md),
-              child: Semantics(
+              child: KeyCodeDisplay(
                 label: 'Check number',
-                value: state.request?.check.split('').join(' '),
-                child: ExcludeSemantics(
-                  child: Column(
-                    children: [
-                      Text(
-                        'Check number',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      Text(
-                        state.request?.check ?? '',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.headlineMedium?.copyWith(letterSpacing: 2),
-                      ),
-                    ],
-                  ),
-                ),
+                code: state.request?.check ?? '',
               ),
             ),
+            if (state.request?.accountKeyCode != null)
+              Padding(
+                padding: const EdgeInsets.all(HelixSpace.md),
+                child: KeyCodeDisplay(
+                  label: 'Your account key code',
+                  code: state.request!.accountKeyCode!,
+                ),
+              ),
             const PageIntro(
               text:
                   'The same number should be showing on the new device. If '
                   'it is not, or if the device is not in your hands right '
-                  'now, do not approve it. Nobody from Helix will ever ask '
-                  'you to scan a code.',
+                  'now, do not approve it. The new device will then ask '
+                  "whether the account is its owner's and show the key code "
+                  'above: compare them. Nobody from Helix will ever ask you '
+                  'to scan a code.',
             ),
             BusyFilledButton(
               label: 'Approve',
@@ -137,9 +132,40 @@ class _ApproveDevicePageState extends ConsumerState<ApproveDevicePage> {
               kind: InlineNoticeKind.success,
               message:
                   'The device is joining your account. It will show up in '
-                  'your device list in a moment.',
+                  'your device list in a moment, once its owner has '
+                  'confirmed the account.',
             ),
-            BusyFilledButton(label: 'Done', onPressed: () => context.pop()),
+            const PageIntro(
+              title: 'Chat history',
+              text:
+                  'A new device starts without your old messages. You can '
+                  'send them from this phone, encrypted: the new device '
+                  'must accept them. Nothing is sent unless you choose to.',
+            ),
+            if (state.historyError != null)
+              InlineNotice(
+                kind: InlineNoticeKind.error,
+                message: state.historyError!,
+              ),
+            if (state.historySent)
+              const InlineNotice(
+                kind: InlineNoticeKind.success,
+                message:
+                    'Your history is on its way. The new device will ask to '
+                    'accept it under Settings, Backup.',
+              )
+            else
+              BusyFilledButton(
+                label: 'Send history to this device',
+                icon: Icons.send_to_mobile_outlined,
+                busy: state.sendingHistory,
+                onPressed: controller.sendHistory,
+              ),
+            BusyFilledButton(
+              label: 'Done',
+              tonal: !state.historySent,
+              onPressed: () => context.pop(),
+            ),
           ],
         ),
       },

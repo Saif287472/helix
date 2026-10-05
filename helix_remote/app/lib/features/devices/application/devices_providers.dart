@@ -185,12 +185,38 @@ class ApproveLinkState {
     this.code = '',
     this.request,
     this.error,
+    this.sendingHistory = false,
+    this.historySent = false,
+    this.historyError,
   });
 
   final ApproveStep step;
   final String code;
   final LinkRequest? request;
   final String? error;
+
+  /// After the approval: "Send history to this device" is running, finished,
+  /// or failed with a sentence. History is never sent unless asked for.
+  final bool sendingHistory;
+  final bool historySent;
+  final String? historyError;
+
+  ApproveLinkState copyWith({
+    bool? sendingHistory,
+    bool? historySent,
+    String? historyError,
+    bool clearHistoryError = false,
+  }) => ApproveLinkState(
+    step: step,
+    code: code,
+    request: request,
+    error: error,
+    sendingHistory: sendingHistory ?? this.sendingHistory,
+    historySent: historySent ?? this.historySent,
+    historyError: clearHistoryError
+        ? null
+        : (historyError ?? this.historyError),
+  );
 }
 
 String linkProblemText(LinkProblem problem) => switch (problem) {
@@ -203,6 +229,16 @@ String linkProblemText(LinkProblem problem) => switch (problem) {
   LinkProblem.expired =>
     'That code has expired. Codes last ten minutes. Ask the new device to '
         'show a new one.',
+  LinkProblem.declined =>
+    'You said that was not your account, so nothing was kept and this '
+        'device is not linked. If you did mean to link it, show a new code '
+        'and try again.',
+  LinkProblem.notLinkedYet =>
+    'The new device has not finished joining yet. Wait a moment and try '
+        'again.',
+  LinkProblem.untrusted =>
+    'The approval could not be verified, so nothing was kept. Show a new '
+        'code and ask your other device to approve it again.',
   LinkProblem.notConfirmed =>
     'Approval needs your phone\'s own unlock (fingerprint, face or PIN) so '
         'nobody else holding it can add a device.',
@@ -226,6 +262,10 @@ final approveLinkProvider =
     );
 
 final class ApproveLinkController extends Notifier<ApproveLinkState> {
+  /// The account's devices before the approval, so the one that appears after
+  /// it is known (and the history goes to it alone).
+  Set<String> _devicesBefore = const {};
+
   @override
   ApproveLinkState build() => const ApproveLinkState();
 
@@ -263,7 +303,14 @@ final class ApproveLinkController extends Notifier<ApproveLinkState> {
           !await auth.confirm('Approve a new device for your Helix account')) {
         throw const LinkProblemException(LinkProblem.notConfirmed);
       }
-      await ref.read(devicesGatewayProvider).approveLink(code);
+      final gateway = ref.read(devicesGatewayProvider);
+      try {
+        _devicesBefore = await gateway.deviceIds();
+      } on Object {
+        // Offline for the list only; the approval below says so if it matters.
+        _devicesBefore = const {};
+      }
+      await gateway.approveLink(code);
       state = const ApproveLinkState(step: ApproveStep.done);
     } on LinkProblemException catch (e) {
       state = ApproveLinkState(
@@ -282,12 +329,40 @@ final class ApproveLinkController extends Notifier<ApproveLinkState> {
     }
   }
 
+  /// "Send history to this device", on the approving side after the link.
+  /// The engine's history transfer is off by default: this is the person
+  /// choosing it, and the other device must still accept it.
+  Future<void> sendHistory() async {
+    if (state.step != ApproveStep.done ||
+        state.sendingHistory ||
+        state.historySent) {
+      return;
+    }
+    state = state.copyWith(sendingHistory: true, clearHistoryError: true);
+    try {
+      await ref
+          .read(devicesGatewayProvider)
+          .sendHistoryToNewDevice(_devicesBefore);
+      state = state.copyWith(sendingHistory: false, historySent: true);
+    } on LinkProblemException catch (e) {
+      state = state.copyWith(
+        sendingHistory: false,
+        historyError: linkProblemText(e.problem),
+      );
+    } on Object catch (error) {
+      state = state.copyWith(
+        sendingHistory: false,
+        historyError: describeFailure(error).message,
+      );
+    }
+  }
+
   void reset() => state = const ApproveLinkState();
 }
 
 // ------------------------------------------------------ linking this device
 
-enum LinkThisStep { starting, waiting, finishing, failed }
+enum LinkThisStep { starting, waiting, confirming, finishing, failed }
 
 class LinkThisDeviceState {
   const LinkThisDeviceState({
@@ -297,6 +372,7 @@ class LinkThisDeviceState {
     this.expiresAt,
     this.error,
     this.expired = false,
+    this.proposal,
   });
 
   final LinkThisStep step;
@@ -307,7 +383,19 @@ class LinkThisDeviceState {
 
   /// The code ran out; offer a new one.
   final bool expired;
+
+  /// While [step] is `confirming`: the account the approval offers, for "Is
+  /// this your account?". Nothing is kept until the person confirms.
+  final LinkProposalView? proposal;
 }
+
+/// How long "Is this your account?" waits for an answer before it counts as
+/// no. The approval's token does not stay valid for long, and a question left
+/// open on an unattended phone should not keep a way into an account open.
+/// Overridden in tests.
+final linkConfirmTimeoutProvider = Provider<Duration>(
+  (ref) => const Duration(minutes: 5),
+);
 
 /// The new device's side of linking: shows a QR code, waits for a signed-in
 /// device to approve it, and then signs this device in. After that it asks for
@@ -324,6 +412,11 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
   var _linked = false;
   var _signedIn = false;
 
+  /// The pending "Is this your account?" answer, while one is on screen.
+  Completer<bool>? _answer;
+  Timer? _answerTimer;
+  var _timedOut = false;
+
   @override
   LinkThisDeviceState build() {
     final postSignIn = ref.read(postSignInProvider.notifier);
@@ -332,6 +425,8 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
     });
     ref.onDispose(() {
       _disposed = true;
+      // Leaving the page is a no: nothing is kept.
+      _settleAnswer(false);
       _session?.cancel();
       // The restore step was asked for while waiting; if the person left
       // without linking, take the request back (after this provider is gone,
@@ -342,6 +437,39 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
   }
 
   bool get _stale => _disposed;
+
+  /// The person's answer to "Is this your account?".
+  void confirmAccount() {
+    if (_answer == null) return;
+    state = const LinkThisDeviceState(step: LinkThisStep.finishing);
+    _settleAnswer(true);
+  }
+
+  /// "No, this is not my account" (or "Cancel"): the approval is discarded.
+  void rejectAccount() => _settleAnswer(false);
+
+  void _settleAnswer(bool yes) {
+    _answerTimer?.cancel();
+    _answerTimer = null;
+    final answer = _answer;
+    _answer = null;
+    if (answer != null && !answer.isCompleted) answer.complete(yes);
+  }
+
+  Future<bool> _ask(LinkProposalView proposal, int generation) {
+    if (_stale || generation != _generation) return Future.value(false);
+    _timedOut = false;
+    final answer = _answer = Completer<bool>();
+    state = LinkThisDeviceState(
+      step: LinkThisStep.confirming,
+      proposal: proposal,
+    );
+    _answerTimer = Timer(ref.read(linkConfirmTimeoutProvider), () {
+      _timedOut = true;
+      _settleAnswer(false);
+    });
+    return answer.future;
+  }
 
   /// Makes a code and waits. Called when the page opens and for "New code".
   Future<void> start() async {
@@ -388,11 +516,30 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
     // exists, with no flash of the home tabs in between.
     ref.read(postSignInProvider.notifier).offerRestore();
     try {
-      await session.complete();
+      await session.complete(confirm: (proposal) => _ask(proposal, generation));
     } on LinkProblemException catch (e) {
       if (!_stale && generation == _generation) {
         ref.read(postSignInProvider.notifier).done();
-        _fail(e.problem);
+        if (e.problem == LinkProblem.declined && _timedOut) {
+          state = const LinkThisDeviceState(
+            step: LinkThisStep.failed,
+            error:
+                'Nobody answered, so nothing was kept and this device is not '
+                'linked. Show a new code to try again.',
+            expired: true,
+          );
+        } else {
+          _fail(e.problem);
+        }
+      }
+      return;
+    } on Object catch (error) {
+      if (!_stale && generation == _generation) {
+        ref.read(postSignInProvider.notifier).done();
+        state = LinkThisDeviceState(
+          step: LinkThisStep.failed,
+          error: describeFailure(error).message,
+        );
       }
       return;
     }
@@ -409,7 +556,10 @@ final class LinkThisDeviceController extends Notifier<LinkThisDeviceState> {
     state = LinkThisDeviceState(
       step: LinkThisStep.failed,
       error: linkProblemText(problem),
-      expired: problem == LinkProblem.expired,
+      expired:
+          problem == LinkProblem.expired ||
+          problem == LinkProblem.declined ||
+          problem == LinkProblem.untrusted,
     );
   }
 }

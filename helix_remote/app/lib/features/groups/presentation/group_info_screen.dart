@@ -10,6 +10,7 @@ import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/group_navigation.dart';
 import 'package:helix_remote/features/groups/groups_routes.dart';
 import 'package:helix_remote/features/groups/presentation/widgets/group_avatar.dart';
+import 'package:helix_remote/shared/widgets/pending_members_prompt.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// The default disappearing-message timers a group offers, in seconds.
@@ -53,6 +54,13 @@ class GroupInfoScreen extends ConsumerWidget {
       final signal = next.value;
       if (signal is GroupMembershipEnded) {
         showHelixSnackBar(context, membershipEndedText(signal.reason));
+      }
+      if (signal is GroupMemberUnconfirmedArrived) {
+        showHelixSnackBar(
+          context,
+          'A member was added by the server roster. Confirm or remove them '
+          'below.',
+        );
       }
     });
     final info = ref.watch(groupInfoProvider(groupId));
@@ -381,6 +389,7 @@ class _GroupBody extends ConsumerWidget {
             ],
           ),
         ),
+        PendingMembersPrompt(groupId: view.id),
         HelixSettingsSection(
           title: 'Group',
           children: [

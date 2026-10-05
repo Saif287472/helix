@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
+import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote/features/settings/application/settings_gateway.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
 
@@ -16,12 +17,20 @@ class PrivacyState {
     this.loading = true,
     this.saving = false,
     this.error,
+    this.wanted,
   });
 
   final PrivacyPrefs? prefs;
   final bool loading;
   final bool saving;
   final String? error;
+
+  /// A change that is waiting for the account's phone number (turning "find me
+  /// by phone number" back on, on a device that does not know the number): the
+  /// page asks for it, and [PrivacyController.submitNumber] sends this with it.
+  final PrivacyPrefs? wanted;
+
+  bool get needsNumber => wanted != null;
 
   PrivacyState copyWith({
     PrivacyPrefs? prefs,
@@ -34,6 +43,7 @@ class PrivacyState {
     loading: loading ?? this.loading,
     saving: saving ?? this.saving,
     error: clearError ? null : (error ?? this.error),
+    wanted: wanted,
   );
 }
 
@@ -64,22 +74,56 @@ final class PrivacyController extends Notifier<PrivacyState> {
     }
   }
 
-  Future<void> update(PrivacyPrefs next) async {
+  Future<void> update(PrivacyPrefs next, {String? phoneNumber}) async {
     final previous = state.prefs;
     if (previous == null || previous == next || state.saving) return;
     state = PrivacyState(prefs: next, loading: false, saving: true);
     try {
-      await _gateway.setPrivacy(next);
+      await _gateway.setPrivacy(next, phoneNumber: phoneNumber);
       state = PrivacyState(prefs: next, loading: false);
+    } on PhoneNumberNeeded {
+      // Nothing was sent. The switch goes back to what the server has until
+      // the number is given.
+      state = PrivacyState(prefs: previous, loading: false, wanted: next);
     } on Object catch (error) {
+      final failure = describeFailure(error, now: ref.read(clockProvider)());
+      final turningOnPhone =
+          next.discoverableByPhone && !previous.discoverableByPhone;
       state = PrivacyState(
         prefs: previous,
         loading: false,
-        error:
-            'That was not saved. '
-            '${describeFailure(error, now: ref.read(clockProvider)()).message}',
+        error: turningOnPhone && _refused(failure)
+            ? 'Helix did not turn this on. It checks the number against the '
+                  'one your account was verified with, so it has to be that '
+                  'number. Check it and try again.'
+            : 'That was not saved. ${failure.message}',
       );
     }
+  }
+
+  /// The server answered and said no (as opposed to being out of reach).
+  static bool _refused(Failure failure) =>
+      failure.kind == FailureKind.rejected ||
+      failure.kind == FailureKind.notAllowed ||
+      failure.kind == FailureKind.unknown;
+
+  /// The number the person typed for [PrivacyState.wanted]. False when it is
+  /// not a number with a country code (nothing is sent); true once it has been
+  /// tried (a refusal by the server shows as the page's error).
+  Future<bool> submitNumber(String text) async {
+    final wanted = state.wanted;
+    if (wanted == null) return true;
+    final number = PhoneNumbers.normalize(text);
+    if (number == null) return false;
+    state = PrivacyState(prefs: state.prefs, loading: false);
+    await update(wanted, phoneNumber: number);
+    return true;
+  }
+
+  /// The person did not give a number: leave the setting as the server has it.
+  void cancelNumber() {
+    if (state.wanted == null) return;
+    state = PrivacyState(prefs: state.prefs, loading: false);
   }
 
   Future<void> setLastSeen(AudienceChoice a) =>
