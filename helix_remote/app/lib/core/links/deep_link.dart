@@ -92,9 +92,14 @@ class HelixDeepLink {
       };
     }
 
-    if ((uri.scheme == 'https' || uri.scheme == 'http') &&
-        uri.pathSegments.firstOrNull == 'open') {
-      return _serverCode(Uri.decodeComponent(uri.fragment));
+    // The shared form: the exact path `/open` (or `/open/`), over https. The
+    // host is not used for anything - the code names its own server and the
+    // link host receives no request - but cleartext and `/open/anything` are
+    // not this form.
+    if (uri.scheme == 'https' &&
+        uri.host.isNotEmpty &&
+        (uri.path == '/open' || uri.path == '/open/')) {
+      return _serverCode(_decodeFragment(uri.fragment));
     }
 
     if ((uri.scheme == 'https' || uri.scheme == 'http') &&
@@ -108,6 +113,14 @@ class HelixDeepLink {
       );
     }
     return null;
+  }
+
+  static String _decodeFragment(String fragment) {
+    try {
+      return Uri.decodeComponent(fragment);
+    } on ArgumentError {
+      return '';
+    }
   }
 
   static HelixDeepLink? _invite(String? code, String? server) {

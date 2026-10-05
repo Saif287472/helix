@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
+import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
@@ -26,6 +28,21 @@ class ResetScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authStateProvider);
     final recoverableKey = auth.hasError && auth.error is KeyUnavailable;
+
+    if (auth.hasError && auth.error is EngineAlreadyRunning) {
+      // Not damage: another window (or the background wake) has the database.
+      // Nothing here may offer the reset.
+      return _Shell(
+        title: 'Helix Remote',
+        message:
+            'Helix is already open in another window. Close that one, then '
+            'try again.',
+        action: FilledButton(
+          onPressed: () => ref.invalidate(runtimeProvider),
+          child: const Text('Try again'),
+        ),
+      );
+    }
 
     if (!auth.hasError) {
       // Nothing is wrong: the router sends people here only from an error, so

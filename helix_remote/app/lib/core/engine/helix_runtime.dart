@@ -3,7 +3,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:helix_remote/core/engine/backup_policy.dart';
+import 'package:helix_remote/core/engine/server_policy.dart';
+import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/platform/network_probe.dart';
+import 'package:helix_remote/core/platform/tls_pinning.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_crypto/v2.dart' show SecureCryptoRandom;
@@ -27,7 +30,8 @@ final class HelixRuntime {
     required this.api,
     required this.engine,
     required this.serverUrl,
-  });
+    required EngineLease? lease,
+  }) : _lease = lease;
 
   /// Opens the database at [dbFile] with [key] and starts an engine against
   /// [serverUrl].
@@ -35,6 +39,14 @@ final class HelixRuntime {
   /// Throws [DbEncryptionException] when the key is wrong or the file is
   /// plaintext, and [KeyUnavailable] when there is no key at all for an
   /// existing database — both leave the caller's next step clear.
+  ///
+  /// Also throws [InsecureServerUrl] for a server that is not https (outside a
+  /// debug build's development hosts), and [EngineAlreadyRunning] when another
+  /// engine owns the database (see [EngineLease]). Both are checked before the
+  /// database is opened.
+  ///
+  /// A runtime for Helix Global is certificate-pinned ([TlsPinPolicy]); the
+  /// REST client and the realtime socket both go through the pinned client.
   ///
   /// [blobs] is where attachments live (`AppBlobStore` in the app).
   ///
@@ -50,13 +62,57 @@ final class HelixRuntime {
     BlobStore? blobs,
     bool headless = false,
     NetworkProbe network = const DeviceNetworkProbe(),
+    TlsPinPolicy? pinning,
+  }) async {
+    final problem = ServerPolicy.check(serverUrl);
+    if (problem != null) throw InsecureServerUrl(problem);
+
+    final lease = await EngineLease.acquire(
+      File('${dbFile.path}.lease'),
+      role: headless ? LeaseRole.headless : LeaseRole.foreground,
+    );
+    try {
+      return await _open(
+        lease: lease,
+        dbFile: dbFile,
+        key: key,
+        serverUrl: serverUrl,
+        phoneBook: phoneBook,
+        config: config,
+        blobs: blobs,
+        headless: headless,
+        network: network,
+        pinning: pinning ?? TlsPinPolicy.forThisBuild(),
+      );
+    } on Object {
+      await lease.release();
+      rethrow;
+    }
+  }
+
+  static Future<HelixRuntime> _open({
+    required EngineLease lease,
+    required File dbFile,
+    required DatabaseKey key,
+    required Uri serverUrl,
+    required PhoneBook phoneBook,
+    required EngineConfig config,
+    required BlobStore? blobs,
+    required bool headless,
+    required NetworkProbe network,
+    required TlsPinPolicy pinning,
   }) async {
     final db = await HelixDb.open(dbFile, key: key);
-    final api = HelixApi(
+    final pinned = pinning.appliesTo(serverUrl);
+    HelixApi build() => HelixApi(
       baseUrl: serverUrl,
       sessions: DbSessionTokenStore(db),
       clientName: config.deviceName,
+      sockets: pinned ? pinning.socketFactory : defaultSocketFactory,
     );
+    // The REST client makes its `HttpClient` when it is constructed, so a
+    // pinned runtime builds it inside the pinning scope.
+    final api = pinned ? pinning.run(build) : build();
     final engine = Engine(
       api: api,
       db: db,
@@ -93,9 +149,11 @@ final class HelixRuntime {
       api: api,
       engine: engine,
       serverUrl: serverUrl,
+      lease: lease,
     );
   }
 
+  final EngineLease? _lease;
   final HelixDb db;
   final HelixApi api;
   final Engine engine;
@@ -104,9 +162,13 @@ final class HelixRuntime {
   /// Closes the engine, then the client and the database, in that order: the
   /// engine owns neither.
   Future<void> close() async {
-    await engine.close();
-    await api.close();
-    await db.close();
+    try {
+      await engine.close();
+      await api.close();
+      await db.close();
+    } finally {
+      await _lease?.release();
+    }
   }
 }
 

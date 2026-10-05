@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
+import 'package:helix_remote/core/engine/server_policy.dart';
 import 'package:helix_remote/core/platform/app_blob_store.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
@@ -93,10 +94,47 @@ final class ServerUrlNotifier extends Notifier<Uri?> {
 
   /// Points the app at [url], which tears the runtime down and opens a new one
   /// (see [runtimeProvider]). Used by sign-in and by the sign-out path.
-  void use(Uri url) => state = url;
+  ///
+  /// Throws [InsecureServerUrl] for an address [ServerPolicy] refuses (not
+  /// https, outside a debug build's development hosts), so nothing downstream
+  /// ever builds a client for it.
+  void use(Uri url) {
+    final problem = ServerPolicy.check(url);
+    if (problem != null) throw InsecureServerUrl(problem);
+    state = url;
+  }
 
   /// Forgets the server, so the next screen is sign-in on Helix Global.
   void forget() => state = null;
+}
+
+/// Whether the remembered server has been read back from the keystore yet.
+///
+/// The cold-start app lock needs it: before the read, "signed out" only means
+/// "not looked yet", and a device with a saved session must not be treated as
+/// a fresh sign-in.
+enum SessionRestore {
+  /// The keystore has not been read.
+  pending,
+
+  /// A server was remembered and the app was pointed at it.
+  restored,
+
+  /// Nothing remembered: a first install, a wipe or a sign-out.
+  none,
+}
+
+final sessionRestoreProvider =
+    NotifierProvider<SessionRestoreNotifier, SessionRestore>(
+      SessionRestoreNotifier.new,
+    );
+
+class SessionRestoreNotifier extends Notifier<SessionRestore> {
+  @override
+  SessionRestore build() => SessionRestore.pending;
+
+  void finish({required bool restored}) =>
+      state = restored ? SessionRestore.restored : SessionRestore.none;
 }
 
 /// The live runtime, or the reason there is not one yet.

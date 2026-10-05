@@ -3,6 +3,8 @@ import 'package:helix_remote/core/engine/global_server.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/engine/server_policy.dart';
+import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/links/helix_code.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
@@ -29,8 +31,69 @@ final signInControllerProvider =
 final class SignInController extends Notifier<SignInState> {
   String? _challengeId;
 
+  /// A server named by a code or link that is waiting for the person's yes.
+  /// Nothing has been sent to it.
+  Uri? _pendingServer;
+
+  /// The one server the person approved on the code page. Anything else a code
+  /// names has to be approved again.
+  Uri? _approvedServer;
+
   @override
-  SignInState build() => const SignInState();
+  SignInState build() {
+    // A link is only ever applied once the app knows nobody is signed in, and
+    // however it got here (a cold start, a warm one, a restore that finished
+    // after the link did).
+    ref.listen(pendingLinkProvider, (_, _) => _consumeWhenSettled());
+    ref.listen(sessionRestoreProvider, (_, _) => _consumeWhenSettled());
+    ref.listen(authStateProvider, (previous, next) {
+      final now = next.value;
+      final before = previous?.value;
+      final signedIn = now == AppAuthState.ready;
+      final signedOut =
+          now == AppAuthState.signedOut &&
+          (before == AppAuthState.ready || before == AppAuthState.revoked);
+      // Whoever signs in, or out, leaves nothing of this flow behind: not the
+      // half-entered page, not an approved server, not a parked link.
+      if (signedIn || signedOut) _resetFlow();
+      _consumeWhenSettled();
+    });
+    return const SignInState();
+  }
+
+  void _resetFlow() {
+    _challengeId = null;
+    _verificationToken = null;
+    _verifiedAccountId = null;
+    _pendingServer = null;
+    _approvedServer = null;
+    // A parked invite or recovery code goes with the flow it was for; a group
+    // link waiting for an account does not.
+    if (ref.read(pendingLinkProvider)?.setupCode != null) {
+      ref.read(pendingLinkProvider.notifier).set(null);
+    }
+    state = const SignInState();
+  }
+
+  /// Whether the device is known to have no account, so a link may be used.
+  /// Before the remembered server has been read (or while the engine is still
+  /// deciding) a signed-in phone looks signed out; a link must not act then.
+  bool get _knownSignedOut {
+    if (ref.read(sessionRestoreProvider) == SessionRestore.pending) {
+      return false;
+    }
+    final auth = ref.read(authStateProvider);
+    if (auth.isLoading) return false;
+    final value = auth.value;
+    return value == AppAuthState.signedOut || value == AppAuthState.revoked;
+  }
+
+  void _consumeWhenSettled() {
+    if (!_knownSignedOut) return;
+    if (ref.read(pendingLinkProvider)?.setupCode == null) return;
+    // Fire and forget: the outcome is the state the screen shows.
+    consumePendingCode();
+  }
 
   // ------------------------------------------------------------- entering
 
@@ -47,6 +110,8 @@ final class SignInController extends Notifier<SignInState> {
   /// The hidden corner's fourth tap, and a shared link, both land here.
   void leaveAdvancedMode() {
     _challengeId = null;
+    _pendingServer = null;
+    _approvedServer = null;
     state = const SignInState();
   }
 
@@ -56,7 +121,13 @@ final class SignInController extends Notifier<SignInState> {
   /// Takes the code a link left in [pendingLinkProvider], if any. Called once
   /// when the screen appears, so a link tapped while the app was closed lands
   /// on the same path as one tapped while it was open.
+  ///
+  /// A link is used only when the device is known to be signed out (see
+  /// [_knownSignedOut]); otherwise it stays parked, and is dropped when the
+  /// person signs in or out. It never reaches a server on its own: the code
+  /// page asks first (see [submitCode]).
   Future<void> consumePendingCode() async {
+    if (!_knownSignedOut) return;
     final code = ref.read(pendingLinkProvider.notifier).take()?.setupCode;
     if (code == null || code.isEmpty) return;
     await openWithCode(code);
@@ -96,10 +167,12 @@ final class SignInController extends Notifier<SignInState> {
         leaveAdvancedMode();
       case SignInPage.phone:
         if (state.isAdvanced) {
+          _approvedServer = null;
           state = state.copyWith(
             page: SignInPage.code,
             clearCodeType: true,
             clearServerName: true,
+            clearServerHost: true,
             codeString: '',
             clearError: true,
           );
@@ -144,6 +217,22 @@ final class SignInController extends Notifier<SignInState> {
     if (serverUrl == null || !serverUrl.hasScheme) {
       return _fail(SignInCopy.notACode);
     }
+    // Before anything is sent: cleartext, a look-alike host and an address
+    // with a user name in it are refused, whatever the code says.
+    if (ServerPolicy.check(serverUrl) != null) {
+      return _fail(SignInCopy.insecureServer);
+    }
+    // A server that came out of a code or a link is somebody else's choice.
+    // The person is shown its host and asked before the first request.
+    if (!_isApproved(serverUrl)) {
+      _pendingServer = serverUrl;
+      state = state.copyWith(
+        pendingServerHost: ServerPolicy.displayHost(serverUrl),
+        isLoading: false,
+        clearError: true,
+      );
+      return false;
+    }
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -163,7 +252,10 @@ final class SignInController extends Notifier<SignInState> {
         if (!result.valid) return _fail(SignInCopy.recoveryInvalid);
         state = state.copyWith(serverName: result.serverName);
       }
+      final global = ServerPolicy.isGlobal(serverUrl);
       state = state.copyWith(
+        serverHost: global ? null : ServerPolicy.displayHost(serverUrl),
+        clearServerHost: global,
         codeType: type,
         page: SignInPage.phone,
         isLoading: false,
@@ -175,15 +267,44 @@ final class SignInController extends Notifier<SignInState> {
     }
   }
 
+  bool _isApproved(Uri server) =>
+      ServerPolicy.isGlobal(server) ||
+      (_approvedServer != null &&
+          ServerPolicy.sameServer(_approvedServer!, server));
+
+  /// The person said yes to the server in [SignInState.pendingServerHost]:
+  /// the code is checked against it now, and not before.
+  Future<bool> confirmServer() async {
+    final server = _pendingServer;
+    if (server == null) return false;
+    _approvedServer = server;
+    _pendingServer = null;
+    state = state.copyWith(clearPendingServer: true);
+    return submitCode();
+  }
+
+  /// The person said no. The code is forgotten and nothing was sent.
+  void declineServer() {
+    _pendingServer = null;
+    _approvedServer = null;
+    state = state.copyWith(
+      clearPendingServer: true,
+      codeString: '',
+      clearError: true,
+    );
+  }
+
   /// After an invite was entered for a number that already has an account:
   /// the invite cannot be used, and a recovery code is the way back in.
   void beginPhoneRecovery() {
     _challengeId = null;
+    _approvedServer = null;
     state = state.copyWith(
       page: SignInPage.code,
       codeString: '',
       clearCodeType: true,
       clearServerName: true,
+      clearServerHost: true,
       showPhoneRecoveryPrompt: false,
       clearError: true,
     );
@@ -370,8 +491,13 @@ final class SignInController extends Notifier<SignInState> {
   /// The runtime for the server this sign-in is on. Sign-in opens on Helix
   /// Global, so a device that has not chosen another server (a first install,
   /// or one that just signed out) is pointed at it before anything is asked.
+  ///
+  /// The Global page is Helix Global, always: a personal server a person once
+  /// approved (and backed out of) must not keep receiving what they type here.
   Future<HelixRuntime> _currentRuntime() {
-    if (ref.read(serverUrlProvider) == null) {
+    final current = ref.read(serverUrlProvider);
+    final wantGlobal = !state.isAdvanced;
+    if (current == null || (wantGlobal && !ServerPolicy.isGlobal(current))) {
       ref.read(serverUrlProvider.notifier).use(kGlobalServerUrl);
     }
     return ref.read(runtimeProvider.future);
@@ -415,7 +541,7 @@ final class SignInController extends Notifier<SignInState> {
 /// True when [raw] starts with a Helix prefix but carries no payload after it.
 ///
 /// A person who pasted `HLX-REC-` and nothing else needs to be told the code is
-/// incomplete; the same goes for one that has a payload but not three parts.
+/// incomplete; the same goes for one whose payload does not decode.
 bool _isTruncated(String raw) {
   final upper = raw.toUpperCase();
   final prefix = upper.startsWith(kHelixRecoveryPrefix)
@@ -426,9 +552,10 @@ bool _isTruncated(String raw) {
   if (prefix == null) return false;
   final payload = upper.substring(prefix.length);
   if (payload.isEmpty) return true;
-  // An invite is one `server|code` pair; a recovery code is three parts. Fewer
-  // separators than that means the paste was cut short.
-  final parts = payload.split('|');
-  final expected = prefix == kHelixRecoveryPrefix ? 3 : 2;
-  return parts.length < expected || parts.any((part) => part.isEmpty);
+  // The payload is opaque base64, so it cannot be counted for separators: a
+  // code is complete when it decodes into all of its parts, and a paste cut
+  // short does not.
+  return prefix == kHelixRecoveryPrefix
+      ? decodeHelixRecoveryCode(raw) == null
+      : decodeHelixInviteCode(raw) == null;
 }

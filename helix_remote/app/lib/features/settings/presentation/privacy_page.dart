@@ -159,9 +159,10 @@ class PrivacyPage extends ConsumerWidget {
           HelixSettingsSection(
             title: 'App lock',
             footer:
-                'Asks for your fingerprint, face or phone PIN when you come '
-                'back to Helix. It keeps the screen private; it does not '
-                'add another key to your messages.',
+                'Asks for your fingerprint, face or phone PIN when you open '
+                'Helix, and when you come back after the time you choose '
+                'under "Lock again". It keeps the screen private; it does '
+                'not add another key to your messages.',
             children: [
               HelixSettingsSwitchTile(
                 icon: Icons.fingerprint,

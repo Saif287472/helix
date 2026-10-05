@@ -48,12 +48,33 @@ class _AppLinkListenerState extends ConsumerState<AppLinkListener> {
   }
 
   void _onLink(HelixDeepLink link) {
-    ref.read(pendingLinkProvider.notifier).set(link);
-    // A group link needs an account: it waits (parked in the provider) until
-    // the person is signed in, and is routed then.
-    if (_needsAccount(link) && !_signedIn) return;
+    final pending = ref.read(pendingLinkProvider.notifier);
+    if (_needsAccount(link)) {
+      // A group link needs an account: it waits (parked in the provider) until
+      // the person is signed in, and is routed then.
+      pending.set(link);
+      if (!_signedIn) return;
+      routeDeepLink(ref.read(appRouterProvider), link);
+      pending.take();
+      return;
+    }
+    if (link.setupCode != null) {
+      // An invite or recovery code belongs to sign-in. A phone that already
+      // has an account has no use for one, and a code left parked would be
+      // applied by the next sign-in after a sign-out: drop it.
+      if (_signedIn) {
+        pending.set(null);
+        return;
+      }
+      // Parked, and applied by the sign-in screen once the device is known to
+      // be signed out. Applying it only asks the person about the server; it
+      // sends nothing.
+      pending.set(link);
+      routeDeepLink(ref.read(appRouterProvider), link);
+      return;
+    }
     routeDeepLink(ref.read(appRouterProvider), link);
-    if (_needsAccount(link)) ref.read(pendingLinkProvider.notifier).take();
+    pending.set(null);
   }
 
   static bool _needsAccount(HelixDeepLink link) =>

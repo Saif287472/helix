@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_controller.dart';
+import 'package:helix_remote/features/sign_in/application/sign_in_copy.dart';
 import 'package:helix_remote/features/sign_in/application/sign_in_state.dart';
 import 'package:helix_remote/features/sign_in/presentation/widgets/legal_documents_sheet.dart';
 import 'package:helix_remote/features/sign_in/presentation/widgets/sign_in_fields.dart';
@@ -76,6 +77,31 @@ class _CodePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final host = state.pendingServerHost;
+    if (host != null) {
+      // A code or link named a server. Nothing has been sent to it; the host
+      // (not the name the server gives itself) is shown, and the person decides.
+      return SignInFrame(
+        title: 'Personal server',
+        subtitle: SignInCopy.serverQuestion(host),
+        isLoading: state.isLoading,
+        errorMessage: state.errorMessage,
+        onBack: notifier.declineServer,
+        primaryLabel: 'Continue',
+        onPrimary: notifier.confirmServer,
+        secondary: TextButton(
+          onPressed: state.isLoading ? null : notifier.declineServer,
+          child: const Text('Cancel'),
+        ),
+        child: Text(
+          SignInCopy.serverExplanation,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
     return SignInFrame(
       title: 'Personal server',
       subtitle: 'Enter the invite or recovery code from your server admin.',
@@ -318,8 +344,12 @@ class _NamePage extends StatelessWidget {
   }
 }
 
-/// Which server this is, when it is not Helix Global. Never shown on Global:
-/// there is nothing to disambiguate.
+/// Which server this is, when it is not Helix Global: its address, always, and
+/// the name it gives itself after it. Never shown on Global: there is nothing to
+/// disambiguate.
+///
+/// The address leads because it is where the traffic goes; the name is the
+/// server's own claim and could say anything.
 class _ServerBadge extends StatelessWidget {
   const _ServerBadge({required this.state});
 
@@ -327,12 +357,12 @@ class _ServerBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final host = state.pendingServerHost ?? state.serverHost;
+    if (!state.isAdvanced || host == null) return const SizedBox.shrink();
     final name = state.serverName;
-    if (!state.isAdvanced || name == null || name.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    final label = name == null || name.isEmpty ? host : '$host ($name)';
     return Semantics(
-      label: 'Server: $name',
+      label: 'Server: $label',
       excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -343,10 +373,13 @@ class _ServerBadge extends StatelessWidget {
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: HelixSpace.xxs),
-          Text(
-            name,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+          Flexible(
+            child: Text(
+              label,
+              key: const ValueKey('server-badge'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],

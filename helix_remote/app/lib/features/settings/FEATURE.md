@@ -42,3 +42,14 @@ another); every row opens a page registered in `settings_routes.dart`.
   `AppSettings.notifyCalls` in the calls feature (A3a).
 - Per-conversation notification overrides live in the chat itself (A2); the
   Notifications page lists what is muted and can unmute.
+
+## Review pass notes (v2-fixa)
+
+- App lock: the control "Lock again" is a grace period (see `app/MODULE.md`);
+  the footer says the app also asks on every fresh open.
+- Images auto-download on Wi-Fi only by default (`AppSettings.mediaImages`).
+- Account deletion: the UI still sends the bare `DeleteAccountRequest`. The
+  server now wants a fresh proof (`current_auth_key`, `verification_token`,
+  `device_proof`); the DTO, api client and engine method are not in this
+  branch, so the re-auth step in `account_page.dart` is a follow-up once they
+  land (J:\hx2fixc).

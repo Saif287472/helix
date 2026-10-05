@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/crash_reporter.dart';
 import 'package:helix_remote/core/calls/call_host.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/engine/server_policy.dart';
 import 'package:helix_remote/core/lifecycle/app_lifecycle_host.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
@@ -110,9 +111,14 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
   Future<void> _restoreServer() async {
     final saved = await ref.read(serverUrlStoreProvider).load();
     final uri = saved == null ? null : Uri.tryParse(saved);
-    if (uri != null && uri.hasScheme) {
-      ref.read(serverUrlProvider.notifier).use(uri);
-    }
+    // A remembered address that is not https (or not an address at all) is
+    // not used: the device opens on Helix Global's sign-in rather than
+    // talking to it in the clear.
+    final usable =
+        uri != null && uri.hasScheme && ServerPolicy.check(uri) == null;
+    if (usable) ref.read(serverUrlProvider.notifier).use(uri);
+    if (!mounted) return;
+    ref.read(sessionRestoreProvider.notifier).finish(restored: usable);
     unawaited(_startPush());
   }
 

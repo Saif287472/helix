@@ -631,10 +631,12 @@ void main() {
         network.change(NetworkKind.mobile);
         await Future<void>.delayed(const Duration(milliseconds: 200));
         expect(settings.read(MediaSettings.autoDownloadVideo), 0);
-        // "Always" kinds do not move.
+        // Images default to Wi-Fi only now, so they follow the network too;
+        // an "always" kind does not move.
+        expect(settings.read(MediaSettings.autoDownloadImages), 0);
         expect(
-          settings.read(MediaSettings.autoDownloadImages),
-          MediaDownloadLimits.images,
+          settings.read(MediaSettings.autoDownloadAudio),
+          MediaDownloadLimits.audio,
         );
       },
     );

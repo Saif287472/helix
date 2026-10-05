@@ -10,6 +10,7 @@ import 'package:helix_remote/core/platform/app_blob_store.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
+import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 
@@ -91,6 +92,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         final person = await runtime.engine.people.person(call.caller);
         await CallNotifications.showIncoming(
           callId: call.callId,
+          // The caller's name is content: only when the person turned
+          // previews on, like a message's text.
+          showCaller: await settings.get(AppSettings.notificationsPreview),
           // The same name the app shows (phone book, nickname, number,
           // `~Helix name`): this isolate has no providers, so it asks the
           // naming helper for the one row.
@@ -103,6 +107,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     } finally {
       await runtime.close();
     }
+  } on EngineAlreadyRunning {
+    // The running app owns the database and fetches the mailbox itself; a
+    // second engine here would race it over the same ratchets.
+    return;
   } on Object catch (error) {
     // A background isolate must never crash the app, and must never log
     // anything that could name content, a key or a number.

@@ -52,7 +52,9 @@ abstract final class AppSettings {
   static const mediaImages = Setting<MediaDownloadPolicy>.enumeration(
     'app.media.images',
     MediaDownloadPolicy.values,
-    MediaDownloadPolicy.always,
+    // Wi-Fi only: a photo a stranger sends should not spend mobile data (or
+    // reveal this phone's address to a hostile link) without a tap.
+    MediaDownloadPolicy.wifi,
   );
   static const mediaAudio = Setting<MediaDownloadPolicy>.enumeration(
     'app.media.audio',

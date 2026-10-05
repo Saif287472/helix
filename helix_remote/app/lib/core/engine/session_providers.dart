@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/links/pending_link.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
+import 'package:helix_remote/core/platform/picker_cleanup.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 
 /// What the shell shows: sign-in, or the home tabs.
@@ -65,9 +68,19 @@ final class SignOutAction {
     await runtime.engine.signOut();
     await _ref.read(secureKeyStoreProvider).forget();
     await _ref.read(serverUrlStoreProvider).clear();
+    await _wipeLeftovers();
     // Rebuilding the runtime is what makes the wipe visible to the UI.
     _ref.invalidate(runtimeProvider);
     _ref.read(serverUrlProvider.notifier).forget();
+  }
+
+  /// What the engine's wipe does not reach: the avatar picture, downloaded
+  /// attachments, the file picker's temporary copies, and any link still
+  /// parked for the next sign-in.
+  Future<void> _wipeLeftovers() async {
+    _ref.read(pendingLinkProvider.notifier).set(null);
+    await AppPaths.wipeLocalFiles();
+    await PickerTemporaryFiles.clear();
   }
 }
 
@@ -83,13 +96,29 @@ final class DestructiveReset {
 
   final Ref _ref;
 
+  /// Completes however broken the runtime is: this is the way out of a
+  /// database that will not open, so it works from the files alone. The
+  /// runtime is closed first if there is one, but a runtime that failed to
+  /// open (the usual reason to be here) only means there is nothing to close.
   Future<void> call() async {
+    HelixRuntime? runtime;
+    try {
+      runtime = await _ref.read(runtimeProvider.future);
+    } on Object {
+      runtime = null;
+    }
+    if (runtime != null) {
+      try {
+        await runtime.engine.stop();
+        await runtime.db.close();
+      } on Object {
+        // Closing is best effort; the files are deleted regardless.
+      }
+    }
     _ref.read(serverUrlProvider.notifier).forget();
-    final runtime = await _ref.read(runtimeProvider.future);
-    await runtime.engine.stop();
-    await runtime.db.close();
-    final file = await AppPaths.databaseFile();
-    if (await file.exists()) await file.delete();
+    _ref.read(pendingLinkProvider.notifier).set(null);
+    await AppPaths.wipeLocalFiles(includeDatabase: true);
+    await PickerTemporaryFiles.clear();
     await _ref.read(secureKeyStoreProvider).forget();
     await _ref.read(serverUrlStoreProvider).clear();
     _ref.invalidate(runtimeProvider);

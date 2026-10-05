@@ -3,15 +3,19 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
+import 'package:helix_remote/core/engine/local_settings.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
+import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/calls/application/call_audio.dart';
 import 'package:helix_remote/features/calls/application/call_controller.dart';
 import 'package:helix_remote/features/calls/application/call_screen_state.dart';
 import 'package:helix_remote/features/calls/application/calls_port.dart';
 import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
 import 'package:helix_remote/features/calls/application/platform/notification_call_ringer.dart';
+import 'package:helix_remote_engine/helix_remote_engine.dart'
+    show MissedCallEvent;
 
 /// What the phone does around a call, apart from drawing it: rings, takes the
 /// screen over the lock screen, runs the foreground service, routes the sound,
@@ -33,7 +37,8 @@ final class CallEffects {
   final CallRinger ringer;
   final CallAudioController audio;
 
-  /// Lets a live call through the app lock (`AppLock.callInProgress`).
+  /// Lets a connecting or active call through the app lock
+  /// (`AppLock.callInProgress`); never a ringing one.
   final void Function({required bool value}) setLockBypass;
 
   String? _ringingFor;
@@ -52,7 +57,6 @@ final class CallEffects {
     final isNew = previous == null || previous.callId != next.callId;
     if (isNew) {
       if (previous != null) await _finish(previous);
-      setLockBypass(value: true);
       await platform.setCallActive(active: true, keepScreenOn: false);
     }
     switch (next.stage) {
@@ -69,6 +73,10 @@ final class CallEffects {
       case CallStage.dialing:
       case CallStage.connecting:
       case CallStage.active:
+        // The app lock is lifted only once the call is really under way: a
+        // ringing call (or one being placed) is not somebody proving they hold
+        // the phone, and must not open the app to whoever picks it up.
+        setLockBypass(value: next.stage != CallStage.dialing);
         await _stopRinging(next.callId);
         await _startService(next);
         if (next.stage != CallStage.dialing) {
@@ -231,16 +239,30 @@ final class CallNotificationHandler {
         if (lifecycle == AppLifecycleState.resumed) return;
         final people =
             _ref.read(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
-        unawaited(
-          CallNotifications.showMissed(
-            callId: event.notice.messageId,
-            callerName: people.displayOf(event.notice.sender),
-          ),
-        );
+        unawaited(_showMissed(event, people));
       });
     } on Object {
       // No runtime (signed out): nothing rings, so nothing is missed.
     }
+  }
+
+  Future<void> _showMissed(
+    MissedCallEvent event,
+    PeopleDirectory people,
+  ) async {
+    var showCaller = false;
+    try {
+      showCaller = await _ref
+          .read(localSettingsProvider)
+          .get(AppSettings.notificationsPreview);
+    } on Object {
+      // Unreadable: keep the name off the notification.
+    }
+    await CallNotifications.showMissed(
+      callId: event.notice.messageId,
+      callerName: people.displayOf(event.notice.sender),
+      showCaller: showCaller,
+    );
   }
 
   void dispose() {

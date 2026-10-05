@@ -47,9 +47,9 @@ abstract interface class ContactsAccess {
   /// The current state, without asking.
   Future<ContactsPermission> permission();
 
-  /// Shows the system permission dialog when it may be shown. Asks for read
-  /// and write together: reading finds people, writing keeps a rename in the
-  /// phone's contacts too.
+  /// Shows the system permission dialog when it may be shown. Asks for
+  /// **read** only: reading finds people. Write access is asked for at the
+  /// moment of a rename (see [saveName]), never up front.
   Future<ContactsPermission> request();
 
   /// Opens the app's page in the system settings.
@@ -75,7 +75,7 @@ abstract interface class ContactsAccess {
 final class FlutterContactsAccess implements ContactsAccess {
   const FlutterContactsAccess();
 
-  static const _type = PermissionType.readWrite;
+  static const _type = PermissionType.read;
 
   @override
   bool get isSupported => Platform.isAndroid || Platform.isIOS;
@@ -108,6 +108,9 @@ final class FlutterContactsAccess implements ContactsAccess {
       // Nothing to open on this platform.
     }
   }
+
+  static bool _isGranted(PermissionStatus status) =>
+      status == PermissionStatus.granted || status == PermissionStatus.limited;
 
   static ContactsPermission _map(PermissionStatus status) => switch (status) {
     PermissionStatus.granted ||
@@ -151,6 +154,18 @@ final class FlutterContactsAccess implements ContactsAccess {
   }) async {
     if (await permission() != ContactsPermission.granted) return false;
     try {
+      // Saving a name is the one thing that needs write access, so it is
+      // asked for now, with the person's rename as the reason. A refusal
+      // leaves the name in Helix only.
+      final write = await FlutterContacts.permissions.check(
+        PermissionType.readWrite,
+      );
+      if (!_isGranted(write)) {
+        final asked = await FlutterContacts.permissions.request(
+          PermissionType.readWrite,
+        );
+        if (!_isGranted(asked)) return false;
+      }
       if (contactId != null && contactId.isNotEmpty) {
         final contact = await FlutterContacts.get(
           contactId,

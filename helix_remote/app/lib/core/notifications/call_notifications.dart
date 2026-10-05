@@ -19,9 +19,12 @@ final class CallNotificationResponse {
 /// The incoming-call notification: the one thing that rings the phone, takes
 /// the whole screen over a locked one and carries Answer and Decline.
 ///
-/// It names who is calling and nothing else. Like every notification here it
-/// is built from the local database or from a pending call's caller id; no
-/// push payload ever supplies text for it.
+/// It names who is calling and nothing else, and only when the person turned
+/// notification previews on: the caller's name is content, so with previews
+/// off (the default) the text says that a call is coming and the notification
+/// is `private`, which keeps even that off a locked screen. Like every
+/// notification here it is built from the local database or from a pending
+/// call's caller id; no push payload ever supplies text for it.
 ///
 /// Shared by the running app (`CallRinger`) and the FCM isolate
 /// (`push_background.dart`), which is why it lives in `core/`.
@@ -57,6 +60,17 @@ abstract final class CallNotifications {
   /// server keeps a pending offer no longer.
   static const ringFor = Duration(seconds: 60);
 
+  /// What an incoming-call notification says and who may see it, for the
+  /// notification-previews setting: the caller's name and `public` only when
+  /// previews are on, else "Helix" and `private`.
+  static ({String title, NotificationVisibility visibility})
+  incomingPresentation({
+    required String callerName,
+    required bool showCaller,
+  }) => showCaller
+      ? (title: callerName, visibility: NotificationVisibility.public)
+      : (title: 'Helix', visibility: NotificationVisibility.private);
+
   /// A stable notification id for a call, so a re-post replaces the first.
   static int idFor(String callId) => callId.hashCode & 0x7fffffff;
 
@@ -87,6 +101,7 @@ abstract final class CallNotifications {
   static Future<void> showMissed({
     required String callId,
     required String callerName,
+    bool showCaller = false,
   }) async {
     if (!Platform.isAndroid) return;
     final plugin = LocalNotifications.plugin;
@@ -94,13 +109,16 @@ abstract final class CallNotifications {
     await plugin.show(
       id: idFor('missed-$callId'),
       title: 'Missed call',
-      body: callerName,
+      body: showCaller ? callerName : 'Open Helix to see who called.',
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _missed.id,
           _missed.name,
           channelDescription: _missed.description,
           category: AndroidNotificationCategory.missedCall,
+          visibility: showCaller
+              ? NotificationVisibility.public
+              : NotificationVisibility.private,
           autoCancel: true,
         ),
       ),
@@ -112,18 +130,26 @@ abstract final class CallNotifications {
   /// over a locked or idle phone (and needs `USE_FULL_SCREEN_INTENT`). [video]
   /// is null for a call whose offer has not been opened yet (a push woke the
   /// app): the notification then just says a call is coming.
+  ///
+  /// [showCaller] is the notification-previews setting: false puts "Helix" in
+  /// place of the caller's name and makes the notification `private`.
   static Future<void> showIncoming({
     required String callId,
     required String callerName,
     bool? video,
     bool fullScreen = false,
+    bool showCaller = false,
   }) async {
     if (!Platform.isAndroid) return;
     final plugin = LocalNotifications.plugin;
     if (plugin == null) return;
+    final presentation = incomingPresentation(
+      callerName: callerName,
+      showCaller: showCaller,
+    );
     await plugin.show(
       id: idFor(callId),
-      title: callerName,
+      title: presentation.title,
       body: switch (video) {
         true => 'Incoming video call',
         false => 'Incoming voice call',
@@ -137,7 +163,7 @@ abstract final class CallNotifications {
           importance: Importance.max,
           priority: Priority.max,
           category: AndroidNotificationCategory.call,
-          visibility: NotificationVisibility.public,
+          visibility: presentation.visibility,
           fullScreenIntent: fullScreen,
           ongoing: true,
           autoCancel: false,

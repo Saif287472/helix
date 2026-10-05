@@ -18,7 +18,7 @@ class ChatsSettingsPage extends ConsumerWidget {
     final scale = ref.watch(fontScaleSettingProvider).value ?? 100;
     final enter = ref.watch(enterToSendProvider).value ?? false;
     final images =
-        ref.watch(mediaImagesProvider).value ?? MediaDownloadPolicy.always;
+        ref.watch(mediaImagesProvider).value ?? MediaDownloadPolicy.wifi;
     final audio =
         ref.watch(mediaAudioProvider).value ?? MediaDownloadPolicy.always;
     final video =

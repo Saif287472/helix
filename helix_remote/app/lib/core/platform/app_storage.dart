@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:path/path.dart' as p;
@@ -11,7 +12,7 @@ import 'package:path_provider/path_provider.dart';
 /// The database key is **not** here: it lives in the platform keystore, in
 /// [SecureKeyStore].
 abstract final class AppPaths {
-  /// `<documents>/helix_remote/helix_remote.db`.
+  /// `<app data>/helix_remote/helix_remote.db` (see `_base`).
   static Future<File> databaseFile() async {
     final dir = await _base();
     return File(p.join(dir.path, 'helix_remote.db'));
@@ -35,10 +36,71 @@ abstract final class AppPaths {
   /// Everything the app keeps on disk, for the storage page.
   static Future<Directory> appDirectory() => _base();
 
+  /// Windows only: the machine-local, non-roaming per-user folder
+  /// (`%LOCALAPPDATA%/<company>/<product>`). Overridden in tests.
+  @visibleForTesting
+  static Future<Directory> Function() localDataDirectory =
+      getApplicationCacheDirectory;
+
+  /// Android's app-private files directory. Overridden in tests.
+  @visibleForTesting
+  static Future<Directory> Function() privateDataDirectory =
+      getApplicationDocumentsDirectory;
+
+  /// Whether this is Windows; a test sets it to exercise both paths.
+  @visibleForTesting
+  static bool Function() isWindows = () => Platform.isWindows;
+
+  /// Where the app's folder lives.
+  ///
+  /// **Not** `Documents` on Windows: that folder is the person's own, and
+  /// OneDrive's "known folder backup" syncs it, which would carry the encrypted
+  /// database, its attachments and the avatar to a cloud they never chose. The
+  /// per-user local application-data folder is machine-local and is not
+  /// roamed (the "application support" folder is, in a domain), so it is used
+  /// instead. On Android `getApplicationDocumentsDirectory` is the app's
+  /// private directory and stays.
   static Future<Directory> _base() async {
-    final documents = await getApplicationDocumentsDirectory();
-    return Directory(p.join(documents.path, 'helix_remote'))
+    final parent = isWindows()
+        ? await localDataDirectory()
+        : await privateDataDirectory();
+    return Directory(p.join(parent.path, 'helix_remote'))
       ..createSync(recursive: true);
+  }
+
+  /// Deletes what a signed-out device must not keep: the avatar picture (a
+  /// plaintext PNG) and every downloaded attachment. With [includeDatabase],
+  /// the database file and its journal files go too (the destructive reset).
+  ///
+  /// Works from the paths alone, so it still finishes when the engine, the
+  /// database or the keystore cannot be opened. Each file is tried on its own:
+  /// one that cannot be deleted does not stop the rest.
+  static Future<void> wipeLocalFiles({bool includeDatabase = false}) async {
+    final Directory base;
+    try {
+      base = await _base();
+    } on Object {
+      // No app folder can be found (no platform plugin), so none was written.
+      return;
+    }
+    final targets = <FileSystemEntity>[
+      File(p.join(base.path, 'profile_avatar.png')),
+      Directory(p.join(base.path, 'attachments')),
+      if (includeDatabase)
+        for (final suffix in const ['', '-wal', '-shm', '-journal'])
+          File(p.join(base.path, 'helix_remote.db$suffix')),
+    ];
+    for (final entity in targets) {
+      try {
+        if (entity is Directory) {
+          if (await entity.exists()) await entity.delete(recursive: true);
+        } else if (await entity.exists()) {
+          await entity.delete();
+        }
+      } on Object {
+        // Nothing sensible to do about one stuck file; the others still go.
+      }
+    }
   }
 }
 

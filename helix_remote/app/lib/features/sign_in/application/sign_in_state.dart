@@ -34,6 +34,8 @@ final class SignInState {
     this.isLoading = false,
     this.errorMessage,
     this.serverName,
+    this.serverHost,
+    this.pendingServerHost,
     this.codeType,
     this.accountExists = false,
     this.hasPassword = false,
@@ -69,6 +71,16 @@ final class SignInState {
 
   /// The personal server's name, from its invite or recovery code.
   final String? serverName;
+
+  /// The address of the personal server this sign-in is on, as the person is
+  /// asked to recognise it (host and non-standard port). Shown on every page
+  /// while it is not Helix Global: the name above is the server's own claim,
+  /// this is where the traffic goes.
+  final String? serverHost;
+
+  /// A server named by a code or a link that the person has not yet approved.
+  /// Nothing is sent to it until they do.
+  final String? pendingServerHost;
 
   final SignInCodeType? codeType;
 
@@ -125,6 +137,8 @@ final class SignInState {
     bool? isLoading,
     String? errorMessage,
     String? serverName,
+    String? serverHost,
+    String? pendingServerHost,
     SignInCodeType? codeType,
     bool? accountExists,
     bool? hasPassword,
@@ -133,6 +147,8 @@ final class SignInState {
     bool clearError = false,
     bool clearCodeType = false,
     bool clearServerName = false,
+    bool clearServerHost = false,
+    bool clearPendingServer = false,
   }) => SignInState(
     mode: mode ?? this.mode,
     page: page ?? this.page,
@@ -147,6 +163,10 @@ final class SignInState {
     isLoading: isLoading ?? this.isLoading,
     errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     serverName: clearServerName ? null : serverName ?? this.serverName,
+    serverHost: clearServerHost ? null : serverHost ?? this.serverHost,
+    pendingServerHost: clearPendingServer
+        ? null
+        : pendingServerHost ?? this.pendingServerHost,
     codeType: clearCodeType ? null : codeType ?? this.codeType,
     accountExists: accountExists ?? this.accountExists,
     hasPassword: hasPassword ?? this.hasPassword,
@@ -171,6 +191,8 @@ final class SignInState {
       other.isLoading == isLoading &&
       other.errorMessage == errorMessage &&
       other.serverName == serverName &&
+      other.serverHost == serverHost &&
+      other.pendingServerHost == pendingServerHost &&
       other.codeType == codeType &&
       other.accountExists == accountExists &&
       other.hasPassword == hasPassword &&
@@ -192,6 +214,8 @@ final class SignInState {
     isLoading,
     errorMessage,
     serverName,
+    serverHost,
+    pendingServerHost,
     codeType,
     accountExists,
     hasPassword,

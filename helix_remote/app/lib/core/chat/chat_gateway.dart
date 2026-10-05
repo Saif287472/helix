@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/platform/picker_cleanup.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart'
@@ -157,13 +158,19 @@ class ChatGateway {
     MessageRef? replyTo,
     bool viewOnce = false,
   }) async {
-    await _engine.media.sendMedia(
-      conversationId,
-      items,
-      caption: caption,
-      replyTo: replyTo,
-      viewOnce: viewOnce,
-    );
+    try {
+      await _engine.media.sendMedia(
+        conversationId,
+        items,
+        caption: caption,
+        replyTo: replyTo,
+        viewOnce: viewOnce,
+      );
+    } finally {
+      // The engine copied what it was given into its own store; the picker's
+      // plaintext temporary copies have done their job.
+      await PickerTemporaryFiles.clear();
+    }
   }
 
   Future<void> react(int rowid, String? emoji) => _chats.react(rowid, emoji);

@@ -96,3 +96,11 @@ offer was known (`PendingCallDecision`, valid for the ring time).
 - Group calls, call links and scheduled calls: not built.
 - No APK is needed to review the code; one is needed to try calls on a phone
   (Kotlin changed).
+
+## Review pass notes (v2-fixa)
+
+- The app lock is lifted (`AppLock.callInProgress`) only once a call is
+  connecting or active, never while it rings or is being placed.
+- The incoming and missed-call notifications name the caller, and are `public`,
+  only when message previews are on (`CallNotifications.incomingPresentation`);
+  otherwise the title is "Helix" and the notification is `private`.

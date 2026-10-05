@@ -305,12 +305,15 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 20));
 
         expect(ringer.log, ['ring Bob Builder video:false full:true']);
-        expect(AppLock.callInProgress.value, isTrue);
+        // Ringing is not "somebody holds the phone": the app lock stays on
+        // until the call is connecting or active.
+        expect(AppLock.callInProgress.value, isFalse);
         expect(platform.log, contains('active:true keepOn:false'));
 
         await container.read(callActionsProvider).accept();
         await untilScreen((s) => s?.stage == CallStage.active);
         await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(AppLock.callInProgress.value, isTrue);
 
         expect(ringer.log.last, 'stop');
         expect(platform.log, contains('service:start Bob Builder video:false'));

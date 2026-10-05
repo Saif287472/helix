@@ -92,9 +92,15 @@ The rules that were true in v1 and are still true (each has a test in
   two seconds of each other reveal an `Advanced mode` button in the same
   corner; a fourth tap opens it. `AdvancedModeCorner.tapWindow` and
   `.tapsToReveal` are public because the rule is public.
-- A shared link (`https://helix.agiletechbd.com/open#HLX-…`, or
-  `helix://open?code=…`) opens advanced mode and checks its code at once. The
-  code travels in the **fragment**, so a browser never sends it to the server.
+- A shared link (`https://…/open#HLX-…` - exactly `/open`, over https - or
+  `helix://open?code=…`) opens advanced mode with its code. The code travels in
+  the **fragment**, so a browser never sends it to the server. **Any code or
+  link that names a server other than Helix Global stops at a confirmation**
+  ("This code wants to sign you in on <host>"): no request is made until the
+  person agrees, the host (not the server's self-chosen name) is shown on every
+  page that follows, and a link is only applied when the device is known to be
+  signed out (`SessionRestore` settled, auth not ready); it is dropped when
+  anyone signs in or out.
 - Only Helix Global asks for the Terms. A personal server has its own operator
   policies.
 - Sign-in pages use `HelixThemes.signIn()` (the app icon's blue) as a local
@@ -314,3 +320,40 @@ These need a plugin that is not in the build; no dependency was added.
 - Also open: the group member picker is its own list (it reads the same people
   table as the search, so it was not swapped for the panel); a minimised
   return-to-call bar; group calls (deferred, plan section 13).
+
+## Security review pass (v2-fixa)
+
+- **App lock** (`core/security/app_lock.dart`). Cold start: once per process,
+  when `sessionRestoreProvider` has settled and the session is `ready`, the
+  gate covers the app until the stored setting is read, then locks if it is on
+  (unreadable setting = locked). A sign-in made in this process does not lock.
+  "Lock again" is a real grace period: backgrounded for at least that long (or
+  a clock set backwards) locks on return; "Immediately" locks on background.
+  A call lifts the lock only once connecting or active, not while ringing.
+- **Servers** (`core/engine/server_policy.dart`). https only; `http` reaches
+  `localhost`/`127.0.0.1`/`10.0.2.2` in debug builds only; no user info, query,
+  fragment or non-ASCII host. Enforced in sign-in (before any request), on the
+  remembered server at start, in `ServerUrlNotifier.use` and in
+  `HelixRuntime.open` (which the push isolate uses too).
+- **Pinning** (`core/platform/tls_pinning.dart`). Android's network security
+  config does not govern Dart sockets. A runtime for Helix Global is built
+  under `HttpOverrides` with a context that trusts no CA; the pin (SHA-256 of
+  the leaf SPKI, `builtInPins` = the XML's, plus `--dart-define=
+  HELIX_GLOBAL_PINS=a,b` for the next key) decides in `badCertificateCallback`,
+  for REST and the realtime socket (via the api package's existing `sockets`
+  injection; no api change). Fail closed; debug builds unpinned. The pin is the
+  leaf key: a renewal with a new key and no shipped pin makes Global
+  unreachable. Verify the pin against the live certificate before release.
+- **One engine** (`core/platform/engine_lease.dart`). A heartbeat lease file
+  beside the database: the push isolate stands aside while the app runs; a
+  second Windows window is refused (`EngineAlreadyRunning`, shown by the reset
+  screen without the destructive option). Best-effort advisory, not a mutex.
+- **Local files**. Windows data lives in the local (non-roaming) app-data
+  folder, not Documents (OneDrive). Sign-out and the destructive reset delete
+  the avatar and attachments, clear the file picker's temporary copies (also
+  after every media send), and the reset works from the files alone.
+- **Contacts** read access is requested up front; write only at a rename.
+- **Call notifications** name the caller, and are `public`, only with message
+  previews on; otherwise "Helix" and `private`.
+- Link handling: the router ignores the platform's start URL; a link's code
+  stays in `pendingLinkProvider`, never in a route location.

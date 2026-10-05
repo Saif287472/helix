@@ -35,6 +35,22 @@ abstract final class SignInCopy {
     null => 'This invite code is not valid.',
   };
 
+  /// A server that is refused outright: not https, or an address that could
+  /// pass for another. Never names the address.
+  static const insecureServer =
+      'This code points to a server that is not reachable securely, so Helix '
+      'will not use it. Ask your server admin for a new code.';
+
+  /// The question asked before any request goes to a server that came from a
+  /// code or a link. [host] is the address itself, never the name the server
+  /// gives itself.
+  static String serverQuestion(String host) =>
+      'This code wants to sign you in on $host.';
+
+  static const serverExplanation =
+      'Only continue if you know this server and expected this code. Your '
+      'phone number and messages will be handled by it.';
+
   // ----------------------------------------------------------- the phone page
   static const badPhoneNumber = 'Enter a valid phone number.';
 
