@@ -467,6 +467,13 @@ log note below).
 "user" is done by the user. Agents do not touch the live server, `.env` or the
 production database.
 
+Decisions the user made on 2026-10-02 (plan §13, "Cutover decisions"):
+federation off, `HELIX_ADMIN_PASSWORD` for the first admin, uploads on local
+disk, `architecture-v2` merged into `main` with every commit kept (tag the last
+v1 commit `v1-final` first), BulkSMSBD tested by POST on the day, the TURN
+script reads the new `.env`, phones get the same app id (uninstall, then
+install) and no rollback plan is wanted (the tag exists anyway).
+
 ### Before the day
 
 1. Agent: merge `architecture-v2` into `main`; delete `backend/` and the
@@ -478,7 +485,16 @@ production database.
 4. User: make sure the Postgres role and databases exist
    (`server/tool/setup_local_postgres.ps1`), and that backups work
    (`V2_OPERABILITY.md`, "Backups").
-5. User, optional rehearsal: create a throwaway database as the Postgres
+5. User, before releasing the app build: **check the TLS pin.** The app pins
+   Helix Global's certificate key (`helix_remote_network_security.xml`,
+   captured 2026-08-07). Caddy may have renewed with a new key since, and a
+   stale pin makes Global unreachable in release builds. Get the current pin
+   from the live certificate, update the config, or pass the new value with
+   `--dart-define=HELIX_GLOBAL_PINS=<base64 sha256>,<backup>` at build time.
+   Debug builds are not pinned.
+6. Agent: tag the last v1 commit on `main` (`git tag v1-final`) before the
+   merge.
+7. User, optional rehearsal: create a throwaway database as the Postgres
    superuser (`createdb -U postgres -O helix helix_rehearsal`), start the new server on
    another port (`$env:HELIX_PORT = "8081"`, `HELIX_GLOBAL_MODE=false`,
    `HELIX_SMS_PROVIDER=none`) with that database, check
@@ -578,7 +594,13 @@ How the v1 names map:
    - Sign in to the Helix Admin app (the first operator comes from
      `HELIX_ADMIN_PASSWORD`).
    - Install the new app build on a phone, register by SMS (this is the
-     POST-versus-GET check), send a message and make a call.
+     POST-versus-GET check: if no code arrives, look for `sms_failed` and its
+     reason in the server log; the fix is to switch the BulkSMSBD call back
+     to GET in `modules/identity/sms.dart`), send a message and make a call.
+   - Things only a real phone can show (see `app/MODULE.md`): the camera and
+     microphone prompts, voice-note recording and playback, video playback,
+     the lock-screen incoming-call screen and audio routing, and that the app
+     lock asks for the fingerprint or PIN after the app was swiped away.
 8. User: remove `HELIX_ADMIN_PASSWORD` from `.env`.
 9. User: reinstall the app on every phone (clean slate, plan D2).
 
