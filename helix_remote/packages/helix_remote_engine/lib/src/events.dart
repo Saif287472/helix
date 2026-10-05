@@ -166,6 +166,24 @@ final class GroupMembershipLost extends EngineEvent {
   final String reason;
 }
 
+/// The server's roster gained a member that no admin's action explains (or
+/// one who joined by themselves through a link). Until the user confirms them
+/// ([GroupsService.confirmMember]) this device gives them neither its sender
+/// key nor the group key, so they cannot read what it sends. The chat has a
+/// `member_unconfirmed` notice ("X was added by the server roster");
+/// [reason] is `unattributed` or `link_join`. The UI should ask the user.
+final class GroupMemberUnconfirmed extends EngineEvent {
+  const GroupMemberUnconfirmed({
+    required this.groupId,
+    required this.account,
+    required this.reason,
+  });
+
+  final String groupId;
+  final String account;
+  final String reason;
+}
+
 /// Someone asked to join through an approval link (this account is an
 /// admin). `GroupsService.joinRequests` lists the requests.
 final class GroupJoinRequested extends EngineEvent {

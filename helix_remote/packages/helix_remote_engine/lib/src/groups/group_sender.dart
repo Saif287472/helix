@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_engine/src/context.dart';
@@ -70,8 +72,25 @@ final class GroupMessageSender {
     bool urgent = true,
     bool ephemeral = false,
     List<DeviceAddress> redistribute = const [],
+  }) => sendEncoded(
+    groupId: groupId,
+    requestId: requestId,
+    bytes: content.encode(),
+    urgent: urgent,
+    ephemeral: ephemeral,
+    redistribute: redistribute,
+  );
+
+  /// [send] for content that is already encoded (tests send crafted bytes
+  /// that no `ContentMessage` can express).
+  Future<void> sendEncoded({
+    required String groupId,
+    required String requestId,
+    required Uint8List bytes,
+    bool urgent = true,
+    bool ephemeral = false,
+    List<DeviceAddress> redistribute = const [],
   }) => _locks.run(groupId, () async {
-    final bytes = content.encode();
     if (redistribute.isNotEmpty) {
       await _forgetDistribution(groupId, redistribute);
     }

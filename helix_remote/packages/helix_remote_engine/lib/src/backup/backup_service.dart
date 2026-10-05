@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:helix_remote_crypto/v2.dart' show BackupCrypto;
 import 'package:helix_remote_engine/src/account/device_service.dart';
 import 'package:helix_remote_engine/src/backup/device_transfer.dart';
 import 'package:helix_remote_engine/src/backup/errors.dart';
@@ -194,8 +195,16 @@ final class BackupService {
 
   // -------------------------------------------------------- full backup
 
-  /// Creates the manual backup under [recoverySecret] (16 characters or 6
-  /// words) and, if given, a 32-byte [platformKey] from the platform's
+  /// A random recovery secret with 160 bits of entropy
+  /// (`ABCD-EFGH-...`, 39 characters) for [createFullBackup]: show it once
+  /// for the user to write down. The app should offer this instead of asking
+  /// for a phrase, because anyone holding the stored backup can guess a
+  /// chosen secret offline. Nothing is stored here.
+  String generateRecoverySecret() =>
+      BackupCrypto.generateRecoverySecret(_ctx.random);
+
+  /// Creates the manual backup under [recoverySecret] (at least 20
+  /// characters; see [generateRecoverySecret]) and, if given, a 32-byte [platformKey] from the platform's
   /// credential store. [mediaIds] lists the backup-kind media objects the
   /// backup refers to. Throws [BackupException] (`weakSecret`, `tooLarge`,
   /// ...). The secret is used and dropped; it is never stored or sent.

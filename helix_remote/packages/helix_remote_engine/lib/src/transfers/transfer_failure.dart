@@ -110,6 +110,10 @@ TransferOutcome classifyTransferError(Object error) {
       return const TransferSessionEnded();
     case MalformedResponseException():
       return const RetryTransfer('bad_response');
+    case ResponseTooLargeException() || RangeNotHonoredException():
+      // The server sends more than the pointer allows, or will not resume:
+      // retrying the same request gets the same answer.
+      return const FailTransfer(TransferFailure.sizeMismatch);
     case ApiException():
       switch (error.code) {
         case ErrorCode.deviceRevoked:

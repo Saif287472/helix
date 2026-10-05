@@ -62,8 +62,8 @@ final class RatchetHeader {
 
   factory RatchetHeader.fromJson(JsonReader json) => RatchetHeader(
     ratchetKey: json.bytes('dh'),
-    previousCount: json.integer('pn'),
-    count: json.integer('n'),
+    previousCount: json.intIn('pn', 0, _maxU32),
+    count: json.intIn('n', 0, _maxU32),
   );
 
   /// Bytes authenticated as part of the AEAD associated data.
@@ -77,6 +77,9 @@ final class RatchetHeader {
     return out.toBytes();
   }
 }
+
+/// The counters and ids of the sealed layouts are 32-bit on the wire.
+const _maxU32 = 4294967295;
 
 Uint8List _u32(int value) =>
     Uint8List(4)..buffer.asByteData().setUint32(0, value);
@@ -116,8 +119,8 @@ final class PrekeyMessage extends SealedPayload {
   factory PrekeyMessage.fromJson(JsonReader json) => PrekeyMessage(
     senderIdentityKey: json.bytes('dik'),
     ephemeralKey: json.bytes('ek'),
-    signedPrekeyId: json.integer('spk'),
-    oneTimePrekeyId: json.optInt('opk'),
+    signedPrekeyId: json.intIn('spk', 0, _maxU32),
+    oneTimePrekeyId: json.optIntIn('opk', 0, _maxU32),
     header: RatchetHeader.fromJson(json.object('h')),
     ciphertext: json.bytes('ct'),
   );
@@ -172,7 +175,7 @@ final class SenderKeyMessage extends SealedPayload {
 
   factory SenderKeyMessage.fromJson(JsonReader json) => SenderKeyMessage(
     distributionId: json.nonEmpty('dist'),
-    iteration: json.integer('it'),
+    iteration: json.intIn('it', 0, _maxU32),
     ciphertext: json.bytes('ct'),
     signature: json.bytes('sig'),
   );

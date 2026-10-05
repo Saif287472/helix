@@ -178,16 +178,20 @@ abstract final class ArchiveReader {
             'the backup is gzip-compressed and no codec was given',
           );
         }
-        final Uint8List expanded;
+        // Inflated in chunks into a sink that stops at the frame limit, so a
+        // small frame that expands enormously (a gzip bomb) is dropped
+        // before it is ever held in memory.
+        final sink = _CappedSink(ArchiveFormat.maxFrameExpanded);
         try {
-          expanded = Uint8List.fromList(gzip.decode(payload));
+          final conversion = gzip.decoder.startChunkedConversion(sink);
+          conversion.add(payload);
+          conversion.close();
+        } on _FrameTooLarge {
+          throw const BackupException(BackupFailure.corrupt, 'frame size');
         } on Object {
           throw const BackupException(BackupFailure.corrupt, 'gzip frame');
         }
-        if (expanded.length > ArchiveFormat.maxFrameExpanded) {
-          throw const BackupException(BackupFailure.corrupt, 'frame size');
-        }
-        return expanded;
+        return sink.takeBytes();
       default:
         throw const BackupException(
           BackupFailure.newerFormat,
@@ -217,4 +221,27 @@ abstract final class ArchiveReader {
       start = end + 1;
     }
   }
+}
+
+final class _FrameTooLarge implements Exception {
+  const _FrameTooLarge();
+}
+
+/// Collects inflated bytes and throws once [limit] is passed.
+final class _CappedSink implements Sink<List<int>> {
+  _CappedSink(this.limit);
+
+  final int limit;
+  final BytesBuilder _out = BytesBuilder(copy: false);
+
+  @override
+  void add(List<int> chunk) {
+    if (_out.length + chunk.length > limit) throw const _FrameTooLarge();
+    _out.add(chunk);
+  }
+
+  @override
+  void close() {}
+
+  Uint8List takeBytes() => _out.takeBytes();
 }

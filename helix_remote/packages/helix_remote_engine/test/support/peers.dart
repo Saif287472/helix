@@ -114,6 +114,7 @@ final class Peers {
     EngineConfig config = fastConfig,
     PhoneBook? phoneBook,
     Clock? clock,
+    HardWipe? hardWipe,
   }) async {
     final db = HelixDb.inMemory(key: DatabaseKey.generate());
     final api = HelixApi(
@@ -129,6 +130,7 @@ final class Peers {
       random: SeededRandom('$name${_seed++}'),
       config: config,
       phoneBook: phoneBook,
+      hardWipe: hardWipe,
     );
     final peer = Peer._(name, server, db, api, engine);
     _all.add(peer);
@@ -142,8 +144,14 @@ final class Peers {
     String? phone,
     EngineConfig config = fastConfig,
     PhoneBook? phoneBook,
+    HardWipe? hardWipe,
   }) async {
-    final peer = await create(name, config: config, phoneBook: phoneBook);
+    final peer = await create(
+      name,
+      config: config,
+      phoneBook: phoneBook,
+      hardWipe: hardWipe,
+    );
     final challenge = await peer.engine.account.requestPhoneCode(
       phone ?? '+8801700000000',
     );
@@ -164,7 +172,7 @@ final class Peers {
   Future<Peer> link(Peer existing, String name) async {
     final fresh = await create(name);
     final link = await fresh.engine.account.beginLink();
-    final done = link.complete();
+    final done = link.complete(confirm: (_) async => true);
     await existing.engine.devices.approveLink(link.code);
     await done;
     expect(fresh.account, existing.account);

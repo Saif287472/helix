@@ -19,6 +19,10 @@ abstract final class MessageKinds {
   /// no message row behind it).
   static const missedCall = 'missed_call';
 
+  /// Row kinds only the engine writes: content from a peer never gets one of
+  /// these (`ContentCodec.storedKind`).
+  static const reserved = {undecryptable, unsupported, missedCall};
+
   /// Types this engine renders. Anything else is shown as "needs a newer
   /// version" (CONTENT_V2.md §1).
   static const known = {

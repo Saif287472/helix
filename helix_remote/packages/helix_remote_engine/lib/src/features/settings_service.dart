@@ -29,8 +29,41 @@ final class SettingsService {
 
   Future<PrivacySettings> privacy() => _ctx.api.people.privacy();
 
-  Future<void> setPrivacy(PrivacySettings settings) =>
-      _ctx.api.people.setPrivacy(settings);
+  /// Saves the privacy settings. Turning `discoverableByPhone` on again
+  /// (it was off on the server) sends the account's own number too: the
+  /// server keeps no discovery entry for an account that opted out and
+  /// rebuilds it from that number after checking it against the verified
+  /// one. The number is [phoneNumber], else the one this device registered
+  /// with; an account that has neither cannot be made discoverable by phone
+  /// (an [ArgumentError] says so before anything is sent).
+  Future<void> setPrivacy(
+    PrivacySettings settings, {
+    String? phoneNumber,
+  }) async {
+    var toSend = settings;
+    if (settings.discoverableByPhone &&
+        settings.phoneNumber == null &&
+        !(await _ctx.api.people.privacy()).discoverableByPhone) {
+      final number =
+          phoneNumber ?? (await _ctx.db.accountDao.current())?.phoneNumber;
+      if (number == null) {
+        throw ArgumentError.value(
+          null,
+          'phoneNumber',
+          'the account number is needed to turn phone discovery back on',
+        );
+      }
+      toSend = PrivacySettings(
+        discoverableByPhone: true,
+        discoverableByName: settings.discoverableByName,
+        lastSeen: settings.lastSeen,
+        online: settings.online,
+        groupAdd: settings.groupAdd,
+        phoneNumber: number,
+      );
+    }
+    await _ctx.api.people.setPrivacy(toSend);
+  }
 
   /// Claims `~name` (3-32 characters, lower case, digits, `_` and `.`,
   /// starting with a letter). Throws `ApiException(name_taken)` when it is

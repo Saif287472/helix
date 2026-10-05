@@ -107,10 +107,22 @@ void main() {
     );
     expect(e.failure, BackupFailure.weakSecret);
     expect(world.remote.fullPuts, 0);
-    // Six words are enough.
+    // Twenty characters are the floor; words do not count for more.
+    final short = await failureOf(
+      alice.backup.createFullBackup(recoverySecret: 'a b c d e f g h i'),
+    );
+    expect(short.failure, BackupFailure.weakSecret);
     await alice.backup.createFullBackup(
       recoverySecret: 'one two three four five six',
     );
+    expect(world.remote.fullPuts, 1);
+  });
+
+  test('a generated recovery secret works end to end', () async {
+    final generated = alice.backup.generateRecoverySecret();
+    expect(generated.length, 39);
+    expect(generated, isNot(alice.backup.generateRecoverySecret()));
+    await alice.backup.createFullBackup(recoverySecret: generated);
     expect(world.remote.fullPuts, 1);
   });
 

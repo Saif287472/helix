@@ -92,6 +92,24 @@ void main() {
     ]);
   });
 
+  test('a gzip frame that inflates past the limit is dropped while it '
+      'inflates', () {
+    final payload = gzip.encode(Uint8List(32 * 1024 * 1024 + 1));
+    expect(payload.length, lessThan(8 * 1024 * 1024), reason: 'a small bomb');
+    final frame = Uint8List(5 + payload.length);
+    ByteData.sublistView(frame).setUint32(0, 1 + payload.length);
+    frame[4] = 1;
+    frame.setRange(5, frame.length, payload);
+    expect(failureOf(() => read(frame)), BackupFailure.corrupt);
+    // A frame exactly at the limit still reads.
+    final ok = gzip.encode(Uint8List(1024));
+    final small = Uint8List(5 + ok.length);
+    ByteData.sublistView(small).setUint32(0, 1 + ok.length);
+    small[4] = 1;
+    small.setRange(5, small.length, ok);
+    expect(ArchiveReader.frames(small, gzip: gzip).single, hasLength(1024));
+  });
+
   test('structural damage is corrupt, a codec from the future is newer', () {
     final writer = ArchiveWriter()..add({'t': 'header'});
     final good = join(writer.finish());

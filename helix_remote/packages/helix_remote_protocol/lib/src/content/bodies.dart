@@ -14,6 +14,22 @@ abstract final class ContentLimits {
   static const maxIdsPerReceipt = 500;
   static const editWindow = Duration(minutes: 15);
   static const deleteWindow = Duration(days: 2);
+
+  /// Sanity bounds on numbers read from peers: nothing beyond them is real,
+  /// and everything within them is safe to add, multiply and `Duration`.
+  static const maxLatE7 = 900000000;
+  static const maxLngE7 = 1800000000;
+  static const maxAccuracyM = 100000000;
+  static const maxCallSeconds = 31536000;
+  static const maxExpireSeconds = 315360000;
+
+  /// Counters (iterations, epochs, versions) are 32-bit on the wire.
+  static const maxCounter = 4294967295;
+
+  /// A media dimension or duration (pixels, milliseconds).
+  static const maxMediaDimension = 1000000;
+  static const maxMediaDurationMs = 86400000;
+  static const maxWaveformSamples = 1024;
 }
 
 /// A message being acted on (reaction, edit, delete, vote, RSVP, reply).
@@ -107,8 +123,8 @@ final class Mention {
 
   factory Mention.fromJson(JsonReader json) => Mention(
     account: json.nonEmpty('account'),
-    start: json.integer('start'),
-    length: json.integer('length'),
+    start: json.intIn('start', 0, ContentLimits.maxTextLength),
+    length: json.intIn('length', 0, ContentLimits.maxTextLength),
   );
 }
 
@@ -285,9 +301,17 @@ final class LocationBody extends ContentBody {
   });
 
   factory LocationBody.fromJson(JsonReader json) => LocationBody(
-    latE7: json.integer('lat_e7'),
-    lngE7: json.integer('lng_e7'),
-    accuracyM: json.integer('accuracy_m'),
+    latE7: json.intIn(
+      'lat_e7',
+      -ContentLimits.maxLatE7,
+      ContentLimits.maxLatE7,
+    ),
+    lngE7: json.intIn(
+      'lng_e7',
+      -ContentLimits.maxLngE7,
+      ContentLimits.maxLngE7,
+    ),
+    accuracyM: json.intIn('accuracy_m', 0, ContentLimits.maxAccuracyM),
     label: json.optString('label'),
     address: json.optString('address'),
   );
@@ -343,9 +367,17 @@ final class LiveLocationBody extends ContentBody {
   factory LiveLocationBody.fromJson(JsonReader json) => LiveLocationBody(
     sessionId: json.nonEmpty('session_id'),
     state: json.enumValue('state', LiveLocationState.values),
-    latE7: json.integer('lat_e7'),
-    lngE7: json.integer('lng_e7'),
-    accuracyM: json.integer('accuracy_m'),
+    latE7: json.intIn(
+      'lat_e7',
+      -ContentLimits.maxLatE7,
+      ContentLimits.maxLatE7,
+    ),
+    lngE7: json.intIn(
+      'lng_e7',
+      -ContentLimits.maxLngE7,
+      ContentLimits.maxLngE7,
+    ),
+    accuracyM: json.intIn('accuracy_m', 0, ContentLimits.maxAccuracyM),
     expiresAt: json.time('expires_at'),
   );
 }
@@ -580,7 +612,7 @@ final class CallLogBody extends ContentBody {
       CallOutcome.values,
       orElse: CallOutcome.unknown,
     ),
-    durationS: json.optInt('duration_s'),
+    durationS: json.optIntIn('duration_s', 0, ContentLimits.maxCallSeconds),
   );
 }
 
@@ -857,7 +889,7 @@ final class SenderKeyDistributionBody extends ContentBody {
       SenderKeyDistributionBody(
         groupId: json.nonEmpty('group_id'),
         distributionId: json.nonEmpty('dist_id'),
-        iteration: json.integer('iteration'),
+        iteration: json.intIn('iteration', 0, ContentLimits.maxCounter),
         chainKey: json.bytes('chain_key'),
         signingKey: json.bytes('signing_key'),
       );
@@ -891,7 +923,7 @@ final class GroupKeyBody extends ContentBody {
 
   factory GroupKeyBody.fromJson(JsonReader json) => GroupKeyBody(
     groupId: json.nonEmpty('group_id'),
-    epoch: json.integer('epoch'),
+    epoch: json.intIn('epoch', 0, ContentLimits.maxCounter),
     key: json.bytes('key'),
   );
 }
@@ -916,7 +948,7 @@ final class ProfileKeyUpdateBody extends ContentBody {
   factory ProfileKeyUpdateBody.fromJson(JsonReader json) =>
       ProfileKeyUpdateBody(
         key: json.bytes('key'),
-        version: json.integer('version'),
+        version: json.intIn('version', 0, ContentLimits.maxCounter),
       );
 }
 

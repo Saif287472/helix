@@ -168,13 +168,40 @@ abstract final class BackupCrypto {
     u32(version),
   ]);
 
-  /// The F2 recovery-secret rule: at least 16 characters or 6 words.
-  static bool isValidRecoverySecret(String secret) {
-    final words = secret
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty);
-    return secret.length >= 16 || words.length >= 6;
+  /// The shortest recovery secret accepted for a new backup. The backup
+  /// key's only protection is this secret under Argon2id, and anyone who
+  /// holds the stored envelope can guess offline, so a human-chosen short
+  /// phrase is not enough; [generateRecoverySecret] makes one that is.
+  static const minRecoverySecretLength = 20;
+
+  /// The recovery-secret rule: at least [minRecoverySecretLength] characters
+  /// (after trimming). Opening an old envelope does not apply it: the secret
+  /// is whatever was used then.
+  static bool isValidRecoverySecret(String secret) =>
+      secret.trim().length >= minRecoverySecretLength;
+
+  /// A random recovery secret with 160 bits of entropy: 32 characters of
+  /// base32 in eight groups of four (`ABCD-EFGH-...`). The app shows it once
+  /// for the user to write down, so nobody has to choose one.
+  static String generateRecoverySecret(CryptoRandom random) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    final bytes = random.nextBytes(20);
+    final out = StringBuffer();
+    var buffer = 0;
+    var bits = 0;
+    var count = 0;
+    for (final b in bytes) {
+      buffer = (buffer << 8) | b;
+      bits += 8;
+      while (bits >= 5) {
+        bits -= 5;
+        if (count > 0 && count % 4 == 0) out.write('-');
+        out.write(alphabet[(buffer >> bits) & 31]);
+        count++;
+      }
+      buffer &= (1 << bits) - 1;
+    }
+    return out.toString();
   }
 
   /// Encrypts [plaintext] under a random backup key, wrapped by the recovery

@@ -281,4 +281,97 @@ void main() {
     );
     expect(utf8.decode(message.encode()), contains('"type":"text"'));
   });
+
+  group('crafted content never throws anything but a FormatException', () {
+    Map<String, Object?> message({
+      Object? ts = 1700000000000,
+      Object? exp,
+      Map<String, Object?>? body,
+      String type = 'text',
+    }) => {
+      'v': 1,
+      'id': messageM,
+      'ts': ts,
+      'conv': {'kind': 'direct', 'to': accountB},
+      'type': type,
+      'body': body ?? {'text': 'hi'},
+      'exp': ?exp,
+    };
+
+    void rejected(String why, Map<String, Object?> json) => test(why, () {
+      expect(
+        () => ContentMessage.decode(utf8.encode(jsonEncode(json))),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    rejected('a huge timestamp', message(ts: 9223372036854775807));
+    rejected('a negative timestamp', message(ts: -5));
+    rejected('a huge disappearing timer', message(exp: 9007199254740991));
+    rejected(
+      'a huge media size',
+      message(
+        type: 'media',
+        body: {
+          'items': [
+            {
+              'kind': 'image',
+              'media': {
+                'id': 'm',
+                'key': encodeBytes(bytes(32, 1)),
+                'digest': encodeBytes(bytes(32, 2)),
+                'size': 9007199254740991,
+                'mime': 'image/png',
+              },
+            },
+          ],
+        },
+      ),
+    );
+    rejected(
+      'a huge live-location expiry',
+      message(
+        type: 'live_location',
+        body: {
+          'session_id': 's',
+          'state': 'start',
+          'lat_e7': 1,
+          'lng_e7': 1,
+          'accuracy_m': 1,
+          'expires_at': 9223372036854775807,
+        },
+      ),
+    );
+    rejected(
+      'an absurd mention range',
+      message(
+        body: {
+          'text': 'hi',
+          'mentions': [
+            {'account': accountB, 'start': 9007199254740991, 'length': 4},
+          ],
+        },
+      ),
+    );
+    rejected(
+      'a coordinate outside the globe',
+      message(
+        type: 'location',
+        body: {'lat_e7': 9000000001, 'lng_e7': 0, 'accuracy_m': 5},
+      ),
+    );
+    rejected(
+      'an iteration beyond 32 bits',
+      message(
+        type: 'sender_key_distribution',
+        body: {
+          'group_id': groupG,
+          'dist_id': messageM,
+          'iteration': 4294967296,
+          'chain_key': encodeBytes(bytes(32, 1)),
+          'signing_key': encodeBytes(bytes(32, 2)),
+        },
+      ),
+    );
+  });
 }

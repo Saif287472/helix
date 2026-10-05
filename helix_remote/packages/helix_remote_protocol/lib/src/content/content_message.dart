@@ -114,7 +114,7 @@ final class ContentMessage {
   });
 
   factory ContentMessage.fromJson(JsonReader json) {
-    final version = json.integer('v');
+    final version = json.intIn('v', 0, 65535);
     final type = json.nonEmpty('type');
     final bodyJson = json.object('body');
     final ContentBody body = version > currentVersion
@@ -130,7 +130,7 @@ final class ContentMessage {
       reply: json.has('reply')
           ? MessageRef.fromJson(json.object('reply'))
           : null,
-      expireSeconds: json.optInt('exp'),
+      expireSeconds: json.optIntIn('exp', 0, ContentLimits.maxExpireSeconds),
       profileKey: json.optBytes('profile_key'),
       viewOnce: flags?.flag('view_once') ?? false,
     );

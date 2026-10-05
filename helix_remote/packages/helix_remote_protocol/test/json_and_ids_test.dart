@@ -55,6 +55,50 @@ void main() {
       );
     });
 
+    test('out-of-range numbers and times are format errors, never '
+        'RangeError or UnsupportedError', () {
+      JsonReader reader(String source) => JsonReader.decode(source);
+      for (final source in [
+        '{"ts":9223372036854775807}',
+        '{"ts":-9223372036854775808}',
+        '{"ts":8640000000000001}',
+        '{"ts":253402300800000}',
+        '{"ts":-1}',
+        '{"ts":1e400}',
+        '{"ts":1e19}',
+        '{"ts":9007199254740992}',
+      ]) {
+        expect(
+          () => reader(source).time('ts'),
+          throwsA(isA<ProtocolFormatException>()),
+          reason: source,
+        );
+        expect(
+          () => reader(source).optTime('ts'),
+          throwsA(isA<FormatException>()),
+          reason: source,
+        );
+      }
+      expect(reader('{"ts":0}').time('ts'), DateTime.utc(1970));
+      expect(
+        reader('{"ts":253402300799999}').time('ts'),
+        DateTime.utc(9999, 12, 31, 23, 59, 59, 999),
+      );
+      for (final source in ['{"n":1e400}', '{"n":-1e400}', '{"n":1e300}']) {
+        expect(
+          () => reader(source).integer('n'),
+          throwsA(isA<ProtocolFormatException>()),
+          reason: source,
+        );
+      }
+      expect(reader('{"n":9007199254740991}').integer('n'), maxWireInt);
+      expect(
+        () => reader('{"n":11}').intIn('n', 0, 10),
+        throwsA(isA<ProtocolFormatException>()),
+      );
+      expect(reader('{"n":10}').intIn('n', 0, 10), 10);
+    });
+
     test('unknown enum values fall back only when asked to', () {
       final json = JsonReader.decode('{"k":"from_the_future"}');
       expect(

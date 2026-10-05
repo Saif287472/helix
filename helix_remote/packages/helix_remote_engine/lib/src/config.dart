@@ -27,6 +27,7 @@ final class EngineConfig {
       max: Duration(seconds: 30),
     ),
     this.wipeOnRevocation = true,
+    this.trustLinkJoins = false,
     this.maxFetchPages = 20,
     this.initialOneTimePrekeys = PrekeyPolicy.initialOneTimePrekeys,
     this.calls = const CallConfig(),
@@ -49,6 +50,7 @@ final class EngineConfig {
     Duration? typingSendInterval,
     Backoff? inboundRetry,
     bool? wipeOnRevocation,
+    bool? trustLinkJoins,
     int? maxFetchPages,
     int? initialOneTimePrekeys,
     CallConfig? calls,
@@ -68,6 +70,7 @@ final class EngineConfig {
     typingSendInterval: typingSendInterval ?? this.typingSendInterval,
     inboundRetry: inboundRetry ?? this.inboundRetry,
     wipeOnRevocation: wipeOnRevocation ?? this.wipeOnRevocation,
+    trustLinkJoins: trustLinkJoins ?? this.trustLinkJoins,
     maxFetchPages: maxFetchPages ?? this.maxFetchPages,
     initialOneTimePrekeys: initialOneTimePrekeys ?? this.initialOneTimePrekeys,
     calls: calls ?? this.calls,
@@ -116,6 +119,12 @@ final class EngineConfig {
   /// Device revocation (close code 4003, `device_revoked`) wipes the local
   /// database (docs/architecture/remote_bounded_contexts.md).
   final bool wipeOnRevocation;
+
+  /// Whether a member who joins a group by themselves through an invite link
+  /// is accepted without asking (the server's announcement is all there is
+  /// to go on). Off by default: such a member is held back until the user
+  /// confirms them (`GroupsService.confirmMember`, `GroupMemberUnconfirmed`).
+  final bool trustLinkJoins;
 
   /// Upper bound of mailbox pages one [Engine.syncOnce] reads.
   final int maxFetchPages;

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -247,6 +248,53 @@ void main() {
       );
     });
 
+    test('crafted numbers in decrypted content are quarantined as bad content '
+        'at once, never retried, and the stream goes on', () async {
+      await say('works');
+      Uint8List craft(Map<String, Object?> patch) {
+        final json = ContentMessage(
+          id: Uuid.v7(),
+          sentAt: peers.clock.now,
+          conversation: DirectConversation(to: bob.account),
+          body: const TextBody(text: 'crafted'),
+        ).toJson();
+        return Uint8List.fromList(utf8.encode(jsonEncode({...json, ...patch})));
+      }
+
+      final crafted = {
+        'huge ts': craft({'ts': 9223372036854775807}),
+        'float ts beyond the range': craft({'ts': 1e300}),
+        'negative ts': craft({'ts': -1}),
+        'huge exp': craft({'exp': 9007199254740991}),
+        'huge version': craft({'v': 9223372036854775807}),
+      };
+      for (final bytes in crafted.values) {
+        await alice.engine.debugSendRaw(bytes, audience: [bob.account]);
+      }
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      await alice.engine.chats.sendText(chat.id, 'after the crafted ones');
+      await alice.engine.drainOutbox();
+
+      final watch = Stopwatch()..start();
+      final summary = await bob.sync();
+      expect(summary.complete, isTrue);
+      expect(
+        watch.elapsed,
+        lessThan(const Duration(seconds: 2)),
+        reason: 'no retry loop for a deterministic failure',
+      );
+      final placeholders = (await bob.messages(
+        alice,
+      )).where((m) => m.kind == MessageKinds.undecryptable).toList();
+      expect(placeholders, hasLength(crafted.length));
+      for (final row in placeholders) {
+        expect(row.payload, contains('bad_content'));
+        expect(row.payload, contains('"waiting":false'));
+      }
+      expect(await bob.texts(alice), ['works', 'after the crafted ones']);
+      expect(peers.server.device(bob.device).mailbox, isEmpty);
+    });
+
     test('a message from an unknown device without a session asks for a '
         'fresh one and shows a waiting row', () async {
       await say('m1');
@@ -362,7 +410,11 @@ void main() {
           ],
         ),
       );
-      await sendRaw(alice, bob, const SystemBody(kind: 'custom'));
+      await sendRaw(
+        alice,
+        bob,
+        const SystemBody(kind: 'timer_changed', fields: {'seconds': 60}),
+      );
       await sendRaw(
         alice,
         bob,
@@ -401,6 +453,39 @@ void main() {
       expect(media.single.width, 4);
       expect((await bob.db.messagesDao.search('photo')).single.kind, 'media');
     });
+
+    test(
+      'a peer cannot write engine-owned rows: system notices other '
+      'than the timer are dropped, reserved kinds become unsupported',
+      () async {
+        await sendRaw(
+          alice,
+          bob,
+          const SystemBody(kind: 'safety_number_changed'),
+        );
+        await sendRaw(alice, bob, const SystemBody(kind: 'you_were_removed'));
+        await sendRaw(
+          alice,
+          bob,
+          const UnknownBody(type: 'undecryptable', raw: {'code': 'forged'}),
+        );
+        await sendRaw(
+          alice,
+          bob,
+          const UnknownBody(type: 'unsupported', raw: {}),
+        );
+        final rows = await bob.messages(alice);
+        expect(rows.map((m) => m.kind), [
+          MessageKinds.unsupported,
+          MessageKinds.unsupported,
+        ]);
+        expect(
+          rows.where((m) => m.kind == MessageKinds.undecryptable),
+          isEmpty,
+          reason: 'a forged placeholder would be replaced by a re-send',
+        );
+      },
+    );
 
     test('poll votes and RSVPs update the poll message', () async {
       final chat = await alice.engine.chats.openDirect(bob.account);

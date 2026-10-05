@@ -114,7 +114,7 @@ final class EngineWorld {
   }) async {
     final fresh = await create(name, realtime: realtime);
     final link = await fresh.engine.account.beginLink();
-    final done = link.complete();
+    final done = link.complete(confirm: (_) async => true);
     await existing.engine.devices.approveLink(link.code);
     await done.timeout(const Duration(seconds: 20));
     expect(fresh.engine.status, EngineStatus.running);

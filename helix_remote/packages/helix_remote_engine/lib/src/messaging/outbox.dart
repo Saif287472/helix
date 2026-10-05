@@ -206,7 +206,9 @@ OpFailure classifyOpError(Object error) {
       return const RetryLater('network');
     case SignedOutException():
       return const SessionEnded();
-    case MalformedResponseException():
+    case MalformedResponseException() ||
+        ResponseTooLargeException() ||
+        RangeNotHonoredException():
       return const RetryLater('bad_response');
     case TransientEngineException():
       return const RetryLater('transient');

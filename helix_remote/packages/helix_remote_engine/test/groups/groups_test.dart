@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:helix_remote_crypto/v2.dart';
@@ -597,6 +598,186 @@ void main() {
     });
   });
 
+  group('server-driven state and membership (CRYPTO_V2.md §9, §14)', () {
+    test('a state is never replaced by an older version, and an old blob '
+        'under a newer version does not open', () async {
+      final g = await trio();
+      final oldBlob = Uint8List.fromList(server.groups[g.id]!.encryptedState);
+      await g.alice.engine.groups.rename(g.id, 'Renamed');
+      await g.bob.sync();
+      expect((await g.bob.engine.groups.details(g.id))!.title, 'Renamed');
+      final current = (await g.bob.db.groupsDao.byId(g.id))!;
+      expect(current.stateVersion, 2);
+
+      // The server serves the first blob again, under the old version.
+      final group = server.groups[g.id]!;
+      final goodBlob = Uint8List.fromList(group.encryptedState);
+      group
+        ..encryptedState = oldBlob
+        ..stateVersion = 1;
+      await g.bob.engine.groups.refresh(g.id);
+      var row = (await g.bob.db.groupsDao.byId(g.id))!;
+      expect(row.title, 'Renamed');
+      expect(row.stateVersion, 2, reason: 'the stored version did not go back');
+      expect(row.state, goodBlob, reason: 'the stored state was kept');
+
+      // ... or under a higher one: it was sealed for version 1, so it does
+      // not open for 7, and the name stays.
+      group.stateVersion = 7;
+      await g.bob.engine.groups.refresh(g.id);
+      row = (await g.bob.db.groupsDao.byId(g.id))!;
+      expect(row.title, 'Renamed');
+      expect((await g.bob.engine.groups.details(g.id))!.title, 'Renamed');
+    });
+
+    test('a member the server adds with no announcement is held back: no '
+        'sender key, no group key, a notice and an event; confirming them '
+        'releases them', () async {
+      final g = await trio();
+      final dave = await peers.register('dave', phone: '+8801711000004');
+      await say(g.alice, g.chat, 'before', [g.bob, g.carol]);
+      final events = <EngineEvent>[];
+      g.alice.engine.events.listen(events.add);
+
+      server.injectMember(server.groups[g.id]!, dave.account);
+      await g.alice.engine.groups.refresh(g.id);
+      expect(await g.alice.engine.groups.pendingMembers(g.id), {
+        dave.account: 'unattributed',
+      });
+      final notices = [
+        for (final m in (await g.alice.db.messagesDao.pageOlder(
+          g.chat,
+        )).messages)
+          if (m.kind == 'system') m.payload!,
+      ];
+      expect(
+        notices.where((p) => p.contains(GroupNoticeKinds.memberUnconfirmed)),
+        hasLength(1),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        events.whereType<GroupMemberUnconfirmed>().single.account,
+        dave.account,
+      );
+
+      // The next message goes to Bob and Carol; Dave is delivered the
+      // ciphertext (the server fans out to everyone) but gets no key.
+      await say(g.alice, g.chat, 'secret', [g.bob, g.carol]);
+      await dave.sync();
+      expect(await texts(dave, g.chat), isEmpty);
+      expect(
+        await dave.db.cryptoDao.latestSenderKey(
+          groupId: g.id,
+          account: g.alice.account,
+          device: g.alice.device,
+        ),
+        isNull,
+      );
+      expect(await texts(g.bob, g.chat), ['before', 'secret']);
+
+      // The user confirms Dave: the group key now, the sender key with the
+      // next message.
+      expect(
+        await g.alice.engine.groups.confirmMember(g.id, dave.account),
+        isTrue,
+      );
+      expect(await g.alice.engine.groups.pendingMembers(g.id), isEmpty);
+      await g.alice.engine.drainOutbox();
+      await say(g.alice, g.chat, 'after', [g.bob, g.carol, dave]);
+      expect(await texts(dave, g.chat), ['after']);
+      expect(
+        await g.alice.engine.groups.confirmMember(g.id, dave.account),
+        isFalse,
+      );
+    });
+
+    test('an announcement attributed to an admin explains the member; one '
+        'attributed to a plain member does not', () async {
+      final g = await trio();
+      final dave = await peers.register('dave', phone: '+8801711000004');
+      final erin = await peers.register('erin', phone: '+8801711000005');
+      final group = server.groups[g.id]!;
+
+      // Announced by Alice (the owner): Bob and Carol accept Dave.
+      server.injectMember(
+        group,
+        dave.account,
+        announce: true,
+        announceActor: g.alice.account,
+      );
+      await g.bob.sync();
+      await g.carol.sync();
+      expect(await g.bob.engine.groups.pendingMembers(g.id), isEmpty);
+      expect(await g.carol.engine.groups.pendingMembers(g.id), isEmpty);
+
+      // Attributed to Bob, a plain member, while only admins may add.
+      server.injectMember(
+        group,
+        erin.account,
+        announce: true,
+        announceActor: g.bob.account,
+      );
+      await g.carol.sync();
+      expect(await g.carol.engine.groups.pendingMembers(g.id), {
+        erin.account: 'unattributed',
+      });
+    });
+
+    test('a member who joins a group by themselves is held back', () async {
+      final g = await trio();
+      final dave = await peers.register('dave', phone: '+8801711000004');
+      server.injectMember(
+        server.groups[g.id]!,
+        dave.account,
+        announce: true,
+        announceActor: dave.account,
+      );
+      await g.bob.sync();
+      expect(await g.bob.engine.groups.pendingMembers(g.id), {
+        dave.account: 'link_join',
+      });
+    });
+
+    test('link joins are accepted when the config trusts them', () async {
+      final alice = await peers.register('alice', phone: '+8801711000001');
+      final bob = await peers.register(
+        'bob',
+        phone: '+8801711000002',
+        config: fastConfig.copyWith(trustLinkJoins: true),
+      );
+      final dave = await peers.register('dave', phone: '+8801711000004');
+      final created = await alice.engine.groups.create(
+        name: 'Weekend',
+        members: [bob.account],
+      );
+      await alice.engine.drainOutbox();
+      await bob.sync();
+      server.injectMember(
+        server.groups[created.groupId]!,
+        dave.account,
+        announce: true,
+        announceActor: dave.account,
+      );
+      await bob.sync();
+      expect(await bob.engine.groups.pendingMembers(created.groupId), isEmpty);
+    });
+
+    test('a member this account adds itself is never held back', () async {
+      final g = await trio();
+      final dave = await peers.register('dave', phone: '+8801711000004');
+      await g.alice.engine.groups.addMembers(g.id, [dave.account]);
+      await g.alice.engine.drainOutbox();
+      await g.bob.sync();
+      await dave.sync();
+      for (final p in [g.alice, g.bob, g.carol]) {
+        await p.sync();
+        expect(await p.engine.groups.pendingMembers(g.id), isEmpty);
+      }
+      await say(g.alice, g.chat, 'welcome', [g.bob, g.carol, dave]);
+      expect(await texts(dave, g.chat), ['welcome']);
+    });
+  });
+
   group('quarantine and recovery', () {
     test('a message without its sender key is quarantined, the sender sends '
         'the key and the message again', () async {
@@ -684,6 +865,38 @@ void main() {
         expect(await texts(g.bob, g.chat), ['real', 'after the forgery']);
       },
     );
+
+    test('crafted numbers in group content are quarantined at once and the '
+        'stream goes on', () async {
+      final g = await trio();
+      await say(g.alice, g.chat, 'works', [g.bob, g.carol]);
+      for (final patch in [
+        {'ts': 9223372036854775807},
+        {'exp': 9007199254740991},
+        {'ts': -1},
+      ]) {
+        final json = ContentMessage(
+          id: Uuid.v7(),
+          sentAt: peers.clock.now,
+          conversation: GroupConversation(group: g.id),
+          body: const TextBody(text: 'crafted'),
+        ).toJson();
+        await g.alice.engine.debugSendRawGroup(
+          g.id,
+          Uint8List.fromList(utf8.encode(jsonEncode({...json, ...patch}))),
+        );
+      }
+      await say(g.alice, g.chat, 'after', [g.bob, g.carol]);
+      final rows = (await g.bob.db.messagesDao.pageOlder(g.chat)).messages;
+      final bad = rows.where((m) => m.kind == MessageKinds.undecryptable);
+      expect(bad, hasLength(3));
+      for (final row in bad) {
+        expect(row.payload, contains('bad_content'));
+        expect(row.payload, contains('"waiting":false'));
+      }
+      expect(await texts(g.bob, g.chat), ['works', 'after']);
+      expect(await texts(g.carol, g.chat), ['works', 'after']);
+    });
 
     test('group content from outside the group is dropped', () async {
       final g = await trio();

@@ -18,6 +18,11 @@ export 'src/daos/transfers_dao.dart';
 export 'src/database.dart';
 export 'src/history_store.dart';
 export 'src/opening.dart'
-    show DatabaseKey, DbEncryptionException, hasPlaintextSqliteHeader;
+    show
+        DatabaseKey,
+        DbEncryptionException,
+        destroyDatabaseFiles,
+        hasPlaintextSqliteHeader,
+        walSizeLimitBytes;
 export 'src/setting.dart';
 export 'src/values.dart';

@@ -613,3 +613,59 @@ Additive helpers for the app's chat list and conversation: `chats.watchMessagesF
 stays) and `presence.watchAllTyping()` (who is typing, in every chat). The db
 package gained the matching `MessagesDao.watchReactionsSince` and
 `clearConversation`.
+
+## Security review pass (2026-10-05)
+
+What the independent review changed here (CRYPTO_V2.md section 14 has the
+reasoning and the open items):
+
+- **Re-send authorisation** (`messaging/apply.dart`, `_mayResend`): a direct
+  message is re-sent only to the chat peer (not blocked) or an own device; a
+  group message to an own device or a current, not banned, not blocked member
+  with `joinedAt <= sentAt`. Others are ignored without an answer.
+  Tests: `test/resend_authorisation_test.dart`, `server/test/client/engine/
+  security_test.dart`.
+- **Decode failures never stall**: any error decoding decrypted content or a
+  sealed payload (pairwise or group) commits the session and quarantines as
+  `bad_content` at once. `Engine.debugSendRaw` / `debugSendRawGroup` send
+  crafted bytes in tests.
+- **Hard wipe seam**: `Engine(hardWipe: ...)` (`HardWipe`) runs after
+  `signOut` (and a wiping revocation) has deleted every row and vacuumed the
+  database. The app closes the database, calls `destroyDatabaseFiles` and
+  deletes the keystore key there.
+- **Groups**: a stored state is never replaced by an older `stateVersion`
+  (`RosterUpdate.stateRolledBack`); the version is in the state blob's AAD.
+  Members the server adds that nothing explains are *pending*
+  (`GroupTrust`, settings keys `group.pending.<id>` / `group.explained.<id>`):
+  `GroupsService.pendingMembers`, `watchPendingMembers`, `confirmMember`;
+  `GroupMemberUnconfirmed` event; `member_unconfirmed` notice (suggested
+  text: "X was added by the server roster"; `fields.reason` is `unattributed`
+  or `link_join`); no sender key (`GroupSendRoster.withheld`) and no group key
+  go to them. `EngineConfig.trustLinkJoins` (default false) accepts members
+  who join by themselves through a link.
+- **Linking**: `NewDeviceLink.awaitApproval()` returns a `LinkProposal`
+  (account id, masked phone, `~name`, key fingerprint) after the approval's
+  certificate and link signature check out; `LinkProposal.accept()` registers
+  the device, `reject()` keeps nothing. `complete({required confirm})` does
+  both. There is no variant without the question.
+- **Direct chats**: peers' `system` rows other than `timer_changed` are
+  dropped; unknown types named like engine row kinds become `unsupported`
+  (`MessageKinds.reserved`).
+- **Account deletion**: `Engine.deleteAccount({password, verificationToken,
+  phoneNumber})` proves ownership as the server accepts (password auth key,
+  else a fresh phone verification token, else this device's signature over
+  `deleteAccountSignatureBody(challenge)`), then wipes like `signOut`.
+- **Privacy**: `SettingsService.setPrivacy` sends the account's own number
+  (`phoneNumber`, else the one it registered with) when
+  `discoverableByPhone` goes from off to on; with no number it throws
+  `ArgumentError` before sending.
+- **Backups**: recovery secrets are at least 20 characters;
+  `BackupService.generateRecoverySecret()`. History transfers are off by
+  default (`BackupOptions.autoTransferToNewDevices`, `autoAcceptTransfers`):
+  the user starts (`sendHistory`) or accepts (`acceptOffer`) them. Gzip
+  frames stop inflating at the frame limit.
+- Downloads pass the pointer's size bound to the API (`maxBytes`), and the
+  new `ResponseTooLargeException` / `RangeNotHonoredException` end a transfer
+  as a size mismatch.
+- A key change also writes the safety-number notice into the group chats of a
+  contact known only from groups.

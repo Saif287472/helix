@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_crypto/v2.dart';
@@ -48,6 +49,17 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart'
     show ContentMessage, Envelope;
 import 'package:meta/meta.dart';
 
+/// The app's half of a hard wipe, run by [Engine.signOut] (and by a
+/// revocation that wipes) after every row has been deleted and the database
+/// vacuumed. The engine itself is pure Dart and owns neither the database
+/// file nor the keystore, so the host does the rest here, in this order:
+/// close the database (and the API), `destroyDatabaseFiles(file)`, delete the
+/// [DatabaseKey] from the platform keystore (that one makes anything left on
+/// the flash unreadable), and delete downloaded media. The engine must be
+/// discarded afterwards. The default is none: the rows are gone and the file
+/// is vacuumed, but the file and key stay.
+typedef HardWipe = Future<void> Function();
+
 /// The Helix Remote messaging engine (ADR-027, plan §6): everything between
 /// the network and the UI that is not UI. Pure Dart, built from injected
 /// pieces, with no globals, so the app, the FCM background isolate, the CLI
@@ -86,7 +98,10 @@ final class Engine {
     MediaProcessor? mediaProcessor,
     TransferConfig transferConfig = const TransferConfig(),
     BackupOptions backupOptions = const BackupOptions(),
+    HardWipe? hardWipe,
   }) : _hasBlobs = blobs != null,
+       // ignore: prefer_initializing_formals
+       _hardWipe = hardWipe,
        _ctx = EngineContext(
          api: api,
          db: db,
@@ -216,6 +231,7 @@ final class Engine {
   late final PeerDirectory _peers;
   late final PairwiseCrypto _crypto;
   late final MessageSender _sender;
+  final HardWipe? _hardWipe;
   late final OutboxService _outbox;
   late final InboundMedia _inboundMedia;
   late final TransferWorker _transferWorker;
@@ -465,6 +481,30 @@ final class Engine {
     );
   }
 
+  /// Sends already-encoded [content] straight to [audience] (one request,
+  /// no outbox): tests craft payloads that no [ContentMessage] can express
+  /// (out-of-range numbers and times) to prove the receiver survives them.
+  @visibleForTesting
+  Future<void> debugSendRaw(
+    Uint8List content, {
+    required Iterable<String> audience,
+  }) async {
+    await _sender.send(
+      requestId: _ctx.ids.next(),
+      content: content,
+      accounts: audience,
+    );
+  }
+
+  /// [debugSendRaw] for a group: encrypted under this device's sender key.
+  @visibleForTesting
+  Future<void> debugSendRawGroup(String groupId, Uint8List content) =>
+      _groupPipeline.sender.sendEncoded(
+        groupId: groupId,
+        requestId: _ctx.ids.next(),
+        bytes: content,
+      );
+
   /// One housekeeping pass (expired messages, key upkeep).
   Future<void> runMaintenance() async {
     await _maintenance.runOnce();
@@ -492,7 +532,41 @@ final class Engine {
     await media.wipeFiles();
     await _ctx.db.wipeAll();
     _forgetIdentity();
-    _setStatus(EngineStatus.signedOut);
+    try {
+      await _hardWipe?.call();
+    } finally {
+      _setStatus(EngineStatus.signedOut);
+    }
+  }
+
+  /// Deletes the account on the server, then signs this device out and wipes
+  /// it (like [signOut]). The proof is as for `AccountService.deleteAccount`:
+  /// [password], else [verificationToken], else this device's signing key.
+  /// The account is gone for good; a failure leaves everything as it was.
+  Future<void> deleteAccount({
+    String? password,
+    String? verificationToken,
+    String? phoneNumber,
+  }) async {
+    if (!_ctx.isSignedIn) throw const NotSignedInException();
+    // The server closes this device's socket as "revoked" once the account
+    // is gone; this call does the wiping, so that reaction stands down.
+    _revoking = true;
+    try {
+      await account.deleteAccount(
+        password: password,
+        verificationToken: verificationToken,
+        phoneNumber: phoneNumber,
+      );
+    } on Object {
+      _revoking = false;
+      rethrow;
+    }
+    try {
+      await signOut();
+    } finally {
+      _revoking = false;
+    }
   }
 
   /// The server says this device was revoked: stop, forget the session and
@@ -511,9 +585,16 @@ final class Engine {
       }
     }
     _forgetIdentity();
-    // Last, so whoever reacts to the status finds the wipe done.
-    _setStatus(EngineStatus.revoked);
-    _revoking = false;
+    try {
+      if (_ctx.config.wipeOnRevocation) await _hardWipe?.call();
+    } on Object {
+      // The host's wipe failed: the rows are gone already, and the status
+      // must still reach the UI.
+    } finally {
+      // Last, so whoever reacts to the status finds the wipe done.
+      _setStatus(EngineStatus.revoked);
+      _revoking = false;
+    }
   }
 
   /// The session could not be renewed: tokens are gone, the data stays.

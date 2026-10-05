@@ -35,6 +35,10 @@ enum SignInFailure {
   /// The other device did not approve in time, or the link expired.
   linkExpired,
 
+  /// The user did not confirm the account the approving device offered
+  /// (`NewDeviceLink.complete`'s `confirm` answered no).
+  linkDeclined,
+
   /// The password did not unwrap the account key.
   wrongPassword,
 

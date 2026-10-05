@@ -101,7 +101,7 @@ final class GroupInbound {
     final SealedPayload sealed;
     try {
       sealed = SealedPayload.decode(payload);
-    } on FormatException {
+    } on Object {
       return _quarantine(
         envelope,
         mark,
@@ -135,7 +135,7 @@ final class GroupInbound {
     final ContentMessage content;
     try {
       content = ContentMessage.decode(decrypted.content);
-    } on FormatException {
+    } on Object {
       // Decryption worked, so the chain moved: commit it, then quarantine.
       await _store.commit(decrypted.writes);
       return _quarantine(
@@ -384,11 +384,25 @@ final class GroupInbound {
     final blob = group.state;
     final opensNew =
         blob != null &&
-        await _keyring.tryOpen(group.id, blob, body.epoch, body.key) != null;
+        await _keyring.tryOpen(
+              group.id,
+              blob,
+              body.epoch,
+              group.stateVersion,
+              body.key,
+            ) !=
+            null;
     if (held != null) {
       final opensHeld =
           blob != null &&
-          await _keyring.tryOpen(group.id, blob, body.epoch, held) != null;
+          await _keyring.tryOpen(
+                group.id,
+                blob,
+                body.epoch,
+                group.stateVersion,
+                held,
+              ) !=
+              null;
       if (opensHeld || !opensNew) {
         return const ApplyResult.ignored('key_conflict');
       }
@@ -409,7 +423,7 @@ final class GroupInbound {
     if (data != null) {
       try {
         event = RosterChangeEvent.fromJson(JsonReader(data));
-      } on FormatException {
+      } on Object {
         event = null;
       }
     }
@@ -457,6 +471,16 @@ final class GroupInbound {
           }
         }
       case RosterChangeKind.created || RosterChangeKind.added:
+        if (event.change == RosterChangeKind.added) {
+          // Before the roster is read: the read finds the new members and
+          // holds back whoever the announcement does not explain.
+          await _roster.attributeAdded(
+            groupId,
+            actor: event.actor,
+            accounts: event.members,
+            at: at,
+          );
+        }
         final update = await _roster.refreshForInbound(groupId);
         if (update != null) {
           final joined =

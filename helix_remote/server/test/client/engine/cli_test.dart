@@ -157,7 +157,7 @@ void main() {
         expect(lastJson(chats)['chats'], isNot(contains('unread: 1')));
 
         // Bob links a second CLI device: it shows a code, Bob approves it.
-        final linkIo = _Io(h, null, env: const {});
+        final linkIo = _Io(h, null, env: const {}, input: ['y']);
         final linking = HelixCli(linkIo).run([
           '--home',
           '${root.path}/bob2',

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:helix_remote_protocol/src/content/bodies.dart';
 import 'package:helix_remote_protocol/src/json.dart';
 
 /// Reference to an encrypted media object (CONTENT_V2.md §2,
@@ -24,6 +25,10 @@ final class MediaPointer {
 
   /// SHA-256 of the ciphertext, checked after download.
   final Uint8List digest;
+
+  /// The largest attachment a pointer may declare (the per-account
+  /// attachment quota of the server, 4 GiB).
+  static const maxSize = 4 * 1024 * 1024 * 1024;
 
   /// Plaintext size in bytes.
   final int size;
@@ -53,7 +58,7 @@ final class MediaPointer {
       id: json.nonEmpty('id'),
       key: key,
       digest: digest,
-      size: json.integer('size'),
+      size: json.intIn('size', 0, MediaPointer.maxSize),
       mime: json.nonEmpty('mime'),
       name: json.optString('name'),
       blurhash: json.optString('blurhash'),
@@ -123,9 +128,21 @@ final class MediaItem {
     ),
     media: MediaPointer.fromJson(json.object('media')),
     caption: json.optString('caption'),
-    durationMs: json.optInt('duration_ms'),
-    waveform: json.optBytes('waveform'),
-    width: json.optInt('width'),
-    height: json.optInt('height'),
+    durationMs: json.optIntIn(
+      'duration_ms',
+      0,
+      ContentLimits.maxMediaDurationMs,
+    ),
+    waveform: _waveform(json),
+    width: json.optIntIn('width', 0, ContentLimits.maxMediaDimension),
+    height: json.optIntIn('height', 0, ContentLimits.maxMediaDimension),
   );
+}
+
+Uint8List? _waveform(JsonReader json) {
+  final bytes = json.optBytes('waveform');
+  if (bytes != null && bytes.length > ContentLimits.maxWaveformSamples) {
+    throw ProtocolFormatException('waveform too long', path: json.path);
+  }
+  return bytes;
 }

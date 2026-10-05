@@ -4,6 +4,16 @@ import 'dart:typed_data';
 /// A decoded JSON object.
 typedef JsonMap = Map<String, Object?>;
 
+/// The largest integer a wire message may carry (2^53 - 1, the largest
+/// integer JavaScript reads exactly).
+const maxWireInt = 9007199254740991;
+
+/// The earliest wire timestamp: the epoch.
+const minWireTime = 0;
+
+/// The latest wire timestamp: 9999-12-31T23:59:59.999Z.
+const maxWireTime = 253402300799999;
+
 /// Thrown when a wire message does not match the contract. [path] names the
 /// offending field (`body.recipients[2].device_id`), never its value: wire
 /// values can be secrets.
@@ -91,16 +101,44 @@ final class JsonReader {
     return value;
   }
 
+  /// An integer in the range every JSON implementation reads exactly
+  /// (|v| <= 2^53 - 1, [maxWireInt]). A hostile peer's larger value, an
+  /// infinite or fractional number is a [ProtocolFormatException], never an
+  /// arithmetic overflow further on.
   int integer(String key) {
     final value = _required(key);
-    if (value is int) return value;
-    if (value is double && value == value.truncateToDouble()) {
-      return value.toInt();
+    final int result;
+    if (value is int) {
+      result = value;
+    } else if (value is double &&
+        value.isFinite &&
+        value == value.truncateToDouble() &&
+        value.abs() <= maxWireInt) {
+      result = value.toInt();
+    } else {
+      return _type(key, 'an integer');
     }
-    return _type(key, 'an integer');
+    if (result > maxWireInt || result < -maxWireInt) {
+      throw ProtocolFormatException('integer out of range', path: _at(key));
+    }
+    return result;
   }
 
   int? optInt(String key) => has(key) ? integer(key) : null;
+
+  /// An integer within [min] .. [max]; anything else is a
+  /// [ProtocolFormatException] (sizes, counts, coordinates and durations of
+  /// untrusted content are checked where they are read).
+  int intIn(String key, int min, int max) {
+    final value = integer(key);
+    if (value < min || value > max) {
+      throw ProtocolFormatException('value out of range', path: _at(key));
+    }
+    return value;
+  }
+
+  int? optIntIn(String key, int min, int max) =>
+      has(key) ? intIn(key, min, max) : null;
 
   bool boolean(String key) {
     final value = _required(key);
@@ -114,9 +152,17 @@ final class JsonReader {
 
   Uint8List? optBytes(String key) => has(key) ? bytes(key) : null;
 
-  /// Epoch milliseconds (UTC). All wire timestamps use this form.
-  DateTime time(String key) =>
-      DateTime.fromMillisecondsSinceEpoch(integer(key), isUtc: true);
+  /// Epoch milliseconds (UTC). All wire timestamps use this form, within
+  /// [minWireTime] .. [maxWireTime] (1970 to the end of year 9999): a value
+  /// outside it is a [ProtocolFormatException], not the `RangeError` that
+  /// `DateTime` would throw (and not a date that breaks arithmetic later).
+  DateTime time(String key) {
+    final ms = integer(key);
+    if (ms < minWireTime || ms > maxWireTime) {
+      throw ProtocolFormatException('time out of range', path: _at(key));
+    }
+    return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  }
 
   DateTime? optTime(String key) => has(key) ? time(key) : null;
 

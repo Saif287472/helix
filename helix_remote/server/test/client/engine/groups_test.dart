@@ -437,8 +437,14 @@ void main() {
 
       final joined = await dave.engine.groups.joinWithLink(invite.link);
       expect(joined.joined, isTrue);
+      // Someone who joins by themselves is held back until the user
+      // confirms them (the server's word is all there is): nothing is handed
+      // over before that, so the name stays unreadable.
+      await inGroup(dave, g.id);
+      await confirmJoiner(g.alice, g.id, dave);
+      expect((await dave.db.groupsDao.byId(g.id))!.title, isEmpty);
       // The key comes from the admin with the lowest account id, so the name
-      // appears without anyone doing anything.
+      // appears once she has confirmed.
       await inGroup(dave, g.id, title: 'Weekend');
 
       await g.alice.engine.chats.sendText(chat, 'welcome dave');
@@ -573,6 +579,7 @@ void main() {
         expect(await g.alice.engine.groups.bans(g.id), isEmpty);
         final back = await g.bob.engine.groups.joinWithLink(invite.link);
         expect(back.joined, isTrue);
+        await confirmJoiner(g.alice, g.id, g.bob);
         await inGroup(g.bob, g.id, title: 'Two of us');
         // The old history is still in his chat, the new group works.
         await g.alice.engine.chats.sendText(chat, 'welcome back');
@@ -883,6 +890,25 @@ Future<void> inGroup(EngineUser user, String groupId, {String? title}) =>
         expect(row!.title, title, reason: '${user.name} cannot read the name');
       }
     });
+
+/// [admin] confirms [joiner], who joined by a link: waits until the group
+/// holds them back, then confirms (the group key goes out now).
+Future<void> confirmJoiner(
+  EngineUser admin,
+  String groupId,
+  EngineUser joiner,
+) async {
+  await settle(() async {
+    expect(
+      await admin.engine.groups.pendingMembers(groupId),
+      containsPair(joiner.account, 'link_join'),
+    );
+  });
+  expect(
+    await admin.engine.groups.confirmMember(groupId, joiner.account),
+    isTrue,
+  );
+}
 
 Future<ConversationRow?> groupChat(EngineUser user, String groupId) =>
     user.db.conversationsDao.byId(GroupIds.conversationId(groupId));

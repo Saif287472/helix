@@ -147,3 +147,17 @@ a `DeviceSessionAuth`; `HelixAdminApi(baseUrl)` the admin client to an
   `server/test/client/api_v2_test.dart`: this package may not depend on
   the server, so the server's tests (allowed to import this package only
   under `test/client/`) drive it instead.
+
+## Response size caps (review pass 2026-10-05)
+
+`HelixTransport.send/call/external` take `maxResponseBytes` (default
+`defaultMaxResponseBytes`, 4 MiB). The body is cut off as soon as it is longer
+(by `content-length` up front, or counted while it streams in) with
+`ResponseTooLargeException`; it is never retried. Backups and the account
+export pass 32 MiB; `MediaClient.download` takes `maxBytes` (the caller passes
+what the pointer's declared size allows; the default is the 4 GiB quota). A
+ranged download must be answered with the range: a full body where an offset
+was asked, or more bytes than the range holds, is `RangeNotHonoredException`
+(the first range, from byte 0, may be answered with the whole object within
+the cap). `ComplianceClient.deleteAccount` takes `currentAuthKey`,
+`verificationToken` or `deviceProof` (see `DeleteAccountRequest`).

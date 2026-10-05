@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 import 'support/fakes.dart';
@@ -559,6 +560,95 @@ void main() {
       );
       expect(server.seen, isEmpty);
     });
+  });
+
+  group('response size caps', () {
+    test(
+      'a JSON body over the cap is refused by its declared length',
+      () async {
+        server.handler = (_) =>
+            http.Response.bytes(Uint8List(defaultMaxResponseBytes + 1), 200);
+        await expectLater(
+          IdentityClient(transport()).devices(),
+          throwsA(isA<ResponseTooLargeException>()),
+        );
+      },
+    );
+
+    test('a body of unknown length is cut off while it streams in', () async {
+      var pulled = 0;
+      final client = MockClient.streaming((request, body) async {
+        final chunks = Stream<List<int>>.periodic(const Duration(), (_) {
+          pulled++;
+          return Uint8List(1024 * 1024);
+        });
+        return http.StreamedResponse(chunks, 200);
+      });
+      final t = HelixTransport(
+        baseUrl: Uri.parse('https://helix.test'),
+        client: client,
+        auth: auth,
+        retry: RetryPolicy.none,
+      );
+      await expectLater(
+        IdentityClient(t).devices(),
+        throwsA(
+          isA<ResponseTooLargeException>().having(
+            (e) => e.limit,
+            'limit',
+            defaultMaxResponseBytes,
+          ),
+        ),
+      );
+      expect(pulled, lessThan(10), reason: 'it stopped reading at the cap');
+    });
+
+    test('a per-call cap applies; a body within it comes through', () async {
+      server.handler = (_) => http.Response.bytes(Uint8List(100), 200);
+      final response = await transport().send(
+        Routes.devices,
+        maxResponseBytes: 100,
+      );
+      expect(response.body, hasLength(100));
+      await expectLater(
+        transport().send(Routes.devices, maxResponseBytes: 99),
+        throwsA(isA<ResponseTooLargeException>()),
+      );
+    });
+
+    test(
+      'media: a ranged request answered with the whole object, or with '
+      'more than the range, is refused; the cap bounds the download',
+      () async {
+        final media = MediaClient(transport());
+        server.handler = (_) => http.Response.bytes(Uint8List(10), 200);
+        await expectLater(
+          media.download('m1', start: 4, end: 6),
+          throwsA(isA<RangeNotHonoredException>()),
+        );
+        // From byte 0 the whole object is a fine answer, within the cap.
+        final first = await media.download(
+          'm1',
+          start: 0,
+          end: 5,
+          maxBytes: 10,
+        );
+        expect(first.partial, isFalse);
+        await expectLater(
+          media.download('m1', start: 0, end: 5, maxBytes: 9),
+          throwsA(isA<ResponseTooLargeException>()),
+        );
+        server.handler = (_) => http.Response.bytes(
+          Uint8List(10),
+          206,
+          headers: {'content-range': 'bytes 4-13/20'},
+        );
+        await expectLater(
+          media.download('m1', start: 4, end: 6),
+          throwsA(isA<RangeNotHonoredException>()),
+        );
+      },
+    );
   });
 
   group('media', () {

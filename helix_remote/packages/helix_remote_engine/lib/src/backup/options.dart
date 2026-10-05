@@ -31,7 +31,13 @@ abstract interface class RelayStore {
   Future<String> upload(List<int> ciphertext, {CancellationToken? cancel});
 
   /// The whole object; throws `ApiException(not_found)` when it is gone.
-  Future<Uint8List> download(String mediaId, {CancellationToken? cancel});
+  /// A body longer than [maxBytes] (what the pointer says the object can be)
+  /// is dropped while it streams in.
+  Future<Uint8List> download(
+    String mediaId, {
+    int? maxBytes,
+    CancellationToken? cancel,
+  });
 
   /// Best effort; the owner only.
   Future<void> delete(String mediaId);
@@ -81,9 +87,14 @@ final class ApiRelayStore implements RelayStore {
   @override
   Future<Uint8List> download(
     String mediaId, {
+    int? maxBytes,
     CancellationToken? cancel,
   }) async {
-    final response = await _client.download(mediaId, cancel: cancel);
+    final response = await _client.download(
+      mediaId,
+      maxBytes: maxBytes ?? defaultMaxDownloadBytes,
+      cancel: cancel,
+    );
     return response.bytes;
   }
 
@@ -98,8 +109,8 @@ final class BackupOptions {
   const BackupOptions({
     this.gzip,
     this.autoBackup = true,
-    this.autoTransferToNewDevices = true,
-    this.autoAcceptTransfers = true,
+    this.autoTransferToNewDevices = false,
+    this.autoAcceptTransfers = false,
     this.backupInterval = const Duration(days: 1),
     this.retryInterval = const Duration(hours: 1),
     this.pageSize = 400,
@@ -133,11 +144,15 @@ final class BackupOptions {
   /// The first-run default of the "back up automatically" switch.
   final bool autoBackup;
 
-  /// Offer history to a device that has just joined the account.
+  /// Offer history to a device that has just joined the account, without
+  /// asking. Off by default: whoever links a device (or holds a stolen
+  /// session) would otherwise receive the whole history unasked; the user
+  /// starts the transfer (`BackupService.sendHistory`).
   final bool autoTransferToNewDevices;
 
   /// Download and import an offer from another of this account's devices
-  /// without asking.
+  /// without asking. Off by default: the user accepts a history transfer
+  /// (`BackupService.acceptOffer`).
   final bool autoAcceptTransfers;
 
   /// How often the automatic backup runs, and how soon after a failure.

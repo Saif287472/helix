@@ -11,6 +11,7 @@ import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
 import 'package:helix_remote_engine/src/groups/group_keyring.dart';
 import 'package:helix_remote_engine/src/groups/group_notices.dart';
+import 'package:helix_remote_engine/src/groups/group_trust.dart';
 import 'package:helix_remote_engine/src/groups/sender_key_store.dart';
 import 'package:helix_remote_engine/src/util/keyed_lock.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -23,6 +24,7 @@ final class RosterUpdate {
     required this.previousTitle,
     required this.added,
     required this.removed,
+    this.stateRolledBack = false,
   });
 
   /// The `groups` row after the refresh.
@@ -38,6 +40,10 @@ final class RosterUpdate {
   /// Members that are new, and members that are gone, since the last roster.
   final Set<String> added;
   final Set<String> removed;
+
+  /// The server offered an older state version than the stored one: the
+  /// stored state was kept (a state is never replaced by an older one).
+  final bool stateRolledBack;
 }
 
 /// The member devices a group send addresses.
@@ -46,12 +52,14 @@ final class GroupSendRoster {
     required this.groupId,
     required this.members,
     required this.devicesByAccount,
+    this.withheld = const {},
   }) : crypto = GroupRoster(
          groupId: groupId,
-         members: members,
+         members: members.difference(withheld),
          devices: [
            for (final e in devicesByAccount.entries)
-             for (final d in e.value) ?_address(e.key, d),
+             if (!withheld.contains(e.key))
+               for (final d in e.value) ?_address(e.key, d),
          ],
        ),
        digest = membersDigest(devicesByAccount);
@@ -63,6 +71,11 @@ final class GroupSendRoster {
 
   /// Member devices by account, this device left out.
   final Map<String, List<String>> devicesByAccount;
+
+  /// Members this account has not confirmed (see [GroupTrust]): they are
+  /// left out of [crypto], so no sender key is handed to them, but they stay
+  /// in [digest], which the server checks against everyone it delivers to.
+  final Set<String> withheld;
 
   /// The roster in the form the sender-key protocol takes.
   final GroupRoster crypto;
@@ -93,13 +106,19 @@ final class GroupSendRoster {
 /// Everything per group runs under one lock, so a refresh and a stale
 /// adoption never interleave.
 final class GroupRosterSync {
-  GroupRosterSync(this._ctx, this._keyring, this._peers, this._senderKeys)
-    : _notices = GroupNotices(_ctx);
+  GroupRosterSync(
+    this._ctx,
+    this._keyring,
+    this._peers,
+    this._senderKeys,
+    this._trust,
+  ) : _notices = GroupNotices(_ctx);
 
   final EngineContext _ctx;
   final GroupKeyring _keyring;
   final PeerDirectory _peers;
   final DbSenderKeyStore _senderKeys;
+  final GroupTrust _trust;
   final GroupNotices _notices;
   final KeyedLock<String> _locks = KeyedLock();
 
@@ -180,11 +199,23 @@ final class GroupRosterSync {
         removed: const {},
       );
     }
-    final content = await _keyring.openState(
-      groupId,
-      group.encryptedState,
-      epoch: group.epoch,
-    );
+    // A state is never replaced by an older one: a lower version than the
+    // stored one is the server replaying an old blob (CRYPTO_V2.md section 9).
+    // The roster still applies; the stored state, title and picture stay.
+    final rolledBack =
+        existing != null && group.stateVersion < existing.stateVersion;
+    final stateBlob = rolledBack ? existing.state : group.encryptedState;
+    final stateVersion = rolledBack
+        ? existing.stateVersion
+        : group.stateVersion;
+    final content = stateBlob == null
+        ? null
+        : await _keyring.openState(
+            groupId,
+            stateBlob,
+            epoch: group.epoch,
+            version: stateVersion,
+          );
     final title = content?.name ?? existing?.title ?? '';
     final avatar = content == null
         ? existing?.avatar
@@ -213,6 +244,7 @@ final class GroupRosterSync {
         ),
     ];
     var applied = false;
+    final unconfirmed = <String>[];
     await _db.transaction(() async {
       await _db.groupsDao.upsert(
         GroupsCompanion.insert(
@@ -221,12 +253,12 @@ final class GroupRosterSync {
           avatar: Value(avatar),
           role: me.role.wire,
           epoch: existing == null ? Value(group.epoch) : const Value.absent(),
-          state: Value(Uint8List.fromList(group.encryptedState)),
-          stateVersion: Value(
-            existing != null && existing.stateVersion > group.stateVersion
-                ? existing.stateVersion
-                : group.stateVersion,
-          ),
+          state: rolledBack
+              ? const Value.absent()
+              : Value(Uint8List.fromList(group.encryptedState)),
+          stateVersion: rolledBack
+              ? const Value.absent()
+              : Value(group.stateVersion),
           createdAt: existing?.createdAt ?? group.createdAt,
         ),
       );
@@ -247,7 +279,30 @@ final class GroupRosterSync {
           if (m.account != self) m.account,
       ]);
       await _keyring.saveMeta(groupId, meta);
+      // Members the server added that nothing explains are held back in the
+      // same transaction as the roster: no send can run in between.
+      if (existing != null && previous.isNotEmpty) {
+        for (final m in group.members) {
+          if (m.account == self || previous.containsKey(m.account)) continue;
+          if (await _trust.takeExplained(groupId, m.account)) continue;
+          if (await _trust.isPending(groupId, m.account)) continue;
+          unconfirmed.add(m.account);
+          await _holdBack(groupId, m.account, PendingReasons.unattributed);
+        }
+      }
+      await _trust.retainOnly(groupId, {
+        for (final m in group.members) m.account,
+      });
     });
+    for (final account in unconfirmed) {
+      _ctx.emit(
+        GroupMemberUnconfirmed(
+          groupId: groupId,
+          account: account,
+          reason: PendingReasons.unattributed,
+        ),
+      );
+    }
     final stored = (await _db.groupsDao.byId(groupId))!;
     final names = {for (final m in group.members) m.account};
     return RosterUpdate(
@@ -258,8 +313,91 @@ final class GroupRosterSync {
           ? const {}
           : names.difference(previous.keys.toSet()),
       removed: previous.keys.toSet().difference(names),
+      stateRolledBack: rolledBack,
     );
   }
+
+  // ------------------------------------------------- server-driven members
+
+  /// Marks [account] as waiting for confirmation and leaves the notice in
+  /// the chat. Runs inside the caller's transaction.
+  Future<void> _holdBack(String groupId, String account, String reason) async {
+    await _trust.addPending(groupId, account, reason);
+    await _notices.add(
+      groupId: groupId,
+      kind: GroupNoticeKinds.memberUnconfirmed,
+      members: [account],
+      fields: {'reason': reason},
+    );
+  }
+
+  /// A `roster_change` of kind `added` names [actor] as the one who added
+  /// [accounts]. Called before the roster is read (the read finds the new
+  /// members and would hold them back otherwise); also fine after it.
+  ///
+  /// Explained: an actor who may add people (an admin, or any member when
+  /// the group allows everyone), who is not one of the added. Everyone else
+  /// waits for confirmation: a member joining by themselves through a link
+  /// ([PendingReasons.linkJoin], unless `EngineConfig.trustLinkJoins`) or an
+  /// addition by someone who may not add ([PendingReasons.unattributed]).
+  Future<void> attributeAdded(
+    String groupId, {
+    required String? actor,
+    required Iterable<String> accounts,
+    DateTime? at,
+  }) => _locks.run(groupId, () async {
+    final self = _ctx.identity.accountId;
+    if (await _db.groupsDao.byId(groupId) == null) return;
+    final may = actor != null && await _mayAdd(groupId, actor);
+    final emitted = <(String, String)>[];
+    await _db.transaction(() async {
+      for (final account in accounts) {
+        if (account == self) continue;
+        final known = await _db.groupsDao.member(groupId, account) != null;
+        final waiting = await _trust.isPending(groupId, account);
+        if (known && !waiting) continue; // Accepted before.
+        final selfJoin = actor == account;
+        if (selfJoin ? _ctx.config.trustLinkJoins : may) {
+          await _trust.explain(groupId, [account]);
+          continue;
+        }
+        final reason = selfJoin
+            ? PendingReasons.linkJoin
+            : PendingReasons.unattributed;
+        if (waiting) {
+          await _trust.addPending(groupId, account, reason); // relabel
+        } else {
+          await _holdBack(groupId, account, reason);
+          emitted.add((account, reason));
+        }
+      }
+    });
+    for (final (account, reason) in emitted) {
+      _ctx.emit(
+        GroupMemberUnconfirmed(
+          groupId: groupId,
+          account: account,
+          reason: reason,
+        ),
+      );
+    }
+  });
+
+  Future<bool> _mayAdd(String groupId, String actor) async {
+    final member = await _db.groupsDao.member(groupId, actor);
+    if (member == null) return false;
+    if (member.role == GroupRole.owner.wire ||
+        member.role == GroupRole.admin.wire) {
+      return true;
+    }
+    return (await _keyring.meta(groupId)).settings.addMembers ==
+        GroupPermission.everyone;
+  }
+
+  /// This account added [accounts] itself (or approved their request): they
+  /// are explained.
+  Future<void> explainOwnAdds(String groupId, Iterable<String> accounts) =>
+      _trust.explain(groupId, accounts);
 
   /// Re-reads the stored state blob with the keys held now (a group key
   /// just arrived): name, picture and description appear without a network
@@ -268,7 +406,12 @@ final class GroupRosterSync {
     final group = await _db.groupsDao.byId(groupId);
     final blob = group?.state;
     if (group == null || blob == null) return;
-    final content = await _keyring.openState(groupId, blob, epoch: group.epoch);
+    final content = await _keyring.openState(
+      groupId,
+      blob,
+      epoch: group.epoch,
+      version: group.stateVersion,
+    );
     if (content == null) return;
     final avatar = _avatarBytes(content.avatar);
     await _db.groupsDao.upsert(
@@ -334,6 +477,7 @@ final class GroupRosterSync {
       await _db.groupsDao.forget(groupId);
       await _senderKeys.forgetGroup(groupId);
       await _keyring.forget(groupId);
+      await _trust.forget(groupId);
       final conversation = GroupIds.conversationId(groupId);
       if (await _db.conversationsDao.byId(conversation) != null) {
         await _db.conversationsDao.setMembers(conversation, const []);
@@ -363,8 +507,10 @@ final class GroupRosterSync {
     if (await _db.groupsDao.byId(groupId) == null) return null;
     final own = _ctx.identity.deviceId;
     final rows = await _db.groupsDao.members(groupId);
+    final waiting = await _trust.pending(groupId);
     return GroupSendRoster(
       groupId: groupId,
+      withheld: waiting.keys.toSet(),
       members: {for (final r in rows) r.accountId},
       devicesByAccount: {
         for (final r in rows)

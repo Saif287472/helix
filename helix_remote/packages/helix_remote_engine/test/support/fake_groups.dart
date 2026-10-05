@@ -15,7 +15,9 @@ final class FakeGroup {
   Uint8List encryptedState;
   GroupSettings settings;
   int epoch = 0;
-  int stateVersion = 0;
+
+  /// Starts at 1 like the real server; the state blob's AAD binds it.
+  int stateVersion = 1;
 
   /// Member accounts in join order, with their roles.
   final Map<String, GroupRole> roles = {};
@@ -106,6 +108,27 @@ final class FakeGroups {
     );
   }
 
+  /// Puts [account] in the roster the way a hostile or buggy server could:
+  /// with no announcement, or announced as added by [announceActor] (an
+  /// admin's name, a forgery, or the account itself for a link join).
+  void injectMember(
+    FakeGroup group,
+    String account, {
+    String? announceActor,
+    bool announce = false,
+  }) {
+    group.roles[account] = GroupRole.member;
+    group.joinedAt[account] = server.now();
+    if (announce) {
+      _announce(
+        group,
+        RosterChangeKind.added,
+        actor: announceActor,
+        members: [account],
+      );
+    }
+  }
+
   void _announce(
     FakeGroup group,
     RosterChangeKind change, {
@@ -181,7 +204,6 @@ final class FakeGroups {
       final req = SetGroupStateRequest.fromJson(r.json!);
       if (conflictsOnNextState > 0) {
         conflictsOnNextState--;
-        group.stateVersion++;
         return server.error(ErrorCode.versionConflict);
       }
       if (req.expectedVersion != group.stateVersion) {
@@ -380,10 +402,7 @@ final class FakeGroups {
     sends.add(RecordedGroupSend(from, id, request, 200));
     if (!_seenSends.add('${from.id}/${request.id}')) {
       return server.ok(
-        SendMessageResponse(
-          acceptedAt: server.now(),
-          replayed: true,
-        ).toJson(),
+        SendMessageResponse(acceptedAt: server.now(), replayed: true).toJson(),
       );
     }
     final sender = EnvelopeSender(account: from.accountId, device: from.id);

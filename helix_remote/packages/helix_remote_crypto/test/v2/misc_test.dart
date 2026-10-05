@@ -90,6 +90,14 @@ void main() {
             params: const KdfParams(memoryKib: 1024),
           ),
         );
+        // One iteration is below the floor (CRYPTO_V2.md section 11).
+        await expectThrows<MalformedCryptoInputException>(
+          PasswordKeys.derive(
+            password: 'x',
+            salt: salt,
+            params: const KdfParams(iterations: 1),
+          ),
+        );
         await expectThrows<MalformedCryptoInputException>(
           PasswordKeys.derive(password: 'x', salt: Uint8List(8)),
         );
@@ -232,8 +240,41 @@ void main() {
           BackupCrypto.open(weak, recoverySecret: secret),
         );
         expect(BackupCrypto.isValidRecoverySecret('short'), isFalse);
+        // Six short words are not enough any more: length is what counts.
+        expect(
+          BackupCrypto.isValidRecoverySecret('one two three four five six'),
+          isTrue,
+          reason: '27 characters',
+        );
+        expect(BackupCrypto.isValidRecoverySecret('a b c d e f'), isFalse);
+        expect(
+          BackupCrypto.isValidRecoverySecret('nineteen characters'),
+          isFalse,
+        );
+        expect(
+          BackupCrypto.isValidRecoverySecret('exactly twenty chars'),
+          isTrue,
+        );
       },
     );
+
+    test('a generated recovery secret is long, random and valid', () {
+      final r = SeededRandom('recovery-secret');
+      final a = BackupCrypto.generateRecoverySecret(r);
+      final b = BackupCrypto.generateRecoverySecret(r);
+      expect(a, matches(RegExp(r'^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$')));
+      expect(a, isNot(b));
+      expect(BackupCrypto.isValidRecoverySecret(a), isTrue);
+      // 160 bits: 20 bytes in, 32 base32 characters out, no bias to one
+      // character.
+      final seen = {
+        for (var i = 0; i < 40; i++)
+          ...BackupCrypto.generateRecoverySecret(
+            r,
+          ).replaceAll('-', '').split(''),
+      };
+      expect(seen.length, greaterThan(20));
+    });
 
     test('history backup is bound to its account and version', () async {
       final r = SeededRandom('hist');
@@ -285,16 +326,17 @@ void main() {
           linkId: linkId,
           ephemeralKey: eNew.publicKey,
         );
-        ProvisionMessage message(Uint8List identityKey) => ProvisionMessage(
-          accountId: accountA,
-          identityKeySeed: aik.seed,
-          identityKey: identityKey,
-          profileKey: r.nextBytes(32),
-          approverDeviceId: deviceA1,
+        final approver = await LocalDeviceKeys.create(
+          accountIdentityKey: aik,
+          address: DeviceAddress(accountA, deviceA1),
+          createdAt: DateTime.utc(2026, 10, 1),
+          random: r,
         );
         final sealed = await Provisioning.seal(
           linkCode: code,
-          message: message(aik.publicKey),
+          approver: approver,
+          accountKey: aik,
+          profileKey: r.nextBytes(32),
           random: r,
         );
         final opened = await Provisioning.open(
@@ -303,6 +345,8 @@ void main() {
           sealed: sealed,
         );
         expect(opened.identityKey, aik.publicKey);
+        expect(opened.approverDeviceId, deviceA1);
+        expect(Provisioning.keyCode(aik.publicKey), hasLength(24));
         expect(opened.toString(), isNot(contains(encodeBytes(aik.seed))));
         await expectThrows<DecryptionFailedException>(
           Provisioning.open(
@@ -318,27 +362,106 @@ void main() {
             sealed: sealed,
           ),
         );
-        final lying = await Provisioning.seal(
-          linkCode: code,
-          message: message(r.nextBytes(32)),
-          random: r,
-        );
-        await expectThrows<UntrustedIdentityException>(
-          Provisioning.open(ephemeralKey: eNew, linkId: linkId, sealed: lying),
-        );
         expect(
           () => LinkCode.parse('helix-link:1:ftp://x:$linkId:AAAA'),
           throwsA(isA<MalformedCryptoInputException>()),
         );
       },
     );
+
+    test('the approval is checked: wrong account key, wrong link context, an '
+        'approver of another account, a forged signature', () async {
+      final r = SeededRandom('approval');
+      final eNew = await X25519KeyPair.generate(r);
+      const linkId = '0192a4f0-0000-7000-8000-0000000000f1';
+      final aik = await Ed25519KeyPair.generate(r);
+      final mallory = await Ed25519KeyPair.generate(r);
+      final code = LinkCode(
+        serverOrigin: 'https://helix.example',
+        linkId: linkId,
+        ephemeralKey: eNew.publicKey,
+      );
+      final at = DateTime.utc(2026, 10, 1);
+      Future<LocalDeviceKeys> device(Ed25519KeyPair key, String account) =>
+          LocalDeviceKeys.create(
+            accountIdentityKey: key,
+            address: DeviceAddress(account, deviceA1),
+            createdAt: at,
+            random: r,
+          );
+      Future<Uint8List> seal(
+        LocalDeviceKeys approver,
+        Ed25519KeyPair accountKey,
+      ) => Provisioning.seal(
+        linkCode: code,
+        approver: approver,
+        accountKey: accountKey,
+        profileKey: r.nextBytes(32),
+        random: r,
+      );
+      Future<void> rejects(Uint8List sealed) =>
+          expectThrows<UntrustedIdentityException>(
+            Provisioning.open(
+              ephemeralKey: eNew,
+              linkId: linkId,
+              sealed: sealed,
+            ),
+          );
+
+      // The honest case opens.
+      final good = await device(aik, accountA);
+      await Provisioning.open(
+        ephemeralKey: eNew,
+        linkId: linkId,
+        sealed: await seal(good, aik),
+      );
+
+      // An approver certified by another AIK than the one it hands over.
+      await rejects(await seal(await device(mallory, accountA), aik));
+      // The AIK handed over is not the one the approver belongs to.
+      await rejects(await seal(good, mallory));
+
+      // An approval signed for another link or another ephemeral key
+      // cannot be replayed: re-seal the same message with a different
+      // approval body.
+      final otherCode = LinkCode(
+        serverOrigin: 'https://helix.example',
+        linkId: '0192a4f0-0000-7000-8000-0000000000f2',
+        ephemeralKey: eNew.publicKey,
+      );
+      final lifted = ProvisionMessage(
+        accountId: accountA,
+        identityKeySeed: aik.seed,
+        identityKey: aik.publicKey,
+        profileKey: r.nextBytes(32),
+        approver: good.identity,
+        approval: await good.signingKey.sign(
+          Provisioning.approvalBody(
+            linkId: otherCode.linkId,
+            ephemeralKey: eNew.publicKey,
+            accountId: accountA,
+            identityKey: aik.publicKey,
+          ),
+        ),
+      );
+      final ephemeral = await X25519KeyPair.generate(r);
+      final shared = await ephemeral.agree(eNew.publicKey);
+      final sealedLifted = Uint8List.fromList([
+        ...ephemeral.publicKey,
+        ...await AeadKey.derive(shared, Provisioning.info).seal(
+          utf8.encode(jsonEncode(lifted.toJson())),
+          aad: Provisioning.associatedData(linkId),
+        ),
+      ]);
+      await rejects(sealedLifted);
+    });
   });
 
   group('group state and profile blobs', () {
     test('random nonces, AAD binding, padding', () async {
       final r = SeededRandom('blob');
       final gmk = newSymmetricKey(r);
-      final aad = SealedBlobCipher.groupStateAad(groupG, 2);
+      final aad = SealedBlobCipher.groupStateAad(groupG, 2, 5);
       final one = await SealedBlobCipher.groupState.seal(
         secret: gmk,
         plaintext: utf8.encode('{"name":"x"}'),
@@ -367,8 +490,21 @@ void main() {
         SealedBlobCipher.groupState.open(
           secret: gmk,
           blob: one,
-          aad: SealedBlobCipher.groupStateAad(groupG, 3),
+          aad: SealedBlobCipher.groupStateAad(groupG, 3, 5),
         ),
+      );
+      // The state version is bound too: an older blob cannot pass for the
+      // current version.
+      await expectThrows<DecryptionFailedException>(
+        SealedBlobCipher.groupState.open(
+          secret: gmk,
+          blob: one,
+          aad: SealedBlobCipher.groupStateAad(groupG, 2, 6),
+        ),
+      );
+      expect(
+        SealedBlobCipher.groupStateAad(groupG, 2, 5),
+        hasLength(11 + 16 + 4 + 4),
       );
       await expectThrows<DecryptionFailedException>(
         SealedBlobCipher.profile.open(secret: gmk, blob: one, aad: aad),
@@ -433,6 +569,27 @@ void main() {
         SignedPrekeyRecord.fromJson(JsonReader(s1.toJson())).toWire().toJson(),
         s1.toWire().toJson(),
       );
+    });
+  });
+
+  group('device addresses from the wire', () {
+    test('a malformed address is a FormatException, not an ArgumentError', () {
+      for (final source in [
+        '{"account":"not-a-uuid","device":"$deviceA1"}',
+        '{"account":"$accountA","device":"x"}',
+        '{"account":"$accountA@","device":"$deviceA1"}',
+        '{"account":"$accountA@bad domain","device":"$deviceA1"}',
+      ]) {
+        expect(
+          () => DeviceAddress.fromJson(JsonReader.decode(source)),
+          throwsA(isA<ProtocolFormatException>()),
+          reason: source,
+        );
+      }
+      final ok = DeviceAddress.fromJson(
+        JsonReader.decode('{"account":"$accountA","device":"$deviceA1"}'),
+      );
+      expect(ok.account, accountA);
     });
   });
 }

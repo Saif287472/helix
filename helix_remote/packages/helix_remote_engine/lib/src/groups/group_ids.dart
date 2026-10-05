@@ -39,6 +39,10 @@ abstract final class GroupLimits {
 
   /// Versions conflicts retried when writing the group state.
   static const stateRetries = 4;
+
+  /// The `state_version` a group starts at on the server (a create stores
+  /// the sealed state as version 1; every accepted write adds one).
+  static const initialStateVersion = 1;
 }
 
 /// `system` message kinds the engine writes locally into a group chat from
@@ -54,6 +58,12 @@ abstract final class GroupNoticeKinds {
   static const renamed = 'group_renamed';
   static const pictureChanged = 'group_picture_changed';
   static const joinRequested = 'join_requested';
+
+  /// The server's roster gained a member that no admin's action explains:
+  /// they get no keys until this account confirms them
+  /// (`GroupsService.confirmMember`). `fields.reason` is `unattributed` or
+  /// `link_join`.
+  static const memberUnconfirmed = 'member_unconfirmed';
 
   /// This device was removed from the group.
   static const youWereRemoved = 'you_were_removed';

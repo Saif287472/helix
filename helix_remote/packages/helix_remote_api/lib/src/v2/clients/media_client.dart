@@ -36,6 +36,11 @@ final class MediaDownload {
   final int? size;
 }
 
+/// The most a media download may hold unless the caller says otherwise
+/// (the per-account attachment quota, 4 GiB, is the real ceiling; callers
+/// with a declared size pass it).
+const defaultMaxDownloadBytes = 4 * 1024 * 1024 * 1024;
+
 /// The `media` module. Objects are already encrypted by the engine
 /// (CRYPTO_V2.md §12); the server sees a random id and bytes.
 ///
@@ -81,10 +86,19 @@ final class MediaClient {
 
   /// Downloads the object, or bytes [start] to [end] inclusive. A redirect to
   /// object storage is followed without the bearer token.
+  ///
+  /// The body is read only up to [maxBytes] (a longer one throws
+  /// [ResponseTooLargeException] while it streams in): callers pass what the
+  /// object can legitimately be, e.g. from the pointer's declared size. A
+  /// ranged request must be answered with that range: a full body where an
+  /// offset was asked, or more bytes than the range holds, throws
+  /// [RangeNotHonoredException] (the first range, from byte 0, may be
+  /// answered with the whole object, which [MediaDownload.partial] reports).
   Future<MediaDownload> download(
     String mediaId, {
     int? start,
     int? end,
+    int maxBytes = defaultMaxDownloadBytes,
     CancellationToken? cancel,
   }) async {
     final range = start == null && end == null
@@ -97,6 +111,7 @@ final class MediaClient {
       accept: const {301, 302, 303, 307, 308},
       followRedirects: false,
       cancel: cancel,
+      maxResponseBytes: maxBytes,
     );
     if (response.status >= 300 && response.status < 400) {
       final location = response.headers['location'];
@@ -111,7 +126,18 @@ final class MediaClient {
         _t.baseUrl.resolve(location),
         headers: range,
         cancel: cancel,
+        maxResponseBytes: maxBytes,
       );
+    }
+    final partial = response.status == 206;
+    final asked = start != null || end != null;
+    if (asked && !partial && (start ?? 0) > 0) {
+      throw RangeNotHonoredException(requestId: response.requestId);
+    }
+    if (partial &&
+        end != null &&
+        response.body.length > end - (start ?? 0) + 1) {
+      throw RangeNotHonoredException(requestId: response.requestId);
     }
     return MediaDownload(
       bytes: response.body,

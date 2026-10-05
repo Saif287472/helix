@@ -137,6 +137,37 @@ final class ApiException extends HelixApiException {
   ].join();
 }
 
+/// A response body was longer than the caller allows ([limit] bytes), so it
+/// was dropped while it streamed in (a server, or something in between,
+/// sending far more than the call can legitimately return). Not retried:
+/// the same answer would come again.
+final class ResponseTooLargeException extends HelixApiException {
+  const ResponseTooLargeException({required this.limit, this.requestId});
+
+  final int limit;
+  final String? requestId;
+
+  @override
+  String toString() =>
+      'ResponseTooLargeException(limit $limit bytes'
+      '${requestId == null ? '' : ', request $requestId'})';
+}
+
+/// A ranged download was answered with something other than the range: a
+/// full body where the object was asked from an offset, or more bytes than
+/// the range holds. The server does not honour `Range`, so the transfer
+/// cannot resume.
+final class RangeNotHonoredException extends HelixApiException {
+  const RangeNotHonoredException({this.requestId});
+
+  final String? requestId;
+
+  @override
+  String toString() =>
+      'RangeNotHonoredException'
+      '${requestId == null ? '' : '(request $requestId)'}';
+}
+
 enum SignedOutReason {
   /// No session is stored (never signed in, or signed out).
   noSession,

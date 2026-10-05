@@ -137,6 +137,11 @@ final class DownloadRunner {
         mediaId,
         start: have,
         end: stop - 1,
+        // The object cannot be longer than the pointer's size implies.
+        maxBytes: AttachmentCrypto.ciphertextLength(
+          attachment.size,
+          chunkSize: AttachmentCrypto.maxChunkSize,
+        ),
         cancel: control.token,
       );
       // A server that ignored the range sent the whole object.
@@ -261,11 +266,16 @@ final class DownloadRunner {
       return;
     }
     if (pointer.size <= 0 || pointer.size > _config.maxThumbnailBytes) return;
-    final download = await _media.download(pointer.id, cancel: control.token);
-    // Whatever the server sends is bounded by what the pointer says.
+    // Whatever the server sends is bounded by what the pointer says: longer
+    // is dropped while it streams in.
     final limit = AttachmentCrypto.ciphertextLength(
       pointer.size,
       chunkSize: AttachmentCrypto.maxChunkSize,
+    );
+    final download = await _media.download(
+      pointer.id,
+      maxBytes: limit,
+      cancel: control.token,
     );
     if (download.bytes.length > limit) {
       throw const TransferException(TransferFailure.sizeMismatch);

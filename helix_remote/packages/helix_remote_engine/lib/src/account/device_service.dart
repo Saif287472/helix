@@ -7,6 +7,7 @@ import 'package:helix_remote_engine/src/crypto/peer_directory.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/settings_keys.dart';
+import 'package:helix_remote_engine/src/util/masking.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// This account's devices: the list, rename, revoke, and approving the
@@ -117,15 +118,18 @@ final class DeviceService {
     }
     final self = _ctx.identity;
     final profileKey = await _ownProfileKey();
+    final row = await _ctx.db.accountDao.current();
+    final phone = row?.phoneNumber;
+    // Signed as this device, over this link and the new device's ephemeral
+    // key; the account's masked number and `~name` ride along for the new
+    // device's user to compare (CRYPTO_V2.md section 2a).
     final sealed = await Provisioning.seal(
       linkCode: link,
-      message: ProvisionMessage(
-        accountId: self.accountId,
-        identityKeySeed: self.accountKey.seed,
-        identityKey: self.accountKey.publicKey,
-        profileKey: profileKey,
-        approverDeviceId: self.deviceId,
-      ),
+      approver: self.keys,
+      accountKey: self.accountKey,
+      profileKey: profileKey,
+      phoneMask: phone == null ? null : maskPhone(phone),
+      helixName: row?.helixName,
       random: _ctx.random,
     );
     await _ctx.api.identity.approveLink(

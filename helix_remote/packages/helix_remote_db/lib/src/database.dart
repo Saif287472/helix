@@ -6,6 +6,7 @@ import 'package:drift/native.dart';
 // isolate (here: a failed key check in the setup callback).
 // ignore: experimental_member_use
 import 'package:drift/remote.dart';
+import 'package:meta/meta.dart';
 import 'package:helix_remote_db/src/daos/account_dao.dart';
 import 'package:helix_remote_db/src/daos/calls_dao.dart';
 import 'package:helix_remote_db/src/daos/conversations_dao.dart';
@@ -121,7 +122,22 @@ class HelixDb extends _$HelixDb {
   /// sessions, messages, people, settings, the outbox. The FTS index is
   /// emptied by the triggers on `messages`. The file stays, encrypted and
   /// empty, so the engine can be set up again on the same database.
-  Future<void> wipeAll() => transaction(() async {
+  ///
+  /// Deleting rows alone leaves their bytes in free pages and in the
+  /// write-ahead log, so afterwards the log is checkpointed and truncated and
+  /// the file is `VACUUM`ed (rebuilt without free pages), then checkpointed
+  /// again: key material is not recoverable from the file (with
+  /// `secure_delete`, set on every connection, as the second line). The
+  /// complete answer is [destroyDatabaseFiles] plus destroying the
+  /// keystore's [DatabaseKey]; see "Wiping" in `MODULE.md`.
+  Future<void> wipeAll() async {
+    await _deleteEverything();
+    await customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
+    await customStatement('VACUUM');
+    await customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
+  }
+
+  Future<void> _deleteEverything() => transaction(() async {
     for (final table in <TableInfo<Table, Object?>>[
       outboxOps,
       deferredActions,
@@ -185,6 +201,18 @@ class HelixDb extends _$HelixDb {
       if (cause is DbEncryptionException) throw cause;
       rethrow;
     }
+    return db;
+  }
+
+  /// An *unencrypted* database file, for tests that read the file's bytes to
+  /// prove that deleted values are overwritten. Never used by the app.
+  @visibleForTesting
+  static Future<HelixDb> openPlainFileForTesting(File file) async {
+    _allowSeveralDatabases();
+    final db = HelixDb.withExecutor(
+      NativeDatabase(file, setup: setUpPlainFileConnection),
+    );
+    await db.customSelect('SELECT 1').get();
     return db;
   }
 

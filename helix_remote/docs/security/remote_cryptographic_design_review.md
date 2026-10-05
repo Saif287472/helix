@@ -278,3 +278,23 @@ reviewed or Signal-equivalent until an independent review happens (ADR-028).
   - X3DH without an OPK is replayable at the X3DH level; this is mitigated
     by remembered base keys and envelope de-duplication.
   - Passwords are not Unicode-normalised.
+
+## Independent review pass, 2026-10-05
+
+An independent, read-only review of the v2 client crypto and engine was done
+and its confirmed findings were fixed in the commit `fix(client): v2 security
+review pass - crypto and engine`: re-send requests answered to anyone (high);
+crafted numbers in content stalling the inbound queue, deleted keys left in
+the database file, server-driven group state and membership, device linking
+without confirmation (medium); reserved kinds from peers, weak KDF and
+recovery-secret floors, unbounded response bodies (low). What changed, the
+test behind each fix and what stays open (signed membership changes,
+key-change handling, forced-reset replay, retired base-key cap, HTTPS
+enforcement, group key planting, server-trusted roles) is in CRYPTO_V2.md
+section 14 ("Independent review pass") and the MODULE.md of the engine, db
+and api packages. **This is still not an external review**: the design and
+code have not been audited by a third party, and nothing here should be read
+as a claim that they have. The residual risk "the server can roll group state
+back within an epoch" above is closed by binding the state version into the
+blob's AAD; a hostile server can still forge the attribution of a membership
+change.

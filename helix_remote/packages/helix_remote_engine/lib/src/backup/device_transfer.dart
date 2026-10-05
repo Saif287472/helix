@@ -551,7 +551,15 @@ final class DeviceTransferJob {
   ) async {
     final Uint8List ciphertext;
     try {
-      ciphertext = await _relay.download(pointer.id, cancel: token);
+      ciphertext = await _relay.download(
+        pointer.id,
+        // Whatever the relay sends is bounded by what the pointer promised.
+        maxBytes: AttachmentCrypto.ciphertextLength(
+          pointer.size,
+          chunkSize: AttachmentCrypto.maxChunkSize,
+        ),
+        cancel: token,
+      );
     } on ApiException catch (e) {
       if (e.code == ErrorCode.notFound || e.code == ErrorCode.expired) {
         throw const BackupException(BackupFailure.expired, 'relay object');

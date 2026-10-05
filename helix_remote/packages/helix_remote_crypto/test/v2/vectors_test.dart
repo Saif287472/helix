@@ -281,19 +281,23 @@ void main() {
     final eNew = await X25519KeyPair.generate(r);
     const linkId = '0192a4f0-0000-7000-8000-0000000000f1';
     final aik = await Ed25519KeyPair.generate(r);
+    final approver = await LocalDeviceKeys.create(
+      accountIdentityKey: aik,
+      address: DeviceAddress(accountA, deviceA1),
+      createdAt: t0,
+      random: r,
+    );
     final provision = await Provisioning.seal(
       linkCode: LinkCode(
         serverOrigin: 'https://helix.example',
         linkId: linkId,
         ephemeralKey: eNew.publicKey,
       ),
-      message: ProvisionMessage(
-        accountId: accountA,
-        identityKeySeed: aik.seed,
-        identityKey: aik.publicKey,
-        profileKey: profileKey,
-        approverDeviceId: deviceA1,
-      ),
+      approver: approver,
+      accountKey: aik,
+      profileKey: profileKey,
+      phoneMask: '+88017*****01',
+      helixName: 'alice',
       random: r,
     );
 
@@ -392,6 +396,7 @@ void main() {
       sealed: unb64(vl['sealed']),
     );
     expect(opened.accountId, accountA);
+    expect(opened.approverDeviceId, deviceA1);
     final vb = obj(v['full_backup']);
     expect(
       utf8.decode(

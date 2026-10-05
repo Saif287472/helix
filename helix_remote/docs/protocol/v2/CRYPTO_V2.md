@@ -84,13 +84,31 @@ transcript it had to sign). v2 uses a provisioning message, as Signal does:
    sealed  = E_old.pub(32) ‖ AES-256-GCM(aes_key, nonce, provision_json,
                                           aad = "helix.v2.provision" ‖ link_id)
    provision_json = {"account_id", "identity_key_private" (AIK seed, 32 B),
-                     "identity_key", "profile_key", "approver_device_id"}
+                     "identity_key", "profile_key",
+                     "approver" (the approving device's public identity and
+                                 its certificate under the AIK),
+                     "approval" (Ed25519 by the approver's DSK over
+                                 "helix.v2.provision-approval" ‖ link_id ‖
+                                 E_new.pub ‖ account_id(16) ‖ AIK),
+                     "phone_mask", "helix_name" (claims, for the user)}
    ```
    and posts it to `POST /v1/devices/links/{link_id}/approve`.
 3. The new device long-polls `GET /v1/auth/links/{link_id}` (bearer
-   `poll_token`), opens the provisioning message, generates its DIK/DSK,
-   signs its certificate with the AIK, and calls `POST /v1/auth/devices`
-   with the single-use `link_token`.
+   `poll_token`), opens the provisioning message and **checks it**: the AIK
+   seed matches the AIK, the approver's certificate verifies under that AIK
+   for the same account id, and the approval signature covers *this* link and
+   *this* `E_new` (a message cannot be lifted from another link, and an
+   account id cannot be paired with an AIK that certifies no approver). It
+   then **shows the proposed account** (masked phone, `~Helix name`, a short
+   fingerprint of the AIK) and **asks the user**; nothing is stored until the
+   user says yes. Only then does it generate its DIK/DSK, sign its
+   certificate with the AIK, and call `POST /v1/auth/devices` with the
+   single-use `link_token`.
+
+The confirmation matters because anyone who saw the QR code can approve the
+link with an account of their own: the cryptographic checks bind the approval
+to the link, not to the account the user means. The masked phone and name are
+the approver's claims; the user compares them with their own account.
 
 The server relays the sealed message but cannot read it. Links expire after
 10 minutes. Every other device gets an `account_signal` (`new_sign_in`).
@@ -231,7 +249,13 @@ is optional in the wire format for that reason.
 - **Group master key (GMK):** 32 random bytes per group *epoch*. Encrypts the
   group state blob stored on the server (`name`, `description`, `avatar`
   pointer, display settings): `AES-256-GCM(HKDF(GMK, info="helix.v2.group-state",
-  len=44), state_json, aad = "helix.v2.gs" ‖ group_id ‖ u32(epoch))`. Shared
+  len=44), state_json, aad = "helix.v2.gs" ‖ group_id ‖ u32(epoch) ‖
+  u32(state_version))`. The server's `state_version` starts at 1 and rises by
+  exactly 1 per accepted write, so a write over version `v` is sealed for
+  `v + 1`; a client never replaces a stored state with a lower version, and a
+  blob served under a version it was not sealed for does not open (a server
+  cannot replay an old state, in or out of an epoch). Invite-link previews use
+  their own random key with epoch and version 0. Shared
   pairwise in `group_key` content when a member joins; a new epoch and GMK on
   removal or leave. The server knows the roster and roles (it enforces them)
   but not the group's name or picture.
@@ -260,7 +284,9 @@ devices are vouched for by the AIK certificate.
 ## 11. Passwords and the password-wrapped identity key (kept from v1 F1 §9a)
 
 - Password KDF: Argon2id, m = 19,456 KiB, t = 2, p = 1, 64-byte output, salt
-  from the server's `password params` (per account). Then
+  from the server's `password params` (per account). Parameters with
+  `t < 2` (or outside the other ranges) are refused by clients and by the
+  server (`KdfParams.isAcceptable`). Then
   `auth_key = HKDF(out, info="helix.v2.password.auth", 32)` and
   `wrap_key = HKDF(out, info="helix.v2.password.wrap", 32)`.
 - **Only `auth_key` is ever sent** (the password never leaves the device).
@@ -293,7 +319,12 @@ devices are vouched for by the AIK certificate.
 Kept from v1 F2 with one fix: every AES-GCM operation gains AAD
 (`"helix.v2.backup" ‖ backup_id ‖ u32(version)`). Envelope v3 otherwise
 matches F2 (Argon2id m=8192 KiB t=2 p=1 for recovery secrets; random backup
-key wrapped by recovery secret and platform credential). The automatic
+key wrapped by recovery secret and platform credential). A new backup needs a
+recovery secret of **at least 20 characters** (words do not count for more:
+the stored envelope allows offline guessing), and the engine offers
+`generateRecoverySecret()`: 160 random bits as eight groups of four base32
+characters, so the app never needs a human-chosen one. Opening an old
+envelope applies only the KDF floor checks. The automatic
 history backup keeps its key derivation from the AIK (`HKDF(AIK_priv,
 info="helix.v2.history-backup")`) and is deleted when the AIK rotates.
 Session and prekey private state is never backed up; after a restore, peers'
@@ -434,9 +465,86 @@ reviewed**.
 
 **Open (for C3/C4 or review)**
 
-- The group state AAD binds the epoch but not the state version, so a server
-  can roll the state back within an epoch.
 - The receiver of a prekey message from an unknown device must fetch that
   device's identity, and `GET /v1/keys` consumes a one-time prekey to do it. A
   device-identity lookup that consumes nothing, or a certificate inside the
   prekey message, would avoid this.
+
+**Independent review pass (2026-10-05; changes made, and what stays open)**
+
+An independent read-only review of the client crypto and engine found the
+following; each was fixed with a test that fails without the fix.
+
+- *Re-send requests (high).* `resend_request` and `decryption_error` re-sent
+  an account's own messages to whoever asked, and any account can message any
+  account. Now a direct message is re-sent only to the chat's peer (not
+  blocked) or one of the account's own devices; a group message to the
+  account's own devices or to a current member that is not banned or blocked
+  and whose `joined_at` is not after the message's `sent_at`. Everything else
+  is ignored without an answer.
+- *Crafted numbers (medium).* `JsonReader.integer` and `time` throw
+  `ProtocolFormatException` outside 2^53 and 1970..9999; content fields have
+  their own bounds (`ContentLimits`); sealed header counters are 32-bit; a
+  malformed `DeviceAddress` is a `FormatException`. Any failure to decode
+  decrypted content (pairwise or group) is deterministic: the session state
+  is committed and the envelope quarantined as `bad_content` at once.
+- *Deleted data on disk (medium).* `secure_delete` on every connection, a
+  4 MiB `journal_size_limit`, and `wipeAll` ends with `wal_checkpoint
+  (TRUNCATE)`, `VACUUM`, another checkpoint. `destroyDatabaseFiles` is the
+  file half of a hard wipe; the engine's `signOut` (and a wiping revocation)
+  call the app's `hardWipe` hook afterwards, which closes the database,
+  destroys the files and deletes the keystore key (the half that matters:
+  overwriting is best effort on flash and journaling file systems).
+- *Server-driven state (medium).* See §9 (state version in the AAD, no
+  rollback). A member the server's roster gains that no admin's action
+  explains is *pending*: no sender key and no group key go to them until the
+  user confirms them (`GroupsService.confirmMember`), a `member_unconfirmed`
+  notice is written ("X was added by the server roster") and
+  `GroupMemberUnconfirmed` is emitted. Explained: this account added them, or
+  a `roster_change` `added` names an actor who may add (admin, or anyone if
+  the group allows) who is not the added member. A member joining by
+  themselves through a link is pending too (`EngineConfig.trustLinkJoins`
+  accepts them).
+- *Linking (low).* §2a: approver certificate and signature over the link, and
+  the new device asks before it keeps anything.
+- *Reserved kinds (low).* A peer's `system` notice other than `timer_changed`
+  is dropped in direct chats (as it was in groups), and an unknown type that
+  is one of the engine's own row kinds (`undecryptable`, `unsupported`,
+  `missed_call`) is stored as `unsupported`.
+- *KDF and recovery secret (low).* `t >= 2` everywhere; 20-character recovery
+  secrets and a generator.
+- *Unbounded bodies (low).* Responses are capped while they stream in
+  (4 MiB by default, per-call caps for backups, export and media bounded by
+  the pointer's size); a ranged download answered with the whole object or
+  with more than the range is refused; gzip frames of history archives stop
+  inflating at the frame limit.
+- *Defaults.* History transfers to and from other devices are off until the
+  user starts or accepts them (`BackupOptions.autoTransferToNewDevices`,
+  `autoAcceptTransfers`).
+- *Safety number changed* is written into the group chats of a contact known
+  only from groups.
+
+**Still open after that review (needs a design change or product decision)**
+
+- *Signed membership changes.* The roster, the roles and the attribution of a
+  change are the server's word. A hostile server can forge an `added`
+  announcement attributed to an admin, and the pending check above then
+  passes. Closing it needs membership changes signed by the acting member's
+  device (and a roster the members hash and compare), not a client rule.
+- *Key change UX.* A new AIK for a known account is pinned automatically (with
+  a notice and a reset "verified" flag). Whether to hold sends until the user
+  looks is a product decision.
+- *Forced-reset replay.* A peer can make a device start fresh sessions (at
+  most one per remote device per 10 minutes); the cost is bounded but not
+  nil.
+- *Retired base keys.* The list of base keys remembered against prekey-message
+  replay is not capped.
+- *No HTTPS enforcement.* `HelixApi` and `LinkCode` accept `http://` origins
+  (needed for tests and a LAN personal server); the app must refuse them for
+  Helix Global.
+- *Group key planting.* A member can hand another member a wrong group key
+  (the name stays unreadable until an admin's key arrives); sender keys are
+  redistributed on a re-send request from any current member that passes the
+  checks above.
+- *Server-trusted roles.* Which member is an admin is the server's word until
+  membership changes are signed.

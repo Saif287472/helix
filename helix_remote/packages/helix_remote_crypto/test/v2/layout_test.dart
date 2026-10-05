@@ -277,13 +277,11 @@ void main() {
     expect(LinkCode.parse(code.encode()).linkId, linkId);
     final sealed = await Provisioning.seal(
       linkCode: code,
-      message: ProvisionMessage(
-        accountId: accountA,
-        identityKeySeed: alice.aik.seed,
-        identityKey: alice.aik.publicKey,
-        profileKey: Uint8List(32),
-        approverDeviceId: deviceA1,
-      ),
+      approver: a.keys,
+      accountKey: alice.aik,
+      profileKey: Uint8List(32),
+      phoneMask: '+88017*****01',
+      helixName: 'alice',
       random: random,
     );
     final kn = hkdf(
@@ -298,13 +296,48 @@ void main() {
       ciphertext: sealed.sublist(32),
       aad: [...ascii8('helix.v2.provision'), ...uuid16(linkId)],
     );
-    expect((jsonDecode(utf8.decode(json)) as Map).keys.toSet(), {
+    final provision = (jsonDecode(utf8.decode(json)) as Map)
+        .cast<String, Object?>();
+    expect(provision.keys.toSet(), {
       'account_id',
       'identity_key_private',
       'identity_key',
       'profile_key',
-      'approver_device_id',
+      'approver',
+      'approval',
+      'phone_mask',
+      'helix_name',
     });
+    // The approval is the approver's DSK signature over
+    // label ‖ link_id ‖ E_new ‖ account ‖ AIK.
+    expect(
+      Provisioning.approvalBody(
+        linkId: linkId,
+        ephemeralKey: eNew.publicKey,
+        accountId: accountA,
+        identityKey: alice.aik.publicKey,
+      ),
+      [
+        ...ascii8('helix.v2.provision-approval'),
+        ...uuid16(linkId),
+        ...eNew.publicKey,
+        ...uuid16(accountA),
+        ...alice.aik.publicKey,
+      ],
+    );
+    expect(
+      await ed25519Verify(
+        publicKey: a.keys.signingKey.publicKey,
+        message: Provisioning.approvalBody(
+          linkId: linkId,
+          ephemeralKey: eNew.publicKey,
+          accountId: accountA,
+          identityKey: alice.aik.publicKey,
+        ),
+        signature: decodeBytes(provision['approval']! as String),
+      ),
+      isTrue,
+    );
   });
 
   test('§12 attachment header layout and ciphertext length', () async {

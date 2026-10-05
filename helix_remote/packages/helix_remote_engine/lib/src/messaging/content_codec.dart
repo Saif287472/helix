@@ -95,9 +95,18 @@ abstract final class ContentCodec {
   ];
 
   /// The kind a content type is stored under: unknown types and content
-  /// from newer versions are shown as "needs a newer version".
-  static String storedKind(ContentMessage content) =>
-      content.isFromNewerVersion ? MessageKinds.unsupported : content.body.type;
+  /// from newer versions are shown as "needs a newer version". A type a peer
+  /// invents that is one of the engine's own row kinds (a forged "couldn't
+  /// decrypt" placeholder, say) is stored as unsupported too: those kinds
+  /// are written only by the engine.
+  static String storedKind(ContentMessage content) {
+    final body = content.body;
+    if (content.isFromNewerVersion ||
+        (body is UnknownBody && MessageKinds.reserved.contains(body.type))) {
+      return MessageKinds.unsupported;
+    }
+    return body.type;
+  }
 
   static String? _json(Map<String, Object?> map) =>
       map.isEmpty ? null : jsonEncode(map);

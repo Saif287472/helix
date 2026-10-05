@@ -233,6 +233,39 @@ void main() {
       },
     );
 
+    test('absurd times and sizes in a request are a clean 4xx, not a 500, '
+        'and the server keeps working', () async {
+      final g = await create([bob.accountId]);
+      for (final huge in [
+        9223372036854775807,
+        -9223372036854775808,
+        8640000000000001,
+        253402300800000,
+      ]) {
+        final r = await h.api.call(
+          Routes.createInviteLink,
+          params: {'group_id': g.groupId},
+          bearer: alice.bearer,
+          body: {
+            'encrypted_preview': encodeBytes(bytes(30, 9)),
+            'expires_at': huge,
+          },
+        );
+        expect(
+          r.status,
+          inInclusiveRange(400, 499),
+          reason: '$huge: ${r.body}',
+        );
+      }
+      final fine = await h.api.call(
+        Routes.createInviteLink,
+        params: {'group_id': g.groupId},
+        bearer: alice.bearer,
+        body: CreateInviteLinkRequest(encryptedPreview: bytes(30, 9)).toJson(),
+      );
+      expect(fine.status, inInclusiveRange(200, 299));
+    });
+
     test('invite links: preview, join, approval flow, bans', () async {
       final g = await create([bob.accountId]);
       final open = InviteLink.fromJson(

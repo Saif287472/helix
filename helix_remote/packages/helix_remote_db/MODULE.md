@@ -191,3 +191,25 @@ noise from the missing parts), then run the tool again.
 3. `test/drift/helix/migration_test.dart` already checks every path between
    dumped versions; add a data-integrity test for the new step there.
 4. Update this file.
+
+## Wiping and deleted data (review pass 2026-10-05)
+
+Deleting rows does not remove their bytes: they stay in free pages and in the
+write-ahead log. So every connection sets `PRAGMA secure_delete = ON` (deleted
+content is overwritten) and `journal_size_limit` (4 MiB, `walSizeLimitBytes`:
+a bounded WAL keeps old page images from lingering). `HelixDb.wipeAll()`
+(sign-out, a wiping revocation) deletes every row, then runs
+`wal_checkpoint(TRUNCATE)`, `VACUUM` and another checkpoint, so key material
+is not recoverable from the file or the log.
+
+That is the *soft* wipe: the file and the key survive, empty. The **hard
+wipe** is the app's: close the database, `destroyDatabaseFiles(file)`
+(overwrites with zeros, best effort, and deletes the file and its `-wal`,
+`-shm`, `-journal`), delete the `DatabaseKey` from the platform keystore (the
+step that makes anything left on flash unreadable; overwriting alone cannot
+be relied on with wear levelling or copy-on-write file systems). The engine
+calls the app's `hardWipe` hook (`Engine(hardWipe: ...)`) after `wipeAll`.
+`test/wipe_test.dart` reads the bytes of an unencrypted file database (an
+encrypted file never shows plaintext) to prove that a deleted marker is gone
+after delete and checkpoint, after `wipeAll`, and that the same steps without
+`secure_delete` would leave it.

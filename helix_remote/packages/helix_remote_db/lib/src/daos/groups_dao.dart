@@ -75,6 +75,14 @@ class GroupsDao extends DatabaseAccessor<HelixDb> with _$GroupsDaoMixin {
             ..orderBy([(m) => OrderingTerm.asc(m.accountId)]))
           .watch();
 
+  /// The groups [account] is in, by the roster stored here.
+  Future<List<String>> groupIdsOf(String account) async => [
+    for (final m in await (select(
+      groupMembers,
+    )..where((m) => m.accountId.equals(account))).get())
+      m.groupId,
+  ];
+
   Future<GroupMemberRow?> member(String groupId, String account) =>
       (select(groupMembers)..where(
             (m) => m.groupId.equals(groupId) & m.accountId.equals(account),

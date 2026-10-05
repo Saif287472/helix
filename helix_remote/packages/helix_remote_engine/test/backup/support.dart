@@ -126,6 +126,7 @@ final class FakeRelay implements RelayStore {
   @override
   Future<Uint8List> download(
     String mediaId, {
+    int? maxBytes,
     CancellationToken? cancel,
   }) async {
     downloads[mediaId] = (downloads[mediaId] ?? 0) + 1;
@@ -249,7 +250,7 @@ final class BackupWorld {
   Future<BackupPeer> link(BackupPeer existing, String name) async {
     final fresh = await create(name);
     final link = await fresh.engine.account.beginLink();
-    final done = link.complete();
+    final done = link.complete(confirm: (_) async => true);
     await existing.engine.devices.approveLink(link.code);
     await done;
     expect(fresh.account, existing.account);

@@ -10,6 +10,7 @@ import 'package:helix_remote_engine/src/groups/group_invite_links.dart';
 import 'package:helix_remote_engine/src/groups/group_keyring.dart';
 import 'package:helix_remote_engine/src/groups/group_rekey.dart';
 import 'package:helix_remote_engine/src/groups/group_roster.dart';
+import 'package:helix_remote_engine/src/groups/group_trust.dart';
 import 'package:helix_remote_engine/src/groups/sender_key_store.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -154,6 +155,7 @@ final class GroupsService {
     this._keys,
     this._senderKeys,
     this._outbox,
+    this._trust,
   );
 
   final EngineContext _ctx;
@@ -162,8 +164,39 @@ final class GroupsService {
   final GroupKeyDistributor _keys;
   final DbSenderKeyStore _senderKeys;
   final OutboxService _outbox;
+  final GroupTrust _trust;
 
   HelixDb get _db => _ctx.db;
+
+  // ------------------------------------------------- unconfirmed members
+
+  /// Members the server's roster gained that no admin's action explains, by
+  /// account, with the reason (`unattributed` or `link_join`). This device
+  /// hands them neither its sender key nor the group key until
+  /// [confirmMember]; everything sent here stays unreadable to them.
+  Future<Map<String, String>> pendingMembers(String groupId) =>
+      _trust.pending(groupId);
+
+  Stream<Map<String, String>> watchPendingMembers(String groupId) =>
+      _trust.watchPending(groupId);
+
+  /// The user accepts [account]: from the next message on it gets this
+  /// device's sender key, and it gets the group key now. Returns false when
+  /// [account] was not waiting. (Removing a member the user does not know is
+  /// `removeMember`, for admins.)
+  Future<bool> confirmMember(String groupId, String account) async {
+    await _require(groupId);
+    final confirmed = await _trust.confirm(groupId, account);
+    if (confirmed) {
+      // Confirmed before the roster read that lists them has run: that read
+      // must not hold them back again.
+      if (await _db.groupsDao.member(groupId, account) == null) {
+        await _trust.explain(groupId, [account]);
+      }
+      await _keys.share(groupId, [account]);
+    }
+    return confirmed;
+  }
 
   // -------------------------------------------------------------- reading
 
@@ -224,7 +257,13 @@ final class GroupsService {
       avatar: avatar,
     );
     // The first epoch is 0 (the server starts there and a removal bumps it).
-    final sealed = await _keyring.sealState(groupId, 0, key, state);
+    final sealed = await _keyring.sealState(
+      groupId,
+      0,
+      GroupLimits.initialStateVersion,
+      key,
+      state,
+    );
     await _keyring.put(groupId, 0, key);
     final wanted = members.where((m) => m != self).toSet().toList();
     final Group created;
@@ -317,6 +356,8 @@ final class GroupsService {
       groupId,
       accounts.toSet().toList(),
     );
+    // Added by this account: explained, not "added by the server roster".
+    await _roster.explainOwnAdds(groupId, result.added);
     final update = await _roster.refresh(groupId);
     if (update != null && result.added.isNotEmpty) {
       await _keys.share(groupId, result.added, epoch: update.group.epoch);
@@ -412,11 +453,11 @@ final class GroupsService {
       ).toJson(),
     );
     // The preview is sealed with the link's own random key, bound to the
-    // group (epoch 0 in the AAD: a preview never carries an epoch).
+    // group (epoch and version 0 in the AAD: a preview carries neither).
     final sealed = await SealedBlobCipher.groupState.seal(
       secret: previewKey,
       plaintext: utf8.encode(preview),
-      aad: SealedBlobCipher.groupStateAad(groupId, 0),
+      aad: SealedBlobCipher.groupStateAad(groupId, 0, 0),
       random: _ctx.random,
     );
     final link = await _ctx.api.groups.createInviteLink(
@@ -454,7 +495,7 @@ final class GroupsService {
       final plain = await SealedBlobCipher.groupState.open(
         secret: parsed.previewKey,
         blob: preview.encryptedPreview,
-        aad: SealedBlobCipher.groupStateAad(preview.groupId, 0),
+        aad: SealedBlobCipher.groupStateAad(preview.groupId, 0, 0),
       );
       content = GroupStateContent.fromJson(
         JsonReader.decode(utf8.decode(plain)),
@@ -498,6 +539,7 @@ final class GroupsService {
       groupId,
     )).requests.where((r) => r.requestId == requestId).firstOrNull?.account;
     await _ctx.api.groups.resolveJoinRequest(groupId, requestId, approve: true);
+    if (account != null) await _roster.explainOwnAdds(groupId, [account]);
     final update = await _roster.refresh(groupId);
     if (account != null && update != null) {
       await _keys.share(groupId, [account], epoch: update.group.epoch);
@@ -599,11 +641,19 @@ final class GroupsService {
       final current =
           (blob == null
               ? null
-              : await _keyring.openState(groupId, blob, epoch: group.epoch)) ??
+              : await _keyring.openState(
+                  groupId,
+                  blob,
+                  epoch: group.epoch,
+                  version: group.stateVersion,
+                )) ??
           GroupStateContent(name: group.title);
+      // A write over version v becomes v + 1, and the blob is sealed for it.
+      final next = group.stateVersion + 1;
       final sealed = await _keyring.sealState(
         groupId,
         group.epoch,
+        next,
         key,
         change(current),
       );
@@ -615,6 +665,12 @@ final class GroupsService {
             expectedVersion: group.stateVersion,
           ),
         );
+        if (result.stateVersion != next) {
+          // The server numbered the write differently: nobody could open
+          // the blob. Read the group again and retry on top of it.
+          await _roster.refresh(groupId);
+          continue;
+        }
         await _db.groupsDao.saveState(
           groupId,
           state: sealed,

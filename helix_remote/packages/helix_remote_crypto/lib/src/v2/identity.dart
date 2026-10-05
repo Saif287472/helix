@@ -39,8 +39,21 @@ final class DeviceAddress implements Comparable<DeviceAddress> {
 
   JsonMap toJson() => {'account': account, 'device': device};
 
-  factory DeviceAddress.fromJson(JsonReader json) =>
-      DeviceAddress(json.nonEmpty('account'), json.nonEmpty('device'));
+  /// Reads an address from the wire or from stored state. A malformed one is
+  /// a [ProtocolFormatException] (a `FormatException`), like every other
+  /// decode failure.
+  factory DeviceAddress.fromJson(JsonReader json) {
+    final account = json.nonEmpty('account');
+    final device = json.nonEmpty('device');
+    try {
+      return DeviceAddress(account, device);
+    } on ArgumentError {
+      throw ProtocolFormatException(
+        'malformed device address',
+        path: json.path,
+      );
+    }
+  }
 
   @override
   bool operator ==(Object other) =>

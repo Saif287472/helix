@@ -367,7 +367,19 @@ db.key in the home directory (created on first use). Nothing prints it.
           );
           io.err('waiting for approval (10 minutes)...');
         }
-        await link.complete();
+        // Whoever saw the code can approve it with an account of their own,
+        // so the account is shown and confirmed before anything is kept.
+        await link.complete(
+          confirm: (offer) async {
+            io.err(
+              'linking to account ${offer.phoneMask ?? offer.accountId}'
+              '${offer.helixName == null ? '' : ' (~${offer.helixName})'}, '
+              'key ${offer.fingerprint}',
+            );
+            final answer = await io.readLine('is this your account? [y/N]');
+            return answer?.trim().toLowerCase() == 'y';
+          },
+        );
         home.saveServer(server.toString());
         _printIdentity(engine, 'linked');
       },

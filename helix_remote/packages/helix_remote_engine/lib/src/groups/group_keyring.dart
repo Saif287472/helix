@@ -130,16 +130,20 @@ final class GroupKeyring {
   // --------------------------------------------------------------- state
 
   /// Seals [state] for [groupId] under the key of [epoch] (the group's
-  /// current epoch).
+  /// current epoch) as the state of [version]. The server's version starts at
+  /// [GroupLimits.initialStateVersion] and rises by one per accepted write, so
+  /// a write over version `v` is sealed for `v + 1`; the version is part of
+  /// the AAD (CRYPTO_V2.md section 9).
   Future<Uint8List> sealState(
     String groupId,
     int epoch,
+    int version,
     List<int> key,
     GroupStateContent state,
   ) => SealedBlobCipher.groupState.seal(
     secret: key,
     plaintext: utf8.encode(jsonEncode(state.toJson())),
-    aad: SealedBlobCipher.groupStateAad(groupId, epoch),
+    aad: SealedBlobCipher.groupStateAad(groupId, epoch, version),
     random: _ctx.random,
   );
 
@@ -150,6 +154,7 @@ final class GroupKeyring {
     String groupId,
     List<int> blob, {
     required int epoch,
+    required int version,
   }) async {
     final held = await keys(groupId);
     final order = held.keys.toList()
@@ -161,24 +166,25 @@ final class GroupKeyring {
         return b.compareTo(a);
       });
     for (final e in order) {
-      final content = await tryOpen(groupId, blob, e, held[e]!);
+      final content = await tryOpen(groupId, blob, e, version, held[e]!);
       if (content != null) return content;
     }
     return null;
   }
 
-  /// [blob] opened with [key] as the state of [epoch], or null.
+  /// [blob] opened with [key] as the state of [epoch] and [version], or null.
   Future<GroupStateContent?> tryOpen(
     String groupId,
     List<int> blob,
     int epoch,
+    int version,
     List<int> key,
   ) async {
     try {
       final plain = await SealedBlobCipher.groupState.open(
         secret: key,
         blob: blob,
-        aad: SealedBlobCipher.groupStateAad(groupId, epoch),
+        aad: SealedBlobCipher.groupStateAad(groupId, epoch, version),
       );
       return GroupStateContent.fromJson(JsonReader.decode(utf8.decode(plain)));
     } on CryptoV2Exception {

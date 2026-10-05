@@ -42,7 +42,7 @@ enum BackupFailure {
   /// The backup is compressed and this engine was given no gzip codec.
   compressionUnavailable,
 
-  /// The recovery secret does not meet the policy (16 characters or 6 words).
+  /// The recovery secret does not meet the policy (at least 20 characters).
   weakSecret,
 
   /// This is the only device; there is nobody to send history to.

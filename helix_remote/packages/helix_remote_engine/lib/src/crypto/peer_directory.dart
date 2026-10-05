@@ -7,6 +7,7 @@ import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
+import 'package:helix_remote_engine/src/groups/group_ids.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
@@ -179,6 +180,19 @@ final class PeerDirectory {
         MessageKinds.safetyNumberChanged,
         now,
       );
+    }
+    // A contact known only from groups changed key too: say so in each of
+    // those chats (there may be no direct chat to say it in).
+    for (final groupId in await _ctx.db.groupsDao.groupIdsOf(account)) {
+      final conversation = GroupIds.conversationId(groupId);
+      if (await _ctx.db.conversationsDao.byId(conversation) != null) {
+        await _localNotice(
+          conversation,
+          account,
+          MessageKinds.safetyNumberChanged,
+          now,
+        );
+      }
     }
   }
 

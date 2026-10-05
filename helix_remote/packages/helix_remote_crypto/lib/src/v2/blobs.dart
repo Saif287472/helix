@@ -21,7 +21,11 @@ final class SealedBlobCipher {
 
   static const formatVersion = 1;
 
-  /// `aad = "helix.v2.gs" ‖ group_id(16) ‖ u32(epoch)`.
+  /// `aad = "helix.v2.gs" ‖ group_id(16) ‖ u32(epoch) ‖ u32(state_version)`.
+  ///
+  /// The state version is in the AAD so a server cannot serve an older blob
+  /// as the current one (CRYPTO_V2.md §9): the version the server reports
+  /// must be the one the blob was sealed for.
   static const groupState = SealedBlobCipher._('helix.v2.group-state');
 
   /// `aad = "helix.v2.pf" ‖ account_id(16) ‖ u32(version)`.
@@ -29,8 +33,13 @@ final class SealedBlobCipher {
 
   final String info;
 
-  static Uint8List groupStateAad(String groupId, int epoch) =>
-      concatBytes([label('helix.v2.gs'), uuidBytes(groupId), u32(epoch)]);
+  static Uint8List groupStateAad(String groupId, int epoch, int stateVersion) =>
+      concatBytes([
+        label('helix.v2.gs'),
+        uuidBytes(groupId),
+        u32(epoch),
+        u32(stateVersion),
+      ]);
 
   static Uint8List profileAad(String accountId, int version) => concatBytes([
     label('helix.v2.pf'),

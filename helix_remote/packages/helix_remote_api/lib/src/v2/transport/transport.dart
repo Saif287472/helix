@@ -9,6 +9,12 @@ import 'package:helix_remote_api/src/v2/transport/retry.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:http/http.dart' as http;
 
+/// The most a response body may hold unless the call says otherwise (JSON
+/// answers are small). Bodies longer than the cap are dropped while they
+/// stream in ([ResponseTooLargeException]); media downloads, backups and the
+/// account export pass their own, larger caps.
+const defaultMaxResponseBytes = 4 * 1024 * 1024;
+
 /// A successful (or explicitly accepted) HTTP response.
 final class ApiResponse {
   const ApiResponse({
@@ -122,6 +128,7 @@ final class HelixTransport {
     bool followRedirects = true,
     CancellationToken? cancel,
     Duration? timeout,
+    int maxResponseBytes = defaultMaxResponseBytes,
   }) async {
     if (json != null && bytes != null) {
       throw ArgumentError('send either json or bytes, not both');
@@ -188,6 +195,7 @@ final class HelixTransport {
           followRedirects: followRedirects,
           cancel: cancel,
           timeout: timeout ?? this.timeout,
+          maxBytes: maxResponseBytes,
         );
       } on NetworkException {
         failures++;
@@ -254,6 +262,7 @@ final class HelixTransport {
     Set<int> accept = const {},
     CancellationToken? cancel,
     Duration? timeout,
+    int maxResponseBytes = defaultMaxResponseBytes,
   }) async => (await send(
     route,
     params: params,
@@ -264,6 +273,7 @@ final class HelixTransport {
     accept: accept,
     cancel: cancel,
     timeout: timeout,
+    maxResponseBytes: maxResponseBytes,
   )).decode(decode);
 
   /// A request whose response has no body (204).
@@ -297,6 +307,7 @@ final class HelixTransport {
     Set<int> accept = const {},
     CancellationToken? cancel,
     Duration? timeout,
+    int maxResponseBytes = defaultMaxResponseBytes,
   }) async {
     final response = await _attempt(
       method: method,
@@ -306,6 +317,7 @@ final class HelixTransport {
       followRedirects: false,
       cancel: cancel,
       timeout: timeout ?? this.timeout,
+      maxBytes: maxResponseBytes,
     );
     final status = response.statusCode;
     if ((status >= 200 && status < 300) || accept.contains(status)) {
@@ -330,6 +342,7 @@ final class HelixTransport {
     required bool followRedirects,
     required CancellationToken? cancel,
     required Duration timeout,
+    required int maxBytes,
   }) async {
     final abort = Completer<_Abort>();
     final timer = Timer(timeout, () {
@@ -357,7 +370,7 @@ final class HelixTransport {
 
     try {
       final streamed = await race(_client.send(request));
-      final bytes = await race(streamed.stream.toBytes());
+      final bytes = await race(_readCapped(streamed, maxBytes));
       return http.Response.bytes(
         bytes,
         streamed.statusCode,
@@ -378,6 +391,43 @@ final class HelixTransport {
       timer.cancel();
       if (!abort.isCompleted) abort.complete(_Abort.done);
     }
+  }
+
+  /// Collects the body, giving up as soon as it is longer than [limit]
+  /// (declared by `content-length`, or counted while it streams): a hostile
+  /// or broken peer cannot make this process buffer an unbounded body.
+  Future<Uint8List> _readCapped(
+    http.StreamedResponse response,
+    int limit,
+  ) async {
+    final declared = response.contentLength;
+    if (declared != null && declared > limit) {
+      unawaited(response.stream.listen(null).cancel());
+      throw ResponseTooLargeException(limit: limit);
+    }
+    final out = BytesBuilder(copy: false);
+    final done = Completer<Uint8List>();
+    late StreamSubscription<List<int>> subscription;
+    subscription = response.stream.listen(
+      (chunk) {
+        if (out.length + chunk.length > limit) {
+          unawaited(subscription.cancel());
+          if (!done.isCompleted) {
+            done.completeError(ResponseTooLargeException(limit: limit));
+          }
+          return;
+        }
+        out.add(chunk);
+      },
+      onError: (Object error, StackTrace stack) {
+        if (!done.isCompleted) done.completeError(error, stack);
+      },
+      onDone: () {
+        if (!done.isCompleted) done.complete(out.takeBytes());
+      },
+      cancelOnError: true,
+    );
+    return done.future;
   }
 
   Future<void> _wait(Duration delay, CancellationToken? cancel) async {

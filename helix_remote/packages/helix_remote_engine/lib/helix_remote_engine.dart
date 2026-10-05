@@ -2,7 +2,7 @@
 /// MODULE.md.
 library;
 
-export 'src/account/account_service.dart' show AccountService, NewDeviceLink;
+export 'src/account/account_service.dart' show AccountService, LinkConfirm, LinkProposal, NewDeviceLink;
 export 'src/account/device_service.dart' show DeviceService;
 export 'src/account/session_token_store.dart' show DbSessionTokenStore;
 export 'src/backup/backup_service.dart' show BackupService;
@@ -22,7 +22,7 @@ export 'src/calls/call_models.dart';
 export 'src/calls/call_signaling.dart';
 export 'src/calls/calls_service.dart' show CallsService;
 export 'src/config.dart' show EngineConfig;
-export 'src/engine.dart' show Engine;
+export 'src/engine.dart' show Engine, HardWipe;
 export 'src/errors.dart';
 export 'src/events.dart';
 export 'src/features/chats_service.dart' show ChatsService;

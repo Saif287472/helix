@@ -716,7 +716,7 @@ final class _World {
   Future<_User> link(_User existing, String name) async {
     final fresh = await create(name);
     final link = await fresh.engine.account.beginLink();
-    final done = link.complete();
+    final done = link.complete(confirm: (_) async => true);
     await existing.engine.devices.approveLink(link.code);
     await done.timeout(const Duration(seconds: 20));
     return fresh;

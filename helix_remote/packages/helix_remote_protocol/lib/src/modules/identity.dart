@@ -18,6 +18,9 @@ final class KdfParams {
   static const defaultMemoryKib = 19456;
   static const defaultIterations = 2;
   static const defaultParallelism = 1;
+
+  /// The weakest iteration count accepted (CRYPTO_V2.md section 11).
+  static const minIterations = 2;
   static const outputLength = 64;
 
   final int memoryKib;
@@ -29,7 +32,7 @@ final class KdfParams {
   bool get isAcceptable =>
       memoryKib >= defaultMemoryKib &&
       memoryKib <= 262144 &&
-      iterations >= 1 &&
+      iterations >= minIterations &&
       iterations <= 10 &&
       parallelism >= 1 &&
       parallelism <= 4 &&

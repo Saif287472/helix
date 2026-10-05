@@ -175,7 +175,7 @@ final class InboundProcessor {
     final SealedPayload sealed;
     try {
       sealed = SealedPayload.decode(payload);
-    } on FormatException {
+    } on Object {
       return _quarantine(envelope, sender, 'bad_payload', requestReset: false);
     }
     if (sealed is SenderKeyMessage) {
@@ -230,8 +230,10 @@ final class InboundProcessor {
     final ContentMessage content;
     try {
       content = ContentMessage.decode(result.content);
-    } on FormatException {
+    } on Object {
       // Decryption worked, so the ratchet moved: commit it, then quarantine.
+      // Any decode failure is deterministic (the same bytes fail again), so
+      // none is retried: a crafted value must not stall the stream.
       await _commitSessionOnly(result);
       return _quarantine(envelope, sender, 'bad_content', requestReset: false);
     }
@@ -422,7 +424,7 @@ final class InboundProcessor {
     if (data == null) return null;
     try {
       return decode(JsonReader(data));
-    } on FormatException {
+    } on Object {
       return null;
     }
   }

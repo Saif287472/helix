@@ -126,6 +126,16 @@ void setUpEncryptedConnection(Database db, String keyHex, {required bool wal}) {
 void setUpPlainMemoryConnection(Database db) =>
     _setUpConnection(db, wal: false);
 
+/// Connection setup for an unencrypted *file* database. Tests only: it lets
+/// them read the file's bytes to prove that deleted values are overwritten
+/// (an encrypted file never shows plaintext, so it cannot show a leak).
+void setUpPlainFileConnection(Database db) => _setUpConnection(db, wal: true);
+
+/// The largest the write-ahead log file may stay on disk after a checkpoint
+/// (`journal_size_limit`): a bounded WAL keeps old page images, and with
+/// them deleted rows, from lingering.
+const walSizeLimitBytes = 4 * 1024 * 1024;
+
 void _setUpConnection(Database db, {required bool wal}) {
   if (wal) {
     final mode = db.select('PRAGMA journal_mode = WAL;');
@@ -133,8 +143,50 @@ void _setUpConnection(Database db, {required bool wal}) {
       throw StateError('could not enable write-ahead logging');
     }
     db.execute('PRAGMA synchronous = NORMAL;');
+    db.execute('PRAGMA journal_size_limit = $walSizeLimitBytes;');
   }
+  // A deleted row (a spent one-time prekey, an old ratchet state, a deleted
+  // message) is overwritten with zeros instead of lingering in a free page.
+  db.execute('PRAGMA secure_delete = ON;');
   db.execute('PRAGMA foreign_keys = ON;');
+}
+
+/// Hard wipe: overwrites with zeros (best effort) and deletes the database
+/// file and its `-wal`, `-shm` and `-journal` companions.
+///
+/// The database must be closed first. This is the file half of a hard wipe;
+/// the half that matters is destroying the [DatabaseKey] in the platform
+/// keystore, which makes anything left on the flash unreadable. Overwriting
+/// cannot be relied on alone: flash wear levelling and journaling or
+/// copy-on-write file systems keep stale copies the file can no longer
+/// reach. A missing file is not an error.
+Future<void> destroyDatabaseFiles(File file) async {
+  for (final path in [
+    file.path,
+    '${file.path}-wal',
+    '${file.path}-shm',
+    '${file.path}-journal',
+  ]) {
+    final target = File(path);
+    if (!await target.exists()) continue;
+    try {
+      final length = await target.length();
+      final handle = await target.open(mode: FileMode.writeOnly);
+      try {
+        final zeros = Uint8List(64 * 1024);
+        for (var written = 0; written < length; written += zeros.length) {
+          final chunk = min(zeros.length, length - written);
+          await handle.writeFrom(zeros, 0, chunk);
+        }
+        await handle.flush();
+      } finally {
+        await handle.close();
+      }
+    } on FileSystemException {
+      // Best effort: deleting the file is what must happen.
+    }
+    await target.delete();
+  }
 }
 
 /// The hex form of [key] for [setUpEncryptedConnection]. Internal: it exists

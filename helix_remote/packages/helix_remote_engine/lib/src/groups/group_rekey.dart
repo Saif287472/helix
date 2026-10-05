@@ -8,6 +8,7 @@ import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
 import 'package:helix_remote_engine/src/groups/group_keyring.dart';
 import 'package:helix_remote_engine/src/groups/group_roster.dart';
+import 'package:helix_remote_engine/src/groups/group_trust.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
@@ -23,12 +24,19 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 /// state under it. A removed member still holding the old key can read the
 /// old state but nothing written after.
 final class GroupKeyDistributor {
-  GroupKeyDistributor(this._ctx, this._keyring, this._outbox, this._roster);
+  GroupKeyDistributor(
+    this._ctx,
+    this._keyring,
+    this._outbox,
+    this._roster,
+    this._trust,
+  );
 
   final EngineContext _ctx;
   final GroupKeyring _keyring;
   final OutboxService _outbox;
   final GroupRosterSync _roster;
+  final GroupTrust _trust;
 
   HelixDb get _db => _ctx.db;
 
@@ -39,7 +47,9 @@ final class GroupKeyDistributor {
     Iterable<String> accounts, {
     int? epoch,
   }) async {
-    final audience = accounts.toSet();
+    // Members this account has not confirmed get no key (GroupTrust).
+    final withheld = (await _trust.pending(groupId)).keys;
+    final audience = accounts.toSet()..removeAll(withheld);
     if (audience.isEmpty) return true;
     final group = await _db.groupsDao.byId(groupId);
     final at = epoch ?? group?.epoch;
@@ -89,12 +99,24 @@ final class GroupKeyDistributor {
       final blob = group.state;
       if (key != null &&
           blob != null &&
-          await _keyring.tryOpen(groupId, blob, epoch, key) != null) {
+          await _keyring.tryOpen(
+                groupId,
+                blob,
+                epoch,
+                group.stateVersion,
+                key,
+              ) !=
+              null) {
         return; // Already rotated and sealed.
       }
       var state = blob == null
           ? null
-          : await _keyring.openState(groupId, blob, epoch: epoch);
+          : await _keyring.openState(
+              groupId,
+              blob,
+              epoch: epoch,
+              version: group.stateVersion,
+            );
       if (state == null) {
         // The previous key never reached this device: the name cannot be
         // carried over, and an empty one must not replace it.
@@ -113,7 +135,8 @@ final class GroupKeyDistributor {
       // Queue the key first: if the state write fails, a retry re-seals
       // and members already hold the key.
       await share(groupId, members, epoch: epoch);
-      final sealed = await _keyring.sealState(groupId, epoch, key, state);
+      final next = group.stateVersion + 1;
+      final sealed = await _keyring.sealState(groupId, epoch, next, key, state);
       try {
         final result = await _ctx.api.groups.setState(
           groupId,
@@ -122,6 +145,14 @@ final class GroupKeyDistributor {
             expectedVersion: group.stateVersion,
           ),
         );
+        if (result.stateVersion != next) {
+          // Numbered differently by the server: unreadable, so not stored;
+          // the next pass reads the group again and re-seals.
+          if (--attempts <= 0) {
+            throw const GroupException(GroupFailure.versionConflict);
+          }
+          continue;
+        }
         await _db.groupsDao.saveState(
           groupId,
           state: sealed,

@@ -316,30 +316,9 @@ final class AccountService {
     String? phoneNumber,
   }) async {
     final self = _ctx.identity;
-    Uint8List? currentAuthKey;
-    if (currentPassword != null) {
-      final number =
-          phoneNumber ?? (await _ctx.db.accountDao.current())?.phoneNumber;
-      if (number == null) {
-        throw const SignInException(
-          SignInFailure.wrongPassword,
-          'the phone number is needed to check the current password',
-        );
-      }
-      final params = await _ctx.api.identity.passwordParams(number);
-      try {
-        currentAuthKey = (await PasswordKeys.derive(
-          password: currentPassword,
-          salt: params.salt,
-          params: params.kdf,
-        )).authKey;
-      } on CryptoV2Exception {
-        throw const SignInException(
-          SignInFailure.untrustedAccountKey,
-          'the server asked for weaker password hashing than Helix allows',
-        );
-      }
-    }
+    final currentAuthKey = currentPassword == null
+        ? null
+        : await _authKeyOf(currentPassword, phoneNumber);
     await _ctx.api.identity.setPassword(
       SetPasswordRequest(
         password: await _passwordSetup(
@@ -351,6 +330,84 @@ final class AccountService {
         verificationToken: verificationToken,
       ),
     );
+  }
+
+  /// The auth key of [password] under the server's stored parameters for
+  /// [phoneNumber] (default: the number this device signed in with).
+  Future<Uint8List> _authKeyOf(String password, String? phoneNumber) async {
+    final number =
+        phoneNumber ?? (await _ctx.db.accountDao.current())?.phoneNumber;
+    if (number == null) {
+      throw const SignInException(
+        SignInFailure.wrongPassword,
+        'the phone number is needed to check the current password',
+      );
+    }
+    final params = await _ctx.api.identity.passwordParams(number);
+    try {
+      return (await PasswordKeys.derive(
+        password: password,
+        salt: params.salt,
+        params: params.kdf,
+      )).authKey;
+    } on CryptoV2Exception {
+      throw const SignInException(
+        SignInFailure.untrustedAccountKey,
+        'the server asked for weaker password hashing than Helix allows',
+      );
+    }
+  }
+
+  // ---------------------------------------------------- delete account
+
+  /// Deletes the account on the server (`DELETE /v1/account`), proving
+  /// ownership the way the server accepts for this account:
+  ///
+  /// - an account with a password: the [password] (its auth key is derived
+  ///   here; the password never leaves the device), or a [verificationToken]
+  ///   from a fresh phone verification;
+  /// - an account with a number on a server that sends texts: a
+  ///   [verificationToken] for that number (single use);
+  /// - any other account (no password, no number or no SMS): neither is
+  ///   given, and this device signs a fresh server challenge with its
+  ///   signing key (`deleteAccountSignatureBody`).
+  ///
+  /// The caller picks by what the user can supply: a password when the
+  /// account has one, else the token when the server texts, else none. The
+  /// server's `invalid_credentials` answer lists what it would have
+  /// accepted (`details.accepted`). This only deletes the account on the
+  /// server; `Engine.deleteAccount` also wipes this device.
+  Future<void> deleteAccount({
+    String? password,
+    String? verificationToken,
+    String? phoneNumber,
+  }) async {
+    final self = _ctx.identity;
+    if (password != null) {
+      await _ctx.api.compliance.deleteAccount(
+        currentAuthKey: await _authKeyOf(password, phoneNumber),
+      );
+    } else if (verificationToken != null) {
+      await _ctx.api.compliance.deleteAccount(
+        verificationToken: verificationToken,
+      );
+    } else {
+      final challenge = await _ctx.api.identity.deviceChallenge(
+        DeviceChallengeRequest(
+          accountId: self.accountId,
+          deviceId: self.deviceId,
+        ),
+      );
+      await _ctx.api.compliance.deleteAccount(
+        deviceProof: DeviceKeyProof(
+          challengeId: challenge.challengeId,
+          challenge: challenge.challenge,
+          signature: await self.keys.signingKey.sign(
+            deleteAccountSignatureBody(challenge.challenge),
+          ),
+        ),
+      );
+    }
   }
 
   // --------------------------------------------------------- linking
@@ -372,7 +429,7 @@ final class AccountService {
     return NewDeviceLink._(this, created, ephemeral, code, deviceName);
   }
 
-  Future<void> _completeLink(NewDeviceLink link) async {
+  Future<LinkProposal> _awaitApproval(NewDeviceLink link) async {
     final cancel = link._cancel;
     while (true) {
       if (cancel.isCancelled) {
@@ -410,6 +467,8 @@ final class AccountService {
           }
           final ProvisionMessage provision;
           try {
+            // Checks the approver's certificate and its signature over this
+            // link; nothing is stored yet.
             provision = await Provisioning.open(
               ephemeralKey: link._ephemeral,
               linkId: link._created.linkId,
@@ -421,16 +480,22 @@ final class AccountService {
               'the approval could not be opened',
             );
           }
-          await _addDevice(
-            accountId: provision.accountId,
-            accountKey: await Ed25519KeyPair.fromSeed(
-              provision.identityKeySeed,
+          return LinkProposal._(
+            () async => _addDevice(
+              accountId: provision.accountId,
+              accountKey: await Ed25519KeyPair.fromSeed(
+                provision.identityKeySeed,
+              ),
+              deviceName: link._deviceName,
+              linkToken: token,
+              profileKey: provision.profileKey,
             ),
-            deviceName: link._deviceName,
-            linkToken: token,
-            profileKey: provision.profileKey,
+            accountId: provision.accountId,
+            phoneMask: provision.phoneMask,
+            helixName: provision.helixName,
+            fingerprint: Provisioning.keyCode(provision.identityKey),
+            approverDeviceId: provision.approverDeviceId,
           );
-          return;
       }
     }
   }
@@ -583,6 +648,58 @@ final class AccountService {
   }
 }
 
+/// Asked by [NewDeviceLink.complete] once an approval has arrived and
+/// checked out, before anything is kept: show the user the account
+/// ([LinkProposal.phoneMask], [LinkProposal.helixName]) and answer whether
+/// it is theirs.
+typedef LinkConfirm = Future<bool> Function(LinkProposal proposal);
+
+/// The account a signed-in device offers this new device (CRYPTO_V2.md §2a).
+///
+/// The approval is cryptographically bound to the link (the approver is a
+/// certified device of [accountId] and signed this link), but anyone who
+/// saw the link's QR code can approve it with an account of their own, so
+/// the user has to recognise the account: [phoneMask] and [helixName] are
+/// what the approver claims, [fingerprint] is the account key's short form
+/// for comparing with the approving device. Nothing is stored until
+/// [accept]; [reject] (or dropping the proposal) leaves the device empty.
+final class LinkProposal {
+  LinkProposal._(
+    this._accept, {
+    required this.accountId,
+    required this.phoneMask,
+    required this.helixName,
+    required this.fingerprint,
+    required this.approverDeviceId,
+  });
+
+  final String accountId;
+
+  /// The account's phone number, masked (`+88017*****01`), as the approver
+  /// states it; null when the account has none.
+  final String? phoneMask;
+
+  /// The account's `~Helix name`, as the approver states it.
+  final String? helixName;
+
+  /// 20 hex digits of the account key's hash, in groups of four.
+  final String fingerprint;
+  final String approverDeviceId;
+
+  final Future<void> Function() _accept;
+  bool _used = false;
+
+  /// Registers this device with the account and keeps the keys.
+  Future<void> accept() {
+    if (_used) throw StateError('this proposal was already answered');
+    _used = true;
+    return _accept();
+  }
+
+  /// Declines: nothing was stored.
+  void reject() => _used = true;
+}
+
 /// A link in progress on the new device (CRYPTO_V2.md §2a).
 final class NewDeviceLink {
   NewDeviceLink._(
@@ -605,9 +722,28 @@ final class NewDeviceLink {
   /// The link stops working at this time (10 minutes).
   DateTime get expiresAt => _created.expiresAt;
 
-  /// Waits for a signed-in device to approve, then registers this device.
+  /// Waits for a signed-in device to approve and returns what it offers,
+  /// after checking the approval (the approver is a certified device of the
+  /// account and signed this link). Nothing is stored yet: the UI shows the
+  /// proposal and calls [LinkProposal.accept] or [LinkProposal.reject].
   /// Throws `SignInException(linkExpired)` on expiry or [cancel].
-  Future<void> complete() => _account._completeLink(this);
+  Future<LinkProposal> awaitApproval() => _account._awaitApproval(this);
+
+  /// [awaitApproval], then [confirm]: registers this device only if it
+  /// answers true (`SignInException(linkDeclined)` otherwise). There is no
+  /// variant without the question, because a link approved by someone else
+  /// would silently put this device on their account.
+  Future<void> complete({required LinkConfirm confirm}) async {
+    final proposal = await awaitApproval();
+    if (!await confirm(proposal)) {
+      proposal.reject();
+      throw const SignInException(
+        SignInFailure.linkDeclined,
+        'the account was not confirmed',
+      );
+    }
+    await proposal.accept();
+  }
 
   void cancel() => _cancel.cancel();
 }

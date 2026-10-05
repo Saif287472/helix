@@ -114,9 +114,18 @@ final class ContentApplier {
     if (group != null) {
       final refused = await _groupGate(sender, content, group, viaGroup);
       if (refused != null) return ApplyResult.ignored(refused);
-    } else if (sender.account != self) {
-      final person = await _db.peopleDao.byAccount(chat.peer);
-      if (person?.blocked ?? false) return const ApplyResult.ignored('blocked');
+    } else {
+      // Notices come from the engine itself, never from a peer's message:
+      // the disappearing timer is the one system message that is sent.
+      if (body is SystemBody && body.kind != MessageKinds.timerChanged) {
+        return const ApplyResult.ignored('system_not_allowed');
+      }
+      if (sender.account != self) {
+        final person = await _db.peopleDao.byAccount(chat.peer);
+        if (person?.blocked ?? false) {
+          return const ApplyResult.ignored('blocked');
+        }
+      }
     }
 
     if (!ContentCodec.isMessage(body) && body.isVisible) {
@@ -754,6 +763,12 @@ final class ContentApplier {
 
   /// Sends own messages again. [device] is the one that could not read them:
   /// for a group message it gets this device's sender key again with it.
+  ///
+  /// Anyone can message anyone, and message ids are visible to the server,
+  /// so a request is honoured only from a party that was entitled to the
+  /// message in the first place ([_mayResend]); anything else is ignored
+  /// without an answer, so the requester learns nothing (not even that the
+  /// id exists).
   Future<void> _resend(
     String toAccount,
     List<String> messageIds,
@@ -771,13 +786,10 @@ final class ContentApplier {
           now.difference(row.sentAt) > _ctx.config.resendWindow) {
         continue;
       }
+      if (!await _mayResend(row, toAccount)) continue;
       if (GroupIds.isGroupConversation(row.conversationId)) {
         final groupId = GroupIds.groupIdOf(row.conversationId);
-        // Only a member may ask for a group message to be sent again.
-        if (device == null ||
-            await _db.groupsDao.member(groupId, device.account) == null) {
-          continue;
-        }
+        if (device == null) continue;
         await _outbox.enqueueGroupContent(
           content: ContentCodec.rebuild(
             row,
@@ -811,5 +823,30 @@ final class ContentApplier {
         requestId: _ctx.ids.next(),
       );
     }
+  }
+
+  /// Whether [requester] may have the own message [row] sent again.
+  ///
+  /// A direct message: only the chat's peer (not blocked) or one of this
+  /// account's own devices. A group message: this account's own devices, or a
+  /// current member that is neither banned nor blocked and that joined at or
+  /// before the message was sent (a member added later cannot pull the
+  /// history before it joined; a missing join time counts as "not entitled").
+  Future<bool> _mayResend(MessageRow row, String requester) async {
+    final self = _ctx.identity.accountId;
+    if (requester == self) return true;
+    if ((await _db.peopleDao.byAccount(requester))?.blocked ?? false) {
+      return false;
+    }
+    if (GroupIds.isGroupConversation(row.conversationId)) {
+      final groupId = GroupIds.groupIdOf(row.conversationId);
+      final member = await _db.groupsDao.member(groupId, requester);
+      final joined = member?.joinedAt;
+      return member != null &&
+          joined != null &&
+          !joined.isAfter(row.sentAt) &&
+          !await _db.groupsDao.isBanned(groupId, requester);
+    }
+    return row.conversationId == directConversationId(requester);
   }
 }
