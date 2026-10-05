@@ -127,17 +127,17 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
   }
 
   Future<void> _call({required bool video}) async {
-    final started = await ref
+    final failure = await ref
         .read(contactInfoActionsProvider)
         .startCall(_id, video: video);
-    if (!started) _say('Calling is not available yet.');
+    if (failure != null) _say(failure);
   }
 
   Future<void> _sharedMedia() async {
     final opened = await ref
         .read(contactInfoActionsProvider)
         .openSharedMedia(_id);
-    if (!opened) _say('Shared media is not available yet.');
+    if (!opened) _say('Shared media could not be opened.');
   }
 
   @override

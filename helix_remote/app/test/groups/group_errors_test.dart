@@ -78,7 +78,7 @@ void main() {
   });
 
   test('network and sign-out', () {
-    expect(groupErrorText(const NetworkException()), contains('No connection'));
+    expect(groupErrorText(const NetworkException()), contains('offline'));
     expect(
       groupErrorText(const SignedOutException(SignedOutReason.noSession)),
       contains('signed out'),

@@ -79,6 +79,20 @@ final class ChatsService {
   Stream<List<AttachmentRow>> watchAttachments(Iterable<int> rowids) =>
       _db.messagesDao.watchAttachmentsFor(rowids);
 
+  /// The photos, videos and files of [conversationId], newest first, live
+  /// (the shared-media view).
+  Stream<List<SharedAttachment>> watchSharedAttachments(
+    String conversationId, {
+    int limit = 500,
+  }) => _db.messagesDao.watchSharedAttachments(conversationId, limit: limit);
+
+  /// The messages of [conversationId] that hold a web link, newest first,
+  /// live.
+  Stream<List<MessageRow>> watchMessagesWithLinks(
+    String conversationId, {
+    int limit = 200,
+  }) => _db.messagesDao.watchMessagesWithLinks(conversationId, limit: limit);
+
   /// A message of [conversationId] by its content id, whoever wrote it (a
   /// reply quote or a read receipt names it that way).
   Future<MessageRow?> findMessage(String conversationId, String messageId) =>

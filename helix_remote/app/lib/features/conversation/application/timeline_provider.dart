@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/message_mapper.dart';
 import 'package:helix_remote/features/conversation/application/timeline_builder.dart';
@@ -219,7 +219,7 @@ int initialLimitFor(OpenInfo open) =>
 final timelineProvider = StreamProvider.autoDispose
     .family<TimelineSnapshot, TimelineArgs>((ref, args) async* {
       final gateway = await ref.watch(chatGatewayProvider.future);
-      final people = await ref.watch(chatPeopleProvider.future);
+      final people = await ref.watch(peopleDirectoryProvider.future);
       final open = await ref.watch(
         conversationOpenProvider(args.conversationId).future,
       );
@@ -241,7 +241,7 @@ const _coalesce = Duration(milliseconds: 16);
 
 Stream<TimelineSnapshot> _snapshots({
   required ChatGateway gateway,
-  required ChatPeople people,
+  required PeopleDirectory people,
   required OpenInfo open,
   required TimelineWindow window,
   required String conversationId,

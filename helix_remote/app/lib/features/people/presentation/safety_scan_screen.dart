@@ -64,14 +64,27 @@ class _SafetyScanScreenState extends ConsumerState<SafetyScanScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final scanner = ref.watch(qrScannerBuilderProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Scan code')),
       body: ColoredBox(
         color: scheme.inverseSurface,
-        child: HelixQrScanFrame(
-          hint: 'Point the camera at the code on their phone',
-          child: ref.watch(qrScannerBuilderProvider)(context, _onText),
-        ),
+        child: scanner == null
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'This device has no camera to scan with. Compare the '
+                    'numbers on both phones instead.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: HelixScrimColors.onBackdrop),
+                  ),
+                ),
+              )
+            : HelixQrScanFrame(
+                hint: 'Point the camera at the code on their phone',
+                child: scanner(context, _onText),
+              ),
       ),
     );
   }

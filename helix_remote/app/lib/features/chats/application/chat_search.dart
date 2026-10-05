@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/search_snippet.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
@@ -69,7 +69,7 @@ final chatSearchResultsProvider = FutureProvider.autoDispose<ChatSearchResults>(
     if (superseded) return const ChatSearchResults();
 
     final gateway = await ref.read(chatGatewayProvider.future);
-    final people = await ref.read(chatPeopleProvider.future);
+    final people = await ref.read(peopleDirectoryProvider.future);
     final now = ref.read(clockProvider)();
     final lowered = query.toLowerCase();
 

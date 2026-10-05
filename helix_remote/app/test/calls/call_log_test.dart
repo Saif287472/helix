@@ -1,17 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/format/labels.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/calls/application/call_copy.dart';
 import 'package:helix_remote/features/calls/application/call_log.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../support/call_support.dart';
+import '../support/names_support.dart';
 
 /// The call log as the Calls tab shows it: the engine's rows mapped to the UI
 /// package's items, folded, named by the people-naming order and dated.
 void main() {
   final now = DateTime(2026, 10, 3, 15, 30);
 
-  PeopleNames names() => const PeopleNames({
+  PeopleDirectory names() => directoryOf(const {
     'peer-1': HelixPersonNames(
       phoneBookName: 'Ada Lovelace',
       number: '+8801711000001',
@@ -226,27 +228,24 @@ void main() {
       expect(entries.single.item.title, '~Dan');
     });
 
-    test('a person nothing is known about is a Helix user', () {
+    test('a person nothing is known about is a Helix user with a short id', () {
       final entries = buildCallLog(
         [logRow('a', peer: 'stranger', at: DateTime(2026, 10, 3, 14))],
         names(),
         now,
       );
-      expect(entries.single.item.title, 'Helix user');
+      expect(entries.single.item.title, 'Helix user stranger');
     });
   });
 
   group('time labels', () {
     test('today, yesterday, weekday, date, and another year', () {
-      expect(callTimeLabel(DateTime(2026, 10, 3, 14, 5), now), 'Today, 14:05');
+      expect(formatWhen(DateTime(2026, 10, 3, 14, 5), now), 'Today, 14:05');
+      expect(formatWhen(DateTime(2026, 10, 2, 9, 7), now), 'Yesterday, 09:07');
+      expect(formatWhen(DateTime(2026, 9, 30, 9, 7), now), 'Wed, 09:07');
+      expect(formatWhen(DateTime(2026, 9, 12, 18, 0), now), '12 Sep, 18:00');
       expect(
-        callTimeLabel(DateTime(2026, 10, 2, 9, 7), now),
-        'Yesterday, 09:07',
-      );
-      expect(callTimeLabel(DateTime(2026, 9, 30, 9, 7), now), 'Wed, 09:07');
-      expect(callTimeLabel(DateTime(2026, 9, 12, 18, 0), now), '12 Sep, 18:00');
-      expect(
-        callTimeLabel(DateTime(2025, 12, 31, 23, 59), now),
+        formatWhen(DateTime(2025, 12, 31, 23, 59), now),
         '31 Dec 2025, 23:59',
       );
     });

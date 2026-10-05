@@ -21,6 +21,7 @@ import 'package:helix_remote/features/settings/presentation/settings_tab.dart';
 import 'package:helix_remote/features/settings/settings_routes.dart';
 import 'package:helix_remote/features/sign_in/presentation/sign_in_screen.dart';
 import 'package:helix_remote/shared/route_paths.dart';
+import 'package:helix_remote/shared/widgets/people_search_panel.dart';
 import 'package:helix_remote/shared/widgets/reset_screen.dart';
 
 /// Every route in the app. A1 ships sign-in, the home tabs shell and the two
@@ -89,10 +90,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.home,
         // The home shell lays the tabs out; each tab's content is its
         // feature's.
-        builder: (context, state) => const HomeScreen(
-          chatsTab: ChatsTab(),
-          callsTab: CallsTabScreen(),
-          settingsTab: SettingsTab(),
+        builder: (context, state) => HomeScreen(
+          // The router is where features meet (they never import each other):
+          // the people search is the people feature's panel, shown under the
+          // Chats and Calls search fields.
+          chatsTab: ChatsTab(
+            peopleResults: (context, query) => PeopleSearchPanel(
+              query: query,
+              mode: PeopleSearchMode.chats,
+              embedded: true,
+            ),
+          ),
+          callsTab: CallsTabScreen(
+            peopleSearch: (context, query, onCall) =>
+                PeopleSearchPanel(query: query, mode: PeopleSearchMode.calls),
+          ),
+          settingsTab: const SettingsTab(),
         ),
       ),
       ...chatsRoutes,

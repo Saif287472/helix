@@ -31,8 +31,8 @@ calls_routes.dart           /call (the full-screen call), /home/calls/:callId (d
 
 Core wiring: `core/calls/call_host.dart` (above the app lock, in `main.dart`),
 `core/calls/place_call.dart` (the seam), `core/notifications/call_notifications.dart`
-(the ringing notification, shared with the FCM isolate), `core/people/name_lookup.dart`
-(the naming adapter).
+(the ringing notification, shared with the FCM isolate). Names come from
+`core/people/people_names.dart` (the one naming source).
 
 ## The call-button seam
 
@@ -55,13 +55,11 @@ conversation header) and A2b (contact info) bind their buttons to this;
 ## Calls tab and the people-search seam
 
 `CallsTabScreen({peopleSearch})`. The router hands it to `HomeScreen(callsTab:)`.
-`peopleSearch` is a `CallsPeopleSearchBuilder(context, query, onCall)`: the people
-feature's search widget plugs in there (the router composes it; features never
-import each other). Without one, the search button filters the call log by name,
-so it always does something useful. Names come from `peopleNamesProvider`
-(`core/people/name_lookup.dart`), the replaceable adapter for the naming order
-(phone book, nickname, number, `~Helix name`); when A2b publishes its provider,
-change only that file.
+`peopleSearch` is a `CallsPeopleSearchBuilder(context, query, onCall)`: the router
+mounts the people feature's `PeopleSearchPanel(mode: calls)` there (features never
+import each other); a tap calls through `placeCallProvider`. Without one, the search
+button filters the call log by name. Names come from `peopleDirectoryProvider`
+(`core/people/people_names.dart`): phone book, nickname, number, `~Helix name`.
 
 ## How a call reaches the screen
 

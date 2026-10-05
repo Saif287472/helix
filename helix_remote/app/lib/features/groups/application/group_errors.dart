@@ -1,3 +1,4 @@
+import 'package:helix_remote/core/engine/failure_copy.dart';
 import 'package:helix_remote_api/v2.dart'
     show ApiException, NetworkException, SignedOutException;
 import 'package:helix_remote_engine/helix_remote_engine.dart'
@@ -40,10 +41,9 @@ String groupErrorText(
       };
     case ApiException(:final code):
       return _apiText(code, context);
-    case NetworkException():
-      return 'No connection. Check your internet and try again.';
-    case SignedOutException():
-      return 'You are signed out. Sign in again to continue.';
+    case NetworkException() || SignedOutException():
+      // Offline and signed out read the same on every screen.
+      return describeFailure(error).message;
     case ArgumentError():
       return 'Enter a group name of 1 to 100 characters.';
   }

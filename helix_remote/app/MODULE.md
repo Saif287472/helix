@@ -172,7 +172,7 @@ other:
   `DevicePhoneBook` over it, `phone_numbers.dart` (E.164, country of the
   account's own number). `shared/widgets/phone_book_sync_host.dart` runs
   discovery on start, resume, hourly and after address-book changes, within the
-  5,000/day budget; `shared/widgets/qr_scanner_view.dart` owns the camera.
+  5,000/day budget; `shared/widgets/qr_scanner_view.dart` owns the camera (the one scanner).
 
 Tests: `people_names_test`, `phone_numbers_test`, `phone_book_test`,
 `people_search_test`, `contact_info_test`, `people_rules_test`,
@@ -227,8 +227,7 @@ Two features, each with its own `FEATURE.md`.
   add members, join by link (`HLX-GRP-` links), encrypted picture and
   description editing.
 
-Shared additions: `core/people/name_lookup.dart` (the replaceable naming
-adapter), `core/notifications/call_notifications.dart` (ringing notification,
+Shared additions: `core/notifications/call_notifications.dart` (ringing notification,
 also used by the FCM isolate), `HomeScreen(callsTab:)` (the tab is handed in
 by the router), `HelixDeepLinkKind.groupLink`, and `ProviderScope` at the root
 of `main.dart` (it was missing). Tests: `test/calls/` (includes the engine's real
@@ -244,7 +243,6 @@ because features may not import each other:
 - `core/chat/chat_gateway.dart` - everything a chat screen asks of the engine,
   in one class. Tests subclass it: reads stay the engine's real watch queries
   over an in-memory database, writes are simulated (`test/support/chat_harness.dart`).
-- `core/chat/chat_people.dart` - the people-naming adapter (`chatPeopleProvider`).
 - `core/chat/message_semantics.dart`, `chat_naming.dart`, `search_snippet.dart`,
   `core/format/labels.dart` - pure helpers (preview kinds, notices, time labels).
 - `core/platform/` - `AppBlobStore` (the engine's file store, now passed to
@@ -262,3 +260,57 @@ Tests: `chat_list_test.dart`, `conversation_test.dart`, `chat_logic_test.dart`,
 1,000-message burst - build-count and relative-cost checks, no wall-clock
 asserts). Widget tests that touch the database run real async work inside
 `tester.runAsync` (see `settle`/`chatTest` in the harness).
+
+## Integration (A2/A3 wiring)
+
+The four feature branches were built in parallel against documented seams. This
+is the final wiring; `test/journeys/` walks it.
+
+- **One naming source.** `core/people/people_names.dart`
+  (`peopleDirectoryProvider`, `personNameProvider`, `PersonName.fromRow`): phone
+  book, nickname, number, `~Helix name`. The chat list, conversation, call log
+  and call screen, groups, settings (blocked list), contact info and the FCM
+  isolate (`core/push/push_background.dart`) all read it. `ChatPeople` and
+  `name_lookup.dart` are gone. A stranger is `Helix user <short id>` everywhere.
+- **People search.** The router builds `ChatsTab(peopleResults:)` with
+  `PeopleSearchPanel(mode: chats, embedded: true)` and
+  `CallsTabScreen(peopleSearch:)` with `PeopleSearchPanel(mode: calls)`. A chat
+  result opens or starts the conversation; a calls result calls.
+- **Calls.** `ConversationSeams.startCall` (contact info, search) and
+  `callLauncherProvider` (conversation header) both resolve to
+  `placeCallProvider`, so a refusal is one sentence (`outcome.message`) in a
+  snackbar. `RouterConversationSeams.openChat` pushes `chatLocation(id)`
+  (`/chat/:id`); `groupChatLocationProvider` defaults to the same.
+- **Shared media.** `ConversationSeams.openSharedMedia` opens
+  `/chat/:id/shared` (photos and videos, documents, links) over the engine's
+  `watchSharedAttachments` / `watchMessagesWithLinks` (additive: db
+  `MessagesDao`, `ChatsService`).
+- **Info pages.** A direct chat's header opens contact info, a group's opens the
+  group info (`shared/navigation/group_paths.dart`, `people_paths.dart`); the
+  conversation menu and settings link to both and to shared media. The Chats tab
+  menu has New group and Join a group with a link (there was no entry to the
+  create screen before).
+- **Duplicates removed.** One QR scanner adapter
+  (`shared/widgets/qr_scanner_view.dart`, null on Windows), one clock
+  (`clockProvider`; the chat, call, group and people clocks are gone), one
+  date-time label (`formatWhen` replaces the call and group ones), `formatAgo`
+  moved next to the other labels in `core/format/labels.dart` (`shared/format.dart`
+  only re-exports for presentation), offline and signed-out group errors reuse
+  `describeFailure`. `formatBytes` (binary, storage and limits) and
+  `formatFileSize` (decimal, a file in a chat) stay separate on purpose.
+- **Tests.** `test/journeys/` (sign-in to a call in the Calls tab, header call
+  failure, shared media, group create/info/add member, settings to devices and
+  back, `HLX-GRP` link preview and join, and the whole `HelixRemoteApp`).
+
+### Left unwired on purpose (needs a decision)
+
+These need a plugin that is not in the build; no dependency was added.
+
+- **Voice notes**: recording (`VoiceRecorder`) and playback (`AudioPlayerAdapter`)
+  are `Unavailable*`; the microphone button says so.
+- **Camera capture** for photos and video messages (`AttachmentPicker` has no
+  camera source) and for a profile picture.
+- **Video playback**: a video opens through the share sheet.
+- Also open: the group member picker is its own list (it reads the same people
+  table as the search, so it was not swapped for the panel); a minimised
+  return-to-call bar; group calls (deferred, plan section 13).

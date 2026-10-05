@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:helix_remote/features/conversation/application/conversation_links.dart';
 import 'package:helix_remote/features/conversation/application/conversation_settings.dart';
+import 'package:helix_remote/shared/navigation/chat_locations.dart';
 import 'package:helix_remote/shared/widgets/mute_choice.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
@@ -119,6 +122,24 @@ class ConversationSettingsScreen extends ConsumerWidget {
           ),
           HelixSettingsSection(
             children: [
+              if (infoLocationOf(conversationId) case final info?)
+                HelixSettingsTile(
+                  icon: view.isGroup
+                      ? Icons.group_outlined
+                      : Icons.person_outline,
+                  title: view.isGroup ? 'Group info' : 'Contact info',
+                  subtitle: view.isGroup
+                      ? 'Members, invite links and group settings'
+                      : 'Name, number and safety number',
+                  showChevron: true,
+                  onTap: () => context.push(info),
+                ),
+              HelixSettingsTile(
+                icon: Icons.photo_library_outlined,
+                title: 'Media, links and docs',
+                showChevron: true,
+                onTap: () => context.push(sharedMediaLocation(conversationId)),
+              ),
               HelixSettingsTile(
                 icon: view.muted ? Icons.volume_off : Icons.volume_up_outlined,
                 title: 'Mute notifications',

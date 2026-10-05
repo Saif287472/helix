@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart' show IconData, Icons;
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -116,7 +116,7 @@ String previewTextOf(MessageRow row) {
 String? systemNoticeText(
   MessageRow row, {
   required String? selfId,
-  required ChatPeople people,
+  required PeopleDirectory people,
 }) {
   if (row.kind == 'call_log') return callLogText(row);
   if (row.kind != 'system') return null;
@@ -124,7 +124,7 @@ String? systemNoticeText(
   final kind = payload['kind'] as String?;
   final actorId = (payload['actor'] as String?) ?? row.sender;
   String name(String account) =>
-      account == selfId ? 'You' : people.nameOf(account);
+      account == selfId ? 'You' : people.displayOf(account);
   final members = [
     for (final m in (payload['members'] as List? ?? const []))
       if (m is String) name(m),
@@ -134,12 +134,12 @@ String? systemNoticeText(
   switch (kind) {
     case 'timer_changed':
       final seconds = (payload['seconds'] as num?)?.toInt() ?? 0;
-      final by = row.outgoing ? 'You' : people.nameOf(row.sender);
+      final by = row.outgoing ? 'You' : people.displayOf(row.sender);
       return seconds <= 0
           ? '$by turned off disappearing messages'
           : '$by set disappearing messages to ${describeDisappearing(seconds)}';
     case 'safety_number_changed':
-      return 'Your safety number with ${people.nameOf(row.sender)} changed';
+      return 'Your safety number with ${people.displayOf(row.sender)} changed';
     case 'group_created':
       return '$actor created this group';
     case 'member_added':

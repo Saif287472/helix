@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// Somewhere a message can be forwarded to: an existing chat, or a person
@@ -42,7 +42,7 @@ final forwardTargetsProvider = StreamProvider.autoDispose<List<ForwardTarget>>((
   ref,
 ) async* {
   final gateway = await ref.watch(chatGatewayProvider.future);
-  final people = await ref.watch(chatPeopleProvider.future);
+  final people = await ref.watch(peopleDirectoryProvider.future);
   final self = gateway.selfAccountId;
   yield* gateway.watchChats().map((rows) {
     final out = <ForwardTarget>[];
@@ -68,12 +68,12 @@ final forwardTargetsProvider = StreamProvider.autoDispose<List<ForwardTarget>>((
             !haveChat.contains(account) &&
             !people.isBlocked(account))
           account,
-    ]..sort((a, b) => people.nameOf(a).compareTo(people.nameOf(b)));
+    ]..sort((a, b) => people.displayOf(a).compareTo(people.displayOf(b)));
     for (final account in strangers) {
       out.add(
         ForwardTarget(
           id: 'direct:$account',
-          title: people.nameOf(account),
+          title: people.displayOf(account),
           avatar: people.avatarOf(account),
           newPeer: account,
         ),

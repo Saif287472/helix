@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/app_blob_store.dart';
@@ -47,7 +47,7 @@ MessageRow row(
 }
 
 void main() {
-  final people = ChatPeople([
+  final people = PeopleDirectory.fromRows([
     PersonRow(
       accountId: 'bob',
       phonebookName: 'Bob',

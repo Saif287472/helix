@@ -383,13 +383,13 @@ void main() {
       expect(seams.opened, isEmpty, reason: 'a call is not a chat');
     });
 
-    testWidgets('while calling is not available, it says so', (tester) async {
-      seams.callsAvailable = false;
+    testWidgets('a refused call shows the reason it gives', (tester) async {
+      seams.callFailure = 'You are already in a call.';
       await open(tester, mode: PeopleSearchMode.calls);
       await tester.tap(find.byTooltip('Voice call Mum'));
       await tester.pump();
       await tester.pump();
-      expect(find.text('Calling is not available yet.'), findsOneWidget);
+      expect(find.text('You are already in a call.'), findsOneWidget);
     });
 
     testWidgets('a long press opens the contact info', (tester) async {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_crypto/v2.dart' show SecureCryptoRandom;
@@ -243,6 +244,8 @@ Widget chatApp(
 }) => ProviderScope(
   overrides: [
     chatGatewayProvider.overrideWith((ref) => gateway),
+    // Names are the app's one source; here its rows are the test database's.
+    peopleRowsProvider.overrideWith((ref) => gateway.engine.people.watchAll()),
     clockProvider.overrideWithValue(() => testNow),
     ...overrides,
   ],

@@ -5,6 +5,7 @@ import 'package:helix_remote/features/conversation/presentation/forward_screen.d
 import 'package:helix_remote/features/conversation/presentation/media_viewer_screen.dart';
 import 'package:helix_remote/features/conversation/presentation/message_info_screen.dart';
 import 'package:helix_remote/features/conversation/presentation/send_files_screen.dart';
+import 'package:helix_remote/features/conversation/presentation/shared_media_screen.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
 
 /// The routes the conversation feature owns. They sit above the home shell,
@@ -24,6 +25,12 @@ final List<RouteBase> conversationRoutes = [
         builder: (context, state) => MediaViewerScreen(
           rowid: int.parse(state.pathParameters['rowid']!),
           initialIndex: int.tryParse(state.uri.queryParameters['i'] ?? '') ?? 0,
+        ),
+      ),
+      GoRoute(
+        path: 'shared',
+        builder: (context, state) => SharedMediaScreen(
+          conversationId: state.pathParameters['conversationId']!,
         ),
       ),
       GoRoute(

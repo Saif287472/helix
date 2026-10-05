@@ -40,8 +40,6 @@ class ChatGateway {
   Future<ConversationRow?> chat(String conversationId) =>
       _chats.watchChat(conversationId).first;
 
-  Stream<List<PersonRow>> watchPeople() => _engine.people.watchAll();
-
   Stream<List<GroupMemberRow>> watchMembers(String groupId) =>
       _engine.groups.watchMembers(groupId);
 
@@ -78,6 +76,15 @@ class ChatGateway {
 
   Stream<List<AttachmentRow>> watchAttachments(int messageRowid) =>
       _chats.watchAttachments([messageRowid]);
+
+  /// The photos, videos and files of a conversation, newest first.
+  Stream<List<SharedAttachment>> watchSharedAttachments(
+    String conversationId,
+  ) => _chats.watchSharedAttachments(conversationId);
+
+  /// The messages of a conversation that hold a web link, newest first.
+  Stream<List<MessageRow>> watchMessagesWithLinks(String conversationId) =>
+      _chats.watchMessagesWithLinks(conversationId);
 
   Stream<List<AttachmentTransferView>> watchTransfers(int messageRowid) =>
       _engine.media.watchMessage(messageRowid);

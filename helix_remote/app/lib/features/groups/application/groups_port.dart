@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/group_picture.dart';
@@ -208,7 +208,7 @@ final class EngineGroupsPort implements GroupsPort {
           for (final row in rows)
             GroupCandidate(
               account: row.accountId,
-              names: namesOf(row),
+              names: PersonName.fromRow(row).tileNames,
               blocked: row.blocked,
             ),
         ],
@@ -232,7 +232,7 @@ final class EngineGroupsPort implements GroupsPort {
     if (row == null) return null;
     return GroupCandidate(
       account: row.accountId,
-      names: namesOf(row),
+      names: PersonName.fromRow(row).tileNames,
       blocked: row.blocked,
     );
   }

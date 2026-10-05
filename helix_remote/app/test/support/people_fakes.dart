@@ -6,12 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
 import 'package:helix_remote/features/people/application/people_gateway.dart';
-import 'package:helix_remote/features/people/application/phone_book_sync.dart';
 import 'package:helix_remote/features/people/people_routes.dart';
 import 'package:helix_remote/shared/navigation/conversation_seams.dart';
 import 'package:helix_remote/shared/widgets/qr_scanner_view.dart';
@@ -145,8 +145,10 @@ final class FakeSeams implements ConversationSeams {
   final List<String> calls = [];
   final List<String> media = [];
 
-  /// Whether the calls and shared-media screens "exist".
-  bool callsAvailable = true;
+  /// The sentence a refused call answers with; null lets the call start.
+  String? callFailure;
+
+  /// Whether the shared-media screen opens.
   bool mediaAvailable = true;
 
   @override
@@ -160,9 +162,9 @@ final class FakeSeams implements ConversationSeams {
   }
 
   @override
-  Future<bool> startCall(String accountId, {required bool video}) async {
+  Future<String?> startCall(String accountId, {required bool video}) async {
     calls.add('${video ? 'video' : 'voice'}:$accountId');
-    return callsAvailable;
+    return callFailure;
   }
 }
 
@@ -190,6 +192,10 @@ final class FakePeopleGateway implements PeopleGateway {
   /// Lookups answer from these (absent = not on Helix).
   final Map<String, PersonRow> byNumber = {};
   final Map<String, PersonRow> byHelixName = {};
+
+  /// Runs when a chat is opened, so a journey can create the conversation in
+  /// its own database the way the engine's `openDirect` does.
+  Future<void> Function(String accountId)? onOpenChat;
 
   /// Thrown by lookups when set.
   Object? lookupError;
@@ -344,6 +350,7 @@ final class FakePeopleGateway implements PeopleGateway {
   @override
   Future<String> openChat(String accountId) async {
     calls.add('openChat:$accountId');
+    await onOpenChat?.call(accountId);
     return directConversationId(accountId);
   }
 
@@ -434,7 +441,7 @@ Future<ProviderContainer> pumpPeople(
         contacts ?? FakeContactsAccess(state: ContactsPermission.granted),
       ),
       conversationSeamsProvider.overrideWithValue(seams ?? FakeSeams()),
-      peopleClockProvider.overrideWithValue(() => testNow),
+      clockProvider.overrideWithValue(() => testNow),
       qrScannerBuilderProvider.overrideWithValue(fakeScanner),
       ...overrides,
     ],

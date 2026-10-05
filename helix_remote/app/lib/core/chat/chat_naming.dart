@@ -1,4 +1,4 @@
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
@@ -14,15 +14,15 @@ String? peerOfConversation(String conversationId) =>
 
 /// The title of a chat row or a conversation header: a person by the naming
 /// rule, a group by its name.
-String chatTitleOf(ConversationRow chat, ChatPeople people) {
+String chatTitleOf(ConversationRow chat, PeopleDirectory people) {
   final peer = peerOfConversation(chat.id);
-  if (peer != null) return people.nameOf(peer);
+  if (peer != null) return people.displayOf(peer);
   final title = chat.title?.trim();
   return title == null || title.isEmpty ? 'Group' : title;
 }
 
 /// The avatar of a chat: a person's picture or initials, a group's glyph.
-HelixAvatarModel chatAvatarOf(ConversationRow chat, ChatPeople people) {
+HelixAvatarModel chatAvatarOf(ConversationRow chat, PeopleDirectory people) {
   final peer = peerOfConversation(chat.id);
   if (peer != null) return people.avatarOf(peer);
   return HelixAvatarModel(
@@ -36,7 +36,7 @@ HelixAvatarModel chatAvatarOf(ConversationRow chat, ChatPeople people) {
 String typingLabelFor(
   String conversationId,
   Set<String> accounts,
-  ChatPeople people,
+  PeopleDirectory people,
 ) {
   if (peerOfConversation(conversationId) != null || accounts.isEmpty) {
     return 'typing...';

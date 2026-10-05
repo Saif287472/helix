@@ -1,13 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/features/people/application/people_failures.dart';
 import 'package:helix_remote/features/people/application/people_gateway.dart';
-
-/// The clock the people feature reads. A provider so a test can move time.
-final peopleClockProvider = Provider<DateTime Function()>(
-  (ref) => DateTime.now,
-);
 
 /// Where the address-book permission stands, and asking for it.
 ///
@@ -133,7 +129,7 @@ final class PhoneBookSyncController extends Notifier<PhoneBookSyncState> {
     }
     final log = await gateway.readSyncLog();
     if (log != null) {
-      final now = ref.read(peopleClockProvider)().toUtc();
+      final now = ref.read(clockProvider)().toUtc();
       final age = now.difference(log.at);
       final wait = addressBookChanged ? changedInterval : minInterval;
       if (age < wait) return;
@@ -157,7 +153,7 @@ final class PhoneBookSyncController extends Notifier<PhoneBookSyncState> {
       return;
     }
     state = state.copyWith(status: PhoneBookStatus.syncing);
-    final now = ref.read(peopleClockProvider);
+    final now = ref.read(clockProvider);
     PeopleGateway? gateway;
     try {
       final ready = await ref.read(peopleGatewayProvider.future);

@@ -48,9 +48,11 @@ name.maskedNumber      // for logs and errors; screens show the full number
   person with no name is shown *by* their number); `maskedNumber` is for
   anything that could be logged.
 
-A2a: replace the placeholder title in `chat_list_provider.dart`'s mapper with
-`ref.watch(peopleDirectoryProvider)` and `directory.nameOfConversation(id)`.
-A3a: member lists, call screens and notifications use `personNameProvider`.
+Every feature reads it (chat list, conversation, calls, groups, settings, and the
+FCM isolate through `PersonName.fromRow`); there is no other naming adapter.
+`PeopleDirectory` also answers `displayOf`, `firstNameOf`, `secondaryOf`,
+`avatarOf`, `isBlocked`, `isVerified` and takes a `fallbackName` for a stranger a
+roster named.
 
 ### 2. Search: `shared/widgets/people_search_panel.dart`
 
@@ -95,11 +97,11 @@ People hand over to other features through `conversationSeamsProvider`, whose
 default is `RouterConversationSeams`. The owner of each destination edits its
 own method there:
 
-| Method | Owner | Default |
-| --- | --- | --- |
-| `openChat(conversationId)` (`direct:<account>` or `group:<id>`) | A2a | pushes `/home/chats/<id>`; A2a registers that route or changes the line |
-| `openSharedMedia(conversationId)` | A2a | returns `false` (the screen says "not available yet") |
-| `startCall(accountId, video:)` | A3a | returns `false` |
+| Method | Resolves to |
+| --- | --- |
+| `openChat(conversationId)` (`direct:<account>` or `group:<id>`) | the conversation route (`chatLocation`) |
+| `openSharedMedia(conversationId)` | `/chat/:id/shared` (conversation feature) |
+| `startCall(accountId, video:)` returns null, or the sentence to show | `placeCallProvider` (calls feature) |
 
 Paths into this feature are in `shared/navigation/people_paths.dart`:
 `PeoplePaths.person(id)` (contact info - from the conversation header and a
@@ -128,7 +130,7 @@ Platform code is behind an adapter in `core/platform/`: `ContactsAccess`
 (permission, read, write, change stream; `FlutterContactsAccess` is the only
 file that touches `flutter_contacts`), `DevicePhoneBook` (the engine's
 `PhoneBook` over it), `phone_numbers.dart`. The camera is behind
-`shared/widgets/qr_scanner_view.dart` (`qrScannerBuilderProvider`).
+`shared/widgets/qr_scanner_view.dart` (`qrScannerBuilderProvider`, the only scanner; devices uses it too).
 Fakes for tests: `test/support/people_fakes.dart`.
 
 ## Phone book

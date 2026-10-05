@@ -38,13 +38,21 @@ conversation_routes.dart    /chat/:id and its sub-routes
 
 ## Seams
 
-- **Calls (A3a):** the header buttons go through `callLauncherProvider`
-  (`core/calls/call_launcher.dart`); default says calls are unavailable.
+- **Calls:** the header buttons go through `callLauncherProvider`
+  (`core/calls/call_launcher.dart`), which resolves to `placeCallProvider`; a failure
+  is the outcome's sentence in a snackbar.
+- **Info pages:** the header title and the menu open the contact info (direct chat,
+  `PeoplePaths.person`) or the group info (`GroupPaths.info`); see
+  `application/conversation_links.dart`.
+- **Shared media:** `/chat/:id/shared` (`shared_media_screen.dart`): photos and videos
+  in a grid, documents, links; from the menu, the settings and the contact info
+  (`ConversationSeams.openSharedMedia`). Backed by the engine's
+  `watchSharedAttachments` / `watchMessagesWithLinks`.
 - **Platform adapters** (`core/platform/`): `AttachmentPicker` (file_picker;
   no camera plugin in the build), `VoiceRecorder`, `AudioPlayerAdapter`
   (both `Unavailable*` until a plugin is chosen), `FileActions` (share sheet).
 - **Group management** (members, roles, links) is the groups feature's; the
-  settings screen has no group info tile until A3a adds one.
+  settings screen links to its info page.
 
 ## Not here
 

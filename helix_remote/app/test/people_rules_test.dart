@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:helix_remote/core/calls/place_call.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/features/home/application/home_tab.dart';
 import 'package:helix_remote/shared/navigation/conversation_seams.dart';
@@ -116,17 +117,15 @@ void main() {
       expect(offenders, isEmpty);
     });
 
-    test('the camera plugin is touched only in the two scanner adapters', () {
-      // People code scans through shared/widgets/qr_scanner_view.dart, the
-      // device-link code through core/platform/qr_scanner.dart.
-      const adapters = [
-        'shared/widgets/qr_scanner_view.dart',
-        'core/platform/qr_scanner.dart',
-      ];
+    test('the camera plugin is touched in exactly one file', () {
+      // Every scan (a person's safety number, a device link) goes through the
+      // one adapter, so a fake can stand in for the camera everywhere else.
       final offenders = [
         for (final file in sources('lib'))
           if (file.readAsStringSync().contains('package:mobile_scanner') &&
-              !adapters.any((a) => file.path.replaceAll(r'\', '/').endsWith(a)))
+              !file.path
+                  .replaceAll(r'\', '/')
+                  .endsWith('shared/widgets/qr_scanner_view.dart'))
             file.path,
       ];
       expect(offenders, isEmpty);
@@ -175,7 +174,7 @@ void main() {
         routes: [
           GoRoute(path: '/', builder: (_, _) => const SizedBox()),
           GoRoute(
-            path: '/home/chats/:id',
+            path: '/chat/:id',
             builder: (_, state) {
               visited.add(state.pathParameters['id']!);
               return const SizedBox();
@@ -201,13 +200,58 @@ void main() {
       expect(visited, containsAll(['direct:abc', 'group:g1']));
     });
 
-    test('calls and shared media answer "not available" until their owners '
-        'fill them in', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+    test(
+      'a call goes through the calls seam and a refusal is its sentence',
+      () async {
+        final placed = <String>[];
+        var refuse = false;
+        final container = ProviderContainer(
+          overrides: [
+            placeCallProvider.overrideWithValue((peer, {required video}) async {
+              placed.add('${video ? 'video' : 'voice'}:$peer');
+              return refuse
+                  ? const PlaceCallOutcome(PlaceCallStatus.busy, 'Busy now.')
+                  : const PlaceCallOutcome(PlaceCallStatus.started);
+            }),
+          ],
+        );
+        addTearDown(container.dispose);
+        final seams = container.read(conversationSeamsProvider);
+        expect(await seams.startCall('a', video: false), isNull);
+        refuse = true;
+        expect(await seams.startCall('b', video: true), 'Busy now.');
+        expect(placed, ['voice:a', 'video:b']);
+      },
+    );
+
+    testWidgets('shared media opens the shared page of the chat', (
+      tester,
+    ) async {
+      final visited = <String>[];
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, _) => const SizedBox()),
+          GoRoute(
+            path: '/chat/:id/shared',
+            builder: (_, state) {
+              visited.add(state.pathParameters['id']!);
+              return const SizedBox();
+            },
+          ),
+        ],
+      );
+      final container = ProviderContainer(
+        overrides: [appRouterProvider.overrideWithValue(router)],
+      );
+      addTearDown(() {
+        container.dispose();
+        router.dispose();
+      });
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
       final seams = container.read(conversationSeamsProvider);
-      expect(await seams.startCall('a', video: false), isFalse);
-      expect(await seams.openSharedMedia('direct:a'), isFalse);
+      expect(await seams.openSharedMedia('direct:abc'), isTrue);
+      await tester.pumpAndSettle();
+      expect(visited, ['direct:abc']);
     });
 
     test('the people paths are the ones the router registers', () {

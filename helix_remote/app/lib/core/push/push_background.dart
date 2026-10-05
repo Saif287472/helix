@@ -8,10 +8,10 @@ import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
 import 'package:helix_remote/core/platform/app_blob_store.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
-import 'package:helix_remote_engine/helix_remote_engine.dart' show PersonNaming;
 
 /// The FirebaseMessaging background handler.
 ///
@@ -91,9 +91,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         final person = await runtime.engine.people.person(call.caller);
         await CallNotifications.showIncoming(
           callId: call.callId,
+          // The same name the app shows (phone book, nickname, number,
+          // `~Helix name`): this isolate has no providers, so it asks the
+          // naming helper for the one row.
           callerName: person == null
-              ? 'Helix user'
-              : PersonNaming.displayName(person),
+              ? PersonName.unknown(call.caller).display
+              : PersonName.fromRow(person).display,
           fullScreen: true,
         );
       }

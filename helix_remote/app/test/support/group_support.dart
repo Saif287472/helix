@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_invites.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/group_navigation.dart';
 import 'package:helix_remote/features/groups/application/group_picture.dart';
 import 'package:helix_remote/features/groups/application/groups_port.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
+import 'names_support.dart';
 
 /// A [GroupsPort] the test drives: it holds one group, records every call, and
 /// can be made to fail the next one.
@@ -304,19 +305,22 @@ final class FakeSharer implements LinkSharer {
 /// The overrides that take the group screens off the runtime.
 List<Override> groupOverrides({
   required FakeGroupsPort port,
-  PeopleNames names = PeopleNames.empty,
+  PeopleDirectory names = PeopleDirectory.empty,
+  bool withNames = true,
   FakePicker? picker,
   FakeSharer? sharer,
   String? Function(String conversationId)? chatLocation,
 }) => [
   groupsPortProvider.overrideWith((ref) async => port),
-  peopleNamesProvider.overrideWith((ref) => Stream.value(names)),
+  if (withNames)
+    peopleDirectoryProvider.overrideWith((ref) => Stream.value(names)),
   groupPicturePickerProvider.overrideWithValue(picker ?? FakePicker()),
   linkSharerProvider.overrideWithValue(sharer ?? FakeSharer()),
   groupPictureProvider.overrideWith((ref, key) async => null),
-  ?(chatLocation == null
-      ? null
-      : groupChatLocationProvider.overrideWithValue(chatLocation)),
+  // Without a chat route the screens fall back to the group's info page.
+  groupChatLocationProvider.overrideWithValue(
+    chatLocation ?? (conversationId) => null,
+  ),
 ];
 
 const _ada = HelixPersonNames(
@@ -327,7 +331,7 @@ const _bob = HelixPersonNames(nickname: 'Bob', number: '+8801711000002');
 const _carol = HelixPersonNames(helixName: 'carol');
 
 /// People the group tests know.
-const testNames = PeopleNames({
+final testNames = directoryOf(const {
   'self': HelixPersonNames(nickname: 'Me'),
   'ada': _ada,
   'bob': _bob,

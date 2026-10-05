@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
-import 'package:helix_remote/features/calls/application/call_controller.dart';
+import 'package:helix_remote/core/engine/clock.dart';
+import 'package:helix_remote/core/format/labels.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/calls/application/call_copy.dart';
 import 'package:helix_remote/features/calls/application/calls_port.dart';
 import 'package:helix_remote/features/calls/application/start_call.dart';
@@ -48,7 +49,7 @@ final class CallLogEntry {
 /// `~Helix name`.
 List<CallLogEntry> buildCallLog(
   List<CallLogRow> rows,
-  PeopleNames names,
+  PeopleDirectory names,
   DateTime now,
 ) {
   final entries = <_Folding>[];
@@ -82,8 +83,8 @@ final class _Folding {
 
   String get peer => row.peerAccountId;
 
-  CallLogEntry build(PeopleNames names, DateTime now) {
-    final person = names.of(peer, fallbackName: row.peerDisplayName);
+  CallLogEntry build(PeopleDirectory names, DateTime now) {
+    final person = names.nameOf(peer, fallbackName: row.peerDisplayName);
     final title = person.display;
     final duration = CallsDao.durationSeconds(row);
     return CallLogEntry(
@@ -97,7 +98,7 @@ final class _Folding {
           colorIndex: HelixAvatarModel.colorIndexFor(peer),
         ),
         direction: direction,
-        timeLabel: callTimeLabel(row.startedAt, now),
+        timeLabel: formatWhen(row.startedAt, now),
         video: row.video,
         count: callIds.length,
         isGroup: row.kind == 'group',
@@ -149,43 +150,11 @@ CallLogDirection detailDirectionOf(CallLogRow row) {
       : CallLogDirection.incoming;
 }
 
-const _months = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-/// "Today, 14:05", "Yesterday, 14:05", "Mon, 14:05" inside the week, then
-/// "12 Sep, 14:05" (and the year when it is not this one).
-String callTimeLabel(DateTime at, DateTime now) {
-  final clock =
-      '${at.hour.toString().padLeft(2, '0')}:'
-      '${at.minute.toString().padLeft(2, '0')}';
-  final today = DateTime(now.year, now.month, now.day);
-  final day = DateTime(at.year, at.month, at.day);
-  final days = today.difference(day).inDays;
-  if (days == 0) return 'Today, $clock';
-  if (days == 1) return 'Yesterday, $clock';
-  if (days > 1 && days < 7) return '${_weekdays[at.weekday - 1]}, $clock';
-  final date = '${at.day} ${_months[at.month - 1]}';
-  return at.year == now.year ? '$date, $clock' : '$date ${at.year}, $clock';
-}
-
 /// The Calls tab's rows, live.
 final callLogProvider = StreamProvider<List<CallLogEntry>>((ref) async* {
-  final names = ref.watch(peopleNamesProvider).value ?? PeopleNames.empty;
-  final clock = ref.watch(callClockProvider);
+  final names =
+      ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
+  final clock = ref.watch(clockProvider);
   final port = await ref.watch(callsPortProvider.future);
   yield* port
       .watchLog(limit: 200)
@@ -257,14 +226,15 @@ final callDetailProvider = StreamProvider.family<CallDetail?, String>((
   ref,
   callId,
 ) async* {
-  final names = ref.watch(peopleNamesProvider).value ?? PeopleNames.empty;
-  final clock = ref.watch(callClockProvider);
+  final names =
+      ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
+  final clock = ref.watch(clockProvider);
   final port = await ref.watch(callsPortProvider.future);
   yield* port.watchLog(limit: 200).map((rows) {
     final row = rows.where((r) => r.callId == callId).firstOrNull;
     if (row == null) return null;
     final peer = row.peerAccountId;
-    final person = names.of(peer, fallbackName: row.peerDisplayName);
+    final person = names.nameOf(peer, fallbackName: row.peerDisplayName);
     final now = clock();
     return CallDetail(
       peer: peer,
@@ -280,7 +250,7 @@ final callDetailProvider = StreamProvider.family<CallDetail?, String>((
             CallDetailRow(
               callId: r.callId,
               direction: detailDirectionOf(r),
-              timeLabel: callTimeLabel(r.startedAt, now),
+              timeLabel: formatWhen(r.startedAt, now),
               video: r.video,
               durationLabel: _durationOf(r),
               spokenDuration: _spokenOf(r),

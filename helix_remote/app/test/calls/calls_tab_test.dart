@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
-import 'package:helix_remote/features/calls/application/call_controller.dart';
+import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
 import 'package:helix_remote/features/calls/presentation/calls_tab.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../support/call_support.dart';
 import '../support/harness.dart';
+import '../support/names_support.dart';
 
 /// The Calls tab: the real log, tap to open, call back, delete, search, and its
 /// empty, loading and error states.
 void main() {
   final now = DateTime(2026, 10, 3, 15, 30);
-  const names = PeopleNames({
+  final names = directoryOf(const {
     'peer-1': HelixPersonNames(
       phoneBookName: 'Ada Lovelace',
       number: '+8801711000001',
@@ -296,6 +296,6 @@ void main() {
   });
 
   test('the clock the screens read is overridable', () {
-    expect(callClockProvider, isNotNull);
+    expect(clockProvider, isNotNull);
   });
 }

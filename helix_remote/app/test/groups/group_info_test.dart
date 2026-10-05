@@ -358,7 +358,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('No connection'), findsOneWidget);
+      expect(find.textContaining('offline'), findsOneWidget);
       expect(find.text('Leave group'), findsOneWidget);
     });
 

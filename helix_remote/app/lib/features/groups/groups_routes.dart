@@ -7,26 +7,25 @@ import 'package:helix_remote/features/groups/presentation/group_invite_screen.da
 import 'package:helix_remote/features/groups/presentation/group_settings_screen.dart';
 import 'package:helix_remote/features/groups/presentation/join_group_screen.dart';
 import 'package:helix_remote/features/groups/presentation/join_requests_screen.dart';
+import 'package:helix_remote/shared/navigation/group_paths.dart';
 
 /// The groups feature's routes: the management screens. (The group
-/// *conversation* is the chats feature's.)
+/// *conversation* is the conversation feature's.) The paths are shared
+/// (`GroupPaths`) so other features can link here without importing this one.
 abstract final class GroupRoutes {
-  static const _base = '/home/groups';
-
   /// New group: members, name, picture.
-  static const create = '$_base/new';
+  static const create = GroupPaths.create;
 
   /// Join with a link. Opened with the link as the route's `extra` (a string)
   /// from a shared `HLX-GRP-…` link, or without one to paste a link.
-  static const join = '$_base/join';
+  static const join = GroupPaths.join;
 
-  static String info(String groupId) =>
-      '$_base/${Uri.encodeComponent(groupId)}';
-  static String settings(String groupId) => '${info(groupId)}/settings';
-  static String invite(String groupId) => '${info(groupId)}/invite';
-  static String requests(String groupId) => '${info(groupId)}/requests';
-  static String banned(String groupId) => '${info(groupId)}/banned';
-  static String addMembers(String groupId) => '${info(groupId)}/add';
+  static String info(String groupId) => GroupPaths.info(groupId);
+  static String settings(String groupId) => GroupPaths.settings(groupId);
+  static String invite(String groupId) => GroupPaths.invite(groupId);
+  static String requests(String groupId) => GroupPaths.requests(groupId);
+  static String banned(String groupId) => GroupPaths.banned(groupId);
+  static String addMembers(String groupId) => GroupPaths.addMembers(groupId);
 }
 
 /// Registered by the router with one line (`...groupsRoutes`). The fixed paths
@@ -43,7 +42,7 @@ final List<RouteBase> groupsRoutes = [
     ),
   ),
   GoRoute(
-    path: '${GroupRoutes._base}/:groupId',
+    path: '${GroupPaths.base}/:groupId',
     builder: (context, state) =>
         GroupInfoScreen(groupId: state.pathParameters['groupId'] ?? ''),
     routes: [

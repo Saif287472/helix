@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/phone_numbers.dart';
@@ -138,7 +139,7 @@ final contactChatProvider = StreamProvider.autoDispose
             (chat) => ContactChatSettings(
               muteLabel: ContactChatSettings.labelFor(
                 chat?.mutedUntil,
-                ref.read(peopleClockProvider)(),
+                ref.read(clockProvider)(),
               ),
               disappearingSeconds: chat?.disappearingSeconds,
             ),
@@ -312,7 +313,7 @@ final class ContactInfoActions {
       );
 
   Future<void> mute(String accountId, MuteFor? duration) async {
-    final now = _ref.read(peopleClockProvider)();
+    final now = _ref.read(clockProvider)();
     await (await _gateway).setMutedUntil(
       accountId,
       duration == null ? null : now.add(duration.duration),
@@ -330,12 +331,12 @@ final class ContactInfoActions {
   Future<void> openGroup(GroupSummary group) =>
       _ref.read(conversationSeamsProvider).openChat(group.conversationId);
 
-  /// Opens the shared media of the chat with them. False when that screen is
-  /// not available yet.
+  /// Opens the shared media of the chat with them. False when that screen
+  /// could not be opened.
   Future<bool> openSharedMedia(String accountId) =>
       _ref.read(conversationSeamsProvider).openSharedMedia('direct:$accountId');
 
-  /// False when calling is not available yet.
-  Future<bool> startCall(String accountId, {required bool video}) =>
+  /// Null when the call started, else one sentence to show.
+  Future<String?> startCall(String accountId, {required bool video}) =>
       _ref.read(conversationSeamsProvider).startCall(accountId, video: video);
 }

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/platform/qr_encoder.dart';
-import 'package:helix_remote/core/platform/qr_scanner.dart';
+import 'package:helix_remote/shared/widgets/qr_scanner_view.dart';
 import 'package:helix_remote/features/devices/application/devices_gateway.dart';
 import 'package:helix_remote/features/devices/application/devices_models.dart';
 import 'package:helix_remote/features/devices/presentation/approve_device_page.dart';

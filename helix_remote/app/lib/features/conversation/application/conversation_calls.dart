@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/calls/call_launcher.dart';
 
 /// The call buttons of a conversation header, over the calls seam in `core/`
-/// (`CallLauncher`, which the calls feature fills in).
+/// (`CallLauncher`, which resolves to the calls feature's `placeCallProvider`).
 final class ConversationCalls {
   ConversationCalls(this._launcher);
 
@@ -11,7 +11,8 @@ final class ConversationCalls {
   /// Whether a call can be started from here at all.
   bool get isAvailable => _launcher.isAvailable;
 
-  Future<void> start(String peerAccount, {required bool video}) =>
+  /// Null when the call started, else one sentence to show.
+  Future<String?> start(String peerAccount, {required bool video}) =>
       _launcher.start(peerAccount: peerAccount, video: video);
 }
 

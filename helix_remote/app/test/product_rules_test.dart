@@ -133,7 +133,11 @@ void main() {
           'UI text is plain English literals; there is no translation layer',
     );
 
-    final pubspec = File('pubspec.yaml').readAsStringSync();
+    // Normalised first: a Windows checkout has CRLF line ends, and the section
+    // below is found by splitting on a line.
+    final pubspec = File(
+      'pubspec.yaml',
+    ).readAsStringSync().replaceAll('\r\n', '\n');
     expect(pubspec, isNot(contains('flutter_localizations')));
     expect(pubspec, isNot(contains('intl:')));
     // `generate: true` under `flutter:` is what turns on gen-l10n. The

@@ -253,19 +253,19 @@ void main() {
       expect(seams.calls, ['voice:$id', 'video:$id']);
     });
 
-    testWidgets('calls and shared media say so while they are not there', (
+    testWidgets('a refused call and unopenable shared media say so', (
       tester,
     ) async {
       seams
-        ..callsAvailable = false
+        ..callFailure = 'You are already in a call.'
         ..mediaAvailable = false;
       await open(tester);
       await tester.tap(find.text('Voice call'));
       await settle(tester);
-      expect(find.text('Calling is not available yet.'), findsOneWidget);
+      expect(find.text('You are already in a call.'), findsOneWidget);
       await tester.tap(find.text('Media, links and docs'));
       await settle(tester);
-      expect(find.text('Shared media is not available yet.'), findsOneWidget);
+      expect(find.text('Shared media could not be opened.'), findsOneWidget);
       expect(seams.media, ['direct:$id']);
     });
 

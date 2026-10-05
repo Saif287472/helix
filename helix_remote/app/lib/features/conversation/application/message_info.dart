@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -45,7 +45,7 @@ class MessageInfo {
 final messageInfoProvider = FutureProvider.autoDispose
     .family<MessageInfo?, int>((ref, rowid) async {
       final gateway = await ref.watch(chatGatewayProvider.future);
-      final people = await ref.watch(chatPeopleProvider.future);
+      final people = await ref.watch(peopleDirectoryProvider.future);
       final row = await gateway.message(rowid);
       if (row == null) return null;
       final now = ref.read(clockProvider)();
@@ -66,7 +66,7 @@ final messageInfoProvider = FutureProvider.autoDispose
         lines: [
           for (final account in accounts)
             ReceiptLine(
-              name: people.nameOf(account),
+              name: people.displayOf(account),
               avatar: people.avatarOf(account),
               deliveredLabel: label(byAccount[account]?.deliveredAt),
               readLabel: label(
@@ -97,13 +97,13 @@ class ReactionLine {
 final reactionDetailsProvider = FutureProvider.autoDispose
     .family<List<ReactionLine>, int>((ref, rowid) async {
       final gateway = await ref.watch(chatGatewayProvider.future);
-      final people = await ref.watch(chatPeopleProvider.future);
+      final people = await ref.watch(peopleDirectoryProvider.future);
       final self = gateway.selfAccountId;
       return [
         for (final r in await gateway.reactionsOf(rowid))
           ReactionLine(
             emoji: r.emoji,
-            name: r.reactor == self ? 'You' : people.nameOf(r.reactor),
+            name: r.reactor == self ? 'You' : people.displayOf(r.reactor),
             avatar: people.avatarOf(r.reactor),
             mine: r.reactor == self,
           ),

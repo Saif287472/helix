@@ -1,4 +1,4 @@
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -15,7 +15,7 @@ class MapperContext {
 
   final bool isGroup;
   final String? selfId;
-  final ChatPeople people;
+  final PeopleDirectory people;
 
   /// The injected clock: a label such as "Today" depends on it.
   final DateTime now;
@@ -47,7 +47,7 @@ HelixMessage mapMessage(
     content: contentOf(row),
     timeLabel: formatClock(row.sentAt),
     authorId: row.sender,
-    authorName: showAuthor ? ctx.people.nameOf(row.sender) : null,
+    authorName: showAuthor ? ctx.people.displayOf(row.sender) : null,
     authorColorIndex: ctx.people.colorIndexOf(row.sender),
     sentAtMs: row.sentAt.millisecondsSinceEpoch,
     status: deliveryStatusOf(row) ?? HelixDeliveryStatus.sent,
@@ -194,7 +194,7 @@ HelixReplyQuote quoteOf(
 ) {
   final author = authorAccount == ctx.selfId
       ? 'You'
-      : ctx.people.nameOf(authorAccount);
+      : ctx.people.displayOf(authorAccount);
   final color = ctx.people.colorIndexOf(authorAccount);
   if (quoted == null || quoted.deletedAt != null) {
     return HelixReplyQuote(

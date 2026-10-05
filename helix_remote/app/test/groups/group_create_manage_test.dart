@@ -219,7 +219,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('No connection'), findsOneWidget);
+      expect(find.textContaining('offline'), findsOneWidget);
       expect(find.text('Club'), findsOneWidget);
     });
 

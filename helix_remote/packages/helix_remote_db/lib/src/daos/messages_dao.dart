@@ -24,6 +24,16 @@ final class MessagePage {
   String? get newestSortKey => messages.isEmpty ? null : messages.last.sortKey;
 }
 
+/// An attachment of a conversation, with when its message was sent: one item
+/// of the shared-media view.
+@immutable
+final class SharedAttachment {
+  const SharedAttachment(this.attachment, this.sentAt);
+
+  final AttachmentRow attachment;
+  final DateTime sentAt;
+}
+
 /// Messages and everything attached to them. Every write that can change
 /// what the chat list shows updates the conversation summary in the same
 /// transaction.
@@ -350,6 +360,57 @@ class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
   )..where((r) => r.messageRowid.equals(rowid))).get();
 
   // ------------------------------------------------------------ media
+
+  /// The attachments of one conversation, newest message first (an album in
+  /// its own order), up to [limit]: the shared media and documents. Voice
+  /// notes are not shared media and are left out. Emits on every change.
+  Stream<List<SharedAttachment>> watchSharedAttachments(
+    String conversationId, {
+    int limit = 500,
+  }) {
+    final query =
+        select(attachments).join([
+            innerJoin(
+              messages,
+              messages.localRowid.equalsExp(attachments.messageRowid),
+            ),
+          ])
+          ..where(
+            messages.conversationId.equals(conversationId) &
+                attachments.kind.equals('voice_note').not(),
+          )
+          ..orderBy([
+            OrderingTerm.desc(messages.sortKey),
+            OrderingTerm.asc(attachments.position),
+          ])
+          ..limit(limit);
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows)
+          SharedAttachment(
+            row.readTable(attachments),
+            row.readTable(messages).sentAt,
+          ),
+      ],
+    );
+  }
+
+  /// The messages of one conversation whose text holds a web link, newest
+  /// first, up to [limit]; deleted messages are left out.
+  Stream<List<MessageRow>> watchMessagesWithLinks(
+    String conversationId, {
+    int limit = 200,
+  }) =>
+      (select(messages)
+            ..where(
+              (m) =>
+                  m.conversationId.equals(conversationId) &
+                  m.deletedAt.isNull() &
+                  (m.body.like('%http://%') | m.body.like('%https://%')),
+            )
+            ..orderBy([(m) => OrderingTerm.desc(m.sortKey)])
+            ..limit(limit))
+          .watch();
 
   Future<List<AttachmentRow>> attachmentsFor(Iterable<int> rowids) =>
       _attachmentsQuery(rowids).get();

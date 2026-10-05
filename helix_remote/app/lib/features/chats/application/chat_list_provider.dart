@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/chats/application/chat_list_mapper.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -17,7 +17,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 /// than "Helix user ..." placeholders that then change.
 final chatListProvider = StreamProvider<List<HelixChatListItem>>((ref) async* {
   final gateway = await ref.watch(chatGatewayProvider.future);
-  final people = await ref.watch(chatPeopleProvider.future);
+  final people = await ref.watch(peopleDirectoryProvider.future);
   final now = ref.watch(clockProvider);
   final self = gateway.selfAccountId;
   yield* gateway.watchChats().map(
@@ -33,7 +33,7 @@ final archivedChatListProvider = StreamProvider<List<HelixChatListItem>>((
   ref,
 ) async* {
   final gateway = await ref.watch(chatGatewayProvider.future);
-  final people = await ref.watch(chatPeopleProvider.future);
+  final people = await ref.watch(peopleDirectoryProvider.future);
   final now = ref.watch(clockProvider);
   final self = gateway.selfAccountId;
   yield* gateway
@@ -51,7 +51,7 @@ final archivedChatListProvider = StreamProvider<List<HelixChatListItem>>((
 /// visible row selects its own entry.
 final chatTypingProvider = StreamProvider<Map<String, String>>((ref) async* {
   final gateway = await ref.watch(chatGatewayProvider.future);
-  final people = await ref.watch(chatPeopleProvider.future);
+  final people = await ref.watch(peopleDirectoryProvider.future);
   yield* gateway.watchAllTyping().map(
     (typing) => {
       for (final entry in typing.entries)

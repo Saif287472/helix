@@ -3,18 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/conversation/application/conversation_calls.dart';
 import 'package:helix_remote/features/conversation/application/conversation_header.dart';
-import 'package:helix_remote/shared/navigation/chat_locations.dart';
+import 'package:helix_remote/features/conversation/application/conversation_links.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// What the app bar's menu can ask for.
-enum ConversationMenuAction { search, settings }
+enum ConversationMenuAction { search, info, media, settings }
 
 /// The conversation's app bar: who it is with (name, avatar, presence or who
 /// is typing), the call buttons and a menu.
 ///
-/// Tapping the title opens the conversation settings. The call buttons go
-/// through the calls seam (`conversationCallsProvider`); a group has none
-/// (group calls are not part of this release).
+/// Tapping the title opens the contact info (a direct chat) or the group info
+/// (a group); the menu also reaches the shared media and the chat's settings.
+/// The call buttons go through the calls seam (`conversationCallsProvider`); a
+/// group has none (group calls are not part of this release).
 class ConversationAppBar extends ConsumerWidget implements PreferredSizeWidget {
   const ConversationAppBar({
     super.key,
@@ -35,14 +36,19 @@ class ConversationAppBar extends ConsumerWidget implements PreferredSizeWidget {
     final scheme = Theme.of(context).colorScheme;
     final peer = header?.peerAccount;
 
-    void call({required bool video}) {
+    Future<void> call({required bool video}) async {
       if (peer == null) return;
       if (!calls.isAvailable) {
-        showHelixSnackBar(context, 'Calls are not available yet.');
+        showHelixSnackBar(context, 'Calls are not available on this device.');
         return;
       }
-      calls.start(peer, video: video);
+      final failure = await calls.start(peer, video: video);
+      if (failure != null && context.mounted) {
+        showHelixSnackBar(context, failure);
+      }
     }
+
+    final info = infoLocationOf(conversationId);
 
     return AppBar(
       titleSpacing: 0,
@@ -51,9 +57,10 @@ class ConversationAppBar extends ConsumerWidget implements PreferredSizeWidget {
           : Semantics(
               button: true,
               label:
-                  '${header.title}, ${header.subtitle ?? ''}. Open chat settings',
+                  '${header.title}, ${header.subtitle ?? ''}. '
+                  '${header.isGroup ? 'Open group info' : 'Open contact info'}',
               child: InkWell(
-                onTap: () => context.push(chatSettingsLocation(conversationId)),
+                onTap: info == null ? null : () => context.push(info),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
                     minHeight: HelixChatMetrics.minTarget,
@@ -135,12 +142,23 @@ class ConversationAppBar extends ConsumerWidget implements PreferredSizeWidget {
         PopupMenuButton<ConversationMenuAction>(
           tooltip: 'More options',
           onSelected: onMenu,
-          itemBuilder: (context) => const [
-            PopupMenuItem(
+          itemBuilder: (context) => [
+            const PopupMenuItem(
               value: ConversationMenuAction.search,
               child: Text('Search'),
             ),
-            PopupMenuItem(
+            if (info != null)
+              PopupMenuItem(
+                value: ConversationMenuAction.info,
+                child: Text(
+                  header?.isGroup ?? false ? 'Group info' : 'Contact info',
+                ),
+              ),
+            const PopupMenuItem(
+              value: ConversationMenuAction.media,
+              child: Text('Media, links and docs'),
+            ),
+            const PopupMenuItem(
               value: ConversationMenuAction.settings,
               child: Text('Chat settings'),
             ),

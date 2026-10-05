@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/groups_port.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -140,12 +140,12 @@ List<MemberAction> _actionsFor(GroupMemberRole viewer, GroupMemberInfo target) {
 
 /// Builds the screen's view of [snapshot]: members named by the
 /// people-naming order, owner first, then admins, then everyone else by name.
-GroupInfoView buildGroupInfo(GroupSnapshot snapshot, PeopleNames names) {
+GroupInfoView buildGroupInfo(GroupSnapshot snapshot, PeopleDirectory names) {
   final members = [
     for (final m in snapshot.members)
       GroupMemberView(
         account: m.account,
-        names: names.of(m.account, fallbackName: m.nameHint),
+        names: names.nameOf(m.account, fallbackName: m.nameHint).tileNames,
         role: m.role,
         isSelf: m.isSelf,
         actions: _actionsFor(snapshot.selfRole, m),
@@ -189,7 +189,8 @@ final groupInfoProvider = Provider.family<AsyncValue<GroupInfoView?>, String>((
   groupId,
 ) {
   final snapshot = ref.watch(groupSnapshotProvider(groupId));
-  final names = ref.watch(peopleNamesProvider).value ?? PeopleNames.empty;
+  final names =
+      ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
   return snapshot.whenData(
     (value) => value == null ? null : buildGroupInfo(value, names),
   );

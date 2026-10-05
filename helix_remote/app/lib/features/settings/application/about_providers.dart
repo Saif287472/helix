@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
+import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/app_info.dart';
 import 'package:helix_remote/core/platform/storage_usage.dart';
 import 'package:helix_remote/features/settings/application/settings_gateway.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
-import 'package:helix_remote/shared/format.dart';
 
 /// This build's name and version.
 final aboutAppProvider = Provider<({String name, String version})>((ref) {

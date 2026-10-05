@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -146,7 +146,8 @@ final peerPresenceProvider = StreamProvider.autoDispose
 final conversationHeaderProvider = Provider.autoDispose
     .family<ConversationHeader?, String>((ref, id) {
       final chat = ref.watch(conversationRowProvider(id)).value;
-      final people = ref.watch(chatPeopleProvider).value ?? ChatPeople.empty;
+      final people =
+          ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
       final typing =
           ref.watch(conversationTypingProvider(id)).value ?? const {};
       final now = ref.watch(clockProvider)();

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
 import 'package:helix_remote/features/calls/application/call_controller.dart';
 import 'package:helix_remote/features/calls/application/call_effects.dart';
 import 'package:helix_remote/features/calls/presentation/call_detail_screen.dart';
@@ -12,6 +11,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../support/call_support.dart';
 import '../support/harness.dart';
+import '../support/names_support.dart';
 
 /// The call-detail page, and the notification buttons: Answer or Decline
 /// pressed before the app knew of the call is applied when it rings.
@@ -135,7 +135,7 @@ void main() {
   });
 
   group('call detail', () {
-    const names = PeopleNames({
+    final names = directoryOf(const {
       'peer-1': HelixPersonNames(
         phoneBookName: 'Ada Lovelace',
         number: '+8801711000001',

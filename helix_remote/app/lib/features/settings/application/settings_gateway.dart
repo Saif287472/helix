@@ -3,10 +3,10 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
-import 'package:helix_remote_engine/helix_remote_engine.dart'
-    show PersonNaming, maskPhone;
+import 'package:helix_remote_engine/helix_remote_engine.dart' show maskPhone;
 import 'package:helix_remote_protocol/helix_remote_protocol.dart' as proto;
 
 /// The account-level calls the settings pages make: who this account is,
@@ -174,7 +174,7 @@ final class EngineSettingsGateway implements SettingsGateway {
       (people) => [
         for (final p in people)
           if (p.blocked)
-            BlockedPerson(id: p.accountId, name: PersonNaming.displayName(p)),
+            BlockedPerson(id: p.accountId, name: PersonName.fromRow(p).display),
       ],
     );
   }

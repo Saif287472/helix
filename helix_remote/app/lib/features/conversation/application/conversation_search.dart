@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
 import 'package:helix_remote/core/chat/chat_naming.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/search_snippet.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
@@ -45,7 +45,7 @@ final inChatSearchResultsProvider = FutureProvider.autoDispose
       await Future<void>.delayed(const Duration(milliseconds: 250));
       if (superseded) return const [];
       final gateway = await ref.read(chatGatewayProvider.future);
-      final people = await ref.read(chatPeopleProvider.future);
+      final people = await ref.read(peopleDirectoryProvider.future);
       final now = ref.read(clockProvider)();
       final isGroup = peerOfConversation(conversationId) == null;
       final rows = await gateway.search(query, conversationId: conversationId);
@@ -55,7 +55,7 @@ final inChatSearchResultsProvider = FutureProvider.autoDispose
             messageId: row.messageId,
             result: HelixMessageSearchResult(
               id: row.localRowid.toString(),
-              chatTitle: row.outgoing ? 'You' : people.nameOf(row.sender),
+              chatTitle: row.outgoing ? 'You' : people.displayOf(row.sender),
               avatar: row.outgoing
                   ? const HelixAvatarModel(name: 'You')
                   : people.avatarOf(row.sender),

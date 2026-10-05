@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
 import 'package:helix_remote/features/calls/application/call_controller.dart';
 import 'package:helix_remote/features/calls/application/call_effects.dart';
@@ -12,6 +12,7 @@ import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../support/call_support.dart';
+import '../support/names_support.dart';
 
 /// The call screen's state machine, driven by the engine's REAL call service
 /// over its in-memory network: every transition the screen draws comes from a
@@ -29,7 +30,7 @@ void main() {
   late CallMediaHub hub;
   late ProviderContainer container;
 
-  const names = PeopleNames({
+  final names = directoryOf(const {
     'account-bob': HelixPersonNames(
       phoneBookName: 'Bob Builder',
       number: '+8801711000002',
@@ -63,8 +64,8 @@ void main() {
     container.listen(callScreenStateProvider, (_, _) {});
     container.listen(callElapsedProvider, (_, _) {});
     container.read(callEffectsProvider);
-    container.listen(peopleNamesProvider, (_, _) {});
-    await container.read(peopleNamesProvider.future);
+    container.listen(peopleDirectoryProvider, (_, _) {});
+    await container.read(peopleDirectoryProvider.future);
   }
 
   setUp(setUpDevices);

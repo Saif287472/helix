@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_errors.dart';
 import 'package:helix_remote/features/groups/application/group_models.dart';
 import 'package:helix_remote/features/groups/application/group_picture.dart';
@@ -33,8 +33,8 @@ final class GroupActions {
 
   Future<GroupsPort> get _port => _ref.read(groupsPortProvider.future);
 
-  PeopleNames get _names =>
-      _ref.read(peopleNamesProvider).value ?? PeopleNames.empty;
+  PeopleDirectory get _names =>
+      _ref.read(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
 
   Future<GroupResult> _run(
     Future<String?> Function(GroupsPort port) action, {
@@ -100,7 +100,7 @@ final class GroupActions {
               ? 'Added 1 person.'
               : 'Added ${outcome.added.length} people.',
         for (final entry in outcome.rejected.entries)
-          addRejectionText(entry.value, _names.displayName(entry.key)),
+          addRejectionText(entry.value, _names.displayOf(entry.key)),
       ];
       final message = lines.isEmpty ? null : lines.join('\n');
       return outcome.added.isEmpty && outcome.rejected.isNotEmpty
@@ -116,18 +116,18 @@ final class GroupActions {
   Future<GroupResult> removeMember(String groupId, String account) =>
       _run((port) async {
         await port.removeMember(groupId, account);
-        return '${_names.displayName(account)} was removed.';
+        return '${_names.displayOf(account)} was removed.';
       });
 
   Future<GroupResult> ban(String groupId, String account) => _run((port) async {
     await port.ban(groupId, account);
-    return '${_names.displayName(account)} was removed and banned.';
+    return '${_names.displayOf(account)} was removed and banned.';
   });
 
   Future<GroupResult> unban(String groupId, String account) =>
       _run((port) async {
         await port.unban(groupId, account);
-        return '${_names.displayName(account)} can join again.';
+        return '${_names.displayOf(account)} can join again.';
       });
 
   Future<GroupResult> setRole(
@@ -136,7 +136,7 @@ final class GroupActions {
     GroupMemberRole role,
   ) => _run((port) async {
     await port.setRole(groupId, account, role);
-    final name = _names.displayName(account);
+    final name = _names.displayOf(account);
     return switch (role) {
       GroupMemberRole.owner => '$name is now the owner.',
       GroupMemberRole.admin => '$name is now an admin.',

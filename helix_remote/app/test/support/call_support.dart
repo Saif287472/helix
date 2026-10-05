@@ -9,9 +9,9 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
-import 'package:helix_remote/features/calls/application/call_controller.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/calls/application/call_effects.dart';
 import 'package:helix_remote/features/calls/application/calls_port.dart';
 import 'package:helix_remote/features/calls/application/media/call_media_hub.dart';
@@ -349,7 +349,8 @@ List<Override> callOverrides({
   FakeRinger? ringer,
   FakeAudioPlatform? audio,
   CallMediaHub? hub,
-  PeopleNames names = PeopleNames.empty,
+  PeopleDirectory names = PeopleDirectory.empty,
+  bool withNames = true,
   Duration linger = const Duration(milliseconds: 50),
   DateTime Function()? clock,
   Stream<CallNotificationResponse>? responses,
@@ -362,13 +363,14 @@ List<Override> callOverrides({
   callRingerProvider.overrideWithValue(ringer ?? FakeRinger()),
   callAudioPlatformProvider.overrideWithValue(audio ?? FakeAudioPlatform()),
   callMediaHubProvider.overrideWithValue(hub ?? CallMediaHub()),
-  peopleNamesProvider.overrideWith((ref) => Stream.value(names)),
+  if (withNames)
+    peopleDirectoryProvider.overrideWith((ref) => Stream.value(names)),
   callEndedLingerProvider.overrideWithValue(linger),
   callNotificationResponsesProvider.overrideWithValue(
     responses ?? const Stream.empty(),
   ),
   callLaunchResponseProvider.overrideWithValue(Future.value(null)),
-  ?(clock == null ? null : callClockProvider.overrideWithValue(clock)),
+  ?(clock == null ? null : clockProvider.overrideWithValue(clock)),
 ];
 
 /// A [CallsPort] the test drives by hand: it records what the UI asked for and

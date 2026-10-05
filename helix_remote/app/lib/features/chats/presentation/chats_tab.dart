@@ -7,6 +7,7 @@ import 'package:helix_remote/features/chats/application/chat_selection.dart';
 import 'package:helix_remote/features/chats/presentation/chat_list_view.dart';
 import 'package:helix_remote/features/chats/presentation/chat_search_view.dart';
 import 'package:helix_remote/shared/navigation/chat_locations.dart';
+import 'package:helix_remote/shared/navigation/group_paths.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// The Chats tab: the chat list, its selection mode, the archived row and the
@@ -59,6 +60,25 @@ class _ChatsTabState extends ConsumerState<ChatsTab> {
             searchHint: 'Search chats, messages and people',
             onQueryChanged: (value) =>
                 ref.read(chatSearchQueryProvider.notifier).set(value),
+            actions: [
+              PopupMenuButton<_ChatsMenu>(
+                tooltip: 'More options',
+                onSelected: (choice) => context.push(switch (choice) {
+                  _ChatsMenu.newGroup => GroupPaths.create,
+                  _ChatsMenu.joinGroup => GroupPaths.join,
+                }),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _ChatsMenu.newGroup,
+                    child: Text('New group'),
+                  ),
+                  PopupMenuItem(
+                    value: _ChatsMenu.joinGroup,
+                    child: Text('Join a group with a link'),
+                  ),
+                ],
+              ),
+            ],
           );
 
     return PopScope(
@@ -92,6 +112,10 @@ class _ChatsTabState extends ConsumerState<ChatsTab> {
     );
   }
 }
+
+/// What the Chats app bar's menu opens: the group screens, which belong to the
+/// groups feature (only their shared paths are known here).
+enum _ChatsMenu { newGroup, joinGroup }
 
 class _ChatsBody extends ConsumerWidget {
   const _ChatsBody({required this.items});

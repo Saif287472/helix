@@ -49,7 +49,20 @@ final class PersonName {
   /// A person this device knows nothing about yet (a stranger's message that
   /// arrived before their row, a deleted account): the id's short form, or
   /// the server for a federated `uuid@domain`.
-  factory PersonName.unknown(String accountId) {
+  ///
+  /// [hint] is a name something else gave (a group roster, a call log row):
+  /// it stands in as the person's `~Helix name`, the last rung of the order.
+  factory PersonName.unknown(String accountId, {String? hint}) {
+    final given = hint?.trim();
+    if (given != null && given.isNotEmpty) {
+      final names = HelixPersonNames(helixName: given);
+      return PersonName(
+        accountId: accountId,
+        names: names,
+        display: names.display,
+        helixName: given,
+      );
+    }
     final at = accountId.indexOf('@');
     final id = at < 0 ? accountId : accountId.substring(0, at);
     final domain = at < 0 ? null : accountId.substring(at + 1);
@@ -143,11 +156,33 @@ final class PersonName {
     colorIndex: HelixAvatarModel.colorIndexFor(accountId),
   );
 
+  /// The first word of [display], for "Sam: see you" prefixes in a group.
+  String get firstName {
+    final space = display.indexOf(' ');
+    return space <= 0 ? display : display.substring(0, space);
+  }
+
+  /// The line under the name in a header or a list: the number when the name
+  /// is not the number, else the `~Helix name`.
+  String? get secondary => names.secondary;
+
+  /// [names] for a tile that draws `names.display` itself. Someone who has
+  /// only a profile name is shown by it (as [display] does) instead of as
+  /// "Helix user", so a tile and a chat row never disagree.
+  HelixPersonNames get tileNames =>
+      source == HelixNameSource.unknown && profileName != null
+      ? HelixPersonNames(nickname: profileName)
+      : names;
+
+  /// A stable avatar colour per person, so a sender keeps one colour in
+  /// every chat.
+  int get colorIndex => HelixAvatarModel.colorIndexFor(accountId);
+
   /// This person as a people-list row.
   HelixPersonItem toItem({bool online = false, String? about}) =>
       HelixPersonItem(
         id: accountId,
-        names: names,
+        names: tileNames,
         image: image,
         about: about,
         online: online,
@@ -219,9 +254,39 @@ final class PeopleDirectory {
       ),
   });
 
-  /// The name of [accountId]; [PersonName.unknown] for a stranger.
-  PersonName nameOf(String accountId) =>
-      byId[accountId] ?? PersonName.unknown(accountId);
+  /// The name of [accountId]; [PersonName.unknown] for a stranger, with
+  /// [fallbackName] (a name a roster or a call row gave) as their `~Helix
+  /// name` when there is one.
+  PersonName nameOf(String accountId, {String? fallbackName}) =>
+      byId[accountId] ?? PersonName.unknown(accountId, hint: fallbackName);
+
+  /// [PersonName.display] of [accountId]: the one string a row, a sentence or
+  /// a notification shows.
+  String displayOf(String accountId, {String? fallbackName}) =>
+      nameOf(accountId, fallbackName: fallbackName).display;
+
+  /// [PersonName.firstName] of [accountId].
+  String firstNameOf(String accountId) => nameOf(accountId).firstName;
+
+  /// [PersonName.secondary] of [accountId]; null for a stranger.
+  String? secondaryOf(String accountId) => byId[accountId]?.secondary;
+
+  /// The avatar of [accountId]: their picture when this device has one, else
+  /// their initials.
+  HelixAvatarModel avatarOf(String accountId) => nameOf(accountId).avatar;
+
+  /// Their picture, when this device has one.
+  ImageProvider? imageOf(String accountId) => byId[accountId]?.image;
+
+  int colorIndexOf(String accountId) =>
+      HelixAvatarModel.colorIndexFor(accountId);
+
+  bool isBlocked(String accountId) => byId[accountId]?.blocked ?? false;
+
+  bool isVerified(String accountId) => byId[accountId]?.verified ?? false;
+
+  /// Every account on this device's people table.
+  Iterable<String> get accounts => byId.keys;
 
   /// The name of the other person in a direct conversation id
   /// (`direct:<account>`), or null for a group or anything else.

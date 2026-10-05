@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/engine/clock.dart';
+import 'package:helix_remote/core/format/labels.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/groups/application/group_actions.dart';
 import 'package:helix_remote/features/groups/application/group_errors.dart';
 import 'package:helix_remote/features/groups/application/group_info.dart';
@@ -377,50 +379,21 @@ final class PersonEntryView {
   );
 }
 
-/// "Today, 14:05", "Yesterday, 14:05", "12 Sep, 14:05".
-String groupTimeLabel(DateTime at, DateTime now) {
-  final clock =
-      '${at.hour.toString().padLeft(2, '0')}:'
-      '${at.minute.toString().padLeft(2, '0')}';
-  final today = DateTime(now.year, now.month, now.day);
-  final days = today.difference(DateTime(at.year, at.month, at.day)).inDays;
-  if (days == 0) return 'Today, $clock';
-  if (days == 1) return 'Yesterday, $clock';
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  final date = '${at.day} ${months[at.month - 1]}';
-  return at.year == now.year ? '$date, $clock' : '$date ${at.year}, $clock';
-}
-
-/// The wall clock the group screens read. Overridden in tests.
-final groupClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
-
 /// [joinRequestsProvider], named and dated.
 final joinRequestViewsProvider = Provider.autoDispose
     .family<AsyncValue<List<PersonEntryView>>, String>((ref, groupId) {
       final requests = ref.watch(joinRequestsProvider(groupId));
-      final names = ref.watch(peopleNamesProvider).value ?? PeopleNames.empty;
-      final now = ref.watch(groupClockProvider)();
+      final names =
+          ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
+      final now = ref.watch(clockProvider)();
       return requests.whenData(
         (list) => [
           for (final r in list)
             PersonEntryView(
               id: r.requestId,
               account: r.account,
-              names: names.of(r.account),
-              whenLabel: groupTimeLabel(r.createdAt.toLocal(), now),
+              names: names.nameOf(r.account).tileNames,
+              whenLabel: formatWhen(r.createdAt, now),
             ),
         ],
       );
@@ -430,16 +403,17 @@ final joinRequestViewsProvider = Provider.autoDispose
 final bannedViewsProvider = Provider.autoDispose
     .family<AsyncValue<List<PersonEntryView>>, String>((ref, groupId) {
       final bans = ref.watch(groupBansProvider(groupId));
-      final names = ref.watch(peopleNamesProvider).value ?? PeopleNames.empty;
-      final now = ref.watch(groupClockProvider)();
+      final names =
+          ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
+      final now = ref.watch(clockProvider)();
       return bans.whenData(
         (list) => [
           for (final b in list)
             PersonEntryView(
               id: b.account,
               account: b.account,
-              names: names.of(b.account),
-              whenLabel: groupTimeLabel(b.bannedAt.toLocal(), now),
+              names: names.nameOf(b.account).tileNames,
+              whenLabel: formatWhen(b.bannedAt, now),
             ),
         ],
       );

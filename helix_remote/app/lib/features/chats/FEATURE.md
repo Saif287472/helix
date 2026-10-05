@@ -24,17 +24,16 @@ presentation/
 chats_routes.dart           `/archived-chats`
 ```
 
-Shared helpers it uses live in `core/chat/` (the gateway, `ChatPeople`
-naming, `chat_naming.dart`, `message_semantics.dart`), because the
+Shared helpers it uses live in `core/chat/` (the gateway, `chat_naming.dart`, `message_semantics.dart`), because the
 conversation needs the same ones and features may not import each other.
 
 ## Seams
 
-- **People search** (A2b): `ChatsTab(peopleResults: (context, query) => ...)`.
-  The router passes it in `app_router.dart`; the widget must not scroll.
-- Naming: `chatPeopleProvider` (`core/chat/chat_people.dart`) is the only
-  adapter onto the people table; the people feature's helper replaces it by
-  replacing that provider.
+- **People search** (A2b): `ChatsTab(peopleResults: ...)`. The router passes
+  `PeopleSearchPanel(mode: chats, embedded: true)`; a tap opens (or starts) the
+  conversation.
+- **Menu**: New group and Join a group with a link (`GroupPaths`).
+- Naming: `peopleDirectoryProvider` (`core/people/people_names.dart`) is the one source.
 
 ## Rules kept
 

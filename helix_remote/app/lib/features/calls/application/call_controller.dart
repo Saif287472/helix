@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/engine/clock.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/features/calls/application/call_audio.dart';
 import 'package:helix_remote/features/calls/application/call_copy.dart';
 import 'package:helix_remote/features/calls/application/call_screen_state.dart';
@@ -10,10 +11,6 @@ import 'package:helix_remote/features/calls/application/media/call_media_hub.dar
 import 'package:helix_remote/features/calls/application/media/call_media_providers.dart';
 import 'package:helix_remote/features/calls/application/platform/call_platform.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
-
-/// The wall clock the call screens read (the timer, the log's day labels).
-/// Overridden in tests.
-final callClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
 /// A one-line message for the call on screen: a permission refused, an answer
 /// that failed. Keyed by call id so one call's notice never shows on the next.
@@ -61,14 +58,15 @@ final class CallScreenOpen extends Notifier<bool> {
 final callScreenStateProvider = Provider<CallScreenState?>((ref) {
   final call = ref.watch(currentCallProvider).value;
   if (call == null) return null;
-  final names = ref.watch(peopleNamesProvider).value ?? PeopleNames.empty;
+  final people =
+      ref.watch(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
   final media = ref.watch(callMediaInfoProvider).value;
   final audio = ref.watch(callAudioProvider);
   final notice = ref.watch(callNoticeProvider);
   final busy = ref.watch(callBusyProvider);
   return CallScreenState.from(
     call: call,
-    names: names.of(call.peer),
+    names: people.nameOf(call.peer).tileNames,
     media: media,
     audio: audio,
     notice: notice != null && notice.$1 == call.callId ? notice.$2 : null,
@@ -87,7 +85,7 @@ final callElapsedProvider = StreamProvider<Duration?>((ref) {
   final frozen = ref.watch(
     callScreenStateProvider.select((state) => state?.talkTime),
   );
-  final clock = ref.watch(callClockProvider);
+  final clock = ref.watch(clockProvider);
   final live = ref.watch(
     callScreenStateProvider.select((state) => state?.isLive ?? false),
   );

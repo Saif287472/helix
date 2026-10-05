@@ -46,11 +46,17 @@ class PeopleSearchPanel extends ConsumerWidget {
     super.key,
     required this.query,
     this.mode = PeopleSearchMode.chats,
+    this.embedded = false,
   });
 
   /// What the search box holds.
   final String query;
   final PeopleSearchMode mode;
+
+  /// Drawn inside another scrolling list (the Chats search puts it between the
+  /// chat and message results): the rows are a plain column that does not
+  /// scroll, and nothing is drawn while it loads.
+  final bool embedded;
 
   /// The keyboard's search key: run the network lookup the text asks for (a
   /// number or a `~name`). Nothing else on screen needs it.
@@ -74,10 +80,13 @@ class PeopleSearchPanel extends ConsumerWidget {
     final sync = ref.watch(phoneBookSyncProvider);
 
     return results.when(
-      loading: () => const HelixChatListSkeleton(),
-      error: (_, _) => const HelixErrorState(
-        message: 'People could not be loaded. Open the app again to try.',
-      ),
+      loading: () =>
+          embedded ? const SizedBox.shrink() : const HelixChatListSkeleton(),
+      error: (_, _) => embedded
+          ? const SizedBox.shrink()
+          : const HelixErrorState(
+              message: 'People could not be loaded. Open the app again to try.',
+            ),
       data: (found) {
         final answered =
             lookup.status != LookupStatus.idle && lookup.answers(parsed);
@@ -110,6 +119,11 @@ class PeopleSearchPanel extends ConsumerWidget {
           if (found.isEmpty && !(answered && lookup.person != null))
             _Row.empty(parsed),
         ];
+        if (embedded) {
+          return Column(
+            children: [for (final row in rows) _RowView(row: row, mode: mode)],
+          );
+        }
         return ListView.builder(
           itemCount: rows.length,
           itemBuilder: (context, index) =>
@@ -240,11 +254,9 @@ class PersonResultTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final actions = ref.read(peopleActionsProvider);
     Future<void> call(bool video) async {
-      final started = await actions.startCall(person.accountId, video: video);
-      if (!started && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Calling is not available yet.')),
-        );
+      final failure = await actions.startCall(person.accountId, video: video);
+      if (failure != null && context.mounted) {
+        showHelixSnackBar(context, failure);
       }
     }
 

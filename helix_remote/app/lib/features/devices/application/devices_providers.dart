@@ -7,12 +7,12 @@ import 'package:helix_remote/core/engine/global_server.dart';
 import 'package:helix_remote/core/engine/post_sign_in.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
+import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/qr_encoder.dart';
-import 'package:helix_remote/core/platform/qr_scanner.dart';
+import 'package:helix_remote/shared/widgets/qr_scanner_view.dart';
 import 'package:helix_remote/core/security/device_auth.dart';
 import 'package:helix_remote/features/devices/application/devices_gateway.dart';
 import 'package:helix_remote/features/devices/application/devices_models.dart';
-import 'package:helix_remote/shared/format.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 // -------------------------------------------------------------- the list

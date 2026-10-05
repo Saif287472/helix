@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
 import 'package:helix_remote/features/calls/application/call_audio.dart';
 import 'package:helix_remote/features/calls/application/call_controller.dart';
@@ -228,11 +229,12 @@ final class CallNotificationHandler {
       _missed = port.missedCalls.listen((event) {
         final lifecycle = WidgetsBinding.instance.lifecycleState;
         if (lifecycle == AppLifecycleState.resumed) return;
-        final names = _ref.read(peopleNamesProvider).value ?? PeopleNames.empty;
+        final people =
+            _ref.read(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
         unawaited(
           CallNotifications.showMissed(
             callId: event.notice.messageId,
-            callerName: names.displayName(event.notice.sender),
+            callerName: people.displayOf(event.notice.sender),
           ),
         );
       });
@@ -250,7 +252,7 @@ final class CallNotificationHandler {
   /// A press on a call notification.
   void onResponse(CallNotificationResponse response) {
     if (response.action == CallNotificationAction.open) return;
-    final now = _ref.read(callClockProvider)();
+    final now = _ref.read(clockProvider)();
     _pending = PendingCallDecision(response.callId, response.action, now);
     final state = _ref.read(callScreenStateProvider);
     if (state != null) unawaited(_applyPending(state));
@@ -260,7 +262,7 @@ final class CallNotificationHandler {
     final pending = _pending;
     if (pending == null || pending.callId != state.callId) return;
     if (state.stage != CallStage.incoming) return;
-    final age = _ref.read(callClockProvider)().difference(pending.at);
+    final age = _ref.read(clockProvider)().difference(pending.at);
     _pending = null;
     if (age > CallNotifications.ringFor) return;
     final actions = _ref.read(callActionsProvider);

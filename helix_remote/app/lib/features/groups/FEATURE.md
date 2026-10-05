@@ -27,13 +27,15 @@ groups_routes.dart      /home/groups/new, /join, /:id and /settings /invite /req
 ## Seams
 
 - **Group chat location.** `groupChatLocationProvider` maps `group:<id>` to a router
-  location; the composition root overrides it with the conversation route (for
-  example `(id) => '/home/chat/$id'`). Until then a new group and a finished join
-  open the group's info page. One override line wires it.
+  location; its default is the conversation route (`chatLocation`). A test overrides it
+  with a function returning null to see the fallback (the group's info page).
+- **Entry points.** Chats tab menu: New group, Join a group with a link. A group chat's
+  header and settings open the info page (`GroupPaths.info`, shared paths in
+  `shared/navigation/group_paths.dart`).
 - **Members** are picked from the people this device knows plus a server lookup by
   phone number or `~Helix name` (no contact requests exist). A2b's search widget can
   replace `MemberPicker`'s list; its contract is `selected` / `onToggle` / `exclude`.
-- Names: `core/people/name_lookup.dart` (shared with calls).
+- Names: `core/people/people_names.dart` (the one naming source, shared with calls).
 
 ## Join by link
 

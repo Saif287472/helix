@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/search_snippet.dart';
 import 'package:helix_remote/features/chats/presentation/chats_tab.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -164,7 +164,10 @@ void main() {
     }
   });
 
-  test('ChatPeople names by phone book, nickname, number then ~name', () {
-    expect(ChatPeople.empty.nameOf('abcdef123456'), startsWith('Helix user'));
+  test('a stranger is named "Helix user" and a short id', () {
+    expect(
+      PeopleDirectory.empty.displayOf('abcdef123456'),
+      startsWith('Helix user'),
+    );
   });
 }

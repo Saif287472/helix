@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/platform/contacts_access.dart';
 import 'package:helix_remote/core/platform/device_phone_book.dart';
@@ -146,7 +147,7 @@ void main() {
       overrides: [
         peopleGatewayProvider.overrideWith((ref) async => gateway),
         contactsAccessProvider.overrideWithValue(access),
-        peopleClockProvider.overrideWithValue(() => now),
+        clockProvider.overrideWithValue(() => now),
       ],
     );
 

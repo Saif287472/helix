@@ -118,7 +118,7 @@ HelixMediaItem _gridItem(MediaPart part) {
   final (transfer, progress) = _transferOf(part);
   final isVideo = row.kind == 'video' || row.kind == 'video_note';
   return HelixMediaItem(
-    thumbnail: _thumbnailOf(part),
+    thumbnail: mediaThumbnailOf(part),
     width: row.width ?? 4,
     height: row.height ?? 3,
     isVideo: isVideo,
@@ -162,7 +162,7 @@ HelixMediaItem _gridItem(MediaPart part) {
 
 /// A small picture of the item: its thumbnail, or, for a finished photo, the
 /// photo itself scaled down.
-ImageProvider? _thumbnailOf(MediaPart part) {
+ImageProvider? mediaThumbnailOf(MediaPart part) {
   final thumb = part.view?.thumbnailPath ?? part.row.thumbnailPath;
   if (thumb != null) return _fileImage(thumb);
   final full = part.view?.localPath ?? part.row.localPath;

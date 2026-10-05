@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/conversation/application/audio_playback.dart';
 import 'package:helix_remote/features/conversation/application/composer_notifier.dart';
+import 'package:helix_remote/features/conversation/application/conversation_links.dart';
 import 'package:helix_remote/features/conversation/application/conversation_search.dart';
 import 'package:helix_remote/features/conversation/application/media_content.dart';
 import 'package:helix_remote/features/conversation/application/media_viewer.dart';
@@ -309,6 +310,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
               switch (action) {
                 case ConversationMenuAction.search:
                   setState(() => _searching = true);
+                case ConversationMenuAction.info:
+                  final info = infoLocationOf(_id);
+                  if (info != null) context.push(info);
+                case ConversationMenuAction.media:
+                  context.push(sharedMediaLocation(_id));
                 case ConversationMenuAction.settings:
                   context.push(chatSettingsLocation(_id));
               }

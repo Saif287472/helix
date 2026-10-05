@@ -1,5 +1,5 @@
 import 'package:helix_remote/core/chat/chat_naming.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -11,7 +11,7 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 /// widget must not.
 HelixChatListItem chatListItemOf(
   ConversationListItem row, {
-  required ChatPeople people,
+  required PeopleDirectory people,
   required String? selfId,
   required DateTime now,
 }) {
@@ -35,7 +35,7 @@ HelixChatListItem chatListItemOf(
 
 HelixChatPreview? _previewOf(
   ConversationListItem row, {
-  required ChatPeople people,
+  required PeopleDirectory people,
   required String? selfId,
 }) {
   final draft = row.conversation.draft?.trim();

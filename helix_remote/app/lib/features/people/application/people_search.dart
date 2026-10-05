@@ -313,8 +313,7 @@ final class PeopleActions {
   Future<void> openGroup(GroupSummary group) =>
       _ref.read(conversationSeamsProvider).openChat(group.conversationId);
 
-  /// Starts a call. False when calling is not available yet (the screen says
-  /// so).
-  Future<bool> startCall(String accountId, {required bool video}) =>
+  /// Starts a call. Null when it started, else one sentence to show.
+  Future<String?> startCall(String accountId, {required bool video}) =>
       _ref.read(conversationSeamsProvider).startCall(accountId, video: video);
 }

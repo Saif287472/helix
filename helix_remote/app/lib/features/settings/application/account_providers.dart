@@ -2,10 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/clock.dart';
 import 'package:helix_remote/core/engine/failure_copy.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
+import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/share_adapter.dart';
 import 'package:helix_remote/features/settings/application/settings_gateway.dart';
 import 'package:helix_remote/features/settings/application/settings_models.dart';
-import 'package:helix_remote/shared/format.dart';
 
 /// What the Account page shows about this account.
 final accountOverviewProvider = FutureProvider.autoDispose<AccountOverview>(

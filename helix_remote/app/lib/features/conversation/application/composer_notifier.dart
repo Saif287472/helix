@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/chat/message_semantics.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/attachment_picker.dart';
@@ -194,7 +194,8 @@ final class ComposerNotifier extends Notifier<ComposerState> {
     final gateway = await _gateway;
     final row = await gateway.message(rowid);
     if (row == null || row.deletedAt != null) return null;
-    final people = ref.read(chatPeopleProvider).value ?? ChatPeople.empty;
+    final people =
+        ref.read(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
     final self = gateway.selfAccountId;
     return ComposerTarget(
       rowid: row.localRowid,
@@ -202,7 +203,7 @@ final class ComposerNotifier extends Notifier<ComposerState> {
       author: row.sender,
       authorName: row.sender == self || row.outgoing
           ? 'You'
-          : people.nameOf(row.sender),
+          : people.displayOf(row.sender),
       text: previewTextOf(row),
       kind: previewKindOf(row),
     );
@@ -314,17 +315,18 @@ final class ComposerNotifier extends Notifier<ComposerState> {
       }
       return;
     }
-    final people = ref.read(chatPeopleProvider).value ?? ChatPeople.empty;
+    final people =
+        ref.read(peopleDirectoryProvider).value ?? PeopleDirectory.empty;
     final members = ref.read(groupMembersProvider(conversationId)).value ?? [];
     final self = ref.read(chatGatewayProvider).value?.selfAccountId;
     final query = token.query.toLowerCase();
     final candidates = <HelixMentionCandidate>[
       for (final m in members)
         if (!m.isSelf && m.accountId != self)
-          if (people.nameOf(m.accountId).toLowerCase().contains(query))
+          if (people.displayOf(m.accountId).toLowerCase().contains(query))
             HelixMentionCandidate(
               id: m.accountId,
-              name: people.nameOf(m.accountId),
+              name: people.displayOf(m.accountId),
               detail: people.secondaryOf(m.accountId),
               image: people.imageOf(m.accountId),
             ),

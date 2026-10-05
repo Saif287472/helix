@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/chat/chat_gateway.dart';
-import 'package:helix_remote/core/chat/chat_people.dart';
+import 'package:helix_remote/core/people/people_names.dart';
 import 'package:helix_remote/core/format/labels.dart';
 import 'package:helix_remote/core/platform/chat_platform.dart';
 import 'package:helix_remote/features/conversation/application/media_content.dart';
@@ -98,11 +98,11 @@ final viewerMetaProvider = FutureProvider.autoDispose.family<ViewerMeta?, int>((
   rowid,
 ) async {
   final gateway = await ref.watch(chatGatewayProvider.future);
-  final people = await ref.watch(chatPeopleProvider.future);
+  final people = await ref.watch(peopleDirectoryProvider.future);
   final row = await gateway.message(rowid);
   if (row == null) return null;
   return ViewerMeta(
-    senderName: row.outgoing ? 'You' : people.nameOf(row.sender),
+    senderName: row.outgoing ? 'You' : people.displayOf(row.sender),
     timeLabel: formatDateTime(row.sentAt, ref.read(clockProvider)()),
     caption: row.body ?? '',
     viewOnce: row.viewOnceState != null,

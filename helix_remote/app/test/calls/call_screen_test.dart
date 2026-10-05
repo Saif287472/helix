@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:helix_remote/core/people/name_lookup.dart';
 import 'package:helix_remote/features/calls/application/call_controller.dart';
 import 'package:helix_remote/features/calls/application/call_effects.dart';
 import 'package:helix_remote/features/calls/application/media/call_media_hub.dart';
@@ -13,12 +12,13 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 import '../support/call_support.dart';
 import '../support/harness.dart';
+import '../support/names_support.dart';
 
 /// The full-screen call: incoming, dialing, live (voice and video) and ended,
 /// drawn from the call state, with the controls wired to the engine port.
 void main() {
   var wall = DateTime.utc(2026, 10, 3, 9, 10);
-  const names = PeopleNames({
+  final names = directoryOf(const {
     'peer-1': HelixPersonNames(
       phoneBookName: 'Ada Lovelace',
       number: '+8801711000001',
