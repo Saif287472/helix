@@ -214,6 +214,7 @@ final class PrivacySettings {
     this.lastSeen = Audience.everyone,
     this.online = Audience.everyone,
     this.groupAdd = Audience.everyone,
+    this.phoneNumber,
   });
 
   final bool discoverableByPhone;
@@ -225,12 +226,19 @@ final class PrivacySettings {
   /// link).
   final Audience groupAdd;
 
+  /// Request only, never returned. The account's own number in E.164, needed
+  /// when `discoverable_by_phone` goes from off to on: the server keeps no
+  /// discovery entry for an account that opted out, so it rebuilds it from
+  /// this number after checking it against the verified one.
+  final String? phoneNumber;
+
   JsonMap toJson() => {
     'discoverable_by_phone': discoverableByPhone,
     'discoverable_by_name': discoverableByName,
     'last_seen': lastSeen.wire,
     'online': online.wire,
     'group_add': groupAdd.wire,
+    if (phoneNumber != null) 'phone_number': phoneNumber,
   };
 
   factory PrivacySettings.fromJson(JsonReader json) => PrivacySettings(
@@ -239,6 +247,7 @@ final class PrivacySettings {
     lastSeen: json.enumValue('last_seen', Audience.values),
     online: json.enumValue('online', Audience.values),
     groupAdd: json.enumValue('group_add', Audience.values),
+    phoneNumber: json.optString('phone_number'),
   );
 }
 

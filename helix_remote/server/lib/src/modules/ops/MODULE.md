@@ -57,4 +57,8 @@ capped at 2,000 characters) and a counter. Nothing is stored.
 `assetlinks.json` lists the valid `AB:CD:…` fingerprints in
 `HELIX_ANDROID_CERT_SHA256` for `com.helix.remote`. `/open` is the
 landing page for `https://<host>/open#HLX-(INV|REC|GRP)-…`. The code stays
-in the fragment, which browsers never send, and a strict CSP is set.
+in the fragment, which browsers never send. The page is served only at
+`/open` and `/open/` (the paths the app's link filter claims; nothing below
+them), with a strict CSP that includes `frame-ancestors 'none'` plus
+`X-Frame-Options: DENY`, so the one-tap page cannot be framed. The pipeline
+adds `nosniff`, `no-store` and `no-referrer` to every response.

@@ -132,11 +132,24 @@ abstract interface class IdentityApi {
     Iterable<String> accountIds,
   );
 
-  /// Accounts whose verified number has these discovery hashes.
+  /// Accounts whose verified number has these client discovery hashes
+  /// (`hex(HMAC(salt, E.164))`), keyed by the hash that matched. Accounts
+  /// that turned phone discovery off have no index and never match.
   Future<Map<String, String>> accountsByDiscoveryHash(
     SqlSession s,
     Iterable<String> hashes,
   );
+
+  /// Turns phone discovery on or off for an account. Off deletes its stored
+  /// discovery index. On, if the index is gone, needs [phoneNumber], the
+  /// account's own number, checked against its verified phone hash
+  /// (`invalid_field` on `phone_number` otherwise).
+  Future<void> setPhoneDiscoverable(
+    Tx tx,
+    String accountId, {
+    required bool on,
+    String? phoneNumber,
+  });
 
   Future<String?> accountByHelixName(SqlSession s, String name);
 
@@ -147,6 +160,21 @@ abstract interface class IdentityApi {
 
   /// Removes a push token the provider reported as unknown.
   Future<void> dropPushToken(SqlSession s, String deviceId);
+
+  /// Throws `invalid_credentials` (details `accepted`: which proofs would
+  /// do) unless the caller proves it owns [accountId]: [authKey] for an
+  /// account with a password, [verificationToken] (a fresh phone
+  /// verification for the account's number, spent on success) for one with
+  /// a password or a textable number, or [deviceProof] (a signature by
+  /// [deviceId]'s key) only for an account with neither. Compliance asks
+  /// before deleting an account.
+  Future<void> confirmOwnership(
+    String accountId,
+    String deviceId, {
+    Uint8List? authKey,
+    String? verificationToken,
+    DeviceKeyProof? deviceProof,
+  });
 
   /// Deletes an account (compliance and admin modules call this).
   Future<void> deleteAccount(Tx tx, String accountId);

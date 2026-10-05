@@ -52,6 +52,7 @@ final class _Registration {
     required this.streamBody,
     required this.allowSuspended,
     required this.extraBearer,
+    required this.trailingSlash,
   });
 
   final String module;
@@ -62,6 +63,7 @@ final class _Registration {
   final bool streamBody;
   final bool allowSuspended;
   final ExtraBearer? extraBearer;
+  final bool trailingSlash;
 }
 
 /// Request body bytes buffered at once on this node, across all requests
@@ -105,6 +107,7 @@ final class RouteRegistry {
     bool streamBody = false,
     bool allowSuspended = false,
     ExtraBearer? extraBearer,
+    bool trailingSlash = false,
   }) {
     final key = route.toString();
     if (!_catalog.any((r) => r.toString() == key)) {
@@ -133,6 +136,7 @@ final class RouteRegistry {
       streamBody: streamBody,
       allowSuspended: allowSuspended,
       extraBearer: extraBearer,
+      trailingSlash: trailingSlash,
     );
   }
 
@@ -175,21 +179,22 @@ final class RouteRegistry {
         );
       });
     for (final registration in ordered) {
-      router.add(
-        registration.route.method.name.toUpperCase(),
-        registration.route.path.replaceAllMapped(
-          RegExp(r'\{([a-z_]+)\}'),
-          (m) => '<${m.group(1)}>',
-        ),
-        _wrap(
-          registration,
-          authenticator,
-          rateLimiter,
-          idempotency,
-          budget,
-          clock,
-        ),
+      final path = registration.route.path.replaceAllMapped(
+        RegExp(r'\{([a-z_]+)\}'),
+        (m) => '<${m.group(1)}>',
       );
+      final handler = _wrap(
+        registration,
+        authenticator,
+        rateLimiter,
+        idempotency,
+        budget,
+        clock,
+      );
+      final method = registration.route.method.name.toUpperCase();
+      router.add(method, path, handler);
+      // Exactly `path` and `path/`, never anything below it.
+      if (registration.trailingSlash) router.add(method, '$path/', handler);
     }
     return router.call;
   }

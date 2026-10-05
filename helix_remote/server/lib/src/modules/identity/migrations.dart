@@ -1,7 +1,23 @@
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 
 /// Schema `identity`. Foreign keys only inside this schema (ADR-026).
-const identityMigrations = [Migration(1, 'identity_baseline', _baseline)];
+const identityMigrations = [
+  Migration(1, 'identity_baseline', _baseline),
+  Migration(2, 'discovery_index', _discoveryIndex),
+];
+
+/// Discovery hashes become pepper-keyed indexes (the salted hash clients send
+/// was testable by anyone holding a database dump, because the salt is
+/// public). The old values cannot be converted without the phone numbers, so
+/// they are dropped; pending phone challenges carry the old form and go too.
+/// Accounts regain discovery by turning it on again with their number.
+String _discoveryIndex(String s) =>
+    '''
+ALTER TABLE $s.accounts RENAME COLUMN discovery_hash TO discovery_index;
+ALTER TABLE $s.phone_challenges RENAME COLUMN discovery_hash TO discovery_index;
+UPDATE $s.accounts SET discovery_index = NULL;
+DELETE FROM $s.phone_challenges;
+''';
 
 String _baseline(String s) =>
     '''

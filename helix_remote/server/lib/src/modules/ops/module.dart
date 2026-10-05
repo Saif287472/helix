@@ -95,7 +95,14 @@ CREATE TABLE $s.settings (
       )
       ..add(name, Routes.metrics, _metrics, extraBearer: _metricsBearer)
       ..add(name, Routes.assetLinks, _assetLinks, rateLimit: _probe)
-      ..add(name, Routes.openLink, _openLink, rateLimit: _probe);
+      ..add(
+        name,
+        Routes.openLink,
+        _openLink,
+        rateLimit: _probe,
+        // The Android link filter matches `/open` and `/open/` only.
+        trailingSlash: true,
+      );
   }
 
   @override
@@ -297,9 +304,14 @@ CREATE TABLE $s.settings (
     openPageHtml,
     headers: {
       'content-type': 'text/html; charset=utf-8',
+      // The page carries a one-tap action on a shared code: it must not be
+      // framed (clickjacking). `frame-ancestors` is the modern control and
+      // `x-frame-options` covers old browsers.
       'content-security-policy':
           "default-src 'none'; style-src 'unsafe-inline'; "
-          "script-src 'unsafe-inline'",
+          "script-src 'unsafe-inline'; frame-ancestors 'none'; "
+          "base-uri 'none'; form-action 'none'",
+      'x-frame-options': 'DENY',
     },
   );
 }

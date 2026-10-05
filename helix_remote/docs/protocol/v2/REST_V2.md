@@ -56,7 +56,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `POST /v1/auth/challenges` | `DeviceChallengeRequest` → `DeviceChallengeResponse` | Challenge kept 5 minutes in the ephemeral store under a random `challenge_id` (never the public device id, so nobody else can replace or spend it). |
 | `POST /v1/auth/sessions` | `DeviceSignInRequest` → `Session` | `challenge_id` and `challenge` from the response, for the device it was issued to (single use); DSK signature over `signInSignatureBody(challenge)`. |
 | `POST /v1/auth/sessions/refresh` | `RefreshRequest` → `Session` | Rotation; reuse of a used token revokes all of the device's tokens and closes its socket (4001). |
-| `POST /v1/auth/recovery/lookup` | `RecoveryLookupRequest` → `RecoveryLookupResponse` | Rate-limited per IP. A valid code answers `valid`, `verification_required` and `account_id` (the id the new device's certificate must name; an invalid, used or expired code answers only `valid: false`, so the id is no enumeration oracle). |
+| `POST /v1/auth/recovery/lookup` | `RecoveryLookupRequest` → `RecoveryLookupResponse` | Rate-limited per IP. A valid code answers `valid`, `verification_required` and `account_id` (the id the new device's certificate must name). An invalid, used or expired code answers exactly `{"valid": false}` with no other field, so the id is no enumeration oracle. |
 | `POST /v1/auth/recovery/redeem` | `RecoveryRedeemRequest` → `Session` | New AIK; other devices revoked; history backup deleted; `key_change` to contacts. |
 | `DELETE /v1/auth/sessions/current` | — → 204 | Sign out this device's tokens (device stays registered); its socket closes (4001) on whichever node holds it. Other devices get `account_signal`/`signed_out`. |
 | `GET /v1/account` | — → `AccountInfo` | |
@@ -100,7 +100,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | Route | Body → response | Rules |
 |---|---|---|
 | `GET /v1/people/discovery-salt` | — → `DiscoverySalt` | Authenticated in v2 (v1 was public). |
-| `POST /v1/people/discover` | `DiscoverRequest` → `DiscoverResponse` | ≤ 1,000 per call, 5,000 per day; only accounts with `discoverable_by_phone`. |
+| `POST /v1/people/discover` | `DiscoverRequest` → `DiscoverResponse` | ≤ 1,000 per call, 5,000 per day; only accounts with `discoverable_by_phone`. The wire hash is `hex(HMAC-SHA256(salt, E.164))` under the public salt; the server stores and matches `HMAC(pepper-derived key, that hash)`, never the salted hash itself. |
 | `GET /v1/people/by-name/{name}` | — → `FindByNameResponse` | Exact match only; only `discoverable_by_name`; rate-limited. |
 | `GET /v1/people/{account}/profile` | — → `EncryptedProfile` | Ciphertext only; readable by anyone with the profile key. |
 | `GET /v1/people/{account}/presence` | — → `PresenceResponse` | Filtered by the owner's `online`/`last_seen` audience. |
@@ -109,7 +109,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `PUT /v1/people/blocks/{account}` | — → 204 | Blocked accounts' messages and calls are dropped silently; they cannot add you to groups. |
 | `DELETE /v1/people/blocks/{account}` | — → 204 | |
 | `GET /v1/people/privacy` | — → `PrivacySettings` | |
-| `PUT /v1/people/privacy` | `PrivacySettings` → 204 | |
+| `PUT /v1/people/privacy` | `PrivacySettings` → 204 | Turning `discoverable_by_phone` off deletes the server's discovery entry for the account. Turning it back on needs `phone_number` (the account's own number, E.164; checked against the verified number, `invalid_field` otherwise); other changes while it stays on need none. Never returned by `GET`. |
 | `PUT /v1/people/contacts` | `SetContactsRequest` → 204 | Replace-all; used only for "contacts" audiences. |
 | `POST /v1/people/reports` | `ReportRequest` → `ReportResponse` | No message content. |
 
@@ -143,8 +143,8 @@ member device (and to removed members, so they know).
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `GET /v1/calls/turn` | — → `TurnCredentials` | 1-hour credentials; 10/hour per device. |
-| `POST /v1/calls/{call_id}/signals` | `CallSignalRequest` → `CallSignalResponse` | Online devices get a `call_signal` envelope now; for `offer`, offline devices get a pending call (TTL ≤ 120 s) and a high-priority push. A pending offer is refreshed only by the same caller device; anyone else's offer under that call id is not stored. `end` clears only pending offers the sender is in (as caller or callee). Blocked: dropped silently. |
+| `GET /v1/calls/turn` | — → `TurnCredentials` | 1-hour coturn REST credentials; 10/hour per device. `username` is `<expiry>:<random id>` (new each time, never an account or device id, because it crosses the network unencrypted on `turn:`). `urls` may include `turns:` (TLS, 5349). |
+| `POST /v1/calls/{call_id}/signals` | `CallSignalRequest` → `CallSignalResponse` | Online devices get a `call_signal` envelope now; for `offer`, offline devices get a pending call (TTL ≤ 120 s) and a high-priority push. A pending offer is refreshed only by the same caller device; anyone else's offer under that call id is not stored. `end` clears only pending offers the sender is in (as caller or callee). Blocked: dropped silently. Offers: 30 per 10 minutes per account; every other kind: 240 per minute per sending device. |
 | `PUT /v1/calls/{call_id}/state` | `CallStateRequest` → 204 | Clears pending offers the account is in (as caller or callee); other devices of the same account stop ringing. |
 | `GET /v1/calls/pending` | — → `PendingCallList` | |
 | `POST /v1/calls/metrics` | `CallMetricsRequest` → 204 | 100 per day per account. |
@@ -195,14 +195,14 @@ smaller id survives, the other ends with reason `glare`.
 | `POST /v1/telemetry/crash` | `CrashReport` → 204 | Opt-in, and only while the `crash_reporting_upload` flag is on (`forbidden` otherwise). 10 per hour per device. Logged redacted, never stored. |
 | `GET /v1/ops/metrics` | — → Prometheus text | Admin token, or the server's `HELIX_METRICS_TOKEN` (opens this route only). |
 | `GET /.well-known/assetlinks.json` | — → Android asset links | |
-| `GET /open` | — → HTML landing page for `#HLX-…` links | |
+| `GET /open` | — → HTML landing page for `#HLX-…` links | Also served at `/open/`, and nowhere below it. CSP `frame-ancestors 'none'` and `X-Frame-Options: DENY`. |
 
 ## compliance
 
 | Route | Body → response | Rules |
 |---|---|---|
 | `GET /v1/account/export` | — → `AccountExport` | One section per module; metadata only (encrypted things appear as versions, sizes, counts). 5 per day. Also while suspended. |
-| `DELETE /v1/account` | `DeleteAccountRequest` → 204 | Runs identity's deletion in one transaction: every module's hook purges its rows. Not a ban. Also while suspended. |
+| `DELETE /v1/account` | `DeleteAccountRequest` → 204 | `confirmation: "DELETE"` plus a proof of ownership, because a session token alone must not delete an account: `current_auth_key` (account with a password; shares password sign-in's lockout), or `verification_token` (fresh single-use phone verification of the account's own number; accepted for accounts with a password or a number on a server that texts), or `device_proof` (a `POST /v1/auth/challenges` challenge answered with the calling device's DSK over `deleteAccountSignatureBody`; only for accounts with neither a password nor a textable number). Otherwise `invalid_credentials` with `details.accepted`. Runs identity's deletion in one transaction: every module's hook purges its rows. Not a ban. Also while suspended. 5 per hour per device. |
 
 ## federation
 

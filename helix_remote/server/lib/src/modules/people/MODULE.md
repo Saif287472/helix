@@ -15,11 +15,21 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   accounts also cannot discover you, find your `~name`, see your presence
   or add you to groups.
 - **Discovery:** `POST /v1/people/discover` takes client-computed
-  `hex(HMAC(salt, E.164))` hashes. Matching happens through identity's
-  discovery hashes. Budget: 1,000 per call and 5,000 per account per day
+  `hex(HMAC(salt, E.164))` hashes (the salt is public). Identity maps each
+  to a pepper-keyed index and matches on that, so the database never holds
+  a hash anyone can test numbers against (see identity's MODULE.md).
+  Budget: 1,000 per call and 5,000 per account per day
   (`discovery_budget`; a call over the budget consumes nothing). It
   honours `discoverable_by_phone` and blocks. This remains the accepted
-  T-5 oracle.
+  T-5 oracle: an authenticated client can ask the live server about
+  numbers within the budget.
+- **Discovery opt-out:** turning `discoverable_by_phone` off deletes the
+  account's discovery index (`IdentityApi.setPhoneDiscoverable`, in the same
+  transaction as the privacy row). Turning it back on needs
+  `PrivacySettings.phone_number`, the account's own number, which identity
+  checks against the verified phone hash before rebuilding the index
+  (`invalid_field` on `phone_number` otherwise). Saving other settings while
+  discovery is already on needs no number.
 - **`~Helix name` lookup:** exact, case-insensitive match, honours
   `discoverable_by_name`, 30 per minute per account.
 - **Presence:** online means any device holds a socket (kernel

@@ -77,6 +77,93 @@ void main() {
       expect((await discover(alice, [bobNumber])).matches, isEmpty);
     });
 
+    group('discovery storage', () {
+      String identitySchema() => h.env.platform.schemas.of('identity');
+
+      Future<String?> storedIndex(
+        TestDevice who,
+      ) async => (await h.env.platform.db.queryOne(
+        'SELECT discovery_index FROM ${identitySchema()}.accounts WHERE id = @id:uuid',
+        {'id': who.accountId},
+      ))!.optString('discovery_index');
+
+      test('a database dump holds nothing a phone number can be tested '
+          'against without the pepper', () async {
+        final salt = DiscoverySalt.fromJson(
+          (await h.api.call(Routes.discoverySalt, bearer: alice.bearer)).json,
+        ).salt;
+        final clientHash = discoveryHash(salt, bobNumber);
+        final stored = await storedIndex(bob);
+        expect(stored, isNotNull);
+        expect(stored, isNot(clientHash));
+        // Everything the dump offers (the public salt, the stored values) is
+        // not enough to reproduce the index from a number.
+        final rows = await h.env.platform.db.query(
+          'SELECT discovery_index FROM ${identitySchema()}.accounts '
+          'UNION ALL SELECT discovery_index FROM ${identitySchema()}.phone_challenges',
+        );
+        final everything = rows.map((r) => r.optString('discovery_index'));
+        expect(everything, isNot(contains(clientHash)));
+        // The index is HMAC(K, client hash) with K derived from the pepper:
+        // reproducible with the pepper, not with another one.
+        String index(List<int> pepper) => crypto.Hmac(
+          crypto.sha256,
+          crypto.Hmac(
+            crypto.sha256,
+            pepper,
+          ).convert(utf8.encode('helix.v2.discovery-index')).bytes,
+        ).convert(utf8.encode(clientHash)).toString();
+        expect(
+          index(base64Url.decode(base64Url.normalize(testPepper))),
+          stored,
+        );
+        expect(index(utf8.encode('not-the-pepper')), isNot(stored));
+        // And the live lookup still works with the real one.
+        expect((await discover(alice, [bobNumber])).matches, hasLength(1));
+      });
+
+      test('opting out removes the entry; turning it back on needs your own '
+          'number', () async {
+        await h.api.call(
+          Routes.setPrivacy,
+          bearer: bob.bearer,
+          body: const PrivacySettings(discoverableByPhone: false).toJson(),
+        );
+        expect(await storedIndex(bob), isNull);
+        expect((await discover(alice, [bobNumber])).matches, isEmpty);
+
+        Future<TestResponse> turnOn(String? number) => h.api.call(
+          Routes.setPrivacy,
+          bearer: bob.bearer,
+          body: PrivacySettings(phoneNumber: number).toJson(),
+        );
+        expect((await turnOn(null)).errorCode, 'invalid_field');
+        expect((await turnOn(aliceNumber)).errorCode, 'invalid_field');
+        expect(
+          await storedIndex(bob),
+          isNull,
+          reason: 'a failed request changes nothing',
+        );
+        expect((await discover(alice, [bobNumber])).matches, isEmpty);
+
+        expect((await turnOn(bobNumber)).status, 204);
+        expect(await storedIndex(bob), isNotNull);
+        expect((await discover(alice, [bobNumber])).matches, hasLength(1));
+        // Already on: saving other settings needs no number.
+        expect((await turnOn(null)).status, 204);
+      });
+
+      test('an account that never had discovery on keeps no entry', () async {
+        await h.api.call(
+          Routes.setPrivacy,
+          bearer: alice.bearer,
+          body: const PrivacySettings(discoverableByPhone: false).toJson(),
+        );
+        expect(await storedIndex(alice), isNull);
+        expect((await discover(bob, [aliceNumber])).matches, isEmpty);
+      });
+    });
+
     test('helix name lookup respects discoverability and blocks', () async {
       await h.api.call(
         Routes.setHelixName,

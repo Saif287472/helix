@@ -160,7 +160,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 
 | Name | Req | Default | Dev | Secret | What it does |
 |---|---|---|---|---|---|
-| `HELIX_PHONE_PEPPER` | yes | none | no | **yes** | Key for stored phone hashes: `<generate: 32 random bytes, base64url>`, at least 32 bytes. Keep it out of database backups. Changing it orphans every stored phone hash, so treat it as permanent. Every node needs the same value. |
+| `HELIX_PHONE_PEPPER` | yes | none | no | **yes** | Key for stored phone hashes: `<generate: 32 random bytes, base64url>`, at least 32 bytes. Keep it out of database backups. It also keys the phone discovery index, so a stolen database cannot be used to test numbers without it. Changing it orphans every stored phone hash and discovery index, so treat it as permanent. Every node needs the same value. |
 | `HELIX_SMS_PROVIDER` | no | `none` | no | no | `none` or `bulksmsbd`. Required to be `bulksmsbd` when `HELIX_GLOBAL_MODE=true`. |
 | `HELIX_SMS_API_KEY` | if `bulksmsbd` | none | no | **yes** | BulkSMSBD API key. |
 | `HELIX_SMS_SENDER_ID` | if `bulksmsbd` | none | no | no | BulkSMSBD approved sender id. |
@@ -179,7 +179,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 
 | Name | Req | Default | Dev | Secret | What it does |
 |---|---|---|---|---|---|
-| `HELIX_TURN_URLS` | with the secret | none | no | no | Comma-separated TURN URLs handed to apps, for example `turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp`. Set together with `HELIX_TURN_SECRET` or not at all (one without the other is a startup error). If unset, `GET` TURN credentials answer 503 `unavailable`. |
+| `HELIX_TURN_URLS` | with the secret | none | no | no | Comma-separated TURN URLs handed to apps, each starting with `turn:` or `turns:` (TLS, port 5349; see "coturn and TURN"), for example `turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp`. Set together with `HELIX_TURN_SECRET` or not at all (one without the other is a startup error). If unset, `GET` TURN credentials answer 503 `unavailable`. |
 | `HELIX_TURN_SECRET` | with the URLs | none | no | **yes** | Shared secret; the same value as coturn's `static-auth-secret`. |
 
 ### admin (`modules/admin/module.dart`)
@@ -221,6 +221,24 @@ helix.agiletechbd.com {
 }
 ```
 
+- **HSTS.** Add `Strict-Transport-Security` in Caddy, once HTTPS works for
+  every client you serve (it makes browsers refuse plain HTTP for the whole
+  period, so start with a short `max-age`):
+
+  ```caddy
+  helix.agiletechbd.com {
+      header Strict-Transport-Security "max-age=31536000"
+      reverse_proxy 127.0.0.1:8080
+  }
+  ```
+
+  The server cannot set it itself: it only ever sees plain HTTP from Caddy on
+  loopback, and browsers ignore HSTS sent over HTTP. It does set the other
+  security headers on every response (`X-Content-Type-Options: nosniff`,
+  `Cache-Control: no-store`, `Referrer-Policy: no-referrer`) and, on the
+  `/open` landing page, a CSP with `frame-ancestors 'none'` and
+  `X-Frame-Options: DENY`. Do not override those in Caddy. Served paths:
+  `/open` and `/open/` only.
 - **WebSocket.** `/v1/ws` needs no special Caddy setting: `reverse_proxy`
   forwards upgrades by itself. The server sends a ping every 30 s and the
   client heartbeat is 25 s, so idle connections stay open.
@@ -258,14 +276,31 @@ helix.agiletechbd.com {
 
 - The server never relays media. It mints time-limited credentials
   (`GET /v1/calls/turn`, calls module): `username =
-  <expiry>:<account>`, `credential = base64(HMAC-SHA1(secret, username))`,
-  valid one hour, limited to 10 per device per hour.
+  <expiry>:<random id>` (new on every request, never an account or device
+  id), `credential = base64(HMAC-SHA1(secret, username))`, valid one hour,
+  limited to 10 per device per hour. coturn checks only the expiry and the
+  HMAC, so it needs no account in the name. This matters because on `turn:`
+  (port 3478) the username crosses the network unencrypted: anyone on the
+  path sees it next to the client's address, and it must not identify a
+  person.
 - The server settings are `HELIX_TURN_URLS` and `HELIX_TURN_SECRET`.
   coturn's `static-auth-secret` must be the same value, and `use-auth-secret`
   must be on (`deploy/coturn/turnserver.conf` already does this).
 - Ports are unchanged from v1: TCP 3478, UDP 3478, UDP 49160-49200 on the
   router and in Windows Firewall (`deploy/coturn/README.md`, "Windows home
   PC").
+- **`turns:` (TLS).** On plain `turn:` the credentials, and the fact that an
+  address is calling, are visible to anyone on the path; the media itself is
+  always end-to-end encrypted. To hide the handshake too, give coturn a
+  certificate (`TURN_CERT_FILE` and its key; `turnserver.conf` already has the
+  TLS block and `tls-listening-port=5349`), open TCP 5349 on the router and in
+  Windows Firewall, and list a `turns:` URL after the `turn:` ones in
+  `HELIX_TURN_URLS`, for example
+  `...,turns:helix.agiletechbd.com:5349?transport=tcp`. The certificate name
+  must match the host in the URL. Entries must start with `turn:` or
+  `turns:`, otherwise the server refuses to start. Until the certificate is
+  in place, leave `turns:` out: a URL that cannot connect only slows calls
+  down.
 - **Open item for cutover:** `deploy/coturn/windows/start-turn.ps1` reads
   `HELIX_REMOTE_TURN_SECRET` and `HELIX_REMOTE_TURN_URL` from the environment
   or `backend\.env`. Phase X deletes `backend/`. The script must be changed to

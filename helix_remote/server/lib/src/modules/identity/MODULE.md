@@ -16,9 +16,18 @@ import.
   under the account's AIK *and* its proof verifies under its own DSK
   (`domain/secrets.dart`, CRYPTO_V2.md §2).
 - **Phone numbers:** only `HMAC(HELIX_PHONE_PEPPER, E.164)` (lookup), the
-  discovery hash (HMAC with the discovery salt, for the people module) and
-  the last four digits are stored. The number exists in memory only while
-  a code is texted.
+  discovery index and the last four digits are stored. The number exists in
+  memory only while a code is texted (and while an account turns discovery
+  back on, below).
+- **Discovery index:** clients hash contacts as `hex(HMAC(discovery_salt,
+  E.164))` under the public salt. The server never stores that: it stores
+  and looks up `hex(HMAC(K, client hash))` with `K = HMAC(HELIX_PHONE_PEPPER,
+  "helix.v2.discovery-index")` (`discovery_index`, migration 2). A dump
+  without the pepper cannot be used to test numbers. Accounts that turn
+  discovery off have no index (null); turning it back on needs the account's
+  own number, checked against `phone_hash`
+  (`IdentityApi.setPhoneDiscoverable`). Pending phone challenges hold the
+  same keyed form, never the salted hash.
 - **Bearer secrets** (verification, sign-in, link, poll and refresh tokens,
   invite and recovery codes) are stored only as SHA-256 hashes.
 - **Revoking a device:** sets `tokens_valid_after`, revokes its refresh
@@ -75,6 +84,19 @@ not secret (discovery gives it to anyone who knows the number), and an unknown,
 used or expired code gets the same bare `{"valid": false}`. The redeem itself
 still demands the SMS verification of the account's own number when SMS is
 configured, so the id alone (or the code alone) takes nothing over.
+
+**Ownership proof** (`IdentityApi.confirmOwnership`, used by compliance
+before `DELETE /v1/account`): a session token alone is not enough. An
+account with a password gives `current_auth_key` (shared failure counter and
+lockout), or a fresh phone verification token as for a password change. An
+account with a verified number on a server that texts gives a single-use
+`verification_token` for that number. Any other account (no password, and no
+number or no SMS: personal servers) gives a `device_proof`: the answer to a
+`POST /v1/auth/challenges` challenge, signed by the calling device's DSK
+over `deleteAccountSignatureBody` (its own label, so a sign-in signature
+confirms nothing). The weaker proof is never accepted where a stronger one
+exists. Refusal is `invalid_credentials` with `details.accepted` naming the
+proofs that would do.
 
 ## Hooks (all run inside identity's transaction)
 

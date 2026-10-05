@@ -126,7 +126,12 @@ void main() {
       // TURN credentials from the real server reached the media session.
       final servers = aliceMedia.last.config.iceServers;
       expect(servers.single.urls, ['turn:turn.helix.test:3478']);
-      expect(servers.single.username, contains(alice.account));
+      expect(servers.single.username, matches(RegExp(r'^\d+:[A-Za-z0-9_-]+$')));
+      expect(
+        servers.single.username,
+        isNot(contains(alice.account)),
+        reason: 'the TURN name crosses the network in the clear',
+      );
       expect(servers.single.credential, isNotEmpty);
 
       await bob2.engine.calls.accept();

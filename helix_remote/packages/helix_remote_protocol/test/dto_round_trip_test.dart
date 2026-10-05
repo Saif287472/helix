@@ -103,10 +103,19 @@ void main() {
       );
       expect(old.valid, isTrue);
       expect(old.accountId, isNull);
-      expect(const RecoveryLookupResponse(valid: false).toJson(), {
-        'valid': false,
-        'verification_required': false,
-      });
+      expect(
+        const RecoveryLookupResponse(valid: false).toJson(),
+        {'valid': false},
+        reason: 'an invalid code answers the bare form',
+      );
+      expect(
+        const RecoveryLookupResponse(
+          valid: false,
+          verificationRequired: true,
+          accountId: accountA,
+        ).toJson(),
+        {'valid': false},
+      );
     });
 
     test('phone, password, links, challenges', () {

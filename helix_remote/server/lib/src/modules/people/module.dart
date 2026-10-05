@@ -409,21 +409,31 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
 
   Future<Response> _setPrivacy(HelixRequest q) async {
     final p = q.json(PrivacySettings.fromJson);
-    await context.db.execute(
-      'INSERT INTO $s.privacy (account_id, discoverable_by_phone, discoverable_by_name, last_seen, online, group_add) '
-      'VALUES (@a:uuid, @p:boolean, @n:boolean, @ls:text, @o:text, @g:text) '
-      'ON CONFLICT (account_id) DO UPDATE SET discoverable_by_phone = excluded.discoverable_by_phone, '
-      'discoverable_by_name = excluded.discoverable_by_name, last_seen = excluded.last_seen, '
-      'online = excluded.online, group_add = excluded.group_add',
-      {
-        'a': q.device.accountId,
-        'p': p.discoverableByPhone,
-        'n': p.discoverableByName,
-        'ls': p.lastSeen.wire,
-        'o': p.online.wire,
-        'g': p.groupAdd.wire,
-      },
-    );
+    final me = q.device.accountId;
+    await context.db.tx((tx) async {
+      await tx.execute(
+        'INSERT INTO $s.privacy (account_id, discoverable_by_phone, discoverable_by_name, last_seen, online, group_add) '
+        'VALUES (@a:uuid, @p:boolean, @n:boolean, @ls:text, @o:text, @g:text) '
+        'ON CONFLICT (account_id) DO UPDATE SET discoverable_by_phone = excluded.discoverable_by_phone, '
+        'discoverable_by_name = excluded.discoverable_by_name, last_seen = excluded.last_seen, '
+        'online = excluded.online, group_add = excluded.group_add',
+        {
+          'a': me,
+          'p': p.discoverableByPhone,
+          'n': p.discoverableByName,
+          'ls': p.lastSeen.wire,
+          'o': p.online.wire,
+          'g': p.groupAdd.wire,
+        },
+      );
+      // Identity keeps the discovery index only while discovery is on.
+      await identity.setPhoneDiscoverable(
+        tx,
+        me,
+        on: p.discoverableByPhone,
+        phoneNumber: p.phoneNumber,
+      );
+    });
     return noContent();
   }
 

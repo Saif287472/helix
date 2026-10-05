@@ -81,17 +81,17 @@ final class IdentityStore {
     required String id,
     required Uint8List identityKey,
     Uint8List? phoneHash,
-    String? discoveryHash,
+    String? discoveryIndex,
     String? phoneLast4,
   }) async {
     await tx.execute(
-      'INSERT INTO $s.accounts (id, identity_key, phone_hash, discovery_hash, phone_last4) '
+      'INSERT INTO $s.accounts (id, identity_key, phone_hash, discovery_index, phone_last4) '
       'VALUES (@id:uuid, @ik:bytea, @ph:bytea, @dh:text, @l4:text)',
       {
         'id': id,
         'ik': identityKey,
         'ph': phoneHash,
-        'dh': discoveryHash,
+        'dh': discoveryIndex,
         'l4': phoneLast4,
       },
     );
@@ -124,18 +124,34 @@ final class IdentityStore {
     return r?.string('id');
   }
 
-  Future<Map<String, String>> accountsByDiscoveryHash(
+  Future<void> setDiscoveryIndex(Tx tx, String accountId, String? index) =>
+      tx.execute(
+        'UPDATE $s.accounts SET discovery_index = @i:text WHERE id = @id:uuid',
+        {'id': accountId, 'i': index},
+      );
+
+  /// The verified phone hash and the discovery index, either may be null.
+  Future<(Uint8List?, String?)> phoneAndIndex(Tx tx, String accountId) async {
+    final r = await tx.queryOne(
+      'SELECT phone_hash, discovery_index FROM $s.accounts WHERE id = @id:uuid FOR UPDATE',
+      {'id': accountId},
+    );
+    return (r?.optBytes('phone_hash'), r?.optString('discovery_index'));
+  }
+
+  /// Account ids by keyed discovery index (see `IdentityContext`).
+  Future<Map<String, String>> accountsByDiscoveryIndex(
     SqlSession db,
     Iterable<String> hashes,
   ) async {
     final list = hashes.toList();
     if (list.isEmpty) return const {};
     final rows = await db.query(
-      "SELECT discovery_hash, id FROM $s.accounts "
-      "WHERE discovery_hash = ANY(string_to_array(@h:text, ','))",
+      "SELECT discovery_index, id FROM $s.accounts "
+      "WHERE discovery_index = ANY(string_to_array(@h:text, ','))",
       {'h': list.join(',')},
     );
-    return {for (final r in rows) r.string('discovery_hash'): r.string('id')};
+    return {for (final r in rows) r.string('discovery_index'): r.string('id')};
   }
 
   Future<void> setStatus(SqlSession db, String accountId, String status) async {

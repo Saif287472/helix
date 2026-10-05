@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:helix_remote_protocol/src/json.dart';
 
 /// `GET /v1/health/live`.
@@ -197,18 +199,77 @@ final class AccountExport {
   );
 }
 
-/// `DELETE /v1/account`: [confirmation] must be exactly `DELETE`.
+/// A device-key proof for `DELETE /v1/account`: the answer to a
+/// `POST /v1/auth/challenges` challenge, signed by this device's DSK over
+/// `deleteAccountSignatureBody(challenge)`.
+final class DeviceKeyProof {
+  const DeviceKeyProof({
+    required this.challengeId,
+    required this.challenge,
+    required this.signature,
+  });
+
+  final String challengeId;
+  final Uint8List challenge;
+  final Uint8List signature;
+
+  JsonMap toJson() => {
+    'challenge_id': challengeId,
+    'challenge': encodeBytes(challenge),
+    'signature': encodeBytes(signature),
+  };
+
+  factory DeviceKeyProof.fromJson(JsonReader json) => DeviceKeyProof(
+    challengeId: json.nonEmpty('challenge_id'),
+    challenge: json.bytes('challenge'),
+    signature: json.bytes('signature'),
+  );
+}
+
+/// `DELETE /v1/account`: [confirmation] must be exactly `DELETE`, and the
+/// caller proves it is the owner, not just a holder of a session token:
+///
+/// - an account with a password gives [currentAuthKey] (the same failure
+///   counter and lockout as password sign-in), or a fresh phone
+///   verification ([verificationToken]) as for a password change;
+/// - an account with a verified number, on a server that sends texts, gives
+///   [verificationToken] (a fresh `POST /v1/auth/phone/verify` for that
+///   number, single use);
+/// - any other account (no password, no number or no SMS) gives
+///   [deviceProof].
 final class DeleteAccountRequest {
-  const DeleteAccountRequest({this.confirmation = expected});
+  const DeleteAccountRequest({
+    this.confirmation = expected,
+    this.currentAuthKey,
+    this.verificationToken,
+    this.deviceProof,
+  });
 
   static const expected = 'DELETE';
 
   final String confirmation;
+  final Uint8List? currentAuthKey;
+  final String? verificationToken;
+  final DeviceKeyProof? deviceProof;
 
-  JsonMap toJson() => {'confirmation': confirmation};
+  JsonMap toJson() => compact({
+    'confirmation': confirmation,
+    'current_auth_key': currentAuthKey == null
+        ? null
+        : encodeBytes(currentAuthKey!),
+    'verification_token': verificationToken,
+    'device_proof': deviceProof?.toJson(),
+  });
 
   factory DeleteAccountRequest.fromJson(JsonReader json) =>
-      DeleteAccountRequest(confirmation: json.string('confirmation'));
+      DeleteAccountRequest(
+        confirmation: json.string('confirmation'),
+        currentAuthKey: json.optBytes('current_auth_key'),
+        verificationToken: json.optString('verification_token'),
+        deviceProof: json.has('device_proof')
+            ? DeviceKeyProof.fromJson(json.object('device_proof'))
+            : null,
+      );
 }
 
 /// `GET /.well-known/helix-server`: federation identity.

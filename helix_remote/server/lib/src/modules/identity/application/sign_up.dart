@@ -56,7 +56,7 @@ final class SignUp {
       phoneHash: phoneHash,
       purpose: req.purpose.wire,
       codeHash: _codeHash(id, code),
-      discoveryHash: await c.discoveryHash(e164),
+      discoveryIndex: await c.discoveryIndexOf(e164),
       last4: e164.substring(e164.length - 4),
       expiresAt: expires,
     );
@@ -110,7 +110,7 @@ final class SignUp {
       if (!match) return null;
       return VerifiedPhone(
         phoneHash: row.bytes('phone_hash'),
-        discoveryHash: row.string('discovery_hash'),
+        discoveryIndex: row.string('discovery_index'),
         last4: row.string('last4'),
         purpose: PhonePurpose.values.firstWhere(
           (p) => p.wire == row.string('purpose'),

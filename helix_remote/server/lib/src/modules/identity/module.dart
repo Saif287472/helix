@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/identity/application/accounts.dart';
 import 'package:helix_remote_server/src/modules/identity/application/administration.dart';
@@ -145,7 +147,24 @@ final class _IdentityFacade implements IdentityApi {
   Future<Map<String, String>> accountsByDiscoveryHash(
     SqlSession s,
     Iterable<String> hashes,
-  ) => _store.accountsByDiscoveryHash(s, hashes);
+  ) async {
+    final byIndex = {for (final h in hashes) _m._ctx.discoveryIndexFor(h): h};
+    final found = await _store.accountsByDiscoveryIndex(s, byIndex.keys);
+    return {for (final e in found.entries) byIndex[e.key]!: e.value};
+  }
+
+  @override
+  Future<void> setPhoneDiscoverable(
+    Tx tx,
+    String accountId, {
+    required bool on,
+    String? phoneNumber,
+  }) => _m._ctx.setPhoneDiscoverable(
+    tx,
+    accountId,
+    on: on,
+    phoneNumber: phoneNumber,
+  );
 
   @override
   Future<String?> accountByHelixName(SqlSession s, String name) =>
@@ -161,6 +180,21 @@ final class _IdentityFacade implements IdentityApi {
   @override
   Future<void> dropPushToken(SqlSession s, String deviceId) =>
       _store.clearPushToken(s, deviceId);
+
+  @override
+  Future<void> confirmOwnership(
+    String accountId,
+    String deviceId, {
+    Uint8List? authKey,
+    String? verificationToken,
+    DeviceKeyProof? deviceProof,
+  }) => _m.accounts.confirmOwnership(
+    accountId,
+    deviceId,
+    authKey: authKey,
+    verificationToken: verificationToken,
+    deviceProof: deviceProof,
+  );
 
   @override
   Future<void> deleteAccount(Tx tx, String accountId) async {

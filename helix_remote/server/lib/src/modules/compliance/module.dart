@@ -94,6 +94,15 @@ final class ComplianceModule extends ModuleBase {
       );
     }
     final accountId = q.device.accountId;
+    // A session token alone does not delete an account: a password, a fresh
+    // phone verification or (for accounts with neither) a device signature.
+    await identity.confirmOwnership(
+      accountId,
+      q.device.deviceId,
+      authKey: req.currentAuthKey,
+      verificationToken: req.verificationToken,
+      deviceProof: req.deviceProof,
+    );
     await context.db.tx((tx) => identity.deleteAccount(tx, accountId));
     log.info('account_deleted', {'account_id': accountId});
     return noContent();

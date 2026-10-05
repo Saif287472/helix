@@ -65,7 +65,19 @@ void main() {
         (await h.api.call(Routes.turnCredentials, bearer: alice.bearer)).json,
       );
       expect(creds.urls, hasLength(2));
-      expect(creds.username, endsWith(':${alice.accountId}'));
+      expect(creds.urls.last, startsWith('turns:'));
+      final parts = creds.username.split(':');
+      expect(parts, hasLength(2));
+      expect(
+        int.parse(parts.first),
+        creds.expiresAt.millisecondsSinceEpoch ~/ 1000,
+      );
+      expect(
+        creds.username,
+        isNot(contains(alice.accountId)),
+        reason: 'the name travels in the clear on turn: and must not name her',
+      );
+      expect(creds.username, isNot(contains(alice.id)));
       final expected = base64.encode(
         crypto.Hmac(
           crypto.sha1,
@@ -73,6 +85,17 @@ void main() {
         ).convert(utf8.encode(creds.username)).bytes,
       );
       expect(creds.credential, expected);
+    });
+
+    test('every TURN request gets a fresh unlinkable username', () async {
+      final a = TurnCredentials.fromJson(
+        (await h.api.call(Routes.turnCredentials, bearer: alice.bearer)).json,
+      );
+      final b = TurnCredentials.fromJson(
+        (await h.api.call(Routes.turnCredentials, bearer: alice.bearer)).json,
+      );
+      expect(a.username.split(':').last, isNot(b.username.split(':').last));
+      expect(a.credential, isNot(b.credential));
     });
 
     test(
@@ -202,6 +225,35 @@ void main() {
         expect((await report()).status, 204);
       }
       expect((await report()).errorCode, 'rate_limited');
+    });
+
+    test('non-offer signals are limited per sending device', () async {
+      final callId = 'call-${Uuid.v7()}';
+      Future<TestResponse> update(TestDevice from, TestDevice to) =>
+          signal(callId, CallSignalKind.update, {
+            to.accountId: [to.id],
+          }, from: from);
+      expect((await update(alice, bob1)).status, 200);
+      // Spend alice's device budget (a burst of 240 a minute) in one write.
+      await h.env.platform.db.execute(
+        'INSERT INTO ${h.env.platform.schemas.platform}.rate_buckets '
+        '(key, tokens, updated_at, allowed) VALUES (@k:text, 0, now(), true) '
+        'ON CONFLICT (key) DO UPDATE SET tokens = 0, updated_at = now()',
+        {'k': 'calls.signals:${alice.id}'},
+      );
+      expect((await update(alice, bob1)).errorCode, 'rate_limited');
+      expect(
+        (await signal(callId, CallSignalKind.end, {
+          bob1.accountId: [bob1.id],
+        })).errorCode,
+        'rate_limited',
+        reason: 'ends count too',
+      );
+      expect(
+        (await update(bob1, bob2)).status,
+        200,
+        reason: 'another device has its own budget',
+      );
     });
 
     test('only the parties can clear or replace a pending offer', () async {

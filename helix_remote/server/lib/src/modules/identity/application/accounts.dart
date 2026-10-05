@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/modules/identity/application/context.dart';
 import 'package:helix_remote_server/src/modules/identity/domain/secrets.dart';
@@ -110,6 +113,86 @@ final class Accounts {
     if (req.verificationToken != null) {
       await c.spendVerification(req.verificationToken!);
     }
+  }
+
+  /// Proof that the caller owns the account, not merely a session token
+  /// (account deletion). A password is checked against its shared failure
+  /// counter and lockout; a phone verification token must be for the
+  /// account's own number and is spent; a device-key signature over a fresh
+  /// challenge is accepted only when the account has neither a password nor
+  /// a number the server can text, so it never replaces a stronger proof.
+  Future<void> confirmOwnership(
+    String accountId,
+    String deviceId, {
+    Uint8List? authKey,
+    String? verificationToken,
+    DeviceKeyProof? deviceProof,
+  }) async {
+    final hasPassword = await c.credentials.password(c.db, accountId) != null;
+    final phoneHash = await c.store.phoneHashOf(c.db, accountId);
+    final textable = phoneHash != null && c.config.sms.isConfigured;
+
+    if (authKey != null && hasPassword) {
+      final (_, error) = await c.db.tx<(Row?, ApiError?)>(
+        (tx) => c.checkPassword(tx, accountId, authKey),
+      );
+      if (error != null) throw error;
+      return;
+    }
+    if (verificationToken != null && textable) {
+      final verified = await c.verification(verificationToken);
+      if (verified != null &&
+          constantTimeEquals(verified.phoneHash, phoneHash)) {
+        await c.spendVerification(verificationToken);
+        return;
+      }
+    }
+    if (deviceProof != null &&
+        !hasPassword &&
+        !textable &&
+        await _deviceProofHolds(accountId, deviceId, deviceProof)) {
+      return;
+    }
+    throw ApiError(
+      ErrorCode.invalidCredentials,
+      message: 'confirm that this is your account',
+      details: {
+        'accepted': [
+          if (hasPassword) 'current_auth_key',
+          if (textable) 'verification_token',
+          if (!hasPassword && !textable) 'device_proof',
+        ],
+      },
+    );
+  }
+
+  Future<bool> _deviceProofHolds(
+    String accountId,
+    String deviceId,
+    DeviceKeyProof proof,
+  ) async {
+    if (!Uuid.isValid(proof.challengeId)) return false;
+    final raw = await c.ephemeral.take(
+      '${IdentityContext.challengePrefix}${proof.challengeId}',
+    );
+    final stored = raw == null ? null : jsonDecode(raw) as Map<String, Object?>;
+    if (stored == null ||
+        stored['d'] != deviceId ||
+        !constantTimeEquals(
+          decodeBytes(stored['c']! as String),
+          proof.challenge,
+        )) {
+      return false;
+    }
+    final device = await c.store.deviceById(c.db, deviceId);
+    if (device == null || !device.active || device.accountId != accountId) {
+      return false;
+    }
+    return verifyEd25519(
+      publicKey: device.signingKey,
+      message: deleteAccountSignatureBody(proof.challenge),
+      signature: proof.signature,
+    );
   }
 
   Future<void> setHelixName(DevicePrincipal me, SetHelixNameRequest req) async {

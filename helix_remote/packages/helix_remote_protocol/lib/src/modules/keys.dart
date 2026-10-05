@@ -257,6 +257,15 @@ Uint8List signedPrekeySignatureBody(int id, List<int> publicKey) {
       .toBytes();
 }
 
+/// Bytes the DSK signs to confirm deleting the account (a
+/// [DeviceChallengeResponse] answered for `DELETE /v1/account`). Its own
+/// label, so a sign-in signature can never confirm a deletion.
+Uint8List deleteAccountSignatureBody(List<int> challenge) =>
+    (BytesBuilder(copy: false)
+          ..add(ascii.encode('helix.v2.delete-account'))
+          ..add(challenge))
+        .toBytes();
+
 /// Bytes the DSK signs to answer a sign-in challenge.
 Uint8List signInSignatureBody(List<int> challenge) =>
     (BytesBuilder(copy: false)

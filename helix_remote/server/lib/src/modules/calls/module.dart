@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/kernel/crypto.dart';
 import 'package:helix_remote_server/src/modules/calls/api.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/messaging/api.dart';
@@ -16,7 +17,9 @@ import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:shelf/shelf.dart';
 
-/// TURN REST credentials (`HELIX_TURN_URLS`, `HELIX_TURN_SECRET`).
+/// TURN REST credentials (`HELIX_TURN_URLS`, `HELIX_TURN_SECRET`). The URLs
+/// may be `turn:` (port 3478, credentials in the clear) or `turns:` (TLS,
+/// port 5349); anything else is a startup error.
 final class TurnConfig {
   const TurnConfig({required this.urls, required this.secret});
 
@@ -32,6 +35,14 @@ final class TurnConfig {
         .where((u) => u.isNotEmpty)
         .toList();
     final secret = config.env['HELIX_TURN_SECRET']?.trim() ?? '';
+    final bad = urls.where(
+      (u) => !u.startsWith('turn:') && !u.startsWith('turns:'),
+    );
+    if (bad.isNotEmpty) {
+      throw ConfigError([
+        'HELIX_TURN_URLS entries must start with turn: or turns:',
+      ]);
+    }
     if (urls.isNotEmpty != secret.isNotEmpty) {
       throw ConfigError([
         'HELIX_TURN_URLS and HELIX_TURN_SECRET must be set together',
@@ -73,6 +84,14 @@ final class CallsModule extends ModuleBase {
     'calls.offers',
     30,
     const Duration(minutes: 10),
+  );
+  // Everything but the offer (update, end, ICE candidates) is cheap to send
+  // and rings nothing, but it still costs a fan-out and a push wake, so each
+  // sending device gets a budget on top of the per-address one.
+  static final _signals = RateLimitPolicy.per(
+    'calls.signals',
+    240,
+    const Duration(minutes: 1),
   );
   static final _metricsLimit = RateLimitPolicy.per(
     'calls.metrics',
@@ -153,8 +172,11 @@ CREATE TABLE $s.call_metrics (
     }
   }
 
-  /// coturn's REST credential scheme: `username = <expiry>:<account>`,
-  /// `credential = base64(HMAC-SHA1(secret, username))`.
+  /// coturn's REST credential scheme: `username = <expiry>:<random id>`,
+  /// `credential = base64(HMAC-SHA1(secret, username))`. coturn checks only
+  /// the expiry and the HMAC, and a `turn:` handshake is unencrypted, so the
+  /// name carries nothing about the account: an on-path observer cannot link
+  /// an address to a person.
   Future<Response> _turn(HelixRequest q) async {
     if (!turn.isConfigured) {
       throw const ApiError(
@@ -165,7 +187,7 @@ CREATE TABLE $s.call_metrics (
     await _limit(_turnLimit, q.device.deviceId);
     final expires = context.clock.now().add(credentialLifetime);
     final username =
-        '${expires.millisecondsSinceEpoch ~/ 1000}:${q.device.accountId}';
+        '${expires.millisecondsSinceEpoch ~/ 1000}:${encodeBytes(randomBytes(12))}';
     final credential = base64.encode(
       crypto.Hmac(
         crypto.sha1,
@@ -200,7 +222,11 @@ CREATE TABLE $s.call_metrics (
     if (req.kind == CallSignalKind.unknown || req.recipients.isEmpty) {
       throw const ApiError(ErrorCode.invalidField);
     }
-    if (req.kind == CallSignalKind.offer) await _limit(_offers, me.accountId);
+    if (req.kind == CallSignalKind.offer) {
+      await _limit(_offers, me.accountId);
+    } else {
+      await _limit(_signals, me.deviceId);
+    }
     final parsed = _parse(req.recipients, excludeDevice: me.deviceId);
 
     final delivered = <String>[];
@@ -415,6 +441,8 @@ CREATE TABLE $s.call_metrics (
     }
     if (req.kind == CallSignalKind.offer) {
       await _limit(_offers, sender.toString());
+    } else {
+      await _limit(_signals, '$sender/${signal.senderDevice}');
     }
     final parsed = _parse(req.recipients);
     if (parsed.remote.isNotEmpty) {

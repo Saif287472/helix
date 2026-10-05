@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 
 import '../support/flows.dart';
@@ -68,6 +69,29 @@ void main() {
       expect(page.headers['content-security-policy'], contains("'none'"));
       expect(page.body, contains('HLX-(INV|REC|GRP)'));
     });
+
+    test('the landing page cannot be framed', () async {
+      final page = await h.api.call(Routes.openLink);
+      expect(
+        page.headers['content-security-policy'],
+        contains("frame-ancestors 'none'"),
+      );
+      expect(page.headers['x-frame-options'], 'DENY');
+    });
+
+    test(
+      'the landing page answers /open and /open/ and nothing below',
+      () async {
+        Future<int> status(String path) async =>
+            (await http.get(h.server.baseUri.replace(path: path))).statusCode;
+        expect(await status('/open'), 200);
+        expect(await status('/open/'), 200);
+        expect(await status('/open/x'), 404);
+        expect(await status('/open/x/'), 404);
+        expect(await status('/openx'), 404);
+        expect(await status('/open//'), 404);
+      },
+    );
 
     test('crash reports need the flag, and are logged redacted', () async {
       final alice = await h.registerGlobal(aliceNumber);
@@ -759,20 +783,31 @@ void main() {
       expect(response.body, isNot(contains(alice.bearer)));
     });
 
+    Future<TestResponse> delete(TestDevice who, DeleteAccountRequest body) => h
+        .api
+        .call(Routes.deleteAccount, bearer: who.bearer, body: body.toJson());
+
+    Future<bool> alive(TestDevice who) async =>
+        (await h.api.call(Routes.account, bearer: who.bearer)).status == 200;
+
     test('deleting the account needs the confirmation and purges it', () async {
       final alice = await h.registerGlobal(aliceNumber);
-      final wrong = await h.api.call(
-        Routes.deleteAccount,
-        bearer: alice.bearer,
-        body: const DeleteAccountRequest(confirmation: 'delete').toJson(),
-      );
-      expect(wrong.errorCode, 'invalid_field');
-
       expect(
-        (await h.api.call(
-          Routes.deleteAccount,
-          bearer: alice.bearer,
-          body: const DeleteAccountRequest().toJson(),
+        (await delete(
+          alice,
+          const DeleteAccountRequest(confirmation: 'delete'),
+        )).errorCode,
+        'invalid_field',
+      );
+
+      final proof = (await h.verifyPhone(
+        aliceNumber,
+        purpose: PhonePurpose.signIn,
+      )).verificationToken;
+      expect(
+        (await delete(
+          alice,
+          DeleteAccountRequest(verificationToken: proof),
         )).status,
         204,
       );
@@ -783,6 +818,184 @@ void main() {
       // The number is free again (deletion is not a ban).
       final again = await h.registerGlobal(aliceNumber);
       expect(again.account.id, isNot(alice.account.id));
+    });
+
+    test('a session token alone deletes nothing: a number needs a fresh '
+        'verification of that number', () async {
+      final alice = await h.registerGlobal(aliceNumber);
+      final bob = await h.registerGlobal(bobNumber);
+
+      final bare = await delete(alice, const DeleteAccountRequest());
+      expect(bare.status, 401);
+      expect(bare.errorCode, 'invalid_credentials');
+      expect(bare.body, contains('verification_token'));
+      expect(await alive(alice), isTrue);
+
+      final bobs = (await h.verifyPhone(
+        bobNumber,
+        purpose: PhonePurpose.signIn,
+      )).verificationToken;
+      expect(
+        (await delete(
+          alice,
+          DeleteAccountRequest(verificationToken: bobs),
+        )).errorCode,
+        'invalid_credentials',
+        reason: 'a verification of another number is no proof',
+      );
+      expect(
+        (await delete(
+          alice,
+          const DeleteAccountRequest(verificationToken: 'vt_not-a-token'),
+        )).status,
+        400,
+      );
+      expect(await alive(alice), isTrue);
+      expect(await alive(bob), isTrue);
+
+      // A verification is single use.
+      final mine = (await h.verifyPhone(
+        aliceNumber,
+        purpose: PhonePurpose.signIn,
+      )).verificationToken;
+      final other = await h.registerGlobal('+8801711000004');
+      expect(
+        (await delete(
+          other,
+          DeleteAccountRequest(verificationToken: mine),
+        )).errorCode,
+        'invalid_credentials',
+      );
+      expect(
+        (await delete(
+          alice,
+          DeleteAccountRequest(verificationToken: mine),
+        )).status,
+        204,
+      );
+    });
+
+    test('an account with a password needs its auth key', () async {
+      final alice = await h.registerGlobal(aliceNumber);
+      final pw = PasswordSetup(
+        kdf: const KdfParams(),
+        salt: bytes(16),
+        authKey: bytes(32, 9),
+        wrappedIdentityKey: WrappedKey(nonce: bytes(12), ciphertext: bytes(48)),
+      );
+      await h.api.call(
+        Routes.setPassword,
+        bearer: alice.bearer,
+        body: SetPasswordRequest(password: pw).toJson(),
+      );
+      expect(
+        (await delete(alice, const DeleteAccountRequest())).errorCode,
+        'invalid_credentials',
+      );
+      expect(
+        (await delete(
+          alice,
+          DeleteAccountRequest(currentAuthKey: bytes(32, 3)),
+        )).errorCode,
+        'invalid_credentials',
+      );
+      expect(await alive(alice), isTrue);
+      expect(
+        (await delete(
+          alice,
+          DeleteAccountRequest(currentAuthKey: pw.authKey),
+        )).status,
+        204,
+      );
+    });
+  });
+
+  group('compliance on a personal server', skip: databaseTestSkipReason, () {
+    late Harness h;
+
+    setUp(() async => h = await Harness.start(global: false));
+    tearDown(() async => h.stop());
+
+    Future<TestDevice> register() async {
+      final invite = await h.identity.signUp.issueInvite(h.env.platform.db);
+      final acct = await TestAccount.create();
+      final device = await acct.newDevice();
+      final response = await h.api.call(
+        Routes.register,
+        body: RegisterRequest(
+          accountId: acct.id,
+          identityKey: acct.publicKey,
+          device: await device.registration(),
+          prekeys: await device.prekeys(),
+          inviteCode: invite.code,
+        ).toJson(),
+      );
+      device.session = RegisterResponse.fromJson(response.json).session;
+      return device;
+    }
+
+    Future<DeviceKeyProof> proofBy(
+      TestDevice signer, {
+      String? asDevice,
+      List<int> Function(List<int>) body = deleteAccountSignatureBody,
+    }) async {
+      final c = DeviceChallengeResponse.fromJson(
+        (await h.api.call(
+          Routes.deviceChallenge,
+          body: DeviceChallengeRequest(
+            accountId: signer.accountId,
+            deviceId: asDevice ?? signer.id,
+          ).toJson(),
+        )).json,
+      );
+      return DeviceKeyProof(
+        challengeId: c.challengeId,
+        challenge: c.challenge,
+        signature: await sign(signer.dsk, body(c.challenge)),
+      );
+    }
+
+    Future<TestResponse> delete(TestDevice who, DeviceKeyProof? proof) =>
+        h.api.call(
+          Routes.deleteAccount,
+          bearer: who.bearer,
+          body: DeleteAccountRequest(deviceProof: proof).toJson(),
+        );
+
+    test('an account with no password and no number proves it with its '
+        'device key', () async {
+      final alice = await register();
+      final bare = await delete(alice, null);
+      expect(bare.errorCode, 'invalid_credentials');
+      expect(bare.body, contains('device_proof'));
+
+      // A sign-in signature (another label) confirms nothing.
+      expect(
+        (await delete(
+          alice,
+          await proofBy(alice, body: signInSignatureBody),
+        )).errorCode,
+        'invalid_credentials',
+      );
+      // Another device's key does not either.
+      final impostor = await (await TestAccount.create()).newDevice();
+      expect(
+        (await delete(
+          alice,
+          await proofBy(impostor, asDevice: alice.id),
+        )).errorCode,
+        'invalid_credentials',
+      );
+      expect(
+        (await h.api.call(Routes.account, bearer: alice.bearer)).status,
+        200,
+      );
+
+      final proof = await proofBy(alice);
+      expect((await delete(alice, proof)).status, 204);
+      // A challenge is single use.
+      final again = await register();
+      expect((await delete(again, proof)).errorCode, 'invalid_credentials');
     });
   });
 }

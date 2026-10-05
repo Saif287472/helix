@@ -214,12 +214,12 @@ final class CredentialStore {
     required Uint8List phoneHash,
     required String purpose,
     required Uint8List codeHash,
-    required String discoveryHash,
+    required String discoveryIndex,
     required String last4,
     required DateTime expiresAt,
   }) async {
     await db.execute(
-      'INSERT INTO $s.phone_challenges (id, phone_hash, purpose, code_hash, discovery_hash, '
+      'INSERT INTO $s.phone_challenges (id, phone_hash, purpose, code_hash, discovery_index, '
       'last4, expires_at) VALUES (@id:uuid, @h:bytea, @p:text, @c:bytea, @dh:text, @l4:text, '
       '@e:timestamptz)',
       {
@@ -227,7 +227,7 @@ final class CredentialStore {
         'h': phoneHash,
         'p': purpose,
         'c': codeHash,
-        'dh': discoveryHash,
+        'dh': discoveryIndex,
         'l4': last4,
         'e': expiresAt,
       },
@@ -235,7 +235,7 @@ final class CredentialStore {
   }
 
   Future<Row?> challengeForUpdate(Tx tx, String id) => tx.queryOne(
-    'SELECT id, phone_hash, purpose, code_hash, discovery_hash, last4, attempts, '
+    'SELECT id, phone_hash, purpose, code_hash, discovery_index, last4, attempts, '
     'expires_at, consumed_at '
     'FROM $s.phone_challenges WHERE id = @id:uuid FOR UPDATE',
     {'id': id},

@@ -78,7 +78,7 @@ final class Registration {
           id: accountId,
           identityKey: req.identityKey,
           phoneHash: verified?.phoneHash,
-          discoveryHash: verified?.discoveryHash,
+          discoveryIndex: verified?.discoveryIndex,
           phoneLast4: verified?.last4,
         );
       }

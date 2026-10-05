@@ -274,7 +274,7 @@ kind = '...'`) for that.
   | `identity.refresh`, `.link_poll` | 600 per hour each |
   | `keys.bundle` / `keys.bundle_target` | 120 / 600 per hour |
   | `messaging.send` (per device) / `messaging.send_account` (per account) | 200 at once, 5 per second / 400 at once, 10 per second |
-  | `calls.turn` / `calls.offers` | 10 per hour per device / 30 per 10 minutes per account |
+  | `calls.turn` / `calls.offers` / `calls.signals` | 10 per hour per device / 30 per 10 minutes per account / 240 per minute per sending device (update, end, ICE) |
   | `groups.create` / `groups.preview` | 20 per day / 60 per hour |
   | `people.by_name` / `people.reports` | 30 per minute / 20 per hour |
   | `compliance.export` / `compliance.delete` | 5 per day / 5 per hour |
@@ -310,11 +310,22 @@ Postgres dump, secrets once and after every change):
 
 **Keep the secrets and the database dump in different places.**
 `HELIX_PHONE_PEPPER` exists so a stolen database does not allow testing phone
-numbers against stored hashes (`modules/identity/MODULE.md`). A dump stored
-next to the pepper loses that protection. A dump also contains the server's
+numbers (`modules/identity/MODULE.md`). Two stored values depend on it: the
+phone lookup hash `HMAC(pepper, E.164)`, and the discovery index
+`HMAC(K, client hash)` with `K` derived from the pepper. Clients hash their
+contacts with the **public** discovery salt, so the salted hash alone would be
+testable by anyone; the server never stores it, only the keyed index, and
+accounts that turned discovery off have no index at all. A dump stored next to
+the pepper loses that protection. A dump also contains the server's
 federation signing key (`federation.settings`), password verifier salts and
-hashes, undelivered ciphertext, and the discovery salt. Treat dumps as secrets
-and encrypt them at rest.
+hashes, undelivered ciphertext, and the (public) discovery salt. Treat dumps
+as secrets and encrypt them at rest.
+
+What remains: whoever holds both the dump and the pepper can test numbers
+against both values; and any signed-in client can still ask the **live**
+server whether numbers have accounts, within 1,000 per call and 5,000 per day
+(`discovery_budget`). That online oracle is the accepted risk T-5: it is how
+contact discovery works.
 
 ### Postgres dump
 

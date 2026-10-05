@@ -25,12 +25,21 @@
 - **`GET /v1/calls/pending`:** offers this device missed while asleep,
   fetched after a push wake.
 - **TURN** (`HELIX_TURN_URLS`, `HELIX_TURN_SECRET`): coturn REST
-  credentials. `username = <expiry>:<account>` and
+  credentials. `username = <expiry>:<random id>` (12 random bytes,
+  base64url, new on every request) and
   `credential = base64(HMAC-SHA1(secret, username))`, valid one hour.
+  coturn checks only the expiry and the HMAC, so the name carries nothing
+  about the account or device: the username crosses the network in the clear
+  on `turn:` (port 3478), and an on-path observer must not be able to tie
+  an address to a person. `HELIX_TURN_URLS` entries must start with `turn:`
+  or `turns:` (TLS, port 5349); list both and clients try them in order.
   Limited to 10 per device per hour; 503 `unavailable` if not configured.
 - **Metrics:** quality numbers keyed by call id only, kept 90 days.
-- **Limits:** 30 offers per account per 10 minutes; 100 metric reports per
-  account per day (at most 9,000 rows per account kept).
+- **Limits:** 30 offers per account per 10 minutes; every other signal
+  (`update`, `end`, ICE) 240 per sending device per minute, on top of the
+  per-address limit (federated senders are keyed by qualified account and
+  device); 100 metric reports per account per day (at most 9,000 rows per
+  account kept).
 
 ## Client side
 

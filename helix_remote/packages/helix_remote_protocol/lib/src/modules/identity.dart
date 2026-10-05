@@ -904,12 +904,16 @@ final class RecoveryLookupResponse {
   /// no other field.
   final String? accountId;
 
-  JsonMap toJson() => compact({
-    'valid': valid,
-    'verification_required': verificationRequired,
-    'server_name': serverName,
-    'account_id': accountId,
-  });
+  /// An invalid code answers exactly `{"valid": false}`: nothing else is
+  /// written, whatever the other fields hold.
+  JsonMap toJson() => valid
+      ? compact({
+          'valid': true,
+          'verification_required': verificationRequired,
+          'server_name': serverName,
+          'account_id': accountId,
+        })
+      : {'valid': false};
 
   factory RecoveryLookupResponse.fromJson(JsonReader json) =>
       RecoveryLookupResponse(

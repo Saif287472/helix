@@ -21,19 +21,22 @@ import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 final class VerifiedPhone {
   const VerifiedPhone({
     required this.phoneHash,
-    required this.discoveryHash,
+    required this.discoveryIndex,
     required this.last4,
     required this.purpose,
   });
 
   final Uint8List phoneHash;
-  final String discoveryHash;
+
+  /// The keyed discovery index ([IdentityContext.discoveryIndexOf]), never
+  /// the salted hash clients compute.
+  final String discoveryIndex;
   final String last4;
   final PhonePurpose purpose;
 
   String encode() => jsonEncode({
     'ph': encodeBytes(phoneHash),
-    'dh': discoveryHash,
+    'dh': discoveryIndex,
     'l4': last4,
     'p': purpose.wire,
   });
@@ -42,7 +45,7 @@ final class VerifiedPhone {
     final j = jsonDecode(raw) as Map<String, Object?>;
     return VerifiedPhone(
       phoneHash: decodeBytes(j['ph']! as String),
-      discoveryHash: j['dh']! as String,
+      discoveryIndex: j['dh']! as String,
       last4: j['l4']! as String,
       purpose: PhonePurpose.values.firstWhere((p) => p.wire == j['p']),
     );
@@ -93,11 +96,57 @@ final class IdentityContext {
   Future<Uint8List> discoverySalt() async => _discoverySalt ??= await store
       .setting(db, 'discovery_salt', () => randomBytes(32));
 
-  /// `lowercase hex(HMAC-SHA256(salt, E.164))`, exactly what clients compute
-  /// for discovery (people module, `DiscoverySalt`).
-  Future<String> discoveryHash(String e164) async {
-    final mac = hmacSha256(await discoverySalt(), utf8.encode(e164));
-    return mac.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  static const _discoveryIndexLabel = 'helix.v2.discovery-index';
+
+  /// The hash clients send for discovery: `lowercase hex(HMAC-SHA256(salt,
+  /// E.164))` under the public salt (people module, `DiscoverySalt`).
+  Future<String> clientDiscoveryHash(String e164) async =>
+      _hex(hmacSha256(await discoverySalt(), utf8.encode(e164)));
+
+  /// What the database stores and looks up for a client hash:
+  /// `hex(HMAC-SHA256(K, client hash))` with `K` derived from the phone
+  /// pepper. The salt is public, so a stored client hash would let a stolen
+  /// database test phone numbers offline; the index cannot be computed
+  /// without the pepper.
+  String discoveryIndexFor(String clientHash) => _hex(
+    hmacSha256(
+      hmacSha256(config.phonePepper, utf8.encode(_discoveryIndexLabel)),
+      utf8.encode(clientHash),
+    ),
+  );
+
+  Future<String> discoveryIndexOf(String e164) async =>
+      discoveryIndexFor(await clientDiscoveryHash(e164));
+
+  static String _hex(List<int> bytes) =>
+      bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+  /// Turns phone discovery on or off for [accountId]. Off removes the index,
+  /// so nothing about the number is stored for discovery. On needs the
+  /// account's own number to rebuild it: [phoneNumber] must hash to the
+  /// account's verified phone hash. Accounts without a verified number have
+  /// nothing to discover and are left alone.
+  Future<void> setPhoneDiscoverable(
+    Tx tx,
+    String accountId, {
+    required bool on,
+    String? phoneNumber,
+  }) async {
+    if (!on) {
+      await store.setDiscoveryIndex(tx, accountId, null);
+      return;
+    }
+    final (phone, index) = await store.phoneAndIndex(tx, accountId);
+    if (phone == null || index != null) return;
+    final e164 = phoneNumber == null ? null : requireE164(phoneNumber);
+    if (e164 == null || !constantTimeEquals(phoneHash(e164), phone)) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        message: 'turning discovery back on needs your own phone number',
+        details: {'field': 'phone_number'},
+      );
+    }
+    await store.setDiscoveryIndex(tx, accountId, await discoveryIndexOf(e164));
   }
 
   Future<void> limit(RateLimitPolicy policy, String key) async {

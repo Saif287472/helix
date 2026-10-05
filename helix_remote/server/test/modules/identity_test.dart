@@ -640,10 +640,7 @@ void main() {
           ).toJson(),
         );
         expect(wrong.status, 200);
-        expect(wrong.json.json, {
-          'valid': false,
-          'verification_required': false,
-        });
+        expect(wrong.json.json, {'valid': false});
 
         final verified = await h.verifyPhone(
           alice,

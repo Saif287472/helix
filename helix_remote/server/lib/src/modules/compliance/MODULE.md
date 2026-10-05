@@ -16,7 +16,10 @@ tables.
   tokens, ciphertext or other people's numbers. Encrypted things (profile,
   backups, media, undelivered envelopes) appear as versions, sizes, dates
   or counts. Public keys are the account's own.
-- **Deletion:** needs `{"confirmation": "DELETE"}`. It runs identity's
+- **Deletion:** needs `{"confirmation": "DELETE"}` and a proof of
+  ownership (`current_auth_key`, `verification_token` or `device_proof`,
+  identity's `confirmOwnership`; a session token alone is refused with
+  `invalid_credentials`). It runs identity's
   `deleteAccount` in one transaction: every device is revoked, which purges
   keys and mailbox and closes sockets; every `onAccountDeleted` hook runs
   (people, media, backup, groups); then the account row goes. Deletion is

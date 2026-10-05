@@ -21,6 +21,8 @@ users run.
 | Attachment ids | content hash (links equal uploads) | random UUIDs |
 | Phone number | hash + plaintext/last-4 paths | keyed hash + last 4 digits; plaintext only in memory while texting a code |
 | Discovery salt | public endpoint | authenticated |
+| Phone discovery entry | salted hash of the number (the salt is public: a dump let anyone test numbers) | pepper-keyed index of the client hash (a dump alone cannot test numbers); none for accounts that opted out of discovery; the online oracle stays (accepted risk T-5) |
+| TURN credential name | `<expiry>:<account id>` in the clear on `turn:` | `<expiry>:<random id>`; no account or device id |
 | Sibling devices' push tokens | listed to every device | never listed |
 | Sender of a message | yes | yes (sealed sender reserved for later) |
 | Recipients of a message | yes | yes, until delivered |
