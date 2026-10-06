@@ -1,9 +1,7 @@
-# `param` must be the first statement in the file, so the preference is set
-# just below it rather than above.
+# Runs the app on a connected Android phone. It opens on the Helix Global
+# sign-in page; a personal server is entered in the hidden advanced mode
+# (three taps bottom-right, two seconds apart, a fourth opens it).
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$TrustedHttpsHost,
-    [int]$BackendPort = 443,
     [string]$DeviceId = ""
 )
 
@@ -16,10 +14,7 @@ if ($DeviceId -ne "") {
 
 Push-Location app
 try {
-    flutter run @deviceArgs `
-        --dart-define=HELIX_REMOTE_PROFILE=android_physical `
-        --dart-define=HELIX_REMOTE_HOST=$TrustedHttpsHost `
-        --dart-define=HELIX_REMOTE_PORT=$BackendPort
+    flutter run @deviceArgs
 } finally {
     Pop-Location
 }

@@ -4,8 +4,8 @@ import 'package:helix_remote_architecture_rules/helix_remote_architecture_rules.
 import 'package:test/test.dart';
 
 /// The v2 CLI (`lib/v2.dart`, `lib/src/v2/`, `bin/helix_v2.dart`) is built
-/// on the engine and must not reach for v1 code, which stays only until the
-/// cutover. The v1 CLI files are not checked here.
+/// on the engine and must not reach for v1 code. The v1 CLI and the other v1
+/// libraries were deleted at Phase X; the rules keep them from coming back.
 void main() {
   final files = scanDartSources(Directory.current.path);
 
@@ -23,7 +23,7 @@ void main() {
     final violations = checkAll(files, [
       ForbiddenDirectiveRule(
         name: 'no-v1',
-        reason: 'v1 is retired at cutover (ADR-029).',
+        reason: 'v1 was retired at Phase X (ADR-029).',
         forbidden: (uri) =>
             anyPackage(v1RetiredPackages)(uri) ||
             uri == 'package:helix_remote_api/api.dart' ||

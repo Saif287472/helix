@@ -46,7 +46,7 @@ void main() {
       ForbiddenDirectiveRule(
         name: 'no-v1-crypto',
         reason:
-            'v1 crypto files are deleted at cutover; v2 code uses only '
+            'v1 crypto files were deleted at Phase X; v2 code uses only '
             'src/v2/.',
         forbidden: (uri) =>
             (uri.startsWith('package:helix_remote_crypto/') &&

@@ -1,5 +1,7 @@
 # F1 Multi-Device Trust Design
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/CRYPTO_V2.md`](v2/CRYPTO_V2.md) sections 2 and 2a (device certificates under the account identity key, QR linking) and 11 (password-wrapped identity key), and the identity module (`server/lib/src/modules/identity/MODULE.md`). The trust reasoning here (password sign-in adds a device, every other device is told, any device can revoke) still holds; the mechanisms changed.
+
 Status: implemented for Phase F1. Extended in 2026-09 with password sign-in,
 revoke-others, stale-device-list recovery and sign-in alerts (sections below).
 The schema version named in the next section is historical: the backend is now

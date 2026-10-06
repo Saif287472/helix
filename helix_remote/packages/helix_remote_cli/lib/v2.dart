@@ -1,5 +1,6 @@
 /// The v2 command line client, built on `helix_remote_engine` (Phase C3b).
-/// The v1 CLI (`helix_remote_cli.dart`) stays until cutover.
+/// This is the package's only public library; the v1 CLI was deleted at
+/// Phase X.
 library;
 
 export 'src/v2/cli_app.dart' show HelixCli, runHelixCli;

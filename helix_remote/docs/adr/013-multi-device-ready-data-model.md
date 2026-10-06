@@ -1,6 +1,8 @@
 # ADR 013: Multi-Device-Ready Data Model from Day One
 
 Status: accepted  
+
+> Status note (Phase X): the principle holds and is stronger in v2 (a session per device pair, one mailbox per device). The SQLite tables it names were replaced (ADR-025, ADR-027).
 Date: 2026-06-19  
 
 ## Context

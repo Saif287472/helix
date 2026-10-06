@@ -1,5 +1,7 @@
 # F2 Backup, Recovery, And Transfer Design
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/CRYPTO_V2.md`](v2/CRYPTO_V2.md) section 13 and `docs/product/BACKUP_RECOVERY.md`. The server keeps no history: a new device gets it from device-to-device transfer or the encrypted history backup (ADR-028).
+
 Status: implemented for Phase F2. The recovery-secret backup below is still
 current. Since 2026-09 a new device normally signs in with the account password
 instead of trusted-device approval, and an automatic text-only history backup

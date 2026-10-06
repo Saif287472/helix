@@ -4,8 +4,8 @@
 /// `dart:io`, no storage. State is plain data that `helix_remote_db` stores
 /// and the engine commits. Not externally reviewed (ADR-028).
 ///
-/// The v1 API (`helix_remote_crypto.dart`) is separate and unchanged until
-/// cutover.
+/// This is the package's only public library; the v1 crypto was deleted at
+/// Phase X.
 library;
 
 export 'src/v2/attachments.dart';

@@ -1,5 +1,7 @@
 # Helix Remote Wire Compatibility Policy
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`../protocol/v2/REST_V2.md`](../protocol/v2/REST_V2.md). Its principles (unknown frames are ignored and acknowledged, additive changes only within a major version, Remote and Local never share codecs) carry over; the version and capability mechanics below are v1.
+
 This document defines the policies and technical design principles governing backward and forward compatibility for the Helix Remote wire protocols (REST API and WebSocket realtime events), addressing tasks P8-040 through P8-044.
 
 ---

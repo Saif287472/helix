@@ -2,8 +2,7 @@
 /// REST clients, one per server module, and the realtime WebSocket client,
 /// built from the `helix_remote_protocol` route catalog and DTOs.
 ///
-/// Pure Dart. The v1 API (`package:helix_remote_api/api.dart`) is separate
-/// and is retired when the app moves to v2 (Phase A1).
+/// Pure Dart. This is the package's only public library.
 library;
 
 export 'package:helix_remote_api/src/v2/clients/admin_client.dart';

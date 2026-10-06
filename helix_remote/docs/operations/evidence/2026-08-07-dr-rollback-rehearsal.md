@@ -2,6 +2,8 @@
 
 Scope: repository-level rehearsal, not a claim of production restore.
 
+> **Status: historical (v1).** The tests named below (`backend/test/...`) were deleted with the v1 backend at Phase X (tag `v1-final`). v2 disaster recovery is in `docs/operations/V2_OPERABILITY.md` and has not been rehearsed with a recorded result.
+
 | Check | Evidence | Result |
 | --- | --- | --- |
 | Transaction rollback | `dart test backend/test/phase10_scalability_test.dart` | Grouped account write rolled back on injected failure. |

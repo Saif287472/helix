@@ -2,6 +2,8 @@
 
 Status: accepted (2026-08-07)
 
+> Status note (Phase X): superseded by ADR-025. The server runs on PostgreSQL 17 with the rate limiter in Postgres; the single-host SQLite baseline described below no longer exists.
+
 ## Decision
 
 Helix Remote uses a single-host SQLite deployment as its supported production

@@ -1,5 +1,5 @@
 name: helix_remote_domain
-description: Domain entities, repository contracts, and models for Helix Remote.
+description: Shared value types for Helix Remote clients, currently the versioned legal-document text.
 publish_to: none
 version: 1.0.0
 
@@ -7,6 +7,3 @@ environment:
   sdk: ^3.12.0
 
 resolution: workspace
-
-dependencies:
-  meta: ^1.18.0

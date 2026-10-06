@@ -1,29 +1,30 @@
 # Package: helix_remote_calls
 
-Status: current. Package-level counterpart to the backend module docs, from
-the [structural upgrade plan](../../../docs/architecture/EARNMINUTE_STRUCTURAL_UPGRADE_PLAN.md)
-(item A4). States in prose what
-[`module_boundaries.json`](../../../docs/architecture/module_boundaries.json)
-enforces at build time via `tool/check_boundaries.dart` — the config is the
-authority; this is the explanation that sits next to the code.
+Status: current. The Flutter half of calling: the WebRTC wrapper the app's
+call UI sits on. The call *state machine* (offer, answer, ICE, end reasons,
+call log, pending calls) lives in `helix_remote_engine`, which talks to this
+package through its `CallMediaFactory` seam. Phase X deleted the v1
+`RemoteCallService` / `RemoteGroupCallService` that used to own that state
+here.
 
 ## Purpose
 
-The client half of calling: the WebRTC engine wrapper, ICE configuration,
-call-quality reporting, the video view widget, and the two services that
-drive 1:1 and group call state.
+`RemoteWebRtcCallEngine` and its helpers: ICE configuration, call-quality
+reports, the video view widget, audio output selection and the permission
+probe. Group calls are not built in v2 (plan section 13).
 
 ## Public surface
 
 `lib/helix_remote_calls.dart` exports `ice_config`, `call_engine`,
-`call_quality`, `call_video_view`, `remote_call_service`,
-`remote_group_call_service`, `web_rtc_call_engine`, `call_devices`.
+`call_quality`, `call_setup_failure`, `call_video_view`,
+`web_rtc_call_engine` and `call_devices`.
 
-`call_devices` (v2 app, Phase A3a) is the app's only door to the plugin for
-audio output selection (`WebRtcAudioOutputs`), the microphone/camera permission
-probe (`WebRtcMediaPermissions`) and `RemoteVideoSource` (in `call_video_view`),
-so the app never imports `flutter_webrtc` itself. The v2 app implements the
-engine's `CallMediaFactory` over `RemoteWebRtcCallEngine`.
+`call_devices` is the app's only door to the plugin for audio output
+selection (`WebRtcAudioOutputs`), the microphone/camera permission probe
+(`WebRtcMediaPermissions`) and `RemoteVideoSource` (in `call_video_view`), so
+the app never imports `flutter_webrtc` itself. The app implements the
+engine's `CallMediaFactory` over `RemoteWebRtcCallEngine`
+(`app/lib/features/calls/application/media/`).
 
 ## Who may depend on this
 
@@ -31,22 +32,17 @@ The app only.
 
 ## What this may depend on
 
-`helix_remote_domain`, `helix_remote_storage`, `flutter_webrtc`, `uuid`,
-Flutter.
+`flutter_webrtc` and Flutter. No other Helix package.
 
 ## Gotchas
 
-- **The state machines here have transition tables in the domain package**
-  (plan item A6): `RemoteCallSessionStatus` mirrors `RemoteCallState`, and
-  `RemoteGroupCallStatus` mirrors `GroupCallStatus`. When you add a state to
-  an enum here, add the edge there — the table is what makes an illegal
-  move loud rather than silent.
-- **`active <-> reconnecting` has to cycle** for ICE restarts. Every other
-  call ending is terminal, and a retry is a new call object.
-- **ICE servers come from the backend's `/calls/turn-credentials`**, which
-  are short-lived (1 hour) and rate-limited. Fetch per call; do not cache
-  across calls.
-- **Group calls are a 4-participant mesh, not an SFU.** See
-  `docs/architecture/adr_group_calls.md`.
-- `CURRENT_STATE_2026-06-20.md` classifies Remote calls as Component-only —
-  the pieces are tested, the end-to-end path is not.
+- **ICE servers come from the server's `GET /v1/calls/turn`**, which are
+  short-lived (1 hour) and rate-limited. Fetch per call; do not cache across
+  calls.
+- **Calls are relay-only** (`IpPrivacyMode.relayOnly` is the default): peers
+  never learn each other's addresses. A direct mode must be chosen
+  explicitly, and an unresolved `directIfVerified` fails closed
+  (`test/ice_config_test.dart`).
+- **`active <-> reconnecting` has to cycle** for ICE restarts.
+- Not testable without a device: the proximity sensor and audio routing
+  Android code (see `app/MODULE.md`).

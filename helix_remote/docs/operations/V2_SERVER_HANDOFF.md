@@ -1,19 +1,22 @@
 # Helix Remote v2 Server - Deployment Handoff
 
-Status: written in Phase S7 (2026-10-01) from the code on branch
-`architecture-v2`. The v2 server is **not deployed**. Helix Global still runs
-the v1 backend (`helix_remote/backend`, SQLite) until cutover (Phase X), which
-the user performs. Until then, the v1 handoff
-(`helix-remote-server-handoff.md` at the repo root) describes production.
+Status: final, Phase X (2026-10). Written in Phase S7 (2026-10-01) from the code,
+its environment table re-checked against the code at Phase X. The v2 server
+replaces the v1 backend (`helix_remote/backend`, SQLite, deleted from the
+repository) on the cutover day, which **the user performs** (checklist below).
+Until that day Helix Global still runs v1; the v1 handoff
+(`helix-remote-server-handoff.md` at the repo root, now historical for the
+backend, still accurate for Caddy, the router and WSL1 coturn) describes the
+PC. After the cutover, this file describes production.
 
-This file is the v2 equivalent of that handoff. Day-two operation (health,
+Day-two operation (health,
 metrics, logs, jobs, backups, upgrades, troubleshooting) is in
 [`V2_OPERABILITY.md`](V2_OPERABILITY.md). Plan of record:
 `../architecture/ARCHITECTURE_V2_PLAN.md`.
 
-Rules that do not change from v1: the user edits `.env` (agents never do);
-never paste secret values anywhere; the running server is production and is
-never stopped or restarted by an agent.
+Rules that do not change: the user edits `.env` (agents never do); never paste
+secret values anywhere; the running server is production and is never stopped or
+restarted by an agent.
 
 ## What the server is
 
@@ -301,14 +304,37 @@ helix.agiletechbd.com {
   `turns:`, otherwise the server refuses to start. Until the certificate is
   in place, leave `turns:` out: a URL that cannot connect only slows calls
   down.
-- **Open item for cutover:** `deploy/coturn/windows/start-turn.ps1` reads
-  `HELIX_REMOTE_TURN_SECRET` and `HELIX_REMOTE_TURN_URL` from the environment
-  or `backend\.env`. Phase X deletes `backend/`. The script must be changed to
-  read `server\.env` and the new names (`HELIX_TURN_SECRET`,
-  `HELIX_TURN_URLS`, or `TURN_REALM`) before the old backend goes. Until then,
-  keep the same secret value in both places, and coturn needs no restart.
+- **`start-turn.ps1`** (`deploy/coturn/windows/`) reads the secret from the
+  server's `.env` (`helix_remote\server\.env`, or the file named by
+  `-EnvFile`), with a process environment variable winning, the way the server
+  reads it. It needs `HELIX_TURN_SECRET`; the realm is `TURN_REALM`, else the
+  host of the first `HELIX_TURN_URLS` entry, else the host of
+  `HELIX_PUBLIC_BASE_URL`. The value is the same secret as v1's
+  `HELIX_REMOTE_TURN_SECRET`, so a coturn that is already running needs no
+  restart at cutover. The script never prints the secret or puts it on a
+  command line, and it serves plain `turn:` on 3478 only. `turns:` and the
+  certificate are **optional** (`deploy/coturn/README.md`, "Enable TLS").
 - The readiness probe does **not** check TURN. A missing TURN setting shows up
   as calls failing to get credentials (503 `unavailable`).
+
+## TLS pinning (app)
+
+Pinning Helix Global's certificate key in the app is **off by default**. The
+app pins nothing unless the build passes
+`--dart-define=HELIX_GLOBAL_PINS=<base64 sha256>,<backup>` (the values are the
+SHA-256 of the certificate's public key, base64; the next key's pin goes in the
+same list before a renewal changes the key). Debug builds are never pinned.
+Why it is off: the old built-in pin (captured 2026-08-07) can go stale when
+Caddy renews the certificate with a new key, and a stale pin makes Global
+unreachable from every release build.
+
+To turn it on for a release: get the current leaf key from the live
+certificate (`openssl s_client -connect helix.agiletechbd.com:443 -servername helix.agiletechbd.com | openssl x509
+-pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary
+| openssl base64`), decide how the next key will be announced, then build with the
+define. Android's `network_security_config` carries no pin: it governs only the
+platform HTTP stack, so it would protect none of the app's Dart traffic
+(`app/MODULE.md`, "Pinning"; `app/lib/core/platform/tls_pinning.dart`).
 
 ## Push (FCM)
 
@@ -339,7 +365,8 @@ helix.agiletechbd.com {
   `invalid_destination`, `rejected`) and the caller gets 503
   `sms_unavailable`. The number, the code and the key are never logged.
 - **Open item (POST versus GET).** v1 called the gateway with **GET** and the
-  API key in the query string (`backend/lib/src/sms_provider.dart`). v2 calls it
+  API key in the query string (`backend/lib/src/sms_provider.dart` at the tag
+  `v1-final`). v2 calls it
   with **POST** and a form body, to keep the key out of URLs. v1's way is the
   one proven in production. Confirm POST against the real gateway at cutover:
   request one code and check that the text arrives. If the gateway rejects
@@ -461,42 +488,39 @@ log note below).
 - **Admin password:** change it in the admin app (this ends other admin
   sessions).
 
-## Draft cutover checklist (Phase X)
+## Cutover checklist (Phase X)
 
-**DRAFT. The coordinator finalises this at Phase X.** Everything marked
-"user" is done by the user. Agents do not touch the live server, `.env` or the
-production database.
+Everything marked "user" is done by the user. Agents do not touch the live
+server, `.env` or the production database.
 
-Decisions the user made on 2026-10-02 (plan §13, "Cutover decisions"):
-federation off, `HELIX_ADMIN_PASSWORD` for the first admin, uploads on local
-disk, `architecture-v2` merged into `main` with every commit kept (tag the last
-v1 commit `v1-final` first), BulkSMSBD tested by POST on the day, the TURN
-script reads the new `.env`, phones get the same app id (uninstall, then
-install) and no rollback plan is wanted (the tag exists anyway).
+Decisions the user made on 2026-10-02 (plan section 13, "Cutover decisions"):
+federation off; `HELIX_ADMIN_PASSWORD` for the first admin; uploads on local
+disk next to the server, backed up with the database; `architecture-v2` merged
+into `main` with every commit kept (the last v1 commit is tagged `v1-final`
+first); BulkSMSBD tested by POST on the day; the TURN script reads the new
+`.env` (same secret); phones keep the same app id (uninstall, then install); no
+rollback plan; TLS pinning off for now.
 
 ### Before the day
 
-1. Agent: merge `architecture-v2` into `main`; delete `backend/` and the
-   retired packages (plan, Phase X); update `AGENTS.md`, CI, verify scripts.
-2. Agent: change `deploy/coturn/windows/start-turn.ps1` to read
-   `server\.env` and the new variable names (see "coturn and TURN").
-3. Agent: list the final `.env` lines (below) with the real names from the
-   code at that time. Re-run the generated table above against the code.
-4. User: make sure the Postgres role and databases exist
-   (`server/tool/setup_local_postgres.ps1`), and that backups work
-   (`V2_OPERABILITY.md`, "Backups").
-5. User, before releasing the app build: **check the TLS pin.** The app pins
-   Helix Global's certificate key (`helix_remote_network_security.xml`,
-   captured 2026-08-07). Caddy may have renewed with a new key since, and a
-   stale pin makes Global unreachable in release builds. Get the current pin
-   from the live certificate, update the config, or pass the new value with
-   `--dart-define=HELIX_GLOBAL_PINS=<base64 sha256>,<backup>` at build time.
-   Debug builds are not pinned.
-6. Agent: tag the last v1 commit on `main` (`git tag v1-final`) before the
-   merge.
-7. User, optional rehearsal: create a throwaway database as the Postgres
-   superuser (`createdb -U postgres -O helix helix_rehearsal`), start the new server on
-   another port (`$env:HELIX_PORT = "8081"`, `HELIX_GLOBAL_MODE=false`,
+1. Agent (done in Phase X): the branch has `backend/` and the retired packages
+   deleted, `AGENTS.md`, CI, the verify scripts, the security docs and the
+   regression matrix updated, `start-turn.ps1` reading `server\.env`, and this
+   checklist final. The environment table above was re-checked against the
+   code and `server/.env.example` is complete.
+2. User: make sure the Postgres role and databases exist
+   (`server/tool/setup_local_postgres.ps1`) and that you know how you will
+   back up (`V2_OPERABILITY.md`, "Backups": a `pg_dump` of the `helix`
+   database plus the blob directory, kept together).
+3. User: decide about TLS pinning for the first release build (it is off by
+   default, see "TLS pinning (app)"), and have the new app and admin builds
+   ready (agents do not build APKs).
+4. User or coordinator, before the merge: tag the last v1 commit on `main`
+   (`git tag v1-final`), then merge `architecture-v2` into `main` keeping every
+   commit.
+5. User, optional rehearsal: create a throwaway database as the Postgres
+   superuser (`createdb -U postgres -O helix helix_rehearsal`), start the new
+   server on another port (`$env:HELIX_PORT = "8081"`, `HELIX_GLOBAL_MODE=false`,
    `HELIX_SMS_PROVIDER=none`) with that database, check
    `http://127.0.0.1:8081/v1/health/ready`, then drop the database.
 
@@ -535,8 +559,8 @@ HELIX_PUSH_PROVIDER=fcm
 HELIX_FCM_PROJECT_ID=<Firebase project id, same as v1>
 HELIX_FCM_SERVICE_ACCOUNT=<path to the Firebase service-account key file>
 
-# --- calls (same values as v1 and coturn) ---
-HELIX_TURN_URLS=<same list as v1 HELIX_REMOTE_TURN_URL>
+# --- calls (same secret as v1 and coturn; an explicit URL list, no turns: until coturn has a certificate) ---
+HELIX_TURN_URLS=turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp
 HELIX_TURN_SECRET=<same value as v1 HELIX_REMOTE_TURN_SECRET and coturn>
 
 # --- admin (remove after the first start) ---
@@ -563,30 +587,40 @@ How the v1 names map:
 | `HELIX_REMOTE_GLOBAL_INSTANCE_MODE` | `HELIX_GLOBAL_MODE` | |
 | `HELIX_REMOTE_SMS_API_KEY`, `_SMS_SENDER_ID` | `HELIX_SMS_API_KEY`, `HELIX_SMS_SENDER_ID` | Add `HELIX_SMS_PROVIDER=bulksmsbd`. |
 | `HELIX_REMOTE_FCM_PROJECT_ID`, `_FCM_SERVICE_ACCOUNT` | `HELIX_FCM_PROJECT_ID`, `HELIX_FCM_SERVICE_ACCOUNT` | Add `HELIX_PUSH_PROVIDER=fcm`. `HELIX_REMOTE_FCM_ACCESS_TOKEN` is gone. |
-| `HELIX_REMOTE_TURN_URL`, `_TURN_SECRET` | `HELIX_TURN_URLS`, `HELIX_TURN_SECRET` | Values can stay the same. |
+| `HELIX_REMOTE_TURN_URL`, `_TURN_SECRET` | `HELIX_TURN_URLS`, `HELIX_TURN_SECRET` | The secret stays the same. v1 expanded a single base `turn:host:3478` into three URLs; v2 takes the explicit list. |
 | `HELIX_REMOTE_ADMIN_PASSWORD` | `HELIX_ADMIN_PASSWORD` | Now only seeds the first admin. |
 | `HELIX_ANDROID_CERT_SHA256` | `HELIX_ANDROID_CERT_SHA256` | Unchanged. |
 | `HELIX_REMOTE_JWT_KEY_RING_JSON`, `_JWT_ACTIVE_KID` | `HELIX_JWT_KEYS`, `HELIX_JWT_ACTIVE_KID` | |
 | `HELIX_REMOTE_MAX_ATTACHMENT_BYTES` | `HELIX_MAX_ATTACHMENT_BYTES` | |
 | `HELIX_REMOTE_ACCOUNT_QUOTA_BYTES`, `_ATTACHMENT_RETENTION_DAYS` | none | Now fixed in the media module (4 GiB, 30 days). |
-| `HELIX_REMOTE_DEPLOYMENT_TOPOLOGY`, `_BACKEND_WORKERS`, `_LOG_FILE`, `_SERVER_AUDIENCE`, `_ADMIN_TOKEN`, `_FEDERATION_*` | none | Not used in v2. |
+| `HELIX_REMOTE_DEPLOYMENT_TOPOLOGY`, `_BACKEND_WORKERS`, `_LOG_FILE`, `_SERVER_AUDIENCE`, `_ADMIN_TOKEN`, `_FEDERATION_*` | none | Not used in v2 (`HELIX_LOG_FILE` exists again, with the new name). |
 
 ### The day
 
+Do these in order. The first two matter because the merge deletes the v1 files
+and a running v1 server holds some of them open.
+
 1. User: stop the v1 backend (Ctrl+C in its console). Keep Caddy and coturn
-   running. Copy `remote_backend.db` and `attachments_storage` somewhere safe
-   if you want a way back; v2 does not read them.
-2. User: write the new `.env` lines above in `helix_remote/server/.env`.
-3. User: `cd J:\Projects\helix\helix_remote\server`, then
+   running. Copy `backend\.env`, `remote_backend.db` and `attachments_storage`
+   somewhere safe if you want to look at them later; v2 reads none of them, and
+   no rollback is planned (see "Rollback" below).
+2. User: merge `architecture-v2` into `main` in `J:\Projects\helix` (every
+   commit kept; the tag `v1-final` is on the last v1 commit). Then, from
+   `J:\Projects\helix\helix_remote`, run `flutter pub get` (the workspace needs
+   it before the server can start). The merge leaves untracked leftovers of the
+   old `backend/` folder (its `.env`, database, `.dart_tool`); once you have
+   copied what you need, delete that folder.
+3. User: write the new `.env` lines above in `helix_remote/server/.env`.
+4. User: `cd J:\Projects\helix\helix_remote\server`, then
    `dart run bin/migrate.dart`. Expect `Applied: platform:1, ops:1, ...`. A
    second run prints `Up to date.`
-4. User: `dart run bin/server.dart`. Expect the log event `server_started`
+5. User: `dart run bin/server.dart`. Expect the log event `server_started`
    with the module list.
-5. User: Caddy. If `HELIX_PORT` is still 8080, the upstream is unchanged and
+6. User: Caddy. If `HELIX_PORT` is still 8080, the upstream is unchanged and
    nothing needs editing.
-6. User: coturn. Run the updated `start-turn.ps1` (or leave it running if the
+7. User: coturn. Run the updated `start-turn.ps1` (or leave it running if the
    secret did not change).
-7. User, verify:
+8. User, verify:
    - `curl.exe https://helix.agiletechbd.com/v1/health/ready` returns
      `{"ready":true,"checks":{"database":true,"storage":true}}`.
    - `curl.exe https://helix.agiletechbd.com/v1/server` shows the name,
@@ -597,33 +631,36 @@ How the v1 names map:
      POST-versus-GET check: if no code arrives, look for `sms_failed` and its
      reason in the server log; the fix is to switch the BulkSMSBD call back
      to GET in `modules/identity/sms.dart`), send a message and make a call.
+   - Push: sign a second phone in, close its app, send it a message and place
+     a call; the phone must wake and notify (the FCM provider has no automated
+     test, so this is its first check; look for failed `messaging.push` or
+     `calls.push` jobs in the metrics if it does not).
    - Things only a real phone can show (see `app/MODULE.md`): the camera and
      microphone prompts, voice-note recording and playback, video playback,
      the lock-screen incoming-call screen and audio routing, and that the app
      lock asks for the fingerprint or PIN after the app was swiped away.
-8. User: remove `HELIX_ADMIN_PASSWORD` from `.env`.
-9. User: reinstall the app on every phone (clean slate, plan D2).
+9. User: remove `HELIX_ADMIN_PASSWORD` from `.env`.
+10. User: reinstall the app on every phone (uninstall the old one first; clean
+    slate, plan D2; the app id and signing key are unchanged).
 
 ### Rollback
 
-Before the day, keep the v1 commit (the last `main` commit before the merge)
-and the untouched v1 database and attachments. To go back: stop the v2
-server, check out that v1 commit in a working copy, restore `backend/.env`,
-and start `dart run bin/server.dart` in `helix_remote/backend` as before.
-Phones with the new app will not work against v1.
+None is planned. There are no real users and the user chose to fix forward. The
+last v1 commit is tagged `v1-final` on `main` before the merge, which exists
+only as a by-product of keeping the history; no recovery tooling is built or
+needed.
 
-## Review items found while writing this document
+## Review items
 
-These are mismatches between plan, docs and code, or things to decide:
+Mismatches between plan, docs and code, or things to decide:
 
 - Resolved in S7: `HELIX_LOG_FILE` now appends to the file; every boolean
   uses one parser (`1/true/yes`, `0/false/no`); module settings errors exit
   with 78 from both `bin/server.dart` and `bin/migrate.dart`.
+- Resolved at Phase X: `start-turn.ps1` reads `server\.env` and the new names;
+  `.env.example` no longer says to keep an old JWT key for 60 days (refresh
+  tokens are opaque, so the 12-hour admin token lifetime is what matters).
 - The plan lists `bin/admin_tool.dart` (reset admin password). It does not
   exist.
-- `.env.example` says to remove an old JWT key "after 60 days (the
-  refresh-token lifetime)". Refresh tokens are opaque, not JWTs, so 12 hours
-  (the admin token lifetime) is enough.
 - Readiness checks only `database` and `storage`. v1's readiness also
   reported call, TURN, WebSocket and push readiness.
-- `start-turn.ps1` still reads `backend\.env` and the v1 variable names.

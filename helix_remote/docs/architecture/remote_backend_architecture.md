@@ -1,5 +1,7 @@
 # Helix Remote Backend Reference Architecture
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`../adr/026-server-module-architecture.md`](../adr/026-server-module-architecture.md), [`../adr/025-postgres-stateless-server.md`](../adr/025-postgres-stateless-server.md) and `server/lib/src/platform/PLATFORM.md`.
+
 > Superseded as current-state implementation evidence by
 > `docs/adr/019-dart-shelf-backend-authoritative.md`.
 >

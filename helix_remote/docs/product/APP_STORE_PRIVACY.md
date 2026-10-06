@@ -1,31 +1,32 @@
 # Helix Remote App Store Privacy Declarations
 
-Status: Phase 18 draft for store review  
-Date: 2026-06-19
+Status: Phase 18 draft for store review, updated at Phase X (2026-10) for the v2 server
 
 Use this file as the source checklist for store privacy forms. Final answers
 must be reviewed against the exact release build and store form wording.
 
 ## Data Linked To The User
 
-- Account ID and hashed phone number (`phone_hash`; there is no username
-  field).
+- Account ID and keyed hash of the phone number (`phone_hash`), the last four
+  digits, and a `~Helix name`; there is no username field.
   The raw phone number is sent to the server only when requesting an SMS code;
-  the server checks it against the hash, passes it to the SMS gateway
-  (BulkSMSBD) for delivery, and does not store it from that request.
+  the server hashes it, passes it to the SMS gateway (BulkSMSBD) for delivery,
+  and does not store it from that request.
 - Password-derived verifier and password-wrapped identity key: Argon2id
-  salt/parameters, a salted hash of a key derived from the password, and the
+  salt/parameters, an HMAC verifier of a key derived from the password, and the
   account identity private key encrypted under another password-derived key
-  (`account_passwords`). The password itself is never collected.
-- Encrypted, text-only chat history backup (`history_backups`), which the
-  server cannot decrypt.
-- Device IDs and device names.
-- Contacts/friend state created inside Helix Remote.
+  (`passwords`). The password itself is never collected.
+- Encrypted, text-only chat history backup (`history_backups`) and the optional
+  recovery backup (`full_backups`), which the server cannot decrypt.
+- Device IDs, device names and platform.
+- Blocks and privacy settings created inside Helix Remote (there are no contact
+  requests).
 - Abuse reports and safety actions.
-- Encrypted message/attachment/backup metadata needed for sync and delivery.
+- Encrypted message envelopes (until delivered, 30 days at most), encrypted
+  attachment objects with random ids, and backup metadata needed for delivery.
 - If the user opts into contacts sync: salted hashes of their phone-book
   numbers, sent only to check which are already Helix users on the same
-  server (`POST /contacts/match`). Phone-book names and unmatched numbers
+  server (`POST /v1/people/discover`). Phone-book names and unmatched numbers
   never leave the device.
 
 ## Data Not Collected In Current Scope
@@ -44,9 +45,11 @@ must be reviewed against the exact release build and store form wording.
 
 - Camera/microphone: only for calls and user-initiated media capture flows when
   implemented by platform UI.
-- Contacts (read-only): only if the user opts into contacts sync from the
-  Contacts tab; used solely to compute phone-hash matches, never to read or
-  transmit raw contact data. Degrades gracefully if denied.
+- Contacts (read and write): read only if the user opts into contacts sync
+  (asked from the Chats and Calls tabs after an explanation); used solely to
+  compute phone-hash matches, never to transmit raw contact data. Write is used
+  only when the person renames someone in Helix and allows it. Degrades
+  gracefully if denied.
 - Notifications: for generic message/call alerts without plaintext content,
   and for "new sign-in on your account" alerts. OTP codes arrive by SMS, not
   by notification.

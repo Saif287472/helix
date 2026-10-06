@@ -1,5 +1,7 @@
 # F3 Privacy Controls And Ephemeral Content
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/CONTENT_V2.md`](v2/CONTENT_V2.md): disappearing timers and view-once state travel inside the encrypted content, so the server never sees them. Locked chats are not built in v2.
+
 Status: Phase F3 implementation evidence
 Date: 2026-06-25
 

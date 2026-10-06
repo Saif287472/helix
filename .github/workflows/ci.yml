@@ -98,7 +98,7 @@ jobs:
     defaults:
       run:
         working-directory: helix_remote
-    # PostgreSQL for the v2 server tests (ADR-025). The credentials only exist
+    # PostgreSQL for the server tests (ADR-025). The credentials only exist
     # inside this throwaway service container. HELIX_REQUIRE_TEST_DATABASE
     # turns a missing database into a failure instead of skipped tests, so
     # this job is where the database suites are guaranteed to run. The
@@ -155,8 +155,8 @@ jobs:
       # (reactivecircus/android-emulator-runner or equivalent) AND journeys
       # worth ~10 minutes of runner time. Today's two files pump a widget
       # each; see helix_remote/app/integration_test/README.md.
-      - name: Verify governance control evidence
-        run: dart run tool/check_governance_controls.dart
+      # The governance control evidence check (tool/check_governance_controls.dart)
+      # runs inside verify.sh above.
       - name: Enforce coverage ratchet
         shell: bash
         run: ./scripts/coverage.sh
@@ -189,7 +189,7 @@ jobs:
       - name: Verify declared performance budgets
         run: dart tool/check_performance_budgets.dart
       - name: Enforce message-list burst budget on the CI reference runner
-        run: flutter test app/test/phase4_performance_budget_test.dart
+        run: flutter test app/test/performance_budget_test.dart
 
   no-source-changes:
     needs: changes
@@ -200,22 +200,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "No Helix Remote source, docs, or CI changes detected (helix_local changes are not yet wired into this workflow)."
-
-  fuzz-seed-corpus:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: helix_remote
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - name: Scheduled Phase 11 fuzz seed corpus regression
-        run: dart test tool/fuzz_seed_corpus_test.dart
 
   supply-chain:
     needs: changes

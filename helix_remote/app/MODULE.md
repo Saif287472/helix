@@ -4,7 +4,7 @@ The Helix Remote Flutter client, rebuilt on the v2 stack (ADR-027,
 `docs/architecture/ARCHITECTURE_V2_PLAN.md` §6.4). **Phase A1** replaced the
 v1 `lib/` with this one: the old composition root, `remote_rest_client.dart`,
 the onboarding notifier and every screen under `screens/` are gone from this
-branch. `main` keeps them for reference until cutover.
+branch; they live in git history (tag `v1-final`).
 
 ## The shape
 
@@ -53,7 +53,7 @@ Enforced by `test/architecture_test.dart`:
   or StreamProvider; the screen receives plain values.
 - A feature never imports another feature. Shared state goes through a provider
   in `core/` or a widget in `shared/`.
-- No v1 package (`helix_remote_storage`, `_sync`, `_groups`, `_backend`).
+- No retired v1 package (`helix_remote_storage`, `_sync`, `_groups`, `_backend`; deleted at Phase X, the rule keeps them from returning).
 - No `sqlite3`/`drift` outside `helix_remote_db`, no `http`/WebSocket outside
   `helix_remote_api`.
 
@@ -369,15 +369,20 @@ Proximity/earpiece playback is not done.
   fragment or non-ASCII host. Enforced in sign-in (before any request), on the
   remembered server at start, in `ServerUrlNotifier.use` and in
   `HelixRuntime.open` (which the push isolate uses too).
-- **Pinning** (`core/platform/tls_pinning.dart`). Android's network security
-  config does not govern Dart sockets. A runtime for Helix Global is built
-  under `HttpOverrides` with a context that trusts no CA; the pin (SHA-256 of
-  the leaf SPKI, `builtInPins` = the XML's, plus `--dart-define=
-  HELIX_GLOBAL_PINS=a,b` for the next key) decides in `badCertificateCallback`,
-  for REST and the realtime socket (via the api package's existing `sockets`
-  injection; no api change). Fail closed; debug builds unpinned. The pin is the
-  leaf key: a renewal with a new key and no shipped pin makes Global
-  unreachable. Verify the pin against the live certificate before release.
+- **Pinning** (`core/platform/tls_pinning.dart`) is **off by default**: a build
+  pins nothing unless it passes `--dart-define=HELIX_GLOBAL_PINS=<base64>,<base64>`
+  (SHA-256 of the leaf SPKI; list the next key's pin too). Android's network
+  security config does not govern Dart sockets, so its release file carries no
+  pin (it only forbids cleartext), and no pin is built in: a stale one would lock
+  every release build out of Helix Global. When pins are defined (release builds
+  only; debug is never pinned), a runtime for Helix Global is built under
+  `HttpOverrides` with a context that trusts no CA, and the pin decides in
+  `badCertificateCallback`, for REST and the realtime socket (via the api
+  package's existing `sockets` injection; no api change). Fail closed: a
+  renewal with a new key and no shipped pin makes Global unreachable from that
+  build. Get the pin from the live certificate first
+  (`docs/operations/V2_SERVER_HANDOFF.md`, "TLS pinning (app)").
+  `TlsPinPolicy.fromDefinedPins` is what the tests exercise.
 - **One engine** (`core/platform/engine_lease.dart`). A heartbeat lease file
   beside the database: the push isolate stands aside while the app runs; a
   second Windows window is refused (`EngineAlreadyRunning`, shown by the reset

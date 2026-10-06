@@ -26,7 +26,8 @@ const Map<String, Set<String>> v2PackageDependencies = {
   'helix_remote_server': {'helix_remote_protocol'},
 };
 
-/// v1 packages that no v2 code may import. They are deleted at cutover.
+/// v1 packages that no v2 code may import. They were deleted at Phase X; the
+/// rule keeps them from coming back.
 const Set<String> v1RetiredPackages = {
   'helix_remote_backend',
   'helix_remote_storage',
@@ -50,7 +51,7 @@ List<ArchitectureRule> v2PackageRules(String selfPackage) {
     ForbiddenDirectiveRule(
       name: 'no-v1-packages',
       reason:
-          'v1 packages are retired at cutover; v2 code must not depend on '
+          'v1 packages were retired at Phase X; v2 code must not depend on '
           'them (ADR-029).',
       forbidden: anyPackage(v1RetiredPackages),
     ),

@@ -1,33 +1,19 @@
 # Package: helix_remote_api
 
-Status: current. Holds two APIs side by side until the app moves to v2:
+Status: current. The typed REST and WebSocket clients for the v2 server
+(ARCHITECTURE_V2_PLAN.md §6.1, ADR-027), built in Phase C3a. The v1 REST
+interface (`lib/api.dart`) was deleted at Phase X; `lib/v2.dart` is the
+package's only public library (the name stays `v2.dart`, it was not
+renamed).
 
-- **v1** (`lib/api.dart`, `lib/api/`): the REST interface and envelope
-  parser the live v1 app uses. Unchanged on `architecture-v2` and deleted
-  with the rest of v1 (Phase A1 / X).
-- **v2** (`lib/v2.dart`, `lib/src/v2/`): the typed REST and WebSocket
-  clients for the v2 server (ARCHITECTURE_V2_PLAN.md §6.1, ADR-027), built
-  in Phase C3a. Everything below the v1 section is about v2.
-
-## v1
-
-Package-level counterpart to the backend module docs, from the
-[structural upgrade plan](../../../docs/architecture/EARNMINUTE_STRUCTURAL_UPGRADE_PLAN.md)
-(item A4). Public surface `lib/api.dart`; used by the v1 app, CLI and
-`helix_remote_sync`; depends on `helix_remote_domain` and `meta`.
-
-- Error bodies are `{error, code, details?}` with `code` from
-  `RemoteErrorCode`. Branch on `code`, not on the message, and do not infer
-  the code from the HTTP status.
-
-## v2: who may depend on it, and on what
+## Who may depend on it, and on what
 
 - **Users:** `helix_remote_engine` (C3b), the CLI, the admin console (AD).
   The app's presentation layer never imports it (plan §6.4).
 - **Depends on:** `helix_remote_protocol` (routes, DTOs, frames, error
   codes; the single source of truth for paths and payloads), `http`,
   `crypto` (the WebSocket accept check) and `meta`. Not
-  `helix_remote_domain`, not the v1 files (`test/architecture_test.dart`).
+  `helix_remote_domain` (`test/architecture_test.dart`).
 - **Pure Dart.** `dart:io` appears only in `realtime/io_socket.dart`, behind
   a conditional import, so the web build of the admin console compiles.
   `package:http` appears only in the transport and the facades. No other

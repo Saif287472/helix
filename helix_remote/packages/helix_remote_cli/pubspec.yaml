@@ -14,8 +14,6 @@ dependencies:
   sqlite3: ^3.3.3
   crypto: ^3.0.7
   cryptography: ^2.9.0
-  helix_remote_domain:
-    path: ../helix_remote_domain
   helix_remote_api:
     path: ../helix_remote_api
   helix_remote_crypto:
@@ -26,12 +24,8 @@ dependencies:
     path: ../helix_remote_engine
   helix_remote_protocol:
     path: ../helix_remote_protocol
-  helix_remote_storage:
-    path: ../helix_remote_storage
 
 dev_dependencies:
   helix_remote_architecture_rules:
     path: ../helix_remote_architecture_rules
   test: ^1.31.0
-  helix_remote_backend:
-    path: ../../backend

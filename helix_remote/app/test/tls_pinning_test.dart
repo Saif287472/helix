@@ -132,12 +132,8 @@ void main() {
 
   group('the policy', () {
     test('pins Helix Global hosts and nothing else', () {
-      final built = TlsPinPolicy.forThisBuild();
-      final pinned = TlsPinPolicy(
-        hosts: built.hosts,
-        pins: built.pins,
-        enforce: true,
-      );
+      final pinned = TlsPinPolicy.fromDefinedPins(_certPin, debug: false);
+      expect(pinned.enforce, isTrue);
       expect(
         pinned.appliesTo(Uri.parse('https://helix.agiletechbd.com')),
         isTrue,
@@ -146,12 +142,45 @@ void main() {
       expect(pinned.appliesTo(Uri.parse('https://chat.example.org')), isFalse);
     });
 
-    test('a debug build is not pinned', () {
+    test('a debug build is not pinned, even with pins defined', () {
       expect(
         policy(enforce: false).appliesTo(Uri.parse('https://localhost')),
         isFalse,
       );
-      expect(TlsPinPolicy.forThisBuild().enforce, isFalse);
+      final debug = TlsPinPolicy.fromDefinedPins(_certPin, debug: true);
+      expect(debug.enforce, isFalse);
+      expect(
+        debug.appliesTo(Uri.parse('https://helix.agiletechbd.com')),
+        isFalse,
+      );
+    });
+
+    test('pinning is off by default: no define, nothing is pinned', () {
+      // Run without --dart-define=HELIX_GLOBAL_PINS, as every build is by
+      // default, in debug (tests) and release alike.
+      final built = TlsPinPolicy.forThisBuild();
+      expect(built.pins, isEmpty);
+      expect(built.enforce, isFalse);
+      final release = TlsPinPolicy.fromDefinedPins('', debug: false);
+      expect(release.enforce, isFalse);
+      expect(
+        release.appliesTo(Uri.parse('https://helix.agiletechbd.com')),
+        isFalse,
+        reason: 'an empty pin list must not lock the app out of Global',
+      );
+    });
+
+    test('a release build with defined pins is pinned to exactly those', () {
+      final release = TlsPinPolicy.fromDefinedPins(
+        ' $_certPin , ,$_nextPin,',
+        debug: false,
+      );
+      expect(release.enforce, isTrue);
+      expect(release.pins, {_certPin, _nextPin});
+      expect(
+        release.appliesTo(Uri.parse('https://helix.agiletechbd.com')),
+        isTrue,
+      );
     });
 
     test('garbage is not a certificate and is refused', () {
@@ -169,20 +198,21 @@ void main() {
       );
     });
 
-    test('the built-in pin is the one in the Android network config', () {
-      final xml = File(
-        'android/app/src/main/res/xml/helix_remote_network_security.xml',
-      ).readAsStringSync();
-      final pins = RegExp(
-        r'<pin digest="SHA-256">([^<]+)</pin>',
-      ).allMatches(xml).map((m) => m.group(1)).toSet();
-      expect(TlsPinPolicy.builtInPins, pins);
-      for (final host in TlsPinPolicy.globalHosts) {
-        expect(xml, contains(host));
-      }
-    });
+    test(
+      'the Android release config carries no pin (it is inert for Dart)',
+      () {
+        final xml = File(
+          'android/app/src/main/res/xml/helix_remote_network_security.xml',
+        ).readAsStringSync();
+        expect(xml, isNot(contains('<pin')));
+        expect(xml, contains('cleartextTrafficPermitted="false"'));
+      },
+    );
   });
 }
+
+/// A second, made-up pin for the rotation case.
+const _nextPin = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=';
 
 /// SHA-256(SPKI) of [_certPem], computed with openssl.
 const _certPin = 'KhweRpu9R9x4qrdmg/dITX4Nec8kebWGKMkioScTZjM=';

@@ -2,7 +2,7 @@
 
 | Package | Resolved version | Risk | Owner | Remediation |
 |---|---:|---|---|---|
-| `sqlite3_flutter_libs` | `0.6.0+eol` | EOL marker in resolved package version. Remote storage no longer depends on it after P2-01; Local storage still resolves it and must be reviewed separately. | storage-team | Keep visible until Local storage removes the obsolete shim or records a product-specific exception. |
+| `sqlite3_flutter_libs` | `0.6.0+eol` | EOL marker in resolved package version. Remote no longer depends on it (the v1 `helix_remote_storage` was deleted at Phase X; the v2 client database uses `sqlite3` with the SQLCipher build hook); Local storage still resolves it and must be reviewed separately. | storage-team | Keep visible until Local storage removes the obsolete shim or records a product-specific exception. |
 | `file_picker` | `12.0.0-beta.7` | **Directly declared** by Helix Remote at `helix_remote/app/pubspec.yaml`, as a prerelease *ahead of* the 11.x stable line, so no stability guarantee applies. Recorded as an accepted exception in [ADR-024](../../helix_remote/docs/adr/024-file-picker-prerelease-exception.md). The committed `helix_remote/pubspec.lock` is what pins it; the declared caret range does not. | platform-team | Hold at the locked resolution. Revisit when `file_picker` 12 reaches stable, and retire the exception then. |
 
 ## Architecture v2 dependency intake (2026-09-30)
@@ -21,7 +21,7 @@ stable releases checked on 2026-09-30.
 | `flutter_riverpod` | `3.4.3` | `helix_remote/app` | A1 | Central to UI state. A major bump later would touch every feature. | client-team | Use plain providers, with no `riverpod_generator`, so there is less codegen to keep in step. Take upgrades on their own, with the widget suite. |
 | `go_router` | `18.0.2` | `helix_remote/app` | A1 | Routing and deep links (`helix://`, `/open` links). A regression breaks shared links silently. | client-team | Deep-link tests for both link forms, plus the hidden advanced-mode entry. |
 | `aws_signature_v4` + `aws_common` | `0.6.13` / `0.7.15` | `helix_remote/server` (**added in S1**) | S1 | The user chose it on 2026-10-01 for S3-compatible storage. It pulls in `built_value`, `built_collection`, `http2` and `os_detect`, all server-only. A signing bug would surface as rejected uploads, not leaked data. | server-team | Confined to `platform/blobs/` (architecture test). Presign structure is tested against AWS's documented SigV4 parameters. Local storage is the default. |
-| `shelf`, `shelf_router`, `http` | `1.4.2` / `1.1.4` / `1.2.x` | `helix_remote/server` (S1) | S1 | Already used and reviewed by v1 `backend/`. | server-team | — |
+| `shelf`, `shelf_router`, `http` | `1.4.2` / `1.1.4` / `1.2.x` | `helix_remote/server` (S1) | S1 | Already used and reviewed by the v1 `backend/` (deleted at Phase X) before the v2 server took them over. | server-team | — |
 | `http`, `crypto` | `1.6.0` / `3.0.7` | `packages/helix_remote_api` (**added in C3a**) | C3a | Already resolved and reviewed (`http` by the server and v1 backend, `crypto` by the protocol package); the lockfile is unchanged. `http` ≥ 1.5 is needed for `AbortableRequest` (timeouts and cancellation). `crypto` only checks `Sec-WebSocket-Accept` in the hand-made upgrade. | client-team | `http` is confined to the transport and the facades, `dart:io` to the socket adapter (`helix_remote_api/test/architecture_test.dart`). |
 | `fake_async` | `1.3.3` | dev-only (`packages/helix_remote_api`, **added in C3a**) | C3a | Test-only, already resolved through the Flutter SDK's test packages. | client-team | — |
 | `shelf_web_socket`, `web_socket_channel`, `googleapis_auth`, `stream_channel` | `3.0.0` / `3.0.3` / `2.3.3` / `2.1.4` | `helix_remote/server` (S3; `stream_channel` S7) | S3 | Already used and reviewed by v1 `backend/` (realtime relay, FCM token exchange). `stream_channel` was already resolved transitively (shelf); S7 imports it directly to wrap the upgraded socket for the WebSocket frame limit. | server-team | Google auth is confined to `platform/push/` (architecture test). |
@@ -53,8 +53,10 @@ New native build steps on Windows (`audioplayers_windows`, `record_windows`, `fc
 The audit recorded several client dependencies as materially behind. The minor gaps
 (`cryptography_flutter`, `mobile_scanner`, `flutter_webrtc`) have since resolved forward within
 their existing caret ranges and no longer appear in `flutter pub outdated`. `googleapis_auth` was
-taken from 1.6.0 to 2.3.3 — it is pure Dart on the backend, its FCM JWT signing path is covered by
-`fcm_access_token_test.dart`, and the full backend suite passes on it.
+taken from 1.6.0 to 2.3.3 — it is pure Dart, and the v1 test of its FCM token path
+(`fcm_access_token_test.dart`) was deleted with the v1 backend. The v2 server's FCM provider
+(`platform/push/push.dart`) has no automated test, because it needs Google's endpoints: the first real
+push on cutover day is its check (`helix_remote/docs/operations/V2_SERVER_HANDOFF.md`, "The day").
 
 The remainder are **deliberately not upgraded**, and are recorded here rather than left as silent
 staleness. Each is a major version bump on a platform plugin whose failure mode is invisible to a
@@ -86,3 +88,15 @@ root lockfile is unsound in this repository; read it off the member `pubspec.yam
 
 `tool/check_governance_controls.dart` now asserts this row against the declaring pubspec, so the two
 cannot drift apart again silently.
+
+## Retired at Phase X (cutover, 2026-10)
+
+The v1 workspace members `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups` and the
+`backend` package were deleted, together with the v1 REST client, crypto and CLI inside surviving
+packages. Declared dependencies that only they used were dropped from the remaining pubspecs
+(`flutter`, `cryptography_flutter`, `flutter_secure_storage` and `helix_remote_domain` from
+`helix_remote_crypto`, which is now pure Dart; `uuid`, `path` and the domain and storage packages from
+`helix_remote_calls`; `meta` from `helix_remote_domain`; the domain package from `helix_remote_api`;
+`helix_remote_domain` and the test package from `tool`). `helix_remote/pubspec.lock` did not change: every
+resolved package is still declared by some remaining member (the app still declares
+`cryptography_flutter`, and the app and the admin console `flutter_secure_storage`). Nothing was added.

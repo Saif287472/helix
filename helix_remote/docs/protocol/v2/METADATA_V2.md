@@ -1,10 +1,9 @@
 # Helix Remote v2 — What the server knows
 
-Status: **specified 2026-10-01 (Phase P1), pending user review.** This is the
-v2 counterpart of `docs/product/METADATA_INVENTORY.md` and the claims in
-`PRIVACY_CLAIM_MATRIX.md`. Those product documents describe the live v1
-system and are rewritten from this one at cutover (Phase X), once v2 is what
-users run.
+Status: **specified 2026-10-01 (Phase P1), pending user review; folded into the
+product documents at Phase X.** `docs/product/METADATA_INVENTORY.md`,
+`PRIVACY_CLAIM_MATRIX.md` and `DATA_FLOW.md` were rewritten from this file for the
+v2 server and are the current statements; this file keeps the v1-to-v2 comparison.
 
 ## Server-visible data, v1 → v2
 

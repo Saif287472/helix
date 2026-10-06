@@ -13,15 +13,15 @@ TEMPLATE=${TURN_TEMPLATE:-/etc/coturn/turnserver.conf.template}
 RENDERED=${TURN_RENDERED:-/tmp/turnserver.conf}
 CERT_DIR=${TURN_CERT_DIR:-/etc/coturn/certs}
 
-if [ -z "${HELIX_REMOTE_TURN_SECRET:-}" ]; then
-    echo "FATAL: HELIX_REMOTE_TURN_SECRET is not set." >&2
+if [ -z "${HELIX_TURN_SECRET:-}" ]; then
+    echo "FATAL: HELIX_TURN_SECRET is not set." >&2
     echo "Generate one with: openssl rand -hex 32" >&2
-    echo "It must be identical to the backend's HELIX_REMOTE_TURN_SECRET." >&2
+    echo "It must be identical to the server's HELIX_TURN_SECRET." >&2
     exit 1
 fi
 
 if [ -z "${TURN_REALM:-}" ]; then
-    echo "FATAL: TURN_REALM is not set (e.g. hr.agiletechbd.com)." >&2
+    echo "FATAL: TURN_REALM is not set (e.g. helix.agiletechbd.com)." >&2
     exit 1
 fi
 
@@ -68,7 +68,7 @@ umask 077
 while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
         *'${TURN_SECRET}'*)
-            value=$HELIX_REMOTE_TURN_SECRET
+            value=$HELIX_TURN_SECRET
             key=${line%%=*}
             ;;
         *'${TURN_REALM}'*)

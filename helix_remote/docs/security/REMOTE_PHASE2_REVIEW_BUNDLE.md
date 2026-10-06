@@ -1,6 +1,10 @@
 # Helix Remote Phase 2 Security Review Bundle
 
-Status: prepared for external review
+Status: **historical (v1).** Prepared for external review in June 2026 and never sent. It
+describes the v1 code (`helix_remote_storage`, v1 X3DH and ratchet), which was deleted at
+the Phase X cutover (last v1 commit: tag `v1-final`); the paths below no longer exist. A
+review of the current code starts from `docs/protocol/v2/CRYPTO_V2.md` and the v2 note in
+`remote_cryptographic_design_review.md`.
 Date: 2026-06-20
 
 This bundle summarizes the Phase 2 code evidence for Remote local persistence,

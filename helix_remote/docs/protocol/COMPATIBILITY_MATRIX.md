@@ -1,5 +1,7 @@
 # Protocol Compatibility Matrix
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/REST_V2.md`](v2/REST_V2.md): the v2 contract starts at `/v1` and is carried by the route catalog (`packages/helix_remote_protocol`); there is no per-capability negotiation, and clients of the old `/api/v1` cannot talk to a v2 server.
+
 Status: F11 account/platform expansion baseline, with 2026-09 additions
 (password sign-in, history backup).
 

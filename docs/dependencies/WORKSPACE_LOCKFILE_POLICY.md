@@ -11,7 +11,7 @@ This repository holds **two independent pub workspaces**, not one. There is no r
 ## Helix Remote
 
 `helix_remote/pubspec.lock` is committed as the reproducible dependency snapshot for the client, the
-admin console, the backend, all `helix_remote_*` packages, and `tool/`. It is authoritative:
+admin console, the server, all `helix_remote_*` packages, and `tool/`. It is authoritative:
 
 - CI resolves with `flutter pub get --enforce-lockfile` in every Helix Remote job, so a resolution
   that drifts from the lockfile fails the build rather than silently building against whatever the
@@ -30,7 +30,7 @@ admin console, the backend, all `helix_remote_*` packages, and `tool/`. It is au
 ### Reading the lockfile
 
 In a pub workspace the root lockfile classifies every package from the **root package's**
-perspective, so a dependency declared by a member package (`app/`, `admin/`, `backend/`) is recorded
+perspective, so a dependency declared by a member package (`app/`, `admin/`, `server/`) is recorded
 as `dependency: transitive`. **Do not read direct-versus-transitive off `helix_remote/pubspec.lock`** —
 read it off the declaring member's `pubspec.yaml`. Getting this wrong is what produced the incorrect
 `file_picker` entry corrected in the risk register.

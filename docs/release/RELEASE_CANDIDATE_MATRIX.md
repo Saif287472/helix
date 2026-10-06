@@ -6,7 +6,7 @@
 | Windows release build | Blocked until signing material exists | Blocked until signing material exists | same scripts with `-BuildArtifacts -Windows` |
 | Signing isolation | `HELIX_LOCAL_*`, `helix_local.keystore` | `HELIX_REMOTE_*`, `helix_remote.keystore` | ADR 016 and Gradle signing guards |
 | Co-installation | Product-scoped IDs and storage prefixes | Product-scoped IDs and storage prefixes | Phase 20 governance tests |
-| Upgrade | Migration tests and rollback notes required | Migration tests and rollback notes required | storage/backend test suites |
+| Upgrade | Migration tests and rollback notes required | Migration tests and rollback notes required | server and database test suites (`helix_remote/server`, `helix_remote_db`) |
 | Uninstall/reinstall | Manual device matrix before public release | Manual device matrix before public release | release checklist sign-off |
 | Permissions | LAN, notification, camera/mic only where needed | internet, notification, camera/mic only where needed | platform manifest review |
 | Deep links | Product-scoped schemes only | Product-scoped schemes only | release checklist sign-off |

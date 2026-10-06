@@ -1,9 +1,10 @@
 # Helix Remote protocol v2
 
 Status: **specified 2026-10-01 (Phase P1 of
-`docs/architecture/ARCHITECTURE_V2_PLAN.md`), pending user review.** Applies
-to the v2 server (`helix_remote/server/`) and the v2 client stack; the live v1
-system is described by the documents one level up.
+`docs/architecture/ARCHITECTURE_V2_PLAN.md`), implemented, live since the Phase X
+cutover; the P1 review items below are still pending the user's review.** This is
+the truth for the server (`helix_remote/server/`) and the client stack. The F0-F11
+design documents one level up describe the deleted v1 system and are historical.
 
 | Document | Covers |
 |---|---|

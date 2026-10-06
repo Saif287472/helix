@@ -1,19 +1,12 @@
-# `param` must be the first statement in the file, so the preference is set
-# just below it rather than above.
-param(
-    [string]$BackendHost = "127.0.0.1",
-    [int]$BackendPort = 8080
-)
-
+# Runs the Windows app from source. The app opens on the Helix Global sign-in
+# page; to point it at a local server, open the hidden advanced mode (three
+# taps bottom-right, two seconds apart, a fourth opens it) and enter the
+# server address. A local server is `dart run bin/server.dart` in server/.
 $ErrorActionPreference = "Stop"
 
 Push-Location app
 try {
-    flutter run -d windows `
-        --dart-define=HELIX_REMOTE_PROFILE=local_windows `
-        --dart-define=HELIX_REMOTE_DEV_MODE=true `
-        --dart-define=HELIX_REMOTE_HOST=$BackendHost `
-        --dart-define=HELIX_REMOTE_PORT=$BackendPort
+    flutter run -d windows
 } finally {
     Pop-Location
 }

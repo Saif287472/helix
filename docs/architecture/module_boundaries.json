@@ -1,6 +1,7 @@
 {
   "version": 3,
   "notes": [
+    "HISTORICAL (Phase X, 2026-10): this Stage 3 boundary config names a layout (apps/, packages/local, packages/remote) that no longer exists, and tool/check_boundaries.dart was never kept. Helix Remote's boundaries are enforced by helix_remote/packages/helix_remote_architecture_rules and every package's test/architecture_test.dart; this file is kept as design history.",
     "Workspace layout: apps/ holds the two-product apps; packages/local/ holds Local-classified",
     "packages; packages/shared/ and packages/remote/ are reserved for future packages.",
     "All paths are workspace-relative after package resolution by tool/check_boundaries.dart.",

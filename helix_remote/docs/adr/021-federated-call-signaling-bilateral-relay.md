@@ -1,6 +1,8 @@
 # ADR 021: Federated Call Signaling — Bilateral Relay, No Home-Server Authority
 
 Status: accepted
+
+> Status note (Phase X): implemented again in the v2 federation module (phase S6b, synchronous call relay); see `server/lib/src/modules/federation/MODULE.md`. Federation is off at cutover.
 Date: 2026-07-17
 
 ## Context

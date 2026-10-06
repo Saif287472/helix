@@ -69,9 +69,12 @@ const controls = <GovernanceControl>[
     'does not currently ship an iOS target',
   ),
   GovernanceControl(
-    'production hardening ADR',
-    'docs/adr/022-production-hardening-boundaries.md',
-    'SQLite deployment',
+    'server architecture decision',
+    'docs/adr/025-postgres-stateless-server.md',
+    'PostgreSQL',
+    because:
+        'ADR-025 replaced the SQLite server (ADR-022 is historical); the '
+        'handoff and the verify scripts assume Postgres.',
   ),
   GovernanceControl(
     'release obfuscation',
@@ -89,47 +92,99 @@ const controls = <GovernanceControl>[
         'and the diagnostic log; the platform default is allowBackup=true.',
   ),
 
-  // --- Certificate pinning -------------------------------------------------
+  // --- Transport security --------------------------------------------------
   GovernanceControl(
-    'Android TLS pin config',
+    'Android release config forbids cleartext traffic',
     'app/android/app/src/main/res/xml/helix_remote_network_security.xml',
-    'hr.agiletechbd.com',
+    'base-config cleartextTrafficPermitted="false"',
+  ),
+  GovernanceControl(
+    'Android release config carries no pin that Dart would ignore',
+    'app/android/app/src/main/res/xml/helix_remote_network_security.xml',
+    '<pin-set',
+    absent: true,
+    because:
+        'network_security_config only governs the platform HTTP stack. The '
+        'app\'s traffic is Dart\'s, so a pin here protects nothing and only '
+        'looks like protection. Pinning lives in tls_pinning.dart.',
+  ),
+  GovernanceControl(
+    'TLS pinning is off unless a build defines pins',
+    'app/lib/core/platform/tls_pinning.dart',
+    'enforce: !debug && pins.isNotEmpty',
+    because:
+        'no pin is built in (a stale one locks every release build out of '
+        'Helix Global); HELIX_GLOBAL_PINS turns pinning on at build time.',
   ),
 
-  // --- HIGH-2: screen capture protection, both platforms -------------------
+  // --- Screenshots are allowed (product rule, 2026-09-30) ------------------
   GovernanceControl(
-    'Android screen capture protection',
+    'no screen-capture blocking on Android',
     'app/android/app/src/main/kotlin/com/helix/remote/MainActivity.kt',
-    'com.helix.remote/screen_security',
+    'FLAG_SECURE',
+    absent: true,
     because:
-        'HIGH-2 — FLAG_SECURE keeps message content out of screenshots, '
-        'recordings, and the recents thumbnail.',
+        'people need to screenshot chats; capture blocking was removed on '
+        '2026-09-30 and must not come back (AGENTS.md, product rules).',
   ),
   GovernanceControl(
-    'Windows screen capture protection',
-    'app/windows/runner/screen_security.cpp',
-    'SetWindowDisplayAffinity',
-    because:
-        'HIGH-2 was closed on Android first and left the Windows desktop '
-        'build capturable. The runner must keep serving the same channel.',
-  ),
-  GovernanceControl(
-    'Windows capture handler is compiled in',
+    'no screen-capture blocking on Windows (handler is not built)',
     'app/windows/runner/CMakeLists.txt',
     'screen_security.cpp',
-    because: 'a handler that is not in the build protects nothing.',
+    absent: true,
+    because:
+        'the Windows display-affinity handler was removed with Android\'s.',
+  ),
+  GovernanceControl(
+    'no screen-capture blocking on Windows (no display affinity)',
+    'app/windows/runner/flutter_window.cpp',
+    'SetWindowDisplayAffinity',
+    absent: true,
+    because: 'screenshots are allowed everywhere.',
+  ),
+  GovernanceControl(
+    'a test keeps screenshots allowed',
+    'app/test/product_rules_test.dart',
+    'screenshots are allowed everywhere',
   ),
 
-  // --- HIGH-1: log redaction ----------------------------------------------
+  // --- LOW-1: release shrinking ----------------------------------------------
   GovernanceControl(
-    'client log redaction',
-    'app/lib/services/app_logger.dart',
-    'redactLogLine',
+    'release builds are minified',
+    'app/android/app/build.gradle.kts',
+    'isMinifyEnabled = true',
     because:
-        'HIGH-1 — LOG_REDACTION.md mandates redaction of tokens, keys, '
-        'and payloads, and the log is exported through the share sheet. '
-        'Redaction must stay at the write boundary, where call sites cannot '
-        'bypass it.',
+        'LOW-1 — shipping without R8 leaves debug metadata in the artifact. '
+        'The v1 regression test for it was deleted with v1.',
+  ),
+  GovernanceControl(
+    'release builds shrink resources',
+    'app/android/app/build.gradle.kts',
+    'isShrinkResources = true',
+  ),
+
+  // --- Logs and crash reports: no secrets, no content -----------------------
+  GovernanceControl(
+    'server logs are redacted at the write boundary',
+    'server/lib/src/platform/observability/log.dart',
+    'redactFields',
+    because:
+        'AGENTS.md: never log passwords, tokens, keys, message content, '
+        'codes or full phone numbers. Redaction must stay where every call '
+        'site goes through it.',
+  ),
+  GovernanceControl(
+    'a test proves the log redaction',
+    'server/test/platform/infra_test.dart',
+    'redact',
+  ),
+  GovernanceControl(
+    'the request id reaches the request log line',
+    'server/lib/src/platform/http/pipeline.dart',
+    "'request_id': requestId",
+    because:
+        'a request that cannot be found in the log by its id cannot be '
+        'correlated with a client report.',
   ),
 
   // --- HIGH-4 / MED-9: dependency governance -------------------------------
@@ -173,7 +228,7 @@ const controls = <GovernanceControl>[
         'from the schema (ADR-027).',
   ),
   GovernanceControl(
-    'the v2 local database keeps the SQLCipher at-rest tests',
+    'the local database keeps the SQLCipher at-rest tests',
     'packages/helix_remote_db/test/encryption_test.dart',
     'P2-01 encrypted database rejects a wrong key',
     because:
@@ -185,7 +240,7 @@ const controls = <GovernanceControl>[
   GovernanceControl(
     'crash reporter is wired to the zone handlers',
     'app/lib/main.dart',
-    'TelemetryReporter.instance.reportCrash',
+    'CrashReporter.report',
     because:
         'MED-4 — the consent and event types existed for a while with no '
         'caller, so no crash was ever reported. The wiring is the control, '
@@ -193,33 +248,47 @@ const controls = <GovernanceControl>[
   ),
   GovernanceControl(
     'crash reporting stays opt-in',
-    'app/lib/services/telemetry_reporter.dart',
-    'sink != null && _consent.crashReporting',
+    'app/lib/core/engine/crash_reporter.dart',
+    'if (!opted) return;',
     because:
-        'reporting must require BOTH a configured sink and explicit '
-        'consent. Weakening either half turns a privacy-first product into '
-        'one that phones home by default.',
+        'reporting must require the person\'s opt-in AND the server\'s '
+        'crash_reporting_upload flag. Weakening either half turns a '
+        'privacy-first product into one that phones home by default.',
+  ),
+  GovernanceControl(
+    'a crash report carries the exception type only',
+    'app/lib/core/engine/crash_reporter.dart',
+    'error.runtimeType.toString()',
+    because:
+        'no message text, stack trace, account or server address leaves '
+        'the device.',
   ),
   GovernanceControl(
     'the crash sink is self-hosted',
-    'backend/lib/src/modules/operability.dart',
-    'telemetryRouter',
+    'server/lib/src/modules/ops/module.dart',
+    'Routes.crashReport',
     because:
         'MED-4 asked for a self-hosted sink specifically. A vendor SDK '
         'in the client would satisfy the letter and not the intent.',
   ),
-
-  // --- Observability -------------------------------------------------------
-  GovernanceControl(
-    'correlation ids propagate into logs',
-    'backend/lib/src/server_log.dart',
-    'currentCorrelationId',
-    because:
-        '§23 — ids were generated and echoed but never reached the log '
-        'lines emitted while handling the request, so they correlated '
-        'nothing.',
-  ),
 ];
+
+/// Every `.dart` path the regression matrix names must exist, so the matrix
+/// cannot come to describe tests that were renamed or deleted. Paths in the
+/// matrix are relative to `helix_remote/`.
+List<String> regressionMatrixFailures() {
+  const matrix = 'docs/security/REGRESSION_TEST_MATRIX.md';
+  final file = File(matrix);
+  if (!file.existsSync()) return ['$matrix does not exist'];
+  final paths = RegExp(
+    r'`([A-Za-z0-9_./-]+\.dart)`',
+  ).allMatches(file.readAsStringSync()).map((m) => m.group(1)!).toSet();
+  return [
+    if (paths.isEmpty) '$matrix names no test files',
+    for (final path in paths)
+      if (!File(path).existsSync()) '$matrix names $path, which does not exist',
+  ];
+}
 
 void main() {
   final missing = <String>[];
@@ -227,6 +296,7 @@ void main() {
     final failure = control.evaluate();
     if (failure != null) missing.add(failure);
   }
+  missing.addAll(regressionMatrixFailures());
 
   if (missing.isNotEmpty) {
     stderr.writeln('Governance control verification failed:');

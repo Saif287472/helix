@@ -1,6 +1,8 @@
 # ADR 019: Dart/Shelf Backend Is the Authoritative Implementation
 
 Status: accepted  
+
+> Status note (Phase X): Dart with shelf is still the server. The v1 `backend/` package and its SQLite storage were deleted at cutover; the storage and topology parts are superseded by ADR-025.
 Date: 2026-06-20
 
 > For the v2 server (`helix_remote/server/`, branch `architecture-v2`), the

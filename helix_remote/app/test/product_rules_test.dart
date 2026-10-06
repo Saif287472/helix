@@ -191,7 +191,10 @@ void main() {
     },
   );
 
-  test('release manifest pins the Helix Global certificate key', () {
+  test('release manifest forbids cleartext and carries no inert pin', () {
+    // Certificate pinning is off by default and lives in Dart
+    // (tls_pinning.dart, tls_pinning_test.dart); Android's network security
+    // config would not apply to Dart's sockets, so it holds no pin.
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',
     ).readAsStringSync();
@@ -200,9 +203,8 @@ void main() {
     ).readAsStringSync();
 
     expect(manifest, contains('networkSecurityConfig'));
-    expect(networkConfig, contains('hr.agiletechbd.com'));
-    expect(networkConfig, contains('pin-set'));
-    expect(networkConfig, contains('SHA-256'));
+    expect(networkConfig, contains('cleartextTrafficPermitted="false"'));
+    expect(networkConfig, isNot(contains('<pin-set')));
   });
 
   test('LOW-4 no foreground-service permission is requested unused', () {

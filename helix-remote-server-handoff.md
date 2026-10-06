@@ -1,5 +1,7 @@
 # Helix Remote — Local PC Deployment Handoff
 
+> **Status: historical for the backend (Phase X, 2026-10).** This is the handoff of the v1 backend (SQLite, `helix_remote/backend`), which the v2 server replaced; its `HELIX_REMOTE_*` variables, `backend/.env` and SQLite steps no longer apply. The current handoff is [`helix_remote/docs/operations/V2_SERVER_HANDOFF.md`](helix_remote/docs/operations/V2_SERVER_HANDOFF.md). The PC-level parts below (Caddy, the router and Windows Firewall, coturn in WSL1, the dynamic IP) are still accurate; read them with the v2 handoff beside them.
+
 You're picking up infrastructure work on a self-hosted deployment of the "Helix Remote"
 messaging app (private repo `github.com/Saif287472/helix`, main branch). This is
 currently configured for personal/family and development use. The earlier InterServer

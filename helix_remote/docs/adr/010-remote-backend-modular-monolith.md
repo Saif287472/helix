@@ -1,6 +1,8 @@
 # ADR 010: Remote Backend Modular Monolith
 
 Status: accepted  
+
+> Status note (Phase X): still the shape of the server; refined by ADR-026 (modules with their own Postgres schema and an `api.dart` facade). The `helix_remote/backend` it names was replaced by `helix_remote/server`.
 Date: 2026-06-19  
 
 ## Context

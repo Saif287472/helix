@@ -1,9 +1,8 @@
 # Helix Remote v2 Server - Operability
 
-Status: written in Phase S7 (2026-10-01) from the code on branch
-`architecture-v2`. The v2 server is not deployed yet; v1 is still live until
-cutover. This document replaces `REMOTE_OPERABILITY_AND_DR.md` for v2 (that
-file stays as the v1 reference until Phase X).
+Status: written in Phase S7 (2026-10-01) from the code, finalised at Phase X
+(2026-10). This document replaced `REMOTE_OPERABILITY_AND_DR.md`, which stays
+as the historical v1 reference.
 
 Companion: [`V2_SERVER_HANDOFF.md`](V2_SERVER_HANDOFF.md) (what the server is,
 the environment variables, start and stop, Caddy, cutover). Module details are
@@ -81,7 +80,7 @@ identifiers into a ticket or chat without checking it first.
 - **Not exported (gaps):** database pool use, rate-limit rejections as a
   counter (they show up as `429` in the histogram's `status` label), push and
   SMS results.
-- Useful starting signals, taken from the v1 operability targets and mapped
+- Useful starting signals, taken from the old operability targets and mapped
   to what exists: readiness failing for 2 minutes; `5xx` share of
   `helix_http_request_seconds_count` above 2% for 5 minutes; `429` share above
   20%; any `helix_jobs_total{result="dead"}` increase or `helix_jobs_dead`
@@ -564,7 +563,7 @@ millions of users; this section is about two nodes on one host.
 - `MigrationIntegrityError`: the code and the database disagree about an
   applied migration. You are running different code than the database was
   migrated with. Check the code version; do not edit the table.
-- Port already in use: another node, or the v1 backend, is on `HELIX_PORT`.
+- Port already in use: another node, or a leftover process, is on `HELIX_PORT`.
 - Another node holds the migration lock: a second start waits for it; it ends
   when that node's migration transaction finishes.
 
@@ -675,8 +674,7 @@ stdout to.
 
 Phase S7 includes a load harness for authenticated send and receive, with p50
 and p95 at 1,000 simulated devices on the PC. Its results and instructions are
-recorded with the phase report, not here. The v1 smoke harness described in
-`LOAD_TESTING.md` targets the old backend only.
+recorded with the phase report, not here (`LOAD_TESTING.md`).
 
 ## Review items found while writing this document
 
@@ -686,6 +684,5 @@ recorded with the phase report, not here. The v1 smoke harness described in
   jobs are not built.
 - There is no operator reset for the admin password and no retry route for a
   single dead job.
-- Error codes `4001`, `4004` and `4029` are documented for WebSockets but never
-  sent; the upgrade has no rate limit of its own.
-- The pool size (10) is a constant, not a setting.
+- Resolved in S7: `4001`, `4004` and `4029` are sent (token expiry, suspension,
+  too many upgrades or frames), and the pool size is `HELIX_DB_POOL_SIZE`.

@@ -2,32 +2,15 @@
 
 This document performs the formal cryptographic design review (P9-001) for Helix Remote. It details the cryptographic decisions and design specifications resolving tasks P9-002 through P9-018 and P9-023.
 
-> Implementation status (2026-09): sections 2-9 describe the target design.
-> Where the code differs:
->
-> - **Ratchet (section 4):** `DoubleRatchetSession`
->   (`packages/helix_remote_crypto/lib/src/double_ratchet.dart`) implements the
->   symmetric chains, DH ratchet steps and skipped-message keys, and is used by
->   `app/lib/app/remote_messaging_service/message_crypto.dart`. The replay
->   window in section 6 is not verified, and there is no independent review, so
->   it must not be represented as Signal-equivalent.
-> - **Identity (section 2):** the account identity key is one per account, not
->   per device. A device that signs in with the password holds the same key,
->   unwrapped from a password-wrapped copy on the server (section 9a).
-> - **Signed prekeys (sections 2, 9):** the default signed-prekey TTL is 30 days
->   (`signedPrekeyTtl` in `packages/helix_remote_crypto/lib/src/prekey_manager.dart`),
->   not a 14-day background rotation.
-> - **Linking (section 9, P9-007):** there is no QR-and-sign-by-`IK_A` step.
->   Linking uses a server-stored approval transcript signed by the new device,
->   a six-digit verification code and a 10-minute TTL
->   (`backend/lib/src/modules/auth/devices.dart`). A device can also be added
->   by password sign-in with no approval (section 9a).
-> - **Revocation (section 9, P9-009, P9-018):** revocation is an authenticated
->   server call (bearer token of a sibling device: `/devices/revoke`,
->   `/devices/revoke-others`, `/devices/lost-device`), not a published
->   `IK_A`-signed proof.
-> - **Attachments (section 8):** ciphertext is stored on the server's local
->   filesystem (`HELIX_REMOTE_ATTACHMENTS_DIR`), not S3.
+> **Status at Phase X (2026-10): sections 1-10 are the v1 design review, kept as
+> design history.** They describe the v1 implementation (per-conversation
+> sessions, symmetric-only ratchet steps in the app, `helix_remote_storage`,
+> `double_ratchet.dart`, the SQLite backend), which was deleted at the cutover
+> (last v1 commit: tag `v1-final`); the file paths they name no longer exist.
+> The current implementation is v2: read **section 11** (the v2 client crypto
+> note) and **"Independent review pass, 2026-10-05"** at the end, and the
+> specification in `docs/protocol/v2/CRYPTO_V2.md`. Nothing here, v1 or v2, has
+> been externally reviewed.
 
 ---
 
@@ -237,8 +220,8 @@ by ARCHITECTURE_V2_PLAN.md §5. Nothing in v2 may be described as externally
 reviewed or Signal-equivalent until an independent review happens (ADR-028).
 
 - **Scope:** `packages/helix_remote_crypto/lib/v2.dart` implements
-  `docs/protocol/v2/CRYPTO_V2.md`. The v1 code above is unchanged and stays
-  in use until cutover.
+  `docs/protocol/v2/CRYPTO_V2.md`. The v1 code described above was deleted at
+  Phase X; v2 is the only crypto in the repository.
 - **What changed from v1:**
   - Full Double Ratchet with DH steps (post-compromise security), with
     `MAX_SKIP` 1,000 per chain, 2,000 stored keys per session and a 30-day

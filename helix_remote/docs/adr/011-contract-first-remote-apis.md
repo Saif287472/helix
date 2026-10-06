@@ -1,6 +1,8 @@
 # ADR 011: Contract-First Remote APIs
 
 Status: accepted  
+
+> Status note (Phase X): superseded by ADR-028. The OpenAPI and JSON-Schema files named here were deleted; the contract is the Dart route catalog in `packages/helix_remote_protocol` plus `docs/protocol/v2/REST_V2.md`, kept in step by tests (route parity, documentation coverage, golden fixtures in `contracts/v2/fixtures/`).
 Date: 2026-06-19  
 
 ## Context

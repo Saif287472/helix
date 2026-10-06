@@ -1,5 +1,5 @@
 name: helix_remote_crypto
-description: Cryptographic primitives for Helix Remote, including X3DH, Double Ratchet, Sender Keys, and secure storage.
+description: Helix Remote client cryptography, pure Dart - X3DH, Double Ratchet, Sender Keys, attachment and backup crypto.
 publish_to: none
 version: 1.0.0
 
@@ -9,21 +9,13 @@ environment:
 resolution: workspace
 
 dependencies:
-  flutter:
-    sdk: flutter
   meta: ^1.18.0
   cryptography: ^2.9.0
-  cryptography_flutter: ^2.0.0
   crypto: ^3.0.7
-  flutter_secure_storage: ^11.2.0
-  helix_remote_domain:
-    path: ../helix_remote_domain
   helix_remote_protocol:
     path: ../helix_remote_protocol
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
   helix_remote_architecture_rules:
     path: ../helix_remote_architecture_rules
   test: ^1.31.0

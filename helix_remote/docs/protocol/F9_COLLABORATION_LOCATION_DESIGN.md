@@ -1,5 +1,7 @@
 # F9 Collaboration And Location Design
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/CONTENT_V2.md`](v2/CONTENT_V2.md). Polls, events, stickers and live location are content types the app draws as text or "needs a newer version" for now (plan section 11, A2).
+
 Status: completed locally on 2026-06-25.
 
 F9 adds server-opaque collaboration content for polls, events, reminders, and

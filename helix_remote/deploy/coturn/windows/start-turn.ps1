@@ -8,12 +8,16 @@ Uses the same template and entrypoint as the Docker deployment
 never drift. coturn has no native Windows build; WSL1 is used because it
 shares Windows' network stack, so coturn binds the PC's real LAN address.
 
-Settings are read the way the backend reads them - a process environment
-variable wins, otherwise backend/.env - so coturn and the backend are always
+Settings are read the way the v2 server reads them - a process environment
+variable wins, otherwise server/.env - so coturn and the server are always
 handed the same shared secret:
 
-  HELIX_REMOTE_TURN_SECRET  required; must match what the backend uses
-  TURN_REALM                optional; defaults to the host in HELIX_REMOTE_TURN_URL
+  HELIX_TURN_SECRET  required; must match what the server uses
+  TURN_REALM         optional; defaults to the host of the first entry in
+                     HELIX_TURN_URLS (then the host of HELIX_PUBLIC_BASE_URL)
+
+The file is helix_remote\server\.env next to this checkout; pass -EnvFile
+when the server's .env lives somewhere else.
 
 The secret is never put on a command line. It reaches WSL through WSLENV
 (inherited environment), and the rendered config lives in a root-only file
@@ -29,24 +33,32 @@ The router's public IPv4. Detected automatically when omitted.
 .PARAMETER LanIp
 This PC's LAN IPv4 (the router forwards to it). Detected from the default
 route when omitted.
+
+.PARAMETER EnvFile
+The server's .env file. Defaults to server\.env in this checkout.
+
+.NOTES
+TLS (turns: on 5349) is optional: this script serves plain turn: on 3478
+only. See deploy/coturn/README.md, "Enable TLS", if you want turns:.
 #>
 param(
     [string]$Distro = 'Ubuntu',
     [string]$PublicIp,
-    [string]$LanIp
+    [string]$LanIp,
+    [string]$EnvFile
 )
 
 $ErrorActionPreference = 'Stop'
 
 $coturnDir = Split-Path $PSScriptRoot -Parent
 $repoRoot = Split-Path (Split-Path $coturnDir -Parent) -Parent
-$envFile = Join-Path $repoRoot 'backend\.env'
+if (-not $EnvFile) { $EnvFile = Join-Path $repoRoot 'server\.env' }
 
 function Get-Setting([string]$Name) {
     $fromProcess = [Environment]::GetEnvironmentVariable($Name)
     if ($fromProcess) { return $fromProcess }
-    if (-not (Test-Path $envFile)) { return $null }
-    $line = Get-Content $envFile |
+    if (-not (Test-Path $EnvFile)) { return $null }
+    $line = Get-Content $EnvFile |
         Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=" } |
         Select-Object -First 1
     if (-not $line) { return $null }
@@ -57,18 +69,22 @@ function Get-Setting([string]$Name) {
     return $value
 }
 
-$secret = Get-Setting 'HELIX_REMOTE_TURN_SECRET'
+$secret = Get-Setting 'HELIX_TURN_SECRET'
 if (-not $secret) {
-    throw "HELIX_REMOTE_TURN_SECRET is not set in the environment or $envFile."
+    throw "HELIX_TURN_SECRET is not set in the environment or in $EnvFile."
 }
 
 $realm = Get-Setting 'TURN_REALM'
 if (-not $realm) {
-    $turnUrl = Get-Setting 'HELIX_REMOTE_TURN_URL'
-    if ($turnUrl -match '^turns?:([^:?,]+)') { $realm = $Matches[1] }
+    $turnUrls = Get-Setting 'HELIX_TURN_URLS'
+    if ($turnUrls -match '^\s*turns?:([^:?,\s]+)') { $realm = $Matches[1] }
 }
 if (-not $realm) {
-    throw 'Set TURN_REALM (or HELIX_REMOTE_TURN_URL) in backend/.env.'
+    $baseUrl = Get-Setting 'HELIX_PUBLIC_BASE_URL'
+    if ($baseUrl -match '^https?://([^:/?#]+)') { $realm = $Matches[1] }
+}
+if (-not $realm) {
+    throw "Set TURN_REALM, HELIX_TURN_URLS or HELIX_PUBLIC_BASE_URL in $EnvFile."
 }
 
 if (-not $LanIp) {
@@ -96,7 +112,7 @@ foreach ($file in @('entrypoint.sh', 'turnserver.conf')) {
 
 & wsl.exe -d $Distro -u root -- sh -c 'pkill -x turnserver; sleep 1; true'
 
-$env:HELIX_REMOTE_TURN_SECRET = $secret
+$env:HELIX_TURN_SECRET = $secret
 $env:TURN_REALM = $realm
 $env:TURN_EXTERNAL_IP = $PublicIp
 $env:TURN_LOCAL_IP = $LanIp
@@ -104,7 +120,7 @@ $env:TURN_TEMPLATE = "$stage/turnserver.conf"
 $env:TURN_RENDERED = "$stage/turnserver.rendered.conf"
 # No certificate directory: plain turn: on 3478 only (see entrypoint.sh).
 $env:TURN_CERT_DIR = "$stage/certs"
-$env:WSLENV = 'HELIX_REMOTE_TURN_SECRET/u:TURN_REALM/u:TURN_EXTERNAL_IP/u:TURN_LOCAL_IP/u:TURN_TEMPLATE/u:TURN_RENDERED/u:TURN_CERT_DIR/u'
+$env:WSLENV = 'HELIX_TURN_SECRET/u:TURN_REALM/u:TURN_EXTERNAL_IP/u:TURN_LOCAL_IP/u:TURN_TEMPLATE/u:TURN_RENDERED/u:TURN_CERT_DIR/u'
 
 Start-Process -FilePath 'wsl.exe' -WindowStyle Hidden -ArgumentList @(
     '-d', $Distro, '-u', 'root', '--',

@@ -4,8 +4,8 @@ import 'package:helix_remote_architecture_rules/helix_remote_architecture_rules.
 import 'package:test/test.dart';
 
 /// Import boundaries for helix_remote_api (ARCHITECTURE_V2_PLAN.md §6.1, §8).
-/// The whole package is checked, v1 files included: the v1 API depends only
-/// on helix_remote_domain, which the v2 graph allows.
+/// The v1 API (`lib/api.dart`) was deleted at Phase X; the rules below keep it
+/// and the domain models from coming back into the clients.
 void main() {
   final files = scanDartSources(Directory.current.path);
 
@@ -33,8 +33,8 @@ void main() {
       ForbiddenDirectiveRule(
         name: 'v2-isolation',
         reason:
-            'v2 clients speak helix_remote_protocol DTOs only; the v1 API is '
-            'retired at Phase A1.',
+            'v2 clients speak helix_remote_protocol DTOs only; the v1 API was '
+            'retired at Phase X.',
         forbidden: (uri) =>
             uri.startsWith('package:helix_remote_api/api') ||
             uri.startsWith('package:helix_remote_domain/'),

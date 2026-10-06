@@ -1,50 +1,35 @@
 # Package: helix_remote_cli
 
-Status: current. Holds two CLIs side by side until cutover: **v1** (below,
-unchanged) and **v2** (`lib/v2.dart`, `lib/src/v2/`, `bin/helix_v2.dart`,
-described at the end). Package-level counterpart to the backend module docs, from
-the [structural upgrade plan](../../../docs/architecture/EARNMINUTE_STRUCTURAL_UPGRADE_PLAN.md)
-(item A4). States in prose what
-[`module_boundaries.json`](../../../docs/architecture/module_boundaries.json)
-enforces at build time via `tool/check_boundaries.dart` — the config is the
-authority; this is the explanation that sits next to the code.
+Status: current. The headless client, `helix_v2`. The v1 CLI was deleted at
+Phase X.
 
 ## Purpose
 
 A headless client used for end-to-end testing and operator debugging:
-register, log in, publish prekeys, send and receive messages without the
-Flutter app.
+register, sign in, send and receive messages without the Flutter app. It is
+a thin shell over `helix_remote_engine`: each run opens the encrypted
+database, builds `HelixApi` and an `Engine`, runs one command and closes
+everything.
 
 ## Public surface
 
-`lib/helix_remote_cli.dart` exports `cli_secure_storage`, `cli_client`,
-`cli_rest_client`, `cli_message_envelope`.
+`lib/v2.dart` is the package's only public library (sources in
+`lib/src/v2/`; the name stays `v2.dart`). The executable is
+`bin/helix_v2.dart`.
 
 ## Who may depend on this
 
-Nothing. It is a leaf — tests and tooling invoke it, no package imports it.
+Nothing but tests: `server/test/client/engine/cli_test.dart` drives it.
 
 ## What this may depend on
 
-`helix_remote_domain`, `helix_remote_api`, `helix_remote_crypto`,
-`helix_remote_storage`, plus `crypto`, `cryptography` and `path`.
+`helix_remote_engine`, `helix_remote_api`, `helix_remote_db`,
+`helix_remote_crypto` and `helix_remote_protocol`. No Flutter, drift,
+sqlite3 or HTTP imports of its own (`test/v2/architecture_test.dart`).
 
-## Gotchas
+## Commands
 
-- **`cli_secure_storage` is a file-backed stand-in for the platform
-  keychain.** It exists so the CLI can run headless; it is not a secure
-  store and must not be used by the app.
-- **`verify.sh` runs this package's tests with `flutter test`, not `dart
-  test`**, even though its own pubspec has no `sdk: flutter`. It transitively
-  depends on `helix_remote_crypto`, which is Flutter-based, and plain `dart
-  test` fails to resolve `dart:ui` in that case. The comment in
-  `scripts/verify.sh` says so; don't "simplify" it back.
-
-## v2 CLI (`helix_v2`, Phase C3b)
-
-A thin shell over `helix_remote_engine`: each run opens the encrypted
-database, builds `HelixApi` and an `Engine`, runs one command and closes
-everything. `dart run helix_remote_cli:helix_v2 help` lists the commands:
+`dart run helix_remote_cli:helix_v2 help` lists the commands:
 `register`, `login` (password), `link` / `link-approve` (QR code text),
 `status`, `logout`, `contacts add|find|list`, `block`, `chats`, `send`
 (one-shot), `chat` (interactive), `read`, `react`, `fetch`, `watch`,
@@ -66,8 +51,6 @@ Peers are `+number`, `~name`, a contact name or an id prefix.
   `cli_test.dart` (server) asserts that no phone number, code, key or
   password appears in anything printed.
 - **Exit codes:** 0 success, 1 failure, 2 misuse.
-- **Rules** (`test/v2/architecture_test.dart`): v2 files import no v1 package,
-  no v1 CLI file, no Flutter, drift, sqlite3 or HTTP.
 - **Tests:** `test/v2/` (arguments, key handling, safe errors, no server) and
   `server/test/client/engine/cli_test.dart` (two homes exchange messages
   through the real server, a second CLI device is linked, a device is

@@ -1,7 +1,6 @@
 name: helix_remote_api
 description: >-
-  HTTP REST client definitions and WebSocket envelope parser for Helix Remote
-  (v1, `lib/api.dart`), and the typed v2 REST and realtime clients
+  Typed REST and realtime clients for the Helix Remote v2 server
   (`lib/v2.dart`).
 publish_to: none
 version: 1.0.0
@@ -13,8 +12,6 @@ resolution: workspace
 
 dependencies:
   crypto: ^3.0.7
-  helix_remote_domain:
-    path: ../helix_remote_domain
   helix_remote_protocol:
     path: ../helix_remote_protocol
   http: ^1.6.0

@@ -1,5 +1,7 @@
 # F4 Messaging Productivity Design
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/CONTENT_V2.md`](v2/CONTENT_V2.md): edits, reactions, replies, deletes and forwards are encrypted content types, not server routes, so the server no longer enforces edit or delete windows.
+
 Status: completed locally on 2026-06-25.
 
 Phase F4 adds local-first chat organization and contact workflows without

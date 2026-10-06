@@ -63,15 +63,15 @@ if (-not (Test-BuildOnlyEnabled)) {
     }
 
     Invoke-Step "Dart format check" {
-        dart format --output=none --set-exit-if-changed app admin backend server packages tool
+        dart format --output=none --set-exit-if-changed app admin server packages tool
     }
 
     Invoke-Step "Flutter analyze" {
         flutter analyze @FlutterPubArgs
     }
 
-    Invoke-Step "Dart analyze (backend, v2 server and tooling)" {
-        dart analyze backend server tool
+    Invoke-Step "Dart analyze (server and tooling)" {
+        dart analyze server tool
     }
 
     Invoke-Step "Flutter tests (app)" {
@@ -92,19 +92,10 @@ if (-not (Test-BuildOnlyEnabled)) {
         }
     }
 
-    Invoke-Step "Tests: backend" {
-        Push-Location backend
-        try {
-            dart test
-        } finally {
-            Pop-Location
-        }
-    }
-
-    # v2 server (ARCHITECTURE_V2_PLAN.md). Database tests skip unless
-    # HELIX_TEST_DATABASE_URL is set; CI sets HELIX_REQUIRE_TEST_DATABASE=1
-    # on Linux so they cannot silently skip there.
-    Invoke-Step "Tests: server (v2)" {
+    # The server. Database tests skip unless HELIX_TEST_DATABASE_URL is set;
+    # CI sets HELIX_REQUIRE_TEST_DATABASE=1 on Linux so they cannot silently
+    # skip there.
+    Invoke-Step "Tests: server" {
         Push-Location server
         try {
             dart test
@@ -122,21 +113,18 @@ if (-not (Test-BuildOnlyEnabled)) {
             try {
                 # Always `flutter test`, even for packages whose own
                 # pubspec.yaml has no `sdk: flutter` line - matching
-                # verify.sh. A package can still transitively depend on a
-                # Flutter-based one (helix_remote_cli -> helix_remote_crypto),
-                # and plain `dart test` then fails to resolve `dart:ui`,
-                # surfacing as compile errors inside Flutter's own sources
-                # (velocity_tracker.dart: "'Offset' isn't a type"). This
-                # script used to branch on the pubspec and so hit exactly
-                # that on helix_remote_cli, while the bash script - which
-                # carries the same fix and a comment explaining it - passed.
-                # `flutter test` runs pure-Dart package tests correctly too,
-                # so there is no downside to using it unconditionally.
+                # verify.sh. It runs pure-Dart package tests correctly too,
+                # and a package that gains a Flutter dependency later does
+                # not need a new branch here.
                 flutter test @FlutterPubArgs
             } finally {
                 Pop-Location
             }
         }
+    }
+
+    Invoke-Step "Governance control evidence" {
+        dart run tool/check_governance_controls.dart
     }
 
     Invoke-Step "Dependency health advisory" {
