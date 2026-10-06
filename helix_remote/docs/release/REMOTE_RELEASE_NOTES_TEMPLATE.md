@@ -7,7 +7,7 @@ Date: `YYYY-MM-DD`
 ## Summary
 
 - User-visible changes:
-- Backend/API changes:
+- Server/API changes (new migrations, new `.env` lines):
 - Compatibility notes:
 
 ## Verification
@@ -23,9 +23,8 @@ Date: `YYYY-MM-DD`
 
 - Claims verified against `docs/product/PRIVACY_CLAIM_MATRIX.md`:
 - Known blockers retained:
-  - SQLCipher-capable database-at-rest encryption.
-  - Independent external crypto/security review.
-  - Full DH/skipped-key ratchet support.
+  - Independent external crypto/security review (so no "audited" or strong
+    forward-secrecy claims).
   - Staging deployment, until real infrastructure exists.
 
 ## Rollback

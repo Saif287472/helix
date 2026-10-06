@@ -41,16 +41,20 @@ Invoke-Step "Remote client tests" {
     }
 }
 
-Invoke-Step "Remote backend tests" {
-    Push-Location backend
+# Needs HELIX_TEST_DATABASE_URL (a Postgres test database); a missing database
+# fails the step instead of skipping the suites.
+Invoke-Step "Server tests" {
+    Push-Location server
     try {
-        dart test
+        $env:HELIX_REQUIRE_TEST_DATABASE = "1"
+        dart test --concurrency=3
     } finally {
+        Remove-Item Env:HELIX_REQUIRE_TEST_DATABASE -ErrorAction SilentlyContinue
         Pop-Location
     }
 }
 
-Invoke-Step "Remote API compatibility tests" {
+Invoke-Step "Remote API client tests" {
     Push-Location packages\helix_remote_api
     try {
         dart test

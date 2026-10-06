@@ -17,7 +17,7 @@ All pre-existing monorepo packages were classified as **Local-specific**. They n
 | `helix_discovery` | `helix_local_discovery` in `helix_local/packages/helix_local_discovery` | Local Discovery | No |
 
 ## Helix Remote packages
-`helix_remote/packages/`: `helix_remote_domain`, `helix_remote_api`, `helix_remote_crypto`, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_calls`, `helix_remote_groups`, `helix_remote_ui`, `helix_remote_cli` (workspace list in `helix_remote/pubspec.yaml`).
+`helix_remote/packages/`: `helix_remote_protocol`, `helix_remote_crypto`, `helix_remote_db`, `helix_remote_api`, `helix_remote_engine`, `helix_remote_calls`, `helix_remote_ui`, `helix_remote_domain`, `helix_remote_cli`, plus the test-only `helix_remote_architecture_rules` (workspace list in `helix_remote/pubspec.yaml`). `helix_remote_storage`, `helix_remote_sync` and `helix_remote_groups` were deleted at the Phase X cutover; their roles went to `helix_remote_db` and `helix_remote_engine`.
 
 ## Extraction Target
 No shared packages exist, and no `packages/shared/` directory was created. A shared package would have to satisfy ADR 014.

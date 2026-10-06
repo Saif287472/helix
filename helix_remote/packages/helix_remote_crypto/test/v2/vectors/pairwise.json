@@ -1,0 +1,120 @@
+{
+  "description": "Alice (initiator) and Bob; Bob decrypts the A->B payloads with the keys below and, with rng \"vec-b-session\", re-encrypts the B->A payload byte for byte.",
+  "time": 1790856000000,
+  "alice": {
+    "aik": "h9pSHfqDYkizrTBFLiqOiFQKYLnn-7BK1SZCpK-kauQ",
+    "device": {
+      "v": 1,
+      "address": {
+        "account": "0192a4f0-0000-7000-8000-00000000000a",
+        "device": "0192a4f0-0000-7000-8000-0000000000a1"
+      },
+      "aik": "h9pSHfqDYkizrTBFLiqOiFQKYLnn-7BK1SZCpK-kauQ",
+      "dik": "iYqzREPgTbblXyFcS8GkRDURo9JUHjVRlbTReKaH1Rw",
+      "dsk": "_Bc25RCEaXyxRN507vqeGIW-5oiUFSwOZhBeEcnWMIU",
+      "cert": {
+        "created_at": 1790856000000,
+        "signature": "9GMgwgXtgueTEDXvS-KmMobk4NtfNTxfIVHqKNPdmilAJms6yWWWxhH4T5wR-1TNB4ANKaCILljWh4Tki5tHBA"
+      }
+    }
+  },
+  "bob": {
+    "aik": "xQvyVrPboCNoTdWvsDA7v66V7F8mArHqrI3mOlmcwRc",
+    "device_keys": {
+      "v": 1,
+      "address": {
+        "account": "0192a4f0-0000-7000-8000-00000000000b",
+        "device": "0192a4f0-0000-7000-8000-0000000000b1"
+      },
+      "aik": "xQvyVrPboCNoTdWvsDA7v66V7F8mArHqrI3mOlmcwRc",
+      "dik_priv": "bYRXLLK4gg8fcCxkKNhO8IRuAo74MVmvH7t-NRE8zpA",
+      "dik": "FmIGbqYIGMJMxrjNqJD_Z00m2Fe-gK-BVuhyrSpvkFk",
+      "dsk_seed": "pSFpwTzEHuKk7FfWDuw6PN0Vu2ltmtfPXzC8SsO2dwI",
+      "dsk": "1oNXCaW5Hfdc0ds837DChcaodxskiORP_9ZRKPftmrM",
+      "cert": {
+        "created_at": 1790856000000,
+        "signature": "0_a9pMCErKyE9Ep3TZyv2Y7uEwgIRqxrjy7ervHq8zp01Z3jttAchgsnmwGzZBXkxGmHSufFjyIdyj7lDZtaDQ"
+      }
+    },
+    "signed_prekey": {
+      "v": 1,
+      "id": 1,
+      "priv": "3Q2nko4dXFcJMZ3mGG20_Oe6zh1OxxkuKPAWiDT5O7U",
+      "pub": "T2nfYvVbeqwjLAGMuj_Oa19U2gkL5bpTyQRgUWJerEE",
+      "sig": "7OUG-nJ3Iu8_t4NrZTmRLb9_4Kj3VEznNwlGUhehdfu9eoBO3z4hfPE3zN6vxM44nRqwQYaCIfksVm92YJbbAQ",
+      "created_at": 1790856000000
+    },
+    "one_time_prekey": {
+      "v": 1,
+      "id": 1,
+      "priv": "xYv9bWhk2nUMh7TGPjQtGC__oKRIPNMysozBXUixa88",
+      "pub": "VB1D6dXT6NAnin_PGVyLc-vDvorXXTIfPc4Nl2gawVg"
+    }
+  },
+  "messages": [
+    {
+      "from": "0192a4f0-0000-7000-8000-00000000000a/0192a4f0-0000-7000-8000-0000000000a1",
+      "content": "Hello Bob",
+      "payload": {
+        "v": 2,
+        "t": "prekey",
+        "dik": "iYqzREPgTbblXyFcS8GkRDURo9JUHjVRlbTReKaH1Rw",
+        "ek": "4tqtcMJhk99eCEgm5UnSYjvEk_xlIe8desbjqk3wVUs",
+        "spk": 1,
+        "opk": 1,
+        "h": {
+          "dh": "9_dL8hSyY9cs5IiDvlyrMc1dKv-St38I6Jt7lrApUUQ",
+          "pn": 0,
+          "n": 0
+        },
+        "ct": "raEoetUOh5vL1QsBVBSTR5dJXqErsZCNH0cx8X2JcWRW-KlaHLrKd_WdJKs0OnVQgpE2Wm0mLBYbWPXeFxs39ybEMg0tCFhReYK5orABVLy_ZOyq6BKsMXvYudPCi9gR4-UFTkSuJjDO6v1VRZSmLBc3rXc5FMJ_OUQDmisEry8pwU_4XPvS6d13p3Kv6T86JyR1GiC8kORaAlQGpFHsaVbCIveK2Dt1qimdrhqhxYg"
+      }
+    },
+    {
+      "from": "0192a4f0-0000-7000-8000-00000000000a/0192a4f0-0000-7000-8000-0000000000a1",
+      "content": "Are you there?",
+      "payload": {
+        "v": 2,
+        "t": "prekey",
+        "dik": "iYqzREPgTbblXyFcS8GkRDURo9JUHjVRlbTReKaH1Rw",
+        "ek": "4tqtcMJhk99eCEgm5UnSYjvEk_xlIe8desbjqk3wVUs",
+        "spk": 1,
+        "opk": 1,
+        "h": {
+          "dh": "9_dL8hSyY9cs5IiDvlyrMc1dKv-St38I6Jt7lrApUUQ",
+          "pn": 0,
+          "n": 1
+        },
+        "ct": "3fehhWqfRI3lNriA3wXf3RrXtuWYympIDFJNqeONnhtqWCBlx5YFCm3zR3fOdjFZ6IovGNp7d44Gkqo5KrVRKDOQKY9oNVTXwihYkHsGYOCM0CNOv6dNvFvGg4phZAhBpiM8h-_yUz9TJxDEST0dAVl2xbg4TeGh5G9JurfzEwvqxwdKZghBBY2HAc1k0fkq2TuLMMHDAI2AOsR3sQ2kloHbqC-1LM75GxKJvu-5l-I"
+      }
+    },
+    {
+      "from": "0192a4f0-0000-7000-8000-00000000000b/0192a4f0-0000-7000-8000-0000000000b1",
+      "content": "Hi Alice",
+      "payload": {
+        "v": 2,
+        "t": "ratchet",
+        "h": {
+          "dh": "lLfrB7fNQBRro49EdsHf4GzSdkFoqtw5y9COCVhrp1I",
+          "pn": 0,
+          "n": 0
+        },
+        "ct": "NLzfTU8i-temIbSA2wRlxEDAduUbDFHZXZ4WwCf1q-d6_SukGgdJSJXtUu_-dTY8zscHYjHn5wgNTTtolQnYbwb-fYFAqEr78I1Dxne2qY_5SqfnoPNEwbSLq5OrwgSfDA7_pakTi_zxmCRqzYq6u1ot7BfWJDuUM4tKsjuYzHvdHoG9E7Xk-9HVfpSyeemXpsd-e0WGrStsPQ9zBVGtdzXkQecV__Gsrj96fu4jeYI"
+      }
+    },
+    {
+      "from": "0192a4f0-0000-7000-8000-00000000000a/0192a4f0-0000-7000-8000-0000000000a1",
+      "content": "Ratchet turned",
+      "payload": {
+        "v": 2,
+        "t": "ratchet",
+        "h": {
+          "dh": "gQ7e_oh6bgzhvoddfpYY6EzgSv5jGt-Z0QBW_cjOegk",
+          "pn": 2,
+          "n": 0
+        },
+        "ct": "24OeXaeXJ7XzRiDvr5tN12ZoRQh7W7_xRNNwTFBy1r8TUzVA1LfIu2cOGeCjQt7gaQoAwR6m9fAQtYIDo-ScxBZJ2yY5cCB13wtfQFZk1LQgXWLG5WUHlWUIrL-aOW9AjUfxAgudcY3lQRRMBN7a1UMjAWj8EPDBwdxmWNHVtfPNbRttnopfgVXl78h2s5N3FCTpxm_bHLwTZ2V5WVpLbcBo98SuB5oUDuJ90H5HftI"
+      }
+    }
+  ]
+}

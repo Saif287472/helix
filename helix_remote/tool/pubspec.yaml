@@ -1,5 +1,5 @@
 name: helix_remote_tool
-description: Extraction and tooling scripts for helix_remote.
+description: Repository checks and tooling scripts for helix_remote - governance controls, performance budgets and the SBOM.
 publish_to: none
 version: 1.0.0
 
@@ -7,10 +7,3 @@ environment:
   sdk: ^3.12.0
 
 resolution: workspace
-
-dependencies:
-  helix_remote_domain:
-    path: ../packages/helix_remote_domain
-
-dev_dependencies:
-  test: ^1.31.0

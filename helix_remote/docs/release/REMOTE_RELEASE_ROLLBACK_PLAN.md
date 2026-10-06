@@ -1,5 +1,7 @@
 # Helix Remote Release Rollback Plan
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`V2_SERVER_HANDOFF.md`](../operations/V2_SERVER_HANDOFF.md), "Rollback": no rollback is planned for the cutover (no real users; fix forward).
+
 Remote rollback must preserve account identity, device state, message deletion
 semantics, backup envelopes, and server compatibility.
 

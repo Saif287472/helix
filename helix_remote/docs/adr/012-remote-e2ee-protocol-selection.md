@@ -1,6 +1,8 @@
 # ADR 012: Remote E2EE Protocol Selection Process
 
 Status: accepted  
+
+> Status note (Phase X): the v1 implementation named below was deleted. The current protocol is specified in `docs/protocol/v2/CRYPTO_V2.md` (ADR-028): per-device-pair X3DH, a full Double Ratchet, Sender Keys. It is still Helix-owned and not externally reviewed.
 Date: 2026-06-19  
 
 > Implementation status (2026-09): the "widely deployed library" goal was not met. Helix Remote uses its own X3DH (`packages/helix_remote_crypto/lib/src/x3dh.dart`) and `DoubleRatchetSession` (`packages/helix_remote_crypto/lib/src/double_ratchet.dart`) built on the `cryptography` package primitives (Ed25519, X25519, HKDF, AES-GCM). It has not been externally reviewed; see `docs/security/EXTERNAL_SECURITY_REVIEW_GATE.md`.

@@ -1,5 +1,7 @@
 # F5 Rich Media Pipeline Design
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/CRYPTO_V2.md`](v2/CRYPTO_V2.md) section 12 (attachment STREAM v2) and the media module (`server/lib/src/modules/media/MODULE.md`): random object ids, 30-day expiry, no message link.
+
 Status: completed locally on 2026-06-25.
 
 F5 reuses the encrypted attachment pipeline and adds typed message content for

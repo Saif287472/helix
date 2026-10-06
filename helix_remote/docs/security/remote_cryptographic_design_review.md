@@ -2,32 +2,15 @@
 
 This document performs the formal cryptographic design review (P9-001) for Helix Remote. It details the cryptographic decisions and design specifications resolving tasks P9-002 through P9-018 and P9-023.
 
-> Implementation status (2026-09): sections 2-9 describe the target design.
-> Where the code differs:
->
-> - **Ratchet (section 4):** `DoubleRatchetSession`
->   (`packages/helix_remote_crypto/lib/src/double_ratchet.dart`) implements the
->   symmetric chains, DH ratchet steps and skipped-message keys, and is used by
->   `app/lib/app/remote_messaging_service/message_crypto.dart`. The replay
->   window in section 6 is not verified, and there is no independent review, so
->   it must not be represented as Signal-equivalent.
-> - **Identity (section 2):** the account identity key is one per account, not
->   per device. A device that signs in with the password holds the same key,
->   unwrapped from a password-wrapped copy on the server (section 9a).
-> - **Signed prekeys (sections 2, 9):** the default signed-prekey TTL is 30 days
->   (`signedPrekeyTtl` in `packages/helix_remote_crypto/lib/src/prekey_manager.dart`),
->   not a 14-day background rotation.
-> - **Linking (section 9, P9-007):** there is no QR-and-sign-by-`IK_A` step.
->   Linking uses a server-stored approval transcript signed by the new device,
->   a six-digit verification code and a 10-minute TTL
->   (`backend/lib/src/modules/auth/devices.dart`). A device can also be added
->   by password sign-in with no approval (section 9a).
-> - **Revocation (section 9, P9-009, P9-018):** revocation is an authenticated
->   server call (bearer token of a sibling device: `/devices/revoke`,
->   `/devices/revoke-others`, `/devices/lost-device`), not a published
->   `IK_A`-signed proof.
-> - **Attachments (section 8):** ciphertext is stored on the server's local
->   filesystem (`HELIX_REMOTE_ATTACHMENTS_DIR`), not S3.
+> **Status at Phase X (2026-10): sections 1-10 are the v1 design review, kept as
+> design history.** They describe the v1 implementation (per-conversation
+> sessions, symmetric-only ratchet steps in the app, `helix_remote_storage`,
+> `double_ratchet.dart`, the SQLite backend), which was deleted at the cutover
+> (last v1 commit: tag `v1-final`); the file paths they name no longer exist.
+> The current implementation is v2: read **section 11** (the v2 client crypto
+> note) and **"Independent review pass, 2026-10-05"** at the end, and the
+> specification in `docs/protocol/v2/CRYPTO_V2.md`. Nothing here, v1 or v2, has
+> been externally reviewed.
 
 ---
 
@@ -229,3 +212,72 @@ Ratchet property; it is a keyed lookup hash, nothing more.
     Helix Remote servers is out of scope by construction - each server has an
     independent salt, so a hash computed for one server is meaningless on
     another.
+
+## 11. v2 client crypto (Phase C2, 2026-10-02) - internal review note
+
+**Not externally reviewed.** This note is the author's own review, required
+by ARCHITECTURE_V2_PLAN.md §5. Nothing in v2 may be described as externally
+reviewed or Signal-equivalent until an independent review happens (ADR-028).
+
+- **Scope:** `packages/helix_remote_crypto/lib/v2.dart` implements
+  `docs/protocol/v2/CRYPTO_V2.md`. The v1 code described above was deleted at
+  Phase X; v2 is the only crypto in the repository.
+- **What changed from v1:**
+  - Full Double Ratchet with DH steps (post-compromise security), with
+    `MAX_SKIP` 1,000 per chain, 2,000 stored keys per session and a 30-day
+    expiry.
+  - Sessions per device pair, not per conversation.
+  - Device certificates under the AIK, checked before any DH. SPK
+    signatures under the DSK. No fallback to "the last SPK".
+  - Sender Keys with a per-message Ed25519 signature, rotation on removal or
+    device change, and one ciphertext per group message.
+  - Attachment STREAM with an authenticated header and a last-chunk flag.
+  - AAD on every backup AEAD.
+  - A working provisioning message for device linking.
+- **Invariants and tests (`test/v2/`):**
+  - Decrypt-before-commit: operations are pure and return state only after
+    the AEAD tag (and, for groups, the signature) verifies. Tests check
+    that a failure leaves the stored bytes unchanged.
+  - Replay of messages and of prekey messages is rejected, including
+    no-OPK prekey messages after their session was dropped.
+  - Tampered header, ciphertext or AD are rejected; wrong identities
+    (certificate, SPK signature, DIK mismatch, unknown device) are refused.
+  - Skip caps and eviction are enforced; previous sessions are capped at 5.
+  - §13a reset and simultaneous initiation converge; sender-key rotation
+    behaves as specified.
+  - Known-answer tests against RFC 5869, RFC 7748 and RFC 8032.
+  - Byte layouts are rebuilt by hand from CRYPTO_V2.md and compared with the
+    implementation.
+  - Golden vectors are regenerated and also consumed from the files.
+- **Spec deviation found:** CRYPTO_V2.md §9 derived the group-state and
+  profile-blob nonce from the key, which would repeat the GCM nonce across
+  versions. A random nonce is implemented instead (CRYPTO_V2.md §14,
+  proposed change-log entry).
+- **Residual risks:**
+  - Pure-Dart primitives from `package:cryptography` (not constant-time
+    audited).
+  - No header encryption or sealed sender (by design in v2.0).
+  - The server can roll group state back within an epoch.
+  - X3DH without an OPK is replayable at the X3DH level; this is mitigated
+    by remembered base keys and envelope de-duplication.
+  - Passwords are not Unicode-normalised.
+
+## Independent review pass, 2026-10-05
+
+An independent, read-only review of the v2 client crypto and engine was done
+and its confirmed findings were fixed in the commit `fix(client): v2 security
+review pass - crypto and engine`: re-send requests answered to anyone (high);
+crafted numbers in content stalling the inbound queue, deleted keys left in
+the database file, server-driven group state and membership, device linking
+without confirmation (medium); reserved kinds from peers, weak KDF and
+recovery-secret floors, unbounded response bodies (low). What changed, the
+test behind each fix and what stays open (signed membership changes,
+key-change handling, forced-reset replay, retired base-key cap, HTTPS
+enforcement, group key planting, server-trusted roles) is in CRYPTO_V2.md
+section 14 ("Independent review pass") and the MODULE.md of the engine, db
+and api packages. **This is still not an external review**: the design and
+code have not been audited by a third party, and nothing here should be read
+as a claim that they have. The residual risk "the server can roll group state
+back within an epoch" above is closed by binding the state version into the
+blob's AAD; a hostile server can still forge the attribution of a membership
+change.

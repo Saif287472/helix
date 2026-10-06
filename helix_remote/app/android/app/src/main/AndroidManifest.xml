@@ -14,6 +14,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Camera and microphone are used when the person taps Camera or holds the
+         microphone, not required to install: a tablet without a camera still
+         runs the app, and the Camera option is simply not offered. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!--
         allowBackup=false: the app's private directory holds the SQLCipher
@@ -70,7 +76,9 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https" android:host="helix.agiletechbd.com" android:pathPrefix="/open" />
+                <data android:scheme="https" android:host="helix.agiletechbd.com" />
+                <data android:path="/open" />
+                <data android:path="/open/" />
             </intent-filter>
             <!-- Links reach Dart through com.helix.remote/links (MainActivity), not
                  as Navigator routes: none of them names a route the app has. -->

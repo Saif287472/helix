@@ -58,6 +58,8 @@ jobs:
     env:
       CI: "true"
       HELIX_VERIFY_BUILD: "1"
+      # The drift codegen check runs once, as its own step in verify-linux.
+      HELIX_VERIFY_SKIP_CODEGEN: "1"
     steps:
       - uses: actions/checkout@v4
       # Pinned rather than left to the runner image: the Android build needs a
@@ -96,8 +98,31 @@ jobs:
     defaults:
       run:
         working-directory: helix_remote
+    # PostgreSQL for the server tests (ADR-025). The credentials only exist
+    # inside this throwaway service container. HELIX_REQUIRE_TEST_DATABASE
+    # turns a missing database into a failure instead of skipped tests, so
+    # this job is where the database suites are guaranteed to run. The
+    # Windows job cannot run Linux service containers and skips them.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: helix
+          POSTGRES_PASSWORD: helix-ci
+          POSTGRES_DB: helix_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U helix -d helix_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       CI: "true"
+      HELIX_TEST_DATABASE_URL: postgresql://helix:helix-ci@127.0.0.1:5432/helix_test?sslmode=disable
+      HELIX_REQUIRE_TEST_DATABASE: "1"
+      # Covered by the dedicated codegen step below.
+      HELIX_VERIFY_SKIP_CODEGEN: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -106,6 +131,12 @@ jobs:
           flutter-version: 3.44.8
           cache: true
       - run: flutter pub get --enforce-lockfile
+      # Generated drift code is committed (ADR-027). Regenerate it and fail if
+      # the result differs from the commit: a schema change without
+      # regenerated code, schema dump and schema helpers cannot merge.
+      - name: Verify generated drift code is current (helix_remote_db)
+        working-directory: helix_remote/packages/helix_remote_db
+        run: dart run tool/codegen.dart --check
       - name: Verify on Linux
         shell: bash
         run: ./scripts/verify.sh
@@ -124,8 +155,8 @@ jobs:
       # (reactivecircus/android-emulator-runner or equivalent) AND journeys
       # worth ~10 minutes of runner time. Today's two files pump a widget
       # each; see helix_remote/app/integration_test/README.md.
-      - name: Verify governance control evidence
-        run: dart run tool/check_governance_controls.dart
+      # The governance control evidence check (tool/check_governance_controls.dart)
+      # runs inside verify.sh above.
       - name: Enforce coverage ratchet
         shell: bash
         run: ./scripts/coverage.sh
@@ -158,7 +189,7 @@ jobs:
       - name: Verify declared performance budgets
         run: dart tool/check_performance_budgets.dart
       - name: Enforce message-list burst budget on the CI reference runner
-        run: flutter test app/test/phase4_performance_budget_test.dart
+        run: flutter test app/test/performance_budget_test.dart
 
   no-source-changes:
     needs: changes
@@ -169,22 +200,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "No Helix Remote source, docs, or CI changes detected (helix_local changes are not yet wired into this workflow)."
-
-  fuzz-seed-corpus:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: helix_remote
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - name: Scheduled Phase 11 fuzz seed corpus regression
-        run: dart test tool/fuzz_seed_corpus_test.dart
 
   supply-chain:
     needs: changes

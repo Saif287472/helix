@@ -1,21 +1,20 @@
+# TURN relay (coturn) for a Linux host with Docker. The Helix server itself is
+# not run from here: it is `dart run bin/server.dart` in server/ against
+# PostgreSQL 17 (docs/operations/V2_SERVER_HANDOFF.md). The production PC does
+# not use this file: it runs coturn in WSL (deploy/coturn/windows/), and this
+# compose file has not been run since the v2 rename of the variables.
+#
+# Start it with the server's .env as the interpolation file, so the shared
+# secret is the same one the server uses and nothing else from that file
+# (database URL, keys) enters the container:
+#
+#   docker compose --env-file server/.env up -d helix-turn
+#
+# Needs HELIX_TURN_SECRET and TURN_REALM; TURN_EXTERNAL_IP (the public IPv4)
+# on a VPS, and TURN_LOCAL_IP as well behind a NAT router.
 services:
-  helix-backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: helix-backend
-    ports:
-      - "127.0.0.1:8080:8080"
-    volumes:
-      - helix-data:/app/data
-    env_file:
-      - .env
-    restart: unless-stopped
-
-  # TURN relay for WebRTC calls, co-hosted with the backend. Without it,
-  # a call between two clients that are both behind symmetric NAT (most
-  # mobile networks) never connects - which is what "TURN Server
-  # Configured: DISABLED" on the admin Config screen is warning about.
+  # TURN relay for WebRTC calls. Without it, a call between two clients that
+  # are both behind symmetric NAT (most mobile networks) never connects.
   #
   # network_mode: host rather than published ports: TURN hands out a range
   # of relay ports, and publishing a range that size through Docker's
@@ -30,19 +29,19 @@ services:
     container_name: helix-turn
     network_mode: host
     restart: unless-stopped
-    env_file:
-      - .env
+    environment:
+      HELIX_TURN_SECRET: ${HELIX_TURN_SECRET:?set HELIX_TURN_SECRET (the same value as the server)}
+      TURN_REALM: ${TURN_REALM:?set TURN_REALM, for example helix.agiletechbd.com}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
+      TURN_LOCAL_IP: ${TURN_LOCAL_IP:-}
     entrypoint: ["/usr/local/bin/helix-turn-entrypoint.sh"]
     volumes:
       - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf.template:ro
       - ./deploy/coturn/entrypoint.sh:/usr/local/bin/helix-turn-entrypoint.sh:ro
       # Populated by deploy/coturn/certbot-deploy-hook.sh. Until it is,
-      # coturn serves plain turn: on 3478 and skips TLS.
+      # coturn serves plain turn: on 3478 and skips TLS (turns: is optional).
       - ./turn-certs:/etc/coturn/certs:ro
     # The rendered config holds the shared secret, so it is written to
     # memory rather than to the container's writable layer.
     tmpfs:
       - /tmp
-
-volumes:
-  helix-data:

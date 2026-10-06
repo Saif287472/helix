@@ -15,7 +15,7 @@
 # the internet-facing relay unprivileged.
 set -eu
 
-DOMAIN=${TURN_DOMAIN:-hr.agiletechbd.com}
+DOMAIN=${TURN_DOMAIN:-helix.agiletechbd.com}
 PROJECT_DIR=${HELIX_PROJECT_DIR:-/opt/helix-remote/helix_remote}
 DEST=${TURN_CERT_DIR:-$PROJECT_DIR/turn-certs}
 

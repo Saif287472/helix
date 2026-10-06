@@ -1,5 +1,7 @@
 # Helix Remote Operability and Disaster Recovery
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`V2_OPERABILITY.md`](V2_OPERABILITY.md) (health, metrics, logs, jobs, backups and restore, disaster recovery, upgrades) and [`V2_SERVER_HANDOFF.md`](V2_SERVER_HANDOFF.md). The SQLite backup and restore steps below do not apply to the Postgres server.
+
 Status: Phase 19 repository baseline. This document defines the solo-owner
 operating model and production runbooks. Current production (Helix Global) is
 a single Windows PC: SQLite, attachments on local disk, FCM push, coturn in

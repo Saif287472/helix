@@ -1,5 +1,7 @@
 # F0 Foundation Design
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/README.md`](v2/README.md) (REST, realtime, content, crypto, metadata). v2 has no capability-token negotiation: the contract is the `/v1` route catalog in `packages/helix_remote_protocol`.
+
 Status: implemented baseline for Phase F0. The schema capabilities listed
 below are the F0 baseline, not today's versions: the app's local database is at
 `latestSchemaVersion` 31 (`packages/helix_remote_storage/lib/src/database/migrations.dart`)

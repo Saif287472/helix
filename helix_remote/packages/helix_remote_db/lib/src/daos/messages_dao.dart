@@ -1,0 +1,709 @@
+import 'package:drift/drift.dart';
+import 'package:helix_remote_db/src/database.dart';
+import 'package:helix_remote_db/src/tables/conversations.dart';
+import 'package:helix_remote_db/src/tables/messages.dart';
+import 'package:helix_remote_db/src/values.dart';
+import 'package:helix_remote_protocol/helix_remote_protocol.dart'
+    show ReceiptKind;
+import 'package:meta/meta.dart';
+
+part 'messages_dao.g.dart';
+
+/// One page of a conversation, oldest first.
+@immutable
+final class MessagePage {
+  const MessagePage(this.messages, {required this.hasMore});
+
+  final List<MessageRow> messages;
+
+  /// More messages exist beyond this page in the direction it was read.
+  final bool hasMore;
+
+  /// Cursors for the next page in each direction.
+  String? get oldestSortKey => messages.isEmpty ? null : messages.first.sortKey;
+  String? get newestSortKey => messages.isEmpty ? null : messages.last.sortKey;
+}
+
+/// An attachment of a conversation, with when its message was sent: one item
+/// of the shared-media view.
+@immutable
+final class SharedAttachment {
+  const SharedAttachment(this.attachment, this.sentAt);
+
+  final AttachmentRow attachment;
+  final DateTime sentAt;
+}
+
+/// Messages and everything attached to them. Every write that can change
+/// what the chat list shows updates the conversation summary in the same
+/// transaction.
+@DriftAccessor(
+  tables: [
+    Conversations,
+    Messages,
+    MessageReactions,
+    MessageReceipts,
+    Attachments,
+  ],
+)
+class MessagesDao extends DatabaseAccessor<HelixDb> with _$MessagesDaoMixin {
+  MessagesDao(super.attachedDatabase);
+
+  /// Longest chat-list preview, in Unicode code points.
+  static const previewLength = 100;
+
+  // ------------------------------------------------------------- writes
+
+  /// Inserts [message] with its [media] (album order) and updates the
+  /// conversation summary: last message, unread and mention counts. The
+  /// conversation must exist. Fails on a duplicate `(message_id, sender)`.
+  Future<MessageRow> insertMessage(
+    MessagesCompanion message, {
+    List<AttachmentsCompanion> media = const [],
+  }) => transaction(() async {
+    final row = await into(messages).insertReturning(message);
+    for (final (index, item) in media.indexed) {
+      await into(attachments).insert(
+        item.copyWith(
+          messageRowid: Value(row.localRowid),
+          position: Value(index),
+        ),
+      );
+    }
+    final conversation = await _conversation(row.conversationId);
+    final newest =
+        conversation.lastMessageSortKey == null ||
+        row.sortKey.compareTo(conversation.lastMessageSortKey!) > 0;
+    final unread = row.status == MessageStatus.received;
+    await (update(
+      conversations,
+    )..where((c) => c.id.equals(row.conversationId))).write(
+      ConversationsCompanion(
+        lastMessageRowid: newest ? Value(row.localRowid) : const Value.absent(),
+        lastMessageSortKey: newest ? Value(row.sortKey) : const Value.absent(),
+        lastMessageAt: newest ? Value(row.sentAt) : const Value.absent(),
+        lastMessagePreview: newest ? Value(preview(row)) : const Value.absent(),
+        unreadCount: Value(conversation.unreadCount + (unread ? 1 : 0)),
+        mentionCount: Value(
+          conversation.mentionCount + (unread && row.mentionsMe ? 1 : 0),
+        ),
+      ),
+    );
+    return row;
+  });
+
+  /// An edit by the author (CONTENT_V2.md §3): new text or caption, and
+  /// optionally a new [payload].
+  Future<void> editMessage(
+    int rowid, {
+    required String? body,
+    String? payload,
+    required DateTime editedAt,
+  }) => transaction(() async {
+    final row = await _message(rowid);
+    await (update(messages)..where((m) => m.localRowid.equals(rowid))).write(
+      MessagesCompanion(
+        body: Value(body),
+        payload: payload == null ? const Value.absent() : Value(payload),
+        editedAt: Value(editedAt),
+      ),
+    );
+    await refreshSummary(row.conversationId);
+  });
+
+  /// Replaces the JSON [payload] (poll votes, RSVPs, placeholder state)
+  /// without marking the message edited.
+  Future<void> updatePayload(int rowid, String? payload) =>
+      (update(messages)..where((m) => m.localRowid.equals(rowid))).write(
+        MessagesCompanion(payload: Value(payload)),
+      );
+
+  /// Delete for everyone: the row stays as "This message was deleted", its
+  /// text, payload, reactions and media rows go. Returns the removed media
+  /// rows so the caller can delete their local files.
+  Future<List<AttachmentRow>> deleteForEveryone(
+    int rowid, {
+    required DateTime deletedAt,
+  }) => transaction(() async {
+    final row = await _message(rowid);
+    final media = await (select(
+      attachments,
+    )..where((a) => a.messageRowid.equals(rowid))).get();
+    await (delete(
+      attachments,
+    )..where((a) => a.messageRowid.equals(rowid))).go();
+    await (delete(
+      messageReactions,
+    )..where((r) => r.messageRowid.equals(rowid))).go();
+    await (update(messages)..where((m) => m.localRowid.equals(rowid))).write(
+      MessagesCompanion(
+        body: const Value(null),
+        payload: const Value(null),
+        deletedAt: Value(deletedAt),
+      ),
+    );
+    await refreshSummary(row.conversationId);
+    return media;
+  });
+
+  /// Removes messages from this device (delete for me, disappearing
+  /// messages) and refreshes the affected summaries.
+  Future<int> removeMessages(Iterable<int> rowids) => transaction(() async {
+    final ids = rowids.toList();
+    if (ids.isEmpty) return 0;
+    final conversationIds =
+        await (selectOnly(messages, distinct: true)
+              ..addColumns([messages.conversationId])
+              ..where(messages.localRowid.isIn(ids)))
+            .map((r) => r.read(messages.conversationId)!)
+            .get();
+    final removed = await (delete(
+      messages,
+    )..where((m) => m.localRowid.isIn(ids))).go();
+    for (final id in conversationIds) {
+      await refreshSummary(id);
+    }
+    return removed;
+  });
+
+  /// Removes every message whose disappearing timer ran out by [now].
+  Future<int> removeExpired(DateTime now) async {
+    final due =
+        await (selectOnly(messages)
+              ..addColumns([messages.localRowid])
+              ..where(
+                messages.expiresAt.isSmallerOrEqualValue(
+                  now.millisecondsSinceEpoch,
+                ),
+              ))
+            .map((r) => r.read(messages.localRowid)!)
+            .get();
+    return removeMessages(due);
+  }
+
+  /// Marks incoming messages up to and including [sortKey] as read and
+  /// recounts the conversation's unread and mention counts. Returns the
+  /// messages that became read, for read receipts.
+  Future<List<MessageRow>> markReadUpTo(
+    String conversationId,
+    String sortKey,
+  ) => transaction(() async {
+    final read =
+        await (update(messages)..where(
+              (m) =>
+                  m.conversationId.equals(conversationId) &
+                  m.status.equalsValue(MessageStatus.received) &
+                  m.sortKey.isSmallerOrEqualValue(sortKey),
+            ))
+            .writeReturning(
+              const MessagesCompanion(status: Value(MessageStatus.read)),
+            );
+    final conversation = await _conversation(conversationId);
+    final previous = conversation.lastReadSortKey;
+    if (previous == null || sortKey.compareTo(previous) > 0) {
+      await (update(conversations)..where((c) => c.id.equals(conversationId)))
+          .write(ConversationsCompanion(lastReadSortKey: Value(sortKey)));
+    }
+    await refreshSummary(conversationId);
+    read.sort((a, b) => a.sortKey.compareTo(b.sortKey));
+    return read;
+  });
+
+  /// Moves an outgoing message's status forward ([MessageStatus.advance]).
+  Future<MessageStatus> advanceStatus(int rowid, MessageStatus next) =>
+      transaction(() async {
+        final row = await _message(rowid);
+        final status = row.status.advance(next);
+        if (status != row.status) {
+          await (update(messages)..where((m) => m.localRowid.equals(rowid)))
+              .write(MessagesCompanion(status: Value(status)));
+        }
+        return status;
+      });
+
+  /// Starts the disappearing timer when the message is first displayed.
+  Future<void> markDisplayed(int rowid, DateTime displayedAt) async {
+    await customUpdate(
+      'UPDATE messages SET expires_at = ? + expire_seconds * 1000 '
+      'WHERE local_rowid = ? AND expire_seconds IS NOT NULL '
+      'AND expires_at IS NULL',
+      variables: [
+        Variable.withInt(displayedAt.millisecondsSinceEpoch),
+        Variable.withInt(rowid),
+      ],
+      updates: {messages},
+      updateKind: UpdateKind.update,
+    );
+  }
+
+  /// When the next disappearing message runs out; null if none is pending.
+  Future<DateTime?> nextExpiryAt() async {
+    final row = await customSelect(
+      'SELECT min(expires_at) AS at FROM messages WHERE expires_at IS NOT NULL',
+      readsFrom: {messages},
+    ).getSingle();
+    final at = row.readNullable<int>('at');
+    return at == null ? null : const EpochMs().fromSql(at);
+  }
+
+  /// Sets the view-once state (opened media is then deleted by the caller).
+  Future<void> setViewOnceState(int rowid, ViewOnceState state) =>
+      (update(messages)..where((m) => m.localRowid.equals(rowid))).write(
+        MessagesCompanion(viewOnceState: Value(state)),
+      );
+
+  /// Recomputes the conversation summary from the messages table.
+  Future<void> refreshSummary(String conversationId) => transaction(() async {
+    final last =
+        await (select(messages)
+              ..where((m) => m.conversationId.equals(conversationId))
+              ..orderBy([(m) => OrderingTerm.desc(m.sortKey)])
+              ..limit(1))
+            .getSingleOrNull();
+    final counts = await customSelect(
+      'SELECT count(*) AS unread, coalesce(sum(mentions_me), 0) AS mentions '
+      'FROM messages WHERE conversation_id = ? AND status = ?',
+      variables: [
+        Variable.withString(conversationId),
+        Variable.withString(MessageStatus.received.name),
+      ],
+      readsFrom: {messages},
+    ).getSingle();
+    await (update(
+      conversations,
+    )..where((c) => c.id.equals(conversationId))).write(
+      ConversationsCompanion(
+        lastMessageRowid: Value(last?.localRowid),
+        lastMessageSortKey: Value(last?.sortKey),
+        lastMessageAt: Value(last?.sentAt),
+        lastMessagePreview: Value(last == null ? null : preview(last)),
+        unreadCount: Value(counts.read<int>('unread')),
+        mentionCount: Value(counts.read<int>('mentions')),
+      ),
+    );
+  });
+
+  /// The chat-list preview for [message]: its text or caption on one line,
+  /// at most [previewLength] code points. Empty for deleted messages and
+  /// messages without text; the list shows those by kind.
+  static String preview(MessageRow message) {
+    if (message.deletedAt != null) return '';
+    final text = (message.body ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final runes = text.runes;
+    if (runes.length <= previewLength) return text;
+    return String.fromCharCodes(runes.take(previewLength));
+  }
+
+  // ---------------------------------------------- reactions and receipts
+
+  /// Sets [reactor]'s reaction, replacing any earlier one.
+  Future<void> setReaction(
+    int rowid, {
+    required String reactor,
+    required String emoji,
+    required DateTime at,
+  }) => into(messageReactions).insertOnConflictUpdate(
+    MessageReactionsCompanion.insert(
+      messageRowid: rowid,
+      reactor: reactor,
+      emoji: emoji,
+      reactedAt: at,
+    ),
+  );
+
+  Future<void> removeReaction(int rowid, {required String reactor}) =>
+      (delete(messageReactions)..where(
+            (r) => r.messageRowid.equals(rowid) & r.reactor.equals(reactor),
+          ))
+          .go();
+
+  Future<List<ReactionRow>> reactionsFor(Iterable<int> rowids) =>
+      _reactionsQuery(rowids).get();
+
+  Stream<List<ReactionRow>> watchReactionsFor(Iterable<int> rowids) =>
+      _reactionsQuery(rowids).watch();
+
+  SimpleSelectStatement<$MessageReactionsTable, ReactionRow> _reactionsQuery(
+    Iterable<int> rowids,
+  ) => select(messageReactions)
+    ..where((r) => r.messageRowid.isIn(rowids.toList()))
+    ..orderBy([(r) => OrderingTerm.asc(r.reactedAt)]);
+
+  /// Records that [account] reached [kind] for an outgoing message. Each
+  /// time is kept from its first receipt.
+  Future<void> recordReceipt(
+    int rowid, {
+    required String account,
+    required ReceiptKind kind,
+    required DateTime at,
+  }) async {
+    final column = switch (kind) {
+      ReceiptKind.delivered => 'delivered_at',
+      ReceiptKind.read => 'read_at',
+      ReceiptKind.viewed => 'viewed_at',
+    };
+    await customInsert(
+      'INSERT INTO message_receipts (message_rowid, account_id, $column) '
+      'VALUES (?, ?, ?) ON CONFLICT (message_rowid, account_id) '
+      'DO UPDATE SET $column = coalesce($column, excluded.$column)',
+      variables: [
+        Variable.withInt(rowid),
+        Variable.withString(account),
+        Variable.withInt(at.millisecondsSinceEpoch),
+      ],
+      updates: {messageReceipts},
+    );
+  }
+
+  Future<List<ReceiptRow>> receiptsFor(int rowid) => (select(
+    messageReceipts,
+  )..where((r) => r.messageRowid.equals(rowid))).get();
+
+  // ------------------------------------------------------------ media
+
+  /// The attachments of one conversation, newest message first (an album in
+  /// its own order), up to [limit]: the shared media and documents. Voice
+  /// notes are not shared media and are left out. Emits on every change.
+  Stream<List<SharedAttachment>> watchSharedAttachments(
+    String conversationId, {
+    int limit = 500,
+  }) {
+    final query =
+        select(attachments).join([
+            innerJoin(
+              messages,
+              messages.localRowid.equalsExp(attachments.messageRowid),
+            ),
+          ])
+          ..where(
+            messages.conversationId.equals(conversationId) &
+                attachments.kind.equals('voice_note').not(),
+          )
+          ..orderBy([
+            OrderingTerm.desc(messages.sortKey),
+            OrderingTerm.asc(attachments.position),
+          ])
+          ..limit(limit);
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows)
+          SharedAttachment(
+            row.readTable(attachments),
+            row.readTable(messages).sentAt,
+          ),
+      ],
+    );
+  }
+
+  /// The messages of one conversation whose text holds a web link, newest
+  /// first, up to [limit]; deleted messages are left out.
+  Stream<List<MessageRow>> watchMessagesWithLinks(
+    String conversationId, {
+    int limit = 200,
+  }) =>
+      (select(messages)
+            ..where(
+              (m) =>
+                  m.conversationId.equals(conversationId) &
+                  m.deletedAt.isNull() &
+                  (m.body.like('%http://%') | m.body.like('%https://%')),
+            )
+            ..orderBy([(m) => OrderingTerm.desc(m.sortKey)])
+            ..limit(limit))
+          .watch();
+
+  Future<List<AttachmentRow>> attachmentsFor(Iterable<int> rowids) =>
+      _attachmentsQuery(rowids).get();
+
+  Stream<List<AttachmentRow>> watchAttachmentsFor(Iterable<int> rowids) =>
+      _attachmentsQuery(rowids).watch();
+
+  SimpleSelectStatement<$AttachmentsTable, AttachmentRow> _attachmentsQuery(
+    Iterable<int> rowids,
+  ) => select(attachments)
+    ..where((a) => a.messageRowid.isIn(rowids.toList()))
+    ..orderBy([
+      (a) => OrderingTerm.asc(a.messageRowid),
+      (a) => OrderingTerm.asc(a.position),
+    ]);
+
+  /// Transfer progress: state and local file paths.
+  Future<void> updateAttachment(
+    int id, {
+    AttachmentTransfer? transfer,
+    String? localPath,
+    String? thumbnailPath,
+  }) => (update(attachments)..where((a) => a.id.equals(id))).write(
+    AttachmentsCompanion(
+      transfer: transfer == null ? const Value.absent() : Value(transfer),
+      localPath: localPath == null ? const Value.absent() : Value(localPath),
+      thumbnailPath: thumbnailPath == null
+          ? const Value.absent()
+          : Value(thumbnailPath),
+    ),
+  );
+
+  /// One attachment row.
+  Future<AttachmentRow?> attachmentById(int id) =>
+      (select(attachments)..where((a) => a.id.equals(id))).getSingleOrNull();
+
+  /// Fills in the pointer of an outgoing attachment once its upload is done:
+  /// the server object id, the ciphertext digest and, when there is one, the
+  /// thumbnail's pointer as JSON. [thumbnail] null leaves the stored one.
+  Future<void> setAttachmentPointer(
+    int id, {
+    required String mediaId,
+    required Uint8List digest,
+    String? thumbnail,
+  }) => (update(attachments)..where((a) => a.id.equals(id))).write(
+    AttachmentsCompanion(
+      mediaId: Value(mediaId),
+      digest: Value(digest),
+      thumbnail: thumbnail == null ? const Value.absent() : Value(thumbnail),
+    ),
+  );
+
+  /// Stores the thumbnail pointer (JSON) of an attachment.
+  Future<void> setAttachmentThumbnail(int id, String thumbnail) =>
+      (update(attachments)..where((a) => a.id.equals(id))).write(
+        AttachmentsCompanion(thumbnail: Value(thumbnail)),
+      );
+
+  /// Removes the media rows of a message (a view-once message after it was
+  /// seen) and returns them, so their files can be deleted.
+  Future<List<AttachmentRow>> removeAttachments(int messageRowid) =>
+      transaction(() async {
+        final rows = await (select(
+          attachments,
+        )..where((a) => a.messageRowid.equals(messageRowid))).get();
+        await (delete(
+          attachments,
+        )..where((a) => a.messageRowid.equals(messageRowid))).go();
+        return rows;
+      });
+
+  /// Every local file path the attachment rows point at (media and
+  /// thumbnails), for the file sweep.
+  Future<Set<String>> attachmentPaths() async {
+    final rows = await customSelect(
+      'SELECT local_path, thumbnail_path FROM attachments '
+      'WHERE local_path IS NOT NULL OR thumbnail_path IS NOT NULL',
+      readsFrom: {attachments},
+    ).get();
+    return {
+      for (final row in rows) ...[
+        ?row.readNullable<String>('local_path'),
+        ?row.readNullable<String>('thumbnail_path'),
+      ],
+    };
+  }
+
+  /// View-once messages whose media can go: incoming ones that were opened,
+  /// and outgoing ones the recipient has viewed. Only those that still have
+  /// media rows.
+  Future<List<({int rowid, bool outgoing})>>
+  viewOnceWithMediaToConsume() async {
+    final rows = await customSelect(
+      'SELECT m.local_rowid AS id, m.outgoing AS outgoing FROM messages m WHERE '
+      '((m.outgoing = 0 AND m.view_once_state = ?) OR '
+      '(m.outgoing = 1 AND m.view_once_state IS NOT NULL AND m.status = ?)) '
+      'AND EXISTS (SELECT 1 FROM attachments a '
+      'WHERE a.message_rowid = m.local_rowid)',
+      variables: [
+        Variable.withString(ViewOnceState.opened.name),
+        Variable.withString(MessageStatus.viewed.name),
+      ],
+      readsFrom: {messages, attachments},
+    ).get();
+    return [
+      for (final row in rows)
+        (rowid: row.read<int>('id'), outgoing: row.read<bool>('outgoing')),
+    ];
+  }
+
+  /// How many attachment rows exist; emits on every change. The file sweep
+  /// runs when it drops (a message was removed or expired).
+  Stream<int> watchAttachmentCount() => customSelect(
+    'SELECT count(*) AS n FROM attachments',
+    readsFrom: {attachments},
+  ).watchSingle().map((row) => row.read<int>('n'));
+
+  // ------------------------------------------------------------- reads
+
+  Future<MessageRow?> byRowid(int rowid) => (select(
+    messages,
+  )..where((m) => m.localRowid.equals(rowid))).getSingleOrNull();
+
+  /// The message other content refers to as `{id, author}`.
+  Future<MessageRow?> find(String messageId, {required String sender}) =>
+      (select(messages)..where(
+            (m) => m.messageId.equals(messageId) & m.sender.equals(sender),
+          ))
+          .getSingleOrNull();
+
+  /// A message of [conversationId] by its id, whoever wrote it (group chats:
+  /// own-device read sync names messages of several authors).
+  Future<MessageRow?> findInConversation(
+    String conversationId,
+    String messageId,
+  ) =>
+      (select(messages)..where(
+            (m) =>
+                m.conversationId.equals(conversationId) &
+                m.messageId.equals(messageId),
+          ))
+          .getSingleOrNull();
+
+  /// Messages older than [before] (or the newest ones), oldest first.
+  Future<MessagePage> pageOlder(
+    String conversationId, {
+    String? before,
+    int limit = 50,
+  }) async {
+    final rows =
+        await (select(messages)
+              ..where(
+                (m) =>
+                    m.conversationId.equals(conversationId) &
+                    (before == null
+                        ? const Constant(true)
+                        : m.sortKey.isSmallerThanValue(before)),
+              )
+              ..orderBy([(m) => OrderingTerm.desc(m.sortKey)])
+              ..limit(limit + 1))
+            .get();
+    final hasMore = rows.length > limit;
+    return MessagePage(
+      rows.take(limit).toList().reversed.toList(),
+      hasMore: hasMore,
+    );
+  }
+
+  /// Messages newer than [after], oldest first.
+  Future<MessagePage> pageNewer(
+    String conversationId, {
+    required String after,
+    int limit = 50,
+  }) async {
+    final rows =
+        await (select(messages)
+              ..where(
+                (m) =>
+                    m.conversationId.equals(conversationId) &
+                    m.sortKey.isBiggerThanValue(after),
+              )
+              ..orderBy([(m) => OrderingTerm.asc(m.sortKey)])
+              ..limit(limit + 1))
+            .get();
+    return MessagePage(rows.take(limit).toList(), hasMore: rows.length > limit);
+  }
+
+  /// The newest [limit] messages, oldest first; emits on every change.
+  Stream<List<MessageRow>> watchLatest(
+    String conversationId, {
+    int limit = 50,
+  }) =>
+      (select(messages)
+            ..where((m) => m.conversationId.equals(conversationId))
+            ..orderBy([(m) => OrderingTerm.desc(m.sortKey)])
+            ..limit(limit))
+          .watch()
+          .map((rows) => rows.reversed.toList());
+
+  /// Up to [limit] messages from [from] (inclusive) onwards, oldest first:
+  /// a window the user scrolled back to, kept live.
+  Stream<List<MessageRow>> watchFrom(
+    String conversationId,
+    String from, {
+    int limit = 200,
+  }) =>
+      (select(messages)
+            ..where(
+              (m) =>
+                  m.conversationId.equals(conversationId) &
+                  m.sortKey.isBiggerOrEqualValue(from),
+            )
+            ..orderBy([(m) => OrderingTerm.asc(m.sortKey)])
+            ..limit(limit))
+          .watch();
+
+  /// Every reaction on the messages of [conversationId] from [fromSortKey]
+  /// onwards (the window a conversation screen shows), live. Reactions on
+  /// older messages are not read: a screen asks again when it scrolls back.
+  Stream<List<ReactionRow>> watchReactionsSince(
+    String conversationId,
+    String fromSortKey,
+  ) {
+    final query =
+        select(messageReactions).join([
+            innerJoin(
+              messages,
+              messages.localRowid.equalsExp(messageReactions.messageRowid),
+            ),
+          ])
+          ..where(
+            messages.conversationId.equals(conversationId) &
+                messages.sortKey.isBiggerOrEqualValue(fromSortKey),
+          )
+          ..orderBy([OrderingTerm.asc(messageReactions.reactedAt)]);
+    return query.watch().map(
+      (rows) => [for (final row in rows) row.readTable(messageReactions)],
+    );
+  }
+
+  /// Removes every message of [conversationId] from this device and resets
+  /// the chat's summary (the chat itself stays). Returns how many went.
+  Future<int> clearConversation(String conversationId) => transaction(() async {
+    final removed = await (delete(
+      messages,
+    )..where((m) => m.conversationId.equals(conversationId))).go();
+    await refreshSummary(conversationId);
+    return removed;
+  });
+
+  /// Full-text search over message text and captions, newest first.
+  /// [query] is plain user input: every word must match, as a prefix
+  /// (`hel wor` finds "hello world"). Deleted messages never match.
+  Future<List<MessageRow>> search(
+    String query, {
+    String? conversationId,
+    int limit = 50,
+  }) async {
+    final match = ftsMatchExpression(query);
+    if (match == null) return const [];
+    final rows = await customSelect(
+      'SELECT m.* FROM messages_fts f '
+      'JOIN messages m ON m.local_rowid = f.rowid '
+      'WHERE messages_fts MATCH ? AND m.deleted_at IS NULL '
+      '${conversationId == null ? '' : 'AND m.conversation_id = ? '}'
+      'ORDER BY m.sort_key DESC LIMIT ?',
+      variables: [
+        Variable.withString(match),
+        if (conversationId != null) Variable.withString(conversationId),
+        Variable.withInt(limit),
+      ],
+      readsFrom: {messages, attachedDatabase.messagesFts},
+    ).get();
+    return [for (final row in rows) messages.map(row.data)];
+  }
+
+  /// FTS5 MATCH expression for user input: the words (runs of letters,
+  /// digits and marks, as the tokenizer sees them), each quoted and used as
+  /// a prefix, so FTS syntax in the input is never interpreted. Null when
+  /// there is nothing to search for.
+  static String? ftsMatchExpression(String input) {
+    final words = _word
+        .allMatches(input)
+        .map((m) => '"${m[0]}"*')
+        .toList(growable: false);
+    return words.isEmpty ? null : words.join(' ');
+  }
+
+  static final _word = RegExp(r'[\p{L}\p{N}\p{M}]+', unicode: true);
+
+  Future<MessageRow> _message(int rowid) =>
+      (select(messages)..where((m) => m.localRowid.equals(rowid))).getSingle();
+
+  Future<ConversationRow> _conversation(String id) =>
+      (select(conversations)..where((c) => c.id.equals(id))).getSingle();
+}

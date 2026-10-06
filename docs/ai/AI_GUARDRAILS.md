@@ -31,7 +31,7 @@ inside `helix_remote/` (the script uses workspace-relative paths):
 ./scripts/verify.ps1   # or: ./scripts/verify.sh
 ```
 
-That script covers Helix Remote (app, admin, backend, packages). Helix Local has
+That script covers Helix Remote (app, admin, server, packages). The server tests need a Postgres test database (`HELIX_TEST_DATABASE_URL`). Helix Local has
 no working one-shot gate yet (`helix_local/scripts/verify_student.*` still use
 the old `apps/` layout); run `flutter analyze` and `flutter test` from
 `helix_local/`. Per `AGENTS.md`, do not build APKs unless the user asks.

@@ -19,7 +19,10 @@ OUT_DIR="coverage"
 # margin for normal movement while still catching a real regression.
 #
 # Raise it as new suites land. Never lower it to accommodate one.
-MIN_LINE_COVERAGE="${MIN_LINE_COVERAGE:-55}"
+#
+# Raised 55 -> 70 at Phase X: the v2 stack (app, admin, engine, db, api, crypto,
+# protocol, ui) measured 74.71% on 2026-10-06 once the v1 packages were deleted.
+MIN_LINE_COVERAGE="${MIN_LINE_COVERAGE:-70}"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
@@ -35,7 +38,10 @@ collect() {
   (cd "$dir" && flutter test --no-pub --coverage)
 
   if [ -f "${dir}/coverage/lcov.info" ]; then
-    cat "${dir}/coverage/lcov.info" >> "${OUT_DIR}/lcov.info"
+    # Generated code (drift's *.g.dart, committed per ADR-027) is not
+    # counted: most of it is API surface no caller uses.
+    awk '/^SF:/ { skip = ($0 ~ /\.g\.dart$/) } !skip { print } /^end_of_record/ { skip = 0 }' \
+      "${dir}/coverage/lcov.info" >> "${OUT_DIR}/lcov.info"
   fi
 }
 
@@ -78,5 +84,5 @@ awk -v actual="$coverage" -v minimum="$MIN_LINE_COVERAGE" 'BEGIN {
 }'
 
 echo
-echo "Note: the backend is covered by 'dart test' in verify.sh, which does not"
-echo "emit lcov; its ~411 tests are not represented in the number above."
+echo "Note: the server is covered by 'dart test' in verify.sh, which does not"
+echo "emit lcov; its tests are not represented in the number above."

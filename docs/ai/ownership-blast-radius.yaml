@@ -3,13 +3,14 @@
 #
 # The repository is two independent pub workspaces with no root pubspec:
 #   helix_local/   - Helix Local (app, packages/helix_local_*, tool, scripts)
-#   helix_remote/  - Helix Remote (app, admin, backend, packages/helix_remote_*,
+#   helix_remote/  - Helix Remote (app, admin, server, packages/helix_remote_*,
 #                    tool, scripts, contracts, deploy, docs)
 # Run each workspace's commands from inside that workspace directory.
 #
 # Helix Remote's canonical gate is helix_remote/scripts/verify.ps1 (Windows)
-# or helix_remote/scripts/verify.sh: format check, flutter analyze, dart
-# analyze backend/tool, and the app, admin, backend and package test suites.
+# or helix_remote/scripts/verify.sh: drift codegen check, format check, flutter
+# analyze, dart analyze server/tool, the app, admin, server and package test
+# suites, and the governance check (the server tests need Postgres).
 # Per AGENTS.md, agents do not build APKs unless the user asks.
 #
 # Helix Local has no working one-shot gate: helix_local/scripts/verify_student.*
@@ -25,17 +26,19 @@ classifications:
     areas:
       # Helix Remote: identity, crypto, sessions, passwords, schema, release config
       - helix_remote/packages/helix_remote_crypto/**
-      - helix_remote/backend/lib/src/modules/auth.dart
-      - helix_remote/backend/lib/src/modules/auth/**
-      - helix_remote/backend/lib/src/jwt.dart
-      - helix_remote/backend/lib/src/server_impl.dart
-      - helix_remote/backend/lib/src/database/migrations.dart
-      - helix_remote/packages/helix_remote_storage/lib/src/database/migrations.dart
-      - helix_remote/app/lib/app/password_vault.dart
-      - helix_remote/app/lib/app/composition_root/password_auth.dart
-      - helix_remote/app/lib/app/history_backup_codec.dart
-      - helix_remote/app/lib/app/remote_messaging_service/message_crypto.dart
-      - helix_remote/app/lib/app/remote_messaging_service/message_decryption.dart
+      - helix_remote/server/lib/src/modules/identity/**
+      - helix_remote/server/lib/src/modules/keys/**
+      - helix_remote/server/lib/src/modules/admin/**
+      - helix_remote/server/lib/src/kernel/jwt.dart
+      - helix_remote/server/lib/src/kernel/crypto.dart
+      - helix_remote/server/lib/src/platform/http/**
+      - helix_remote/server/lib/src/platform/db/migrations.dart
+      - helix_remote/server/lib/src/modules/**/migrations.dart
+      - helix_remote/packages/helix_remote_db/lib/src/database.dart
+      - helix_remote/packages/helix_remote_engine/lib/src/crypto/**
+      - helix_remote/packages/helix_remote_engine/lib/src/account/**
+      - helix_remote/app/lib/core/platform/tls_pinning.dart
+      - helix_remote/app/lib/core/security/**
       - helix_remote/app/android/**
       - helix_remote/pubspec.yaml
       # Helix Local: identity, crypto, bootstrap, platform config
@@ -57,15 +60,15 @@ classifications:
   - classification: High
     areas:
       # Helix Remote
-      - helix_remote/backend/lib/src/modules/**
-      - helix_remote/backend/lib/src/database/**
-      - helix_remote/packages/helix_remote_sync/**
+      - helix_remote/server/lib/src/modules/**
+      - helix_remote/server/lib/src/platform/**
+      - helix_remote/packages/helix_remote_protocol/**
+      - helix_remote/packages/helix_remote_engine/**
+      - helix_remote/packages/helix_remote_db/**
       - helix_remote/packages/helix_remote_api/**
-      - helix_remote/packages/helix_remote_storage/**
       - helix_remote/packages/helix_remote_calls/**
-      - helix_remote/packages/helix_remote_groups/**
       - helix_remote/packages/helix_remote_domain/**
-      - helix_remote/app/lib/app/**
+      - helix_remote/app/lib/core/**
       - helix_remote/contracts/**
       # Helix Local
       - helix_local/packages/helix_local_protocol/lib/protocol/**
@@ -78,14 +81,13 @@ classifications:
     minimum_verification:
       - "Remote: helix_remote/scripts/verify.ps1 (or verify.sh)"
       - "Local (from helix_local/): flutter analyze; targeted and full flutter test"
-    notes: "Protocol, sync, storage, backend module, request, group, and navigation changes can alter user-visible contracts."
+    notes: "Protocol, engine, storage, server module, request, group, and navigation changes can alter user-visible contracts."
 
   - classification: Medium
     areas:
       # Helix Remote
-      - helix_remote/app/lib/screens/**
-      - helix_remote/app/lib/widgets/**
-      - helix_remote/app/lib/services/**
+      - helix_remote/app/lib/features/**
+      - helix_remote/app/lib/shared/**
       - helix_remote/admin/lib/**
       - helix_remote/packages/helix_remote_ui/**
       - helix_remote/packages/helix_remote_cli/**

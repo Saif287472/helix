@@ -1,19 +1,22 @@
 # Remote Calls Release Readiness
 
+Status: updated at Phase X for the v2 server (`/v1` routes, `V2_OPERABILITY.md` metrics).
+
 This runbook is the controlled-release gate for Helix Remote one-to-one calls.
 It intentionally records evidence without storing tokens, TURN shared secrets,
 raw SDP, raw ICE candidates, private keys, private IPs, or media content.
 
 ## Required Service Checks
 
-- API: `GET /api/v1/health/ready` reports `api_ready: true`.
-- WebSocket: admin metrics show connected devices and reconnect rejects below
-  alert threshold.
-- TURN: readiness reports `call_ready: true` and a nonzero TURN URL count.
-- Push: admin metrics show the push provider available and no failed/DLQ wake
-  notifications.
-- Support export: `GET /api/v1/ops/support-diagnostic` contains only redacted
-  configuration and aggregate counters.
+- API: `GET /v1/health/ready` reports `{"ready":true,...}` (database and storage).
+- WebSocket: `GET /v1/ops/metrics` (admin token or `HELIX_METRICS_TOKEN`) shows connected
+  devices, and upgrade and reconnect rejections stay below the alert threshold.
+- TURN: an authenticated `GET /v1/calls/turn` returns credentials with the expected URLs
+  (readiness does not check TURN), and `turnutils_uclient` allocates a relay.
+- Push: metrics show no dead-letter `messaging.push` or `calls.push` jobs
+  (`V2_OPERABILITY.md`, "Jobs").
+- Diagnostics: `V2_OPERABILITY.md` lists the redacted log and metrics that replace the v1
+  support export; there is no support-diagnostic route in v2.
 
 ## Capacity Validation
 
@@ -65,24 +68,25 @@ Configure alerts for:
 
 - Caddy terminates HTTPS/WSS and forwards only to the local Dart backend.
 - Coturn uses a DNS-only hostname, restricted relay port range, NAT mapping,
-  TLS where enabled, and the runtime `HELIX_REMOTE_TURN_SECRET`.
-- Backend environment variables include JWT secret, public base URL, TURN URL,
-  TURN secret, database path, admin account IDs, and push provider settings.
+  TLS where enabled (optional), and the runtime `HELIX_TURN_SECRET`.
+- Server environment variables include the JWT key ring, public base URL, database
+  URL, TURN URLs and secret, and the push provider settings (`V2_SERVER_HANDOFF.md`).
 - Android build configuration contains no server secrets or TURN shared secret.
 - Debug and release builds pass.
-- `dart analyze`, `flutter analyze`, focused backend tests, call package tests,
+- `dart analyze`, `flutter analyze`, the server's call tests, the engine's call tests,
   app widget tests, and Android build gates pass.
 
 ## Rollback
 
 1. Disable new call entry points in the Android app if the issue is client-only.
-2. If signaling is affected, block `/api/v1/calls/signal` at Caddy and keep
+2. If signaling is affected, block `/v1/calls/` at Caddy and keep
    messaging endpoints online.
-3. If TURN is saturated or leaking cost, revoke/rotate `HELIX_REMOTE_TURN_SECRET`
-   and restart Coturn plus backend.
-4. Restore the previous backend binary and database backup if migrations or
-   pending-call state are suspected.
-5. Export `/api/v1/ops/support-diagnostic` before and after rollback.
+3. If TURN is saturated or leaking cost, rotate `HELIX_TURN_SECRET` in `server/.env`
+   and in Coturn together and restart both.
+4. For a bad server release there is no rollback plan for the cutover itself (fix
+   forward); for later releases restore the previous server build and, only if a
+   migration is suspected, the Postgres backup (`V2_OPERABILITY.md`, "Backups").
+5. Capture the redacted log lines and `/v1/ops/metrics` before and after.
 
 ## Release Blockers
 
@@ -92,4 +96,4 @@ Configure alerts for:
 - Forced-TURN audio/video fails in the required matrix.
 - More than one target device can answer the same call.
 - Active calls leak camera, microphone, renderers, streams, or active markers.
-- Backend messaging availability depends on TURN availability.
+- Messaging availability depends on TURN availability.

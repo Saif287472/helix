@@ -1,6 +1,8 @@
 # ADR 017: Remote Metadata Minimization and Privacy Logging
 
 Status: accepted  
+
+> Status note (Phase X): the rules still hold and v2 goes further (no conversation graph, encrypted profiles and group names): see `docs/protocol/v2/METADATA_V2.md` and `docs/product/METADATA_INVENTORY.md`.
 Date: 2026-06-19  
 
 ## Context

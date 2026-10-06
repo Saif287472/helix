@@ -3,11 +3,11 @@
 | Concern | Evidence | Status |
 |---|---|---|
 | Privacy inventory | `helix_remote/docs/product/METADATA_INVENTORY.md`, `helix_remote/docs/product/PRIVACY_CLAIM_MATRIX.md` | Documented |
-| Retention | `helix_remote/docs/product/RETENTION_AND_DELETION.md`, Phase 10 retention tests | Documented and component-tested |
-| Deletion | `helix_remote/backend/test/privacy_compliance_test.dart`, `DELETE /api/v1/account/delete` | Backend-tested; the app purges local data afterwards (`purgeAfterAccountDeletion` in `helix_remote/app/lib/app/composition_root/runtime.dart`) |
-| Export | `helix_remote/backend/test/privacy_compliance_test.dart`, `GET /api/v1/privacy/export` | Backend-tested; ciphertext-only. Does not yet include `account_passwords` or `history_backups` rows |
-| Backup | backup crypto/storage tests and `helix_remote/backend/test/multi_device_backup_recovery_test.dart` | Component/backend-tested |
-| Telemetry | `helix_remote/app/lib/app/remote_telemetry.dart` | Local aggregate telemetry only; no ad SDK |
+| Retention | `helix_remote/docs/product/RETENTION_AND_DELETION.md`, `helix_remote/server/test/modules/` (mailbox expiry, media expiry, purge jobs) | Documented and server-tested |
+| Deletion | `helix_remote/server/test/modules/ops_admin_test.dart` (compliance group), `helix_remote/server/test/client/engine/security_test.dart`, `DELETE /v1/account` | Server- and client-tested; the app wipes its local data afterwards |
+| Export | `helix_remote/server/test/modules/ops_admin_test.dart` ("export holds every module section and no secrets"), `GET /v1/account/export` | Server-tested; metadata only, no secrets, tokens or ciphertext |
+| Backup | `helix_remote/server/test/modules/media_backup_test.dart`, `helix_remote/packages/helix_remote_engine/test/backup/`, `helix_remote/server/test/client/engine/backup_test.dart` | Component- and server-tested |
+| Telemetry | `helix_remote/app/lib/core/engine/crash_reporter.dart`, `helix_remote/server/test/modules/ops_admin_test.dart` | Opt-in crash reports (exception type, version, platform); logged redacted, never stored; no ad SDK |
 | App-store disclosures | `helix_remote/docs/product/APP_STORE_PRIVACY.md` | Documentation required before submission |
 | Data processing | `helix_remote/docs/product/PRIVACY_POLICY.md`; shipped legal text in `helix_remote/docs/legal/privacy_policy.md` | Documentation required before submission |
 

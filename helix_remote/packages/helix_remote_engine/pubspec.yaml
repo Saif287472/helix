@@ -1,0 +1,30 @@
+name: helix_remote_engine
+description: >-
+  Helix Remote v2 engine - pure Dart messaging core: account and device
+  lifecycle, pairwise sessions, inbound and outbound pipelines and the feature
+  services the app, the FCM background isolate and the CLI share (ADR-027).
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  crypto: ^3.0.7
+  helix_remote_api:
+    path: ../helix_remote_api
+  helix_remote_crypto:
+    path: ../helix_remote_crypto
+  helix_remote_db:
+    path: ../helix_remote_db
+  helix_remote_protocol:
+    path: ../helix_remote_protocol
+  meta: ^1.18.0
+
+dev_dependencies:
+  helix_remote_architecture_rules:
+    path: ../helix_remote_architecture_rules
+  http: ^1.6.0
+  test: ^1.31.0

@@ -1,6 +1,8 @@
 # ADR 007: Helix Remote Persistent Data Contract
 
 Status: accepted  
+
+> Status note (Phase X): the client half (a SQLCipher database on the device) still holds, now as drift on SQLite (ADR-027). The server half is superseded: the server uses PostgreSQL (ADR-025).
 Date: 2026-06-19  
 
 ## Context

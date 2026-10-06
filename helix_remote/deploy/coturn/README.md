@@ -1,38 +1,42 @@
-# TURN relay (coturn), co-hosted with the backend
+# TURN relay (coturn), co-hosted with the server
 
 WebRTC calls need a relay whenever the two parties can't reach each other
 directly. On mobile carrier networks that's the common case, not the
 exception, so without TURN a call between two phones typically rings and
-then fails to connect. The admin console shows this as **TURN Server
-Configured: DISABLED** on the Config screen.
+then fails to connect. Without TURN settings the server answers credential
+requests with 503 `unavailable`.
 
-This directory runs coturn on the same VPS as the backend. At a couple of
-dozen users that is the right call - relayed audio is roughly 50 kbit/s
+This directory runs coturn next to the Helix server (a VPS with Docker, or a
+Windows PC with WSL, below). At a couple of dozen users that is the right call - relayed audio is roughly 50 kbit/s
 each way per participant, so even a handful of simultaneous calls is a
 rounding error against a VPS's bandwidth.
 
 ## How the credentials work
 
-There are no user accounts on the TURN server. The backend mints
-short-lived credentials on demand (`GET /api/v1/calls/turn-credentials`)
-using a shared secret:
+There are no user accounts on the TURN server. The server mints
+short-lived credentials on demand (`GET /v1/calls/turn`) using a shared
+secret:
 
-- username: `<unix-expiry>:<account-id>:<device-id>`, valid one hour
+- username: `<unix-expiry>:<random id>`, valid one hour (it never names an
+  account or a device: on plain `turn:` it crosses the network unencrypted)
 - password: `base64(HMAC-SHA1(secret, username))`
 
 coturn's `use-auth-secret` mode verifies exactly that construction, which
 is why the two sides only need to agree on one value:
-`HELIX_REMOTE_TURN_SECRET`. The backend rate-limits issuance per account
-and per device, so a stolen credential also expires on its own.
+`HELIX_TURN_SECRET`. The server rate-limits issuance per device, so a stolen
+credential also expires on its own.
 
 ## Setup
 
-All commands run from the repo root on the VPS
-(`/opt/helix-remote/helix_remote`).
+All commands run from `helix_remote/` on the VPS
+(`/opt/helix-remote/helix_remote`). The compose file only runs coturn; run
+the Helix server itself as described in
+`docs/operations/V2_SERVER_HANDOFF.md`.
 
 ### 1. Fill in the environment
 
-In `.env`:
+In `server/.env` (compose is started with `--env-file server/.env`, so
+coturn and the server read the same secret and cannot drift apart):
 
 ```sh
 # One secret, shared by both services.
@@ -40,10 +44,10 @@ openssl rand -hex 32
 ```
 
 ```ini
-HELIX_REMOTE_TURN_URL=turn:hr.agiletechbd.com:3478,turns:hr.agiletechbd.com:5349
-HELIX_REMOTE_TURN_SECRET=<the value you just generated>
-TURN_REALM=hr.agiletechbd.com
-TURN_EXTERNAL_IP=157.250.207.166
+HELIX_TURN_URLS=turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp
+HELIX_TURN_SECRET=<the value you just generated>
+TURN_REALM=helix.agiletechbd.com
+TURN_EXTERNAL_IP=<the VPS public IPv4 address>
 ```
 
 `TURN_EXTERNAL_IP` is the VPS's public IPv4 address. Getting it wrong is
@@ -52,8 +56,8 @@ clients are handed a relay address they can't reach.
 
 ### 2. Open the firewall
 
-The backend is deliberately not exposed directly (nginx proxies it), but
-TURN has to be reachable from the internet:
+The server is deliberately not exposed directly (Caddy or another reverse
+proxy fronts it), but TURN has to be reachable from the internet:
 
 ```sh
 sudo ufw allow 3478/tcp comment 'TURN'
@@ -71,22 +75,31 @@ together if you outgrow it.
 ### 3. Start it
 
 ```sh
-docker compose up -d helix-turn
+docker compose --env-file server/.env up -d helix-turn
 docker compose logs -f helix-turn
 ```
 
 Expect `TURN: no certificates in /etc/coturn/certs - serving plain turn:
 on 3478 only.` on the first run. Calls work at this point.
 
-### 4. Enable TLS (turns:), recommended
+### 4. Enable TLS (turns:), optional
 
-`turns:` on 5349 looks like ordinary HTTPS traffic, so it gets through
-restrictive networks that block UDP outright. It reuses the same Let's
-Encrypt certificate nginx already has:
+Calls work without this step, over plain `turn:` on 3478 (the media itself
+is always end-to-end encrypted; plain `turn:` only exposes the handshake
+and the fact that an address is calling). `turns:` on 5349 hides that and
+looks like ordinary HTTPS traffic, so it also gets through restrictive
+networks that block UDP outright. It needs a certificate for the host in
+the URL (this example reuses a Let's Encrypt certificate that already
+exists on the VPS):
 
 ```sh
-sudo TURN_DOMAIN=hr.agiletechbd.com deploy/coturn/certbot-deploy-hook.sh
+sudo TURN_DOMAIN=helix.agiletechbd.com deploy/coturn/certbot-deploy-hook.sh
 ```
+
+Then add a `turns:` entry to `HELIX_TURN_URLS`, for example
+`turns:helix.agiletechbd.com:5349?transport=tcp`, and restart the server.
+Until the certificate is in place leave `turns:` out: a URL that cannot
+connect only slows calls down.
 
 Then install it as a renewal hook so it survives certificate renewals -
 coturn only reads its certificate at startup, so a renewed certificate
@@ -103,21 +116,16 @@ rather than mounting `/etc/letsencrypt` into the container. That's on
 purpose: the private key in `archive/` is root-only, so a mount would
 force this internet-facing relay to run as root.
 
-### 5. Restart the backend and confirm
+### 5. Restart the server and confirm
 
-The backend reads the TURN settings at startup:
-
-```sh
-docker compose up -d helix-backend
-```
-
-The admin console's Config screen should now show **TURN Server
-Configured: ENABLED**, and the Logs screen should no longer carry the
-`HELIX_REMOTE_TURN_URL or HELIX_REMOTE_TURN_SECRET is not set` warning.
+The server reads the TURN settings at startup (Ctrl+C, then
+`dart run bin/server.dart` in `server/`). An authenticated
+`GET /v1/calls/turn` should now return credentials instead of 503
+`unavailable`.
 
 ## Windows home PC (behind a router)
 
-Helix Global currently runs on a Windows PC rather than a VPS. coturn has
+Helix Global runs on a Windows PC rather than a VPS. coturn has
 no native Windows build, so `windows/start-turn.ps1` runs it in WSL1 (which
 shares Windows' network stack) using the same template and entrypoint as
 above. The router is what makes this different from the VPS: coturn listens
@@ -137,17 +145,18 @@ on the PC's LAN address and advertises the router's public one.
    New-NetFirewallRule -DisplayName 'Helix TURN (TCP)' -Direction Inbound -Protocol TCP -LocalPort 3478 -Action Allow
    ```
 
-5. **Configure the backend in `backend/.env` only.** The backend lets
-   Windows environment variables override `.env`, so remove any
-   `HELIX_REMOTE_TURN_*` user/system environment variables - otherwise the
-   backend and coturn can end up with different secrets.
+5. **Configure the server in `server/.env` only.** The server lets
+   Windows environment variables override `.env`, and so does
+   `start-turn.ps1`, so remove any `HELIX_TURN_*` user/system environment
+   variables - otherwise the server and coturn can end up with different
+   secrets.
 
    ```ini
-   HELIX_REMOTE_TURN_URL=turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp
-   HELIX_REMOTE_TURN_SECRET=<openssl rand -hex 32>
+   HELIX_TURN_URLS=turn:helix.agiletechbd.com:3478?transport=udp,turn:helix.agiletechbd.com:3478?transport=tcp
+   HELIX_TURN_SECRET=<openssl rand -hex 32>
    ```
 
-   Restart the backend after changing either value.
+   Restart the server after changing either value.
 
 ### Run
 
@@ -156,13 +165,21 @@ on the PC's LAN address and advertises the router's public one.
 .\deploy\coturn\windows\stop-turn.ps1
 ```
 
+The script reads `HELIX_TURN_SECRET` (required) and, for the realm,
+`TURN_REALM`, else the host of the first `HELIX_TURN_URLS` entry, else the
+host of `HELIX_PUBLIC_BASE_URL`, from the process environment or
+`server\.env`. If the server's `.env` is somewhere else, pass
+`-EnvFile <path>`. The script never prints the secret and never puts it on a
+command line. It serves plain `turn:` on 3478; `turns:` is optional (above)
+and is not enabled by this script.
+
 The public IP is detected at each start. A home connection's public IP can
 change; when it does, the DNS record and this relay both need the new one -
 re-run `start-turn.ps1` after updating DNS.
 
 ## Verifying it actually relays
 
-Config saying ENABLED only means the backend has a URL and a secret. To
+Having the settings only means the server has a URL and a secret. To
 check the relay itself answers, fetch a credential as a logged-in user
 and test it at https://icetest.info or with `turnutils_uclient`:
 
@@ -170,13 +187,13 @@ and test it at https://icetest.info or with `turnutils_uclient`:
 docker compose exec helix-turn turnutils_uclient \
     -T -u "$(date -d '+1 hour' +%s):smoketest" \
     -w "$(printf '%s' "$(date -d '+1 hour' +%s):smoketest" \
-        | openssl dgst -sha1 -hmac "$HELIX_REMOTE_TURN_SECRET" -binary \
+        | openssl dgst -sha1 -hmac "$HELIX_TURN_SECRET" -binary \
         | base64)" \
-    hr.agiletechbd.com
+    helix.agiletechbd.com
 ```
 
 A successful run prints allocation results rather than `401`. A `401`
-means the secret in `.env` and the one coturn loaded have drifted apart -
+means the secret in `server/.env` and the one coturn loaded have drifted apart -
 restart `helix-turn` after any change to it.
 
 ## Security notes
@@ -184,7 +201,7 @@ restart `helix-turn` after any change to it.
 `turnserver.conf` denies relaying to every private, loopback,
 link-local and reserved address range. This matters more than usual
 here: with host networking an unrestricted relay could reach the
-backend on `127.0.0.1:8080` directly, bypassing nginx, TLS and the rate
+server on `127.0.0.1:8080` directly, bypassing Caddy, TLS and the rate
 limiter, and could reach a cloud metadata endpoint at
 `169.254.169.254`. Don't remove those `denied-peer-ip` lines to "fix"
 a connectivity problem - if a legitimate peer is being denied, it is on

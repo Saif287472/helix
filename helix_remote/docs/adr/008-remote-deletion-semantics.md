@@ -1,6 +1,8 @@
 # ADR 008: Remote Deletion Semantics
 
 Status: accepted  
+
+> Status note (Phase X): the tombstone and sequence mechanism describes v1. In v2 the server keeps no history, deletes are encrypted content applied by each device, and account deletion is an event every module handles (ADR-028, `docs/product/RETENTION_AND_DELETION.md`).
 Date: 2026-06-19  
 
 ## Context

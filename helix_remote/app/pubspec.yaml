@@ -1,51 +1,56 @@
 name: helix_remote
-description: Helix Remote — internet messaging with end-to-end encryption, ephemeral
-  LAN messaging, and secure group communication.
+description: Helix Remote — internet messaging with end-to-end encryption.
 publish_to: none
-version: 1.0.0
+version: 2.0.0
 
 resolution: workspace
 
 environment:
   sdk: ^3.12.0
 
+# The v2 client stack (ARCHITECTURE_V2_PLAN.md §6.1). The app depends on the
+# engine and the ui package; db/api/crypto/protocol are here because the app
+# opens the encrypted database, stores its key and needs the legal documents.
+# `presentation/` never imports any of them — see test/architecture_test.dart.
 dependencies:
   flutter:
     sdk: flutter
   helix_remote_domain:
     path: ../packages/helix_remote_domain
+  helix_remote_protocol:
+    path: ../packages/helix_remote_protocol
   helix_remote_crypto:
     path: ../packages/helix_remote_crypto
   helix_remote_api:
     path: ../packages/helix_remote_api
-  helix_remote_storage:
-    path: ../packages/helix_remote_storage
-  helix_remote_sync:
-    path: ../packages/helix_remote_sync
+  helix_remote_db:
+    path: ../packages/helix_remote_db
+  helix_remote_engine:
+    path: ../packages/helix_remote_engine
   helix_remote_calls:
     path: ../packages/helix_remote_calls
-  flutter_webrtc: ^1.5.1
-  helix_remote_groups:
-    path: ../packages/helix_remote_groups
   helix_remote_ui:
     path: ../packages/helix_remote_ui
+  # Plain providers only: no riverpod_generator, so no codegen to keep in step
+  # (docs/dependencies/DEPENDENCY_RISK_REGISTER.md).
+  flutter_riverpod: ^3.4.3
+  go_router: ^18.0.2
+
+  cryptography_flutter: ^2.0.0
   path: ^1.9.1
   path_provider: ^2.1.6
+  flutter_secure_storage: ^11.2.0
+  flutter_local_notifications: ^22.3.1
   # Stable 13.x resolves alongside share_plus ^13.1.0, which closes the
   # prerelease exception recorded in
   # docs/adr/024-file-picker-prerelease-exception.md.
   file_picker: ^13.1.0
-  cryptography: ^2.9.0
-  cryptography_flutter: ^2.0.0
-  crypto: ^3.0.7
-  flutter_secure_storage: ^11.2.0
   share_plus: ^13.1.0
-  flutter_local_notifications: ^22.3.1
-  # Push wake for incoming calls. Without a registered push token the
+  # Push wake for messages and calls. Without a registered push token the
   # server's wake notification has nowhere to go and a closed app never
-  # rings - see services/push_registration_service.dart. Both degrade to
-  # "push unavailable" when google-services.json is absent, which is the
-  # state of any checkout that has not been given deployment material.
+  # syncs. Both degrade to "push unavailable" when google-services.json is
+  # absent, which is the state of any checkout that has not been given
+  # deployment material.
   firebase_core: ^4.13.0
   firebase_messaging: ^16.5.0
   connectivity_plus: ^7.3.1
@@ -55,6 +60,15 @@ dependencies:
   device_info_plus: ^13.2.0
   url_launcher: ^6.3.2
   local_auth: ^3.0.1
+  # Media (see docs/dependencies/DEPENDENCY_RISK_REGISTER.md, "Media plugins").
+  # Each is used in exactly one file under lib/core/platform/ behind an
+  # interface; test/media_plugins_rules_test.dart enforces it.
+  image_picker: ^1.2.3
+  record: ^7.1.1
+  audioplayers: ^6.8.1
+  video_player: ^2.14.1
+  fc_native_video_thumbnail: ^3.0.1
+  image: ^4.10.1
 
 dev_dependencies:
   flutter_test:
@@ -64,8 +78,8 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   test: ^1.31.0
   sqlite3: ^3.3.3
-  helix_remote_backend:
-    path: ../backend
+  helix_remote_architecture_rules:
+    path: ../packages/helix_remote_architecture_rules
   flutter_launcher_icons: ^0.14.4
 
 flutter_launcher_icons:

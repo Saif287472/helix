@@ -1,7 +1,6 @@
 # Helix Remote Security and Compliance Gates
 
-Status: Phase 18 implementation evidence  
-Date: 2026-06-19
+Status: Phase 18 implementation evidence, paths updated at Phase X (2026-10) for the v2 server
 
 ## Incident Response
 
@@ -38,8 +37,10 @@ Date: 2026-06-19
   the exact implementation/version.
 - Mobile application security review: BLOCKED until a release build is reviewed
   for Android and Windows targets.
-- Backend security review: BLOCKED until the deployed backend, configuration,
-  auth, admin, logging, and storage paths are reviewed.
+- Server security review: BLOCKED until an external reviewer evaluates the
+  deployed server, configuration, auth, admin, logging, and storage paths. The
+  internal review pass of 2026-10-02 (tracker S7 in
+  `docs/architecture/ARCHITECTURE_V2_PLAN.md`) is not external.
 - Secrets and access review: BLOCKED until production credentials and access
   roles exist.
 
@@ -57,8 +58,8 @@ Date: 2026-06-19
 Before any public release, every privacy/security claim must be checked against:
 
 - `docs/product/PRIVACY_CLAIM_MATRIX.md`
-- `docs/product/remote/PRIVACY_POLICY.md`
-- `docs/product/remote/METADATA_INVENTORY.md`
-- `docs/product/remote/RETENTION_AND_DELETION.md`
-- Current automated test results
-- The unresolved blocker list in the master plan
+- `docs/product/PRIVACY_POLICY.md`
+- `docs/product/METADATA_INVENTORY.md`
+- `docs/product/RETENTION_AND_DELETION.md`
+- Current automated test results (`docs/security/REGRESSION_TEST_MATRIX.md`)
+- The unresolved blocker list above

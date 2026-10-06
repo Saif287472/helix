@@ -1,0 +1,33 @@
+-- Full-text search over message text and captions (plan §6.2).
+--
+-- External content: the index stores tokens only and reads the text from
+-- `messages.body`. The triggers keep it in step with every insert, update of
+-- `body` and delete, inside the same transaction as the write.
+--
+-- Tokenizer: unicode61 folds case for every script and strips Latin
+-- diacritics (`remove_diacritics 2`). `M*` is added to the token categories
+-- so combining marks stay inside words: without it, Bengali and other Indic
+-- words split at every vowel sign.
+import 'tables/messages.dart';
+
+CREATE VIRTUAL TABLE messages_fts USING fts5(
+  body,
+  content = 'messages',
+  content_rowid = 'local_rowid',
+  tokenize = 'unicode61 remove_diacritics 2 categories ''L* N* Co M*'''
+);
+
+CREATE TRIGGER messages_fts_insert AFTER INSERT ON messages BEGIN
+  INSERT INTO messages_fts (rowid, body) VALUES (new.local_rowid, new.body);
+END;
+
+CREATE TRIGGER messages_fts_delete AFTER DELETE ON messages BEGIN
+  INSERT INTO messages_fts (messages_fts, rowid, body)
+    VALUES ('delete', old.local_rowid, old.body);
+END;
+
+CREATE TRIGGER messages_fts_update AFTER UPDATE OF body ON messages BEGIN
+  INSERT INTO messages_fts (messages_fts, rowid, body)
+    VALUES ('delete', old.local_rowid, old.body);
+  INSERT INTO messages_fts (rowid, body) VALUES (new.local_rowid, new.body);
+END;

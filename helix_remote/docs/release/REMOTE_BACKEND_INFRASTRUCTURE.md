@@ -1,6 +1,6 @@
 # Helix Remote Backend Infrastructure & Operations Guide
 
-> **Status: target-state guide, not the current deployment.** Helix Global runs on the user's Windows PC with Caddy (automatic TLS) in front of `dart run bin/server.dart` and coturn in WSL1; there is no staging host, VPC, vault or nginx. `helix_remote/deploy/nginx/` is legacy from the VPS era. For the real environment variables and runbook see `helix_remote/docs/operations/REMOTE_OPERABILITY_AND_DR.md` and `helix-remote-server-handoff.md`.
+> **Status: target-state guide, not the current deployment (updated at Phase X).** Helix Global runs on the user's Windows PC with Caddy (automatic TLS) in front of `dart run bin/server.dart` (the v2 server, PostgreSQL 17) and coturn in WSL1; there is no staging host, VPC, vault or nginx (the legacy `deploy/nginx/` config was deleted). The `HELIX_REMOTE_*` variable names below are the v1 backend's and no longer exist: the real environment variables are in `helix_remote/docs/operations/V2_SERVER_HANDOFF.md`, and the runbook is `V2_OPERABILITY.md` next to it.
 
 This document defines the deployment architecture, configuration standards, security scanning, load testing, and operational runbook for the **Helix Remote Backend**.
 

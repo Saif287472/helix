@@ -1,0 +1,18 @@
+# drift code generation (MODULE.md, "Regenerating"). Generated files are
+# committed; `dart run tool/codegen.dart --check` fails when they are stale.
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          databases:
+            helix: lib/src/database.dart
+          schema_dir: drift_schemas/
+          test_dir: test/drift/
+          store_date_time_values_as_text: false
+          sql:
+            dialect: sqlite
+            options:
+              version: "3.46"
+              modules:
+                - fts5

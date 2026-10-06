@@ -1,0 +1,16 @@
+{
+  "id": "0192a4f0-0000-7000-8000-00000000000d",
+  "recipients": [
+    {
+      "account": "0192a4f0-0000-7000-8000-00000000000b",
+      "devices": [
+        {
+          "device": "0192a4f0-0000-7000-8000-0000000000b1",
+          "payload": "CxIZICcuNTxDSlFYX2ZtdHuCiZCXnqWs"
+        }
+      ]
+    }
+  ],
+  "urgent": true,
+  "ephemeral": false
+}

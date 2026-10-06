@@ -1,0 +1,49 @@
+{
+  "group_id": "0192a4f0-0000-7000-8000-0000000000ee",
+  "sender": {
+    "account": "0192a4f0-0000-7000-8000-00000000000a",
+    "device": "0192a4f0-0000-7000-8000-0000000000a1"
+  },
+  "distribution": {
+    "group_id": "0192a4f0-0000-7000-8000-0000000000ee",
+    "dist_id": "58b2be14-90d9-432e-9313-38303b257c20",
+    "iteration": 0,
+    "chain_key": "gjs-U7wPzuNgqCjUmNj4THGgmfGmC_rpiEICLLFLn8I",
+    "signing_key": "SSN22QRK7szHuFrrhSX-ZFnM1oKN6sGPqq1Mf7Y9dZc"
+  },
+  "messages": [
+    {
+      "content": "one",
+      "payload": {
+        "v": 2,
+        "t": "sender_key",
+        "dist": "58b2be14-90d9-432e-9313-38303b257c20",
+        "it": 0,
+        "ct": "umsCwrXibh_q9egEnxE_AfrW9aEuX4Xtc4mLINu0YPy1rLJzrrtV9HP652i5Wt-QMqY8cJzlN6j7iEgztoYR9ig1kVkg--2JRPUR2q_M8OPiBWTq8HAEUPxj-UfCwPXqEL_REoQEdE5jYsZxqJYzSFCSmBOZ7OtoSVOOIrbN_tlxCk4TiwmnenYdt8spPVdfbYWRXFWXyhyTbKCySv8iIkSGW89WmqBQfvf9qBgCTeU",
+        "sig": "L7QFU7s52jR4AgzS1DCWaFcyljehHeZvTnOpUrd_8ABELRaDCYQnnzih_S5lJ9BqcIRTsVJHWIVfqYaypOabBw"
+      }
+    },
+    {
+      "content": "two",
+      "payload": {
+        "v": 2,
+        "t": "sender_key",
+        "dist": "58b2be14-90d9-432e-9313-38303b257c20",
+        "it": 1,
+        "ct": "XWDehEGKr7mAfN-C54TnR75JrOVeSoAovo3RT0_PFTO67VnBjlbCfPZpoVyDvCANtHCMhH92LBle4XaiqN21Kh6S7dHSv7e7r7uuPOUDTVCwdA9qyc1rlyOsZyo6IeScFYQ5wcqaebr84UErQ4hAvhj8wqGn5xzkptva5ke6pHF7MaURxMVhDLwf3rm-oQJTq9YnOlErV_HVYVvcT-G1afpQuO5-SIDtEOibxPgtjjU",
+        "sig": "w39xJjEKATBLtze6wdHSKlm5PkR-mhY9GdyoHkpYT0useBHnnWXlB3LBfon5pMhffZmqGsRrGDXnoeT-ffBEAg"
+      }
+    },
+    {
+      "content": "three",
+      "payload": {
+        "v": 2,
+        "t": "sender_key",
+        "dist": "58b2be14-90d9-432e-9313-38303b257c20",
+        "it": 2,
+        "ct": "gGjfzPVmsLlBh8Q6Q9xmZMWeJWBr8mVDacoEW0gJV0yne8etOv9QfH9TXkKslim0un7gtbe2nodnMnB-4xOx1B7yTdXkrdvS0vq_gzqZiiV_-3YugJeiNAIXU7r0PZqQ7It82Z3hwJSqAq8H6OquoX1tixEfn9bAAXWEuUx3ckIRp8wNHMPlaVeWSRtFM6UpYLnL9e9Kzse7xLfnWLcYG5ZNFZXmjAba1QA87DOhR7E",
+        "sig": "mlUrpZiiW4vzUlhGhQv1jRa4hnGpTD3uGJ6t36jZQ_eSMrdR8T8a8vQWAa3BeexFS4sV58DKsjdtV_Z1I--aCA"
+      }
+    }
+  ]
+}

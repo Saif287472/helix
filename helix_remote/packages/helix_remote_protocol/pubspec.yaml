@@ -1,0 +1,21 @@
+name: helix_remote_protocol
+description: >-
+  Helix Remote v2 wire contract - REST DTOs, realtime frames, mailbox
+  envelopes, end-to-end encrypted content types and error codes. Shared by the
+  v2 server, app, admin console and CLI (ADR-028).
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  crypto: ^3.0.7
+  meta: ^1.18.0
+
+dev_dependencies:
+  helix_remote_architecture_rules:
+    path: ../helix_remote_architecture_rules
+  test: ^1.31.0

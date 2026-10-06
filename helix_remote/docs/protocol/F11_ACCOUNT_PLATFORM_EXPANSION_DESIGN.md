@@ -1,5 +1,7 @@
 # F11 Account And Platform Expansion Design
 
+> **Status: historical (v1 design).** This document records the v1 design and implementation. v1 was deleted at the Phase X cutover (SQLite backend, `helix_remote_storage`, `helix_remote_sync`, `helix_remote_groups`, per-conversation sessions); the last v1 commit is tagged `v1-final`. Schema numbers, file paths and endpoints below are v1. The v2 truth: [`v2/REST_V2.md`](v2/REST_V2.md) and the identity module (`server/lib/src/modules/identity/MODULE.md`).
+
 F11 adds the local contract for running Helix Remote across multiple account
 contexts and platform families without sharing runtime state. The phase does
 not replace packaging infrastructure; it gives the app, storage, diagnostics,
