@@ -342,8 +342,7 @@ class HelixConversationList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final extra = footer == null ? 0 : 1;
-    return ColoredBox(
-      color: HelixChatColors.page,
+    return HelixChatWallpaper(
       child: ListView.builder(
         reverse: true,
         controller: controller,
@@ -371,4 +370,61 @@ class HelixConversationList extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The page behind a conversation: the warm paper colour with a faint doodle
+/// pattern (rings, tickets, strokes and dots) laid in a brick grid, so the
+/// page reads as a chat and not as an empty surface.
+///
+/// It is painted once for the size it is given and does not move with the
+/// list, so scrolling never repaints it.
+class HelixChatWallpaper extends StatelessWidget {
+  const HelixChatWallpaper({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: HelixChatColors.page,
+    child: CustomPaint(
+      painter: const _WallpaperPainter(color: HelixScrimColors.shadow),
+      child: child,
+    ),
+  );
+}
+
+class _WallpaperPainter extends CustomPainter {
+  const _WallpaperPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    const step = 86.0;
+    for (double y = -20; y < size.height + step; y += step) {
+      for (double x = -18; x < size.width + step; x += step) {
+        // Every other row is shifted, like bricks.
+        final shift = ((y / step).round().isEven ? 0 : 34).toDouble();
+        final cx = x + shift;
+        canvas.drawCircle(Offset(cx + 18, y + 18), 12, paint);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(cx + 46, y + 8, 22, 18),
+            const Radius.circular(4),
+          ),
+          paint,
+        );
+        canvas.drawLine(Offset(cx + 2, y + 58), Offset(cx + 32, y + 38), paint);
+        canvas.drawCircle(Offset(cx + 62, y + 58), 5, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WallpaperPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

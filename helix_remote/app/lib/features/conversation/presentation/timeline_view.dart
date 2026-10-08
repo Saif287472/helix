@@ -212,8 +212,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
           message: 'This conversation could not be loaded.',
         );
       }
-      return const ColoredBox(
-        color: HelixChatColors.page,
+      return const HelixChatWallpaper(
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -229,8 +228,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
       });
     }
     if (snapshot.newestFirst.isEmpty) {
-      return const ColoredBox(
-        color: HelixChatColors.page,
+      return const HelixChatWallpaper(
         child: Center(
           child: HelixSystemNotice(
             text: 'Messages are end-to-end encrypted. Say hello.',
@@ -244,8 +242,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     final extra = typing ? 1 : 0;
     return Stack(
       children: [
-        ColoredBox(
-          color: HelixChatColors.page,
+        HelixChatWallpaper(
           child: ListView.builder(
             reverse: true,
             controller: _scroll,

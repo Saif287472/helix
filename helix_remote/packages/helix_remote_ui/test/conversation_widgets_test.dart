@@ -40,6 +40,7 @@ Widget _bubble(
 );
 
 void main() {
+  wallpaperTests();
   group('text bubbles', () {
     testWidgets('show body, time and, for outgoing, the tick', (tester) async {
       await pumpHelix(
@@ -1003,5 +1004,35 @@ void main() {
       );
       expect(find.byType(HelixReactionPicker), findsNothing);
     });
+  });
+}
+
+void wallpaperTests() {
+  testWidgets('the chat wallpaper paints its pattern behind the child', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: HelixThemes.light(),
+        home: const HelixChatWallpaper(child: Text('over the pattern')),
+      ),
+    );
+
+    expect(find.text('over the pattern'), findsOneWidget);
+    final paint = tester.widget<CustomPaint>(
+      find.descendant(
+        of: find.byType(HelixChatWallpaper),
+        matching: find.byType(CustomPaint),
+      ),
+    );
+    expect(paint.painter, isNotNull);
+    // The page colour is under the pattern.
+    final base = tester.widget<ColoredBox>(
+      find.descendant(
+        of: find.byType(HelixChatWallpaper),
+        matching: find.byType(ColoredBox),
+      ),
+    );
+    expect(base.color, HelixChatColors.page);
   });
 }
