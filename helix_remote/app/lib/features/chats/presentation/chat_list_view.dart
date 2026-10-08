@@ -19,6 +19,8 @@ class ChatListView extends ConsumerWidget {
     required this.items,
     this.headers = const [],
     this.archivedList = false,
+    this.activeChatId,
+    this.onOpenChat,
   });
 
   final List<HelixChatListItem> items;
@@ -28,6 +30,12 @@ class ChatListView extends ConsumerWidget {
 
   /// This is the archived list: the swipe is "Unarchive", not "Archive".
   final bool archivedList;
+
+  /// The chat open beside the list on a wide window; its row stays tinted.
+  final String? activeChatId;
+
+  /// Opens a chat in place (the wide layout). Null pushes its page.
+  final ValueChanged<String>? onOpenChat;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,6 +50,8 @@ class ChatListView extends ConsumerWidget {
     void open(HelixChatListItem item) {
       if (selecting) {
         notifier.toggle(item.id);
+      } else if (onOpenChat != null) {
+        onOpenChat!(item.id);
       } else {
         context.push(chatLocation(item.id));
       }
@@ -58,7 +68,8 @@ class ChatListView extends ConsumerWidget {
               return _ChatRow(
                 key: ValueKey(item.id),
                 item: item,
-                selected: selection.contains(item.id),
+                selected:
+                    selection.contains(item.id) || item.id == activeChatId,
                 selecting: selecting,
                 onOpen: () => open(item),
                 onSelect: () => selecting

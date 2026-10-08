@@ -14,6 +14,7 @@ import 'package:helix_remote/features/groups/groups_routes.dart';
 import 'package:helix_remote/features/chats/chats_routes.dart';
 import 'package:helix_remote/features/chats/presentation/chats_tab.dart';
 import 'package:helix_remote/features/conversation/conversation_routes.dart';
+import 'package:helix_remote/features/conversation/presentation/conversation_screen.dart';
 import 'package:helix_remote/features/home/presentation/home_screen.dart';
 import 'package:helix_remote/features/people/people_routes.dart';
 import 'package:helix_remote/features/profile/profile_routes.dart';
@@ -77,6 +78,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           // the people search is the people feature's panel, shown under the
           // Chats and Calls search fields.
           chatsTab: ChatsTab(
+            // On a wide window the chosen chat opens beside the list.
+            detailBuilder: (context, id) =>
+                ConversationScreen(conversationId: id),
             peopleResults: (context, query) => PeopleSearchPanel(
               query: query,
               mode: PeopleSearchMode.chats,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/features/home/application/home_tab.dart';
+import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// Home: three swipeable tabs and nothing else.
 ///
@@ -40,25 +41,50 @@ class _HomeScreenState extends State<HomeScreen> {
   void _select(HomeTab tab) {
     if (tab == _tab) return;
     setState(() => _tab = tab);
-    _pages.animateToPage(
-      tab.index,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-    );
+    // On a wide window the tabs are not a page view, so there is nothing to
+    // animate.
+    if (_pages.hasClients) {
+      _pages.animateToPage(
+        tab.index,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  /// Back from a wide window to a narrow one: the page view starts over, so it
+  /// is taken to the tab that was showing.
+  void _syncPages() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pages.hasClients) return;
+      final page = _pages.page?.round();
+      if (page != _tab.index) _pages.jumpToPage(_tab.index);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    // A wide window (a desktop, a tablet) shows the tabs one at a time rather
+    // than as swipeable pages: nothing there is swiped, and a chat open beside
+    // the list must not be able to scroll the pages sideways.
+    final wide = MediaQuery.sizeOf(context).width >= HelixBreakpoints.medium;
+    if (!wide) _syncPages();
     return Scaffold(
-      body: PageView(
-        controller: _pages,
-        onPageChanged: (index) => setState(() => _tab = HomeTab.values[index]),
-        children: [
-          HomeTabKeepAlive(child: widget.chatsTab),
-          HomeTabKeepAlive(child: widget.callsTab),
-          HomeTabKeepAlive(child: widget.settingsTab),
-        ],
-      ),
+      body: wide
+          ? IndexedStack(
+              index: _tab.index,
+              children: [widget.chatsTab, widget.callsTab, widget.settingsTab],
+            )
+          : PageView(
+              controller: _pages,
+              onPageChanged: (index) =>
+                  setState(() => _tab = HomeTab.values[index]),
+              children: [
+                HomeTabKeepAlive(child: widget.chatsTab),
+                HomeTabKeepAlive(child: widget.callsTab),
+                HomeTabKeepAlive(child: widget.settingsTab),
+              ],
+            ),
       bottomNavigationBar: _HomeBar(selected: _tab, onSelected: _select),
     );
   }
