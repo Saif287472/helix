@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 import 'support/fake_admin_server.dart';
@@ -18,7 +19,7 @@ void main() {
       await enter(tester, 'Server address', 'helix.test');
       await tapText(tester, 'Continue');
 
-      expect(find.text('First-time setup'), findsOneWidget);
+      expect(find.textContaining('First-time setup'), findsOneWidget);
       expect(find.text('Set password and sign in'), findsOneWidget);
       expect(find.text('New admin password'), findsOneWidget);
       expect(find.text('Repeat the password'), findsOneWidget);
@@ -88,7 +89,7 @@ void main() {
       await h.pumpApp(tester);
       await enter(tester, 'Server address', 'https://helix.test/');
       await tapText(tester, 'Continue');
-      expect(find.text('First-time setup'), findsNothing);
+      expect(find.textContaining('First-time setup'), findsNothing);
 
       await enter(tester, 'Admin password', adminPassword);
       await tapText(tester, 'Sign in');
@@ -278,7 +279,7 @@ void main() {
     ) async {
       await h.startSignedIn(tester);
       h.server.expireAllTokens();
-      await h.goTo(tester, 'Accounts');
+      await h.goTo(tester, 'Users & Devices');
 
       expect(
         find.text('Your admin session has ended. Sign in again.'),
@@ -295,24 +296,26 @@ void main() {
       ];
       h.server.devices['acct-1'] = [FakeAdminServer.device('d1')];
       await h.startSignedIn(tester);
-      await h.goTo(tester, 'Accounts');
+      await h.goTo(tester, 'Users & Devices');
       await tester.tap(find.text('alice'));
       await tester.pumpAndSettle();
-      expect(find.text('Devices'), findsOneWidget);
+      expect(find.text('DEVICES'), findsOneWidget);
 
       h.server.expireAllTokens();
-      await tester.tap(find.byTooltip('Reload account'));
+      await tester.tap(find.widgetWithText(ConsoleChip, 'Active'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Devices'), findsNothing);
+      expect(find.text('DEVICES'), findsNothing);
       expect(find.widgetWithText(TextField, 'Server address'), findsOneWidget);
     });
 
     testWidgets('signing out forgets the token and asks for the password '
         'again', (tester) async {
       await h.startSignedIn(tester);
-      await h.goTo(tester, 'Settings');
-      await tester.tap(find.text('Sign out'));
+      await h.openOps(tester, 'Config');
+      final signOut = find.widgetWithText(FilledButton, 'Sign out');
+      await tester.ensureVisible(signOut);
+      await tester.tap(signOut);
       await tester.pumpAndSettle();
       await tester.tap(
         find.descendant(

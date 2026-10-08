@@ -4,14 +4,23 @@ import 'package:helix_admin/src/features/common/format.dart';
 import 'package:helix_admin/src/features/dashboard/server_controller.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
 import 'package:helix_admin/src/session/admin_session_scope.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_admin/src/widgets/dialogs.dart';
 import 'package:helix_admin/src/widgets/password_field.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
-/// Server name, the admin password, App lock, cleanup and sign-out.
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.server});
+/// Plain names for the feature flags the server allow-lists.
+const flagLabels = {
+  'crash_reporting_upload': 'Accept crash reports from apps',
+  'minimal_analytics': 'Minimal analytics',
+  'group_calls': 'Group calls',
+};
+
+/// Ops & Logs > Config: the server's name and properties, federation, the
+/// admin password and App lock, maintenance, feature flags and sign-out.
+class ConfigView extends StatelessWidget {
+  const ConfigView({super.key, required this.server});
 
   final ServerController server;
 
@@ -98,6 +107,35 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _maintenance(BuildContext context, bool on) async {
+    if (on) {
+      final confirmed = await showConfirmDialog(
+        context,
+        title: 'Turn on maintenance mode?',
+        message:
+            'The server will answer 503 to every app until you turn it off. '
+            'This console keeps working.',
+        action: 'Turn on',
+      );
+      if (!confirmed || !context.mounted) return;
+    }
+    final problem = await server.setMaintenance(on);
+    if (!context.mounted) return;
+    showMessage(
+      context,
+      problem ?? (on ? 'Maintenance mode is on.' : 'Maintenance mode is off.'),
+    );
+  }
+
+  Future<void> _federation(BuildContext context, bool on) async {
+    final problem = await server.setFederation(on);
+    if (!context.mounted) return;
+    showMessage(
+      context,
+      problem ?? (on ? 'Federation is on.' : 'Federation is off.'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = AdminSessionScope.of(context);
@@ -107,85 +145,271 @@ class SettingsScreen extends StatelessWidget {
         final config = server.config;
         final expires = session.sessionExpiresAt;
         return ListView(
-          padding: const EdgeInsets.all(HelixSpace.md),
+          padding: const EdgeInsets.all(16),
           children: [
-            _Group(
-              title: 'Server',
-              children: [
-                ListTile(
-                  title: const Text('Server name'),
-                  subtitle: Text(
-                    config == null || config.serverName.isEmpty
+            ConsoleCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ConsoleCardLabel('Server node identity'),
+                  const SizedBox(height: 14),
+                  ConsoleSettingRow(
+                    title: config == null || config.serverName.isEmpty
                         ? 'Not set'
                         : config.serverName,
-                  ),
-                  trailing: TextButton(
-                    onPressed: config == null || server.isBusy('name')
-                        ? null
-                        : () => _rename(context),
-                    child: const Text('Rename'),
-                  ),
-                ),
-                ListTile(
-                  title: const Text('Address'),
-                  subtitle: Text(session.serverAddress?.text ?? ''),
-                ),
-                if (expires != null)
-                  ListTile(
-                    title: const Text('Signed in until'),
-                    subtitle: Text(
-                      '${formatTime(expires)} (admin sessions last 12 hours)',
+                    subtitle:
+                        'Public node identity shown to people who sign up',
+                    trailing: OutlinedButton(
+                      onPressed: config == null || server.isBusy('name')
+                          ? null
+                          : () => _rename(context),
+                      style: ConsoleButtons.outlined,
+                      child: const Text('Edit name'),
                     ),
                   ),
-              ],
-            ),
-            _Group(
-              title: 'Security',
-              children: [
-                ListTile(
-                  title: const Text('Change admin password'),
-                  subtitle: const Text('Signs out every other admin session.'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _changePassword(context),
-                ),
-                SwitchListTile(
-                  title: const Text('App lock'),
-                  subtitle: const Text(
-                    "Ask for this device's screen lock when the console opens.",
-                  ),
-                  value: session.appLockEnabled,
-                  onChanged: (on) => _appLock(context, on),
-                ),
-              ],
-            ),
-            _Group(
-              title: 'Maintenance',
-              children: [
-                ListTile(
-                  title: const Text('Purge dead jobs'),
-                  subtitle: const Text(
-                    'Clears failed background jobs and expired rows.',
-                  ),
-                  trailing: server.isBusy('purge')
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.chevron_right),
-                  onTap: server.isBusy('purge') ? null : () => _purge(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: HelixSpace.md),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.tonalIcon(
-                onPressed: () => _signOut(context),
-                icon: const Icon(Icons.logout),
-                label: const Text('Sign out'),
+                ],
               ),
             ),
+            const SizedBox(height: 16),
+            ConsoleCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ConsoleCardLabel('Server configuration properties'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Address, version and limits as this server reports them',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: HelixConsoleColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _Properties(
+                    items: [
+                      ConsoleProperty(
+                        label: 'Public server address',
+                        value: session.serverAddress?.text ?? 'Not available',
+                      ),
+                      ConsoleProperty(
+                        label: 'Node ID',
+                        value: config?.nodeId ?? 'Not available',
+                        copyable: config != null,
+                      ),
+                      ConsoleProperty(
+                        label: 'Version',
+                        value: config?.version ?? 'Not available',
+                      ),
+                      ConsoleProperty(
+                        label: 'Sign-up',
+                        mono: false,
+                        value: switch (config?.registration) {
+                          RegistrationMode.phone => 'Phone number',
+                          RegistrationMode.invite => 'Invite code',
+                          RegistrationMode.closed => 'Closed',
+                          _ => 'Not available',
+                        },
+                      ),
+                      ConsoleProperty(
+                        label: 'Attachment limit',
+                        mono: false,
+                        value: config == null
+                            ? 'Not available'
+                            : formatBytes(config.maxAttachmentBytes),
+                      ),
+                      if (expires != null)
+                        ConsoleProperty(
+                          label: 'Signed in until',
+                          mono: false,
+                          value: formatTime(expires),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ConsoleCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ConsoleCardLabel('Worldwide mode & peer network'),
+                  const SizedBox(height: 14),
+                  ConsoleSettingRow(
+                    title: 'Worldwide Network Mode',
+                    subtitle: 'Talk to other Helix servers (federation)',
+                    trailing: Switch(
+                      value: config?.federationEnabled ?? false,
+                      onChanged: config == null || server.isBusy('federation')
+                          ? null
+                          : (on) => _federation(context, on),
+                    ),
+                  ),
+                  if (config?.federationDomain != null) ...[
+                    const SizedBox(height: 14),
+                    ConsoleProperty(
+                      label: 'Federation domain',
+                      value: config!.federationDomain!,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ConsoleCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ConsoleCardLabel('Local security & app lock'),
+                  const SizedBox(height: 14),
+                  ConsoleSettingRow(
+                    title: 'Device biometric / PIN lock',
+                    subtitle:
+                        "Ask for this device's screen lock when the console "
+                        'opens',
+                    trailing: Switch(
+                      value: session.appLockEnabled,
+                      onChanged: (on) => _appLock(context, on),
+                    ),
+                  ),
+                  const Divider(height: 28),
+                  ConsoleSettingRow(
+                    title: 'Admin password',
+                    subtitle: 'Changing it signs out every other admin session',
+                    trailing: OutlinedButton(
+                      onPressed: () => _changePassword(context),
+                      style: ConsoleButtons.outlined,
+                      child: const Text('Change password'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ConsoleCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ConsoleCardLabel('Node maintenance & clean-up'),
+                  const SizedBox(height: 14),
+                  ConsoleSettingRow(
+                    title: 'Server maintenance mode',
+                    subtitle:
+                        'Apps get 503 Service Unavailable while it is on. '
+                        'This console keeps working',
+                    trailing: Switch(
+                      value: config?.maintenance ?? false,
+                      onChanged: config == null || server.isBusy('maintenance')
+                          ? null
+                          : (on) => _maintenance(context, on),
+                    ),
+                  ),
+                  const Divider(height: 28),
+                  ConsoleSettingRow(
+                    title: 'Purge dead jobs',
+                    subtitle:
+                        'Clears failed background jobs and expired sign-in '
+                        'rows. Nothing a person can see is removed',
+                    trailing: OutlinedButton(
+                      onPressed: server.isBusy('purge')
+                          ? null
+                          : () => _purge(context),
+                      style: ConsoleButtons.outlinedTone(
+                        HelixConsoleColors.danger,
+                        HelixConsoleColors.dangerBorder,
+                      ),
+                      child: server.isBusy('purge')
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Purge'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ConsoleCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ConsoleCardLabel('Feature flags'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Server-owned switches. Changes take effect immediately.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: HelixConsoleColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (server.flagsNote != null)
+                    ConsoleBanner(message: server.flagsNote!),
+                  if (server.flags.isEmpty && server.flagsNote == null)
+                    const Text(
+                      'This server has no feature flags.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: HelixConsoleColors.textMuted,
+                      ),
+                    ),
+                  for (final entry in server.flags.entries) ...[
+                    ConsoleSettingRow(
+                      title: flagLabels[entry.key] ?? entry.key,
+                      subtitle: entry.key,
+                      trailing: Switch(
+                        value: entry.value,
+                        onChanged: server.isBusy('flag:${entry.key}')
+                            ? null
+                            : (on) async {
+                                final problem = await server.setFlag(
+                                  entry.key,
+                                  on,
+                                );
+                                if (context.mounted && problem != null) {
+                                  showMessage(context, problem);
+                                }
+                              },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ConsoleCard(
+              color: HelixConsoleColors.dangerSurface,
+              borderColor: HelixConsoleColors.dangerBorder,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ConsoleCardLabel(
+                    'Admin session control',
+                    color: HelixConsoleColors.danger,
+                  ),
+                  const SizedBox(height: 14),
+                  ConsoleSettingRow(
+                    title: 'Sign out of this server',
+                    titleColor: HelixConsoleColors.onDanger,
+                    subtitleColor: HelixConsoleColors.danger,
+                    subtitle:
+                        'Clears the saved admin session from this device. '
+                        'You will need the admin password to sign back in',
+                    trailing: FilledButton(
+                      onPressed: () => _signOut(context),
+                      style: ConsoleButtons.filledTone(
+                        HelixConsoleColors.danger,
+                      ),
+                      child: const Text('Sign out'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
           ],
         );
       },
@@ -193,38 +417,34 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-class _Group extends StatelessWidget {
-  const _Group({required this.title, required this.children});
+/// Two columns of property boxes on a wide card, one on a phone.
+class _Properties extends StatelessWidget {
+  const _Properties({required this.items});
 
-  final String title;
-  final List<Widget> children;
+  final List<Widget> items;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: HelixSpace.md),
-    child: Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (constraints.maxWidth < 520) {
+        return Column(
+          children: [
+            for (var i = 0; i < items.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              items[i],
+            ],
+          ],
+        );
+      }
+      final width = (constraints.maxWidth - 12) / 2;
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              HelixSpace.md,
-              HelixSpace.md,
-              HelixSpace.md,
-              0,
-            ),
-            child: Semantics(
-              header: true,
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-          ),
-          ...children,
+          for (final item in items) SizedBox(width: width, child: item),
         ],
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -257,7 +477,6 @@ class _RenameDialogState extends State<_RenameDialog> {
       maxLength: AdminConfigPatch.maxServerNameLength,
       decoration: const InputDecoration(
         labelText: 'Name people see for this server',
-        border: OutlineInputBorder(),
       ),
       onSubmitted: (value) => Navigator.pop(context, value),
     ),

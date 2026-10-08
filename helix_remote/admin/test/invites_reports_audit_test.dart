@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 import 'support/fake_admin_server.dart';
@@ -45,12 +46,12 @@ void main() {
       await openInvites(tester);
 
       expect(find.text('Invite open-inv'), findsOneWidget);
-      expect(find.text('Used'), findsOneWidget);
-      expect(find.text('Cancelled'), findsOneWidget);
+      expect(find.text('USED'), findsOneWidget);
+      expect(find.text('CANCELLED'), findsOneWidget);
       expect(find.textContaining('used by acct-9'), findsOneWidget);
       expect(find.textContaining('HLX-INV'), findsNothing);
       // Only an open invite can be cancelled.
-      expect(find.widgetWithText(TextButton, 'Cancel'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Cancel'), findsOneWidget);
     });
 
     testWidgets('creating an invite shows the code once', (tester) async {
@@ -85,7 +86,7 @@ void main() {
       tester,
     ) async {
       await openInvites(tester);
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel'));
       await tester.pumpAndSettle();
       expect(find.text('Cancel this invite?'), findsOneWidget);
       await tapText(tester, 'Cancel invite');
@@ -95,12 +96,12 @@ void main() {
         h.server.requests,
         contains('DELETE /v1/admin/invites/open-invite-1'),
       );
-      expect(find.widgetWithText(TextButton, 'Cancel'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, 'Cancel'), findsNothing);
     });
 
     testWidgets('declining the cancel sends nothing', (tester) async {
       await openInvites(tester);
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel'));
       await tester.pumpAndSettle();
       await tapText(tester, 'Cancel');
 
@@ -140,15 +141,15 @@ void main() {
 
       expect(
         find.descendant(
-          of: find.byType(ListTile),
+          of: find.byType(AppBar),
           matching: find.text('Invites'),
         ),
         findsNothing,
       );
       expect(
         find.descendant(
-          of: find.byType(ListTile),
-          matching: find.text('Accounts'),
+          of: find.byType(AppBar),
+          matching: find.text('Users & Devices'),
         ),
         findsOneWidget,
       );
@@ -177,7 +178,7 @@ void main() {
 
     Future<void> openReports(WidgetTester tester) async {
       await h.startSignedIn(tester);
-      await h.goTo(tester, 'Reports');
+      await h.goTo(tester, 'Ops & Logs');
     }
 
     testWidgets('shows the open reports first', (tester) async {
@@ -191,12 +192,12 @@ void main() {
 
     testWidgets('filters by outcome', (tester) async {
       await openReports(tester);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Resolved'));
+      await tester.tap(find.widgetWithText(ConsoleChip, 'Resolved'));
       await tester.pumpAndSettle();
       expect(find.text('Abuse'), findsOneWidget);
       expect(find.text('Spam'), findsNothing);
 
-      await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+      await tester.tap(find.widgetWithText(ConsoleChip, 'All'));
       await tester.pumpAndSettle();
       expect(find.text('Spam'), findsOneWidget);
       expect(find.text('Impersonation'), findsOneWidget);
@@ -242,7 +243,7 @@ void main() {
       await tapText(tester, 'Open account');
 
       expect(find.text('•••• 1234'), findsOneWidget);
-      expect(find.text('Devices'), findsOneWidget);
+      expect(find.text('DEVICES'), findsOneWidget);
     });
 
     testWidgets('a load failure is an error, not "no reports"', (tester) async {
@@ -258,7 +259,10 @@ void main() {
       await openReports(tester);
 
       expect(find.text('No open reports'), findsOneWidget);
-      expect(find.text('Nothing is waiting for you.'), findsOneWidget);
+      expect(
+        find.textContaining('Nothing is waiting for you.'),
+        findsOneWidget,
+      );
     });
   });
 
@@ -279,7 +283,7 @@ void main() {
 
     Future<void> openAudit(WidgetTester tester) async {
       await h.startSignedIn(tester);
-      await h.goTo(tester, 'Audit log');
+      await h.openOps(tester, 'Audit');
     }
 
     testWidgets('shows newest first with targets and details', (tester) async {
@@ -287,7 +291,7 @@ void main() {
 
       expect(find.text('action.5'), findsOneWidget);
       expect(find.textContaining('enabled: true'), findsOneWidget);
-      expect(find.textContaining('target target-n'), findsWidgets);
+      expect(find.textContaining('Target target-n'), findsWidgets);
       final first = tester.getTopLeft(find.text('action.5')).dy;
       final last = tester.getTopLeft(find.text('action.1')).dy;
       expect(first, lessThan(last));
@@ -311,7 +315,7 @@ void main() {
         FakeAdminServer.account('acct-1', name: 'alice', last4: '1234'),
       ];
       await h.startSignedIn(tester);
-      await h.goTo(tester, 'Accounts');
+      await h.goTo(tester, 'Users & Devices');
       await tester.tap(find.text('alice'));
       await tester.pumpAndSettle();
       await tapText(tester, 'Suspend');
@@ -322,9 +326,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      await h.goTo(tester, 'Audit log');
+      await h.openOps(tester, 'Audit');
 
       expect(find.text('account.suspend'), findsOneWidget);
     });
@@ -333,7 +335,7 @@ void main() {
       h.server.audit.clear();
       await openAudit(tester);
 
-      expect(find.text('Nothing recorded yet'), findsOneWidget);
+      expect(find.text('No audit events recorded yet'), findsOneWidget);
     });
 
     testWidgets('a failure shows an error with retry', (tester) async {
@@ -341,8 +343,49 @@ void main() {
       await openAudit(tester);
 
       expect(find.text('Something went wrong'), findsOneWidget);
-      await tapText(tester, 'Retry');
+      await tapText(tester, 'Try again');
       expect(find.text('action.5'), findsOneWidget);
+    });
+
+    testWidgets('the chips narrow the loaded events by kind', (tester) async {
+      h.server.audit
+        ..clear()
+        ..addAll([
+          AuditEntry(
+            id: 'k1',
+            action: 'account.suspend',
+            at: DateTime.utc(2026, 10, 1, 3),
+          ),
+          AuditEntry(
+            id: 'k2',
+            action: 'admin.sign_in',
+            at: DateTime.utc(2026, 10, 1, 2),
+          ),
+          AuditEntry(
+            id: 'k3',
+            action: 'config.update',
+            at: DateTime.utc(2026, 10, 1, 1),
+          ),
+        ]);
+      await openAudit(tester);
+      expect(find.text('account.suspend'), findsOneWidget);
+      expect(find.text('admin.sign_in'), findsOneWidget);
+      expect(find.text('config.update'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ConsoleChip, 'Moderation'));
+      await tester.pumpAndSettle();
+      expect(find.text('account.suspend'), findsOneWidget);
+      expect(find.text('admin.sign_in'), findsNothing);
+      expect(find.text('config.update'), findsNothing);
+
+      await tester.tap(find.widgetWithText(ConsoleChip, 'System'));
+      await tester.pumpAndSettle();
+      expect(find.text('config.update'), findsOneWidget);
+      expect(find.text('account.suspend'), findsNothing);
+
+      await tester.tap(find.widgetWithText(ConsoleChip, 'All events (3)'));
+      await tester.pumpAndSettle();
+      expect(find.text('admin.sign_in'), findsOneWidget);
     });
   });
 }

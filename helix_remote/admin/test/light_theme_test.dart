@@ -49,7 +49,7 @@ void main() {
   testWidgets('no screen offers an appearance toggle', (tester) async {
     final h = AdminHarness();
     await h.startSignedIn(tester);
-    await h.goTo(tester, 'Settings');
+    await h.openOps(tester, 'Config');
 
     expect(find.text('Dark Mode'), findsNothing);
     expect(find.byIcon(Icons.dark_mode), findsNothing);

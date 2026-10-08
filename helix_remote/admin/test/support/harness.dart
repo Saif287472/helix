@@ -145,11 +145,20 @@ final class AdminHarness {
     await pumpApp(tester);
   }
 
-  /// Opens a place from the navigation list.
+  /// Opens a place from the header (the test window is wide): `Overview`,
+  /// `Users & Devices`, `Invites` or `Ops & Logs`.
   Future<void> goTo(WidgetTester tester, String place) async {
     await tester.tap(
-      find.descendant(of: find.byType(ListTile), matching: find.text(place)),
+      find.descendant(of: find.byType(AppBar), matching: find.text(place)),
     );
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens Ops & Logs and one of its sub-tabs: `Reports`, `Audit`, `Logs`
+  /// or `Config`.
+  Future<void> openOps(WidgetTester tester, String tab) async {
+    await goTo(tester, 'Ops & Logs');
+    await tester.tap(find.text(tab).first);
     await tester.pumpAndSettle();
   }
 }

@@ -16,6 +16,7 @@ final class ServerController extends FeatureController {
   Map<String, bool> _flags = const {};
   ReadyResponse? _ready;
   MetricsSummary? _metrics;
+  int? _latencyMs;
 
   bool _loading = false;
   String? _error;
@@ -32,6 +33,14 @@ final class ServerController extends FeatureController {
   /// Null when the health check could not be asked; see [healthNote].
   ReadyResponse? get ready => _ready;
   MetricsSummary? get metrics => _metrics;
+
+  /// How long the last readiness check took to answer, in milliseconds; null
+  /// before the first answer or when the server could not be reached.
+  int? get latencyMs => _latencyMs;
+
+  /// The server could not be asked at all (no readiness answer and no
+  /// configuration).
+  bool get offline => _ready == null && _config == null && _error != null;
 
   bool get loading => _loading;
 
@@ -69,9 +78,14 @@ final class ServerController extends FeatureController {
         clear: () => _flagsNote = null,
       ),
       _read(
-        () async => _ready = await ctx.api.ops.ready(),
+        () async {
+          final clock = Stopwatch()..start();
+          _ready = await ctx.api.ops.ready();
+          _latencyMs = clock.elapsedMilliseconds;
+        },
         (e) {
           _ready = null;
+          _latencyMs = null;
           _healthNote = describeAdminError(e, now: ctx.now);
         },
         clear: () => _healthNote = null,

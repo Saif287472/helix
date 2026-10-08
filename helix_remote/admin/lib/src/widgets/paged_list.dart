@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:helix_admin/src/features/common/feature_controller.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// A refreshable, cursor-paged list for any [PagedController]: the first
 /// page, a "Load more" button while the server has more, and distinct
-/// loading, empty and error states.
+/// loading, empty and error states. The header (title, search, filters)
+/// scrolls with the list and stays while it reloads.
 class PagedListView<T> extends StatelessWidget {
   const PagedListView({
     super.key,
@@ -14,6 +16,9 @@ class PagedListView<T> extends StatelessWidget {
     required this.emptyTitle,
     this.emptyMessage,
     this.header,
+    this.shown,
+    this.gap = 10,
+    this.padding = const EdgeInsets.all(16),
   });
 
   final PagedController<T> controller;
@@ -22,54 +27,71 @@ class PagedListView<T> extends StatelessWidget {
   final String emptyTitle;
   final String? emptyMessage;
 
-  /// Filters, shown above the list and kept while it reloads.
+  /// A title and filters, shown above the list and kept while it reloads.
   final Widget? header;
+
+  /// Narrows what is listed (a client-side filter over the loaded pages);
+  /// null lists everything the controller has.
+  final List<T>? shown;
+
+  /// Space between two items.
+  final double gap;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final Widget body;
+        final items = shown ?? controller.items;
+        final hasHeader = header != null;
+        final Widget? state;
         if (controller.loading && controller.items.isEmpty) {
-          body = Center(
-            child: Semantics(
-              label: 'Loading',
-              liveRegion: true,
-              child: const HelixSkeleton(width: 180, height: 24),
-            ),
+          state = const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: ConsoleLoading(),
           );
         } else if (controller.error != null) {
-          body = HelixErrorState(
+          state = ConsoleBanner(
+            title: 'Something went wrong',
             message: controller.error!,
             onRetry: controller.refresh,
           );
-        } else if (controller.items.isEmpty) {
-          body = HelixEmptyState(
+        } else if (items.isEmpty) {
+          state = ConsoleEmpty(
             icon: emptyIcon,
             title: emptyTitle,
             message: emptyMessage,
           );
         } else {
-          body = RefreshIndicator(
-            onRefresh: controller.refresh,
-            child: ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: controller.items.length + 1,
-              itemBuilder: (context, index) {
-                if (index < controller.items.length) {
-                  return itemBuilder(context, controller.items[index]);
-                }
-                return _Footer(controller: controller);
-              },
-            ),
-          );
+          state = null;
         }
-        return Column(
-          children: [
-            ?header,
-            Expanded(child: body),
-          ],
+        final lead = hasHeader ? 1 : 0;
+        final count = state != null ? lead + 1 : lead + items.length + 1;
+        return RefreshIndicator(
+          onRefresh: controller.refresh,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: padding,
+            itemCount: count,
+            itemBuilder: (context, index) {
+              if (hasHeader && index == 0) {
+                return Padding(
+                  padding: EdgeInsets.only(bottom: gap + 6),
+                  child: header,
+                );
+              }
+              if (state != null) return state;
+              final i = index - lead;
+              if (i < items.length) {
+                return Padding(
+                  padding: EdgeInsets.only(bottom: gap),
+                  child: itemBuilder(context, items[i]),
+                );
+              }
+              return _Footer(controller: controller);
+            },
+          ),
         );
       },
     );
@@ -85,32 +107,33 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     if (controller.loadingMore) {
       return const Padding(
-        padding: EdgeInsets.all(HelixSpace.md),
+        padding: EdgeInsets.all(16),
         child: Center(child: CircularProgressIndicator()),
       );
     }
     final problem = controller.moreError;
     if (problem != null || controller.hasMore) {
       return Padding(
-        padding: const EdgeInsets.all(HelixSpace.md),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Column(
           children: [
             if (problem != null)
               Padding(
-                padding: const EdgeInsets.only(bottom: HelixSpace.xs),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   problem,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: const TextStyle(color: HelixConsoleColors.danger),
                 ),
               ),
             OutlinedButton(
               onPressed: controller.loadMore,
+              style: ConsoleButtons.outlined,
               child: Text(problem == null ? 'Load more' : 'Try again'),
             ),
           ],
         ),
       );
     }
-    return const SizedBox(height: HelixSpace.lg);
+    return const SizedBox(height: 24);
   }
 }

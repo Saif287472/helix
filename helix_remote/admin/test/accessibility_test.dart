@@ -57,12 +57,9 @@ void main() {
 
   for (final place in const [
     'Overview',
-    'Accounts',
+    'Users & Devices',
     'Invites',
-    'Reports',
-    'Audit log',
-    'Server log',
-    'Settings',
+    'Ops & Logs',
   ]) {
     testWidgets(place, (tester) async {
       await h.startSignedIn(tester);
@@ -71,15 +68,23 @@ void main() {
     });
   }
 
+  for (final tab in const ['Reports', 'Audit', 'Logs', 'Config']) {
+    testWidgets('Ops & Logs > $tab', (tester) async {
+      await h.startSignedIn(tester);
+      await h.openOps(tester, tab);
+      await check(tester);
+    });
+  }
+
   testWidgets('an account page', (tester) async {
     await h.startSignedIn(tester);
-    await h.goTo(tester, 'Accounts');
+    await h.goTo(tester, 'Users & Devices');
     await tester.tap(find.text('alice'));
     await tester.pumpAndSettle();
     await check(tester);
   });
 
-  testWidgets('the narrow layout opens a drawer with every place', (
+  testWidgets('the phone layout has a bottom bar with every place', (
     tester,
   ) async {
     h.saveSession();
@@ -90,18 +95,13 @@ void main() {
     await tester.pumpWidget(HelixAdminApp(services: h.services()));
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationRail), findsNothing);
-    await tester.tap(find.byTooltip('Open navigation menu'));
-    await tester.pumpAndSettle();
-    for (final place in const [
-      'Accounts',
-      'Reports',
-      'Audit log',
-      'Server log',
-      'Settings',
-    ]) {
+    expect(find.byType(NavigationBar), findsOneWidget);
+    for (final place in const ['Overview', 'Users', 'Invites', 'Ops & Logs']) {
       expect(
-        find.descendant(of: find.byType(ListTile), matching: find.text(place)),
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text(place),
+        ),
         findsOneWidget,
       );
     }
@@ -109,12 +109,13 @@ void main() {
 
     await tester.tap(
       find.descendant(
-        of: find.byType(ListTile),
-        matching: find.text('Accounts'),
+        of: find.byType(NavigationBar),
+        matching: find.text('Users'),
       ),
     );
     await tester.pumpAndSettle();
     expect(find.text('alice'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('a phone-sized sign-in has no overflow', (tester) async {

@@ -54,7 +54,7 @@ class _HelixAdminAppState extends State<HelixAdminApp> {
         navigatorKey: _navigator,
         title: 'Helix Admin',
         debugShowCheckedModeBanner: false,
-        theme: HelixThemes.light(),
+        theme: HelixThemes.console(),
         themeMode: ThemeMode.light,
         builder: (context, child) => Semantics(
           container: true,
@@ -78,9 +78,7 @@ class _Gate extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = AdminSessionScope.of(context);
     return switch (session.phase) {
-      SessionPhase.starting => const Scaffold(
-        body: Center(child: HelixSkeleton(width: 192, height: 24)),
-      ),
+      SessionPhase.starting => const _Launching(),
       SessionPhase.locked => const LockScreen(),
       SessionPhase.signedOut => const SignInScreen(),
       // A new key per sign-in: nothing from an earlier session survives.
@@ -90,4 +88,41 @@ class _Gate extends StatelessWidget {
       ),
     };
   }
+}
+
+/// What shows while the console reads its saved session: the mark and a
+/// skeleton line, so the first frame is already the console's own.
+class _Launching extends StatelessWidget {
+  const _Launching();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Center(
+      child: Semantics(
+        label: 'Starting Helix Admin',
+        liveRegion: true,
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.shield_outlined,
+              size: 44,
+              color: HelixConsoleColors.accent,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Helix Admin',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: HelixConsoleColors.text,
+              ),
+            ),
+            SizedBox(height: 16),
+            HelixSkeleton(width: 160, height: 14),
+          ],
+        ),
+      ),
+    ),
+  );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
 import 'package:helix_admin/src/session/admin_session_scope.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_admin/src/widgets/password_field.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
@@ -59,185 +60,153 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     final session = AdminSessionScope.of(context);
     final setup = session.setupRequired;
-    return Theme(
-      data: HelixThemes.signIn(),
-      child: Builder(
-        builder: (context) {
-          final scheme = Theme.of(context).colorScheme;
-          final theme = Theme.of(context);
-          return Scaffold(
-            body: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(HelixSpace.lg),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Icon(
-                          Icons.admin_panel_settings_outlined,
-                          size: 56,
-                          color: scheme.primary,
-                        ),
-                        const SizedBox(height: HelixSpace.md),
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            'Helix Admin',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.headlineSmall,
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: ConsoleCard(
+                radius: 20,
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 58,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          color: HelixConsoleColors.accentSurface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: HelixConsoleColors.accentContainer,
                           ),
                         ),
-                        const SizedBox(height: HelixSpace.xs),
-                        Text(
-                          setup == true
-                              ? 'First-time setup'
-                              : 'Sign in to your Helix server',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium,
+                        child: const Icon(
+                          Icons.shield_outlined,
+                          size: 30,
+                          color: HelixConsoleColors.accent,
                         ),
-                        const SizedBox(height: HelixSpace.lg),
-                        if (session.notice != null)
-                          _Banner(
-                            text: session.notice!,
-                            background: scheme.secondaryContainer,
-                            foreground: scheme.onSecondaryContainer,
-                            icon: Icons.info_outline,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        setup == true ? 'Create admin password' : 'Helix Admin',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: HelixConsoleColors.text,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      setup == true
+                          ? 'First-time setup for this server'
+                          : 'Master server control and authentication',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: HelixConsoleColors.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    if (session.notice != null) ...[
+                      ConsoleBanner(
+                        message: session.notice!,
+                        tone: ConsoleTone.info,
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    if (session.error != null) ...[
+                      ConsoleBanner(message: session.error!),
+                      const SizedBox(height: 14),
+                    ],
+                    TextField(
+                      controller: _url,
+                      enabled: !session.busy,
+                      keyboardType: TextInputType.url,
+                      autocorrect: false,
+                      textInputAction: setup == null
+                          ? TextInputAction.go
+                          : TextInputAction.next,
+                      onChanged: (_) => session.addressEdited(),
+                      onSubmitted: (_) {
+                        if (setup == null) _submit(session);
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Server address',
+                        hintText: 'https://helix.example.com',
+                      ),
+                    ),
+                    if (setup != null) ...[
+                      const SizedBox(height: 14),
+                      if (setup) ...[
+                        const Text(
+                          'This server has no admin password yet. Choose one '
+                          'with at least ${AdminPasswordRequest.minLength} '
+                          'characters. Whoever reaches a new server first can '
+                          'do this step, so do it now.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.4,
+                            color: HelixConsoleColors.textMuted,
                           ),
-                        if (session.error != null)
-                          _Banner(
-                            text: session.error!,
-                            background: scheme.errorContainer,
-                            foreground: scheme.onErrorContainer,
-                            icon: Icons.error_outline,
-                            live: true,
-                          ),
-                        TextField(
-                          controller: _url,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      PasswordField(
+                        controller: _password,
+                        label: setup ? 'New admin password' : 'Admin password',
+                        enabled: !session.busy,
+                        autofocus: true,
+                        textInputAction: setup
+                            ? TextInputAction.next
+                            : TextInputAction.go,
+                        onSubmitted: (_) {
+                          if (!setup) _submit(session);
+                        },
+                      ),
+                      if (setup) ...[
+                        const SizedBox(height: 12),
+                        PasswordField(
+                          controller: _confirm,
+                          label: 'Repeat the password',
                           enabled: !session.busy,
-                          keyboardType: TextInputType.url,
-                          autocorrect: false,
-                          textInputAction: setup == null
-                              ? TextInputAction.go
-                              : TextInputAction.next,
-                          onChanged: (_) => session.addressEdited(),
-                          onSubmitted: (_) {
-                            if (setup == null) _submit(session);
-                          },
-                          decoration: const InputDecoration(
-                            labelText: 'Server address',
-                            hintText: 'https://helix.example.com',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        if (setup != null) ...[
-                          const SizedBox(height: HelixSpace.md),
-                          if (setup) ...[
-                            Text(
-                              'This server has no admin password yet. Choose '
-                              'one with at least '
-                              '${AdminPasswordRequest.minLength} characters. '
-                              'Whoever reaches a new server first can do '
-                              'this step, so do it now.',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: HelixSpace.sm),
-                          ],
-                          PasswordField(
-                            controller: _password,
-                            label: setup
-                                ? 'New admin password'
-                                : 'Admin password',
-                            enabled: !session.busy,
-                            autofocus: true,
-                            textInputAction: setup
-                                ? TextInputAction.next
-                                : TextInputAction.go,
-                            onSubmitted: (_) {
-                              if (!setup) _submit(session);
-                            },
-                          ),
-                          if (setup) ...[
-                            const SizedBox(height: HelixSpace.sm),
-                            PasswordField(
-                              controller: _confirm,
-                              label: 'Repeat the password',
-                              enabled: !session.busy,
-                              textInputAction: TextInputAction.go,
-                              onSubmitted: (_) => _submit(session),
-                            ),
-                          ],
-                        ],
-                        const SizedBox(height: HelixSpace.lg),
-                        FilledButton(
-                          onPressed: session.busy
-                              ? null
-                              : () => _submit(session),
-                          child: session.busy
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(switch (setup) {
-                                  null => 'Continue',
-                                  true => 'Set password and sign in',
-                                  false => 'Sign in',
-                                }),
+                          textInputAction: TextInputAction.go,
+                          onSubmitted: (_) => _submit(session),
                         ),
                       ],
+                    ],
+                    const SizedBox(height: 22),
+                    FilledButton(
+                      onPressed: session.busy ? null : () => _submit(session),
+                      style: ConsoleButtons.filled,
+                      child: session.busy
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(switch (setup) {
+                              null => 'Continue',
+                              true => 'Set password and sign in',
+                              false => 'Sign in',
+                            }),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
-}
-
-class _Banner extends StatelessWidget {
-  const _Banner({
-    required this.text,
-    required this.background,
-    required this.foreground,
-    required this.icon,
-    this.live = false,
-  });
-
-  final String text;
-  final Color background;
-  final Color foreground;
-  final IconData icon;
-  final bool live;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: HelixSpace.md),
-    child: Semantics(
-      liveRegion: live,
-      child: Container(
-        padding: const EdgeInsets.all(HelixSpace.sm),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: HelixRadius.card,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: foreground, size: 20),
-            const SizedBox(width: HelixSpace.xs),
-            Expanded(
-              child: Text(text, style: TextStyle(color: foreground)),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }

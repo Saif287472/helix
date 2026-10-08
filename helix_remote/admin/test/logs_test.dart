@@ -30,7 +30,7 @@ void main() {
 
   Future<void> openLogs(WidgetTester tester) async {
     await h.startSignedIn(tester);
-    await h.goTo(tester, 'Server log');
+    await h.openOps(tester, 'Logs');
   }
 
   testWidgets('shows the recent lines', (tester) async {
@@ -47,21 +47,36 @@ void main() {
   ) async {
     await openLogs(tester);
 
-    Color? colorOf(String text) =>
-        tester.widget<Text>(find.textContaining(text)).style?.color;
-    expect(colorOf('server_started'), isNull);
-    expect(colorOf('slow_request'), isNotNull);
-    expect(colorOf('unhandled_error'), isNotNull);
+    // The level tag ("[WARN]") carries the colour of the line.
+    Color? colorOf(String text) {
+      final line = tester.widget<SelectableText>(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.textSpan?.toPlainText() ?? '').contains(text),
+        ),
+      );
+      final tag = line.textSpan!.children!.whereType<TextSpan>().firstWhere(
+        (s) => (s.text ?? '').startsWith('['),
+      );
+      return tag.style?.color;
+    }
+
+    expect(colorOf('server_started'), isNotNull);
+    expect(colorOf('slow_request'), isNot(colorOf('server_started')));
+    expect(colorOf('unhandled_error'), isNot(colorOf('server_started')));
     expect(colorOf('slow_request'), isNot(colorOf('unhandled_error')));
   });
 
   testWidgets('filters the lines and offers a way back', (tester) async {
     await openLogs(tester);
-    await enter(tester, 'Filter lines', 'slow');
+    await tester.enterText(find.byType(TextField), 'slow');
+    await tester.pump();
     expect(find.textContaining('slow_request'), findsOneWidget);
     expect(find.textContaining('server_started'), findsNothing);
 
-    await enter(tester, 'Filter lines', 'zzz');
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pump();
     expect(find.text('No lines match the filter'), findsOneWidget);
     await tapText(tester, 'Clear filter');
     expect(find.textContaining('server_started'), findsOneWidget);
@@ -70,9 +85,9 @@ void main() {
   testWidgets('copies the shown lines', (tester) async {
     final copied = recordClipboard(tester);
     await openLogs(tester);
-    await enter(tester, 'Filter lines', 'error');
-    await tester.tap(find.byTooltip('Copy shown lines'));
-    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'error');
+    await tester.pump();
+    await tapText(tester, 'Copy');
 
     expect(copied, hasLength(1));
     expect(copied.single, contains('unhandled_error'));
@@ -91,7 +106,7 @@ void main() {
     await openLogs(tester);
 
     expect(find.text('Something went wrong'), findsOneWidget);
-    await tapText(tester, 'Retry');
+    await tapText(tester, 'Try again');
     expect(find.textContaining('server_started'), findsOneWidget);
   });
 
@@ -100,15 +115,11 @@ void main() {
       tester,
     ) async {
       await openLogs(tester);
-      await tester.tap(find.widgetWithText(SwitchListTile, 'Follow live'));
-      await tester.pumpAndSettle();
+      await tapText(tester, 'Follow live');
 
       expect(h.sockets, hasLength(1));
       expect(h.sockets.single.headers['authorization'], startsWith('Bearer '));
-      expect(
-        find.text('New lines appear as they are written.'),
-        findsOneWidget,
-      );
+      expect(find.text('LIVE STREAMING'), findsOneWidget);
 
       h.sockets.single.push(line('info', 'fresh_line'));
       await tester.pumpAndSettle();
@@ -121,12 +132,9 @@ void main() {
       tester,
     ) async {
       await openLogs(tester);
-      final toggle = find.widgetWithText(SwitchListTile, 'Follow live');
-      await tester.tap(toggle);
-      await tester.pumpAndSettle();
+      await tapText(tester, 'Follow live');
       final socket = h.sockets.single;
-      await tester.tap(toggle);
-      await tester.pumpAndSettle();
+      await tapText(tester, 'Pause');
       // Closing the socket completes on real event-loop turns (stream
       // cancellation futures live in the root zone).
       await tester.runAsync(
@@ -134,10 +142,7 @@ void main() {
       );
 
       expect(socket.closedByClient, isTrue);
-      expect(
-        find.text('Showing the last lines; not updating.'),
-        findsOneWidget,
-      );
+      expect(find.text('STREAM PAUSED'), findsOneWidget);
     });
 
     testWidgets('where a socket is impossible it polls instead', (
@@ -145,8 +150,7 @@ void main() {
     ) async {
       h.socketError = UnsupportedError('no websocket');
       await openLogs(tester);
-      await tester.tap(find.widgetWithText(SwitchListTile, 'Follow live'));
-      await tester.pumpAndSettle();
+      await tapText(tester, 'Follow live');
 
       expect(find.textContaining('Reloading every 3 seconds'), findsOneWidget);
       h.server.logLines = [...h.server.logLines, line('info', 'polled_line')];
@@ -162,8 +166,7 @@ void main() {
         ApiException(status: 401, code: ErrorCode.unauthenticated),
       );
       await openLogs(tester);
-      await tester.tap(find.widgetWithText(SwitchListTile, 'Follow live'));
-      await tester.pumpAndSettle();
+      await tapText(tester, 'Follow live');
 
       expect(find.widgetWithText(TextField, 'Server address'), findsOneWidget);
     });

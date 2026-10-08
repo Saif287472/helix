@@ -227,6 +227,54 @@ abstract final class HelixCallColors {
   static const noticeSurface = Color(0xE62A3439);
 }
 
+/// The operator console's palette: slate surfaces, one blue accent and the
+/// status colours of its health dots, badges and banners.
+///
+/// Light only, like everything else. The console is a different product
+/// surface from the messenger (a dense, card-based tool rather than a chat),
+/// so it has its own named tokens instead of borrowing chat colours.
+abstract final class HelixConsoleColors {
+  /// The page behind the cards.
+  static const background = Color(0xFFF1F5F9);
+  static const surface = Color(0xFFFFFFFF);
+
+  /// A well inside a card: property boxes, the log pane.
+  static const sunken = Color(0xFFF8FAFC);
+  static const border = Color(0xFFE2E8F0);
+  static const borderStrong = Color(0xFFCBD5E1);
+
+  static const text = Color(0xFF0F172A);
+  static const textBody = Color(0xFF334155);
+  static const textMuted = Color(0xFF64748B);
+  static const textFaint = Color(0xFF94A3B8);
+
+  static const accent = Color(0xFF2563EB);
+  static const accentSurface = Color(0xFFEFF6FF);
+  static const accentBorder = Color(0xFFBFDBFE);
+  static const accentContainer = Color(0xFFDBEAFE);
+
+  static const ok = Color(0xFF10B981);
+  static const onOk = Color(0xFF059669);
+  static const okSurface = Color(0xFFECFDF5);
+  static const okBorder = Color(0xFFA7F3D0);
+
+  static const warn = Color(0xFFF59E0B);
+  static const onWarn = Color(0xFFD97706);
+  static const warnSurface = Color(0xFFFFFBEB);
+  static const warnBorder = Color(0xFFFDE68A);
+
+  /// "Not set up": a slate dot, neither healthy nor broken.
+  static const off = Color(0xFF94A3B8);
+
+  static const danger = Color(0xFFDC2626);
+  static const onDanger = Color(0xFF991B1B);
+  static const dangerSurface = Color(0xFFFEF2F2);
+  static const dangerBorder = Color(0xFFFECACA);
+
+  /// Metric tile accents that carry no status meaning.
+  static const violet = Color(0xFF8B5CF6);
+}
+
 /// Severity colours for status affordances — message delivery state, group
 /// join requests, connection banners.
 ///
@@ -349,6 +397,101 @@ abstract final class HelixThemes {
     contrast: highContrast ? 1 : 0,
     seed: HelixColorTokens.signInBlue,
   );
+
+  /// The operator console: the same components on slate cards with a blue
+  /// accent. See [HelixConsoleColors].
+  static ThemeData console() {
+    final base = _theme(
+      Brightness.light,
+      seed: HelixColorTokens.signInBlue,
+    );
+    const border = BorderSide(color: HelixConsoleColors.border);
+    return base.copyWith(
+      scaffoldBackgroundColor: HelixConsoleColors.background,
+      dividerColor: HelixConsoleColors.border,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: HelixConsoleColors.surface,
+        foregroundColor: HelixConsoleColors.text,
+        surfaceTintColor: Color(0x00000000),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: Border(bottom: border),
+      ),
+      cardTheme: const CardThemeData(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        color: HelixConsoleColors.surface,
+        surfaceTintColor: Color(0x00000000),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          side: border,
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: HelixConsoleColors.surface,
+        surfaceTintColor: const Color(0x00000000),
+        indicatorColor: HelixConsoleColors.accentContainer,
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: states.contains(WidgetState.selected)
+                ? HelixConsoleColors.accent
+                : HelixConsoleColors.textMuted,
+          ),
+        ),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? HelixConsoleColors.accent
+                : HelixConsoleColors.textMuted,
+          ),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.all(HelixConsoleColors.surface),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? HelixConsoleColors.accent
+              : HelixConsoleColors.borderStrong,
+        ),
+        trackOutlineColor: WidgetStateProperty.all(const Color(0x00000000)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: HelixConsoleColors.surface,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+        hintStyle: const TextStyle(
+          fontSize: 13,
+          color: HelixConsoleColors.textFaint,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: border,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: border,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: HelixConsoleColors.accent,
+            width: 1.5,
+          ),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: HelixConsoleColors.text,
+        contentTextStyle: const TextStyle(color: HelixConsoleColors.surface),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
 
   static ThemeData _theme(
     Brightness brightness, {

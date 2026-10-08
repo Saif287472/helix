@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:helix_admin/src/features/logs/logs_controller.dart';
 import 'package:helix_admin/src/session/admin_session_controller.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_admin/src/widgets/dialogs.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
@@ -53,110 +56,174 @@ class _LogsScreenState extends State<LogsScreen> {
     return ListenableBuilder(
       listenable: _logs,
       builder: (context, _) {
-        final scheme = Theme.of(context).colorScheme;
         final shown = _logs.shown;
-        final Widget body;
+        final following = _logs.feed != LogFeed.paused;
+        final Widget pane;
         if (_logs.loading && _logs.lines.isEmpty) {
-          body = const Center(child: HelixSkeleton(width: 180, height: 24));
+          pane = const ConsoleLoading(label: 'Loading the log');
         } else if (_logs.error != null && _logs.lines.isEmpty) {
-          body = HelixErrorState(message: _logs.error!, onRetry: _logs.load);
+          pane = Center(
+            child: ConsoleBanner(
+              title: 'Something went wrong',
+              message: _logs.error!,
+              onRetry: _logs.load,
+            ),
+          );
         } else if (shown.isEmpty) {
-          body = HelixEmptyState(
-            icon: Icons.article_outlined,
-            title: _logs.lines.isEmpty
-                ? 'No log lines yet'
-                : 'No lines match the filter',
-            action: _logs.lines.isEmpty
-                ? null
-                : TextButton(
+          pane = Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.terminal,
+                  size: 34,
+                  color: HelixConsoleColors.textFaint,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _logs.lines.isEmpty
+                      ? 'No log lines yet'
+                      : 'No lines match the filter',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: HelixConsoleColors.textMuted,
+                  ),
+                ),
+                if (_logs.lines.isNotEmpty)
+                  TextButton(
                     onPressed: () {
                       _filter.clear();
                       _logs.setFilter('');
                     },
                     child: const Text('Clear filter'),
                   ),
+              ],
+            ),
           );
         } else {
           // Newest at the bottom, and the view stays anchored there as new
           // lines arrive.
-          body = ListView.builder(
+          pane = ListView.builder(
             reverse: true,
-            padding: const EdgeInsets.symmetric(
-              horizontal: HelixSpace.md,
-              vertical: HelixSpace.xs,
-            ),
             itemCount: shown.length,
-            itemBuilder: (context, index) {
-              final entry = shown[shown.length - 1 - index];
-              return _LogLine(entry: entry);
-            },
+            itemBuilder: (context, index) =>
+                _LogLine(entry: shown[shown.length - 1 - index]),
           );
         }
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                HelixSpace.md,
-                HelixSpace.sm,
-                HelixSpace.xs,
-                0,
-              ),
-              child: Row(
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _filter,
-                      onChanged: _logs.setFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Filter lines',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.filter_list),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Reload log',
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _logs.loading ? null : _logs.load,
-                  ),
-                  IconButton(
-                    tooltip: 'Copy shown lines',
-                    icon: const Icon(Icons.copy),
-                    onPressed: _copy,
+                  const Expanded(child: ConsoleHeading('Live Server Console')),
+                  ConsolePill(
+                    label: following ? 'Live streaming' : 'Stream paused',
+                    tone: following ? ConsoleTone.ok : ConsoleTone.warn,
+                    upper: true,
                   ),
                 ],
               ),
-            ),
-            SwitchListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: HelixSpace.md,
-              ),
-              title: const Text('Follow live'),
-              subtitle: Text(switch (_logs.feed) {
-                LogFeed.paused => 'Showing the last lines; not updating.',
-                LogFeed.live => 'New lines appear as they are written.',
-                LogFeed.polling => _logs.feedNote ?? 'Reloading.',
-              }),
-              value: _logs.feed != LogFeed.paused,
-              onChanged: _logs.setLive,
-            ),
-            if (_logs.error != null && _logs.lines.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: HelixSpace.md),
-                child: Text(
-                  _logs.error!,
-                  style: TextStyle(color: scheme.error),
+              const SizedBox(height: 14),
+              Expanded(
+                child: ConsoleCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _logs.loading ? null : _logs.load,
+                              style: ConsoleButtons.outlined,
+                              child: const Text('Reload'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => _logs.setLive(!following),
+                              style: ConsoleButtons.outlined,
+                              child: Text(following ? 'Pause' : 'Follow live'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _copy,
+                              style: ConsoleButtons.outlined,
+                              child: const Text('Copy'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (following && _logs.feed == LogFeed.polling) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _logs.feedNote ?? 'Reloading every few seconds.',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: HelixConsoleColors.textMuted,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _filter,
+                        onChanged: _logs.setFilter,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Filter lines…',
+                          isDense: true,
+                          prefixIcon: Icon(
+                            Icons.search,
+                            size: 20,
+                            color: HelixConsoleColors.textFaint,
+                          ),
+                        ),
+                      ),
+                      if (_logs.error != null && _logs.lines.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _logs.error!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: HelixConsoleColors.danger,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: HelixConsoleColors.sunken,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: HelixConsoleColors.border,
+                            ),
+                          ),
+                          child: pane,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            const Divider(height: 1),
-            Expanded(child: body),
-          ],
+            ],
+          ),
         );
       },
     );
   }
 }
 
+/// One line: the time in blue, the level in its colour, then the event.
 class _LogLine extends StatelessWidget {
   const _LogLine({required this.entry});
 
@@ -164,18 +231,73 @@ class _LogLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = entry.isError
-        ? scheme.error
-        : entry.isWarning
-        ? HelixStatusColors.onCautionContainer
-        : null;
+    final parts = _split(entry);
+    final tag = parts.level;
+    final Color tagColor = switch (tag) {
+      'error' => HelixConsoleColors.danger,
+      'warn' || 'warning' => HelixConsoleColors.onWarn,
+      _ => HelixConsoleColors.onOk,
+    };
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Text(
-        entry.raw,
-        style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: color),
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: SelectableText.rich(
+        TextSpan(
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12.5,
+            height: 1.4,
+            color: HelixConsoleColors.textBody,
+          ),
+          children: [
+            if (parts.time != null)
+              TextSpan(
+                text: '${parts.time} ',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: HelixConsoleColors.accent,
+                ),
+              ),
+            if (tag != null)
+              TextSpan(
+                text: '[${tag.toUpperCase()}] ',
+                style: TextStyle(fontWeight: FontWeight.w800, color: tagColor),
+              ),
+            TextSpan(text: parts.text),
+          ],
+        ),
       ),
     );
+  }
+
+  /// The server writes JSON objects: `ts`, `level`, `event` and fields. Any
+  /// other line is shown as it is.
+  static ({String? time, String? level, String text}) _split(LogEntry entry) {
+    try {
+      final json = jsonDecode(entry.raw);
+      if (json is Map<String, Object?>) {
+        final ts = DateTime.tryParse('${json['ts']}');
+        final time = ts == null
+            ? null
+            : [
+                ts.toLocal().hour,
+                ts.toLocal().minute,
+                ts.toLocal().second,
+              ].map((n) => n.toString().padLeft(2, '0')).join(':');
+        final event = '${json['event'] ?? ''}';
+        final rest = [
+          for (final e in json.entries)
+            if (!const {'ts', 'level', 'event'}.contains(e.key))
+              '${e.key}=${e.value}',
+        ];
+        return (
+          time: time,
+          level: entry.level,
+          text: [event, ...rest].where((p) => p.isNotEmpty).join(' '),
+        );
+      }
+    } on FormatException {
+      // Plain text.
+    }
+    return (time: null, level: entry.level, text: entry.raw);
   }
 }

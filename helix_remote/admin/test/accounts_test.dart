@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:helix_admin/src/app.dart';
+import 'package:helix_admin/src/widgets/console_kit.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 import 'support/fake_admin_server.dart';
@@ -35,7 +37,7 @@ void main() {
 
   Future<void> openAccounts(WidgetTester tester) async {
     await h.startSignedIn(tester);
-    await h.goTo(tester, 'Accounts');
+    await h.goTo(tester, 'Users & Devices');
   }
 
   Future<void> openAlice(WidgetTester tester) async {
@@ -49,15 +51,9 @@ void main() {
       await openAccounts(tester);
 
       expect(find.text('alice'), findsOneWidget);
-      expect(find.textContaining('•••• 1234 · 1 device'), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byType(ListTile),
-          matching: find.text('Suspended'),
-        ),
-        findsOneWidget,
-      );
-      expect(find.textContaining('•••• 5678 · 2 devices'), findsOneWidget);
+      expect(find.textContaining('1 device · Joined'), findsOneWidget);
+      expect(find.text('SUSPENDED'), findsOneWidget);
+      expect(find.textContaining('2 devices · Joined'), findsOneWidget);
       // No name and no number: placeholders, never invented values.
       expect(find.text('No Helix name'), findsOneWidget);
       expect(find.textContaining('No phone number'), findsOneWidget);
@@ -80,13 +76,15 @@ void main() {
     ) async {
       await openAccounts(tester);
 
-      await enter(tester, 'Search by Helix name or last 4 digits', 'bo');
+      await tester.enterText(find.byType(TextField), 'bo');
+      await tester.pump();
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
       expect(find.text('bob'), findsOneWidget);
       expect(find.text('alice'), findsNothing);
 
-      await enter(tester, 'Search by Helix name or last 4 digits', '1234');
+      await tester.enterText(find.byType(TextField), '1234');
+      await tester.pump();
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
       expect(find.text('alice'), findsOneWidget);
@@ -95,12 +93,12 @@ void main() {
 
     testWidgets('the status chips filter the list', (tester) async {
       await openAccounts(tester);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Suspended'));
+      await tester.tap(find.widgetWithText(ConsoleChip, 'Suspended'));
       await tester.pumpAndSettle();
 
       expect(find.text('bob'), findsOneWidget);
       expect(find.text('alice'), findsNothing);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+      await tester.tap(find.widgetWithText(ConsoleChip, 'All users'));
       await tester.pumpAndSettle();
       expect(find.text('alice'), findsOneWidget);
     });
@@ -109,7 +107,8 @@ void main() {
       tester,
     ) async {
       await openAccounts(tester);
-      await enter(tester, 'Search by Helix name or last 4 digits', 'nobody');
+      await tester.enterText(find.byType(TextField), 'nobody');
+      await tester.pump();
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
 
@@ -141,7 +140,7 @@ void main() {
       );
       expect(find.text('alice'), findsNothing);
 
-      await tapText(tester, 'Retry');
+      await tapText(tester, 'Try again');
       expect(find.text('alice'), findsOneWidget);
     });
 
@@ -162,12 +161,12 @@ void main() {
     testWidgets('shows its details and devices', (tester) async {
       await openAlice(tester);
 
-      expect(find.text('•••• 1234'), findsOneWidget);
+      expect(find.text('•••• 1234'), findsWidgets);
       expect(find.text('acct-1'), findsOneWidget);
-      expect(find.text('Open reports'), findsOneWidget);
+      expect(find.text('OPEN REPORTS'), findsOneWidget);
       expect(find.text('Alice Pixel'), findsOneWidget);
       expect(find.text('Old laptop'), findsOneWidget);
-      expect(find.text('Revoked'), findsOneWidget);
+      expect(find.text('REVOKED'), findsOneWidget);
     });
 
     testWidgets('suspending asks for a reason and then shows the new state', (
@@ -319,7 +318,7 @@ void main() {
         h.server.requests,
         contains('DELETE /v1/admin/accounts/acct-1/devices/dev-1'),
       );
-      expect(find.text('Revoked'), findsNWidgets(2));
+      expect(find.text('REVOKED'), findsNWidgets(2));
     });
 
     testWidgets('a recovery code is shown once and can be copied', (
@@ -342,9 +341,7 @@ void main() {
       await tapText(tester, 'Done');
       // Gone from the screen, and no screen in the console holds it.
       expect(find.textContaining('HLX-REC'), findsNothing);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      await h.goTo(tester, 'Audit log');
+      await h.openOps(tester, 'Audit');
       expect(find.textContaining('HLX-REC'), findsNothing);
       expect(find.text('account.recovery_code'), findsOneWidget);
     });
@@ -371,8 +368,56 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('That item no longer exists.'), findsOneWidget);
-      await tapText(tester, 'Retry');
-      expect(find.text('Devices'), findsOneWidget);
+      await tapText(tester, 'Try again');
+      expect(find.text('DEVICES'), findsOneWidget);
+    });
+  });
+
+  group('on a phone', () {
+    Future<void> openPhone(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      h.saveSession();
+      await tester.pumpWidget(HelixAdminApp(services: h.services()));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Users'),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('an account opens as its own page', (tester) async {
+      await openPhone(tester);
+      await tester.tap(find.text('alice'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Account'), findsOneWidget);
+      expect(find.text('Alice Pixel'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Users & Devices'), findsOneWidget);
+    });
+
+    testWidgets('banning from the page returns to a list without her', (
+      tester,
+    ) async {
+      await openPhone(tester);
+      await tester.tap(find.text('alice'));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView).last, const Offset(0, -900));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'Ban');
+      await tapText(tester, 'Ban and delete');
+
+      expect(find.text('Users & Devices'), findsOneWidget);
+      expect(find.text('alice'), findsNothing);
+      expect(find.text('bob'), findsOneWidget);
     });
   });
 }
