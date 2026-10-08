@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -57,6 +58,11 @@ abstract final class LocalNotifications {
   /// Must run before the first frame. Safe to call more than once.
   static Future<void> init() async {
     if (_plugin != null) return;
+    // Notifications are Android-only here. The plugin refuses to start on
+    // Windows without Windows settings (an ArgumentError that would end
+    // `main` before the first frame), and every user of [plugin] already
+    // treats null as "no notifications on this platform".
+    if (!Platform.isAndroid) return;
     final plugin = FlutterLocalNotificationsPlugin();
     await plugin.initialize(
       settings: const InitializationSettings(
