@@ -225,7 +225,7 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ### Known pre-existing test failures
 
-None as of 2026-10-06, at the Phase X cutover (server 338 on Postgres, app 787,
+None as of 2026-10-06, at the Phase X cutover (server 339 on Postgres, app 799,
 engine 292, api 190, admin 181, ui 183 with 5 golden tests skipped off Linux, db
 131, protocol 83, crypto 73, rules 20, cli 13, calls 5; `flutter analyze` and
 `dart analyze server tool` clean; the governance check passes).
