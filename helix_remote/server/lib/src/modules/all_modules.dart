@@ -71,6 +71,7 @@ List<ModuleFactory> allModules({SmsProvider? sms}) {
       identity: identity.api,
       people: people.api,
       ops: ops.api,
+      calls: calls.api,
     ),
     (c) => ComplianceModule(c, identity: identity.api, exporters: exporters),
   ];

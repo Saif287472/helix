@@ -6,6 +6,7 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/kernel/jwt.dart';
 import 'package:helix_remote_server/src/modules/admin/data/admin_store.dart';
 import 'package:helix_remote_server/src/modules/admin/domain/password_hash.dart';
+import 'package:helix_remote_server/src/modules/calls/api.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
 import 'package:helix_remote_server/src/modules/ops/api.dart';
 import 'package:helix_remote_server/src/modules/people/api.dart';
@@ -32,6 +33,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     required this.identity,
     required this.people,
     required this.ops,
+    required this.calls,
   }) {
     _store = AdminStore(schema);
     _jwt = HmacJwt(
@@ -45,6 +47,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   final IdentityApi identity;
   final PeopleApi people;
   final OpsApi ops;
+  final CallsApi calls;
   late final AdminStore _store;
   late final HmacJwt _jwt;
   late final Argon2Params _kdf;
@@ -527,7 +530,29 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     federationDomain: settings.federationEnabled
         ? context.config.publicBaseUrl.host
         : null,
+    integrations: _integrations(),
   );
+
+  /// Which outside services are set up, by name. Reads the facades and the
+  /// provider switches only: no key, address or secret leaves the process.
+  AdminIntegrations _integrations() {
+    String? named(String variable, bool configured) =>
+        configured ? context.config.env[variable]?.trim() : null;
+    return AdminIntegrations(
+      push: AdminIntegrationStatus(
+        configured: context.push.isConfigured,
+        provider: named('HELIX_PUSH_PROVIDER', context.push.isConfigured),
+      ),
+      sms: AdminIntegrationStatus(
+        configured: identity.smsConfigured,
+        provider: named('HELIX_SMS_PROVIDER', identity.smsConfigured),
+      ),
+      turn: AdminIntegrationStatus(
+        configured: calls.turnConfigured,
+        count: calls.turnConfigured ? calls.turnUrlCount : null,
+      ),
+    );
+  }
 
   Future<Response> _config(HelixRequest q) async =>
       jsonResponse(_configOf(await ops.settings()).toJson());

@@ -120,6 +120,10 @@ typedef AccountDeletedHook = Future<void> Function(Tx tx, String accountId);
 
 /// The identity module's facade.
 abstract interface class IdentityApi {
+  /// Whether a gateway for sign-in codes is set up (for the operator
+  /// console; says nothing about whether the gateway accepts the key).
+  bool get smsConfigured;
+
   Future<AccountRecord?> account(SqlSession s, String accountId);
 
   Future<DeviceRecord?> device(SqlSession s, String deviceId);

@@ -126,6 +126,9 @@ final class _IdentityFacade implements IdentityApi {
   IdentityStore get _store => _m._store;
 
   @override
+  bool get smsConfigured => _m._ctx.config.sms.isConfigured;
+
+  @override
   Future<AccountRecord?> account(SqlSession s, String accountId) =>
       _store.account(s, accountId);
 

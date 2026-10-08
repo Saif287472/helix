@@ -53,6 +53,11 @@ final class FakeAdminServer {
     federationEnabled: false,
     maxAttachmentBytes: 10 * 1024 * 1024,
     nodeId: 'node-1',
+    integrations: AdminIntegrations(
+      push: AdminIntegrationStatus(configured: true, provider: 'fcm'),
+      sms: AdminIntegrationStatus(configured: true, provider: 'bulksmsbd'),
+      turn: AdminIntegrationStatus(configured: false),
+    ),
   );
   Map<String, bool> flags = {
     'crash_reporting_upload': false,
@@ -383,6 +388,7 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
         maxAttachmentBytes: config.maxAttachmentBytes,
         nodeId: config.nodeId,
         federationDomain: config.federationDomain,
+        integrations: config.integrations,
       );
       _record('config.update');
       return _json(config.toJson());

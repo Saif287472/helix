@@ -289,6 +289,13 @@ class _Health extends StatelessWidget {
         );
       }
     }
+    final services = config.integrations;
+    if (services != null) {
+      rows
+        ..add(_push(services.push))
+        ..add(_sms(services.sms))
+        ..add(_turn(services.turn));
+    }
     rows
       ..add(
         ConsoleHealthRow(
@@ -340,6 +347,87 @@ class _Health extends StatelessWidget {
           rows[i],
         ],
       ],
+    );
+  }
+
+  /// Push: set up or not. The server cannot know whether Google accepts the
+  /// key until a wake-up is sent, so the words say "set up", never "working".
+  static Widget _push(AdminIntegrationStatus push) => push.configured
+      ? const ConsoleHealthRow(
+          title: 'FCM push notification service',
+          subtitle: 'Firebase Cloud Messaging • Set up',
+          note:
+              'Phones whose app is closed are woken for new messages and '
+              'calls. The server only learns whether Google accepts the key '
+              'when it sends one.',
+          dot: HelixConsoleColors.ok,
+        )
+      : const ConsoleHealthRow(
+          title: 'FCM push notification service',
+          subtitle: 'Firebase Cloud Messaging • Not set up',
+          note:
+              'A phone whose app is closed or asleep is not told about new '
+              'messages or calls. An app still running in the background '
+              'gets them while it stays connected. To turn push on, set '
+              'HELIX_PUSH_PROVIDER=fcm, HELIX_FCM_PROJECT_ID and '
+              'HELIX_FCM_SERVICE_ACCOUNT in server/.env and restart.',
+          dot: HelixConsoleColors.off,
+        );
+
+  /// SMS: a gateway is wired up or not. A gateway can answer "sent" for a
+  /// key it will not honour, so the first real signal is a failed sign-up.
+  static Widget _sms(AdminIntegrationStatus sms) => sms.configured
+      ? ConsoleHealthRow(
+          title: 'SMS gateway',
+          subtitle: '${_smsName(sms.provider)} • Set up',
+          note:
+              'Sign-in codes are sent through it. The server cannot tell '
+              'whether the gateway accepts the key until a code is sent, so '
+              'a failed sign-up is the first real signal.',
+          dot: HelixConsoleColors.ok,
+        )
+      : const ConsoleHealthRow(
+          title: 'SMS gateway',
+          subtitle: 'Not set up',
+          note:
+              'Nobody can receive a sign-in code on this server. Set '
+              'HELIX_SMS_PROVIDER, HELIX_SMS_API_KEY and HELIX_SMS_SENDER_ID '
+              'in server/.env and restart.',
+          dot: HelixConsoleColors.off,
+        );
+
+  static String _smsName(String? provider) => switch (provider) {
+    'bulksmsbd' => 'BulkSMSBD',
+    final other? when other.isNotEmpty => other,
+    _ => 'Gateway',
+  };
+
+  /// TURN: set up or not. The relay itself is not probed from here, and
+  /// router port forwarding for outside devices is not checked.
+  static Widget _turn(AdminIntegrationStatus turn) {
+    if (!turn.configured) {
+      return const ConsoleHealthRow(
+        title: 'TURN relay server',
+        subtitle: 'STUN/TURN peer connection • Not set up',
+        note:
+            'Calls can start, but devices behind strict routers or on mobile '
+            'data cannot pass media to each other. Set HELIX_TURN_URLS and '
+            'HELIX_TURN_SECRET in server/.env and restart.',
+        dot: HelixConsoleColors.off,
+      );
+    }
+    final count = turn.count;
+    final addresses = count == null
+        ? ''
+        : ' • $count address${count == 1 ? '' : 'es'}';
+    return ConsoleHealthRow(
+      title: 'TURN relay server',
+      subtitle: 'STUN/TURN peer connection • Set up$addresses',
+      note:
+          'Calls can relay media through it. The server does not test the '
+          'relay, and router port forwarding for outside devices is not '
+          'checked.',
+      dot: HelixConsoleColors.ok,
     );
   }
 

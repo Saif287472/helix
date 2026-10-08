@@ -16,6 +16,11 @@ abstract interface class CallRelay {
 
 /// The calls module's facade (ADR-026).
 abstract interface class CallsApi {
+  /// Whether a TURN relay is set up, and how many addresses it has (for the
+  /// operator console; the secret and the addresses stay inside the module).
+  bool get turnConfigured;
+  int get turnUrlCount;
+
   void setRelay(CallRelay relay);
 
   /// A signal relayed by [domain]'s server (already authenticated) for this

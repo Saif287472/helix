@@ -607,6 +607,12 @@ final class _CallsFacade implements CallsApi {
   final CallsModule _m;
 
   @override
+  bool get turnConfigured => _m.turn.isConfigured;
+
+  @override
+  int get turnUrlCount => _m.turn.urls.length;
+
+  @override
   void setRelay(CallRelay relay) => _m._relay = relay;
 
   @override

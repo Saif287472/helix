@@ -101,9 +101,29 @@ void main() {
         maxAttachmentBytes: 1 << 20,
         nodeId: 'node-1',
         federationDomain: 'helix.example',
+        integrations: AdminIntegrations(
+          push: AdminIntegrationStatus(configured: true, provider: 'fcm'),
+          sms: AdminIntegrationStatus(configured: false),
+          turn: AdminIntegrationStatus(configured: true, count: 2),
+        ),
       ),
       (v) => v.toJson(),
       AdminConfig.fromJson,
+    );
+    // An older server does not send the block at all.
+    expect(
+      AdminConfig.fromJson(
+        JsonReader.of({
+          'server_name': 'Helix',
+          'version': '1',
+          'registration': 'phone',
+          'maintenance': false,
+          'federation_enabled': false,
+          'max_attachment_bytes': 1,
+          'node_id': 'n',
+        }),
+      ).integrations,
+      isNull,
     );
     expectRoundTrip(
       const FeatureFlags(flags: {'group_calls': true}),

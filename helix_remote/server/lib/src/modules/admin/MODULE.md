@@ -2,8 +2,8 @@
 
 The operator console's API. Schema `admin`: `admins` (Argon2id password
 hash with its parameters, lockout counters, `tokens_valid_after`) and
-`audit`. It uses identity's `IdentityAdminApi`, people's report methods and
-`OpsApi`. It provides the admin half of authentication
+`audit`. It uses identity's `IdentityAdminApi`, people's report methods,
+`OpsApi` and the calls facade (`turnConfigured`, `turnUrlCount`). It provides the admin half of authentication
 (`ProvidesAuthentication`).
 
 ## Sign-in
@@ -52,7 +52,7 @@ never audited, and reasons pass through `redactString`.
 | Invites | list, create (code shown once), cancel | Codes are stored hashed. |
 | Reports | list (`status`), resolve or dismiss | |
 | Audit | list, newest first | |
-| Config | get, patch `server_name`, `maintenance`, `federation_enabled` | |
+| Config | get, patch `server_name`, `maintenance`, `federation_enabled` | `get` also says which outside services are set up (`integrations`: push, SMS, TURN), as a yes/no with the provider name or an address count. Never a key, address or secret; it cannot say whether a provider accepts its key. |
 | Flags | get, set (allow-listed) | |
 | Logs | recent lines, WS stream | This node only, already redacted. |
 | Purge | `POST /v1/admin/purge` | Dead jobs and expired identity rows. Counts by kind. |

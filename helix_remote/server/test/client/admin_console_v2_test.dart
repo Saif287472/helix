@@ -27,8 +27,11 @@ void main() {
 
     /// [seed] true gives the server `HELIX_ADMIN_PASSWORD`; false leaves it
     /// waiting for first-run setup.
-    Future<void> start({bool seed = true}) async => h = await Harness.start(
-      extra: {if (seed) 'HELIX_ADMIN_PASSWORD': password},
+    Future<void> start({
+      bool seed = true,
+      Map<String, String> extra = const {},
+    }) async => h = await Harness.start(
+      extra: {if (seed) 'HELIX_ADMIN_PASSWORD': password, ...extra},
     );
 
     tearDown(() async {
@@ -71,6 +74,34 @@ void main() {
       devices.add(api);
       return api;
     }
+
+    test(
+      'the config says which outside services are set up, not how',
+      () async {
+        const secret = 'dGhpcy1pcy1hLXR1cm4tc2VjcmV0LXRoYXQtaXMtbG9uZw';
+        await start(
+          extra: {
+            'HELIX_TURN_URLS':
+                'turn:turn.example.test:3478,turns:turn.example.test:5349',
+            'HELIX_TURN_SECRET': secret,
+          },
+        );
+        final api = await signedIn();
+
+        final services = (await api.admin.config()).integrations!;
+        // The harness gives the server recording SMS and push providers; TURN
+        // is set by the environment.
+        expect(services.sms.configured, isTrue);
+        expect(services.push.configured, isTrue);
+        expect(services.turn.configured, isTrue);
+        expect(services.turn.count, 2);
+
+        // The answer carries names and counts only: no address, no secret.
+        final raw = jsonEncode(services.toJson());
+        expect(raw, isNot(contains(secret)));
+        expect(raw, isNot(contains('turn.example.test')));
+      },
+    );
 
     test('first-run setup, then sign-in on the admin audience', () async {
       await start(seed: false);

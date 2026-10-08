@@ -257,7 +257,7 @@ tokens never open each other's routes.
 | `GET /v1/admin/reports` | — → `Page<AdminReport>` | `status`. |
 | `PUT /v1/admin/reports/{report_id}` | `ResolveReportRequest` → 204 | `resolved` or `dismissed`; open reports only. |
 | `GET /v1/admin/audit` | — → `Page<AuditEntry>` | Newest first. |
-| `GET /v1/admin/config` | — → `AdminConfig` | No secrets. |
+| `GET /v1/admin/config` | — → `AdminConfig` | No secrets. `integrations` (optional) says whether push, SMS and TURN are set up: `configured`, plus `provider` (`fcm`, `bulksmsbd`) or `count` (TURN addresses). |
 | `PATCH /v1/admin/config` | `AdminConfigPatch` → `AdminConfig` | Server name, maintenance mode, federation switch. |
 | `GET /v1/admin/feature-flags` | — → `FeatureFlags` | |
 | `PUT /v1/admin/feature-flags/{name}` | `SetFeatureFlagRequest` → 204 | Allow-listed names only (`not_found`). |

@@ -140,4 +140,90 @@ void main() {
     expect(find.text('The server could not be checked'), findsOneWidget);
     expect(find.textContaining('server had a problem'), findsWidgets);
   });
+
+  group('outside services', () {
+    AdminConfig config(AdminIntegrations? integrations) => AdminConfig(
+      serverName: 'Test Server',
+      version: '2.0.0-test',
+      registration: RegistrationMode.phone,
+      maintenance: false,
+      federationEnabled: false,
+      maxAttachmentBytes: 1024,
+      nodeId: 'node-1',
+      integrations: integrations,
+    );
+
+    Future<void> showServices(WidgetTester tester) async {
+      await h.startSignedIn(tester);
+      await tester.scrollUntilVisible(
+        find.text('Sign-up'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+    }
+
+    testWidgets('push and SMS set up, TURN not', (tester) async {
+      // The default fake server: FCM and BulkSMSBD on, no relay.
+      await showServices(tester);
+
+      expect(find.text('FCM push notification service'), findsOneWidget);
+      expect(find.text('Firebase Cloud Messaging • Set up'), findsOneWidget);
+      expect(find.text('SMS gateway'), findsOneWidget);
+      expect(find.text('BulkSMSBD • Set up'), findsOneWidget);
+      expect(find.text('TURN relay server'), findsOneWidget);
+      expect(
+        find.text('STUN/TURN peer connection • Not set up'),
+        findsOneWidget,
+      );
+      // A "not set up" row says which lines to add.
+      expect(find.textContaining('HELIX_TURN_URLS'), findsOneWidget);
+    });
+
+    testWidgets('a relay with its address count', (tester) async {
+      h.server.config = config(
+        const AdminIntegrations(
+          push: AdminIntegrationStatus(configured: true, provider: 'fcm'),
+          sms: AdminIntegrationStatus(configured: true, provider: 'bulksmsbd'),
+          turn: AdminIntegrationStatus(configured: true, count: 2),
+        ),
+      );
+      await showServices(tester);
+
+      expect(
+        find.text('STUN/TURN peer connection • Set up • 2 addresses'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('HELIX_TURN_URLS'), findsNothing);
+    });
+
+    testWidgets('nothing set up says what each one needs', (tester) async {
+      h.server.config = config(
+        const AdminIntegrations(
+          push: AdminIntegrationStatus(configured: false),
+          sms: AdminIntegrationStatus(configured: false),
+          turn: AdminIntegrationStatus(configured: false),
+        ),
+      );
+      await showServices(tester);
+
+      expect(
+        find.text('Firebase Cloud Messaging • Not set up'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('HELIX_FCM_SERVICE_ACCOUNT'), findsOneWidget);
+      expect(find.text('Not set up'), findsOneWidget);
+      expect(find.textContaining('HELIX_SMS_API_KEY'), findsOneWidget);
+    });
+
+    testWidgets('an older server that says nothing shows no rows', (
+      tester,
+    ) async {
+      h.server.config = config(null);
+      await showServices(tester);
+
+      expect(find.text('FCM push notification service'), findsNothing);
+      expect(find.text('SMS gateway'), findsNothing);
+      expect(find.text('TURN relay server'), findsNothing);
+    });
+  });
 }

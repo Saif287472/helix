@@ -447,6 +447,68 @@ final class AuditEntry {
   }
 }
 
+/// One outside service the server uses (push, SMS, the TURN relay): whether
+/// it is set up and which one. Never a key, a URL or any other secret.
+final class AdminIntegrationStatus {
+  const AdminIntegrationStatus({
+    required this.configured,
+    this.provider,
+    this.count,
+  });
+
+  /// The server has what it needs to use the service.
+  final bool configured;
+
+  /// Which one (`fcm`, `bulksmsbd`); null when none is set up or the service
+  /// has no named provider.
+  final String? provider;
+
+  /// How many addresses it has (the TURN URLs); null when that means
+  /// nothing for the service.
+  final int? count;
+
+  JsonMap toJson() =>
+      compact({'configured': configured, 'provider': provider, 'count': count});
+
+  factory AdminIntegrationStatus.fromJson(JsonReader json) =>
+      AdminIntegrationStatus(
+        configured: json.boolean('configured'),
+        provider: json.optString('provider'),
+        count: json.optInt('count'),
+      );
+}
+
+/// The outside services an operator needs to know about. Set up through the
+/// server's environment, so the console can show them but not change them.
+final class AdminIntegrations {
+  const AdminIntegrations({
+    required this.push,
+    required this.sms,
+    required this.turn,
+  });
+
+  /// Wake-ups for phones whose app is closed (FCM).
+  final AdminIntegrationStatus push;
+
+  /// The gateway that sends sign-in codes.
+  final AdminIntegrationStatus sms;
+
+  /// The call relay for devices that cannot reach each other directly.
+  final AdminIntegrationStatus turn;
+
+  JsonMap toJson() => {
+    'push': push.toJson(),
+    'sms': sms.toJson(),
+    'turn': turn.toJson(),
+  };
+
+  factory AdminIntegrations.fromJson(JsonReader json) => AdminIntegrations(
+    push: AdminIntegrationStatus.fromJson(json.object('push')),
+    sms: AdminIntegrationStatus.fromJson(json.object('sms')),
+    turn: AdminIntegrationStatus.fromJson(json.object('turn')),
+  );
+}
+
 /// `GET /v1/admin/config`: no secrets.
 final class AdminConfig {
   const AdminConfig({
@@ -458,6 +520,7 @@ final class AdminConfig {
     required this.maxAttachmentBytes,
     required this.nodeId,
     this.federationDomain,
+    this.integrations,
   });
 
   final String serverName;
@@ -471,6 +534,10 @@ final class AdminConfig {
   final String nodeId;
   final String? federationDomain;
 
+  /// The outside services; null when the server does not say (an older
+  /// server).
+  final AdminIntegrations? integrations;
+
   JsonMap toJson() => compact({
     'server_name': serverName,
     'version': version,
@@ -480,6 +547,7 @@ final class AdminConfig {
     'max_attachment_bytes': maxAttachmentBytes,
     'node_id': nodeId,
     'federation_domain': federationDomain,
+    'integrations': integrations?.toJson(),
   });
 
   factory AdminConfig.fromJson(JsonReader json) => AdminConfig(
@@ -495,6 +563,10 @@ final class AdminConfig {
     maxAttachmentBytes: json.integer('max_attachment_bytes'),
     nodeId: json.string('node_id'),
     federationDomain: json.optString('federation_domain'),
+    integrations: switch (json.optObject('integrations')) {
+      final integrations? => AdminIntegrations.fromJson(integrations),
+      null => null,
+    },
   );
 }
 
