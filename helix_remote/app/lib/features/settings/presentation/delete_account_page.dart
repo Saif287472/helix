@@ -47,8 +47,8 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
     final showNumber =
         state.needsNumber || (proof == DeleteProof.password && !phoneKnown);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Delete my account')),
+    return HelixSettingsScaffold(
+      title: 'Delete my account',
       body: overview.isLoading
           ? const Padding(
               padding: EdgeInsets.all(HelixSpace.md),

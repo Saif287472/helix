@@ -50,7 +50,7 @@ void main() {
       await settle(tester);
 
       expect(find.text('Anna Khan'), findsOneWidget);
-      expect(find.text('helix.example.org'), findsOneWidget);
+      expect(find.textContaining('helix.example.org'), findsOneWidget);
       for (final (label, path) in [
         ('Account', RoutePaths.account),
         ('Privacy', RoutePaths.privacy),
@@ -84,6 +84,38 @@ void main() {
       await tester.tap(find.text('Anna Khan'));
       await settle(tester);
       expect(find.text('stub:${RoutePaths.profile}'), findsOneWidget);
+    });
+  });
+
+  group('Settings search', () {
+    testWidgets('narrows the rows and says when nothing matches', (
+      tester,
+    ) async {
+      useTallWindow(tester);
+      await pumpPage(
+        tester,
+        const SettingsTab(),
+        overrides: a3bOverrides(settingsGateway: FakeSettingsGateway()),
+      );
+      await settle(tester);
+
+      await tester.enterText(find.byType(TextField), 'receipts');
+      await tester.pump();
+      expect(find.text('Privacy'), findsOneWidget);
+      expect(find.text('Backup'), findsNothing);
+      expect(find.text('Search results'), findsOneWidget);
+      // The profile card steps aside while searching.
+      expect(find.text('Anna Khan'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'zzzz');
+      await tester.pump();
+      expect(find.text('No settings found'), findsOneWidget);
+      expect(find.textContaining('No settings match'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pump();
+      expect(find.text('Anna Khan'), findsOneWidget);
+      expect(find.text('Backup'), findsOneWidget);
     });
   });
 

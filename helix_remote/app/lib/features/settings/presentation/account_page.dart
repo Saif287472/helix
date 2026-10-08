@@ -21,8 +21,8 @@ class AccountPage extends ConsumerWidget {
     final action = ref.watch(accountActionsProvider);
     final actions = ref.read(accountActionsProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
+    return HelixSettingsScaffold(
+      title: 'Account',
       body: ListView(
         children: [
           if (action.busy) const LinearProgressIndicator(),

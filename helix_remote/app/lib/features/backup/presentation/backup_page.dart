@@ -25,8 +25,8 @@ class BackupPage extends ConsumerWidget {
     final waiting = offers.where((o) => !o.isFinished).length;
     final actions = ref.read(backupSettingsActionsProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Backup')),
+    return HelixSettingsScaffold(
+      title: 'Backup',
       body: switch (view) {
         AsyncError() => HelixErrorState(
           message: 'The backup settings could not be loaded.',

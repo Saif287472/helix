@@ -34,8 +34,8 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     final action = ref.watch(devicesActionsProvider);
     final notifier = ref.read(devicesActionsProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Devices')),
+    return HelixSettingsScaffold(
+      title: 'Devices',
       body: RefreshIndicator(
         onRefresh: notifier.refresh,
         child: ListView(

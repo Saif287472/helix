@@ -15,8 +15,8 @@ class GroupSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final info = ref.watch(groupInfoProvider(groupId));
-    return Scaffold(
-      appBar: AppBar(title: const Text('Group settings')),
+    return HelixSettingsScaffold(
+      title: 'Group settings',
       body: switch (info) {
         AsyncError() => HelixErrorState(
           message: 'This group could not be loaded.',

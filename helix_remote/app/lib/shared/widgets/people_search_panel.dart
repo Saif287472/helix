@@ -219,6 +219,7 @@ class _RowView extends ConsumerWidget {
         final group = row.group!;
         return HelixSettingsTile(
           icon: Icons.group_outlined,
+          iconColor: Theme.of(context).colorScheme.primary,
           title: group.title,
           subtitle: 'Group',
           onTap: () => ref.read(peopleActionsProvider).openGroup(group),
@@ -379,6 +380,7 @@ class _RefreshTile extends ConsumerWidget {
     final busy = sync.status == PhoneBookStatus.syncing;
     return HelixSettingsTile(
       icon: Icons.sync,
+      iconColor: Theme.of(context).colorScheme.primary,
       title: 'Refresh contacts',
       subtitle: subtitle,
       onTap: busy
@@ -411,6 +413,7 @@ class _LookupPrompt extends ConsumerWidget {
         : 'Find ~${query.helixName} on Helix';
     return HelixSettingsTile(
       icon: phone ? Icons.dialpad : Icons.alternate_email,
+      iconColor: Theme.of(context).colorScheme.primary,
       title: title,
       subtitle: phone
           ? 'Only a scrambled version of the number is sent.'

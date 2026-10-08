@@ -21,8 +21,8 @@ class AboutPage extends ConsumerWidget {
     final server = ref.watch(serverDetailsProvider);
     final crash = ref.watch(crashReportsOptInProvider).value ?? false;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Help and about')),
+    return HelixSettingsScaffold(
+      title: 'Help and about',
       body: ListView(
         children: [
           HelixSettingsSection(

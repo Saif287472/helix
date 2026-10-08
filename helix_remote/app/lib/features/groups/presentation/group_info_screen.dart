@@ -64,8 +64,8 @@ class GroupInfoScreen extends ConsumerWidget {
       }
     });
     final info = ref.watch(groupInfoProvider(groupId));
-    return Scaffold(
-      appBar: AppBar(title: const Text('Group info')),
+    return HelixSettingsScaffold(
+      title: 'Group info',
       body: switch (info) {
         AsyncError() => HelixErrorState(
           message: 'This group could not be loaded.',

@@ -25,8 +25,8 @@ class NotificationsPage extends ConsumerWidget {
     final permission = ref.watch(notificationPermissionProvider);
     final muted = ref.watch(mutedChatsProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+    return HelixSettingsScaffold(
+      title: 'Notifications',
       body: ListView(
         children: [
           if (permission.value == false)

@@ -19,8 +19,8 @@ class StoragePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final storage = ref.watch(storageSummaryProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Storage and data')),
+    return HelixSettingsScaffold(
+      title: 'Storage and data',
       body: ListView(
         children: [
           switch (storage) {

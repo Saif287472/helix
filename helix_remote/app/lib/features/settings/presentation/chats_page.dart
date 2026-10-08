@@ -26,8 +26,8 @@ class ChatsSettingsPage extends ConsumerWidget {
     final documents =
         ref.watch(mediaDocumentsProvider).value ?? MediaDownloadPolicy.never;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Chats')),
+    return HelixSettingsScaffold(
+      title: 'Chats',
       body: ListView(
         children: [
           HelixSettingsSection(

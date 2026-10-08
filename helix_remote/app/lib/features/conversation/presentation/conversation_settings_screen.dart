@@ -21,9 +21,9 @@ class ConversationSettingsScreen extends ConsumerWidget {
       conversationSettingsActionsProvider(conversationId),
     );
     if (view == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Chat settings')),
-        body: const Center(child: CircularProgressIndicator()),
+      return const HelixSettingsScaffold(
+        title: 'Chat settings',
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -90,8 +90,8 @@ class ConversationSettingsScreen extends ConsumerWidget {
       if (confirmed) await actions.block(peer);
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Chat settings')),
+    return HelixSettingsScaffold(
+      title: 'Chat settings',
       body: ListView(
         children: [
           Padding(

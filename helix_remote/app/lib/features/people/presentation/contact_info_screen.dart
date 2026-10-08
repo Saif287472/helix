@@ -149,8 +149,8 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
         ref.watch(commonGroupsProvider(_id)).value ?? const <GroupSummary>[];
     final person = async.value;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Contact info')),
+    return HelixSettingsScaffold(
+      title: 'Contact info',
       body: async.when(
         loading: () => const HelixAsyncPanel(loading: true, child: SizedBox()),
         error: (_, _) => const HelixErrorState(

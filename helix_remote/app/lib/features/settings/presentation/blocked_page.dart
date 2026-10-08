@@ -17,8 +17,8 @@ class BlockedPage extends ConsumerWidget {
     final blocked = ref.watch(blockedProvider);
     final action = ref.watch(blockedActionsProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Blocked')),
+    return HelixSettingsScaffold(
+      title: 'Blocked',
       body: switch (blocked) {
         AsyncData(:final value) when value.isEmpty => const HelixEmptyState(
           icon: Icons.block,

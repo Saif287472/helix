@@ -23,8 +23,8 @@ class _LegalPageState extends ConsumerState<LegalPage> {
     final legal = ref.watch(legalProvider);
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Terms and Privacy Policy')),
+    return HelixSettingsScaffold(
+      title: 'Terms and Privacy Policy',
       body: switch (legal) {
         AsyncData(:final value) => ListView(
           padding: const EdgeInsets.all(HelixSpace.md),

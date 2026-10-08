@@ -60,8 +60,8 @@ class PrivacyPage extends ConsumerWidget {
     final disappearing = ref.watch(defaultDisappearingProvider).value;
     final lock = ref.watch(appLockViewProvider).value ?? const AppLockView();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Privacy')),
+    return HelixSettingsScaffold(
+      title: 'Privacy',
       body: ListView(
         children: [
           if (privacy.saving) const LinearProgressIndicator(),

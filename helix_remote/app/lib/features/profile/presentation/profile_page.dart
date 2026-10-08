@@ -58,8 +58,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final canPick = ref.watch(canPickAvatarProvider);
     final data = profile.value ?? const ProfileData();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+    return HelixSettingsScaffold(
+      title: 'Profile',
       body: switch (profile) {
         AsyncError() => HelixErrorState(
           message: 'Your profile could not be loaded.',

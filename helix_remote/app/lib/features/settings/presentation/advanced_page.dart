@@ -20,8 +20,8 @@ class AdvancedPage extends ConsumerWidget {
     final sync = ref.watch(syncNowProvider);
     final server = ref.watch(serverDetailsProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Advanced')),
+    return HelixSettingsScaffold(
+      title: 'Advanced',
       body: ListView(
         children: [
           if (server.hasError)

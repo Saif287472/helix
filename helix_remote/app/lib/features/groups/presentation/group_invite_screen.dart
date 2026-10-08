@@ -24,8 +24,8 @@ class GroupInviteScreen extends ConsumerWidget {
     final name = ref.watch(groupTitleProvider(groupId));
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Invite with a link')),
+    return HelixSettingsScaffold(
+      title: 'Invite with a link',
       body: ListView(
         children: [
           const Padding(

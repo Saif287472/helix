@@ -16,8 +16,8 @@ class SecurityActivityPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final events = ref.watch(securityEventsProvider);
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Security activity')),
+    return HelixSettingsScaffold(
+      title: 'Security activity',
       body: switch (events) {
         AsyncData(:final value) when value.isEmpty => const HelixEmptyState(
           icon: Icons.shield_outlined,
