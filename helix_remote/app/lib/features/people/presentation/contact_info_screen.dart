@@ -182,28 +182,49 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
     return ListView(
       children: [
         Padding(
-          padding: const EdgeInsets.all(HelixSpace.lg),
+          padding: const EdgeInsets.fromLTRB(
+            HelixSpace.lg,
+            HelixSpace.md,
+            HelixSpace.lg,
+            HelixSpace.md,
+          ),
           child: Column(
             children: [
-              HelixAvatar(
-                model: name.avatar,
-                size: HelixAvatarSize.xl,
-                semanticLabel: 'Picture of ${name.display}',
+              // The big picture of the v1 contact page: the extra-large avatar
+              // drawn at 112 logical pixels.
+              SizedBox.square(
+                dimension: 112,
+                child: FittedBox(
+                  child: HelixAvatar(
+                    model: name.avatar,
+                    size: HelixAvatarSize.xl,
+                    semanticLabel: 'Picture of ${name.display}',
+                  ),
+                ),
               ),
-              const SizedBox(height: HelixSpace.sm),
+              const SizedBox(height: HelixSpace.md),
               Semantics(
                 header: true,
                 child: Text(
                   name.display,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
               if (secondary != null)
-                Text(
-                  secondary,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: scheme.onSurfaceVariant),
+                Padding(
+                  padding: const EdgeInsets.only(top: HelixSpace.xxs),
+                  child: Text(
+                    secondary,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
               if (name.blocked)
                 Padding(
@@ -219,7 +240,12 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: HelixSpace.md),
+          padding: const EdgeInsets.fromLTRB(
+            HelixSpace.md,
+            0,
+            HelixSpace.md,
+            HelixSpace.sm,
+          ),
           child: Row(
             children: [
               _ActionButton(
@@ -227,11 +253,13 @@ class _ContactInfoScreenState extends ConsumerState<ContactInfoScreen> {
                 label: 'Message',
                 onTap: () => ref.read(contactInfoActionsProvider).openChat(_id),
               ),
+              const SizedBox(width: HelixSpace.sm),
               _ActionButton(
                 icon: Icons.call_outlined,
                 label: 'Voice call',
                 onTap: () => _call(video: false),
               ),
+              const SizedBox(width: HelixSpace.sm),
               _ActionButton(
                 icon: Icons.videocam_outlined,
                 label: 'Video call',
@@ -386,20 +414,28 @@ class _ActionButton extends StatelessWidget {
         label: label,
         onTap: onTap,
         child: ExcludeSemantics(
+          // The v1 header action: an outlined rounded tile, icon over label.
           child: InkWell(
-            borderRadius: HelixRadius.card,
+            borderRadius: BorderRadius.circular(16),
             onTap: onTap,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 64),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 76),
+              padding: const EdgeInsets.symmetric(vertical: HelixSpace.xs),
+              decoration: BoxDecoration(
+                border: Border.all(color: scheme.outlineVariant),
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icon, color: scheme.primary),
+                  Icon(icon, color: scheme.primary, size: 28),
                   const SizedBox(height: HelixSpace.xxs),
                   Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: scheme.primary),
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ],
               ),

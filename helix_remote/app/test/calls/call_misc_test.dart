@@ -199,7 +199,7 @@ void main() {
       final port = withCalls();
       await tester.pumpWidget(
         harness(
-          home: CallDetailScreen(callId: 'c1'),
+          home: const CallDetailScreen(callId: 'c1'),
           routes: [stubRoute('/home/people/:accountId', 'person')],
           overrides: callOverrides(port: port, names: names, clock: () => now),
         ),
