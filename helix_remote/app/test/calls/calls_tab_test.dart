@@ -277,6 +277,123 @@ void main() {
     });
   });
 
+  group('shortcuts and keypad', () {
+    CallsPeopleSearchBuilder results() =>
+        (context, query, onCall) => Center(
+          child: TextButton(
+            onPressed: () => onCall('found-person', video: false),
+            child: Text('people results for "$query"'),
+          ),
+        );
+
+    testWidgets('round shortcuts and a Recent heading sit above the log', (
+      tester,
+    ) async {
+      await tester.pumpWidget(tab(withLog(), peopleSearch: results()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Call'), findsOneWidget);
+      expect(find.text('Keypad'), findsOneWidget);
+      expect(find.text('Recent'), findsOneWidget);
+      // The two people called most recently, by first name.
+      expect(find.byTooltip('Call Ada Lovelace'), findsOneWidget);
+      expect(find.byTooltip('Call Bob'), findsOneWidget);
+      expect(find.byTooltip('New call'), findsOneWidget);
+    });
+
+    testWidgets('a recent person shortcut places a voice call', (tester) async {
+      final port = withLog();
+      await tester.pumpWidget(tab(port, peopleSearch: results()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Call Bob'));
+      await tester.pumpAndSettle();
+
+      expect(port.calls, ['start peer-2 video:false']);
+    });
+
+    testWidgets('Call and the new call button open the people search', (
+      tester,
+    ) async {
+      await tester.pumpWidget(tab(withLog(), peopleSearch: results()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('New call'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsOneWidget);
+      // The shortcuts step aside while searching.
+      expect(find.text('Keypad'), findsNothing);
+    });
+
+    testWidgets('the keypad types a number and hands it to the search', (
+      tester,
+    ) async {
+      // The keypad sheet is tall.
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(tab(withLog(), peopleSearch: results()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Keypad'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a number'), findsOneWidget);
+      // Too short to search yet.
+      Finder key(String digit) => find.descendant(
+        of: find.byType(GridView),
+        matching: find.text(digit),
+      );
+      await tester.tap(key('8'));
+      await tester.pump();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithIcon(FilledButton, Icons.call))
+            .onPressed,
+        isNull,
+      );
+
+      for (final digit in ['8', '0', '1', '7', '1', '1']) {
+        await tester.tap(key(digit));
+        await tester.pump();
+      }
+      await tester.tap(find.byTooltip('Delete digit'));
+      await tester.pump();
+      await tester.tap(key('1'));
+      await tester.pump();
+      expect(find.text('8801711'), findsOneWidget);
+
+      await tester.tap(find.widgetWithIcon(FilledButton, Icons.call));
+      await tester.pumpAndSettle();
+
+      // The number went to the people search, which checks it is on Helix
+      // before anything is called.
+      expect(find.text('people results for "8801711"'), findsOneWidget);
+    });
+
+    testWidgets('the shortcuts hold at 2x text and meet the tap targets', (
+      tester,
+    ) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpWidget(tab(withLog(), peopleSearch: results()));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    });
+
+    testWidgets('without a people search there are no shortcuts', (
+      tester,
+    ) async {
+      await tester.pumpWidget(tab(withLog()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Keypad'), findsNothing);
+      expect(find.byTooltip('New call'), findsNothing);
+    });
+  });
+
   testWidgets('holds at 2x text with nothing overflowing', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 2;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);

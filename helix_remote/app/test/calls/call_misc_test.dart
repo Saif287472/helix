@@ -195,6 +195,23 @@ void main() {
       expect(port.calls, ['start peer-1 video:true']);
     });
 
+    testWidgets('Contact opens the person page', (tester) async {
+      final port = withCalls();
+      await tester.pumpWidget(
+        harness(
+          home: CallDetailScreen(callId: 'c1'),
+          routes: [stubRoute('/home/people/:accountId', 'person')],
+          overrides: callOverrides(port: port, names: names, clock: () => now),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Contact'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('person'), findsOneWidget);
+    });
+
     testWidgets('delete removes every call with the person, after asking', (
       tester,
     ) async {

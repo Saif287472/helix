@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:helix_remote/features/calls/application/call_copy.dart';
 import 'package:helix_remote/features/calls/application/call_log.dart';
+import 'package:helix_remote/shared/navigation/people_paths.dart';
 import 'package:helix_remote_ui/helix_remote_ui.dart';
 
 /// One person's calls: who it was and every call with them, newest first,
@@ -99,7 +101,7 @@ class _Body extends ConsumerWidget {
                 size: HelixAvatarSize.xl,
                 semanticLabel: 'Picture of ${detail.title}',
               ),
-              const SizedBox(height: HelixSpace.sm),
+              const SizedBox(height: HelixSpace.md),
               Semantics(
                 header: true,
                 child: Text(
@@ -116,21 +118,24 @@ class _Body extends ConsumerWidget {
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
-              const SizedBox(height: HelixSpace.md),
-              Wrap(
-                spacing: HelixSpace.sm,
-                runSpacing: HelixSpace.xs,
-                alignment: WrapAlignment.center,
+              const SizedBox(height: HelixSpace.lg),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  FilledButton.icon(
-                    onPressed: () => _call(context, ref, video: false),
-                    icon: const Icon(Icons.call),
-                    label: const Text('Voice call'),
+                  _DetailAction(
+                    icon: Icons.call_outlined,
+                    label: 'Voice call',
+                    onTap: () => _call(context, ref, video: false),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => _call(context, ref, video: true),
-                    icon: const Icon(Icons.videocam_outlined),
-                    label: const Text('Video call'),
+                  _DetailAction(
+                    icon: Icons.videocam_outlined,
+                    label: 'Video call',
+                    onTap: () => _call(context, ref, video: true),
+                  ),
+                  _DetailAction(
+                    icon: Icons.person_outline,
+                    label: 'Contact',
+                    onTap: () => context.push(PeoplePaths.person(detail.peer)),
                   ),
                 ],
               ),
@@ -140,6 +145,62 @@ class _Body extends ConsumerWidget {
         const HelixSectionHeader(title: 'Calls'),
         for (final row in detail.rows) _CallRow(row: row),
       ],
+    );
+  }
+}
+
+/// One round action under the name: an icon in a tinted circle and its label.
+class _DetailAction extends StatelessWidget {
+  const _DetailAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: HelixSpace.sm),
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(32),
+          onTap: onTap,
+          child: SizedBox(
+            width: 84,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: scheme.onPrimaryContainer),
+                ),
+                const SizedBox(height: HelixSpace.xs),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
