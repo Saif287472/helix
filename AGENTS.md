@@ -87,6 +87,8 @@ helix_remote/                pub workspace (run commands from here)
   packages/helix_remote_architecture_rules  test-only import-rule helpers
   contracts/v2/fixtures/     golden wire fixtures
   deploy/coturn/             TURN relay (Docker and Windows/WSL1 start script)
+  deploy/windows/            the PC's backup task, restore drill and hardened
+                             Caddyfile (the user installs and runs them)
   docs/                      Remote docs (architecture, protocol, security, product)
   scripts/verify.ps1|.sh     full local gate; coverage.sh the coverage ratchet
   tool/                      governance check, performance-budget check, SBOM

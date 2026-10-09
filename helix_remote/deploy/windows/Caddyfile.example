@@ -1,0 +1,28 @@
+# Helix Global site block for Caddy (checked with Caddy 2.11).
+#
+# Install: copy this over J:\Projects\Servers\helix_server\Caddyfile (keep a
+# copy of the old file), then from that folder:
+#   .\caddy.exe validate --config Caddyfile
+#   .\caddy.exe reload --config Caddyfile
+# The Helix server itself is not restarted. See deploy/windows/README.md for
+# the checks to run afterwards.
+
+helix.agiletechbd.com {
+	# HSTS: browsers refuse plain HTTP to this host for max-age seconds. Start
+	# with one day; after a week without trouble, raise it to 31536000.
+	header Strict-Transport-Security "max-age=86400"
+
+	# The operator API (/v1/admin...) and the metrics route answer only to
+	# this PC and the home LAN (192.168.0.0/16 covers 192.168.0.x). Everyone
+	# else gets a plain 404. remote_ip is the address of the TCP connection,
+	# which a client cannot fake with a header. Caddy matches the decoded,
+	# cleaned path without regard to case, so /V1/%61dmin, //v1/admin and
+	# /v1/x/../admin are caught too (tested 2026-10-09).
+	@operatorOutsideLan {
+		path /v1/admin* /v1/ops/metrics*
+		not remote_ip 127.0.0.0/8 ::1 192.168.0.0/16
+	}
+	respond @operatorOutsideLan 404
+
+	reverse_proxy 127.0.0.1:8080
+}

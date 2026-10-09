@@ -224,13 +224,20 @@ helix.agiletechbd.com {
 }
 ```
 
+The hardened block for production is
+`helix_remote/deploy/windows/Caddyfile.example` (install and check steps in
+the `README.md` next to it). It adds the two items below to the block above.
+It was checked with `caddy validate`, and its path rule was tested against a
+local Caddy 2.11 on 2026-10-09.
+
 - **HSTS.** Add `Strict-Transport-Security` in Caddy, once HTTPS works for
   every client you serve (it makes browsers refuse plain HTTP for the whole
-  period, so start with a short `max-age`):
+  period, so start with a short `max-age`, one day in the example, and raise
+  it to `31536000` after a week without trouble):
 
   ```caddy
   helix.agiletechbd.com {
-      header Strict-Transport-Security "max-age=31536000"
+      header Strict-Transport-Security "max-age=86400"
       reverse_proxy 127.0.0.1:8080
   }
   ```
@@ -242,6 +249,25 @@ helix.agiletechbd.com {
   `/open` landing page, a CSP with `frame-ancestors 'none'` and
   `X-Frame-Options: DENY`. Do not override those in Caddy. Served paths:
   `/open` and `/open/` only.
+- **Operator routes.** `/v1/admin...` (the operator console) and
+  `/v1/ops/metrics` should answer only to the PC and the home LAN. Admin
+  sign-in is a single password, so this keeps a leaked password or token from
+  being usable from the internet:
+
+  ```caddy
+  @operatorOutsideLan {
+      path /v1/admin* /v1/ops/metrics*
+      not remote_ip 127.0.0.0/8 ::1 192.168.0.0/16
+  }
+  respond @operatorOutsideLan 404
+  ```
+
+  `remote_ip` is the TCP peer, which a client cannot set with a header.
+  Caddy matches the decoded, cleaned path without regard to case, so
+  `/V1/%61dmin`, `//v1/admin` and `/v1/x/../admin` are caught too. The PC
+  reaches the site through its LAN address (a `hosts` entry). Away from home,
+  the console gets a 404 and shows "That item no longer exists." Phones'
+  routes are unaffected.
 - **WebSocket.** `/v1/ws` needs no special Caddy setting: `reverse_proxy`
   forwards upgrades by itself. The server sends a ping every 30 s and the
   client heartbeat is 25 s, so idle connections stay open.

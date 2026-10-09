@@ -57,7 +57,10 @@ identifiers into a ticket or chat without checking it first.
   (`authorization: {credentials: ...}` in the scrape config). The token
   opens this route only and is compared in constant time. Without it, the
   route needs an admin token (`POST /v1/admin/sessions`, 12 hours). (The
-  plan said `/metrics`; the code serves `/v1/ops/metrics`.)
+  plan said `/metrics`; the code serves `/v1/ops/metrics`.) With the
+  hardened Caddy site (`deploy/windows/Caddyfile.example`), Caddy answers
+  404 to this route and to `/v1/admin...` unless the caller is on the PC or
+  the home LAN. Scrape `http://127.0.0.1:8080/v1/ops/metrics` directly.
 - **Each node reports only itself.** Counters live in memory and reset when
   the process restarts. With two nodes, scrape both (through their own
   ports, not through Caddy) and sum them.
@@ -297,6 +300,15 @@ kind = '...'`) for that.
 
 ## Backups
 
+**Scripts.** `helix_remote/deploy/windows/` automates this section on the PC
+(its `README.md` has the install steps): `backup-helix.ps1` runs the dump,
+checks it with `pg_restore --list`, copies the blobs, makes an optional
+encrypted off-PC copy and keeps a fixed number of generations.
+`install-backup-task.ps1` registers it as a daily Task Scheduler task, and
+`restore-drill.ps1` runs the drill below. The manual steps below are what
+those scripts do. (Added 2026-10-09; the scripts were tested against fake
+`pg_dump`/`pg_restore` tools, not yet against the production database.)
+
 What to back up, and how often (suggest: Postgres daily, blobs after each
 Postgres dump, secrets once and after every change):
 
@@ -332,24 +344,29 @@ contact discovery works.
 $pg = 'C:\Program Files\PostgreSQL\17\bin'
 & "$pg\pg_dump.exe" --format=custom --no-owner --no-unlogged-table-data `
   -h 127.0.0.1 -U helix -d helix `
-  -f "D:\helix-backups\helix-$(Get-Date -Format yyyyMMdd-HHmm).dump"
+  -f "F:\helix-backups\helix-$(Get-Date -Format yyyyMMdd-HHmm).dump"
 ```
 
+- Put backups on another physical disk than the data directory
+  (`C:\Program Files\PostgreSQL\17\data`). On the production PC, C: and D:
+  share one SSD; F: to J: are on the HDD.
 - Give the password through `%APPDATA%\postgresql\pgpass.conf`
-  (`127.0.0.1:5432:helix:helix:<password>`), not on the command line.
+  (`127.0.0.1:5432:*:helix:<password>`; `install-backup-task.ps1
+  -WritePgPass` writes it), not on the command line.
 - `pg_dump` takes a consistent snapshot while the server runs; you do not
   need to stop anything.
 - `--no-unlogged-table-data` leaves out the short-lived tables
   (`platform.ephemeral`, `platform.rate_buckets`). They hold sign-in
   challenges, WebSocket routes, presence and rate-limit state, which must not
   come back from the past.
-- Schedule it with Windows Task Scheduler. Keep several generations, and keep
-  one off the PC.
+- Schedule it with Windows Task Scheduler (`install-backup-task.ps1`). Keep
+  several generations, and keep one off the PC, encrypted (a BitLocker drive,
+  or `age` with the key kept off the PC).
 
 ### Blobs
 
 - Local: copy the directory after the dump finishes, for example
-  `robocopy "<blob dir>" "D:\helix-backups\blobs" /E`. (Do not use `/MIR`
+  `robocopy "<blob dir>" "F:\helix-backups\blobs" /E`. (Do not use `/MIR`
   anywhere in this repository's workflows.) Deleted objects stay in the backup
   copy; that costs space only.
 - S3: use the store's own versioning or replication.
@@ -373,7 +390,7 @@ Practice this (see the drill below) before you need it.
 3. Restore into it as `helix`:
 
    ```powershell
-   & "$pg\pg_restore.exe" --no-owner -h 127.0.0.1 -U helix -d helix_restore "D:\helix-backups\<file>.dump"
+   & "$pg\pg_restore.exe" --no-owner -h 127.0.0.1 -U helix -d helix_restore "F:\helix-backups\db\<file>.dump"
    ```
 
 4. Restore the blob directory to the same path the server uses, or point
@@ -401,6 +418,11 @@ Practice this (see the drill below) before you need it.
 - Messages sent after the backup and not yet delivered are lost.
 
 ### Restore drill (monthly)
+
+`helix_remote/deploy/windows/restore-drill.ps1 -BackupDir F:\helix-backups`
+does these steps and appends the result to `drill.log`. It leaves
+`server\.env` as it is: it overrides the settings below in the drill node's
+process environment, which wins over `.env`.
 
 A restored copy must not touch the real world. Do this on a throwaway
 database and **not** with the production `.env` as it is:
