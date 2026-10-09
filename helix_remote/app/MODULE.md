@@ -26,10 +26,18 @@ lib/
                                 the warm-start MethodChannel
     platform/                   AppPaths, SecureKeyStore (SQLCipher key),
                                 ServerUrlStore, DevicePhoneBook
-    lifecycle/                  resume -> reconnect + syncOnce
+    lifecycle/                  resume -> reconnect + syncOnce, clear the
+                                message notification
     security/                   AppLock + gate, AppSettings
-    notifications/              local notifications (wake-ups only)
+    notifications/              local notifications (wake-ups only);
+                                MessageAlerts (which messages alert, shared
+                                with the push isolate) and RunningAppAlerts
+                                (the notification while the app is in the
+                                background but still running)
     push/                       the FCM background handler, PushTokenSource
+                                (Firebase in this isolate too), and
+                                PushRegistration (the token goes up every
+                                time an engine reaches running)
   features/<feature>/
     application/                Riverpod Notifiers / StreamProviders, the
                                 value objects the screens draw
@@ -123,6 +131,32 @@ land on the lock screen.
 
 This is also the reason the app keeps no SQLite outside the db package: the
 isolate has to reach the same file the UI isolate has.
+
+## Push token and notifications while running
+
+Two things the background isolate cannot do, done by the app since 2026-10-09
+(review E-01, E-02; tests in `test/push_and_alerts_test.dart`):
+
+- **The token.** `PushRegistration` (`core/push/push_registration.dart`) sends
+  the FCM token every time the engine reaches running: a signed-in launch,
+  sign-up, sign-in, linking, a new server. A rotated token goes to whichever
+  engine is running when it arrives. `PushTokenSource` initialises Firebase in
+  the UI isolate: without that, `FirebaseMessaging.instance` threw and the
+  one launch-time attempt that existed before never registered anything. A build
+  without `google-services.json` has no push and says so quietly.
+- **Notifications from the running app.** The app keeps its engine and socket
+  in the background, and the server pushes only to devices that are not
+  connected, so new messages arrive here and the push isolate stands down.
+  `RunningAppAlerts` (`core/notifications/message_alerts.dart`) raises the same
+  grouped notification from the engine's `IncomingMessageEvent`s while the app
+  is paused or hidden, and `AppLifecycleHost` clears it on resume. Which
+  messages alert (muted chats, Settings > Notifications) and what the
+  notification may say (previews) is `MessageAlerts`, shared with the push
+  isolate. Both use notification id 0, so one path's notification replaces the
+  other's rather than stacking. Missed calls were already raised by
+  `call_effects.dart`.
+- Android only: Windows has no notification settings wired yet (review E-03,
+  a decision for the user).
 
 ## Logging
 

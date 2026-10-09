@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
+import 'package:helix_remote/core/notifications/message_alerts.dart';
 import 'package:helix_remote/core/platform/app_blob_store.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
 import 'package:helix_remote/core/people/people_names.dart';
@@ -13,6 +14,8 @@ import 'package:helix_remote/core/platform/device_phone_book.dart';
 import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/push/push_token_source.dart';
 import 'package:helix_remote/core/security/app_settings.dart';
+import 'package:helix_remote_engine/helix_remote_engine.dart'
+    show IncomingNotice;
 
 /// The FirebaseMessaging background handler.
 ///
@@ -54,31 +57,21 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     );
     try {
       final summary = await runtime.engine.syncOnce();
-      // Alerts are settings (Settings > Notifications): off still records the
-      // message, it only stays quiet. A muted chat never alerts.
+      // Alerts are settings (Settings > Notifications), applied the same way
+      // as by the running app (MessageAlerts).
       final settings = runtime.engine.settings;
-      final direct = await settings.get(AppSettings.notifyMessages);
-      final groups = await settings.get(AppSettings.notifyGroups);
-      final audible = [
-        for (final notice in summary.notices)
-          if (!notice.muted &&
-              (notice.conversationId.startsWith('group:') ? groups : direct))
-            notice,
-      ];
+      final audible = <IncomingNotice>[];
+      for (final notice in summary.notices) {
+        if (await MessageAlerts.alerts(notice, settings.get)) {
+          audible.add(notice);
+        }
+      }
       if (audible.isNotEmpty) {
         await LocalNotifications.init();
-        await LocalNotifications.showMessages(
+        await MessageAlerts.show(
+          settings.get,
           count: audible.length,
-          sound: await settings.get(AppSettings.notifySound),
-          vibrate: await settings.get(AppSettings.notifyVibrate),
-          // Only when the person opted in, and only for one message: the text
-          // comes from this phone's own decrypted copy, never from the push.
-          preview:
-              audible.length == 1 &&
-                  await settings.get(AppSettings.notificationsPreview) &&
-                  audible.first.preview.isNotEmpty
-              ? audible.first.preview
-              : null,
+          only: audible.length == 1 ? audible.first : null,
         );
       }
       if (summary.pendingCalls.isNotEmpty) {

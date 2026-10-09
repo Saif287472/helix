@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
+import 'package:helix_remote/core/notifications/message_alerts.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 
 /// Keeps the engine in step with the app's foreground.
@@ -9,7 +12,8 @@ import 'package:helix_remote_engine/helix_remote_engine.dart';
 /// OS may have dropped it, and the device may have slept for hours. So on
 /// resume the socket is reconnected and, when it is not running, the mailbox is
 /// read once over REST. That is what makes a message that arrived while the
-/// app was closed appear without waiting for a push.
+/// app was closed appear without waiting for a push. The message notification
+/// goes on resume too: the chats are on screen.
 class AppLifecycleHost extends ConsumerStatefulWidget {
   const AppLifecycleHost({super.key, required this.child});
 
@@ -37,6 +41,7 @@ class _AppLifecycleHostState extends ConsumerState<AppLifecycleHost>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
+        unawaited(ref.read(runningAppAlertsProvider).resumed());
         unawaitedResume();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:

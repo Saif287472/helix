@@ -11,8 +11,9 @@ import 'package:helix_remote/core/lifecycle/app_lifecycle_host.dart';
 import 'package:helix_remote/core/links/deep_link.dart';
 import 'package:helix_remote/core/notifications/call_notifications.dart';
 import 'package:helix_remote/core/notifications/local_notifications.dart';
+import 'package:helix_remote/core/notifications/message_alerts.dart';
 import 'package:helix_remote/core/push/push_background.dart';
-import 'package:helix_remote/core/push/push_token_source.dart';
+import 'package:helix_remote/core/push/push_registration.dart';
 import 'package:helix_remote/core/router/app_router.dart';
 import 'package:helix_remote/core/security/app_lock.dart';
 import 'package:helix_remote/features/settings/application/media_policy_sync.dart';
@@ -100,11 +101,17 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_restoreServer());
-      // Both stay alive for the whole run: crash reports (opt-in) and the
-      // auto-download limits that follow the network.
+      // These stay alive for the whole run: crash reports (opt-in), the
+      // auto-download limits that follow the network, the push token (sent
+      // whenever an engine reaches running) and the message notification
+      // while the app is in the background.
       ref.read(crashReporterInstallProvider);
       ref.read(wipedRuntimeResetProvider);
       ref.listenManual(mediaPolicySyncProvider, (_, _) {});
+      // Listened rather than read, so they stay active whatever else happens
+      // to watch the providers they follow.
+      ref.listenManual(pushRegistrationProvider, (_, _) {});
+      ref.listenManual(runningAppAlertsProvider, (_, _) {});
     });
   }
 
@@ -122,19 +129,6 @@ class _HelixRemoteAppState extends ConsumerState<HelixRemoteApp> {
     if (usable) ref.read(serverUrlProvider.notifier).use(uri);
     if (!mounted) return;
     ref.read(sessionRestoreProvider.notifier).finish(restored: usable);
-    unawaited(_startPush());
-  }
-
-  /// Registers the push token once there is a runtime. Optional throughout: a
-  /// build without `google-services.json` simply never gets one.
-  Future<void> _startPush() async {
-    try {
-      final runtime = await ref.read(runtimeProvider.future);
-      await PushTokenSource().start(onToken: runtime.engine.push.register);
-    } on Object {
-      // No server chosen yet, or the database could not open. The router is
-      // showing sign-in or the reset screen; both are correct without push.
-    }
   }
 
   @override

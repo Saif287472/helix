@@ -45,6 +45,18 @@ user asks.
   after the app was swiped away).
 - Sign-out paths: revoke one device, revoke all others, and an SMS-OTP sign-in
   on Helix Global signing the other devices out.
+- Push and notifications, on a real Android phone with a build that includes
+  `google-services.json` (no automated test reaches FCM or the notification
+  shade; added after the 2026-10-09 review, E-01 and E-02):
+  - Fresh install, sign up, swipe the app away, then from another phone send a
+    message and place a call. The message notification and the ringing must
+    both arrive, without opening the app first.
+  - App in the background but not swiped away (home button): a new message
+    raises the "New message" notification; opening the app clears it.
+  - Muted chat, Messages or Groups alerts off in Settings > Notifications:
+    no notification. Previews on: one new message shows its text.
+  - Sign out, sign in on another server (advanced mode), and repeat the first
+    check there.
 
 ## Remote Server
 

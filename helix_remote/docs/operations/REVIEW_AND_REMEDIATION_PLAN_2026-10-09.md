@@ -98,8 +98,8 @@ this file as a change.
 |---|---|---|---|---|---|
 | A-01 | High | Server | One idle device's full mailbox blocks every send to its account | `helix_remote/server/lib/src/modules/messaging/data/mailbox_store.dart:19-39` | confirmed; fixed in Batch 2 (trim; inactivity revoke behind an off-by-default setting) |
 | A-02 | High | Server | Group sends have no rate limit and are copied to every member device | `helix_remote/server/lib/src/modules/groups/module.dart:177-182` | confirmed; fixed in Batch 2 |
-| E-01 | High | App | No message notification while the app is backgrounded but running | `helix_remote/app/lib/core/push/push_background.dart:110-113` | confirmed (code) |
-| E-02 | High | App | Push token registered only at app launch | `helix_remote/app/lib/main.dart:111-138` | confirmed |
+| E-01 | High | App | No message notification while the app is backgrounded but running | `helix_remote/app/lib/core/push/push_background.dart:110-113` | confirmed (code); fixed in Batch 3 (device check pending) |
+| E-02 | High | App | Push token registered only at app launch | `helix_remote/app/lib/main.dart:111-138` | confirmed, worse than recorded (Firebase was never initialised in the UI isolate); fixed in Batch 3 (device check pending) |
 | H-01 | High | Ops | No backup of the production database set up or proven | `helix_remote/docs/operations/V2_OPERABILITY.md:298-427` | confirmed (no task, no backup folder, 2026-10-09); Batch 1 scripts written, user installs |
 | A-03 | Medium | Server | No global storage guard; per-account quotas fill one disk | `helix_remote/server/lib/src/modules/media/module.dart:27-31` | confirmed; fixed in Batch 2 (budget off until `HELIX_STORAGE_BUDGET_BYTES` is set) |
 | A-04 | Medium | Server | One hung job stalls every background job on the node | `helix_remote/server/lib/src/platform/jobs/jobs.dart:159-170` | confirmed |
@@ -109,7 +109,7 @@ this file as a change.
 | B-02 | Medium | Admin | Admin API public behind one password, no server sign-out | `helix_remote/server/lib/src/modules/admin/module.dart:121-153` | confirmed; exposure half: Batch 1 Caddyfile written, user installs |
 | C-01 | Medium | Security | Two engines can write the same ratchet state (key/nonce reuse) | `helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart:29-44` | confirmed (code) |
 | E-03 | Medium | App | Windows app raises no notifications | `helix_remote/app/lib/core/notifications/local_notifications.dart:61-65` | confirmed |
-| F-01 | Medium | Tests | Platform glue (FCM, notifications, local_auth) untested | `.github/workflows/ci.yml:143-157` | confirmed |
+| F-01 | Medium | Tests | Platform glue (FCM, notifications, local_auth) untested | `.github/workflows/ci.yml:143-157` | confirmed; push and notification logic tested in Batch 3, device checklist added |
 | G-01 | Medium | Deps | Dependency risk register no longer matches the lockfile | `docs/dependencies/DEPENDENCY_RISK_REGISTER.md:65-70` | confirmed |
 | H-02 | Medium | Ops | Production runs from the development working tree | `helix_remote/docs/operations/V2_SERVER_HANDOFF.md:74-90` | confirmed |
 | H-03 | Medium | Ops | Nothing restarts the service after reboot or crash | `helix_remote/server/lib/src/platform/db/postgres_db.dart:21-24` | confirmed |
@@ -732,6 +732,12 @@ because no contact list is uploaded (`features/settings/application/privacy_prov
   runtime's engine reaches `EngineStatus.running`, from a provider that follows
   `runtimeProvider`; keep the last token and re-send it after sign-in. Test: a
   fake token source registers once after a sign-in completes.
+- **Found while fixing it (Batch 3).** It was worse: the UI isolate never called
+  `Firebase.initializeApp()` (only the background handler does, in its own
+  isolate), so `FirebaseMessaging.instance` threw inside `PushTokenSource()`'s
+  constructor, the `try` in `_startPush` swallowed it, and no launch ever
+  registered a token, signed in or not. Pushes could only reach a device whose
+  token had been registered by some earlier build.
 
 #### E-03 (Medium, confirmed): the Windows app raises no notifications at all
 
@@ -1130,6 +1136,26 @@ the batch.
   killed), receive a message.
 - **APK / restart.** New app APK (the user builds it). No server restart.
 - **Model.** Opus 5.5 (Android lifecycle, the lease and two notification paths).
+- **Status (2026-10-09).** Done in code; the device checks are pending (they
+  need an APK).
+  - **E-02:** `core/push/push_registration.dart`. `PushRegistration`, kept alive
+    by the app root, sends the token every time `authStateProvider` reaches
+    `ready`; a rotated token goes to the engine running at that moment.
+    `PushTokenSource` now initialises Firebase in the UI isolate (the deeper
+    cause, above) and sits behind a `PushTokens` interface.
+    `main.dart`'s `_startPush` is gone.
+  - **E-01:** `core/notifications/message_alerts.dart`. `RunningAppAlerts`
+    raises the grouped notification from the engine's `IncomingMessageEvent`
+    while the app is paused or hidden; `AppLifecycleHost` clears it on resume.
+    `MessageAlerts` (mute and settings rules, previews) is shared with the push
+    isolate. Both paths use notification id 0, so one replaces the other.
+  - **F-01 (part):** `app/test/push_and_alerts_test.dart`, 12 tests, and the
+    device checks in `docs/release/REMOTE_RELEASE_CHECKLIST.md`.
+  - **E-03 (Windows) not done:** section 5, item 5.
+  - **Residual:** a backgrounded app whose network Android has cut (Doze)
+    keeps the lease while unable to fetch, so the push isolate still stands
+    down until the app is frozen past the lease's 20 seconds. That is the
+    lease's to fix (Batch 4).
 
 ### Batch 4: One engine per database, and safe session commits
 
