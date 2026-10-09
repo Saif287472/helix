@@ -96,8 +96,9 @@ or the REST mailbox (`fetchOnce`); both share one serial queue and
 
 1. **Dedupe:** `(envelope id, sender device)` in `processed_envelopes`; a
    replay is acked again and changes nothing.
-2. **Decrypt** under the sender device's lock (`PairwiseCrypto.runLocked`).
-   The crypto layer returns the new session records; it never writes.
+2. **Decrypt** under the sender device's lock (`PairwiseCrypto.locked`, which
+   also retries when another engine moved the stored state). The crypto layer
+   returns the new session records; it never writes.
 3. **Decode** `ContentMessage`. An unknown `type` or a newer `v` becomes a
    row whose kind the UI shows as "needs a newer version"; a body that does
    not parse is quarantined.
@@ -218,7 +219,14 @@ receiver skips).
   to encrypt at send time, `last_error` a code only.
 - Sessions: `DbSessionStore` maps one `DeviceSessions` record onto the six
   `sessions` slots (slot 0: active session and retired base keys as JSON; 1-5:
-  previous sessions).
+  previous sessions). The record's `version` is the database revision it was
+  read at: `save` writes only while that is still the stored one and throws
+  `StaleSessionState` otherwise, so two engines on one database file cannot
+  commit the same ratchet state (C-01). Every read-then-write goes through
+  `PairwiseCrypto.locked` / `encryptFor`, which retry from what the winner
+  committed - the retry must reload inside the attempt, never reuse a record
+  loaded earlier. A cleared record is written as an empty one-slot record, not
+  deleted, so the revision survives.
 - Settings: `EngineSettings` (user-facing: read receipts, typing, default
   timer) and `EngineState` (session JSON, prekey counters, timestamps).
 - Nothing in the engine logs. `maskPhone` and `shortId` are for hosts that
@@ -250,7 +258,11 @@ receiver skips).
 - **Several isolates:** drift watch streams do not cross database instances.
   An FCM isolate writing the same file is invisible to the UI isolate's
   streams until they re-query; A1 decides between a shared drift isolate and
-  a refresh on resume.
+  a refresh on resume. Two engines *writing* the same file are now safe against
+  each other (the session compare-and-set, C-01) but the app still keeps them
+  apart by lease: a `StaleSessionState` that survives
+  `staleAttempts` retries is the caller's problem (an inbound re-delivery, an
+  outbox backoff), not a state to work around.
 - **Contact-list upload** (`PUT /v1/people/contacts`, only for "contacts"
   audiences) is not wired; **profile-key rotation on block** is not done.
 

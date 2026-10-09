@@ -56,7 +56,10 @@ final class EngineAlreadyRunning implements Exception {
 ///   one (it is short-lived), then takes the lease over;
 /// - a foreground engine refuses to share with another foreground engine in a
 ///   **different process** (a second Windows window), and replaces one in its
-///   own process (a server switch, where the old runtime is closing).
+///   own process (a server switch, where the old runtime is closing);
+/// - a held lease that finds another engine's claim in the file has **lost**
+///   the database: it says so once ([lostEvents]) and stops rewriting the
+///   file, so the two cannot both go on believing they own it.
 final class EngineLease {
   EngineLease._(this._file, this._owner, this._role);
 
@@ -69,10 +72,16 @@ final class EngineLease {
   final File _file;
   final String _owner;
   final LeaseRole _role;
+  final StreamController<LeaseRole> _lostEvents = StreamController.broadcast();
   Timer? _heartbeat;
   bool _released = false;
+  bool _lost = false;
 
   /// Takes the lease kept in [file], or throws [EngineAlreadyRunning].
+  ///
+  /// [heartbeat] is how often the held lease refreshes itself (and checks it
+  /// still owns the file); it is a parameter so a test need not wait five
+  /// seconds.
   static Future<EngineLease> acquire(
     File file, {
     required LeaseRole role,
@@ -80,6 +89,7 @@ final class EngineLease {
     Duration waitForHeadless = const Duration(seconds: 10),
     Duration poll = const Duration(milliseconds: 250),
     Duration settle = const Duration(milliseconds: 40),
+    Duration heartbeat = beat,
     int? processId,
   }) async {
     final pidNow = processId ?? pid;
@@ -110,11 +120,33 @@ final class EngineLease {
     }
 
     final lease = EngineLease._(file, owner, role);
-    lease._heartbeat = Timer.periodic(beat, (_) {
-      if (lease._released) return;
-      _write(file, owner, role, pidNow, now());
-    });
+    lease._heartbeat = Timer.periodic(
+      heartbeat,
+      (_) => lease._beat(pidNow, now),
+    );
     return lease;
+  }
+
+  /// Refreshes the claim, unless another engine's claim is in the file.
+  ///
+  /// This is what makes the lease more than a timestamp: a heartbeat that
+  /// kept rewriting the file without looking would stomp over a push isolate
+  /// that legitimately took the lease over after this engine was frozen
+  /// (Android Doze stops the timer), and the two would then encrypt from the
+  /// same ratchet state. Finding somebody else's claim means this engine has
+  /// lost the database: it says so once through [lost] and stops beating, and
+  /// the holder stops syncing (see `HelixRuntime`).
+  void _beat(int pid, DateTime Function() now) {
+    if (_released || _lost) return;
+    final held = _read(_file, now());
+    if (held != null && held.owner != _owner) {
+      _heartbeat?.cancel();
+      _heartbeat = null;
+      _lost = true;
+      _lostEvents.add(held.role);
+      return;
+    }
+    _write(_file, _owner, _role, pid, now());
   }
 
   /// Gives the lease back, if it is still ours.
@@ -122,6 +154,7 @@ final class EngineLease {
     if (_released) return;
     _released = true;
     _heartbeat?.cancel();
+    _heartbeat = null;
     try {
       final held = _read(_file, DateTime.now(), ignoreStale: true);
       if (held != null && held.owner == _owner && _file.existsSync()) {
@@ -130,10 +163,19 @@ final class EngineLease {
     } on Object {
       // A stale file expires by itself.
     }
+    await _lostEvents.close();
   }
 
   /// This lease's role, for diagnostics.
   LeaseRole get role => _role;
+
+  /// True once another engine's claim was found in the file (see [_beat]).
+  bool get lost => _lost;
+
+  /// The role that took the database over, once; nothing afterwards. Lets the
+  /// holder stop its engine instead of writing ratchet state the new owner is
+  /// also writing.
+  Stream<LeaseRole> get lostEvents => _lostEvents.stream;
 
   static String _newOwner() {
     final random = Random.secure();

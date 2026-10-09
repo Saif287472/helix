@@ -27,6 +27,14 @@ class Identity extends Table {
 /// Double Ratchet sessions per device pair (CRYPTO_V2.md §4–5): slot 0 is
 /// the active session, slots 1–5 the previous ones tried on decrypt. The
 /// state blob is owned by `helix_remote_crypto`.
+///
+/// [version] is the record's revision, not part of the crypto state: every
+/// slot of one device pair carries the same value, it rises by one per write,
+/// and a write only lands while the stored value is still the one the writer
+/// read (`CryptoDao.saveSessions`). Two engines on one database file (the app
+/// and its FCM isolate) can therefore not commit the same ratchet state, and
+/// `deleteSessions` - the only way to lose the revision - is not used to
+/// replace a record.
 @DataClassName('SessionRow')
 class Sessions extends Table {
   TextColumn get peerAccountId => text()();
@@ -35,6 +43,7 @@ class Sessions extends Table {
   BlobColumn get state => blob()();
   IntColumn get createdAt => integer().map(const EpochMs())();
   IntColumn get updatedAt => integer().map(const EpochMs())();
+  IntColumn get version => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {peerAccountId, peerDeviceId, slot};

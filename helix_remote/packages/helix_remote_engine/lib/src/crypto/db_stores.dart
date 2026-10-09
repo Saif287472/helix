@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
+import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// [PairwiseSessionStore] over the `sessions` table. A [DeviceSessions]
@@ -11,6 +12,16 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 /// (`PairwiseSession.toJson`). Reads only through the crypto interface; the
 /// engine commits what the crypto layer returns, inside its own
 /// transactions ([save]).
+///
+/// **Revisions.** [load] stamps the record with the `sessions.version` it was
+/// read at, and [save] writes it back only while the stored version is still
+/// that one. A write refused this way throws [StaleSessionState], and the
+/// caller reloads and works from the state the other engine committed rather
+/// than committing state derived from a version that no longer exists: two
+/// engines on one database file (the app and its FCM isolate) would otherwise
+/// encrypt two messages under one key and nonce. The caller must therefore
+/// hold the engine's per-device lock across the read and the write, and
+/// reload on a refusal ([PairwiseCrypto.locked]).
 final class DbSessionStore implements PairwiseSessionStore {
   DbSessionStore(this._db);
 
@@ -23,24 +34,25 @@ final class DbSessionStore implements PairwiseSessionStore {
       remote.device,
     );
     if (rows.isEmpty) return null;
-    return decode(remote, [for (final row in rows) row.state]);
+    return decode(remote, [
+      for (final row in rows) row.state,
+    ], version: rows.first.version);
   }
 
   /// Writes [sessions] (call inside the transaction of the message's effect).
-  Future<void> save(DeviceSessions sessions, {required DateTime now}) {
+  ///
+  /// Throws [StaleSessionState] when another engine committed the same record
+  /// first, leaving the stored state untouched.
+  Future<void> save(DeviceSessions sessions, {required DateTime now}) async {
     final remote = sessions.remote;
-    if (sessions.isEmpty && sessions.retiredBaseKeys.isEmpty) {
-      return _db.cryptoDao.deleteSessions(
-        remote.account,
-        device: remote.device,
-      );
-    }
-    return _db.cryptoDao.saveSessions(
+    final landed = await _db.cryptoDao.saveSessions(
       remote.account,
       remote.device,
       encode(sessions),
       now: now,
+      expectedVersion: sessions.version,
     );
+    if (!landed) throw StaleSessionState(remote);
   }
 
   /// Slot 0 first, then the previous sessions.
@@ -53,7 +65,11 @@ final class DbSessionStore implements PairwiseSessionStore {
     for (final previous in sessions.previous) _bytes(previous.toJson()),
   ];
 
-  static DeviceSessions decode(DeviceAddress remote, List<Uint8List> slots) {
+  static DeviceSessions decode(
+    DeviceAddress remote,
+    List<Uint8List> slots, {
+    int version = 0,
+  }) {
     JsonReader read(Uint8List bytes) => JsonReader.decode(utf8.decode(bytes));
     final head = read(slots.first);
     if (head.integer('v') != 1) {
@@ -71,6 +87,7 @@ final class DbSessionStore implements PairwiseSessionStore {
       retiredBaseKeys: [
         for (final k in head.optStrings('retired')) decodeBytes(k),
       ],
+      version: version,
     );
   }
 

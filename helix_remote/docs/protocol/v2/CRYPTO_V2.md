@@ -450,6 +450,26 @@ reviewed**.
   server requires every device of a listed account); only the device named in
   `sender_device` acts on it.
 
+**Two engines over one database file (2026-10-09; review finding C-01)**
+
+- `sessions` carries a `version` per device pair (a compare-and-set, not crypto
+  state). A session write lands only while the stored version is still the one
+  the writer read, and stores `version + 1`; a write refused this way changes
+  nothing and the engine reloads and retries from what the winning engine
+  committed (`StaleSessionState`, `PairwiseCrypto.locked`). This is what makes
+  "state is committed before the ciphertext leaves" mean something when the app
+  and its FCM isolate both have the file open: without it, two sends from the
+  same sending chain would encrypt under one AES-GCM key and nonce.
+- A record is written as an empty one-slot record rather than deleted when it
+  becomes empty, so its revision survives and the next write is still a
+  compare-and-set.
+- `PRAGMA busy_timeout = 5000` on every connection: SQLite's default of zero
+  fails the second writer immediately, before the compare-and-set can be
+  reached.
+- Group sender keys are **not** covered: `sender_keys` still saves
+  last-writer-wins, so two engines could send a group message from the same
+  sender-key iteration. Recorded as an open item below.
+
 **Deviation (the safer option; proposed change-log entry)**
 
 - **§9 group state and profile blobs use a random nonce.** As written in §9,
@@ -539,6 +559,12 @@ following; each was fixed with a test that fails without the fix.
   nil.
 - *Retired base keys.* The list of base keys remembered against prekey-message
   replay is not capped.
+- *Group sender keys under two engines.* `sender_keys` still saves
+  last-writer-wins, so the app and its FCM isolate could both send a group
+  message from the same sender-key iteration (the same key/nonce reuse the
+  `sessions.version` compare-and-set now prevents for pairwise sessions).
+  Closing it means the same revision on `sender_keys` and threading it through
+  the group crypto writes.
 - *No HTTPS enforcement.* `HelixApi` and `LinkCode` accept `http://` origins
   (needed for tests and a LAN personal server); the app must refuse them for
   Helix Global.

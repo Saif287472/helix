@@ -181,7 +181,10 @@ final class InboundProcessor {
     if (sealed is SenderKeyMessage) {
       return _record(envelope, EnvelopeOutcome.ignored); // Groups: C4.
     }
-    return _crypto.runLocked(
+    // `locked`, not `runLocked`: the whole decrypt-and-apply is retried when
+    // another engine committed the same session first, and the retry re-reads
+    // the state rather than reusing a record loaded before (C-01).
+    return _crypto.locked(
       sender,
       () => _decryptAndApply(envelope, sender, sealed),
     );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -51,6 +52,10 @@ final class HelixRuntime {
   /// engine owns the database (see [EngineLease]). Both are checked before the
   /// database is opened.
   ///
+  /// If another engine takes the lease over while this one runs, the engine
+  /// stops ([leaseLost]) so the two never write ratchet state at once; whoever
+  /// opens the next runtime gets the database back.
+  ///
   /// A runtime for Helix Global is certificate-pinned ([TlsPinPolicy]); the
   /// REST client and the realtime socket both go through the pinned client.
   ///
@@ -82,6 +87,7 @@ final class HelixRuntime {
     TlsPinPolicy? pinning,
     SecureKeyStore? keys,
     Future<void> Function()? afterWipe,
+    Duration leaseHeartbeat = EngineLease.beat,
   }) async {
     final problem = ServerPolicy.check(serverUrl);
     if (problem != null) throw InsecureServerUrl(problem);
@@ -89,6 +95,7 @@ final class HelixRuntime {
     final lease = await EngineLease.acquire(
       File('${dbFile.path}.lease'),
       role: headless ? LeaseRole.headless : LeaseRole.foreground,
+      heartbeat: leaseHeartbeat,
     );
     try {
       return await _open(
@@ -158,7 +165,7 @@ final class HelixRuntime {
       hardWipe: runHardWipe,
     );
     await engine.start(realtime: !headless, background: !headless);
-    return HelixRuntime._(
+    final runtime = HelixRuntime._(
       db: db,
       api: api,
       engine: engine,
@@ -167,6 +174,32 @@ final class HelixRuntime {
       wipe: wipe,
       runHardWipe: runHardWipe,
     );
+    // The lease can be taken over while this engine runs (a push isolate
+    // after Android froze this app). Two engines on one database file would
+    // advance the same ratchet state, so the loser stands down and whoever
+    // watches [leaseLost] opens a new runtime (see `runtimeProvider`).
+    runtime._leaseSub = lease.lostEvents.listen(
+      (byRole) => unawaited(runtime._onLeaseLost(byRole)),
+    );
+    return runtime;
+  }
+
+  /// Another engine owns the database now. Stop syncing: the socket, the
+  /// timers and the workers are all writers. The engine itself is not closed -
+  /// the UI keeps reading this database (the data is the same, only the
+  /// ownership moved) and [close] closes it.
+  ///
+  ///
+  /// Nothing is written out about it: the app has no logging site outside the
+  /// zone handler and the push isolate (`test/architecture_test.dart`), and the
+  /// loss is not something to show the user - the app simply reopens on the
+  /// new runtime.
+  Future<void> _onLeaseLost(LeaseRole byRole) async {
+    try {
+      await engine.stop();
+    } on Object {
+      // The runtime is being closed anyway, which stops the engine too.
+    }
   }
 
   /// What the app passes the engine for backups and history transfers.
@@ -249,6 +282,7 @@ final class HelixRuntime {
   };
 
   final EngineLease? _lease;
+  StreamSubscription<LeaseRole>? _leaseSub;
   final _WipeRecord _wipe;
   final Future<void> Function() _runHardWipe;
   final HelixDb db;
@@ -269,10 +303,18 @@ final class HelixRuntime {
     if (!wasWiped) await _runHardWipe();
   }
 
+  /// Fires once when another engine took the database lease over. Whoever
+  /// rebuilds this runtime (see `runtimeProvider`) listens and opens a new one;
+  /// the engine has already stopped, so nothing of ours writes meanwhile.
+  Stream<LeaseRole> get leaseLost =>
+      _lease?.lostEvents ?? const Stream<LeaseRole>.empty();
+
   /// Closes the engine, then the client and the database, in that order: the
   /// engine owns neither.
   Future<void> close() async {
     try {
+      await _leaseSub?.cancel();
+      _leaseSub = null;
       await engine.close();
       await api.close();
       // A wiped database was closed by the wipe.

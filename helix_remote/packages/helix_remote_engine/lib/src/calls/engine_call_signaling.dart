@@ -140,7 +140,9 @@ final class EngineCallSignaling implements CallSignaling {
     }
     if (sealed is SenderKeyMessage) return null;
     try {
-      return await _crypto.runLocked(sender, () async {
+      // `locked` retries when another engine committed the same session first
+      // (C-01); a signal is ephemeral, so a failure here is dropped below.
+      return await _crypto.locked(sender, () async {
         final PairwiseDecryptResult result;
         try {
           result = await _crypto.decrypt(sender, sealed);

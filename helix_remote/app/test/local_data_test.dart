@@ -125,6 +125,7 @@ void main() {
       LeaseRole role, {
       int processId = 100,
       Duration wait = Duration.zero,
+      Duration heartbeat = EngineLease.beat,
     }) => EngineLease.acquire(
       file,
       role: role,
@@ -132,6 +133,7 @@ void main() {
       processId: processId,
       waitForHeadless: wait,
       settle: Duration.zero,
+      heartbeat: heartbeat,
     );
 
     setUp(() {
@@ -191,6 +193,49 @@ void main() {
       file.writeAsStringSync('not json');
       final lease = await take(LeaseRole.foreground);
       await lease.release();
+    });
+
+    test(
+      'a heartbeat that finds another engine in the file reports the loss and '
+      'stops claiming',
+      () async {
+        final app = await take(
+          LeaseRole.foreground,
+          heartbeat: const Duration(milliseconds: 10),
+        );
+        final lost = app.lostEvents.first;
+
+        // A push isolate took the lease over (this app was frozen, so its
+        // heartbeat had gone stale and the claim looked free).
+        now = now.add(EngineLease.staleAfter + const Duration(seconds: 1));
+        await take(LeaseRole.headless);
+
+        await expectLater(
+          lost.timeout(const Duration(seconds: 5)),
+          completion(LeaseRole.headless),
+        );
+        expect(app.lost, isTrue);
+        // It does not write over the new owner: the file still names the
+        // engine that took it.
+        expect(
+          file.readAsStringSync(),
+          contains(LeaseRole.headless.name),
+          reason: 'the loser must not keep rewriting the claim',
+        );
+        await app.release();
+      },
+    );
+
+    test('a lost lease never deletes the new owner\'s file', () async {
+      final app = await take(
+        LeaseRole.foreground,
+        heartbeat: const Duration(milliseconds: 10),
+      );
+      now = now.add(EngineLease.staleAfter + const Duration(seconds: 1));
+      await take(LeaseRole.headless);
+      await app.lostEvents.first.timeout(const Duration(seconds: 5));
+      await app.release();
+      expect(file.existsSync(), isTrue);
     });
   });
 

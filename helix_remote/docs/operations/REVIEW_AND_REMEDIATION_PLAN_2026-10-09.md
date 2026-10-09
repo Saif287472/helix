@@ -107,7 +107,7 @@ this file as a change.
 | A-06 | Medium | Server | Password routes are an unauthenticated account oracle; lockout DoS | `helix_remote/server/lib/src/modules/identity/application/sign_in.dart:35-60` | confirmed |
 | B-01 | Medium | Admin | Android console App lock locks the operator out | `helix_remote/admin/android/app/src/main/kotlin/com/helix/helix_admin/MainActivity.kt:5` | confirmed |
 | B-02 | Medium | Admin | Admin API public behind one password, no server sign-out | `helix_remote/server/lib/src/modules/admin/module.dart:121-153` | confirmed; exposure half: Batch 1 Caddyfile written, user installs |
-| C-01 | Medium | Security | Two engines can write the same ratchet state (key/nonce reuse) | `helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart:29-44` | confirmed (code) |
+| C-01 | Medium | Security | Two engines can write the same ratchet state (key/nonce reuse) | `helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart:29-44` | confirmed (code); fixed in Batch 4 (group sender keys left open) |
 | E-03 | Medium | App | Windows app raises no notifications | `helix_remote/app/lib/core/notifications/local_notifications.dart:61-65` | confirmed |
 | F-01 | Medium | Tests | Platform glue (FCM, notifications, local_auth) untested | `.github/workflows/ci.yml:143-157` | confirmed; push and notification logic tested in Batch 3, device checklist added |
 | G-01 | Medium | Deps | Dependency risk register no longer matches the lockfile | `docs/dependencies/DEPENDENCY_RISK_REGISTER.md:65-70` | confirmed |
@@ -1177,6 +1177,50 @@ the batch.
 - **Verify.** db, engine, app and server client suites; codegen `--check`.
 - **APK / restart.** New app APK. No server restart.
 - **Model.** Opus 5.5.
+- **Status (2026-10-09).** Done; the device check needs the APK.
+  - **Schema 3:** `sessions.version`, one column, `from2To3` as an
+    `ALTER TABLE ... ADD COLUMN` (the step-by-step helpers only create
+    entities). Existing rows start at 0. Schema dump v3 and the helpers are
+    generated and committed.
+  - **The compare-and-set:** `CryptoDao.saveSessions` takes
+    `expectedVersion`, writes only while the stored revision is still that one
+    and stores `expectedVersion + 1`; it returns **false** and changes nothing
+    otherwise. `DbSessionStore.load` stamps the record with the revision it
+    read, `save` raises `StaleSessionState` when the write is refused, and
+    every read-then-write goes through `PairwiseCrypto.locked` (or
+    `encryptFor`'s own loop), which reloads and retries up to `staleAttempts`
+    (3) - always from the stored state, never from a record loaded earlier.
+    A cleared record is written as an empty one-slot record rather than deleted,
+    so the revision survives and the next write is still comparable.
+  - **`PRAGMA busy_timeout = 5000`** on every connection (`busyTimeout` in
+    `opening.dart`). This was necessary, not cosmetic: with SQLite's default of
+    zero the second writer fails at once, and the compare-and-set is never
+    reached. Found by the two-engine test.
+  - **App:** the heartbeat reads the lease file before rewriting it. Another
+    engine's claim ends this one (`lostEvents`, `lost`), stops the engine
+    (`HelixRuntime._onLeaseLost`) and makes `runtimeProvider` open a new
+    runtime that takes the lease back. A lost lease no longer deletes the
+    file, which is the other engine's now. `HelixRuntime.open` gained
+    `leaseHeartbeat` for the tests.
+  - **Crypto:** `DeviceSessions` carries a `version`, propagated through
+    `withNewActive`, `withUpdated`, `cleared` and a new `atVersion`, and **not**
+    part of the encoded state, so no test vector changed.
+  - **Tests:** db `sync_test.dart` (the CAS, the refusal, the ArgumentError) and
+    `drift/helix/migration_test.dart` ("2 to 3 keeps every session row and
+    gives it revision 0"); crypto `session_test.dart` (the revision travels,
+    and is not stored state); engine `util_test.dart` and a new
+    `two_engines_test.dart` (two engines on one database file: both sends
+    arrive, the revision rises once per committed send, a stale write is
+    refused, a locked block retries); app `local_data_test.dart` (the
+    heartbeat's ownership check, and that a lost lease leaves the new owner's
+    file alone) and `hard_wipe_test.dart` (the engine stops on the loss and the
+    app reopens).
+  - **Not done, deliberately:** `sender_keys` keeps its last-writer-wins save,
+    so two engines could still send a group message from the same sender-key
+    iteration. The user chose sessions only for this batch; the gap is recorded
+    in CRYPTO_V2 §14 and in the design-review note. The Doze residual from
+    Batch 3 is now *safe* (the overlap can no longer corrupt state) but not
+    *removed*: the user chose to keep the lease timing.
 
 ### Batch 5: Server hardening
 

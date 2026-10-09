@@ -2573,8 +2573,669 @@ i1.GeneratedColumn<String> _column_163(String aliasedName) =>
       type: i1.DriftSqlType.string,
       $customConstraints: 'NOT NULL',
     );
+
+final class Schema3 extends i0.VersionedSchema {
+  Schema3({required super.database}) : super(version: 3);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    messagesFts,
+    conversations,
+    messages,
+    messageReactions,
+    messageReceipts,
+    attachments,
+    messagesUnread,
+    messagesMessageId,
+    messagesExpiresAt,
+    conversationMembers,
+    conversationsList,
+    conversationMembersAccount,
+    selfAccount,
+    selfDevices,
+    people,
+    personDevices,
+    identity,
+    sessions,
+    prekeys,
+    senderKeys,
+    inboxCursor,
+    processedEnvelopes,
+    outboxOps,
+    deferredActions,
+    transferJobs,
+    transferChunks,
+    groups,
+    groupMembers,
+    groupBans,
+    callLog,
+    settings,
+    peoplePhoneHash,
+    processedEnvelopesAt,
+    outboxOpsDue,
+    deferredActionsTarget,
+    deferredActionsExpiry,
+    transferJobsState,
+    transferChunksTransfer,
+    groupsList,
+    groupMembersAccount,
+    callLogAt,
+  ];
+  late final Shape0 messagesFts = Shape0(
+    source: i0.VersionedVirtualTable(
+      entityName: 'messages_fts',
+      moduleAndArgs:
+          'fts5(body, content = \'messages\', content_rowid = \'local_rowid\', tokenize = \'unicode61 remove_diacritics 2 categories \'\'L* N* Co M*\'\'\')',
+      columns: [_column_0],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape1 conversations = Shape1(
+    source: i0.VersionedTable(
+      entityName: 'conversations',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_1,
+        _column_2,
+        _column_3,
+        _column_4,
+        _column_5,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_11,
+        _column_12,
+        _column_13,
+        _column_14,
+        _column_15,
+        _column_16,
+        _column_17,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape2 messages = Shape2(
+    source: i0.VersionedTable(
+      entityName: 'messages',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'UNIQUE(message_id, sender)',
+        'UNIQUE(conversation_id, sort_key)',
+      ],
+      columns: [
+        _column_18,
+        _column_19,
+        _column_20,
+        _column_21,
+        _column_22,
+        _column_23,
+        _column_24,
+        _column_25,
+        _column_26,
+        _column_2,
+        _column_27,
+        _column_28,
+        _column_29,
+        _column_30,
+        _column_31,
+        _column_32,
+        _column_33,
+        _column_34,
+        _column_35,
+        _column_36,
+        _column_37,
+        _column_38,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape3 messageReactions = Shape3(
+    source: i0.VersionedTable(
+      entityName: 'message_reactions',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(message_rowid, reactor)'],
+      columns: [_column_39, _column_40, _column_41, _column_42],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape4 messageReceipts = Shape4(
+    source: i0.VersionedTable(
+      entityName: 'message_receipts',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(message_rowid, account_id)'],
+      columns: [_column_39, _column_43, _column_44, _column_45, _column_46],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape5 attachments = Shape5(
+    source: i0.VersionedTable(
+      entityName: 'attachments',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['UNIQUE(message_rowid, position)'],
+      columns: [
+        _column_47,
+        _column_39,
+        _column_48,
+        _column_2,
+        _column_49,
+        _column_50,
+        _column_51,
+        _column_52,
+        _column_53,
+        _column_54,
+        _column_55,
+        _column_56,
+        _column_57,
+        _column_58,
+        _column_59,
+        _column_60,
+        _column_61,
+        _column_62,
+        _column_63,
+        _column_64,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  final i1.Index messagesUnread = i1.Index(
+    'messages_unread',
+    'CREATE INDEX messages_unread ON messages (conversation_id, status)',
+  );
+  final i1.Index messagesMessageId = i1.Index(
+    'messages_message_id',
+    'CREATE INDEX messages_message_id ON messages (message_id)',
+  );
+  final i1.Index messagesExpiresAt = i1.Index(
+    'messages_expires_at',
+    'CREATE INDEX messages_expires_at ON messages (expires_at)',
+  );
+  late final Shape6 conversationMembers = Shape6(
+    source: i0.VersionedTable(
+      entityName: 'conversation_members',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(conversation_id, account_id)'],
+      columns: [_column_20, _column_43, _column_65],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  final i1.Index conversationsList = i1.Index(
+    'conversations_list',
+    'CREATE INDEX conversations_list ON conversations (archived, last_message_at)',
+  );
+  final i1.Index conversationMembersAccount = i1.Index(
+    'conversation_members_account',
+    'CREATE INDEX conversation_members_account ON conversation_members (account_id)',
+  );
+  late final Shape7 selfAccount = Shape7(
+    source: i0.VersionedTable(
+      entityName: 'self_account',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)', 'CHECK(id = 1)'],
+      columns: [
+        _column_66,
+        _column_43,
+        _column_67,
+        _column_68,
+        _column_69,
+        _column_70,
+        _column_71,
+        _column_72,
+        _column_73,
+        _column_74,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape8 selfDevices = Shape8(
+    source: i0.VersionedTable(
+      entityName: 'self_devices',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(device_id)'],
+      columns: [
+        _column_67,
+        _column_54,
+        _column_75,
+        _column_76,
+        _column_77,
+        _column_78,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape9 people = Shape9(
+    source: i0.VersionedTable(
+      entityName: 'people',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(account_id)'],
+      columns: [
+        _column_43,
+        _column_69,
+        _column_70,
+        _column_79,
+        _column_80,
+        _column_81,
+        _column_71,
+        _column_72,
+        _column_82,
+        _column_83,
+        _column_84,
+        _column_85,
+        _column_86,
+        _column_87,
+        _column_88,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape10 personDevices = Shape10(
+    source: i0.VersionedTable(
+      entityName: 'person_devices',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(account_id, device_id)'],
+      columns: [
+        _column_43,
+        _column_67,
+        _column_89,
+        _column_90,
+        _column_91,
+        _column_92,
+        _column_93,
+        _column_88,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape11 identity = Shape11(
+    source: i0.VersionedTable(
+      entityName: 'identity',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)', 'CHECK(id = 1)'],
+      columns: [
+        _column_66,
+        _column_43,
+        _column_67,
+        _column_94,
+        _column_95,
+        _column_96,
+        _column_97,
+        _column_98,
+        _column_99,
+        _column_100,
+        _column_17,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape26 sessions = Shape26(
+    source: i0.VersionedTable(
+      entityName: 'sessions',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'PRIMARY KEY(peer_account_id, peer_device_id, slot)',
+        'CHECK(slot BETWEEN 0 AND 5)',
+      ],
+      columns: [
+        _column_101,
+        _column_102,
+        _column_103,
+        _column_104,
+        _column_17,
+        _column_88,
+        _column_164,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape13 prekeys = Shape13(
+    source: i0.VersionedTable(
+      entityName: 'prekeys',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(kind, key_id)'],
+      columns: [
+        _column_2,
+        _column_105,
+        _column_106,
+        _column_107,
+        _column_108,
+        _column_17,
+        _column_109,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape14 senderKeys = Shape14(
+    source: i0.VersionedTable(
+      entityName: 'sender_keys',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'PRIMARY KEY(group_id, account_id, device_id, dist_id)',
+      ],
+      columns: [
+        _column_110,
+        _column_43,
+        _column_67,
+        _column_111,
+        _column_104,
+        _column_17,
+        _column_88,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape15 inboxCursor = Shape15(
+    source: i0.VersionedTable(
+      entityName: 'inbox_cursor',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)', 'CHECK(id = 1)'],
+      columns: [_column_66, _column_112, _column_113, _column_88],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape16 processedEnvelopes = Shape16(
+    source: i0.VersionedTable(
+      entityName: 'processed_envelopes',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(envelope_id, sender_device)'],
+      columns: [
+        _column_114,
+        _column_115,
+        _column_116,
+        _column_117,
+        _column_118,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape17 outboxOps = Shape17(
+    source: i0.VersionedTable(
+      entityName: 'outbox_ops',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_47,
+        _column_2,
+        _column_119,
+        _column_120,
+        _column_121,
+        _column_122,
+        _column_123,
+        _column_124,
+        _column_125,
+        _column_126,
+        _column_127,
+        _column_17,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape18 deferredActions = Shape18(
+    source: i0.VersionedTable(
+      entityName: 'deferred_actions',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_47,
+        _column_128,
+        _column_129,
+        _column_21,
+        _column_22,
+        _column_2,
+        _column_122,
+        _column_26,
+        _column_130,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape19 transferJobs = Shape19(
+    source: i0.VersionedTable(
+      entityName: 'transfer_jobs',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['UNIQUE(attachment_rowid)'],
+      columns: [
+        _column_47,
+        _column_2,
+        _column_131,
+        _column_132,
+        _column_63,
+        _column_133,
+        _column_134,
+        _column_135,
+        _column_136,
+        _column_123,
+        _column_124,
+        _column_125,
+        _column_126,
+        _column_127,
+        _column_17,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape20 transferChunks = Shape20(
+    source: i0.VersionedTable(
+      entityName: 'transfer_chunks',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(transfer_id, sequence)'],
+      columns: [
+        _column_137,
+        _column_138,
+        _column_139,
+        _column_140,
+        _column_141,
+        _column_26,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape21 groups = Shape21(
+    source: i0.VersionedTable(
+      entityName: 'groups',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_1,
+        _column_142,
+        _column_4,
+        _column_143,
+        _column_144,
+        _column_145,
+        _column_146,
+        _column_7,
+        _column_147,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_11,
+        _column_12,
+        _column_13,
+        _column_17,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape22 groupMembers = Shape22(
+    source: i0.VersionedTable(
+      entityName: 'group_members',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(group_id, account_id)'],
+      columns: [
+        _column_148,
+        _column_43,
+        _column_149,
+        _column_150,
+        _column_143,
+        _column_151,
+        _column_152,
+        _column_153,
+        _column_65,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape23 groupBans = Shape23(
+    source: i0.VersionedTable(
+      entityName: 'group_bans',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(group_id, account_id)'],
+      columns: [_column_148, _column_43, _column_154],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape24 callLog = Shape24(
+    source: i0.VersionedTable(
+      entityName: 'call_log',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(call_id)'],
+      columns: [
+        _column_155,
+        _column_101,
+        _column_156,
+        _column_2,
+        _column_157,
+        _column_158,
+        _column_123,
+        _column_159,
+        _column_160,
+        _column_161,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape25 settings = Shape25(
+    source: i0.VersionedTable(
+      entityName: 'settings',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY("key")'],
+      columns: [_column_162, _column_163, _column_88],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  final i1.Index peoplePhoneHash = i1.Index(
+    'people_phone_hash',
+    'CREATE INDEX people_phone_hash ON people (phone_hash)',
+  );
+  final i1.Index processedEnvelopesAt = i1.Index(
+    'processed_envelopes_at',
+    'CREATE INDEX processed_envelopes_at ON processed_envelopes (processed_at)',
+  );
+  final i1.Index outboxOpsDue = i1.Index(
+    'outbox_ops_due',
+    'CREATE INDEX outbox_ops_due ON outbox_ops (state, next_attempt_at)',
+  );
+  final i1.Index deferredActionsTarget = i1.Index(
+    'deferred_actions_target',
+    'CREATE INDEX deferred_actions_target ON deferred_actions (target_message_id, target_author)',
+  );
+  final i1.Index deferredActionsExpiry = i1.Index(
+    'deferred_actions_expiry',
+    'CREATE INDEX deferred_actions_expiry ON deferred_actions (expires_at)',
+  );
+  final i1.Index transferJobsState = i1.Index(
+    'transfer_jobs_state',
+    'CREATE INDEX transfer_jobs_state ON transfer_jobs (state, next_attempt_at)',
+  );
+  final i1.Index transferChunksTransfer = i1.Index(
+    'transfer_chunks_transfer',
+    'CREATE INDEX transfer_chunks_transfer ON transfer_chunks (transfer_id, sequence)',
+  );
+  final i1.Index groupsList = i1.Index(
+    'groups_list',
+    'CREATE INDEX groups_list ON "groups" (archived)',
+  );
+  final i1.Index groupMembersAccount = i1.Index(
+    'group_members_account',
+    'CREATE INDEX group_members_account ON group_members (account_id)',
+  );
+  final i1.Index callLogAt = i1.Index(
+    'call_log_at',
+    'CREATE INDEX call_log_at ON call_log (started_at)',
+  );
+}
+
+class Shape26 extends i0.VersionedTable {
+  Shape26({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get peerAccountId =>
+      columnsByName['peer_account_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get peerDeviceId =>
+      columnsByName['peer_device_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get slot =>
+      columnsByName['slot']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<i2.Uint8List> get state =>
+      columnsByName['state']! as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<int> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get updatedAt =>
+      columnsByName['updated_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get version =>
+      columnsByName['version']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<int> _column_164(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'version',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL DEFAULT 0',
+      defaultValue: const i1.CustomExpression('0'),
+    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
+  required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -2583,6 +3244,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from1To2(migrator, schema);
         return 2;
+      case 2:
+        final schema = Schema3(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from2To3(migrator, schema);
+        return 3;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -2591,6 +3257,7 @@ i0.MigrationStepWithVersion migrationSteps({
 
 i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
+  required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
 }) => i0.VersionedSchema.stepByStepHelper(
-  step: migrationSteps(from1To2: from1To2),
+  step: migrationSteps(from1To2: from1To2, from2To3: from2To3),
 );

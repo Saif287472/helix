@@ -9,6 +9,7 @@ import 'package:helix_remote/core/engine/helix_runtime.dart';
 import 'package:helix_remote/core/engine/runtime_providers.dart';
 import 'package:helix_remote/core/engine/session_providers.dart';
 import 'package:helix_remote/core/platform/app_storage.dart';
+import 'package:helix_remote/core/platform/engine_lease.dart';
 import 'package:helix_remote/core/platform/picker_cleanup.dart';
 import 'package:helix_remote_crypto/v2.dart'
     show DeviceAddress, Ed25519KeyPair, LocalDeviceKeys, SecureCryptoRandom;
@@ -112,6 +113,7 @@ void main() {
     config: const EngineConfig(),
     headless: true,
     keys: keys,
+    leaseHeartbeat: const Duration(milliseconds: 20),
   );
 
   Future<void> expectNothingLeft() async {
@@ -301,6 +303,64 @@ void main() {
     expect(identical(second, first), isFalse);
     expect(second.engine.account.isSignedIn, isFalse);
   });
+
+  test(
+    'an engine that loses the database lease stops, and the app reopens',
+    () async {
+      final key = await seedSignedInDevice();
+      final first = await open(key);
+      expect(first.engine.status, EngineStatus.running);
+      final lost = first.leaseLost.first;
+
+      // The provider is listening before the loss happens, so it sees it.
+      final opened = <HelixRuntime>[];
+      final container = ProviderContainer(
+        overrides: [
+          runtimeFactoryProvider.overrideWithValue(
+            _Recording(first, opened, () async {
+              // The other engine is gone, so the lease is free again.
+              File('${dbFile.path}.lease').deleteSync();
+              return open(key);
+            }),
+          ),
+          authStateProvider.overrideWith((ref) => const Stream.empty()),
+        ],
+        retry: (_, _) => null,
+      );
+      addTearDown(container.dispose);
+      container
+          .read(serverUrlProvider.notifier)
+          .use(Uri.parse('http://127.0.0.1:9'));
+      expect(await container.read(runtimeProvider.future), same(first));
+
+      // Another engine took the lease over: the file says so, and this engine's
+      // heartbeat finds it. Two engines must not keep writing ratchet state
+      // (review finding C-01).
+      File('${dbFile.path}.lease').writeAsStringSync(
+        jsonEncode({
+          'owner': 'someone-else',
+          'role': LeaseRole.headless.name,
+          'pid': pid + 1,
+          'at': DateTime.now().millisecondsSinceEpoch,
+        }),
+      );
+
+      await expectLater(
+        lost.timeout(const Duration(seconds: 5)),
+        completion(LeaseRole.headless),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(
+        first.engine.status,
+        EngineStatus.stopped,
+        reason: 'the engine that lost the database stops writing',
+      );
+      // The old runtime is closed and a new one opened on the same server.
+      final second = await container.read(runtimeProvider.future);
+      expect(opened, hasLength(2));
+      expect(identical(second, first), isFalse);
+    },
+  );
 }
 
 /// Hands out one prepared runtime.

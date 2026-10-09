@@ -5,6 +5,8 @@ import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/src/context.dart';
+import 'package:helix_remote_engine/src/crypto/pairwise_crypto.dart'
+    show staleAttempts;
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/groups/group_ids.dart';
@@ -239,11 +241,25 @@ final class PeerDirectory {
   }
 
   /// Drops every cached session of [remote]. Retired base keys stay.
-  Future<void> _clearSessions(DeviceAddress remote, DateTime now) async {
-    final sessions = await _ctx.sessionStore.load(remote);
-    if (sessions == null) return;
-    await _ctx.sessionStore.save(sessions.cleared(), now: now);
-  }
+  ///
+  /// Clearing is not a compare-and-set race worth failing over: the record is
+  /// re-read and cleared again if another engine moved it, which reaches the
+  /// same result. The caller's own per-device lock is not held here (a device
+  /// list refresh clears many devices), so [StaleSessionState] is retried
+  /// inside the store's lock.
+  Future<void> _clearSessions(DeviceAddress remote, DateTime now) =>
+      _ctx.deviceLocks.run(remote, () async {
+        for (var attempt = 1; ; attempt++) {
+          final sessions = await _ctx.sessionStore.load(remote);
+          if (sessions == null) return;
+          try {
+            await _ctx.sessionStore.save(sessions.cleared(), now: now);
+            return;
+          } on StaleSessionState {
+            if (attempt >= staleAttempts) rethrow;
+          }
+        }
+      });
 }
 
 /// Answers the session layer's question "who is this device?" for prekey

@@ -7787,6 +7787,18 @@ class $SessionsTable extends Sessions
         type: DriftSqlType.int,
         requiredDuringInsert: true,
       ).withConverter<DateTime>($SessionsTable.$converterupdatedAt);
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     peerAccountId,
@@ -7795,6 +7807,7 @@ class $SessionsTable extends Sessions
     state,
     createdAt,
     updatedAt,
+    version,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -7846,6 +7859,12 @@ class $SessionsTable extends Sessions
     } else if (isInserting) {
       context.missing(_stateMeta);
     }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    }
     return context;
   }
 
@@ -7883,6 +7902,10 @@ class $SessionsTable extends Sessions
           data['${effectivePrefix}updated_at'],
         )!,
       ),
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
     );
   }
 
@@ -7902,6 +7925,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
   final Uint8List state;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int version;
   const SessionRow({
     required this.peerAccountId,
     required this.peerDeviceId,
@@ -7909,6 +7933,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
     required this.state,
     required this.createdAt,
     required this.updatedAt,
+    required this.version,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7927,6 +7952,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
         $SessionsTable.$converterupdatedAt.toSql(updatedAt),
       );
     }
+    map['version'] = Variable<int>(version);
     return map;
   }
 
@@ -7938,6 +7964,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
       state: Value(state),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      version: Value(version),
     );
   }
 
@@ -7953,6 +7980,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
       state: serializer.fromJson<Uint8List>(json['state']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      version: serializer.fromJson<int>(json['version']),
     );
   }
   @override
@@ -7965,6 +7993,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
       'state': serializer.toJson<Uint8List>(state),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'version': serializer.toJson<int>(version),
     };
   }
 
@@ -7975,6 +8004,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
     Uint8List? state,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? version,
   }) => SessionRow(
     peerAccountId: peerAccountId ?? this.peerAccountId,
     peerDeviceId: peerDeviceId ?? this.peerDeviceId,
@@ -7982,6 +8012,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
     state: state ?? this.state,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    version: version ?? this.version,
   );
   SessionRow copyWithCompanion(SessionsCompanion data) {
     return SessionRow(
@@ -7995,6 +8026,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
       state: data.state.present ? data.state.value : this.state,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      version: data.version.present ? data.version.value : this.version,
     );
   }
 
@@ -8006,7 +8038,8 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
           ..write('slot: $slot, ')
           ..write('state: $state, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version')
           ..write(')'))
         .toString();
   }
@@ -8019,6 +8052,7 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
     $driftBlobEquality.hash(state),
     createdAt,
     updatedAt,
+    version,
   );
   @override
   bool operator ==(Object other) =>
@@ -8029,7 +8063,8 @@ class SessionRow extends DataClass implements Insertable<SessionRow> {
           other.slot == this.slot &&
           $driftBlobEquality.equals(other.state, this.state) &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.version == this.version);
 }
 
 class SessionsCompanion extends UpdateCompanion<SessionRow> {
@@ -8039,6 +8074,7 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
   final Value<Uint8List> state;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<int> version;
   final Value<int> rowid;
   const SessionsCompanion({
     this.peerAccountId = const Value.absent(),
@@ -8047,6 +8083,7 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
     this.state = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.version = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   SessionsCompanion.insert({
@@ -8056,6 +8093,7 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
     required Uint8List state,
     required DateTime createdAt,
     required DateTime updatedAt,
+    this.version = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : peerAccountId = Value(peerAccountId),
        peerDeviceId = Value(peerDeviceId),
@@ -8070,6 +8108,7 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
     Expression<Uint8List>? state,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
+    Expression<int>? version,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -8079,6 +8118,7 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
       if (state != null) 'state': state,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (version != null) 'version': version,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -8090,6 +8130,7 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
     Value<Uint8List>? state,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<int>? version,
     Value<int>? rowid,
   }) {
     return SessionsCompanion(
@@ -8099,6 +8140,7 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
       state: state ?? this.state,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -8128,6 +8170,9 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
         $SessionsTable.$converterupdatedAt.toSql(updatedAt.value),
       );
     }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -8143,6 +8188,7 @@ class SessionsCompanion extends UpdateCompanion<SessionRow> {
           ..write('state: $state, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -20431,6 +20477,7 @@ typedef $$SessionsTableCreateCompanionBuilder =
       required Uint8List state,
       required DateTime createdAt,
       required DateTime updatedAt,
+      Value<int> version,
       Value<int> rowid,
     });
 typedef $$SessionsTableUpdateCompanionBuilder =
@@ -20441,6 +20488,7 @@ typedef $$SessionsTableUpdateCompanionBuilder =
       Value<Uint8List> state,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<int> version,
       Value<int> rowid,
     });
 
@@ -20484,6 +20532,11 @@ class $$SessionsTableFilterComposer
         column: $table.updatedAt,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$SessionsTableOrderingComposer
@@ -20524,6 +20577,11 @@ class $$SessionsTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SessionsTableAnnotationComposer
@@ -20556,6 +20614,9 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<DateTime, int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
 }
 
 class $$SessionsTableTableManager
@@ -20592,6 +20653,7 @@ class $$SessionsTableTableManager
                 Value<Uint8List> state = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> version = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SessionsCompanion(
                 peerAccountId: peerAccountId,
@@ -20600,6 +20662,7 @@ class $$SessionsTableTableManager
                 state: state,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                version: version,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -20610,6 +20673,7 @@ class $$SessionsTableTableManager
                 required Uint8List state,
                 required DateTime createdAt,
                 required DateTime updatedAt,
+                Value<int> version = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SessionsCompanion.insert(
                 peerAccountId: peerAccountId,
@@ -20618,6 +20682,7 @@ class $$SessionsTableTableManager
                 state: state,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                version: version,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -154,6 +154,11 @@ final runtimeProvider = FutureProvider<HelixRuntime>((ref) async {
       .watch(runtimeFactoryProvider)
       .open(serverUrl: serverUrl);
   ref.onDispose(runtime.close);
+  // Another engine took the database lease over (a push isolate while this
+  // app was frozen). The old engine has stopped; opening a new runtime takes
+  // the lease back, which either succeeds or surfaces EngineAlreadyRunning as
+  // it already does for a second window.
+  ref.onDispose(runtime.leaseLost.listen((_) => ref.invalidateSelf()).cancel);
   return runtime;
 });
 

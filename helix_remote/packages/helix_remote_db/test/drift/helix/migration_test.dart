@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
@@ -6,6 +7,7 @@ import 'package:test/test.dart';
 
 import 'generated/schema.dart';
 import 'generated/schema_v1.dart' as v1;
+import 'generated/schema_v2.dart' as v2;
 
 /// Migration tests against the checked-in schema dumps (plan §6.2: every
 /// migration has a drift_dev test from the first release onward).
@@ -50,6 +52,53 @@ void main() {
       });
     }
   }
+
+  test('2 to 3 keeps every session row and gives it revision 0', () async {
+    final schema = await verifier.schemaAt(2);
+    final old = v2.DatabaseAtV2(schema.newConnection());
+    await old.customStatement(
+      "INSERT INTO sessions (peer_account_id, peer_device_id, slot, state, "
+      "created_at, updated_at) VALUES ('bob', 'd1', 0, x'7b7d', 1000, 1000)",
+    );
+    await old.customStatement(
+      "INSERT INTO sessions (peer_account_id, peer_device_id, slot, state, "
+      "created_at, updated_at) VALUES ('bob', 'd1', 1, x'7b7d', 1000, 1000)",
+    );
+    await old.close();
+
+    final db = HelixDb.withExecutor(schema.newConnection());
+    addTearDown(db.close);
+    await verifier.migrateAndValidate(db, 3);
+
+    final rows = await db.cryptoDao.sessionsWith('bob', 'd1');
+    expect(rows, hasLength(2));
+    expect(rows.map((r) => r.slot), [0, 1]);
+    expect(rows.every((r) => r.version == 0), isTrue);
+    expect(rows.first.createdAt.millisecondsSinceEpoch, 1000);
+    // The revision is usable: the first compare-and-set from revision 0
+    // lands, and a second write from the same revision is refused.
+    final k = Uint8List.fromList([1, 2, 3]);
+    expect(
+      await db.cryptoDao.saveSessions(
+        'bob',
+        'd1',
+        [k],
+        now: DateTime.utc(2026, 10, 9),
+        expectedVersion: 0,
+      ),
+      isTrue,
+    );
+    expect(
+      await db.cryptoDao.saveSessions(
+        'bob',
+        'd1',
+        [k],
+        now: DateTime.utc(2026, 10, 9),
+        expectedVersion: 0,
+      ),
+      isFalse,
+    );
+  });
 
   test(
     '1 to 2 keeps every schema-1 row and adds empty, working C4 tables',

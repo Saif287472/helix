@@ -103,6 +103,29 @@ void main() {
         throwsA(isA<MalformedCryptoInputException>()),
       );
     });
+
+    test(
+      'the store revision travels with the record but is not stored state',
+      () async {
+        await a.startSessionWith(b);
+        await b.receive(a, await a.send(b, 'x'));
+        final loaded = (await b.sessions.load(a.address))!;
+        expect(loaded.version, 0, reason: 'a store with no revisions');
+
+        // Every operation the engine does between the read and the write keeps
+        // the revision, so the store can still compare against it.
+        expect(loaded.withNewActive(loaded.active!).version, loaded.version);
+        expect(loaded.withUpdated(0, loaded.active!).version, loaded.version);
+        expect(loaded.cleared().version, loaded.version);
+        expect(loaded.atVersion(7).version, 7);
+        // The rest of the record is unchanged by the revision.
+        expect(loaded.atVersion(7).encode(), loaded.encode());
+
+        // It is not part of the bytes: the state blob is identical, so no
+        // crypto vector and no wire format changes with it.
+        expect(DeviceSessions.decode(loaded.atVersion(7).encode()).version, 0);
+      },
+    );
   });
 
   group('out of order and dropped messages', () {

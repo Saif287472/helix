@@ -135,56 +135,108 @@ void main() {
   });
 
   group('session storage layout', () {
-    test(
-      'slots round-trip active, previous sessions and retired keys',
-      () async {
-        final peers = Peers();
-        addTearDown(peers.dispose);
-        final alice = await peers.register('alice');
-        final bob = await peers.register('bob');
-        final chat = await alice.engine.chats.openDirect(bob.account);
-        await alice.engine.chats.sendText(chat.id, 'x');
-        await alice.engine.drainOutbox();
+    test('slots round-trip active, previous sessions and retired keys', () async {
+      final peers = Peers();
+      addTearDown(peers.dispose);
+      final alice = await peers.register('alice');
+      final bob = await peers.register('bob');
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      await alice.engine.chats.sendText(chat.id, 'x');
+      await alice.engine.drainOutbox();
 
-        final store = DbSessionStore(alice.db);
-        final remote = DeviceAddress(bob.account, bob.device);
-        final loaded = (await store.load(remote))!;
-        expect(loaded.active, isNotNull);
+      final store = DbSessionStore(alice.db);
+      final remote = DeviceAddress(bob.account, bob.device);
+      final loaded = (await store.load(remote))!;
+      expect(loaded.active, isNotNull);
 
-        // Six sessions and a retired base key use every slot.
-        var many = loaded;
-        for (var i = 0; i < 4; i++) {
-          many = many.withNewActive(loaded.active!);
-        }
-        expect(many.previous, hasLength(4));
-        final slots = DbSessionStore.encode(many);
-        expect(slots, hasLength(5));
-        expect(DbSessionStore.decode(remote, slots).encode(), many.encode());
-        await store.save(many, now: peers.clock.now);
-        expect((await store.load(remote))!.encode(), many.encode());
-        expect(
-          (await alice.db.cryptoDao.sessionsWith(
-            bob.account,
-            bob.device,
-          )).map((s) => s.slot),
-          [0, 1, 2, 3, 4],
-        );
+      // Six sessions and a retired base key use every slot.
+      var many = loaded;
+      for (var i = 0; i < 4; i++) {
+        many = many.withNewActive(loaded.active!);
+      }
+      expect(many.previous, hasLength(4));
+      final slots = DbSessionStore.encode(many);
+      expect(slots, hasLength(5));
+      expect(DbSessionStore.decode(remote, slots).encode(), many.encode());
+      await store.save(many, now: peers.clock.now);
+      final stored = (await store.load(remote))!;
+      expect(stored.encode(), many.encode());
+      // The save moved the record on: the version it was read at is the one
+      // a write must still match.
+      expect(stored.version, greaterThan(many.version));
+      expect(
+        (await alice.db.cryptoDao.sessionsWith(
+          bob.account,
+          bob.device,
+        )).map((s) => s.slot),
+        [0, 1, 2, 3, 4],
+      );
 
-        // A cleared record keeps only the retired base keys, in slot 0.
-        final cleared = many.cleared();
-        await store.save(cleared, now: peers.clock.now);
-        final back = (await store.load(remote))!;
-        expect(back.active, isNull);
-        expect(back.retiredBaseKeys, isNotEmpty);
-        expect(
-          (await alice.db.cryptoDao.sessionsWith(bob.account, bob.device)),
-          hasLength(1),
-        );
-        // An empty record with nothing to remember deletes the rows.
-        await store.save(DeviceSessions(remote: remote), now: peers.clock.now);
-        expect(await store.load(remote), isNull);
-      },
-    );
+      // A cleared record keeps only the retired base keys, in slot 0. It is built
+      // from what is stored now: `many` was written above, so its revision
+      // is spent.
+      final cleared = stored.cleared();
+      await store.save(cleared, now: peers.clock.now);
+      final back = (await store.load(remote))!;
+      expect(back.active, isNull);
+      expect(back.retiredBaseKeys, isNotEmpty);
+      expect(
+        (await alice.db.cryptoDao.sessionsWith(bob.account, bob.device)),
+        hasLength(1),
+      );
+      // An empty record with nothing to remember keeps one slot: deleting
+      // the rows would lose the revision, and the next write has to be a
+      // compare-and-set against it.
+      await store.save(
+        DeviceSessions(remote: remote, version: back.version),
+        now: peers.clock.now,
+      );
+      final empty = (await store.load(remote))!;
+      expect(empty.isEmpty, isTrue);
+      expect(
+        (await alice.db.cryptoDao.sessionsWith(bob.account, bob.device)),
+        hasLength(1),
+      );
+      expect(empty.version, greaterThan(back.version));
+    });
+
+    test('a record moved by another engine refuses a stale write', () async {
+      final peers = Peers();
+      addTearDown(peers.dispose);
+      final alice = await peers.register('alice');
+      final bob = await peers.register('bob');
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      await alice.engine.chats.sendText(chat.id, 'x');
+      await alice.engine.drainOutbox();
+
+      final remote = DeviceAddress(bob.account, bob.device);
+      final first = DbSessionStore(alice.db);
+      // The second store stands in for the other engine (the app's FCM
+      // isolate): same file, its own store.
+      final second = DbSessionStore(alice.db);
+      final stale = (await first.load(remote))!;
+
+      // It commits first: the revision moves.
+      final current = (await second.load(remote))!;
+      final advanced = current.withUpdated(0, current.active!);
+      await second.save(advanced, now: peers.clock.now);
+
+      // The first engine's copy is now stale and must not be written: doing so
+      // would replace a ratchet state another engine already advanced.
+      await expectLater(
+        first.save(stale, now: peers.clock.now),
+        throwsA(isA<StaleSessionState>()),
+      );
+      final after = (await first.load(remote))!;
+      expect(after.encode(), advanced.encode());
+      expect(after.version, greaterThan(stale.version));
+
+      // Retrying from the stored state works, which is what the engine does.
+      final reloaded = (await first.load(remote))!;
+      final retried = reloaded.withUpdated(0, reloaded.active!);
+      await first.save(retried, now: peers.clock.now);
+      expect((await first.load(remote))!.version, greaterThan(after.version));
+    });
   });
 
   group('content codec', () {

@@ -37,6 +37,13 @@ Nothing that touches storage or the platform.
 - **Every operation returns new state for the engine to commit; nothing
   writes.** The engine commits session state in its own transaction before it
   sends, so a crash cannot desynchronise the ratchet.
+- **`DeviceSessions.version` is storage bookkeeping, not crypto state.** It is
+  the revision a `PairwiseSessionStore` read the record at, so the store can
+  refuse to write over a newer one (two engines on one database file, review
+  finding C-01). It is carried through `withNewActive`, `withUpdated`,
+  `cleared` and `atVersion`, and is **not** part of the encoded state: the
+  blob is identical with or without it, so no vector and no wire format
+  depends on it. A store with no revisions leaves it at 0.
 - **Skipped-message keys are retained bounded, not forever** (1,000 per chain,
   2,000 per session, 30 days).
 - **This package is why the server cannot read messages.** Anything that

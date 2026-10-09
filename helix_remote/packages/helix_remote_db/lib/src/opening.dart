@@ -136,6 +136,17 @@ void setUpPlainFileConnection(Database db) => _setUpConnection(db, wal: true);
 /// them deleted rows, from lingering.
 const walSizeLimitBytes = 4 * 1024 * 1024;
 
+/// How long a statement waits for another connection's write lock
+/// (`busy_timeout`).
+///
+/// SQLite's default is zero, which fails the second writer at once. Two
+/// engines on one database file (the app and its FCM background isolate) are
+/// both writers, and the session compare-and-set (`CryptoDao.saveSessions`)
+/// only means something if the losing writer can take its turn instead of
+/// failing. Every transaction here is short, so waiting is cheaper than an
+/// error, and a genuine deadlock still surfaces after this.
+const busyTimeout = Duration(seconds: 5);
+
 void _setUpConnection(Database db, {required bool wal}) {
   if (wal) {
     final mode = db.select('PRAGMA journal_mode = WAL;');
@@ -145,6 +156,7 @@ void _setUpConnection(Database db, {required bool wal}) {
     db.execute('PRAGMA synchronous = NORMAL;');
     db.execute('PRAGMA journal_size_limit = $walSizeLimitBytes;');
   }
+  db.execute('PRAGMA busy_timeout = ${busyTimeout.inMilliseconds};');
   // A deleted row (a spent one-time prekey, an old ratchet state, a deleted
   // message) is overwritten with zeros instead of lingering in a free page.
   db.execute('PRAGMA secure_delete = ON;');

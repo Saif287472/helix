@@ -1,5 +1,9 @@
 /// Failures the engine reports to its callers. Messages never contain
 /// message content, keys, tokens, codes or full phone numbers.
+library;
+
+import 'package:helix_remote_crypto/v2.dart' show DeviceAddress;
+
 sealed class EngineException implements Exception {
   const EngineException(this.message);
 
@@ -65,6 +69,24 @@ final class TransientEngineException extends EngineException {
   const TransientEngineException(super.message, {this.cause});
 
   final Object? cause;
+}
+
+/// The stored ratchet state for a peer device moved while this engine was
+/// working from it: another engine owns this database (the app and its FCM
+/// isolate) and committed the same record first.
+///
+/// Nothing was written. The caller reloads under the per-device lock and
+/// retries; the state this engine held is stale, and committing it would
+/// reuse a message key (CRYPTO_V2.md §5, review finding C-01). The message
+/// names the peer device and never any key or content.
+final class StaleSessionState extends EngineException {
+  StaleSessionState(this.remote)
+    : super('the stored session with a peer device moved');
+
+  final DeviceAddress remote;
+
+  @override
+  String toString() => 'StaleSessionState: $message';
 }
 
 /// The recipient's keys could not be trusted: a certificate that does not

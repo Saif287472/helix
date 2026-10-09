@@ -88,6 +88,13 @@ void main() {
 
     expect(await pragma('journal_mode'), 'wal');
     expect(await pragma('foreign_keys'), 1);
+    // Two engines on one file are both writers (the app and its FCM isolate);
+    // SQLite's default of zero would fail the second one at once.
+    expect(
+      await pragma('busy_timeout'),
+      busyTimeout.inMilliseconds,
+      reason: 'the losing writer waits for its turn',
+    );
 
     // Statements run on another isolate: while a long query runs, this
     // isolate's event loop keeps going (a timer fires before it finishes).

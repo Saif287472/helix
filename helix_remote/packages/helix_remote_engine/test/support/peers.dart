@@ -65,13 +65,23 @@ const fastConfig = EngineConfig(
 
 /// One engine on its own in-memory database against a [FakeServer].
 final class Peer {
-  Peer._(this.name, this.server, this.db, this.api, this.engine);
+  Peer._(
+    this.name,
+    this.server,
+    this.db,
+    this.api,
+    this.engine, {
+    this.sharedDatabase = false,
+  });
 
   final String name;
   final FakeServer server;
   final HelixDb db;
   final HelixApi api;
   final Engine engine;
+
+  /// True when the database is another peer's and must survive [dispose].
+  final bool sharedDatabase;
 
   String get account => engine.accountId!;
   String get device => engine.deviceId!;
@@ -94,7 +104,8 @@ final class Peer {
   Future<void> dispose() async {
     await engine.close();
     await api.close();
-    await db.close();
+    // A shared database belongs to the peer that opened it.
+    if (!sharedDatabase) await db.close();
   }
 }
 
@@ -115,8 +126,13 @@ final class Peers {
     PhoneBook? phoneBook,
     Clock? clock,
     HardWipe? hardWipe,
+    HelixDb? db,
   }) async {
-    final db = HelixDb.inMemory(key: DatabaseKey.generate());
+    // A caller that passes a [db] is building a second engine over a database
+    // another engine already has open (the app and its FCM isolate, review
+    // finding C-01): the peer must not close it on dispose.
+    final shared = db != null;
+    db ??= HelixDb.inMemory(key: DatabaseKey.generate());
     final api = HelixApi(
       baseUrl: FakeServer.baseUri,
       sessions: DbSessionTokenStore(db),
@@ -132,7 +148,7 @@ final class Peers {
       phoneBook: phoneBook,
       hardWipe: hardWipe,
     );
-    final peer = Peer._(name, server, db, api, engine);
+    final peer = Peer._(name, server, db, api, engine, sharedDatabase: shared);
     _all.add(peer);
     await engine.start(realtime: false, background: false);
     return peer;

@@ -262,6 +262,56 @@ reviewed or Signal-equivalent until an independent review happens (ADR-028).
     by remembered base keys and envelope de-duplication.
   - Passwords are not Unicode-normalised.
 
+## 12. State commit discipline across engines (2026-10-09, review C-01)
+
+**Not externally reviewed.** This is the author's own note on a defect the
+2026-10-09 review found and the change in that batch fixed; it is added here
+because a reviewer should look at it, not because anyone has.
+
+- **What was wrong.** The per-message ratchet invariant "commit the state
+  before the ciphertext leaves" was only enforced *within* one engine. The app
+  and its FCM background isolate are two engines over the same SQLCipher file,
+  and nothing stopped both from reading the same session state, encrypting and
+  committing. The lease between them is advisory (its own comment says so), and
+  its heartbeat rewrote the lease file every five seconds **without checking
+  who owned it**, so an app Android had frozen past the lease's 20 seconds
+  would wake up and stomp the push isolate's claim.
+- **Why it matters more than a lost update.** Two sends taken from the same
+  sending chain state produce the *same* message key and the same AES-GCM
+  nonce. Both ciphertexts are delivered, so their plaintexts XOR to each other,
+  and the GHASH authentication key for that message key is recovered. That is a
+  confidentiality break, not just a broken conversation; a later message on the
+  ratchet also fails, which is what triggers the §13a resets.
+- **What is now in place.** `sessions` carries a `version` per device pair and
+  every session write is a compare-and-set on it (`CryptoDao.saveSessions`
+  returns false and changes nothing if the stored revision moved;
+  `DbSessionStore.save` raises `StaleSessionState`). The engine retries from
+  what the winning engine committed, inside the per-device lock
+  (`PairwiseCrypto.locked`, `staleAttempts` = 3); nothing is encrypted from a
+  state the store has already rejected. Two supporting details matter and are
+  easy to undo by accident: a cleared record is written as an empty one-slot
+  record rather than deleted (otherwise the revision resets and the next write
+  is un-comparable), and every connection sets a 5 s `busy_timeout` (SQLite's
+  default of zero fails the second writer before the compare-and-set is even
+  reached). On the app side the lease heartbeat checks the file before
+  rewriting it: another engine's claim ends this engine's claim, stops its
+  engine, and makes the app open a new runtime that takes the lease back.
+- **What is not covered.** `sender_keys` still saves last-writer-wins, so two
+  engines could send a group message from the same sender-key iteration - the
+  same key/nonce reuse, one layer up. Left open deliberately (the pairwise
+  sessions are the ones that carry 1:1 content, and the revision mechanism
+  needs porting to the group write path). `DeviceSessions.version` is
+  storage bookkeeping: it is carried through the record's transformations and
+  is **not** part of the encoded state, so no test vector changed with it
+  (`test/v2/session_test.dart`, "the store revision travels with the record but
+  is not stored state").
+- **Where to look.** `packages/helix_remote_db/lib/src/daos/crypto_dao.dart`
+  (the compare-and-set), `packages/helix_remote_engine/lib/src/crypto/db_stores.dart`
+  and `pairwise_crypto.dart` (the refusal and the retry),
+  `app/lib/core/platform/engine_lease.dart` (the ownership check), and
+  `packages/helix_remote_engine/test/two_engines_test.dart` (two engines on one
+  database file).
+
 ## Independent review pass, 2026-10-05
 
 An independent, read-only review of the v2 client crypto and engine was done

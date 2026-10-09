@@ -3,7 +3,13 @@ import 'dart:typed_data';
 import 'package:helix_remote_crypto/v2.dart';
 import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/crypto/peer_directory.dart';
+import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+
+/// How many times [PairwiseCrypto.locked] reloads and retries after the stored
+/// session state moved (another engine committed it first). Three is enough
+/// for two engines alternating; a fourth refusal is the caller's problem.
+const staleAttempts = 3;
 
 /// Pairwise encryption glue between the engine and `helix_remote_crypto`:
 /// the session manager over the database stores, the per-device lock, and
@@ -12,8 +18,10 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 ///
 /// The crypto layer never writes. Outbound, [encryptFor] commits the new
 /// ratchet states in one transaction before it returns the payloads. Inbound,
-/// the pipeline calls [runLocked], [decrypt] and commits the returned
-/// sessions in the transaction that applies the message.
+/// the pipeline calls [locked], [decrypt] and commits the returned
+/// sessions in the transaction that applies the message. Both go through
+/// [locked] rather than [runLocked]: a stored state that another engine moved
+/// is reloaded and worked on again, never committed (C-01).
 final class PairwiseCrypto {
   PairwiseCrypto(this._ctx, this.peers);
 
@@ -51,7 +59,32 @@ final class PairwiseCrypto {
   Future<T> runLocked<T>(DeviceAddress device, Future<T> Function() action) =>
       _ctx.deviceLocks.run(device, action);
 
-  /// Decrypts a pairwise payload. Call inside [runLocked]; commit
+  /// Runs [action] holding the lock of [device] and retries it when the stored
+  /// state moved under it ([StaleSessionState], review finding C-01).
+  ///
+  /// The lock is per engine, so two engines on one database file can still
+  /// interleave; the version on the stored record (see [DbSessionStore]) is
+  /// what turns that into a refusal instead of a lost update. [action] must
+  /// therefore read the state it works from *inside* the call (reload, don't
+  /// reuse a record loaded earlier), so a retry starts from what the winning
+  /// engine committed. After [attempts] refusals the last one is rethrown: the
+  /// other engine is still working, and the caller's own retry (an inbound
+  /// re-delivery, an outbox backoff) takes over.
+  Future<T> locked<T>(
+    DeviceAddress device,
+    Future<T> Function() action, {
+    int attempts = staleAttempts,
+  }) => runLocked(device, () async {
+    for (var attempt = 1; ; attempt++) {
+      try {
+        return await action();
+      } on StaleSessionState {
+        if (attempt >= attempts) rethrow;
+      }
+    }
+  });
+
+  /// Decrypts a pairwise payload. Call inside [locked]; commit
   /// `result.sessions` (and delete `consumedOneTimePrekeyId`) in the
   /// transaction that applies the content.
   Future<PairwiseDecryptResult> decrypt(
@@ -82,6 +115,23 @@ final class PairwiseCrypto {
     List<DeviceAddress> devices,
     Uint8List content, {
     Map<DeviceAddress, VerifiedPrekeyBundle> bundles = const {},
+  }) async {
+    // The whole fan-out is one compare-and-set per device inside one
+    // transaction, so a refusal anywhere rolls the whole attempt back and it
+    // runs again from the stored state (C-01).
+    for (var attempt = 1; ; attempt++) {
+      try {
+        return await _encryptFor(devices, content, bundles: bundles);
+      } on StaleSessionState {
+        if (attempt >= staleAttempts) rethrow;
+      }
+    }
+  }
+
+  Future<Map<DeviceAddress, Uint8List>> _encryptFor(
+    List<DeviceAddress> devices,
+    Uint8List content, {
+    required Map<DeviceAddress, VerifiedPrekeyBundle> bundles,
   }) => _ctx.deviceLocks.runAll(devices, () async {
     final manager = this.manager;
     final updated = <DeviceSessions>[];
@@ -115,7 +165,7 @@ final class PairwiseCrypto {
   Future<bool> startFreshSession(
     VerifiedPrekeyBundle bundle, {
     required Duration within,
-  }) => _ctx.deviceLocks.run(bundle.identity.address, () async {
+  }) => locked(bundle.identity.address, () async {
     final record = await _ctx.sessionStore.load(bundle.identity.address);
     final active = record?.active;
     final now = _ctx.now();

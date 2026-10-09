@@ -21,7 +21,7 @@ all open it. May depend only on `helix_remote_domain` and
 - `DatabaseKey.toString()` is redacted; the key lives in the platform
   keystore and is never logged.
 
-## Schema (version 2)
+## Schema (version 3)
 
 Times are `INTEGER` epoch milliseconds (`EpochMs`); enums are stored by name.
 
@@ -47,6 +47,38 @@ Schema 2 (C4) is additive: `from1To2` (in `HelixDb.migration`, over the
 generated `stepByStep`) creates the new tables and their indexes from the
 frozen version-2 schema. `test/drift/helix/migration_test.dart` checks the
 path and that schema-1 rows survive.
+
+Schema 3 adds one column, `sessions.version` (C-01): `from2To3` runs
+`ALTER TABLE sessions ADD COLUMN version INTEGER NOT NULL DEFAULT 0`. A
+step-by-step migration cannot alter a table, and the step-by-step helpers only
+create entities, so this step is the one raw statement in the strategy.
+Existing rows start at 0, which is the revision a first read expects.
+
+## Two engines, one database file
+
+The app and its FCM background isolate are two engines over the same SQLCipher
+file. SQLite serialises their writes, but it cannot stop a *lost update*: both
+read the same ratchet state, both encrypt, both commit. The consequences are
+worse than a corrupted conversation - two sends from the same sending chain
+encrypt two plaintexts under one AES-GCM key and nonce, which leaks their XOR
+and the GHASH key.
+
+- **`sessions.version` is a compare-and-set.** All slots of one device pair
+  carry the same revision. `CryptoDao.saveSessions` writes only while the
+  stored revision is still the one the writer read, and stores
+  `expectedVersion + 1`; it **returns false** otherwise and changes nothing.
+  The engine turns that into `StaleSessionState` and retries from what the
+  winner committed (`PairwiseCrypto.locked`).
+- **A record is never deleted to be replaced.** An empty record is written as
+  a normal one-slot record, because deleting the rows would lose the revision
+  and make the next write un-comparable. `deleteSessions` is for a full wipe
+  (sign-out, revocation) only.
+- **`busy_timeout` is 5 s** (`busyTimeout` in `opening.dart`). SQLite's default
+  is zero, which fails the second writer at once; the compare-and-set is only
+  reachable if the losing writer can take its turn.
+- `HelixDb.open(file, key:, inBackground: true)` is what makes the two
+  connections real: with `inBackground: false` both would share one isolate and
+  could not interleave a write at all.
 
 ## Rules
 

@@ -91,7 +91,7 @@ class HelixDb extends _$HelixDb {
   /// `dart run drift_dev make-migrations`, and fill in the generated test
   /// (MODULE.md, "Changing the schema").
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -114,6 +114,16 @@ class HelixDb extends _$HelixDb {
         await m.create(schema.groupBans);
         await m.create(schema.callLog);
         await m.create(schema.callLogAt);
+      },
+      // Schema 3 adds `sessions.version`, the revision the compare-and-set in
+      // `CryptoDao.saveSessions` needs (two engines on one database file must
+      // not commit the same ratchet state, review C-01). One column with a
+      // default: a step-by-step migration cannot alter a table, and existing
+      // rows start at 0, which is the revision a first read expects.
+      from2To3: (m, schema) async {
+        await m.database.customStatement(
+          'ALTER TABLE sessions ADD COLUMN version INTEGER NOT NULL DEFAULT 0',
+        );
       },
     ),
   );

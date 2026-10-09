@@ -421,6 +421,15 @@ Proximity/earpiece playback is not done.
   beside the database: the push isolate stands aside while the app runs; a
   second Windows window is refused (`EngineAlreadyRunning`, shown by the reset
   screen without the destructive option). Best-effort advisory, not a mutex.
+  The heartbeat **checks the file before rewriting it**: finding another
+  engine's claim means this one has lost the database, so it says so once
+  (`HelixRuntime.leaseLost`), stops claiming and its engine stops (socket,
+  workers, timers), and `runtimeProvider` opens a new runtime that takes the
+  lease back. Without that, an app Android froze past the lease's 20 seconds
+  would wake up and rewrite the claim over the push isolate, and two engines
+  would advance the same ratchet state (review finding C-01; the compare-and-set
+  in the engine is the second line of defence). A lost lease never deletes the
+  file, which now belongs to the other engine.
 - **Local files**. Windows data lives in the local (non-roaming) app-data
   folder, not Documents (OneDrive). Sign-out and the destructive reset delete
   the avatar and attachments, clear the file picker's temporary copies (also

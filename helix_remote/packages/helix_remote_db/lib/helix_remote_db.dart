@@ -21,6 +21,7 @@ export 'src/opening.dart'
     show
         DatabaseKey,
         DbEncryptionException,
+        busyTimeout,
         destroyDatabaseFiles,
         hasPlaintextSqliteHeader,
         walSizeLimitBytes;

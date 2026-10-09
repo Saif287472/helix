@@ -273,16 +273,65 @@ void main() {
       final s = [
         for (var i = 0; i < 3; i++) Uint8List.fromList([i]),
       ];
-      await crypto.saveSessions('bob', 'd1', s, now: at(1));
-      await crypto.saveSessions('bob', 'd2', [s[0]], now: at(1));
-      await crypto.saveSessions('bob', 'd1', [s[2], s[0]], now: at(2));
+      expect(
+        await crypto.saveSessions(
+          'bob',
+          'd1',
+          s,
+          now: at(1),
+          expectedVersion: 0,
+        ),
+        isTrue,
+      );
+      await crypto.saveSessions(
+        'bob',
+        'd2',
+        [s[0]],
+        now: at(1),
+        expectedVersion: 0,
+      );
+      expect(
+        await crypto.saveSessions(
+          'bob',
+          'd1',
+          [s[2], s[0]],
+          now: at(2),
+          expectedVersion: 1,
+        ),
+        isTrue,
+      );
       final d1 = await crypto.sessionsWith('bob', 'd1');
       expect(d1.map((r) => r.state.single), [2, 0]);
       expect(d1.first.createdAt, at(1));
       expect(d1.first.updatedAt, at(2));
+      // Every slot of one record carries its revision, and it rose with the
+      // second write.
+      expect(d1.map((r) => r.version), [2, 2]);
       expect(
-        () => crypto.saveSessions('bob', 'd1', List.filled(7, k), now: at(3)),
+        () => crypto.saveSessions(
+          'bob',
+          'd1',
+          List.filled(7, k),
+          now: at(3),
+          expectedVersion: 2,
+        ),
         throwsArgumentError,
+      );
+      // A write from a record that has been superseded is refused, and
+      // nothing is stored.
+      expect(
+        await crypto.saveSessions(
+          'bob',
+          'd1',
+          [s[1]],
+          now: at(3),
+          expectedVersion: 1,
+        ),
+        isFalse,
+      );
+      expect(
+        (await crypto.sessionsWith('bob', 'd1')).map((r) => r.state.single),
+        [2, 0],
       );
       await crypto.deleteSessions('bob', device: 'd1');
       expect(await crypto.sessionsWith('bob', 'd1'), isEmpty);

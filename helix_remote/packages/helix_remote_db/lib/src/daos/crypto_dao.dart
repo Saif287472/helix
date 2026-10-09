@@ -29,21 +29,46 @@ class CryptoDao extends DatabaseAccessor<HelixDb> with _$CryptoDaoMixin {
             ..orderBy([(s) => OrderingTerm.asc(s.slot)]))
           .get();
 
+  /// The revision of the record with one peer device, or 0 when there is none.
+  Future<int> sessionsVersion(String account, String device) async =>
+      (await sessionsWith(account, device)).firstOrNull?.version ?? 0;
+
   /// Replaces the sessions with one peer device: [states] in slot order,
   /// active first, at most six.
-  Future<void> saveSessions(
+  ///
+  /// A compare-and-set on [Sessions.version]: the write only lands while the
+  /// stored revision is still [expectedVersion], and it stores
+  /// `expectedVersion + 1`. **Returns false** when it moved under this
+  /// caller - another engine wrote the same record first - leaving the stored
+  /// rows untouched, so the caller must load again rather than overwrite
+  /// state it derived from a version that no longer exists. Two engines on
+  /// one database file (the app and its FCM isolate) taking the same sending
+  /// chain would otherwise encrypt two messages under one key and nonce.
+  ///
+  /// An empty [states] list would lose the revision, so a record with no
+  /// session in it is written as a normal one-slot record (an empty
+  /// `DeviceSessions` encodes to exactly that) instead of being deleted.
+  Future<bool> saveSessions(
     String account,
     String device,
     List<Uint8List> states, {
     required DateTime now,
+    required int expectedVersion,
   }) {
+    if (states.isEmpty) {
+      throw ArgumentError.value(
+        states.length,
+        'states',
+        'an empty record is written as a one-slot record, not an empty list',
+      );
+    }
     if (states.length > 6) {
       throw ArgumentError.value(states.length, 'states', 'at most 6 sessions');
     }
     return transaction(() async {
-      final existing = {
-        for (final s in await sessionsWith(account, device)) s.slot: s,
-      };
+      final existing = await sessionsWith(account, device);
+      if (_versionOf(existing) != expectedVersion) return false;
+      final created = {for (final s in existing) s.slot: s.createdAt};
       await deleteSessions(account, device: device);
       await batch(
         (b) => b.insertAll(sessions, [
@@ -53,15 +78,29 @@ class CryptoDao extends DatabaseAccessor<HelixDb> with _$CryptoDaoMixin {
               peerDeviceId: device,
               slot: slot,
               state: state,
-              createdAt: existing[slot]?.createdAt ?? now,
+              createdAt: created[slot] ?? now,
               updatedAt: now,
+              version: Value(expectedVersion + 1),
             ),
         ]),
       );
+      return true;
     });
   }
 
+  /// The revision the slots of one record agree on: their common value, or 0
+  /// for no rows. Rows that disagree (never written by this DAO) read as 0,
+  /// so the first write over them is allowed rather than refused forever.
+  static int _versionOf(List<SessionRow> rows) {
+    if (rows.isEmpty) return 0;
+    final version = rows.first.version;
+    return rows.every((s) => s.version == version) ? version : 0;
+  }
+
   /// Deletes the sessions with [account] (one [device], or all of them).
+  ///
+  /// This drops the revision, so it is for a full wipe (sign-out, revocation)
+  /// and never for replacing a record: use [saveSessions].
   Future<void> deleteSessions(String account, {String? device}) =>
       (delete(sessions)..where(
             (s) =>

@@ -145,6 +145,7 @@ final class DeviceSessions {
     this.active,
     this.previous = const [],
     this.retiredBaseKeys = const [],
+    this.version = 0,
   });
 
   /// Previous sessions kept for in-flight messages and simultaneous
@@ -163,6 +164,13 @@ final class DeviceSessions {
 
   /// Oldest first.
   final List<Uint8List> retiredBaseKeys;
+
+  /// The revision the record was read at, for a store that refuses to write
+  /// over a newer one (two engines on one database file: the app and its
+  /// FCM isolate, C-01). It is **not** part of the stored state - the blob
+  /// below is byte-identical for the same ratchet - so a store that has no
+  /// versions simply leaves it at 0.
+  final int version;
 
   bool get isEmpty => active == null && previous.isEmpty;
 
@@ -195,6 +203,7 @@ final class DeviceSessions {
       active: active,
       previous: List.unmodifiable(prev),
       retiredBaseKeys: List.unmodifiable(retired),
+      version: version,
     );
   }
 
@@ -208,8 +217,18 @@ final class DeviceSessions {
     return DeviceSessions(
       remote: remote,
       retiredBaseKeys: List.unmodifiable(retired),
+      version: version,
     );
   }
+
+  /// The same record at [version], for a store that is about to write it.
+  DeviceSessions atVersion(int version) => DeviceSessions(
+    remote: remote,
+    active: active,
+    previous: previous,
+    retiredBaseKeys: retiredBaseKeys,
+    version: version,
+  );
 
   bool _isRetired(List<int> baseKey) =>
       retiredBaseKeys.any((k) => bytesEqual(k, baseKey));
