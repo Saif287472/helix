@@ -13,6 +13,7 @@ import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
 import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
+import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 import 'package:helix_remote_server/src/platform/push/push.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:shelf/shelf.dart';
@@ -33,6 +34,10 @@ final class MessagingModule extends ModuleBase
       ..onAccountSignal(_accountSignal)
       ..onDeviceListChanged(_deviceListChanged);
     keys.onPrekeysLow(_prekeysLow);
+    _trimmed = context.metrics.counter(
+      'helix_mailbox_trimmed_total',
+      'Undelivered envelopes dropped because a device was over its mailbox quota',
+    );
     context.metrics.collectedGauge(
       'helix_mailbox_backlog',
       'Undelivered envelopes, cluster-wide (counted up to 1,000,000)',
@@ -46,6 +51,7 @@ final class MessagingModule extends ModuleBase
   final IdentityApi identity;
   late final MailboxStore _store;
   late final MessagingApi api;
+  late final Counter _trimmed;
   BlockPolicy _blockPolicy = (db, sender, recipients) async => const <String>{};
   MessageRelay? _relay;
 
@@ -64,6 +70,16 @@ final class MessagingModule extends ModuleBase
     'messaging.send_account',
     capacity: 400,
     perSecond: 10,
+  );
+
+  /// What one account's sends may store, direct and group together, in
+  /// [storedUnits] (one per started 16 KiB per recipient device). A short
+  /// text to a group of 2,000 devices costs 2,000: 25 at once, then one
+  /// every 8 s. A conversation of a few devices never comes near it.
+  static const storedPerAccount = RateLimitPolicy(
+    'messaging.stored_account',
+    capacity: 50000,
+    perSecond: 250,
   );
 
   /// Undelivered envelopes are sealed; they are counted, never exported.
@@ -313,6 +329,20 @@ final class MessagingModule extends ModuleBase
         senderDevice: senderDevice,
       );
     }
+    if (!ephemeral) {
+      // Before any relay, so a refused send is refused everywhere.
+      final sizes = [
+        for (final p in payloads.values) p.length,
+        for (final recipients in parsed.remote.values)
+          for (final r in recipients)
+            for (final d in r.devices) d.payload.length,
+      ];
+      await api.chargeStored(
+        senderAccount,
+        units: sizes.fold<int>(0, (n, size) => n + storedUnits(size)),
+        largestPayload: sizes.fold<int>(0, (m, size) => size > m ? size : m),
+      );
+    }
     await beforeDelivery?.call();
 
     // Recipients who blocked the sender get nothing; the sender is not told.
@@ -530,11 +560,18 @@ final class _MessagingFacade implements MessagingApi {
     Delivery delivery,
   ) async {
     if (payloads.isEmpty) return;
-    final devices = payloads.keys.toList();
-    final seqs = await _store.allocate(tx, devices);
+    // Only devices still active, locked so a concurrent revoke waits for
+    // this transaction and its hook then purges these rows too.
+    final active = await _m.identity.lockActiveDevices(tx, payloads.keys);
+    final devices = [
+      for (final d in payloads.keys)
+        if (active.contains(d)) d,
+    ];
+    if (devices.isEmpty) return;
+    final allocated = await _store.allocate(tx, devices);
     await _store.insert(
       tx,
-      seqs: seqs,
+      seqs: allocated.seqs,
       payloads: payloads,
       id: delivery.id ?? Uuid.v7(),
       kind: delivery.kind,
@@ -544,6 +581,10 @@ final class _MessagingFacade implements MessagingApi {
       data: delivery.data,
       urgent: delivery.urgent,
     );
+    if (allocated.over.isNotEmpty) {
+      final dropped = await _store.trim(tx, allocated.over);
+      if (dropped > 0) _m._trimmed.inc(const {}, dropped.toDouble());
+    }
     if (delivery.urgent) {
       final online = await Presence.online(_m.context.ephemeral, devices);
       for (final device in devices.where((d) => !online.contains(d))) {
@@ -561,6 +602,26 @@ final class _MessagingFacade implements MessagingApi {
         });
       }
     });
+  }
+
+  @override
+  Future<void> chargeStored(
+    String account, {
+    required int units,
+    required int largestPayload,
+  }) async {
+    if (largestPayload > storedUnitBytes) {
+      await _m.context.storage.check();
+    }
+    if (units <= 0) return;
+    final decision = await _m.context.rateLimiter.hit(
+      MessagingModule.storedPerAccount,
+      'account:$account',
+      cost: units,
+    );
+    if (!decision.allowed) {
+      throw ApiError(ErrorCode.rateLimited, retryAfter: decision.retryAfter);
+    }
   }
 
   @override

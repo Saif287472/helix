@@ -18,7 +18,10 @@ deletion contract. The v1 version is in git history (tag `v1-final`).
 - Contacts and blocks: until changed by the person or the account is deleted. Phone-book names are
   device-local only and never sent to the server.
 - **Message mailbox rows: deleted when the device acknowledges them; undelivered rows expire after 30
-  days.** There is no server-side history and no conversation table.
+  days.** There is no server-side history and no conversation table. A device keeps at most its
+  newest 10,000 undelivered envelopes; older ones go earlier (since 2026-10-09). With
+  `HELIX_DEVICE_INACTIVE_DAYS` set, a device unused for that long is revoked and its mailbox purged
+  (never an account's most recently used device).
 - Attachments: 30 days from upload (backup media 90 days, refreshed by each full backup; avatars and
   group pictures until deleted). Objects have random ids and no link to a message, so there is no
   reference counting: deleting a message does not delete its object, and expiry does.

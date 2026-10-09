@@ -12,7 +12,8 @@ one Postgres database.
 | Schema names | `db/schema_names.dart` | module name = schema | test prefixes |
 | Event bus | `bus/event_bus.dart` | `LISTEN/NOTIFY`; the `LISTEN` connection reopens with backoff and then publishes local `platform.resync` | Redis/NATS impl |
 | Ephemeral store | `ephemeral/ephemeral_store.dart` | UNLOGGED table, own 4-connection pool | Redis impl |
-| Rate limits | `ratelimit/rate_limiter.dart` | UNLOGGED token buckets, one statement | Redis impl |
+| Rate limits | `ratelimit/rate_limiter.dart` | UNLOGGED token buckets, one statement; a hit may cost several tokens (`cost:`, charged as the capacity when larger) | Redis impl |
+| Storage budget | `storage/storage_budget.dart` | `HELIX_STORAGE_BUDGET_BYTES` (optional): the size of this server's tables with indexes and TOAST (`pg_total_relation_size` over the catalogue, its own schema prefix only; not `pg_database_size`, which lists every file and took seconds on the shared test database) plus what modules `report` (media objects), measured at most once a minute per node; `check()` throws `quota_exceeded` (`reason: server_storage`) when over it and lets requests through when it cannot measure; gauge `helix_storage_used_bytes`; `close` waits for a measurement in flight | same (S3 bytes reported by media) |
 | Outbox + jobs | `jobs/jobs.dart` | `platform.jobs`, `SKIP LOCKED` leases, backoff, dead letters | same |
 | Periodic jobs | `jobs/jobs.dart` | row-lease, once per interval cluster-wide | same |
 | Object storage | `blobs/object_storage.dart` | local directory | S3-compatible (SigV4) |

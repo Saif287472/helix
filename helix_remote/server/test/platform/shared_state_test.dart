@@ -126,6 +126,31 @@ void main() {
       expect((await a.hit(fast, 'k')).allowed, isTrue, reason: 'refilled');
     });
 
+    test(
+      'rate limiter: a hit can cost several tokens, at most the capacity',
+      () async {
+        final a = PostgresRateLimiter(db, schemas.platform);
+        final b = PostgresRateLimiter(otherNode, schemas.platform);
+        const policy = RateLimitPolicy(
+          'weighted',
+          capacity: 10,
+          perSecond: 0.001,
+        );
+        expect((await a.hit(policy, 'k', cost: 4)).allowed, isTrue);
+        expect((await b.hit(policy, 'k', cost: 4)).allowed, isTrue);
+        final denied = await a.hit(policy, 'k', cost: 4);
+        expect(denied.allowed, isFalse, reason: 'two tokens left');
+        expect(denied.retryAfter, greaterThan(const Duration(seconds: 1000)));
+        expect((await b.hit(policy, 'k', cost: 2)).allowed, isTrue);
+        expect(
+          (await a.hit(policy, 'fresh', cost: 1000)).allowed,
+          isTrue,
+          reason: 'a cost over the capacity takes the whole bucket',
+        );
+        expect((await a.hit(policy, 'fresh')).allowed, isFalse);
+      },
+    );
+
     test('rate limiter: concurrent hits never exceed capacity', () async {
       final a = PostgresRateLimiter(db, schemas.platform);
       final b = PostgresRateLimiter(otherNode, schemas.platform);
@@ -176,6 +201,24 @@ void main() {
       expect(denied.retryAfter.inSeconds, inInclusiveRange(29, 31));
       clock.advance(const Duration(seconds: 30));
       expect((await limiter.hit(policy, 'k')).allowed, isTrue);
+    });
+
+    test('rate limiter: weighted hits wait for what they cost', () async {
+      final clock = ManualClock();
+      final limiter = InMemoryRateLimiter(clock: clock);
+      const policy = RateLimitPolicy('w', capacity: 10, perSecond: 1);
+      expect((await limiter.hit(policy, 'k', cost: 8)).allowed, isTrue);
+      final denied = await limiter.hit(policy, 'k', cost: 5);
+      expect(denied.allowed, isFalse);
+      expect(denied.retryAfter, const Duration(seconds: 3));
+      clock.advance(const Duration(seconds: 3));
+      expect((await limiter.hit(policy, 'k', cost: 5)).allowed, isTrue);
+      expect(
+        (await limiter.hit(policy, 'big', cost: 99)).allowed,
+        isTrue,
+        reason: 'charged as the capacity',
+      );
+      expect((await limiter.hit(policy, 'big')).allowed, isFalse);
     });
 
     test('bus delivers to subscribers', () async {

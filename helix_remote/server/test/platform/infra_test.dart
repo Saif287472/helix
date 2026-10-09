@@ -63,6 +63,36 @@ void main() {
       expect(c.blobs.backend, BlobBackend.s3);
     });
 
+    test(
+      'the storage budget is optional and at least 1 GiB outside dev mode',
+      () {
+        expect(ServerConfig.fromEnv(_env()).storageBudgetBytes, isNull);
+        expect(
+          ServerConfig.fromEnv(
+            _env({'HELIX_STORAGE_BUDGET_BYTES': '53687091200'}),
+          ).storageBudgetBytes,
+          50 * 1024 * 1024 * 1024,
+        );
+        for (final bad in ['1048576', 'lots', '-1']) {
+          expect(
+            () =>
+                ServerConfig.fromEnv(_env({'HELIX_STORAGE_BUDGET_BYTES': bad})),
+            throwsA(isA<ConfigError>()),
+            reason: bad,
+          );
+        }
+        expect(
+          ServerConfig.fromEnv(
+            _env({
+              'HELIX_STORAGE_BUDGET_BYTES': '1048576',
+              'HELIX_DEV_MODE': 'true',
+            }),
+          ).storageBudgetBytes,
+          1048576,
+        );
+      },
+    );
+
     test('toString hides secrets', () {
       final c = ServerConfig.fromEnv(_env());
       expect(c.toString(), isNot(contains('postgresql://')));

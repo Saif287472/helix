@@ -126,6 +126,7 @@ CREATE TABLE $s.full_backups (
     if (req.data.length > HistoryBackup.maxBytes) {
       throw const ApiError(ErrorCode.payloadTooLarge);
     }
+    await context.storage.check();
     final n = await context.db.execute(
       'INSERT INTO $schema.history_backups (account_id, version, data) VALUES (@a:uuid, @v:int4, @d:bytea) '
       'ON CONFLICT (account_id) DO UPDATE SET version = excluded.version, data = excluded.data, updated_at = now() '
@@ -195,6 +196,7 @@ CREATE TABLE $s.full_backups (
             'backups must not contain backup_key, passphrase or recovery_phrase',
       );
     }
+    await context.storage.check();
     await context.db.tx((tx) async {
       final n = await tx.execute(
         'INSERT INTO $schema.full_backups (account_id, backup_id, version, envelope, media_ids) '

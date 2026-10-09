@@ -20,7 +20,8 @@ federation use it).
 
 `metrics` also accepts `HELIX_METRICS_TOKEN` (constant-time compare; that
 token opens nothing else) and refreshes the collected gauges
-(`helix_jobs_dead`, `helix_mailbox_backlog`) before rendering.
+(`helix_jobs_dead`, `helix_mailbox_backlog`, `helix_storage_used_bytes`)
+before rendering.
 
 `ready` runs every check in the `HealthRegistry` (platform: `database`,
 `storage`; modules add their own) with a 3-second timeout each and answers

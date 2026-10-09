@@ -19,6 +19,13 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
       (tx, accountId) =>
           context.outbox.enqueue(tx, purgeJob, {'account': accountId}),
     );
+    // Reserved sizes, so uploads in progress count before their bytes land.
+    context.storage.report(
+      name,
+      () async => (await context.db.queryOne(
+        'SELECT coalesce(sum(size), 0)::int8 AS n FROM $schema.objects',
+      ))!.integer('n'),
+    );
   }
 
   late final MediaApi api;
@@ -119,6 +126,8 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
     if (req.size <= 0 || req.size > max) {
       throw ApiError(ErrorCode.payloadTooLarge, details: {'max_bytes': max});
     }
+    // The server-wide budget first: per-account quotas add up on one disk.
+    await context.storage.check();
     final quota = switch (req.kind) {
       MediaKind.attachment => attachmentQuota,
       MediaKind.persistent => persistentQuota,

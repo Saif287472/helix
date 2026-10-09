@@ -76,8 +76,10 @@ identifiers into a ticket or chat without checking it first.
   | `helix_jobs_dead` | gauge | none | Dead outbox jobs, cluster-wide (read from the database at scrape time). |
   | `helix_mailbox_backlog` | gauge | none | Undelivered envelopes, cluster-wide (counted up to 1,000,000 at scrape time). |
   | `helix_http_body_bytes_in_flight` | gauge | none | Request body bytes this node is buffering (limit `HELIX_MAX_INFLIGHT_BODY_BYTES`). |
+  | `helix_storage_used_bytes` | gauge | none | Helix's tables with their indexes, plus stored media bytes, cluster-wide, at most a minute old (Postgres's own files, such as the write-ahead log, are not counted). Compare with `HELIX_STORAGE_BUDGET_BYTES` and the free disk space. |
+  | `helix_mailbox_trimmed_total` | counter | none | Undelivered envelopes this node dropped because a device was over its 10,000-envelope mailbox quota. A steady rise means a device that never collects its mail. |
 
-  The two cluster-wide gauges are queried on each scrape (3 s timeout; a
+  The cluster-wide gauges are queried on each scrape (3 s timeout; a
   failed read keeps the last value, `NaN` before the first). Every node
   reports the same value for them, so do not sum them across nodes.
 - **Not exported (gaps):** database pool use, rate-limit rejections as a
@@ -256,8 +258,10 @@ kind = '...'`) for that.
      client address, signed-in routes per device, S2S routes per server.
      The route registry refuses a public route without one
      (`platform/http/routes.dart`).
-  3. Some limits inside handlers, keyed by account or number (for example 5 SMS
-     codes per number per hour).
+  3. Some limits inside handlers, keyed by account, number or group (for
+     example 5 SMS codes per number per hour). Some of these are weighted: a
+     stored send takes one token per unit it stores, so a message to a big
+     group costs more than one to a friend.
 - **Answer.** `429` with error code `rate_limited` and a `Retry-After` header.
 - **Order.** A signed-in route checks the token and the route's limit before
   it reads the request body, so refused requests cost no buffering. Bodies
@@ -276,6 +280,8 @@ kind = '...'`) for that.
   | `identity.refresh`, `.link_poll` | 600 per hour each |
   | `keys.bundle` / `keys.bundle_target` | 120 / 600 per hour |
   | `messaging.send` (per device) / `messaging.send_account` (per account) | 200 at once, 5 per second / 400 at once, 10 per second |
+  | `messaging.stored_account` (per account, direct and group sends together) | 50,000 units at once, 250 per second; a unit is one started 16 KiB per recipient device |
+  | `groups.send` (per device) / `groups.fan_out` (per group) | 200 at once, 5 per second / 200,000 units at once, 2,000 per second |
   | `calls.turn` / `calls.offers` / `calls.signals` | 10 per hour per device / 30 per 10 minutes per account / 240 per minute per sending device (update, end, ICE) |
   | `groups.create` / `groups.preview` | 20 per day / 60 per hour |
   | `people.by_name` / `people.reports` | 30 per minute / 20 per hour |
@@ -287,7 +293,8 @@ kind = '...'`) for that.
   (the `4029` close code in the protocol is not used by the server).
 - **Keys.** A bucket key is `<policy>:<principal>` where the principal is
   `ip:<address>`, `device:<id>`, `admin:<id>` or `server:<domain>`. The global
-  limit's key is `ip:<address>`.
+  limit's key is `ip:<address>`. Handler limits use `account:<id>` or, for
+  `groups.fan_out`, the bare group id.
 - **Clear a stuck limit** (for example your own address after testing):
 
   ```sql
@@ -555,8 +562,16 @@ millions of users; this section is about two nodes on one host.
 ## Data growth
 
 - **Mailbox:** deleted on ack; undelivered rows expire after 30 days
-  (`messaging.expire`). The per-device quota is 10,000 undelivered envelopes
-  (`quota_exceeded`).
+  (`messaging.expire`). Each device keeps its newest 10,000 undelivered
+  envelopes; older ones are dropped as new ones arrive
+  (`helix_mailbox_trimmed_total`). With `HELIX_DEVICE_INACTIVE_DAYS` set,
+  devices unused for that long are revoked (never an account's newest).
+- **Server-wide budget:** `HELIX_STORAGE_BUDGET_BYTES` (optional) caps the
+  database plus stored media. Over it, media uploads, backups and sends of
+  payloads over 16 KiB get `quota_exceeded`; short messages still go
+  through. Set it well below the free space of the disk that holds Postgres
+  and the blobs, so the database itself never runs out (a full disk stops
+  Postgres for everyone). Watch `helix_storage_used_bytes`.
 - **Media:** attachments 30 days, backup media 90 days (refreshed by each full
   backup), persistent until deleted; quotas 4 GiB, 1 GiB and 50 MiB per
   account (`media/MODULE.md`). Unfinished uploads are removed after a day.

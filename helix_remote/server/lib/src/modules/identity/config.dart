@@ -14,6 +14,7 @@ final class IdentityConfig {
     required this.jwtKeys,
     required this.activeJwtKid,
     required this.otpResendAfter,
+    required this.inactiveDeviceDays,
   });
 
   /// Key for the stored phone hash. Kept outside the database, so a stolen
@@ -28,6 +29,13 @@ final class IdentityConfig {
   /// Minimum gap between two codes to one number (`HELIX_OTP_RESEND_SECONDS`,
   /// default 30).
   final Duration otpResendAfter;
+
+  /// `HELIX_DEVICE_INACTIVE_DAYS`: devices unused for longer are revoked
+  /// (never an account's most recently used one). 0, the default: never.
+  final int inactiveDeviceDays;
+
+  static const minInactiveDeviceDays = 14;
+  static const maxInactiveDeviceDays = 3650;
 
   static const accessLifetime = Duration(minutes: 15);
   static const refreshLifetime = Duration(days: 60);
@@ -93,6 +101,19 @@ final class IdentityConfig {
     if (resend == null || resend < 0 || resend > 600) {
       problems.add('HELIX_OTP_RESEND_SECONDS must be 0..600');
     }
+    final inactiveRaw = env['HELIX_DEVICE_INACTIVE_DAYS']?.trim();
+    final inactive = inactiveRaw == null || inactiveRaw.isEmpty
+        ? 0
+        : int.tryParse(inactiveRaw);
+    if (inactive == null ||
+        (inactive != 0 &&
+            (inactive < minInactiveDeviceDays ||
+                inactive > maxInactiveDeviceDays))) {
+      problems.add(
+        'HELIX_DEVICE_INACTIVE_DAYS must be 0 (off) or '
+        '$minInactiveDeviceDays..$maxInactiveDeviceDays',
+      );
+    }
     if (problems.isNotEmpty) throw ConfigError(problems);
 
     return IdentityConfig._(
@@ -105,6 +126,7 @@ final class IdentityConfig {
       jwtKeys: config.jwtKeys,
       activeJwtKid: config.activeJwtKid,
       otpResendAfter: Duration(seconds: resend!),
+      inactiveDeviceDays: inactive!,
     );
   }
 }

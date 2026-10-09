@@ -44,6 +44,26 @@ key, CRYPTO_V2.md §9), and messages are sender-key ciphertext (§7).
   messages, member devices only) are stored before the single
   `group_message` ciphertext, which goes to every member device. Group
   messages are not filtered by personal blocks (WhatsApp behaviour).
+  Devices revoked meanwhile get nothing (messaging's `deliver` locks the
+  active ones), and a member device over its mailbox quota loses its
+  oldest envelopes instead of failing the send.
+- **Limits** (review A-02; before 2026-10-09 only the global per-address
+  limit applied, while each send is stored once per member device):
+  - `groups.send`: 200 at once, 5 per second per device, checked before the
+    body is read. Ephemeral sends (typing) count.
+  - A stored send costs `storedUnits(payload)` per member device plus the
+    distributions. It is charged to the sender's stored-envelope budget,
+    which direct sends share (`MessagingApi.chargeStored`, 50,000 units,
+    250 per second), then to the group's own budget (`groups.fan_out`,
+    200,000 units, 2,000 per second, keyed by group id), so many accounts
+    cannot flood one group together either. A short text to 2,000 devices
+    costs 2,000 units. Over either, `rate_limited` with `Retry-After`.
+    Ephemeral sends are not charged.
+  - A payload over 16 KiB while the server is over its storage budget:
+    `quota_exceeded`.
+  - A send proxied to another home server is charged there, and the
+    local delivery to this server's members after it is not charged again
+    (federation is off on Helix Global).
 - **Retries:** use `Idempotency-Key`.
 
 Every roster or settings change sends a `roster_change` envelope to every

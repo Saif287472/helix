@@ -12,6 +12,7 @@ import 'package:helix_remote_server/src/platform/observability/log.dart';
 import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 import 'package:helix_remote_server/src/platform/push/push.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
+import 'package:helix_remote_server/src/platform/storage/storage_budget.dart';
 
 /// Readiness checks by name (`GET /v1/health/ready`).
 final class HealthRegistry {
@@ -52,6 +53,7 @@ final class ModuleContext {
     required this.metrics,
     required this.health,
     required this.push,
+    required this.storage,
   });
 
   final ServerConfig config;
@@ -69,6 +71,9 @@ final class ModuleContext {
 
   /// Data-only device wake-ups (FCM).
   final PushProvider push;
+
+  /// The server-wide storage budget (`HELIX_STORAGE_BUDGET_BYTES`).
+  final StorageBudget storage;
 
   /// The schema of [module] (its own name for a module's own tables).
   String schema(String module) => schemas.of(module);

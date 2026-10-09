@@ -276,9 +276,13 @@ final class IdentityContext {
     );
   }
 
-  /// Revokes every active device of an account (identity changes).
+  /// Revokes every active device of an account (identity changes). In id
+  /// order, the order deliveries lock device rows in
+  /// ([IdentityStore.lockActiveDevices]).
   Future<void> revokeAll(Tx tx, String accountId, String reason) async {
-    for (final device in await store.activeDevices(tx, accountId)) {
+    final devices = [...await store.activeDevices(tx, accountId)]
+      ..sort((a, b) => a.id.compareTo(b.id));
+    for (final device in devices) {
       final revoked = await store.revokeDevice(tx, device.id, reason);
       if (revoked != null) {
         await hooks.deviceRevoked(tx, revoked);
@@ -287,6 +291,41 @@ final class IdentityContext {
         );
       }
     }
+  }
+
+  /// Revokes one device of [accountId] with every consequence: the revoke
+  /// hooks (prekeys, mailbox), the account's other devices told (device
+  /// list, security event, account signal), and its sockets closed after
+  /// commit. False if it was not active.
+  Future<bool> revokeDevice(
+    Tx tx,
+    String accountId,
+    String deviceId,
+    String reason,
+  ) async {
+    final revoked = await store.revokeDevice(tx, deviceId, reason);
+    if (revoked == null) return false;
+    await hooks.deviceRevoked(tx, revoked);
+    await hooks.deviceListChanged(tx, accountId);
+    await store.addEvent(
+      tx,
+      accountId,
+      SecurityEventKind.deviceRevoked,
+      deviceId: revoked.id,
+      deviceName: revoked.name,
+    );
+    await hooks.accountSignal(
+      tx,
+      accountId,
+      AccountSignalEvent(
+        signal: AccountSignalKind.deviceRevoked,
+        at: clock.now(),
+        device: revoked.id,
+        deviceName: revoked.name,
+      ),
+    );
+    tx.afterCommit(() => bus.publish('device.revoked', {'device': revoked.id}));
+    return true;
   }
 
   /// Adds a verified device, runs the hooks and mints its session.

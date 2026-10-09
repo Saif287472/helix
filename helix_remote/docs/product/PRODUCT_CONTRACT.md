@@ -18,8 +18,9 @@ across the public internet.
 - **Chat history**: stored in a local SQLCipher database on the device, decrypted once on arrival
   into structured rows. It persists until the person deletes it.
 - **Server mailboxes**: encrypted message envelopes are held per recipient device until that device
-  acknowledges them, then deleted; undelivered envelopes expire after 30 days. The server keeps no
-  history and no conversation table.
+  acknowledges them, then deleted; undelivered envelopes expire after 30 days, and a device that
+  has more than 10,000 waiting loses the oldest first (so one unused device never blocks messages
+  to its account). The server keeps no history and no conversation table.
 - **Attachments**: ciphertext objects with random ids, on the server's local disk (or an S3-compatible
   store), expiring after 30 days. There is no server-side link between an object and a message.
 - **Chat history backup**: an encrypted, text-only copy of the history, one per account, so a device

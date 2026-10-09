@@ -102,6 +102,7 @@ final class ServerConfig {
     required this.dbPoolSize,
     required this.maxInFlightBodyBytes,
     required this.metricsToken,
+    required this.storageBudgetBytes,
   });
 
   /// The raw environment, for module config sections.
@@ -152,6 +153,11 @@ final class ServerConfig {
   /// `HELIX_METRICS_TOKEN`: a bearer token that opens `GET /v1/ops/metrics`
   /// only (for a Prometheus scraper). Unset: an admin token is needed.
   final String? metricsToken;
+
+  /// `HELIX_STORAGE_BUDGET_BYTES`: the most the database and the stored
+  /// media together may hold. Over it, uploads and large sends get
+  /// `quota_exceeded` (`StorageBudget`). Unset: no server-wide limit.
+  final int? storageBudgetBytes;
 
   static ServerConfig fromEnv(Map<String, String> env) {
     final problems = <String>[];
@@ -290,6 +296,18 @@ final class ServerConfig {
       min: 1024 * 1024,
     );
     final trustRealIp = flag('HELIX_TRUST_X_REAL_IP');
+    final storageBudgetRaw = read('HELIX_STORAGE_BUDGET_BYTES');
+    final storageBudgetBytes = storageBudgetRaw == null
+        ? null
+        : int.tryParse(storageBudgetRaw);
+    // Dev mode (tests) may set a tiny budget to see it refuse.
+    if (storageBudgetRaw != null &&
+        (storageBudgetBytes == null ||
+            storageBudgetBytes < (devMode ? 1 : 1024 * 1024 * 1024))) {
+      problems.add(
+        'HELIX_STORAGE_BUDGET_BYTES must be a number of bytes, at least 1 GiB',
+      );
+    }
 
     if (problems.isNotEmpty) throw ConfigError(problems);
 
@@ -320,6 +338,7 @@ final class ServerConfig {
       dbPoolSize: dbPoolSize,
       maxInFlightBodyBytes: maxInFlightBodyBytes,
       metricsToken: metricsToken,
+      storageBudgetBytes: storageBudgetBytes,
     );
   }
 

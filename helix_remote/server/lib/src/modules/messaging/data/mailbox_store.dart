@@ -10,32 +10,61 @@ final class MailboxStore {
   final String s;
 
   static const partitions = 16;
+
+  /// Undelivered envelopes kept per device; [trim] drops the oldest beyond.
   static const quota = 10000;
   static const retention = Duration(days: 30);
 
   /// Allocates the next `seq` for each device (row-locked, so concurrent
   /// sends on any node never share a number) and counts it as pending.
-  /// Throws `quota_exceeded` if a device has too many undelivered envelopes.
-  Future<Map<String, int>> allocate(Tx tx, List<String> deviceIds) async {
+  /// Devices are locked in id order, so two sends to overlapping devices
+  /// cannot deadlock. `over` holds the devices now above [quota], and by
+  /// how much: pass it to [trim] once the new rows are in.
+  Future<({Map<String, int> seqs, Map<String, int> over})> allocate(
+    Tx tx,
+    List<String> deviceIds,
+  ) async {
     final rows = await tx.query(
       'INSERT INTO $s.device_seq (device_id, last_seq, pending) '
-      'SELECT d, 1, 1 FROM unnest(@ids:_uuid) AS d '
+      'SELECT d, 1, 1 FROM unnest(@ids:_uuid) AS d ORDER BY d '
       'ON CONFLICT (device_id) DO UPDATE SET last_seq = $s.device_seq.last_seq + 1, '
       'pending = $s.device_seq.pending + 1 '
       'RETURNING device_id, last_seq, pending',
       {'ids': deviceIds},
     );
-    final out = <String, int>{};
+    final seqs = <String, int>{};
+    final over = <String, int>{};
     for (final r in rows) {
-      if (r.integer('pending') > quota) {
-        throw const ApiError(
-          ErrorCode.quotaExceeded,
-          message: 'a recipient device has too many undelivered messages',
+      final device = r.string('device_id');
+      seqs[device] = r.integer('last_seq');
+      final excess = r.integer('pending') - quota;
+      if (excess > 0) over[device] = excess;
+    }
+    return (seqs: seqs, over: over);
+  }
+
+  /// Deletes the oldest envelopes of each device in [over] (device id →
+  /// how many), so it keeps its newest [quota]. A device that never
+  /// collects its mail (an unused PC that was never signed out) loses its
+  /// oldest envelopes, as expiry would, instead of failing every send to its
+  /// account and its groups. Returns how many rows went.
+  Future<int> trim(Tx tx, Map<String, int> over) async {
+    var total = 0;
+    for (final e in over.entries) {
+      final deleted = await tx.execute(
+        'DELETE FROM $s.mailbox WHERE device_id = @d:uuid AND seq IN ('
+        'SELECT seq FROM $s.mailbox WHERE device_id = @d:uuid ORDER BY seq LIMIT @n:int4)',
+        {'d': e.key, 'n': e.value},
+      );
+      if (deleted > 0) {
+        await tx.execute(
+          'UPDATE $s.device_seq SET pending = greatest(0, pending - @n:int4) WHERE device_id = @d:uuid',
+          {'d': e.key, 'n': deleted},
         );
       }
-      out[r.string('device_id')] = r.integer('last_seq');
+      total += deleted;
     }
-    return out;
+    return total;
   }
 
   Future<void> insert(

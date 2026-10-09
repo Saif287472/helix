@@ -88,6 +88,25 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
     const Duration(hours: 1),
   );
 
+  /// Group sends per device, like direct sends (`messaging.send`), checked
+  /// before the body is read. Typing indicators count too.
+  static const sendPerDevice = RateLimitPolicy(
+    'groups.send',
+    capacity: 200,
+    perSecond: 5,
+  );
+
+  /// What one group's stored sends may fan out, all senders together, in
+  /// [storedUnits]. Each sender's own budget
+  /// (`MessagingApi.chargeStored`) is smaller; this one stops many
+  /// accounts flooding one large group together. A short text to 2,000
+  /// devices costs 2,000: 100 at once, then one a second.
+  static const fanOutPerGroup = RateLimitPolicy(
+    'groups.fan_out',
+    capacity: 200000,
+    perSecond: 2000,
+  );
+
   /// Memberships and roles (group names and pictures are encrypted).
   @override
   Future<Object?> exportAccount(SqlSession s, String accountId) async {
@@ -179,6 +198,7 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
         Routes.sendGroupMessage,
         _scoped('send'),
         maxBodyBytes: 8 * 1024 * 1024,
+        rateLimit: sendPerDevice,
       );
   }
 
@@ -1127,6 +1147,31 @@ final class GroupsModule extends ModuleBase implements ProvidesAccountExport {
         SendMessageResponse(acceptedAt: context.clock.now()).toJson(),
       );
     }
+
+    // Stored sends cost what they store: the payload once per member
+    // device, plus the distributions. Charged to the sender, then to the
+    // group (review A-02).
+    final units =
+        accountOf.length * storedUnits(req.payload.length) +
+        distributions.values.fold<int>(0, (n, p) => n + storedUnits(p.length));
+    final largest = distributions.values.fold<int>(
+      req.payload.length,
+      (m, p) => p.length > m ? p.length : m,
+    );
+    await messaging.chargeStored(
+      actor.account,
+      units: units,
+      largestPayload: largest,
+    );
+    final perGroup = await context.rateLimiter.hit(
+      fanOutPerGroup,
+      groupId,
+      cost: units,
+    );
+    if (!perGroup.allowed) {
+      throw ApiError(ErrorCode.rateLimited, retryAfter: perGroup.retryAfter);
+    }
+
     await context.db.tx((tx) async {
       // Distributions first, so each device has the key before the message.
       await messaging.deliver(tx, {

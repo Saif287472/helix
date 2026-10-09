@@ -160,6 +160,11 @@ abstract interface class IdentityApi {
   /// The server's phone discovery salt (people module serves it).
   Future<Uint8List> discoverySalt();
 
+  /// The active devices among [deviceIds], locked against a concurrent
+  /// revoke until [tx] ends. Messaging stores envelopes only for these, so
+  /// a device revoked mid-send gets nothing, not even storage.
+  Future<Set<String>> lockActiveDevices(Tx tx, Iterable<String> deviceIds);
+
   Future<PushTarget?> pushTarget(SqlSession s, String deviceId);
 
   /// Removes a push token the provider reported as unknown.

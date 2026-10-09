@@ -26,6 +26,17 @@ abstract interface class MessageRelay {
   Future<void> relay(String domain, S2SMessageBatch batch);
 }
 
+/// The size of one stored-envelope unit ([storedUnits]).
+const storedUnitBytes = 16 * 1024;
+
+/// The stored-envelope units of one payload of [bytes] for one recipient
+/// device: one per started 16 KiB, and at least one. Direct and group sends
+/// are charged in these units ([MessagingApi.chargeStored]), so a large
+/// fan-out of large payloads costs what it stores.
+int storedUnits(int bytes) => bytes <= storedUnitBytes
+    ? 1
+    : (bytes + storedUnitBytes - 1) ~/ storedUnitBytes;
+
 /// What to deliver. Server-generated kinds use [data]; user kinds carry a
 /// sealed payload per device.
 final class Delivery {
@@ -55,13 +66,28 @@ final class Delivery {
 /// realtime gateway.
 abstract interface class MessagingApi {
   /// Stores an envelope for each device in [payloads] (device id → sealed
-  /// payload, or null for server-generated kinds) inside [tx]. Devices are
-  /// woken after commit; urgent deliveries push offline devices.
+  /// payload, or null for server-generated kinds) inside [tx]. Devices that
+  /// are not active (revoked meanwhile) are skipped; the others are locked
+  /// against a revoke until [tx] ends. A device over its mailbox quota
+  /// loses its oldest envelopes. Devices are woken after commit; urgent
+  /// deliveries push offline devices.
   Future<void> deliver(
     Tx tx,
     Map<String, Uint8List?> payloads,
     Delivery delivery,
   );
+
+  /// Charges [account] for storing [units] ([storedUnits], summed over the
+  /// recipient devices) against its stored-envelope budget, shared by direct
+  /// and group sends: `rate_limited` with `Retry-After` when it is spent.
+  /// When [largestPayload] is more than one unit and the server is over its
+  /// storage budget, `quota_exceeded`. Ephemeral sends store nothing and are
+  /// not charged.
+  Future<void> chargeStored(
+    String account, {
+    required int units,
+    required int largestPayload,
+  });
 
   /// Delivers to devices online now, without storing. Returns the devices
   /// it reached.

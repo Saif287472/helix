@@ -157,6 +157,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 | `HELIX_LOG_FILE` | no | none | no | no | Log lines (JSON, redacted) are also appended to this file; stdout keeps them too. Opened at start (an unwritable path exits with 78). Rotate it with a copy-and-truncate tool. |
 | `HELIX_DB_POOL_SIZE` | no | `10` | no | no | Connections in the main Postgres pool, 2 to 200. Count every node's pool plus 5 per node (ephemeral pool and `LISTEN`) against Postgres `max_connections`. |
 | `HELIX_MAX_INFLIGHT_BODY_BYTES` | no | `268435456` (256 MiB) | no | no | Request body bytes one node buffers at once, across all requests (at least 1 MiB). Over it, requests get 503 `unavailable` with `Retry-After: 2`. Keep it above the largest route limit (a full backup is up to 64 MiB). |
+| `HELIX_STORAGE_BUDGET_BYTES` | no | none (no budget) | no | no | The most Helix's tables (with indexes) plus stored media may hold, in bytes, at least 1 GiB (any size in dev mode). Measured at most once a minute per node. Over it, media uploads, backups and sends of payloads over 16 KiB get `quota_exceeded`; short messages still go through. Set it below the free space of the disk, for example `53687091200` (50 GiB). Watch `helix_storage_used_bytes`. |
 | `HELIX_METRICS_TOKEN` | no | none | no | **yes** | At least 32 characters. A bearer token that opens `GET /v1/ops/metrics` and nothing else, for a Prometheus scraper (compared in constant time). Unset: metrics need an admin token. |
 
 ### identity (`modules/identity/config.dart`, `sms.dart`)
@@ -169,6 +170,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 | `HELIX_SMS_SENDER_ID` | if `bulksmsbd` | none | no | no | BulkSMSBD approved sender id. |
 | `HELIX_TERMS_VERSION` | no | the built-in terms version | no | no | Overrides the terms version reported to apps. On Helix Global, registration must name this version. |
 | `HELIX_OTP_RESEND_SECONDS` | no | `30` | no | no | Minimum gap between two codes to one number, 0 to 600. |
+| `HELIX_DEVICE_INACTIVE_DAYS` | no | `0` (off) | no | no | Revoke devices that have not signed in for longer than this many days, 14 to 3650, checked every 6 hours. An account's most recently used device is never revoked. A revoked device must sign in again. Off by default: choosing the period is the operator's decision (WhatsApp unlinks companion devices after about 30 days). |
 
 ### push (`platform/push/push.dart`)
 

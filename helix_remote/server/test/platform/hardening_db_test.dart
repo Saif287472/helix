@@ -206,6 +206,7 @@ void main() {
         expect(ok.body, contains('helix_jobs_dead 0.0'));
         expect(ok.body, contains('helix_mailbox_backlog 0.0'));
         expect(ok.body, contains('helix_http_body_bytes_in_flight'));
+        expect(ok.body, contains('helix_storage_used_bytes'));
         expect(
           (await h.api.call(Routes.metrics, bearer: '${metricsToken}x')).status,
           401,

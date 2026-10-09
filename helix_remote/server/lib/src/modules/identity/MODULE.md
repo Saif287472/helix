@@ -33,7 +33,24 @@ import.
 - **Revoking a device:** sets `tokens_valid_after`, revokes its refresh
   tokens and deletes its push token, inside one transaction with the
   `onDeviceRevoked` hooks (keys purge prekeys). It also publishes
-  `device.revoked` on the bus after commit.
+  `device.revoked` on the bus after commit. A user, operator and inactivity
+  revoke all go through `IdentityContext.revokeDevice` (device list change,
+  security event and `device_revoked` signal to the account's other
+  devices); `revokeAll` revokes in device-id order.
+- **Deliveries lock devices:** `IdentityApi.lockActiveDevices` returns the
+  active devices among a set and holds `FOR SHARE` on their rows (in id
+  order) until the caller's transaction ends. Messaging stores envelopes
+  only for those, so a revoke waits for a delivery in flight and its hooks
+  then purge what it stored (review A-09).
+- **Inactive devices** (`HELIX_DEVICE_INACTIVE_DAYS`, off by default): every
+  6 hours `identity.revoke_inactive` revokes active devices whose last
+  authentication (`last_seen_on`, or the day they were added) is older than
+  that many days, reason `inactive`, up to 2,000 a run. An account's most
+  recently used device is never revoked, so no account is left without one;
+  each device is re-checked under its row lock first, so one that signed in
+  meanwhile stays. This retires the device that is never opened but never
+  signed out (an old PC), which otherwise collects every message to its
+  account (review A-01).
 - **Refresh rotation:** reusing an old refresh token ends every session of
   that device (theft response), and the cut-off is committed before the
   error is returned.
@@ -113,6 +130,7 @@ envelopes; backup (S4) drops the AIK-keyed history backup on key change.
 | `HELIX_SMS_PROVIDER` | `none` or `bulksmsbd`, with `HELIX_SMS_API_KEY` and `HELIX_SMS_SENDER_ID` |
 | `HELIX_TERMS_VERSION` | current terms (default `2026-09`) |
 | `HELIX_OTP_RESEND_SECONDS` | resend gap (default 30) |
+| `HELIX_DEVICE_INACTIVE_DAYS` | revoke devices unused for longer (14 to 3650); 0 or unset, the default: never |
 
 Helix Global (`HELIX_GLOBAL_MODE=true`) refuses to start without SMS.
 

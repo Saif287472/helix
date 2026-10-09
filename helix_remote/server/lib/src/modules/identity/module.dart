@@ -7,6 +7,7 @@ import 'package:helix_remote_server/src/modules/identity/application/accounts.da
 import 'package:helix_remote_server/src/modules/identity/application/administration.dart';
 import 'package:helix_remote_server/src/modules/identity/application/context.dart';
 import 'package:helix_remote_server/src/modules/identity/application/hooks.dart';
+import 'package:helix_remote_server/src/modules/identity/application/inactive_devices.dart';
 import 'package:helix_remote_server/src/modules/identity/application/registration.dart';
 import 'package:helix_remote_server/src/modules/identity/application/sessions.dart';
 import 'package:helix_remote_server/src/modules/identity/application/sign_in.dart';
@@ -53,6 +54,7 @@ final class IdentityModule extends ModuleBase
       log: log,
     );
     signUp = SignUp(_ctx);
+    inactiveDevices = InactiveDevices(_ctx);
     registration = Registration(_ctx);
     signIn = SignIn(_ctx);
     accounts = Accounts(_ctx);
@@ -78,6 +80,7 @@ final class IdentityModule extends ModuleBase
   late final CredentialStore _credentials;
   late final IdentityContext _ctx;
   late final SignUp signUp;
+  late final InactiveDevices inactiveDevices;
   late final Registration registration;
   late final SignIn signIn;
   late final Accounts accounts;
@@ -115,6 +118,12 @@ final class IdentityModule extends ModuleBase
       await _credentials.purgeExpiredRefresh(context.db);
       await _credentials.purgeChallenges(context.db);
     }),
+    if (_ctx.config.inactiveDeviceDays > 0)
+      PeriodicJob(
+        'identity.revoke_inactive',
+        const Duration(hours: 6),
+        inactiveDevices.revoke,
+      ),
   ];
 }
 
@@ -175,6 +184,10 @@ final class _IdentityFacade implements IdentityApi {
 
   @override
   Future<Uint8List> discoverySalt() => _m._ctx.discoverySalt();
+
+  @override
+  Future<Set<String>> lockActiveDevices(Tx tx, Iterable<String> deviceIds) =>
+      _store.lockActiveDevices(tx, deviceIds.toSet().toList());
 
   @override
   Future<PushTarget?> pushTarget(SqlSession s, String deviceId) =>

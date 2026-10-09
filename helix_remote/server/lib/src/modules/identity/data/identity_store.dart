@@ -312,6 +312,65 @@ final class IdentityStore {
     );
   }
 
+  /// The active devices among [deviceIds], each row locked FOR SHARE until
+  /// [tx] ends. Rows are locked in id order, so two transactions never take
+  /// them in opposite orders. A revoke updates the row: it waits for a
+  /// delivery that holds the lock (and its hooks then purge what that
+  /// delivery stored), and a delivery that comes after it sees the revoke.
+  Future<Set<String>> lockActiveDevices(Tx tx, List<String> deviceIds) async {
+    if (deviceIds.isEmpty) return const {};
+    final rows = await tx.query(
+      "SELECT id FROM $s.devices WHERE id = ANY(@ids:_uuid) AND status = 'active' "
+      'ORDER BY id FOR SHARE',
+      {'ids': deviceIds},
+    );
+    return {for (final r in rows) r.string('id')};
+  }
+
+  // A device's activity: the last day it authenticated, or the day it was
+  // added if it never has. An account's "newest" device is the one with the
+  // latest (activity, created_at, id).
+  static const _seen = 'coalesce(last_seen_on, created_at::date)';
+
+  /// Active devices unused for more than [days] days, least recently used
+  /// first. Never an account's most recently used device, so no account is
+  /// left without one.
+  Future<List<({String accountId, String deviceId})>> inactiveDevices(
+    SqlSession db, {
+    required int days,
+    required int limit,
+  }) async {
+    final rows = await db.query(
+      'SELECT id, account_id FROM ('
+      '  SELECT id, account_id, $_seen AS seen, row_number() OVER ('
+      '    PARTITION BY account_id ORDER BY $_seen DESC, created_at DESC, id DESC'
+      "  ) AS rank FROM $s.devices WHERE status = 'active'"
+      ') d WHERE rank > 1 AND seen < current_date - @days:int4 '
+      'ORDER BY seen LIMIT @n:int4',
+      {'days': days, 'n': limit},
+    );
+    return [
+      for (final r in rows)
+        (accountId: r.string('account_id'), deviceId: r.string('id')),
+    ];
+  }
+
+  /// Locks [deviceId] and tells whether it may still be revoked for
+  /// inactivity: active, unused for more than [days] days, and some other
+  /// active device of its account is newer.
+  Future<bool> stillInactive(Tx tx, String deviceId, int days) async {
+    final r = await tx.queryOne(
+      'SELECT coalesce(d.last_seen_on, d.created_at::date) < current_date - @days:int4 AS stale, '
+      'EXISTS (SELECT 1 FROM $s.devices o WHERE o.account_id = d.account_id '
+      "AND o.id <> d.id AND o.status = 'active' AND "
+      '(coalesce(o.last_seen_on, o.created_at::date), o.created_at, o.id) > '
+      '(coalesce(d.last_seen_on, d.created_at::date), d.created_at, d.id)) AS newer '
+      "FROM $s.devices d WHERE d.id = @id:uuid AND d.status = 'active' FOR UPDATE OF d",
+      {'id': deviceId, 'days': days},
+    );
+    return r != null && r.boolean('stale') && r.boolean('newer');
+  }
+
   // ------------------------------------------------------------- push tokens
 
   Future<void> setPushToken(

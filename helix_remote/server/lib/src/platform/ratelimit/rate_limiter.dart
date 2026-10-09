@@ -31,8 +31,10 @@ final class RateDecision {
 
 /// Shared rate limiting (ADR-025): every node sees the same buckets.
 abstract interface class RateLimiter {
-  /// Takes one token for [key] under [policy].
-  Future<RateDecision> hit(RateLimitPolicy policy, String key);
+  /// Takes [cost] tokens (default one) for [key] under [policy]. A cost
+  /// above the policy's capacity is charged as the full capacity, so a
+  /// large request is slow, never impossible.
+  Future<RateDecision> hit(RateLimitPolicy policy, String key, {int cost = 1});
 
   /// Drops buckets that have been full long enough to be meaningless.
   Future<int> sweep();
@@ -45,7 +47,12 @@ final class InMemoryRateLimiter implements RateLimiter {
   final Map<String, (double, DateTime)> _buckets = {};
 
   @override
-  Future<RateDecision> hit(RateLimitPolicy policy, String key) async {
+  Future<RateDecision> hit(
+    RateLimitPolicy policy,
+    String key, {
+    int cost = 1,
+  }) async {
+    final take = _charge(policy, cost);
     final id = '${policy.name}:$key';
     final now = _clock.now();
     final (tokens, at) = _buckets[id] ?? (policy.capacity.toDouble(), now);
@@ -54,12 +61,12 @@ final class InMemoryRateLimiter implements RateLimiter {
       policy.capacity.toDouble(),
       tokens + elapsed * policy.perSecond,
     );
-    if (refilled >= 1) {
-      _buckets[id] = (refilled - 1, now);
+    if (refilled >= take) {
+      _buckets[id] = (refilled - take, now);
       return const RateDecision.allowed();
     }
     _buckets[id] = (refilled, now);
-    return RateDecision.denied(_wait(refilled, policy));
+    return RateDecision.denied(_wait(refilled, policy, take));
   }
 
   @override
@@ -72,8 +79,12 @@ final class InMemoryRateLimiter implements RateLimiter {
   }
 }
 
-Duration _wait(double tokens, RateLimitPolicy policy) => Duration(
-  milliseconds: (((1 - tokens) / policy.perSecond) * 1000).ceil().clamp(
+/// The tokens a hit of [cost] takes: at least one, at most the capacity.
+int _charge(RateLimitPolicy policy, int cost) =>
+    cost.clamp(1, math.max(1, policy.capacity));
+
+Duration _wait(double tokens, RateLimitPolicy policy, int take) => Duration(
+  milliseconds: (((take - tokens) / policy.perSecond) * 1000).ceil().clamp(
     1,
     86400000,
   ),
@@ -89,18 +100,24 @@ final class PostgresRateLimiter implements RateLimiter {
   final String _table;
 
   @override
-  Future<RateDecision> hit(RateLimitPolicy policy, String key) async {
+  Future<RateDecision> hit(
+    RateLimitPolicy policy,
+    String key, {
+    int cost = 1,
+  }) async {
+    final take = _charge(policy, cost);
     // Every expression reads the bucket row that ON CONFLICT has locked,
-    // so concurrent hits from any node serialize on it.
+    // so concurrent hits from any node serialize on it. A new bucket starts
+    // full, and [take] never exceeds the capacity.
     const refilled =
         'LEAST(@cap:float8, b.tokens + EXTRACT(EPOCH FROM (now() - b.updated_at)) * @rate:float8)';
     final row = await _db.queryOne(
       '''
       INSERT INTO $_table AS b (key, tokens, updated_at, allowed)
-      VALUES (@k:text, @cap:float8 - 1, now(), true)
+      VALUES (@k:text, @cap:float8 - @take:float8, now(), true)
       ON CONFLICT (key) DO UPDATE SET
-        tokens = CASE WHEN $refilled >= 1 THEN $refilled - 1 ELSE $refilled END,
-        allowed = $refilled >= 1,
+        tokens = CASE WHEN $refilled >= @take:float8 THEN $refilled - @take:float8 ELSE $refilled END,
+        allowed = $refilled >= @take:float8,
         updated_at = now()
       RETURNING tokens, allowed
       ''',
@@ -108,10 +125,11 @@ final class PostgresRateLimiter implements RateLimiter {
         'k': '${policy.name}:$key',
         'cap': policy.capacity.toDouble(),
         'rate': policy.perSecond,
+        'take': take.toDouble(),
       },
     );
     if (row!.boolean('allowed')) return const RateDecision.allowed();
-    return RateDecision.denied(_wait(row.float('tokens'), policy));
+    return RateDecision.denied(_wait(row.float('tokens'), policy, take));
   }
 
   @override

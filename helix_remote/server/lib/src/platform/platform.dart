@@ -14,6 +14,7 @@ import 'package:helix_remote_server/src/platform/observability/log.dart';
 import 'package:helix_remote_server/src/platform/observability/metrics.dart';
 import 'package:helix_remote_server/src/platform/push/push.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
+import 'package:helix_remote_server/src/platform/storage/storage_budget.dart';
 
 /// The shared infrastructure of one server process, built from config.
 /// Everything here is safe to run on several nodes against one database.
@@ -37,6 +38,7 @@ final class HelixPlatform {
     required this.push,
     required this._ephemeralDb,
     required this.bodyBudget,
+    required this.storageBudget,
   });
 
   static Future<HelixPlatform> open(
@@ -77,6 +79,12 @@ final class HelixPlatform {
       ..add('storage', storage.ping);
     final outbox = Outbox(schemas.platform, bus);
     final bodyBudget = BodyBudget(config.maxInFlightBodyBytes);
+    final storageBudget = StorageBudget(
+      db,
+      limitBytes: config.storageBudgetBytes,
+      clock: clock,
+      schemaPrefix: config.schemaPrefix,
+    );
     metrics
       ..collectedGauge(
         'helix_jobs_dead',
@@ -87,6 +95,11 @@ final class HelixPlatform {
         'helix_http_body_bytes_in_flight',
         'Request body bytes buffered on this node',
         () => bodyBudget.inFlight.toDouble(),
+      )
+      ..collectedGauge(
+        'helix_storage_used_bytes',
+        'Helix tables with their indexes, plus stored media bytes (cluster-wide, at most a minute old)',
+        () async => (await storageBudget.used()).toDouble(),
       );
     return HelixPlatform._(
       config: config,
@@ -102,6 +115,7 @@ final class HelixPlatform {
       ),
       outbox: outbox,
       bodyBudget: bodyBudget,
+      storageBudget: storageBudget,
       jobs: JobRunner(
         db: db,
         platformSchema: schemas.platform,
@@ -145,6 +159,9 @@ final class HelixPlatform {
 
   /// Request body bytes this node buffers at once (`HELIX_MAX_INFLIGHT_BODY_BYTES`).
   final BodyBudget bodyBudget;
+
+  /// The server-wide storage budget (`HELIX_STORAGE_BUDGET_BYTES`).
+  final StorageBudget storageBudget;
   final Db _ephemeralDb;
 
   ModuleContext moduleContext() => ModuleContext(
@@ -161,6 +178,7 @@ final class HelixPlatform {
     metrics: metrics,
     health: health,
     push: push,
+    storage: storageBudget,
   );
 
   /// Platform housekeeping, run once per interval cluster-wide.
@@ -194,6 +212,7 @@ final class HelixPlatform {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    await storageBudget.settle();
     await bus.close();
     await db.close();
     await _ephemeralDb.close();

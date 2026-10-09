@@ -85,7 +85,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `POST /v1/messages` | `SendMessageRequest` → `SendMessageResponse` | Each recipient account must be addressed on **all** its active devices (the sender's own: all except the sending device) or the request fails with `device_list_stale` (`StaleDevices` details) and nothing is sent. Blocked-by-recipient: accepted and silently dropped. Payload ≤ 256 KiB. Mailbox quota per device: 10,000 undelivered envelopes (`quota_exceeded`). `ephemeral`: online devices only, never stored. Rate-limited per device (200 burst, 5/s) and per account (400 burst, 10/s). |
+| `POST /v1/messages` | `SendMessageRequest` → `SendMessageResponse` | Each recipient account must be addressed on **all** its active devices (the sender's own: all except the sending device) or the request fails with `device_list_stale` (`StaleDevices` details) and nothing is sent. Blocked-by-recipient: accepted and silently dropped. Payload ≤ 256 KiB. Each device keeps its newest 10,000 undelivered envelopes; beyond that its oldest are dropped, and the send still succeeds. `ephemeral`: online devices only, never stored. Rate-limited per device (200 burst, 5/s) and per account (400 burst, 10/s); stored sends also draw on the account's stored-envelope budget, shared with group sends (one unit per started 16 KiB per recipient device; 50,000 burst, 250/s; `rate_limited`). A payload over 16 KiB while the server is over its storage budget: `quota_exceeded` (details `reason: server_storage`). |
 | `GET /v1/mailbox` | `?after=&limit=` → `MailboxPage` | Oldest first. |
 | `POST /v1/mailbox/ack` | `AckRequest` → `AckResponse` | Cumulative; deletes acked envelopes. Undelivered envelopes expire after 30 days. |
 
@@ -134,7 +134,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `POST /v1/groups/join` | `InviteTokenRequest` → `JoinGroupResponse` | Banned accounts refused. |
 | `GET /v1/groups/{group_id}/join-requests` | — → `JoinRequestList` | Admins. |
 | `POST /v1/groups/{group_id}/join-requests/{request_id}` | `ResolveJoinRequest` → 204 | Admins. |
-| `POST /v1/groups/{group_id}/messages` | `GroupMessageRequest` → `SendMessageResponse` | Members with `send_messages` permission. `devices_digest` must match the server's member devices (`device_list_stale` otherwise, with every member's devices in details). Fan-out to all member devices except the sender. |
+| `POST /v1/groups/{group_id}/messages` | `GroupMessageRequest` → `SendMessageResponse` | Members with `send_messages` permission. `devices_digest` must match the server's member devices (`device_list_stale` otherwise, with every member's devices in details). Fan-out to all member devices except the sender. Rate-limited per device (200 burst, 5/s, ephemeral sends included). A stored send costs the payload's units ([`POST /v1/messages`](#messaging)) once per member device, plus the distributions, charged to the sender's stored-envelope budget and to the group's own (200,000 burst, 2,000/s); `rate_limited` when either is spent. Ephemeral sends are not charged. |
 
 Every roster or settings change emits a `roster_change` envelope to every
 member device (and to removed members, so they know).
@@ -167,7 +167,7 @@ smaller id survives, the other ends with reason `glare`.
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `POST /v1/media` | `CreateUploadRequest` → `UploadTarget` | Size ≤ the kind's max; per-kind account quota. `url` is a server path for local storage, an absolute presigned URL for S3. The S3 URL signs `content-length` = `size`: upload exactly `size` bytes in one `PUT`. |
+| `POST /v1/media` | `CreateUploadRequest` → `UploadTarget` | Size ≤ the kind's max; per-kind account quota; `quota_exceeded` (details `reason: server_storage`) while the server is over its storage budget. `url` is a server path for local storage, an absolute presigned URL for S3. The S3 URL signs `content-length` = `size`: upload exactly `size` bytes in one `PUT`. |
 | `PUT /v1/media/{media_id}/content` | octet-stream, `Upload-Offset` → 204 | Owner only; resumable; completes when `size` bytes are stored. |
 | `HEAD /v1/media/{media_id}/content` | → `Upload-Offset`, `Upload-Length` | |
 | `GET /v1/media/{media_id}/content` | → bytes (`Range` supported) or `302` to a presigned URL | Any signed-in device: ids are random and content is encrypted, so knowing the id is the capability. |
@@ -177,10 +177,10 @@ smaller id survives, the other ends with reason `glare`.
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `PUT /v1/backups/history` | `HistoryBackup` → 204 | `version` must increase; ≤ 16 MiB. |
+| `PUT /v1/backups/history` | `HistoryBackup` → 204 | `version` must increase; ≤ 16 MiB. `quota_exceeded` (`reason: server_storage`) while the server is over its storage budget, as for the full backup. |
 | `GET /v1/backups/history` | — → `HistoryBackup` | |
 | `DELETE /v1/backups/history` | — → 204 | |
-| `PUT /v1/backups/full` | `FullBackup` → 204 | Refuses envelopes containing `backup_key`, `passphrase`, `recovery_phrase`. ≤ 64 MiB envelope, at most 32 levels deep and 100,000 JSON values (`bad_request`). |
+| `PUT /v1/backups/full` | `FullBackup` → 204 | Refuses envelopes containing `backup_key`, `passphrase`, `recovery_phrase`. ≤ 64 MiB envelope, at most 32 levels deep and 100,000 JSON values (`bad_request`). `quota_exceeded` (`reason: server_storage`) while the server is over its storage budget. |
 | `GET /v1/backups/full` | — → `FullBackup` | |
 | `DELETE /v1/backups/full` | — → 204 | |
 

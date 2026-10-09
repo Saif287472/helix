@@ -96,12 +96,12 @@ this file as a change.
 
 | ID | Severity | Area | Title | File:line | Status |
 |---|---|---|---|---|---|
-| A-01 | High | Server | One idle device's full mailbox blocks every send to its account | `helix_remote/server/lib/src/modules/messaging/data/mailbox_store.dart:19-39` | confirmed |
-| A-02 | High | Server | Group sends have no rate limit and are copied to every member device | `helix_remote/server/lib/src/modules/groups/module.dart:177-182` | confirmed |
+| A-01 | High | Server | One idle device's full mailbox blocks every send to its account | `helix_remote/server/lib/src/modules/messaging/data/mailbox_store.dart:19-39` | confirmed; fixed in Batch 2 (trim; inactivity revoke behind an off-by-default setting) |
+| A-02 | High | Server | Group sends have no rate limit and are copied to every member device | `helix_remote/server/lib/src/modules/groups/module.dart:177-182` | confirmed; fixed in Batch 2 |
 | E-01 | High | App | No message notification while the app is backgrounded but running | `helix_remote/app/lib/core/push/push_background.dart:110-113` | confirmed (code) |
 | E-02 | High | App | Push token registered only at app launch | `helix_remote/app/lib/main.dart:111-138` | confirmed |
 | H-01 | High | Ops | No backup of the production database set up or proven | `helix_remote/docs/operations/V2_OPERABILITY.md:298-427` | confirmed (no task, no backup folder, 2026-10-09); Batch 1 scripts written, user installs |
-| A-03 | Medium | Server | No global storage guard; per-account quotas fill one disk | `helix_remote/server/lib/src/modules/media/module.dart:27-31` | confirmed |
+| A-03 | Medium | Server | No global storage guard; per-account quotas fill one disk | `helix_remote/server/lib/src/modules/media/module.dart:27-31` | confirmed; fixed in Batch 2 (budget off until `HELIX_STORAGE_BUDGET_BYTES` is set) |
 | A-04 | Medium | Server | One hung job stalls every background job on the node | `helix_remote/server/lib/src/platform/jobs/jobs.dart:159-170` | confirmed |
 | A-05 | Medium | Server | No global SMS budget or country allow-list | `helix_remote/server/lib/src/modules/identity/application/sign_up.dart:18-48` | confirmed |
 | A-06 | Medium | Server | Password routes are an unauthenticated account oracle; lockout DoS | `helix_remote/server/lib/src/modules/identity/application/sign_in.dart:35-60` | confirmed |
@@ -116,7 +116,7 @@ this file as a change.
 | H-04 | Medium | Ops | Caddy site has no HSTS and no admin restriction | `J:\Projects\Servers\helix_server\Caddyfile` | confirmed; Batch 1 Caddyfile written, user installs |
 | A-07 | Low | Server | No statement or lock timeout on the pool | `helix_remote/server/lib/src/platform/db/postgres_db.dart:14-19` | confirmed (code) |
 | A-08 | Low | Server | A failing after-commit action becomes a request error | `helix_remote/server/lib/src/platform/db/postgres_db.dart:82-84` | confirmed |
-| A-09 | Low | Server | Device lists checked outside the send transaction | `helix_remote/server/lib/src/modules/messaging/module.dart:308-352` | confirmed |
+| A-09 | Low | Server | Device lists checked outside the send transaction | `helix_remote/server/lib/src/modules/messaging/module.dart:308-352` | confirmed; fixed in Batch 2 |
 | A-10 | Low | Server | Media rows deleted before blobs; failures leak files | `helix_remote/server/lib/src/modules/media/module.dart:349-372` | confirmed |
 | A-11 | Low | Server | Presence and profile reads have no per-account limit | `helix_remote/server/lib/src/modules/people/module.dart:326-359` | confirmed |
 | A-12 | Low | Server | Per-target bundle limit can be exhausted | `helix_remote/server/lib/src/modules/keys/module.dart:32-43` | confirmed |
@@ -1080,6 +1080,31 @@ the batch.
   added; any new `.env` line is optional with a default). A new APK only if the
   protocol gains the skipped-devices field and the app shows it.
 - **Model.** Opus 5.5.
+- **Status (2026-10-09).** Done, server only, no migration, no protocol change,
+  no APK.
+  - **A-01:** a device over 10,000 undelivered envelopes loses its oldest
+    ones in the send's transaction (`MailboxStore.trim`,
+    `helix_mailbox_trimmed_total`) instead of failing the send. That makes the
+    skipped-devices protocol field unnecessary. Inactivity revocation exists
+    (`identity.revoke_inactive`, never an account's newest device) but is off
+    until `HELIX_DEVICE_INACTIVE_DAYS` is set (section 5, item 1).
+  - **A-02:** group sends are limited per device (`groups.send`). Stored sends,
+    direct and group, draw on one weighted per-account budget
+    (`messaging.stored_account`, one unit per started 16 KiB per recipient
+    device), and group sends also on a per-group budget (`groups.fan_out`).
+    `RateLimiter.hit` gained a `cost`. There is no smaller group payload
+    cap: texts may be 65,536 characters, so content up to 256 KiB is
+    legitimate.
+  - **A-03:** a platform `StorageBudget` covers the database size plus media
+    bytes, with the gauge `helix_storage_used_bytes`. While over
+    `HELIX_STORAGE_BUDGET_BYTES` (off until set; section 5, item 7), media
+    uploads, backups and payloads over 16 KiB get `quota_exceeded`.
+  - **A-09:** `deliver` locks the active devices (`FOR SHARE`, id order) in
+    its transaction and skips the others. `allocate` locks in id order too.
+  - **Tests:** `server/test/modules/availability_test.dart`, plus weighted
+    rate-limit and config tests.
+  - **Not done:** an admin dashboard tile for storage (admin APK, Batch 6) and
+    "inactive since" in the app's device list (APK, later).
 
 ### Batch 3: Android notifications and push registration
 

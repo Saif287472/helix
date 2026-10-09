@@ -11,10 +11,25 @@ deliver through it.
   (cumulative). Undelivered rows expire after 30 days (`messaging.expire`,
   every 10 minutes).
 - **Per-device `seq`** comes from `device_seq` under the row lock of an
-  `INSERT … ON CONFLICT DO UPDATE`. Concurrent sends from any node never
-  share a number. Gaps are allowed and numbers are never reused.
-  `device_seq.pending` counts undelivered rows. Above 10,000 the send fails
-  with `quota_exceeded`.
+  `INSERT … ON CONFLICT DO UPDATE`, taken in device-id order so overlapping
+  sends cannot deadlock. Concurrent sends from any node never share a
+  number. Gaps are allowed and numbers are never reused.
+- **Quota: the newest 10,000 per device.** `device_seq.pending` counts
+  undelivered rows. A delivery that takes a device above 10,000 deletes that
+  device's oldest rows in the same transaction (`MailboxStore.trim`, counted
+  in `helix_mailbox_trimmed_total`), as expiry would. Until 2026-10-09 the
+  whole send failed with `quota_exceeded` instead, so one device that never
+  collected its mail (an unused PC that was never signed out) blocked every
+  send to its account and its groups (review A-01). The price: a sender who
+  floods an offline device pushes out its oldest undelivered envelopes,
+  including other people's.
+- **Only active devices get rows.** `deliver` first reads the devices with
+  `IdentityApi.lockActiveDevices` (`FOR SHARE`, in id order) and skips any
+  that are not active. A revoke updates the device row, so it waits for a
+  delivery holding that lock, and its `onDeviceRevoked` hook then purges
+  what the delivery stored. A delivery after a revoke sees it (review A-09:
+  before, a revoke between the device-list check and the insert left rows
+  for 30 days).
 - **Fan-out is two statements** for any number of devices: `unnest` over
   `_uuid` / `_int8` / `_bytea` arrays.
 - **Idempotency:** `sends` records each request id for 7 days, per
@@ -26,7 +41,19 @@ deliver through it.
 
 Limited per device (`messaging.send`: 200 at once, 5 per second, checked
 before the body is read) and per account (`messaging.send_account`: 400 at
-once, 10 per second); over either, `rate_limited`. Presence for urgent
+once, 10 per second); over either, `rate_limited`.
+
+Stored sends also draw on the account's **stored-envelope budget**
+(`messaging.stored_account`: 50,000 units at once, 250 per second), which
+group sends share (`MessagingApi.chargeStored`). A unit is one started
+16 KiB of payload for one recipient device (`storedUnits`), so a short text
+to a few devices costs a few units and a 256 KiB payload to 1,100 devices
+costs 17,600. The rate limiter charges a cost above the capacity as the
+capacity, so a large send is slow, never impossible. Ephemeral sends store
+nothing and are not charged. With a server storage budget set
+(`HELIX_STORAGE_BUDGET_BYTES`), a payload over one unit while the server is
+over it gets `quota_exceeded` (`reason: server_storage`); shorter ones still
+go through (review A-02, A-03). Presence for urgent
 pushes and ephemeral delivery is read once per send (`Presence.online`,
 one `getAll`), not once per device. The `helix_mailbox_backlog` gauge counts
 undelivered rows at scrape time.
@@ -41,8 +68,9 @@ undelivered rows at scrape time.
 4. **Ephemeral sends** (`ephemeral: true`) go to online devices only: the
    envelope is parked in the ephemeral store for 60 s, and
    `realtime.ephemeral` on the bus tells the socket's node.
-5. **Stored sends:** allocate seqs, insert rows, and record the send in
-   one transaction. After commit, `mailbox.wake` goes out on the bus (in
+5. **Stored sends:** charge the stored-envelope budget (before any relay
+   to another server), then allocate seqs, insert rows, trim devices over
+   their quota and record the send in one transaction. After commit, `mailbox.wake` goes out on the bus (in
    chunks of 150 devices). Urgent sends to offline devices enqueue
    `messaging.push` (one pending per device).
 

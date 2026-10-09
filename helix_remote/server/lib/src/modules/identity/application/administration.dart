@@ -92,31 +92,7 @@ final class Administration implements IdentityAdminApi {
     if (target == null || target.accountId != accountId || !target.active) {
       return false;
     }
-    final revoked = await c.store.revokeDevice(tx, deviceId, 'admin');
-    if (revoked == null) return false;
-    await c.hooks.deviceRevoked(tx, revoked);
-    await c.hooks.deviceListChanged(tx, accountId);
-    await c.store.addEvent(
-      tx,
-      accountId,
-      SecurityEventKind.deviceRevoked,
-      deviceId: revoked.id,
-      deviceName: revoked.name,
-    );
-    await c.hooks.accountSignal(
-      tx,
-      accountId,
-      AccountSignalEvent(
-        signal: AccountSignalKind.deviceRevoked,
-        at: c.clock.now(),
-        device: revoked.id,
-        deviceName: revoked.name,
-      ),
-    );
-    tx.afterCommit(
-      () => c.bus.publish('device.revoked', {'device': revoked.id}),
-    );
-    return true;
+    return c.revokeDevice(tx, accountId, deviceId, 'admin');
   }
 
   @override

@@ -9,6 +9,12 @@ Bytes live in `ObjectStorage` under `<kind>/<id>`.
 | `persistent` (avatars, group pictures) | 5 MiB | 50 MiB | until deleted |
 | `backup` | 100 MiB | 1 GiB | 90 days, refreshed by each full backup |
 
+- **Server-wide budget:** per-account quotas add up on one disk, so with
+  `HELIX_STORAGE_BUDGET_BYTES` set, `POST /v1/media` answers
+  `quota_exceeded` (`reason: server_storage`) while the database plus the
+  stored objects are at or over it (`StorageBudget`, PLATFORM.md). This
+  module reports its bytes to that budget as the sum of `objects.size`,
+  reserved sizes of unfinished uploads included (review A-03).
 - **Upload:** `POST /v1/media` creates a random-id object.
   - Local storage returns the relative path `/v1/media/{id}/content`: a
     resumable `PUT` with `Upload-Offset` (a wrong offset gives 409 with
