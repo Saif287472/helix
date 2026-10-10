@@ -28,8 +28,9 @@ abstract interface class KeysApi {
   Future<AccountKeys?> bundles(String accountId, {Set<String>? devices});
 
   /// [bundles] for another server: also counts against the account's
-  /// per-target limit (`keys.bundle_target`) that local fetches share, so
-  /// many servers cannot together drain its one-time prekeys.
+  /// per-target limit for other servers (`keys.bundle_target`), so many
+  /// servers cannot together drain its one-time prekeys. Local fetches do not
+  /// share that bucket, so other servers cannot exhaust it for local users.
   Future<AccountKeys?> remoteBundles(String accountId, {Set<String>? devices});
 
   void onPrekeysLow(PrekeysLowHook hook);

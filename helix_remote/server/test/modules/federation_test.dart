@@ -278,7 +278,7 @@ void main() {
     });
 
     test('remote key fetches count against the account\'s limit', () async {
-      // Drain Bob's per-account bundle bucket on B (local fetches share it).
+      // Drain Bob's per-account bucket for remote fetches on B.
       final target = RateLimitPolicy.per(
         'keys.bundle_target',
         600,

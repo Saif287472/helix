@@ -35,6 +35,11 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
 - **Presence:** online means any device holds a socket (kernel
   `Presence`). Last seen comes from the realtime gateway's record,
   truncated to the minute. Both are filtered by the target's audiences.
+- **Read limits:** reading another account's presence or profile costs the
+  reader one token of `people.reads` (120 a minute) and, the first time that
+  day, one of `people.read_targets` (2,000 distinct accounts a day; the
+  `people:seen:<reader>:<target>` marker in the ephemeral store, one day, is
+  removed again when the read is refused). Reading yourself is free.
 - **Reports:** `reports` stores no message content. The admin console
   lists and resolves them through `PeopleApi.reports` / `resolveReport`.
   They survive account deletion as the moderation record (ids only).

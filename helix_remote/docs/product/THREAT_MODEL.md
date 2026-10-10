@@ -87,7 +87,9 @@ metadata). The cryptography has **not been externally reviewed**
   server without a configured SMS provider cannot register by phone.
 - **Mitigation**: Codes are six digits, single use, valid 10 minutes, with 5 attempts per challenge,
   at most 5 per hour per number and a resend gap (`HELIX_OTP_RESEND_SECONDS`); the server stores
-  only a peppered hash of the code. A verified-phone token is single use. Invite credentials (personal
+  only a peppered hash of the code. Texts go only to allowed calling codes (`HELIX_SMS_COUNTRIES`,
+  default `880`), and the whole server texts at most `HELIX_SMS_DAILY_LIMIT` codes a day (default
+  500), so SMS pumping cannot drain the provider balance (review A-05, 2026-10-10). A verified-phone token is single use. Invite credentials (personal
   servers) expire after 7 days and are stored hashed; shared links carry the code in the URL fragment,
   which browsers do not send to a server. Interception of the SMS itself is not mitigated (T-4).
 - **Residual risk**: SMS is a weak channel; a v2 server run without SMS (personal servers) relies on
@@ -99,9 +101,14 @@ metadata). The cryptography has **not been externally reviewed**
   password-derived key. They can test guesses offline, without the lockout.
 - **Mitigation**: Each guess costs one full Argon2id run plus HKDF, and salts are per account. The
   password never leaves the device; the server sees only the derived auth key. Password sign-in
-  answers decoy parameters for unknown numbers, so it is not a number oracle.
+  answers decoy parameters for unknown numbers, so it is not a number oracle: the decoy salt is
+  32 bytes like a real one, a decoy sign-in runs the same transaction, and it locks after five
+  failures on the same schedule (review A-06, 2026-10-10; before that, the 16-byte decoy salt, the
+  missing lockout and the shorter work each told the two apart).
 - **Residual risk**: A weak password can still be found offline, and a successful guess yields the
-  account identity private key.
+  account identity private key. The decoy lockout lives in the ephemeral store, which a Postgres
+  crash empties, while a real account's lockout survives one; and a decoy check writes no row, so
+  its timing is close to a real failure's but not identical.
 
 ### T-8: Stolen or intercepted recovery code
 - **Description**: An operator-issued recovery code (`HLX-REC-...`, single use, 48 hours) reaches
@@ -127,6 +134,12 @@ metadata). The cryptography has **not been externally reviewed**
 - **Mitigation**: Credentials and signatures are checked before bodies are read; bodies and JSON depth
   are capped; every public route declares a rate-limit policy, and limits live in Postgres so they hold
   across nodes and restarts; sends and WebSocket frames are limited; a tampered or replayed envelope
-  becomes a visible "couldn't decrypt" row and never blocks the stream.
+  becomes a visible "couldn't decrypt" row and never blocks the stream. Reading other people's
+  presence and profiles is limited per account (120 a minute, 2,000 distinct people a day), so an
+  account cannot poll everyone's last seen. Key bundles are limited per (requester, target), with no
+  bucket every requester shares, so a few accounts cannot block new sessions to a victim; each
+  requesting account gets one one-time prekey per device an hour (review A-11, A-12). Every database
+  transaction has a statement and lock timeout, and every background job a timeout, so one stuck
+  query or job cannot stall a node (A-04, A-07).
 - **Residual risk**: A single PC node tops out near 80 sends per second (`docs/operations/LOAD_TESTING.md`);
   a determined flood is an availability problem, not a confidentiality one.

@@ -329,7 +329,7 @@ void main() {
           )).json,
         );
         expect(decoy1.salt, decoy2.salt, reason: 'stable decoys');
-        expect(decoy1.salt.length, 16);
+        expect(decoy1.salt.length, 32, reason: 'as long as a real salt');
 
         final signIn = await h.api.call(
           Routes.passwordSignIn,

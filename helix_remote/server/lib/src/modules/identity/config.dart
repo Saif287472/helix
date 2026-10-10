@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -15,6 +16,8 @@ final class IdentityConfig {
     required this.activeJwtKid,
     required this.otpResendAfter,
     required this.inactiveDeviceDays,
+    required this.smsDailyLimit,
+    required this.smsCountries,
   });
 
   /// Key for the stored phone hash. Kept outside the database, so a stolen
@@ -36,6 +39,22 @@ final class IdentityConfig {
 
   static const minInactiveDeviceDays = 14;
   static const maxInactiveDeviceDays = 3650;
+
+  /// `HELIX_SMS_DAILY_LIMIT`: codes this cluster sends in a day, whichever
+  /// numbers they are for, 1 to 1000000. A pumping script rotating through
+  /// proxies can otherwise spend the provider's balance on thousands of
+  /// numbers nobody owns; when the balance runs out, real sign-ups fail with
+  /// `sms_unavailable`. Default 500.
+  final int smsDailyLimit;
+
+  /// `HELIX_SMS_COUNTRIES`: the calling country codes that may ask for a code,
+  /// as bare digits (`880`, `880,971`; a leading `+` is accepted). `*` means
+  /// every country, and is stored as the empty set. Default `880`:
+  /// international and premium-rate numbers are the ones worth pumping.
+  final Set<String> smsCountries;
+
+  static const defaultSmsDailyLimit = 500;
+  static const defaultSmsCountries = '880';
 
   static const accessLifetime = Duration(minutes: 15);
   static const refreshLifetime = Duration(days: 60);
@@ -114,6 +133,37 @@ final class IdentityConfig {
         '$minInactiveDeviceDays..$maxInactiveDeviceDays',
       );
     }
+
+    final smsDailyRaw = env['HELIX_SMS_DAILY_LIMIT']?.trim();
+    final smsDaily = smsDailyRaw == null || smsDailyRaw.isEmpty
+        ? defaultSmsDailyLimit
+        : int.tryParse(smsDailyRaw);
+    // A zero limit would be a bucket that never refills (and a division by
+    // zero in its retry time); an operator who wants no texts leaves
+    // HELIX_SMS_PROVIDER at none.
+    if (smsDaily == null || smsDaily < 1 || smsDaily > 1000000) {
+      problems.add('HELIX_SMS_DAILY_LIMIT must be 1..1000000');
+    }
+    // Unset or blank is the default; `*` turns the list off; otherwise bare
+    // country codes, comma separated.
+    final countriesRaw =
+        (env['HELIX_SMS_COUNTRIES']?.trim().isNotEmpty ?? false)
+        ? env['HELIX_SMS_COUNTRIES']!.trim()
+        : defaultSmsCountries;
+    final countries = countriesRaw == '*'
+        ? <String>{}
+        : {
+            for (final part in countriesRaw.split(','))
+              if (part.trim().isNotEmpty) part.trim().replaceFirst('+', ''),
+          };
+    if (countriesRaw != '*' &&
+        (countries.isEmpty ||
+            countries.any((c) => !RegExp(r'^[1-9][0-9]{0,2}$').hasMatch(c)))) {
+      problems.add(
+        'HELIX_SMS_COUNTRIES must be * or bare country codes, '
+        'e.g. 880 or 880,971',
+      );
+    }
     if (problems.isNotEmpty) throw ConfigError(problems);
 
     return IdentityConfig._(
@@ -127,6 +177,21 @@ final class IdentityConfig {
       activeJwtKid: config.activeJwtKid,
       otpResendAfter: Duration(seconds: resend!),
       inactiveDeviceDays: inactive!,
+      smsDailyLimit: smsDaily!,
+      smsCountries: countries,
     );
+  }
+
+  /// Whether [e164] may ask for a code ([smsCountries]; empty allows all).
+  bool allowsCountry(String e164) {
+    if (smsCountries.isEmpty) return true;
+    // E.164 country codes are prefix-free (1 to 3 digits), so a number
+    // belongs to a listed country exactly when one listed code is a prefix
+    // of its digits.
+    final digits = e164.startsWith('+') ? e164.substring(1) : e164;
+    for (var length = math.min(3, digits.length); length >= 1; length--) {
+      if (smsCountries.contains(digits.substring(0, length))) return true;
+    }
+    return false;
   }
 }

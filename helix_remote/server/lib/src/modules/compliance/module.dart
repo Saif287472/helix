@@ -60,14 +60,12 @@ final class ComplianceModule extends ModuleBase {
   /// One repeatable-read snapshot, so the sections agree with each other.
   Future<Response> _export(HelixRequest q) async {
     final accountId = q.device.accountId;
-    final sections = await context.db.tx((tx) async {
-      await tx.execute(
-        'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY',
-      );
-      return {
+    final sections = await context.db.tx(
+      (tx) async => {
         for (final m in exporters) m.name: await m.exportAccount(tx, accountId),
-      };
-    });
+      },
+      readOnlySnapshot: true,
+    );
     log.info('account_exported', {'account_id': accountId});
     return Response.ok(
       jsonEncode(

@@ -102,24 +102,24 @@ this file as a change.
 | E-02 | High | App | Push token registered only at app launch | `helix_remote/app/lib/main.dart:111-138` | confirmed, worse than recorded (Firebase was never initialised in the UI isolate); fixed in Batch 3 (device check pending) |
 | H-01 | High | Ops | No backup of the production database set up or proven | `helix_remote/docs/operations/V2_OPERABILITY.md:298-427` | confirmed (no task, no backup folder, 2026-10-09); Batch 1 scripts written, user installs |
 | A-03 | Medium | Server | No global storage guard; per-account quotas fill one disk | `helix_remote/server/lib/src/modules/media/module.dart:27-31` | confirmed; fixed in Batch 2 (budget off until `HELIX_STORAGE_BUDGET_BYTES` is set) |
-| A-04 | Medium | Server | One hung job stalls every background job on the node | `helix_remote/server/lib/src/platform/jobs/jobs.dart:159-170` | confirmed |
-| A-05 | Medium | Server | No global SMS budget or country allow-list | `helix_remote/server/lib/src/modules/identity/application/sign_up.dart:18-48` | confirmed |
-| A-06 | Medium | Server | Password routes are an unauthenticated account oracle; lockout DoS | `helix_remote/server/lib/src/modules/identity/application/sign_in.dart:35-60` | confirmed |
+| A-04 | Medium | Server | One hung job stalls every background job on the node | `helix_remote/server/lib/src/platform/jobs/jobs.dart:159-170` | confirmed; fixed in Batch 5 |
+| A-05 | Medium | Server | No global SMS budget or country allow-list | `helix_remote/server/lib/src/modules/identity/application/sign_up.dart:18-48` | confirmed; fixed in Batch 5 (Bangladesh only, 500 a day by default) |
+| A-06 | Medium | Server | Password routes are an unauthenticated account oracle; lockout DoS | `helix_remote/server/lib/src/modules/identity/application/sign_in.dart:35-60` | confirmed; fixed in Batch 5 |
 | B-01 | Medium | Admin | Android console App lock locks the operator out | `helix_remote/admin/android/app/src/main/kotlin/com/helix/helix_admin/MainActivity.kt:5` | confirmed |
 | B-02 | Medium | Admin | Admin API public behind one password, no server sign-out | `helix_remote/server/lib/src/modules/admin/module.dart:121-153` | confirmed; exposure half: Batch 1 Caddyfile written, user installs |
-| C-01 | Medium | Security | Two engines can write the same ratchet state (key/nonce reuse) | `helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart:29-44` | confirmed (code); fixed in Batch 4 (group sender keys left open) |
+| C-01 | Medium | Security | Two engines can write the same ratchet state (key/nonce reuse) | `helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart:29-44` | confirmed (code); fixed in Batch 4 (sessions, then group sender keys the same day) |
 | E-03 | Medium | App | Windows app raises no notifications | `helix_remote/app/lib/core/notifications/local_notifications.dart:61-65` | confirmed |
 | F-01 | Medium | Tests | Platform glue (FCM, notifications, local_auth) untested | `.github/workflows/ci.yml:143-157` | confirmed; push and notification logic tested in Batch 3, device checklist added |
 | G-01 | Medium | Deps | Dependency risk register no longer matches the lockfile | `docs/dependencies/DEPENDENCY_RISK_REGISTER.md:65-70` | confirmed |
 | H-02 | Medium | Ops | Production runs from the development working tree | `helix_remote/docs/operations/V2_SERVER_HANDOFF.md:74-90` | confirmed |
 | H-03 | Medium | Ops | Nothing restarts the service after reboot or crash | `helix_remote/server/lib/src/platform/db/postgres_db.dart:21-24` | confirmed |
 | H-04 | Medium | Ops | Caddy site has no HSTS and no admin restriction | `J:\Projects\Servers\helix_server\Caddyfile` | confirmed; Batch 1 Caddyfile written, user installs |
-| A-07 | Low | Server | No statement or lock timeout on the pool | `helix_remote/server/lib/src/platform/db/postgres_db.dart:14-19` | confirmed (code) |
-| A-08 | Low | Server | A failing after-commit action becomes a request error | `helix_remote/server/lib/src/platform/db/postgres_db.dart:82-84` | confirmed |
+| A-07 | Low | Server | No statement or lock timeout on the pool | `helix_remote/server/lib/src/platform/db/postgres_db.dart:14-19` | confirmed (code); fixed in Batch 5 |
+| A-08 | Low | Server | A failing after-commit action becomes a request error | `helix_remote/server/lib/src/platform/db/postgres_db.dart:82-84` | confirmed; fixed in Batch 5 |
 | A-09 | Low | Server | Device lists checked outside the send transaction | `helix_remote/server/lib/src/modules/messaging/module.dart:308-352` | confirmed; fixed in Batch 2 |
 | A-10 | Low | Server | Media rows deleted before blobs; failures leak files | `helix_remote/server/lib/src/modules/media/module.dart:349-372` | confirmed |
-| A-11 | Low | Server | Presence and profile reads have no per-account limit | `helix_remote/server/lib/src/modules/people/module.dart:326-359` | confirmed |
-| A-12 | Low | Server | Per-target bundle limit can be exhausted | `helix_remote/server/lib/src/modules/keys/module.dart:32-43` | confirmed |
+| A-11 | Low | Server | Presence and profile reads have no per-account limit | `helix_remote/server/lib/src/modules/people/module.dart:326-359` | confirmed; fixed in Batch 5 |
+| A-12 | Low | Server | Per-target bundle limit can be exhausted | `helix_remote/server/lib/src/modules/keys/module.dart:32-43` | confirmed; fixed in Batch 5 |
 | B-03 | Low | Admin | Live log WebSocket outlives the admin session | `helix_remote/server/lib/src/modules/admin/module.dart:615-630` | confirmed |
 | B-04 | Low | Admin | Some audits outside their transaction; no audit retention | `helix_remote/server/lib/src/modules/admin/module.dart:450-478` | confirmed |
 | B-05 | Low | Admin | Ban confirmed more lightly than delete | `helix_remote/admin/lib/src/features/accounts/account_detail_screen.dart:95-114` | confirmed |
@@ -1256,6 +1256,61 @@ the batch.
   `HELIX_SMS_DAILY_LIMIT`, `HELIX_SMS_COUNTRIES` (both with safe defaults). No
   migration. No APK.
 - **Model.** Sonnet 5.5.
+- **Status (2026-10-10).** Done, server only, no protocol change, no APK. One
+  platform migration (see below). The user chose the defaults: texts to
+  Bangladesh (`880`) only, 500 a day.
+  - **A-04:** job handlers time out after 60 s (shorter than the lease) and
+    are retried with backoff; periodic jobs after 5 minutes; the FCM token
+    refresh after 10 s.
+  - **A-05:** `HELIX_SMS_COUNTRIES` (default `880`, `*` for every country) is
+    checked before anything is stored; `HELIX_SMS_DAILY_LIMIT` (default 500,
+    1 to 1000000) is one cluster bucket, `identity.sms_daily`, charged last,
+    after the ban, resend-gap and per-number checks, so a refused request
+    spends nothing. The admin gauge of codes sent today is not done: the log
+    has `sms_budget_exhausted` and `sms_country_refused`.
+  - **A-06:** decoy salts are 32 bytes; a decoy sign-in runs the same
+    transaction (against an id no account can have) and locks after five
+    failures on the same schedule, with a compare-and-set counter in the
+    ephemeral store. THREAT_MODEL T-7 says what remains (the decoy counter
+    does not survive a Postgres crash; timing is close, not identical).
+  - **A-07:** every transaction sets `statement_timeout` 15 s and
+    `lock_timeout` 5 s; statements outside one have the driver's
+    `query_timeout` 30 s (the URL parameter is in seconds: the first draft
+    passed milliseconds, which would have been 8 hours); statements inside a
+    transaction get a driver timeout just above the server's; migrations run
+    without either. Because the timeouts are the first statement of every
+    transaction, a `SET TRANSACTION` inside one now fails: the compliance
+    export (the only one) asks for its read-only snapshot through
+    `Db.tx(readOnlySnapshot: true)` instead, which the driver sets when the
+    transaction begins.
+  - **A-08:** every after-commit action runs; failures are logged
+    (`after_commit_failed`), never thrown.
+  - **A-11:** `people.reads` (120 a minute) and `people.read_targets` (2,000
+    distinct accounts a day, counted once per target a day through a
+    `people:seen:` marker) on presence and profile reads of other accounts.
+  - **A-12:** local bundle fetches no longer share a per-target bucket; the
+    limit is `keys.bundle_pair`, 20 an hour per (requesting account, target),
+    plus the existing 120 an hour per requesting device. A requesting account
+    gets one one-time prekey per target device an hour, then signed-prekey
+    bundles (CRYPTO_V2 §3, design review §13). Other servers' fetches keep
+    the 600-an-hour per-target bucket.
+  - **Found on the way (fixed):** the rate-limit sweep dropped every bucket
+    idle for an hour, and a missing bucket starts full, so every day-long
+    budget (the new SMS budget and distinct-reads budget, and the existing
+    `groups.create` and `compliance.*`) reset after an hour's pause. Platform
+    migration 2 adds `rate_buckets.full_at` (one policy window after the last
+    hit), and the sweep drops a bucket only once it is full again.
+  - **Tests:** `test/modules/server_hardening_test.dart` (the SMS config, the
+    country check and the budget order, the decoy salt and lockout, the
+    bundle limits and the one-time prekey rule, the people read limits),
+    `test/platform/db_test.dart` (a lock wait gives up, a failing after-commit
+    action), `test/platform/jobs_test.dart` (a hung handler, a hung periodic
+    job), `test/platform/shared_state_test.dart` (the sweep keeps a day-long
+    bucket); `identity_test` and `keys_test` updated for the 32-byte decoy and
+    one prekey per requester.
+  - **Deploy:** restart the server. Platform migration 2 runs at start (or
+    `dart run bin/migrate.dart` first). The two `.env` lines are optional; the
+    defaults are the chosen values.
 
 ### Batch 6: Admin console and admin API
 

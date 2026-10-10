@@ -95,11 +95,17 @@ final class FcmPushProvider implements PushProvider {
     required this.projectId,
     required this._serviceAccount,
     http.Client? client,
+    this.tokenTimeout = const Duration(seconds: 10),
   }) : _client = client ?? http.Client();
 
   final String projectId;
   final Map<String, Object?> _serviceAccount;
   final http.Client _client;
+
+  /// How long Google's token endpoint may take before the refresh is given up
+  /// on (tests use a short one).
+  final Duration tokenTimeout;
+
   String? _token;
   DateTime? _tokenExpires;
   Future<String>? _refreshing;
@@ -122,15 +128,23 @@ final class FcmPushProvider implements PushProvider {
     return _refreshing ??= _refresh().whenComplete(() => _refreshing = null);
   }
 
+  /// Exchanges the service account for an access token.
+  ///
+  /// Bounded: Google's token endpoint is awaited *before* the `.timeout` that
+  /// guards the POST, so a provider that accepts the connection and then stops
+  /// answering used to leave this future pending forever. That future is the
+  /// push job, and a job that never finishes holds the whole job runner (the
+  /// drain awaits every job of a batch, and later ticks join the pass in
+  /// flight) - no pushes, no purges, no relays until the node restarts.
   Future<String> _refresh() async {
     final credentials = gauth.ServiceAccountCredentials.fromJson(
       _serviceAccount,
     );
-    final obtained = await gauth.obtainAccessCredentialsViaServiceAccount(
-      credentials,
-      const [_scope],
-      _client,
-    );
+    final obtained = await gauth
+        .obtainAccessCredentialsViaServiceAccount(credentials, const [
+          _scope,
+        ], _client)
+        .timeout(tokenTimeout);
     _token = obtained.accessToken.data;
     _tokenExpires = obtained.accessToken.expiry;
     return _token!;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/db/postgres_db.dart';
@@ -36,6 +38,8 @@ void main() {
       PostgresDb on,
       String node, {
       Duration backoff = Duration.zero,
+      Duration jobTimeout = const Duration(seconds: 60),
+      int batchSize = 5,
     }) => JobRunner(
       db: on,
       platformSchema: schemas.platform,
@@ -43,7 +47,11 @@ void main() {
       nodeId: node,
       log: Log(sink: MemorySink()),
       metrics: Metrics(),
-      settings: JobRunnerSettings(baseBackoff: backoff, batchSize: 5),
+      settings: JobRunnerSettings(
+        baseBackoff: backoff,
+        batchSize: batchSize,
+        jobTimeout: jobTimeout,
+      ),
     );
 
     Outbox outbox() => Outbox(schemas.platform, bus);
@@ -131,6 +139,84 @@ void main() {
       );
       await r.tick();
       expect(calls, 0);
+    });
+
+    test('a handler that never finishes does not stop the next job', () async {
+      // The failure A-04: a job handler that hangs (a push provider whose
+      // token endpoint stalled) holds the drain, later ticks join the pass in
+      // flight, and nothing else runs on the node until it restarts.
+      var quick = 0;
+      final r =
+          runner(
+              db,
+              'n1',
+              jobTimeout: const Duration(milliseconds: 100),
+              batchSize: 2,
+            )
+            ..register('demo.hang', (p) => Completer<void>().future)
+            ..register('demo.quick', (p) async => quick++);
+      await db.tx((tx) async {
+        await outbox().enqueue(tx, 'demo.hang', const {}, maxAttempts: 1);
+        await outbox().enqueue(tx, 'demo.quick', const {});
+      });
+
+      final started = DateTime.now();
+      await r.tick();
+      expect(
+        DateTime.now().difference(started),
+        lessThan(const Duration(seconds: 10)),
+        reason: 'the pass ends at the timeout instead of never',
+      );
+      expect(quick, 1, reason: 'the other job in the batch still ran');
+
+      // The hung job went back for a retry rather than being lost.
+      final hung = await db.queryOne(
+        "SELECT status, last_error FROM ${schemas.platform}.jobs WHERE kind = 'demo.hang'",
+      );
+      expect(hung!.string('status'), 'dead');
+      expect(
+        hung.string('last_error'),
+        contains('TimeoutException'),
+        reason: 'a timeout is recorded as the failure it was',
+      );
+    });
+
+    test('a periodic job that never finishes releases the loop', () async {
+      // Same shape one layer up: the periodic loop runs its jobs one after
+      // another, so one that hangs stops every later job on the node.
+      final ran = <String>[];
+      final scheduler =
+          PeriodicScheduler(
+              db: db,
+              platformSchema: schemas.platform,
+              nodeId: 'n1',
+              log: Log(sink: MemorySink()),
+              jobTimeout: const Duration(milliseconds: 100),
+            )
+            ..register(
+              PeriodicJob(
+                'demo.hang',
+                const Duration(minutes: 5),
+                () => Completer<void>().future,
+              ),
+            )
+            ..register(
+              PeriodicJob('demo.after', const Duration(minutes: 5), () async {
+                ran.add('after');
+              }),
+            );
+      await scheduler.start();
+      await scheduler.tick();
+
+      expect(ran, ['after']);
+      // Its lease is released, so it runs again next interval instead of
+      // staying claimed.
+      final locked = await db.queryOne(
+        "SELECT locked_until FROM ${schemas.platform}.periodic_jobs "
+        "WHERE name = 'demo.hang'",
+      );
+      expect(locked!.isNull('locked_until'), isTrue);
+      await scheduler.stop();
     });
 
     test('periodic jobs run once per interval across nodes', () async {

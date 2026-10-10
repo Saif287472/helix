@@ -29,18 +29,40 @@ final class KeysModule extends ModuleBase implements ProvidesAccountExport {
 
   static const maxStored = 1000;
 
-  /// Bundle fetches per requesting device, and per target account (OTK
-  /// exhaustion protection).
+  /// Bundle fetches per requesting device, across every target: the
+  /// requester's overall cap.
   static final _perRequester = RateLimitPolicy.per(
     'keys.bundle',
     120,
     const Duration(hours: 1),
   );
+
+  /// Bundle fetches per (requesting account, target account) pair, for local
+  /// requesters. There is deliberately no bucket shared by everyone who asks
+  /// about one target: a few accounts could keep it empty, and then nobody
+  /// could start a session with the victim (review finding A-12). Twenty an
+  /// hour covers every device of the requester and a few session resets.
+  static final _perPair = RateLimitPolicy.per(
+    'keys.bundle_pair',
+    20,
+    const Duration(hours: 1),
+  );
+
+  /// Bundle fetches per target account from *other servers*
+  /// (`KeysApi.remoteBundles`), on top of the federation module's own
+  /// per-server limits, so many servers cannot together drain an account's
+  /// one-time prekeys. Local fetches no longer share it.
   static final _perTarget = RateLimitPolicy.per(
     'keys.bundle_target',
     600,
     const Duration(hours: 1),
   );
+
+  /// How long a requesting account waits for another one-time prekey of the
+  /// same device. Within it, a fetch still answers the signed prekey, and the
+  /// session starts without a one-time prekey (CRYPTO_V2.md §4): draining a
+  /// device's one-time prekeys takes one account per prekey per hour.
+  static const oneTimePrekeyGap = Duration(hours: 1);
 
   /// Public prekey material only, per active device.
   @override
@@ -205,7 +227,7 @@ CREATE TABLE $s.one_time_prekeys (
     }
     for (final (policy, key) in [
       (_perRequester, q.device.deviceId),
-      (_perTarget, address.toString()),
+      (_perPair, '${q.device.accountId}/$address'),
     ]) {
       final decision = await context.rateLimiter.hit(policy, key);
       if (!decision.allowed) {
@@ -231,9 +253,77 @@ CREATE TABLE $s.one_time_prekeys (
         ).toJson(),
       );
     }
-    final keys = await api.bundles(address.id, devices: devices);
+    final keys = await _bundles(
+      address.id,
+      devices: devices,
+      requester: q.device.accountId,
+    );
     if (keys == null) throw const ApiError(ErrorCode.notFound);
     return jsonResponse(keys.toJson());
+  }
+
+  /// [KeysApi.bundles]. With a [requester] (a local account), each of the
+  /// target's devices gives that account at most one one-time prekey per
+  /// [oneTimePrekeyGap]; later bundles in the gap carry the signed prekey
+  /// only.
+  Future<AccountKeys?> _bundles(
+    String accountId, {
+    Set<String>? devices,
+    String? requester,
+  }) async {
+    final db = context.db;
+    final account = await identity.account(db, accountId);
+    if (account == null) return null;
+    final all = await identity.activeDevices(db, accountId);
+    final chosen = devices == null
+        ? all
+        : all.where((d) => devices.contains(d.id)).toList();
+    final bundles = <DeviceBundle>[];
+    final low = <(String, int)>[];
+    for (final device in chosen) {
+      final spk = await _store.signedPrekey(db, device.id);
+      if (spk == null) continue;
+      final hand =
+          requester == null ||
+          await context.ephemeral.putIfAbsent(
+            'keys:otk:$requester:${device.id}',
+            '1',
+            oneTimePrekeyGap,
+          );
+      final otk = hand ? await _store.takeOneTime(db, device.id) : null;
+      final remaining = await _store.oneTimeCount(db, device.id);
+      if (remaining < KeyStatus.lowWatermark) low.add((device.id, remaining));
+      bundles.add(
+        DeviceBundle(
+          deviceId: device.id,
+          identityKey: device.identityKey,
+          signingKey: device.signingKey,
+          certificate: DeviceCertificate(
+            createdAt: device.certificateCreatedAt,
+            signature: device.certificate,
+          ),
+          signedPrekey: spk,
+          oneTimePrekey: otk,
+        ),
+      );
+    }
+    for (final (deviceId, remaining) in low) {
+      // At most one prekeys_low per device per hour.
+      if (await context.ephemeral.putIfAbsent(
+        'keys:low:$deviceId',
+        '1',
+        const Duration(hours: 1),
+      )) {
+        for (final hook in _lowHooks) {
+          await hook(deviceId, remaining);
+        }
+      }
+    }
+    return AccountKeys(
+      account: accountId,
+      identityKey: account.identityKey,
+      devices: bundles,
+    );
   }
 }
 
@@ -261,54 +351,8 @@ final class _KeysFacade implements KeysApi {
   }
 
   @override
-  Future<AccountKeys?> bundles(String accountId, {Set<String>? devices}) async {
-    final db = _m.context.db;
-    final account = await _m.identity.account(db, accountId);
-    if (account == null) return null;
-    final all = await _m.identity.activeDevices(db, accountId);
-    final chosen = devices == null
-        ? all
-        : all.where((d) => devices.contains(d.id)).toList();
-    final bundles = <DeviceBundle>[];
-    final low = <(String, int)>[];
-    for (final device in chosen) {
-      final spk = await _m._store.signedPrekey(db, device.id);
-      if (spk == null) continue;
-      final otk = await _m._store.takeOneTime(db, device.id);
-      final remaining = await _m._store.oneTimeCount(db, device.id);
-      if (remaining < KeyStatus.lowWatermark) low.add((device.id, remaining));
-      bundles.add(
-        DeviceBundle(
-          deviceId: device.id,
-          identityKey: device.identityKey,
-          signingKey: device.signingKey,
-          certificate: DeviceCertificate(
-            createdAt: device.certificateCreatedAt,
-            signature: device.certificate,
-          ),
-          signedPrekey: spk,
-          oneTimePrekey: otk,
-        ),
-      );
-    }
-    for (final (deviceId, remaining) in low) {
-      // At most one prekeys_low per device per hour.
-      if (await _m.context.ephemeral.putIfAbsent(
-        'keys:low:$deviceId',
-        '1',
-        const Duration(hours: 1),
-      )) {
-        for (final hook in _m._lowHooks) {
-          await hook(deviceId, remaining);
-        }
-      }
-    }
-    return AccountKeys(
-      account: accountId,
-      identityKey: account.identityKey,
-      devices: bundles,
-    );
-  }
+  Future<AccountKeys?> bundles(String accountId, {Set<String>? devices}) =>
+      _m._bundles(accountId, devices: devices);
 
   @override
   void onPrekeysLow(PrekeysLowHook hook) => _m._lowHooks.add(hook);

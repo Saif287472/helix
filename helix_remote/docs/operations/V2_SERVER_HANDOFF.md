@@ -131,7 +131,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 
 | Name | Req | Default | Dev | Secret | What it does |
 |---|---|---|---|---|---|
-| `HELIX_DATABASE_URL` | yes | none | no | **yes** | Postgres URL, `postgresql://helix:<password>@127.0.0.1:5432/helix?sslmode=disable` (percent-encode the password). The server appends `max_connection_count=<HELIX_DB_POOL_SIZE>`. Never logged. |
+| `HELIX_DATABASE_URL` | yes | none | no | **yes** | Postgres URL, `postgresql://helix:<password>@127.0.0.1:5432/helix?sslmode=disable` (percent-encode the password). The server appends `max_connection_count=<HELIX_DB_POOL_SIZE>` and `query_timeout=30` (seconds; it overrides one already in the URL). Never logged. |
 | `HELIX_HOST` | no | `127.0.0.1` | no | no | Listen address. Keep it on loopback; Caddy proxies to it. |
 | `HELIX_PORT` | no | `8080` | no | no | Listen port, 0 to 65535. For a second node on the same PC, use another port. |
 | `HELIX_PUBLIC_BASE_URL` | no | `http://<host>:<port>` | no | no | The public URL, `https://helix.agiletechbd.com` in production. It must be an absolute URL. Its host must be a DNS name or IPv4 address (checked at start even if federation is off). The host (and port, if any) is this server's federation domain. Also used by the `/open` page and `federation_domain`. |
@@ -170,6 +170,8 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 | `HELIX_SMS_SENDER_ID` | if `bulksmsbd` | none | no | no | BulkSMSBD approved sender id. |
 | `HELIX_TERMS_VERSION` | no | the built-in terms version | no | no | Overrides the terms version reported to apps. On Helix Global, registration must name this version. |
 | `HELIX_OTP_RESEND_SECONDS` | no | `30` | no | no | Minimum gap between two codes to one number, 0 to 600. |
+| `HELIX_SMS_DAILY_LIMIT` | no | `500` | no | no | Codes the whole server texts in a day, 1 to 1000000 (a token bucket that refills over the day, so at most twice this in any 24 hours). Over it, code requests get 429 `rate_limited` and the log says `sms_budget_exhausted`. Stops SMS pumping from spending the provider balance. |
+| `HELIX_SMS_COUNTRIES` | no | `880` | no | no | Calling codes that may receive codes, comma separated, without `+` (`880`, `880,971`), or `*` for every country. Other numbers get 503 `sms_unavailable` before anything is stored or charged. |
 | `HELIX_DEVICE_INACTIVE_DAYS` | no | `0` (off) | no | no | Revoke devices that have not signed in for longer than this many days, 14 to 3650, checked every 6 hours. An account's most recently used device is never revoked. A revoked device must sign in again. Off by default: choosing the period is the operator's decision (WhatsApp unlinks companion devices after about 30 days). |
 
 ### push (`platform/push/push.dart`)

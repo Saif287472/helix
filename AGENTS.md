@@ -232,12 +232,18 @@ engine 292, api 190, admin 181, ui 183 with 5 golden tests skipped off Linux, db
 131, protocol 83, crypto 73, rules 20, cli 13, calls 5; `flutter analyze` and
 `dart analyze server tool` clean; the governance check passes).
 
-Two server tests are timing-sensitive and can fail while the machine is busy
+Some server tests are timing-sensitive and can fail while the machine is busy
 with other test runs (they pass alone; rerun them alone before calling a failure
 real): `test/platform/hardening_db_test.dart` ("sends are limited per device and
-per account") and `test/client/engine/calls_test.dart` ("two callee devices
-ring, one answers..."). The two timing budgets in
-`app/test/performance_budget_test.dart` can likewise flake under load.
+per account"), `test/client/engine/calls_test.dart` ("two callee devices
+ring, one answers..."), and, seen 2026-10-09/10 under the full suite (a pool
+connection not acquired, or the 30 s test timeout), `devices_test.dart`
+("changing the password needs the current one..."), `messaging_test.dart`
+("two engines talking at once...") and `recovery_test.dart` ("a full
+recovery-code redeem..."): the client's password hashing runs in the server's
+isolate there. Do not run Flutter analysis or tests alongside the server suite.
+The two timing budgets in `app/test/performance_budget_test.dart` can likewise
+flake under load.
 
 Add any failure you confirm is pre-existing here, with the date.
 

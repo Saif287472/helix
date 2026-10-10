@@ -120,6 +120,11 @@ The server relays the sealed message but cannot read it. Links expire after
   a device has fewer than 20 OPKs left it receives a `prekeys_low` envelope
   and uploads 100 more. With no OPKs left, bundles carry only the SPK (X3DH
   without DH4 — still secure, less replay-resistant).
+- A requesting account gets at most one OPK per target device an hour; later
+  fetches in that hour carry only the SPK (same X3DH without DH4). Draining a
+  device's OPKs therefore takes one account per OPK per hour, and there is no
+  per-target bucket a few accounts could empty to stop new sessions to a
+  victim (review A-12, 2026-10-10; server behaviour only, no client change).
 - SPK rotates every 7 days (client-driven, on app start or in background);
   the previous SPK private key is kept 30 days for in-flight prekey messages,
   then deleted. A prekey message naming an unknown SPK id is rejected (no v1

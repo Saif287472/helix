@@ -7,15 +7,15 @@ one Postgres database.
 | Piece | File | Single host now | Scale-out later |
 |---|---|---|---|
 | Config | `config/server_config.dart`, `env_file.dart` | `HELIX_*` env + `server/.env` | same |
-| SQL | `db/db.dart` (`Db`, `Tx`, `Row`), `db/postgres_db.dart` | Postgres pool | same (+ replicas) |
+| SQL | `db/db.dart` (`Db`, `Tx`, `Row`), `db/postgres_db.dart` | Postgres pool; every transaction sets `statement_timeout` 15 s and `lock_timeout` 5 s (`Db.tx` overrides, `Duration.zero` for none: migrations only), statements outside one have the driver's `query_timeout` 30 s; `readOnlySnapshot: true` opens `REPEATABLE READ, READ ONLY` (never `SET TRANSACTION` in the body: the timeouts come first) | same (+ replicas) |
 | Migrations | `db/migrations.dart`, `platform_migrations.dart` | per-module Dart constants, checksummed, advisory lock | same |
 | Schema names | `db/schema_names.dart` | module name = schema | test prefixes |
 | Event bus | `bus/event_bus.dart` | `LISTEN/NOTIFY`; the `LISTEN` connection reopens with backoff and then publishes local `platform.resync` | Redis/NATS impl |
 | Ephemeral store | `ephemeral/ephemeral_store.dart` | UNLOGGED table, own 4-connection pool | Redis impl |
-| Rate limits | `ratelimit/rate_limiter.dart` | UNLOGGED token buckets, one statement; a hit may cost several tokens (`cost:`, charged as the capacity when larger) | Redis impl |
+| Rate limits | `ratelimit/rate_limiter.dart` | UNLOGGED token buckets, one statement; a hit may cost several tokens (`cost:`, charged as the capacity when larger; a charge above what is left takes nothing); swept only once full again (`full_at`, one window after the last hit) | Redis impl |
 | Storage budget | `storage/storage_budget.dart` | `HELIX_STORAGE_BUDGET_BYTES` (optional): the size of this server's tables with indexes and TOAST (`pg_total_relation_size` over the catalogue, its own schema prefix only; not `pg_database_size`, which lists every file and took seconds on the shared test database) plus what modules `report` (media objects), measured at most once a minute per node; `check()` throws `quota_exceeded` (`reason: server_storage`) when over it and lets requests through when it cannot measure; gauge `helix_storage_used_bytes`; `close` waits for a measurement in flight | same (S3 bytes reported by media) |
-| Outbox + jobs | `jobs/jobs.dart` | `platform.jobs`, `SKIP LOCKED` leases, backoff, dead letters | same |
-| Periodic jobs | `jobs/jobs.dart` | row-lease, once per interval cluster-wide | same |
+| Outbox + jobs | `jobs/jobs.dart` | `platform.jobs`, `SKIP LOCKED` leases, backoff, dead letters; a handler is given up on after 60 s (`JobRunnerSettings.jobTimeout`, shorter than the 2-minute lease) | same |
+| Periodic jobs | `jobs/jobs.dart` | row-lease, once per interval cluster-wide; each run given up on after 5 minutes | same |
 | Object storage | `blobs/object_storage.dart` | local directory | S3-compatible (SigV4) |
 | Push | `push/push.dart` | FCM HTTP v1, data-only wake-ups | + APNs |
 | HTTP | `http/routes.dart`, `pipeline.dart`, `request.dart`, `idempotency.dart`, `websocket_limits.dart` | shelf; auth and route limit before the body, per-node body budget, sealed idempotency rows, WebSocket message cap | same |
@@ -28,7 +28,12 @@ one Postgres database.
   imports the AWS signer, and only `platform/push/` imports Google auth.
 - Transactions start only with `Db.tx`; repositories take a `Tx`/`Session`.
   Side effects after commit use `Tx.afterCommit` (never inside the
-  transaction) or the outbox (when they must not be lost).
+  transaction) or the outbox (when they must not be lost). Every after-commit
+  action runs; a failing one is logged (`after_commit_failed`) and never
+  turns the committed write into an error.
+- Anything that waits on the network has a timeout: job handlers, periodic
+  jobs and the FCM token refresh (10 s) included. One stalled call must not
+  stop the loop it runs in.
 - SQL interpolates only `SchemaNames` (validated identifiers). Values are
   always named parameters with explicit types (`@id:uuid`).
 - Public routes need a rate limit (`RouteRegistry.add` refuses otherwise),

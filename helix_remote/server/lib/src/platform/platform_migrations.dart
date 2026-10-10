@@ -5,8 +5,23 @@ import 'package:helix_remote_server/src/platform/db/migrations.dart';
 /// and pending challenges, which is safe, and they cost no WAL.
 const platformMigrations = MigrationSet(
   module: 'platform',
-  migrations: [Migration(1, 'platform_baseline', _baseline)],
+  migrations: [
+    Migration(1, 'platform_baseline', _baseline),
+    Migration(2, 'rate_bucket_full_at', _rateBucketFullAt),
+  ],
 );
+
+/// When a bucket is certainly full again (one policy window after its last
+/// hit), so the sweep drops it then and not after a fixed hour: an hour reset
+/// a day-long budget (the SMS budget, groups created, distinct people read)
+/// to full whenever its key paused for an hour. The default fills existing
+/// rows (and any writer that does not set it) with "now", the old reset.
+String _rateBucketFullAt(String s) =>
+    '''
+ALTER TABLE $s.rate_buckets ADD COLUMN full_at timestamptz NOT NULL DEFAULT now();
+CREATE INDEX rate_buckets_full ON $s.rate_buckets (full_at);
+DROP INDEX $s.rate_buckets_updated;
+''';
 
 String _baseline(String s) =>
     '''

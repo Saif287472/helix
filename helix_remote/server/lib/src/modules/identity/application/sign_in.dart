@@ -34,23 +34,20 @@ final class SignIn {
     }
     return PasswordParamsResponse(
       kdf: const KdfParams(),
-      salt: hmacSha256(c.config.phonePepper, [
-        ...utf8.encode('decoy-salt:'),
-        ...phoneHash,
-      ]).sublist(0, 16),
+      salt: c.decoyPasswordSalt(phoneHash),
     );
   }
 
   /// Step one of password sign-in. Wrong password and unknown number give
-  /// the same answer; repeated failures lock the account's password (not
-  /// the account) for 15 minutes, doubling up to 24 hours.
+  /// the same answer - the same code, the same work and the same lockout
+  /// ([IdentityContext.decoyPasswordFailure]); repeated failures lock the
+  /// account's password (not the account) for 15 minutes, doubling up to 24
+  /// hours.
   Future<PasswordSignInResponse> signIn(PasswordSignInRequest req) async {
     final phoneHash = c.phoneHash(requireE164(req.phoneNumber));
     final account = await c.store.accountByPhone(c.db, phoneHash);
     if (account == null || !account.hasPassword) {
-      // Same work as a real check, so timing does not tell the two apart.
-      c.passwordVerifier(randomBytes(16), req.authKey);
-      throw const ApiError(ErrorCode.invalidCredentials);
+      throw await c.decoyPasswordFailure(phoneHash, req.authKey);
     }
     final result = await c.db.tx<(Row?, ApiError?)>(
       (tx) => c.checkPassword(tx, account.id, req.authKey),

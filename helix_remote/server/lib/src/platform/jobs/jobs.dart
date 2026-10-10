@@ -71,6 +71,7 @@ final class JobRunnerSettings {
     this.batchSize = 20,
     this.baseBackoff = const Duration(seconds: 5),
     this.maxBackoff = const Duration(hours: 1),
+    this.jobTimeout = const Duration(seconds: 60),
   });
 
   final Duration pollInterval;
@@ -78,6 +79,13 @@ final class JobRunnerSettings {
   final int batchSize;
   final Duration baseBackoff;
   final Duration maxBackoff;
+
+  /// How long one handler may run. A handler that never finishes (a push
+  /// provider whose token endpoint stalls, a network that half-dropped) would
+  /// otherwise hold the whole drain: later ticks join the pass in flight, so
+  /// *no* job would run on this node until the process restarted. Shorter than
+  /// [lease], so a job that times out is retried by another node as well.
+  final Duration jobTimeout;
 }
 
 /// Claims and runs outbox jobs. Any number of nodes may run one: claims use
@@ -198,7 +206,11 @@ final class JobRunner {
     final id = job.string('id');
     final kind = job.string('kind');
     try {
-      await _handlers[kind]!(job.json('payload'));
+      // A timeout is a failure like any other: the job goes back with
+      // backoff, and because it is shorter than the lease another node may
+      // claim it meanwhile (at-least-once, which every handler here already
+      // is).
+      await _handlers[kind]!(job.json('payload')).timeout(settings.jobTimeout);
       await _db.execute('DELETE FROM $_table WHERE id = @id:uuid', {'id': id});
       _completed.inc({'kind': kind, 'result': 'ok'});
     } on Object catch (e) {
@@ -256,6 +268,7 @@ final class PeriodicScheduler {
     required this.nodeId,
     required Log log,
     this.checkInterval = const Duration(seconds: 15),
+    this.jobTimeout = const Duration(minutes: 5),
   }) : _table = '$platformSchema.periodic_jobs',
        _log = log.child({'component': 'periodic'});
 
@@ -264,6 +277,11 @@ final class PeriodicScheduler {
   final String nodeId;
   final Log _log;
   final Duration checkInterval;
+
+  /// How long one periodic job may run. The jobs run one after another in
+  /// this loop, so one that never returns would stop every later job on the
+  /// node; a timeout releases the loop and the job runs again next interval.
+  final Duration jobTimeout;
   final Map<String, PeriodicJob> _jobs = {};
   Timer? _timer;
   bool _stopped = false;
@@ -328,7 +346,7 @@ final class PeriodicScheduler {
       );
       if (claimed.isEmpty) continue;
       try {
-        await job.run();
+        await job.run().timeout(jobTimeout);
         ran.add(job.name);
       } on Object catch (e) {
         _log.warn('periodic_failed', {

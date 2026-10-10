@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/db/postgres_db.dart';
 import 'package:helix_remote_server/src/platform/db/schema_names.dart';
+import 'package:postgres/postgres.dart' as pg;
 import 'package:test/test.dart';
 
 import '../support/test_database.dart';
@@ -126,6 +128,129 @@ void main() {
       final received = (await db.listen(channel)).first;
       await db.notify(channel, 'hello');
       expect(await received.timeout(const Duration(seconds: 5)), 'hello');
+    });
+
+    test(
+      'a read-only snapshot is chosen when the transaction begins, and keeps '
+      'its timeouts',
+      () async {
+        // The compliance export used `SET TRANSACTION` inside the body, which
+        // Postgres refuses once the timeouts have been set (a 500).
+        final settings = await db.tx(
+          (tx) async => (await tx.queryOne(
+            "SELECT current_setting('transaction_isolation') AS iso, "
+            "current_setting('transaction_read_only') AS ro, "
+            "current_setting('statement_timeout') AS st",
+          ))!,
+          readOnlySnapshot: true,
+        );
+        expect(settings.string('iso'), 'repeatable read');
+        expect(settings.string('ro'), 'on');
+        expect(settings.string('st'), '15s');
+        await expectLater(
+          db.tx(
+            (tx) => tx.execute(
+              "INSERT INTO $table (id, name) VALUES (gen_random_uuid(), 'x')",
+            ),
+            readOnlySnapshot: true,
+          ),
+          throwsA(anything),
+          reason: 'read only',
+        );
+      },
+    );
+
+    test('a transaction gives up on a lock wait instead of hanging', () async {
+      // A-07: a long lock (a row held FOR UPDATE by a fan-out) used to make
+      // requests queue for minutes on a pool connection, and every other
+      // request then waited for a connection that never came back.
+      await db.execute(
+        "INSERT INTO $table (id, name) VALUES (gen_random_uuid(), 'locked')",
+      );
+      final holder = await openTestDb();
+      addTearDown(holder.close);
+      // Another connection holds the row, then lets go (so the test ends).
+      final blocker = holder.tx((tx) async {
+        await tx.execute(
+          "SELECT * FROM $table WHERE name = 'locked' FOR UPDATE",
+        );
+        await Future<void>.delayed(const Duration(seconds: 2));
+      });
+      // The row is locked by another connection now.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      await expectLater(
+        db.tx(
+          (tx) => tx.execute(
+            "UPDATE $table SET name = 'taken' WHERE name = 'locked'",
+          ),
+          lockTimeout: const Duration(milliseconds: 300),
+        ),
+        throwsA(
+          isA<pg.ServerException>().having(
+            (e) => e.code,
+            'code',
+            '55P03', // lock_not_available
+          ),
+        ),
+      );
+      // The pool connection came back: the next transaction runs.
+      expect(await db.tx((tx) => tx.queryOne('SELECT 1 AS x')), isNotNull);
+      await blocker;
+    });
+
+    test(
+      'a migration-style transaction runs without a statement timeout',
+      () async {
+        // The zero that `MigrationRunner` passes means "no limit" (Postgres's
+        // own meaning), which is what index builds and purges need.
+        await expectLater(
+          db.tx(
+            (tx) => tx.execute('SELECT pg_sleep(0.3)'),
+            statementTimeout: Duration.zero,
+            lockTimeout: Duration.zero,
+          ),
+          completes,
+        );
+        // The connection default is still in force for the next transaction.
+        await expectLater(
+          db.tx(
+            (tx) => tx.execute('SELECT pg_sleep(0.3)'),
+            statementTimeout: const Duration(milliseconds: 100),
+          ),
+          throwsA(
+            isA<pg.ServerException>().having((e) => e.code, 'code', '57014'),
+          ),
+        );
+      },
+    );
+
+    test('a failing after-commit action neither fails the request nor skips '
+        'the rest', () async {
+      // A-08: after-commit actions are best effort. The first one throwing
+      // used to answer 500 for a change that had been committed and to
+      // skip every publish after it.
+      final fired = <String>[];
+      await db.tx((tx) async {
+        await tx.execute(
+          "INSERT INTO $table (id, name) VALUES (gen_random_uuid(), 'kept')",
+        );
+        tx.afterCommit(() async {
+          fired.add('first');
+          throw StateError('the bus is down');
+        });
+        tx.afterCommit(() async => fired.add('second'));
+      });
+      expect(fired, [
+        'first',
+        'second',
+      ], reason: 'the failure is contained and the rest still ran');
+      expect(
+        (await db.query(
+          'SELECT name FROM $table',
+        )).map((r) => r.string('name')),
+        ['kept'],
+      );
     });
   });
 

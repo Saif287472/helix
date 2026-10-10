@@ -92,6 +92,19 @@ default 30) and 5 attempts per challenge. Passwords lock after 5 failures:
 (`IdentityContext.checkPassword`); password changes are also limited to 10
 per hour per account.
 
+**Texts.** A code goes only to a number whose calling code is in
+`HELIX_SMS_COUNTRIES` (checked first; 503 `sms_unavailable` otherwise), and
+the whole server texts at most `HELIX_SMS_DAILY_LIMIT` a day
+(`identity.sms_daily`, one bucket). The budget is charged last, after the
+ban, resend-gap and per-number checks, so a refused request spends nothing.
+
+**Decoys.** A number without a password answers like one with a password:
+a 32-byte salt derived from the pepper (`IdentityContext.decoyPasswordSalt`;
+every client salt is 32 bytes), and a sign-in that runs the same transaction
+against an id no account can have and locks after 5 failures on the same
+schedule (`decoyPasswordFailure`; the counter is in the ephemeral store under
+`identity:pwdecoy:`, compare-and-set, 25 hours).
+
 **Recovery lookup** (`POST /v1/auth/recovery/lookup`, 10 per hour per IP) tells the
 holder of a valid code whether a phone verification must accompany the redeem
 and which account the code belongs to (`account_id`): the new device's
@@ -130,6 +143,8 @@ envelopes; backup (S4) drops the AIK-keyed history backup on key change.
 | `HELIX_SMS_PROVIDER` | `none` or `bulksmsbd`, with `HELIX_SMS_API_KEY` and `HELIX_SMS_SENDER_ID` |
 | `HELIX_TERMS_VERSION` | current terms (default `2026-09`) |
 | `HELIX_OTP_RESEND_SECONDS` | resend gap (default 30) |
+| `HELIX_SMS_DAILY_LIMIT` | codes texted per day by the whole server, 1 to 1000000 (default 500) |
+| `HELIX_SMS_COUNTRIES` | calling codes that may get codes, `880,971` style, or `*` for all (default `880`) |
 | `HELIX_DEVICE_INACTIVE_DAYS` | revoke devices unused for longer (14 to 3650); 0 or unset, the default: never |
 
 Helix Global (`HELIX_GLOBAL_MODE=true`) refuses to start without SMS.

@@ -40,6 +40,26 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
     const Duration(hours: 1),
   );
 
+  /// Reading somebody else's presence or profile is cheap here and free for
+  /// the caller, so without a limit any signed-in account could walk the id
+  /// space and build an activity timeline - which is exactly what the privacy
+  /// audiences and the "last seen" rounding are meant to prevent (the
+  /// audience check still applies; these limits cap *how often* and *how many
+  /// people* one account may ask about).
+  static final _reads = RateLimitPolicy.per(
+    'people.reads',
+    120,
+    const Duration(minutes: 1),
+  );
+
+  /// Distinct accounts one account may ask about per day. Only the first
+  /// read of a target in a day is charged ([_seenFor]).
+  static final _readTargets = RateLimitPolicy.per(
+    'people.read_targets',
+    2000,
+    const Duration(days: 1),
+  );
+
   @override
   String get name => 'people';
 
@@ -270,6 +290,7 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
 
   Future<Response> _profile(HelixRequest q) async {
     final account = q.uuidParam('account');
+    await _limitReads(q.device.accountId, account);
     final row = await context.db.queryOne(
       'SELECT version, ciphertext, updated_at FROM $s.profiles WHERE account_id = @a:uuid',
       {'a': account},
@@ -283,6 +304,29 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
         updatedAt: row.time('updated_at'),
       ).toJson(),
     );
+  }
+
+  /// How long a read target counts as already seen (`people:seen:`, in the
+  /// ephemeral store), so repeat reads of one person are not charged again.
+  static const _seenFor = Duration(days: 1);
+
+  /// The read budget for one account looking at somebody else ([_reads],
+  /// [_readTargets]). Asking about yourself is free: it is what a chat list
+  /// does while it loads.
+  Future<void> _limitReads(String reader, String target) async {
+    if (reader == target) return;
+    final reads = await context.rateLimiter.hit(_reads, reader);
+    if (!reads.allowed) {
+      throw ApiError(ErrorCode.rateLimited, retryAfter: reads.retryAfter);
+    }
+    final seen = 'people:seen:$reader:$target';
+    if (!await context.ephemeral.putIfAbsent(seen, '1', _seenFor)) return;
+    final targets = await context.rateLimiter.hit(_readTargets, reader);
+    if (!targets.allowed) {
+      // A refused read did not see the target, so the next try is charged.
+      await context.ephemeral.delete(seen);
+      throw ApiError(ErrorCode.rateLimited, retryAfter: targets.retryAfter);
+    }
   }
 
   Future<Response> _setProfile(HelixRequest q) async {
@@ -326,6 +370,7 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
   Future<Response> _presence(HelixRequest q) async {
     final target = q.uuidParam('account');
     final me = q.device.accountId;
+    await _limitReads(me, target);
     final privacy = await api.privacy(context.db, target);
     final blocked = (await api.blockedBy(context.db, me, [target])).isNotEmpty;
     var online = false;

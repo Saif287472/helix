@@ -38,7 +38,26 @@ abstract interface class Db implements SqlSession {
   /// Serialization failures and deadlocks are retried up to [retries] times,
   /// so [body] must be safe to re-run (no side effects outside the database
   /// except through [Tx.afterCommit]).
-  Future<T> tx<T>(Future<T> Function(Tx tx) body, {int retries = 3});
+  ///
+  /// [statementTimeout] and [lockTimeout] override the connection defaults for
+  /// this transaction (15 s and 5 s); `Duration.zero` means "no limit"
+  /// (Postgres's own meaning), which only the migration runner uses. A
+  /// statement that outlives the timeout is cancelled by the server, so one
+  /// slow query cannot hold a pool connection until the pool is starved.
+  /// Statements outside a transaction (the purge jobs) have the driver's
+  /// 30 s query timeout instead.
+  ///
+  /// [readOnlySnapshot] opens the transaction `REPEATABLE READ, READ ONLY`,
+  /// so every read sees one snapshot. It is set when the transaction begins:
+  /// a `SET TRANSACTION` inside [body] would come after the timeouts above
+  /// and fail. A nested call cannot ask for it.
+  Future<T> tx<T>(
+    Future<T> Function(Tx tx) body, {
+    int retries = 3,
+    Duration? statementTimeout,
+    Duration? lockTimeout,
+    bool readOnlySnapshot = false,
+  });
 
   /// Notifications on [channel]. Completes once `LISTEN` is active on a
   /// dedicated connection, so a `notify` issued afterwards is received.

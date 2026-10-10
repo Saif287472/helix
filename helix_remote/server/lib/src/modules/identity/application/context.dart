@@ -212,6 +212,69 @@ final class IdentityContext {
   static const passwordFirstLock = Duration(minutes: 15);
   static const passwordMaxLock = Duration(hours: 24);
 
+  /// The salt `PasswordParamsRequest` answers with when the number has no
+  /// password. 32 bytes, which is what every Helix client sends
+  /// (`PasswordKeys.newSalt`): a 16-byte decoy was an account oracle on its
+  /// own, one request per candidate number.
+  Uint8List decoyPasswordSalt(Uint8List phoneHash) => hmacSha256(
+    config.phonePepper,
+    [...utf8.encode('decoy-salt:'), ...phoneHash],
+  );
+
+  /// The password sign-in of a number this server does not know: the same
+  /// HMAC, the same transaction and the same lockout as a real account, so
+  /// nothing in the answer says whether the number exists (THREAT_MODEL T-7).
+  ///
+  /// Three things used to give it away: the decoy salt was shorter than a
+  /// real one, a real account answered `password_locked` after five tries
+  /// while an unknown number never did, and the decoy skipped the
+  /// transaction a real check runs (the comment claiming "same work as a real
+  /// check" was wrong - it is one HMAC against four round trips).
+  Future<ApiError> decoyPasswordFailure(
+    Uint8List phoneHash,
+    Uint8List authKey,
+  ) async {
+    // The verifier a real check computes, over a salt nobody stored.
+    passwordVerifier(decoyPasswordSalt(phoneHash), authKey);
+    // The transaction a real check runs: a row lock and a read, against a
+    // synthetic account id that no account can have (version nibble 8 and the
+    // reserved variant, neither of which `Uuid.v7` produces).
+    final decoy = List<int>.generate(16, (i) => phoneHash[i]);
+    decoy[6] = 0x80 | (decoy[6] & 0x0f);
+    decoy[8] = 0xf0 | (decoy[8] & 0x0f);
+    await db.tx(
+      (tx) => checkPassword(tx, Uuid.format(decoy), authKey),
+      retries: 0,
+      statementTimeout: const Duration(seconds: 5),
+      lockTimeout: const Duration(seconds: 1),
+    );
+    // The same counter and the same lock, in the shared ephemeral store.
+    final key = '$_decoyPasswordPrefix${_hex(phoneHash)}';
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final raw = await ephemeral.get(key);
+      final state = _DecoyFailures.parse(raw);
+      final until = state.lockedUntil;
+      if (until != null && until.isAfter(clock.now())) {
+        return _locked(until);
+      }
+      final failures = state.failures + 1;
+      final lock = failures >= passwordMaxFailures ? _lockFor(failures) : null;
+      final next = _DecoyFailures(failures: failures, lockedUntil: lock);
+      // Stored under a compare-and-set so two nodes cannot both count the
+      // same attempt; the first attempt has no row to replace.
+      final stored = raw == null
+          ? await ephemeral.putIfAbsent(key, next.encode(), _decoyTtl)
+          : await ephemeral.replace(key, raw, next.encode(), _decoyTtl);
+      if (stored) {
+        return lock != null
+            ? _locked(lock)
+            : const ApiError(ErrorCode.invalidCredentials);
+      }
+      // Another node wrote between the read and the write: read again.
+    }
+    return const ApiError(ErrorCode.invalidCredentials);
+  }
+
   /// Checks [authKey] against the account's password. Password sign-in and
   /// password change share one failure counter and lockout: 5 failures
   /// lock it for 15 minutes, doubling up to 24 hours. Returns the password
@@ -258,6 +321,16 @@ final class IdentityContext {
     details: {'locked_until': toWireTime(until)},
     retryAfter: until.difference(clock.now()),
   );
+
+  /// Ephemeral-store prefix for the lockout of a number with no account. It
+  /// lives here, not in the `passwords` table, because there is no account to
+  /// hang it off - and it is not meant to survive: the decoy only has to lock
+  /// for as long as a real account would.
+  static const _decoyPasswordPrefix = 'identity:pwdecoy:';
+
+  /// Longer than the longest lock, so a locked decoy is not forgotten before
+  /// the lock it explains has passed.
+  static final _decoyTtl = passwordMaxLock + const Duration(hours: 1);
 
   Future<void> storePassword(
     SqlSession db,
@@ -363,4 +436,38 @@ final class IdentityContext {
     }
     return sessions.issue(tx, accountId: accountId, deviceId: device.deviceId);
   }
+}
+
+/// What the decoy counter keeps in the ephemeral store: the same fields a
+/// `passwords` row keeps for a real account, in the same JSON shape, so the
+/// same lock schedule (`IdentityContext._lockFor`) applies to it.
+final class _DecoyFailures {
+  const _DecoyFailures({required this.failures, this.lockedUntil});
+
+  final int failures;
+  final DateTime? lockedUntil;
+
+  static _DecoyFailures parse(String? raw) {
+    if (raw == null || raw.isEmpty) return const _DecoyFailures(failures: 0);
+    try {
+      final json = jsonDecode(raw) as Map<String, Object?>;
+      return _DecoyFailures(
+        failures: (json['failed_attempts'] as int?) ?? 0,
+        lockedUntil: json['locked_until'] == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(
+                json['locked_until']! as int,
+                isUtc: true,
+              ),
+      );
+    } on Object {
+      // A corrupt entry must not lock or unlock anything: start over.
+      return const _DecoyFailures(failures: 0);
+    }
+  }
+
+  String encode() => jsonEncode({
+    'failed_attempts': failures,
+    'locked_until': lockedUntil?.millisecondsSinceEpoch,
+  });
 }

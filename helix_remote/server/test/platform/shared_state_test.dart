@@ -161,6 +161,31 @@ void main() {
       expect(results.where((r) => r.allowed).length, 5);
     });
 
+    test(
+      'rate limiter: the sweep keeps a bucket until it is full again',
+      () async {
+        final limiter = PostgresRateLimiter(db, schemas.platform);
+        final daily = RateLimitPolicy.per('daily', 2, const Duration(days: 1));
+        final minute = RateLimitPolicy.per(
+          'minute',
+          2,
+          const Duration(minutes: 1),
+        );
+        expect((await limiter.hit(daily, 'k', cost: 2)).allowed, isTrue);
+        expect((await limiter.hit(minute, 'k', cost: 2)).allowed, isTrue);
+        // Two hours without a hit. The sweep used to drop every bucket idle
+        // for an hour, which gave a day-long budget back in full.
+        await db.execute(
+          'UPDATE ${schemas.platform}.rate_buckets SET '
+          "updated_at = updated_at - interval '2 hours', "
+          "full_at = full_at - interval '2 hours'",
+        );
+        expect(await limiter.sweep(), 1, reason: 'the per-minute bucket only');
+        expect((await limiter.hit(daily, 'k')).allowed, isFalse);
+        expect((await limiter.hit(minute, 'k')).allowed, isTrue);
+      },
+    );
+
     test('event bus: delivered across connections', () async {
       final busA = PostgresEventBus(db, prefix: schemas.prefix);
       final busB = PostgresEventBus(otherNode, prefix: schemas.prefix);
@@ -219,6 +244,22 @@ void main() {
         reason: 'charged as the capacity',
       );
       expect((await limiter.hit(policy, 'big')).allowed, isFalse);
+    });
+
+    test('rate limiter: the sweep drops a bucket once it is full', () async {
+      final clock = ManualClock();
+      final limiter = InMemoryRateLimiter(clock: clock);
+      final daily = RateLimitPolicy.per('daily', 2, const Duration(days: 1));
+      final minute = RateLimitPolicy.per(
+        'minute',
+        2,
+        const Duration(minutes: 1),
+      );
+      await limiter.hit(daily, 'k', cost: 2);
+      await limiter.hit(minute, 'k', cost: 2);
+      clock.advance(const Duration(hours: 2));
+      expect(await limiter.sweep(), 1);
+      expect((await limiter.hit(daily, 'k')).allowed, isFalse);
     });
 
     test('bus delivers to subscribers', () async {

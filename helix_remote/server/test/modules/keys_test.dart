@@ -18,19 +18,24 @@ void main() {
       'bundles hand out each one-time prekey once and signal when low',
       () async {
         final alice = await h.registerGlobal('+8801711000001', oneTime: 21);
-        final bob = await h.registerGlobal('+8801711000002');
+        // Three requesters: one account gets one one-time prekey per device
+        // an hour (server_hardening_test.dart).
+        final others = [
+          for (final n in ['2', '3', '4'])
+            await h.registerGlobal('+880171100000$n'),
+        ];
         final low = <(String, int)>[];
         keys().api.onPrekeysLow(
           (device, remaining) async => low.add((device, remaining)),
         );
 
         final seen = <int>{};
-        for (var i = 0; i < 3; i++) {
+        for (final other in others) {
           final bundle = AccountKeys.fromJson(
             (await h.api.call(
               Routes.accountKeys,
               params: {'account': alice.accountId},
-              bearer: bob.bearer,
+              bearer: other.bearer,
             )).json,
           );
           final device = bundle.devices.single;

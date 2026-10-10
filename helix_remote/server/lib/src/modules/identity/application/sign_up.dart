@@ -21,6 +21,18 @@ final class SignUp {
     const Duration(hours: 1),
   );
 
+  /// The cluster's daily text budget (`HELIX_SMS_DAILY_LIMIT`), one bucket
+  /// for every number. It is a token bucket that refills over the day, so the
+  /// worst case is twice the limit in 24 hours (a full burst at the start of
+  /// the window, then the refill); that is the point - it stops a pumping
+  /// script from spending the provider's balance, and the bucket is shared by
+  /// every node and every purpose (sign-up, recovery, verification).
+  RateLimitPolicy get _dailyBudget => RateLimitPolicy.per(
+    'identity.sms_daily',
+    c.config.smsDailyLimit,
+    const Duration(days: 1),
+  );
+
   // ------------------------------------------------------------ phone codes
 
   Future<PhoneChallengeResponse> requestPhoneChallenge(
@@ -33,6 +45,16 @@ final class SignUp {
       );
     }
     final e164 = requireE164(req.phoneNumber);
+    // Refused before anything is stored or charged, and the answer does not
+    // say whether the number is one this server knows: a caller outside the
+    // allowed countries learns only that no text will come.
+    if (!c.config.allowsCountry(e164)) {
+      c.log.info('sms_country_refused', {'purpose': req.purpose.wire});
+      throw const ApiError(
+        ErrorCode.smsUnavailable,
+        message: 'This server does not send texts to that country.',
+      );
+    }
     final phoneHash = c.phoneHash(e164);
     if (await c.credentials.isBanned(c.db, phoneHash)) {
       throw const ApiError(ErrorCode.phoneBanned);
@@ -46,6 +68,17 @@ final class SignUp {
       );
     }
     await c.limit(_perPhone, encodeBytes(phoneHash));
+    // Charged last, after every check that refuses one number, so a banned
+    // or throttled number never spends the budget real sign-ups need.
+    final budget = await c.rateLimiter.hit(_dailyBudget, 'all');
+    if (!budget.allowed) {
+      c.log.warn('sms_budget_exhausted', {});
+      throw ApiError(
+        ErrorCode.rateLimited,
+        message: 'Too many codes requested today; try again tomorrow.',
+        retryAfter: budget.retryAfter,
+      );
+    }
 
     final id = Uuid.v7(now: now);
     final code = sixDigitCode();

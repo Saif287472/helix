@@ -126,6 +126,9 @@ identifiers into a ticket or chat without checking it first.
   | `periodic_failed` | A housekeeping job failed (`job`, `error`). |
   | `realtime_task_failed` | A WebSocket task failed. |
   | `sms_failed` | SMS gateway refused or was unreachable (`reason`). |
+  | `sms_budget_exhausted` | The day's text budget (`HELIX_SMS_DAILY_LIMIT`) is spent; code requests get 429 until it refills. Many in a row usually mean SMS pumping. |
+  | `sms_country_refused` | A code was asked for a number outside `HELIX_SMS_COUNTRIES` (`purpose`; never the number). |
+  | `after_commit_failed` | A step after a committed write (a bus publish) failed (`error` type). The write stands; sockets catch up at their next refresh. |
   | `admin_setup`, `admin_seeded`, `admin_seed_ignored`, `admin_sign_in_failed` | Operator account events. |
   | `peer_key_changed` | A federation peer's key changed. |
   | `client_crash` | An opt-in client crash report (redacted). |
@@ -186,9 +189,14 @@ any node runs it. (`platform/jobs/jobs.dart`, `platform/platform_migrations.dart
   rescheduled with exponential backoff (5 s, doubling, capped at 1 hour) and
   `last_error` holds only the exception type. When `attempts` reaches
   `max_attempts` the row is kept with `status = 'dead'`.
-- **A handler that runs longer than the lease** can be claimed again by
-  another node. Handlers are written to be idempotent (reasoning, not
-  tested for every handler).
+- **Timeouts.** A handler is given up on after 60 s (`last_error` is
+  `TimeoutException`) and retried like any failure, so one stalled job (an FCM
+  token endpoint that stopped answering) cannot hold every other job on the
+  node. The FCM token refresh itself gives up after 10 s. A periodic job is
+  given up on after 5 minutes and runs again next interval.
+- **A handler that keeps running after its timeout** (the timeout stops the
+  wait, not the work) can overlap a retry on another node. Handlers are
+  written to be idempotent (reasoning, not tested for every handler).
 - **Jobs left pending forever.** A job whose `kind` has no handler on any
   running node is never claimed. After removing a module, check for these.
 - **Job kinds and attempts:**
@@ -278,13 +286,16 @@ kind = '...'`) for that.
   | `identity.verify`, `.invite`, `.password` | 30 per hour each |
   | `identity.register`, `.recovery` | 10 per hour each |
   | `identity.refresh`, `.link_poll` | 600 per hour each |
-  | `keys.bundle` / `keys.bundle_target` | 120 / 600 per hour |
+  | `identity.sms_daily` (one bucket for the whole server) | `HELIX_SMS_DAILY_LIMIT` per day (default 500), charged only for a code that is about to be texted |
+  | `keys.bundle` (per device) / `keys.bundle_pair` (per requesting account and target) | 120 / 20 per hour; a requesting account also gets at most one one-time prekey per target device an hour |
+  | `keys.bundle_target` (per target, other servers' fetches only) | 600 per hour |
   | `messaging.send` (per device) / `messaging.send_account` (per account) | 200 at once, 5 per second / 400 at once, 10 per second |
   | `messaging.stored_account` (per account, direct and group sends together) | 50,000 units at once, 250 per second; a unit is one started 16 KiB per recipient device |
   | `groups.send` (per device) / `groups.fan_out` (per group) | 200 at once, 5 per second / 200,000 units at once, 2,000 per second |
   | `calls.turn` / `calls.offers` / `calls.signals` | 10 per hour per device / 30 per 10 minutes per account / 240 per minute per sending device (update, end, ICE) |
   | `groups.create` / `groups.preview` | 20 per day / 60 per hour |
   | `people.by_name` / `people.reports` | 30 per minute / 20 per hour |
+  | `people.reads` / `people.read_targets` (presence and profiles of other accounts) | 120 per minute / 2,000 distinct accounts per day |
   | `compliance.export` / `compliance.delete` | 5 per day / 5 per hour |
   | `federation.*` | identity 120, keys 600, signals 1200, messages 3000 per minute (keys per target: 30) |
 
@@ -294,7 +305,8 @@ kind = '...'`) for that.
 - **Keys.** A bucket key is `<policy>:<principal>` where the principal is
   `ip:<address>`, `device:<id>`, `admin:<id>` or `server:<domain>`. The global
   limit's key is `ip:<address>`. Handler limits use `account:<id>` or, for
-  `groups.fan_out`, the bare group id.
+  `groups.fan_out`, the bare group id; `keys.bundle_pair` uses
+  `<account id>/<target>`, and the SMS budget is `identity.sms_daily:all`.
 - **Clear a stuck limit** (for example your own address after testing):
 
   ```sql
@@ -302,8 +314,15 @@ kind = '...'`) for that.
   WHERE key = 'ip:<address>' OR key LIKE '%:ip:<address>';
   ```
 
-- Buckets older than an hour are swept every 10 minutes. A Postgres crash
-  empties the table (it is UNLOGGED), which only resets limits.
+  To give back the day's SMS budget (after checking the log for pumping):
+  `DELETE FROM platform.rate_buckets WHERE key = 'identity.sms_daily:all';`
+
+- A bucket is swept (every 10 minutes) once it would be full again: one
+  policy window after its last hit (`full_at`; a minute for a per-minute
+  limit, a day for a daily budget). Dropping it earlier would reset it, which
+  is what an hourly sweep did to the daily budgets before platform migration
+  2. A Postgres crash empties the table (it is UNLOGGED), which only resets
+  limits.
 
 ## Backups
 
@@ -502,6 +521,12 @@ two nodes on one database.)
   `max_connections` of 100 allows about six nodes at the default pool size
   before anything else connects. The `LISTEN` connection must go straight to Postgres (a
   transaction-mode connection pooler breaks `LISTEN`).
+- Postgres timeouts: every transaction sets `statement_timeout` 15 s and
+  `lock_timeout` 5 s (`set_config(..., true)`, transaction-local), and the
+  server appends `query_timeout=30` (seconds) to `HELIX_DATABASE_URL` for
+  statements outside a transaction (the purge jobs). A request that hits one
+  answers 500 and frees its connection instead of holding it. Migrations run
+  without either limit.
 
 **Running two nodes on the PC:**
 

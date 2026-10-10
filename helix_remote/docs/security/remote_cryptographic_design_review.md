@@ -323,6 +323,22 @@ because a reviewer should look at it, not because anyone has.
   `packages/helix_remote_engine/test/two_engines_test.dart` (two engines on one
   database file).
 
+## 13. One-time prekey hand-out (2026-10-10, review A-12)
+
+**Not externally reviewed.** Server behaviour, no crypto code or vector
+changed. Bundle fetches used to share one 600-an-hour bucket per target
+account, so five accounts could keep it empty and nobody new could start a
+session with the victim. The shared bucket is gone for local fetches (other
+servers' fetches keep it); the limit is per (requesting account, target), 20
+an hour. To keep one-time prekeys from being drained without that bucket, a
+requesting account gets at most one OPK per target device an hour
+(`keys:otk:` markers in the ephemeral store, `KeysModule.oneTimePrekeyGap`);
+later bundles carry the signed prekey only, and the session starts without
+DH4 (CRYPTO_V2 §3). The cost is that a second session from the same account
+within the hour (a reset, another of its devices) has no one-time prekey,
+which weakens replay resistance of its first message, not its secrecy.
+`test/modules/server_hardening_test.dart` covers it.
+
 ## Independent review pass, 2026-10-05
 
 An independent, read-only review of the v2 client crypto and engine was done

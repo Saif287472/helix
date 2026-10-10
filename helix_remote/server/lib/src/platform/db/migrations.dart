@@ -63,11 +63,15 @@ final class MigrationRunner {
 
   Future<MigrationReport> run(List<MigrationSet> sets) async {
     _validate(sets);
-    return db.tx((tx) async {
-      // Transaction-scoped: released at commit or rollback.
-      await tx.execute('SELECT pg_advisory_xact_lock($_lockKey)');
-      await tx.execute('CREATE SCHEMA IF NOT EXISTS ${schemas.platform}');
-      await tx.execute('''
+    // No statement or lock timeout: a migration builds indexes and rewrites
+    // tables, which may take minutes. The pool's connect timeout still
+    // applies, and one advisory lock still decides which node migrates.
+    return db.tx(
+      (tx) async {
+        // Transaction-scoped: released at commit or rollback.
+        await tx.execute('SELECT pg_advisory_xact_lock($_lockKey)');
+        await tx.execute('CREATE SCHEMA IF NOT EXISTS ${schemas.platform}');
+        await tx.execute('''
         CREATE TABLE IF NOT EXISTS $_table (
           module text NOT NULL,
           version integer NOT NULL,
@@ -76,45 +80,51 @@ final class MigrationRunner {
           applied_at timestamptz NOT NULL DEFAULT now(),
           PRIMARY KEY (module, version)
         )''');
-      final appliedRows = await tx.query(
-        'SELECT module, version, checksum FROM $_table',
-      );
-      final applied = {
-        for (final r in appliedRows)
-          '${r.string('module')}:${r.integer('version')}': r.string('checksum'),
-      };
-      final done = <String>[];
-      for (final set in sets) {
-        final schema = schemas.of(set.module);
-        await tx.execute('CREATE SCHEMA IF NOT EXISTS $schema');
-        for (final migration in set.migrations) {
-          final key = '${set.module}:${migration.version}';
-          final checksum = migration.checksum;
-          final existing = applied[key];
-          if (existing != null) {
-            if (existing != checksum) {
-              throw MigrationIntegrityError(
-                'migration $key (${migration.name}) changed after it was applied',
-              );
+        final appliedRows = await tx.query(
+          'SELECT module, version, checksum FROM $_table',
+        );
+        final applied = {
+          for (final r in appliedRows)
+            '${r.string('module')}:${r.integer('version')}': r.string(
+              'checksum',
+            ),
+        };
+        final done = <String>[];
+        for (final set in sets) {
+          final schema = schemas.of(set.module);
+          await tx.execute('CREATE SCHEMA IF NOT EXISTS $schema');
+          for (final migration in set.migrations) {
+            final key = '${set.module}:${migration.version}';
+            final checksum = migration.checksum;
+            final existing = applied[key];
+            if (existing != null) {
+              if (existing != checksum) {
+                throw MigrationIntegrityError(
+                  'migration $key (${migration.name}) changed after it was applied',
+                );
+              }
+              continue;
             }
-            continue;
+            await tx.execute(migration.sql(schema));
+            await tx.execute(
+              'INSERT INTO $_table (module, version, name, checksum) '
+              'VALUES (@module:text, @version:int4, @name:text, @checksum:text)',
+              {
+                'module': set.module,
+                'version': migration.version,
+                'name': migration.name,
+                'checksum': checksum,
+              },
+            );
+            done.add(key);
           }
-          await tx.execute(migration.sql(schema));
-          await tx.execute(
-            'INSERT INTO $_table (module, version, name, checksum) '
-            'VALUES (@module:text, @version:int4, @name:text, @checksum:text)',
-            {
-              'module': set.module,
-              'version': migration.version,
-              'name': migration.name,
-              'checksum': checksum,
-            },
-          );
-          done.add(key);
         }
-      }
-      return MigrationReport(done);
-    }, retries: 0);
+        return MigrationReport(done);
+      },
+      retries: 0,
+      statementTimeout: Duration.zero,
+      lockTimeout: Duration.zero,
+    );
   }
 
   void _validate(List<MigrationSet> sets) {

@@ -2,22 +2,63 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:helix_remote_server/src/platform/db/db.dart';
+import 'package:helix_remote_server/src/platform/observability/log.dart';
 import 'package:postgres/postgres.dart' as pg;
 
 /// [Db] over a `package:postgres` pool. This file and its siblings are the
 /// only code that imports the driver (architecture test).
 final class PostgresDb implements Db {
-  PostgresDb._(this._pool, this._url);
+  PostgresDb._(
+    this._pool,
+    this._url, {
+    required this.statementTimeout,
+    required this.lockTimeout,
+    required Log log,
+  }) : _log = log.child({'component': 'db'});
+
+  /// How long a statement may run before the server cancels it. Long enough
+  /// for the biggest fan-out this server does, short enough that a stuck
+  /// query frees its pool connection instead of starving the node.
+  static const defaultStatementTimeout = Duration(seconds: 15);
+
+  /// How long a statement may wait for a row lock. A group row held `FOR
+  /// UPDATE` by a fan-out must fail fast rather than queue every other
+  /// request behind it.
+  static const defaultLockTimeout = Duration(seconds: 5);
+
+  /// The driver's own per-statement timeout, for statements that run outside
+  /// a transaction (where no `SET LOCAL` applies). It cancels the query on
+  /// the server and only then gives up client-side.
+  static const defaultQueryTimeout = Duration(seconds: 30);
 
   /// Opens a pool for [url] (`postgresql://user:pass@host:port/db?sslmode=`).
   /// The URL is never logged.
-  static Future<PostgresDb> open(String url, {int maxConnections = 10}) async {
+  ///
+  /// [statementTimeout] and [lockTimeout] apply to every transaction (see
+  /// [Db.tx]); [queryTimeout] is the driver's limit for statements outside
+  /// one. [log] receives after-commit failures.
+  static Future<PostgresDb> open(
+    String url, {
+    int maxConnections = 10,
+    Duration statementTimeout = defaultStatementTimeout,
+    Duration lockTimeout = defaultLockTimeout,
+    Duration queryTimeout = defaultQueryTimeout,
+    Log? log,
+  }) async {
     final parsed = Uri.parse(url);
     final separator = parsed.hasQuery ? '&' : '?';
     final pool = pg.Pool<void>.withUrl(
-      '$url${separator}max_connection_count=$maxConnections',
+      '$url${separator}max_connection_count=$maxConnections'
+      // The driver reads whole seconds here (and refuses 0).
+      '&query_timeout=${math.max(1, queryTimeout.inSeconds)}',
     );
-    final db = PostgresDb._(pool, url);
+    final db = PostgresDb._(
+      pool,
+      url,
+      statementTimeout: statementTimeout,
+      lockTimeout: lockTimeout,
+      log: log ?? Log(),
+    );
     if (!await db.ping()) {
       await pool.close();
       throw StateError('database is not reachable');
@@ -35,6 +76,9 @@ final class PostgresDb implements Db {
 
   final pg.Pool<void> _pool;
   final String _url;
+  final Duration statementTimeout;
+  final Duration lockTimeout;
+  final Log _log;
   Future<pg.Connection>? _listener;
   StreamSubscription<pg.Notification>? _notifications;
   final Set<String> _listening = {};
@@ -60,27 +104,76 @@ final class PostgresDb implements Db {
       _execute(_pool, sql, params);
 
   @override
-  Future<T> tx<T>(Future<T> Function(Tx tx) body, {int retries = 3}) async {
+  Future<T> tx<T>(
+    Future<T> Function(Tx tx) body, {
+    int retries = 3,
+    Duration? statementTimeout,
+    Duration? lockTimeout,
+    bool readOnlySnapshot = false,
+  }) async {
     // Nested: join the running transaction rather than waiting for a second
     // pool connection (at pool-size concurrency that wait never ends).
     final outer = Zone.current[_txZoneKey];
     if (outer is _PgTx && identical(outer._owner, this) && outer._open) {
+      if (readOnlySnapshot) {
+        throw StateError('a nested transaction cannot change its isolation');
+      }
       return body(outer);
     }
+    final statement = statementTimeout ?? this.statementTimeout;
+    final lock = lockTimeout ?? this.lockTimeout;
+    // The driver's own limit for statements in this transaction (its URL
+    // `query_timeout` otherwise): a little above the server's, so the server
+    // cancels first; a transaction without a server limit (migrations) gets a
+    // day rather than the driver's default.
+    final client = statement == Duration.zero
+        ? const Duration(days: 1)
+        : statement + const Duration(seconds: 5);
     var attempt = 0;
     while (true) {
       final pending = <Future<void> Function()>[];
       try {
-        final result = await _pool.runTx((session) async {
-          final tx = _PgTx(this, session, pending);
-          try {
-            return await runZoned(() => body(tx), zoneValues: {_txZoneKey: tx});
-          } finally {
-            tx._open = false;
-          }
-        });
+        final result = await _pool.runTx(
+          settings: readOnlySnapshot
+              ? pg.TransactionSettings(
+                  isolationLevel: pg.IsolationLevel.repeatableRead,
+                  accessMode: pg.AccessMode.readOnly,
+                )
+              : null,
+          (session) async {
+            // The first thing the transaction does: a lock wait or a runaway
+            // query is cancelled by the server, so the pool connection comes back (see
+            // [Db.tx]). `set_config(..., true)` is transaction-local and takes
+            // both settings in one round trip; the values are millisecond
+            // counts from code, never from a request.
+            await session.execute(
+              "SELECT set_config('statement_timeout', "
+              "'${statement.inMilliseconds}', true), "
+              "set_config('lock_timeout', '${lock.inMilliseconds}', true)",
+            );
+            final tx = _PgTx(this, session, pending, client);
+            try {
+              return await runZoned(
+                () => body(tx),
+                zoneValues: {_txZoneKey: tx},
+              );
+            } finally {
+              tx._open = false;
+            }
+          },
+        );
+        // After-commit actions run after the write is durable and must not
+        // turn it into an error: the bus is best-effort by design, and a
+        // NOTIFY that failed during a blip would otherwise answer 500 for a
+        // change that happened, skipping the remaining publishes.
         for (final action in pending) {
-          await action();
+          try {
+            await action();
+          } on Object catch (e) {
+            _log.warn('after_commit_failed', {
+              'error': e.runtimeType.toString(),
+            });
+          }
         }
         return result;
       } on pg.ServerException catch (e) {
@@ -224,11 +317,12 @@ final class PostgresDb implements Db {
 }
 
 final class _PgTx implements Tx {
-  _PgTx(this._owner, this._session, this._afterCommit);
+  _PgTx(this._owner, this._session, this._afterCommit, this._timeout);
 
   final PostgresDb _owner;
   final pg.TxSession _session;
   final List<Future<void> Function()> _afterCommit;
+  final Duration _timeout;
 
   /// False once the body has finished; later nested `tx` calls (from work
   /// the body left running) start their own transaction.
@@ -238,7 +332,7 @@ final class _PgTx implements Tx {
   Future<List<Row>> query(
     String sql, [
     Map<String, Object?> params = const {},
-  ]) => _query(_session, sql, params);
+  ]) => _query(_session, sql, params, timeout: _timeout);
 
   @override
   Future<Row?> queryOne(
@@ -248,7 +342,7 @@ final class _PgTx implements Tx {
 
   @override
   Future<int> execute(String sql, [Map<String, Object?> params = const {}]) =>
-      _execute(_session, sql, params);
+      _execute(_session, sql, params, timeout: _timeout);
 
   @override
   void afterCommit(Future<void> Function() action) => _afterCommit.add(action);
@@ -257,11 +351,16 @@ final class _PgTx implements Tx {
 Future<List<Row>> _query(
   pg.Session session,
   String sql,
-  Map<String, Object?> params,
-) async {
+  Map<String, Object?> params, {
+  Duration? timeout,
+}) async {
   _checkRanges(sql, params);
   try {
-    final result = await session.execute(pg.Sql.named(sql), parameters: params);
+    final result = await session.execute(
+      pg.Sql.named(sql),
+      parameters: params,
+      timeout: timeout,
+    );
     return [for (final row in result) Row(row.toColumnMap())];
   } on pg.ServerException catch (e) {
     throw _translate(e);
@@ -271,14 +370,16 @@ Future<List<Row>> _query(
 Future<int> _execute(
   pg.Session session,
   String sql,
-  Map<String, Object?> params,
-) async {
+  Map<String, Object?> params, {
+  Duration? timeout,
+}) async {
   _checkRanges(sql, params);
   try {
     final result = await session.execute(
       pg.Sql.named(sql),
       parameters: params,
       ignoreRows: true,
+      timeout: timeout,
     );
     return result.affectedRows;
   } on pg.ServerException catch (e) {

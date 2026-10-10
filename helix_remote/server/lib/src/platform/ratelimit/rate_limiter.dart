@@ -36,7 +36,9 @@ abstract interface class RateLimiter {
   /// large request is slow, never impossible.
   Future<RateDecision> hit(RateLimitPolicy policy, String key, {int cost = 1});
 
-  /// Drops buckets that have been full long enough to be meaningless.
+  /// Drops buckets that are full again (one policy window after their last
+  /// hit): a missing bucket starts full, so dropping one earlier would reset
+  /// it.
   Future<int> sweep();
 }
 
@@ -45,6 +47,7 @@ final class InMemoryRateLimiter implements RateLimiter {
 
   final Clock _clock;
   final Map<String, (double, DateTime)> _buckets = {};
+  final Map<String, DateTime> _fullAt = {};
 
   @override
   Future<RateDecision> hit(
@@ -61,6 +64,7 @@ final class InMemoryRateLimiter implements RateLimiter {
       policy.capacity.toDouble(),
       tokens + elapsed * policy.perSecond,
     );
+    _fullAt[id] = now.add(_window(policy));
     if (refilled >= take) {
       _buckets[id] = (refilled - take, now);
       return const RateDecision.allowed();
@@ -71,13 +75,23 @@ final class InMemoryRateLimiter implements RateLimiter {
 
   @override
   Future<int> sweep() async {
-    final before = _buckets.length;
-    _buckets.removeWhere(
-      (_, v) => _clock.now().difference(v.$2) > const Duration(hours: 1),
-    );
-    return before - _buckets.length;
+    final now = _clock.now();
+    final full = [
+      for (final MapEntry(:key, :value) in _fullAt.entries)
+        if (!value.isAfter(now)) key,
+    ];
+    for (final id in full) {
+      _buckets.remove(id);
+      _fullAt.remove(id);
+    }
+    return full.length;
   }
 }
+
+/// How long an empty bucket of [policy] takes to fill: after this long
+/// without a hit, any bucket of it is full.
+Duration _window(RateLimitPolicy policy) =>
+    Duration(milliseconds: (policy.capacity / policy.perSecond * 1000).ceil());
 
 /// The tokens a hit of [cost] takes: at least one, at most the capacity.
 int _charge(RateLimitPolicy policy, int cost) =>
@@ -111,14 +125,18 @@ final class PostgresRateLimiter implements RateLimiter {
     // full, and [take] never exceeds the capacity.
     const refilled =
         'LEAST(@cap:float8, b.tokens + EXTRACT(EPOCH FROM (now() - b.updated_at)) * @rate:float8)';
+    // `full_at`: one window from now, by when even an empty bucket is full
+    // again; the sweep drops a bucket only then.
     final row = await _db.queryOne(
       '''
-      INSERT INTO $_table AS b (key, tokens, updated_at, allowed)
-      VALUES (@k:text, @cap:float8 - @take:float8, now(), true)
+      INSERT INTO $_table AS b (key, tokens, updated_at, allowed, full_at)
+      VALUES (@k:text, @cap:float8 - @take:float8, now(), true,
+              now() + make_interval(secs => @window:float8))
       ON CONFLICT (key) DO UPDATE SET
         tokens = CASE WHEN $refilled >= @take:float8 THEN $refilled - @take:float8 ELSE $refilled END,
         allowed = $refilled >= @take:float8,
-        updated_at = now()
+        updated_at = now(),
+        full_at = now() + make_interval(secs => @window:float8)
       RETURNING tokens, allowed
       ''',
       {
@@ -126,6 +144,7 @@ final class PostgresRateLimiter implements RateLimiter {
         'cap': policy.capacity.toDouble(),
         'rate': policy.perSecond,
         'take': take.toDouble(),
+        'window': _window(policy).inMilliseconds / 1000,
       },
     );
     if (row!.boolean('allowed')) return const RateDecision.allowed();
@@ -133,7 +152,6 @@ final class PostgresRateLimiter implements RateLimiter {
   }
 
   @override
-  Future<int> sweep() => _db.execute(
-    "DELETE FROM $_table WHERE updated_at < now() - interval '1 hour'",
-  );
+  Future<int> sweep() =>
+      _db.execute('DELETE FROM $_table WHERE full_at <= now()');
 }
