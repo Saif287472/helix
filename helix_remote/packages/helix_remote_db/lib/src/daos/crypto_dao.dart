@@ -219,8 +219,64 @@ class CryptoDao extends DatabaseAccessor<HelixDb> with _$CryptoDaoMixin {
           ))
           .go();
 
+  /// Saves a sender key received from another device. Its revision stays 0:
+  /// receiving never encrypts, so a lost update cannot reuse a key.
   Future<void> saveSenderKey(SenderKeysCompanion key) =>
       into(senderKeys).insertOnConflictUpdate(key);
+
+  /// The revision of this device's own sending key in [groupId] (the
+  /// highest of its rows), or 0 when it has none.
+  Future<int> ownSenderKeyVersion({
+    required String groupId,
+    required String account,
+    required String device,
+  }) async => _highestVersion(
+    await senderKeysOf(groupId: groupId, account: account, device: device),
+  );
+
+  /// Saves this device's own sending key [key] and drops its other keys in
+  /// the group (a rotation replaces the sending key: nobody decrypts our own
+  /// messages, so the old chain is not needed).
+  ///
+  /// A compare-and-set, like [saveSessions]: the write only lands while the
+  /// stored revision is still [expectedVersion], and it stores
+  /// `expectedVersion + 1`. **Returns false**, changing nothing, when another
+  /// engine on this database file wrote first: the caller must load the key
+  /// again rather than commit a chain step that engine may also have taken.
+  Future<bool> saveOwnSenderKey(
+    SenderKeysCompanion key, {
+    required int expectedVersion,
+  }) {
+    final groupId = key.groupId.value;
+    final account = key.accountId.value;
+    final device = key.deviceId.value;
+    return transaction(() async {
+      final existing = await senderKeysOf(
+        groupId: groupId,
+        account: account,
+        device: device,
+      );
+      if (_highestVersion(existing) != expectedVersion) return false;
+      await into(senderKeys).insertOnConflictUpdate(
+        key.copyWith(version: Value(expectedVersion + 1)),
+      );
+      for (final old in existing) {
+        if (old.distId == key.distId.value) continue;
+        await deleteSenderKey(
+          groupId: groupId,
+          account: account,
+          device: device,
+          distId: old.distId,
+        );
+      }
+      return true;
+    });
+  }
+
+  static int _highestVersion(List<SenderKeyRow> rows) => rows.fold(
+    0,
+    (highest, row) => row.version > highest ? row.version : highest,
+  );
 
   /// Deletes a group's sender keys, all of them or one account's.
   Future<void> deleteSenderKeys(String groupId, {String? account}) =>

@@ -1215,12 +1215,21 @@ the batch.
     heartbeat's ownership check, and that a lost lease leaves the new owner's
     file alone) and `hard_wipe_test.dart` (the engine stops on the loss and the
     app reopens).
-  - **Not done, deliberately:** `sender_keys` keeps its last-writer-wins save,
-    so two engines could still send a group message from the same sender-key
-    iteration. The user chose sessions only for this batch; the gap is recorded
-    in CRYPTO_V2 §14 and in the design-review note. The Doze residual from
-    Batch 3 is now *safe* (the overlap can no longer corrupt state) but not
-    *removed*: the user chose to keep the lease timing.
+  - **Group sender keys (completed the same day):** schema 4 adds
+    `sender_keys.version` (`from3To4`). This device's own sending key is saved
+    by compare-and-set (`CryptoDao.saveOwnSenderKey`).
+    `DbSenderKeyStore` raises `StaleSenderKeyState` on a refusal, and
+    `GroupMessageSender` encrypts again from the stored key (`staleAttempts`).
+    Nothing is sent from a refused step. Keys received from other devices stay
+    last-writer-wins at revision 0, because receiving never encrypts.
+    - Tests: db (the compare-and-set, the 3→4 migration with sender keys at 0,
+      the generic upgrade paths to 4) and engine `two_engines_test.dart` (two
+      engines sending to one group at once: both arrive, nothing
+      undecryptable; a stale own-key write is refused).
+    - Docs: CRYPTO_V2 §14 and the design-review note updated.
+  - **Lease timing:** the Doze residual from Batch 3 is now *safe* (the overlap
+    can no longer corrupt state) but not *removed*: the user chose to keep the
+    lease timing.
 
 ### Batch 5: Server hardening
 

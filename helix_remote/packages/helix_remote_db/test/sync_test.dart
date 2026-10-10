@@ -396,6 +396,82 @@ void main() {
     },
   );
 
+  test(
+    'crypto: the own sender key is saved by compare-and-set; a rotation drops '
+    'the old key',
+    () async {
+      final crypto = db.cryptoDao;
+      SenderKeysCompanion own(String dist, int byte) =>
+          SenderKeysCompanion.insert(
+            groupId: 'g1',
+            accountId: 'me',
+            deviceId: 'd0',
+            distId: dist,
+            state: Uint8List.fromList([byte]),
+            createdAt: at(1),
+            updatedAt: at(1),
+          );
+      Future<int> version() => crypto.ownSenderKeyVersion(
+        groupId: 'g1',
+        account: 'me',
+        device: 'd0',
+      );
+
+      expect(await version(), 0);
+      expect(
+        await crypto.saveOwnSenderKey(own('k1', 1), expectedVersion: 0),
+        isTrue,
+      );
+      expect(await version(), 1);
+      // A step taken from revision 0 after another engine wrote revision 1.
+      expect(
+        await crypto.saveOwnSenderKey(own('k1', 9), expectedVersion: 0),
+        isFalse,
+      );
+      expect(
+        (await crypto.latestSenderKey(
+          groupId: 'g1',
+          account: 'me',
+          device: 'd0',
+        ))!.state.single,
+        1,
+        reason: 'the refused write changed nothing',
+      );
+      // A rotation replaces the key and keeps counting.
+      expect(
+        await crypto.saveOwnSenderKey(own('k2', 2), expectedVersion: 1),
+        isTrue,
+      );
+      final rows = await crypto.senderKeysOf(
+        groupId: 'g1',
+        account: 'me',
+        device: 'd0',
+      );
+      expect(rows.map((r) => (r.distId, r.version)), [('k2', 2)]);
+      // Keys received from others keep revision 0.
+      await crypto.saveSenderKey(
+        SenderKeysCompanion.insert(
+          groupId: 'g1',
+          accountId: 'bob',
+          deviceId: 'd1',
+          distId: 'b1',
+          state: Uint8List.fromList([3]),
+          createdAt: at(1),
+          updatedAt: at(1),
+        ),
+      );
+      expect(
+        (await crypto.senderKey(
+          groupId: 'g1',
+          account: 'bob',
+          device: 'd1',
+          distId: 'b1',
+        ))!.version,
+        0,
+      );
+    },
+  );
+
   test('account: one self row and the device list', () async {
     final account = db.accountDao;
     await account.save(

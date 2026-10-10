@@ -91,7 +91,7 @@ class HelixDb extends _$HelixDb {
   /// `dart run drift_dev make-migrations`, and fill in the generated test
   /// (MODULE.md, "Changing the schema").
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -123,6 +123,15 @@ class HelixDb extends _$HelixDb {
       from2To3: (m, schema) async {
         await m.database.customStatement(
           'ALTER TABLE sessions ADD COLUMN version INTEGER NOT NULL DEFAULT 0',
+        );
+      },
+      // Schema 4 adds `sender_keys.version`, the same revision for this
+      // device's own sending key (`CryptoDao.saveOwnSenderKey`): two engines
+      // sending from one sender-key iteration reuse its key and nonce one
+      // layer above the ratchet (review C-01). Existing rows start at 0.
+      from3To4: (m, schema) async {
+        await m.database.customStatement(
+          'ALTER TABLE sender_keys ADD COLUMN version INTEGER NOT NULL DEFAULT 0',
         );
       },
     ),

@@ -296,11 +296,22 @@ because a reviewer should look at it, not because anyone has.
   reached). On the app side the lease heartbeat checks the file before
   rewriting it: another engine's claim ends this engine's claim, stops its
   engine, and makes the app open a new runtime that takes the lease back.
-- **What is not covered.** `sender_keys` still saves last-writer-wins, so two
-  engines could send a group message from the same sender-key iteration - the
-  same key/nonce reuse, one layer up. Left open deliberately (the pairwise
-  sessions are the ones that carry 1:1 content, and the revision mechanism
-  needs porting to the group write path). `DeviceSessions.version` is
+- **Group sender keys (schema 4, the same day).** The same key/nonce reuse
+  existed one layer up: two engines could send a group message from one
+  sender-key iteration. `sender_keys` now carries a `version` too, and this
+  device's own sending key is saved by compare-and-set
+  (`CryptoDao.saveOwnSenderKey`). `DbSenderKeyStore.ownKey` remembers the
+  revision it read, a refused commit raises `StaleSenderKeyState` before
+  anything is sent, and `GroupMessageSender` encrypts again from the stored
+  key (`staleAttempts`). Every own-key read and write happens under the
+  group's send lock, so the remembered revision belongs to the write that
+  follows it. Keys received from other devices keep revision 0 and save
+  last-writer-wins: receiving never encrypts, so a lost update costs at most a
+  re-derived key. No crypto code or vector changed: the revision lives in the
+  engine's store, not in `SenderKeyState`
+  (`packages/helix_remote_engine/test/two_engines_test.dart`, the two group
+  tests).
+- **Bookkeeping, not state.** `DeviceSessions.version` is
   storage bookkeeping: it is carried through the record's transformations and
   is **not** part of the encoded state, so no test vector changed with it
   (`test/v2/session_test.dart`, "the store revision travels with the record but

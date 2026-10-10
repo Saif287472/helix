@@ -8743,6 +8743,18 @@ class $SenderKeysTable extends SenderKeys
         type: DriftSqlType.int,
         requiredDuringInsert: true,
       ).withConverter<DateTime>($SenderKeysTable.$converterupdatedAt);
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     groupId,
@@ -8752,6 +8764,7 @@ class $SenderKeysTable extends SenderKeys
     state,
     createdAt,
     updatedAt,
+    version,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -8805,6 +8818,12 @@ class $SenderKeysTable extends SenderKeys
     } else if (isInserting) {
       context.missing(_stateMeta);
     }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    }
     return context;
   }
 
@@ -8851,6 +8870,10 @@ class $SenderKeysTable extends SenderKeys
           data['${effectivePrefix}updated_at'],
         )!,
       ),
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
     );
   }
 
@@ -8871,6 +8894,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
   final Uint8List state;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int version;
   const SenderKeyRow({
     required this.groupId,
     required this.accountId,
@@ -8879,6 +8903,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
     required this.state,
     required this.createdAt,
     required this.updatedAt,
+    required this.version,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -8898,6 +8923,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
         $SenderKeysTable.$converterupdatedAt.toSql(updatedAt),
       );
     }
+    map['version'] = Variable<int>(version);
     return map;
   }
 
@@ -8910,6 +8936,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
       state: Value(state),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      version: Value(version),
     );
   }
 
@@ -8926,6 +8953,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
       state: serializer.fromJson<Uint8List>(json['state']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      version: serializer.fromJson<int>(json['version']),
     );
   }
   @override
@@ -8939,6 +8967,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
       'state': serializer.toJson<Uint8List>(state),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'version': serializer.toJson<int>(version),
     };
   }
 
@@ -8950,6 +8979,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
     Uint8List? state,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? version,
   }) => SenderKeyRow(
     groupId: groupId ?? this.groupId,
     accountId: accountId ?? this.accountId,
@@ -8958,6 +8988,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
     state: state ?? this.state,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    version: version ?? this.version,
   );
   SenderKeyRow copyWithCompanion(SenderKeysCompanion data) {
     return SenderKeyRow(
@@ -8968,6 +8999,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
       state: data.state.present ? data.state.value : this.state,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      version: data.version.present ? data.version.value : this.version,
     );
   }
 
@@ -8980,7 +9012,8 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
           ..write('distId: $distId, ')
           ..write('state: $state, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version')
           ..write(')'))
         .toString();
   }
@@ -8994,6 +9027,7 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
     $driftBlobEquality.hash(state),
     createdAt,
     updatedAt,
+    version,
   );
   @override
   bool operator ==(Object other) =>
@@ -9005,7 +9039,8 @@ class SenderKeyRow extends DataClass implements Insertable<SenderKeyRow> {
           other.distId == this.distId &&
           $driftBlobEquality.equals(other.state, this.state) &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.version == this.version);
 }
 
 class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
@@ -9016,6 +9051,7 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
   final Value<Uint8List> state;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<int> version;
   final Value<int> rowid;
   const SenderKeysCompanion({
     this.groupId = const Value.absent(),
@@ -9025,6 +9061,7 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
     this.state = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.version = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   SenderKeysCompanion.insert({
@@ -9035,6 +9072,7 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
     required Uint8List state,
     required DateTime createdAt,
     required DateTime updatedAt,
+    this.version = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : groupId = Value(groupId),
        accountId = Value(accountId),
@@ -9051,6 +9089,7 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
     Expression<Uint8List>? state,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
+    Expression<int>? version,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -9061,6 +9100,7 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
       if (state != null) 'state': state,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (version != null) 'version': version,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -9073,6 +9113,7 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
     Value<Uint8List>? state,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<int>? version,
     Value<int>? rowid,
   }) {
     return SenderKeysCompanion(
@@ -9083,6 +9124,7 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
       state: state ?? this.state,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -9115,6 +9157,9 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
         $SenderKeysTable.$converterupdatedAt.toSql(updatedAt.value),
       );
     }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -9131,6 +9176,7 @@ class SenderKeysCompanion extends UpdateCompanion<SenderKeyRow> {
           ..write('state: $state, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -20952,6 +20998,7 @@ typedef $$SenderKeysTableCreateCompanionBuilder =
       required Uint8List state,
       required DateTime createdAt,
       required DateTime updatedAt,
+      Value<int> version,
       Value<int> rowid,
     });
 typedef $$SenderKeysTableUpdateCompanionBuilder =
@@ -20963,6 +21010,7 @@ typedef $$SenderKeysTableUpdateCompanionBuilder =
       Value<Uint8List> state,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<int> version,
       Value<int> rowid,
     });
 
@@ -21011,6 +21059,11 @@ class $$SenderKeysTableFilterComposer
         column: $table.updatedAt,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$SenderKeysTableOrderingComposer
@@ -21056,6 +21109,11 @@ class $$SenderKeysTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SenderKeysTableAnnotationComposer
@@ -21087,6 +21145,9 @@ class $$SenderKeysTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<DateTime, int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
 }
 
 class $$SenderKeysTableTableManager
@@ -21127,6 +21188,7 @@ class $$SenderKeysTableTableManager
                 Value<Uint8List> state = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> version = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SenderKeysCompanion(
                 groupId: groupId,
@@ -21136,6 +21198,7 @@ class $$SenderKeysTableTableManager
                 state: state,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                version: version,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -21147,6 +21210,7 @@ class $$SenderKeysTableTableManager
                 required Uint8List state,
                 required DateTime createdAt,
                 required DateTime updatedAt,
+                Value<int> version = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SenderKeysCompanion.insert(
                 groupId: groupId,
@@ -21156,6 +21220,7 @@ class $$SenderKeysTableTableManager
                 state: state,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                version: version,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

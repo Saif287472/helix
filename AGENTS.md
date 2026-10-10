@@ -100,7 +100,7 @@ docs/                        cross-product docs; much of it historical (see bann
 Schema versions: the server has numbered migrations **per module**
 (`modules/<name>/` and `platform/platform_migrations.dart`), checksummed and
 recorded in `platform.schema_migrations`; never edit one that has run, add a
-new one (expand, migrate, contract). The app's local database is schema **3**
+new one (expand, migrate, contract). The app's local database is schema **4**
 (`schemaVersion` in `packages/helix_remote_db/lib/src/database.dart`); a change
 needs a step migration, a regenerated schema dump and generated code
 (`dart run tool/codegen.dart` in the package; CI runs `--check`), plus the

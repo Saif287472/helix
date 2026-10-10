@@ -89,6 +89,24 @@ final class StaleSessionState extends EngineException {
   String toString() => 'StaleSessionState: $message';
 }
 
+/// This device's own sender key in a group moved while this engine was
+/// sending from it: another engine owns this database (the app and its FCM
+/// isolate) and committed a step of the same chain first.
+///
+/// Nothing was written and nothing was sent. The group sender encrypts again
+/// from the stored key; committing the stale step would send two group
+/// messages under one key and nonce (CRYPTO_V2.md §7, review finding C-01).
+/// The message names the group and never any key or content.
+final class StaleSenderKeyState extends EngineException {
+  StaleSenderKeyState(this.groupId)
+    : super('the sending key of this device in a group moved');
+
+  final String groupId;
+
+  @override
+  String toString() => 'StaleSenderKeyState: $message';
+}
+
 /// The recipient's keys could not be trusted: a certificate that does not
 /// verify, or keys that claim another account.
 final class UntrustedPeerException extends EngineException {

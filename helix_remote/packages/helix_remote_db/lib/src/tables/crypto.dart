@@ -71,6 +71,13 @@ class Prekeys extends Table {
 /// Sender keys per `(group, account, device, dist_id)` (CRYPTO_V2.md §7),
 /// this device's own sending keys included. The state blob is owned by
 /// `helix_remote_crypto`.
+///
+/// [version] is the revision of this device's own sending key in a group,
+/// as [Sessions.version] is for a ratchet record: it rises by one per write,
+/// and a write only lands while the stored value is still the one the writer
+/// read (`CryptoDao.saveOwnSenderKey`), so two engines on one database file
+/// cannot send two group messages from one chain iteration. Keys received
+/// from other devices keep 0: receiving never encrypts.
 @DataClassName('SenderKeyRow')
 class SenderKeys extends Table {
   TextColumn get groupId => text()();
@@ -80,6 +87,7 @@ class SenderKeys extends Table {
   BlobColumn get state => blob()();
   IntColumn get createdAt => integer().map(const EpochMs())();
   IntColumn get updatedAt => integer().map(const EpochMs())();
+  IntColumn get version => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {groupId, accountId, deviceId, distId};

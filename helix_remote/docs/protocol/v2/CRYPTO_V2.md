@@ -466,9 +466,14 @@ reviewed**.
 - `PRAGMA busy_timeout = 5000` on every connection: SQLite's default of zero
   fails the second writer immediately, before the compare-and-set can be
   reached.
-- Group sender keys are **not** covered: `sender_keys` still saves
-  last-writer-wins, so two engines could send a group message from the same
-  sender-key iteration. Recorded as an open item below.
+- This device's own **group sender key** has the same revision since schema 4:
+  `sender_keys.version`, compare-and-set in `CryptoDao.saveOwnSenderKey`. A
+  refused write raises `StaleSenderKeyState`; nothing has been sent yet, and the
+  group sender encrypts again from the stored key (`GroupMessageSender`,
+  `staleAttempts`). Two engines therefore never send group messages from one
+  sender-key iteration. Keys *received* from other devices keep revision 0 and
+  save last-writer-wins: receiving never encrypts, so a lost update can only
+  make a later message re-derive a key the receiver already held.
 
 **Deviation (the safer option; proposed change-log entry)**
 
@@ -559,12 +564,9 @@ following; each was fixed with a test that fails without the fix.
   nil.
 - *Retired base keys.* The list of base keys remembered against prekey-message
   replay is not capped.
-- *Group sender keys under two engines.* `sender_keys` still saves
-  last-writer-wins, so the app and its FCM isolate could both send a group
-  message from the same sender-key iteration (the same key/nonce reuse the
-  `sessions.version` compare-and-set now prevents for pairwise sessions).
-  Closing it means the same revision on `sender_keys` and threading it through
-  the group crypto writes.
+- *Group sender keys under two engines.* Closed for sending in schema 4 (the
+  own key's revision, above). Received keys still save last-writer-wins, which
+  costs at most a re-derived key on the receiving side.
 - *No HTTPS enforcement.* `HelixApi` and `LinkCode` accept `http://` origins
   (needed for tests and a LAN personal server); the app must refuse them for
   Helix Global.

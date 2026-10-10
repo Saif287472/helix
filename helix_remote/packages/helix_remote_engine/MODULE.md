@@ -227,6 +227,14 @@ receiver skips).
   committed - the retry must reload inside the attempt, never reuse a record
   loaded earlier. A cleared record is written as an empty one-slot record, not
   deleted, so the revision survives.
+- Sender keys: `DbSenderKeyStore` does the same for this device's own sending
+  key in a group (schema 4). `ownKey` remembers the revision it read; a commit
+  of an `OwnSenderKeyWrite` lands only while that is still the stored one, and
+  throws `StaleSenderKeyState` otherwise. `GroupMessageSender` then encrypts
+  again from the stored key (nothing was sent), up to `staleAttempts` times; a
+  refused "delivered" mark after a successful send is dropped, which only means
+  a redistribution next time. Every own-key read and write runs under the
+  group's send lock. Received keys save last-writer-wins at revision 0.
 - Settings: `EngineSettings` (user-facing: read receipts, typing, default
   timer) and `EngineState` (session JSON, prekey counters, timestamps).
 - Nothing in the engine logs. `maskPhone` and `shortId` are for hosts that
@@ -259,8 +267,9 @@ receiver skips).
   An FCM isolate writing the same file is invisible to the UI isolate's
   streams until they re-query; A1 decides between a shared drift isolate and
   a refresh on resume. Two engines *writing* the same file are now safe against
-  each other (the session compare-and-set, C-01) but the app still keeps them
-  apart by lease: a `StaleSessionState` that survives
+  each other (the session and own sender-key compare-and-sets, C-01) but the
+  app still keeps them apart by lease: a `StaleSessionState` or
+  `StaleSenderKeyState` that survives
   `staleAttempts` retries is the caller's problem (an inbound re-delivery, an
   outbox backoff), not a state to work around.
 - **Contact-list upload** (`PUT /v1/people/contacts`, only for "contacts"

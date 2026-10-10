@@ -1,6 +1,7 @@
 import 'dart:io';
 
-import 'package:helix_remote_crypto/v2.dart' show DeviceAddress;
+import 'package:helix_remote_crypto/v2.dart'
+    show DeviceAddress, OwnSenderKeyWrite;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_engine/src/context.dart';
@@ -8,8 +9,10 @@ import 'package:helix_remote_engine/src/crypto/db_stores.dart';
 import 'package:helix_remote_engine/src/crypto/local_identity.dart';
 import 'package:helix_remote_engine/src/crypto/pairwise_crypto.dart';
 import 'package:helix_remote_engine/src/crypto/peer_directory.dart';
+import 'package:helix_remote_engine/src/groups/sender_key_store.dart';
 import 'package:test/test.dart';
 
+import 'support/fake_groups.dart';
 import 'support/peers.dart';
 
 /// Two engines over one database file (review finding C-01).
@@ -193,6 +196,108 @@ void main() {
       expect(firstVersion, greaterThan(0));
       final stored = (await store.load(remote))!;
       expect(stored.version, greaterThan(firstVersion));
+    },
+  );
+
+  test('two engines sending to a group at once never send from one sender-key '
+      'step', () async {
+    final (peers, alice, other, bob) = await withTwoEnginesOnOneFile();
+    addTearDown(peers.dispose);
+    FakeGroups(peers.server);
+
+    final created = await alice.engine.groups.create(
+      name: 'Weekend',
+      members: [bob.account],
+    );
+    final groupId = created.groupId;
+    final conversation = GroupIds.conversationId(groupId);
+    await alice.engine.chats.sendText(conversation, 'first');
+    await alice.engine.drainOutbox();
+    await bob.sync();
+    Future<int> revision() => alice.db.cryptoDao.ownSenderKeyVersion(
+      groupId: groupId,
+      account: alice.account,
+      device: alice.device,
+    );
+    final before = await revision();
+    expect(before, greaterThan(0));
+
+    // Both engines queue a group send and are drained together. The sender
+    // key's chain is one sequence: whichever commits second is refused
+    // (`StaleSenderKeyState`) and encrypts again from the step the first
+    // one stored.
+    await alice.engine.chats.sendText(conversation, 'from the app');
+    await other.engine.chats.sendText(conversation, 'from the isolate');
+    await Future.wait([alice.engine.drainOutbox(), other.engine.drainOutbox()]);
+    expect(
+      await revision() - before,
+      greaterThanOrEqualTo(2),
+      reason: 'one committed step per send, never one for both',
+    );
+
+    await bob.sync();
+    final rows = (await bob.db.messagesDao.pageOlder(
+      conversation,
+      limit: 50,
+    )).messages;
+    expect([
+      for (final m in rows)
+        if (m.kind == 'text') m.body,
+    ], containsAll(['first', 'from the app', 'from the isolate']));
+    expect(
+      rows.where((m) => m.kind == MessageKinds.undecryptable),
+      isEmpty,
+      reason: 'both arrived under their own key and nonce',
+    );
+  });
+
+  test(
+    'a stale own sender key write is refused, and nothing changes',
+    () async {
+      final (peers, alice, other, bob) = await withTwoEnginesOnOneFile();
+      addTearDown(peers.dispose);
+      FakeGroups(peers.server);
+      final created = await alice.engine.groups.create(
+        name: 'Weekend',
+        members: [bob.account],
+      );
+      final groupId = created.groupId;
+      final conversation = GroupIds.conversationId(groupId);
+      await alice.engine.chats.sendText(conversation, 'hello');
+      await alice.engine.drainOutbox();
+
+      // Two stores over one file: what two engines have.
+      Future<DbSenderKeyStore> storeOn(Peer peer) async {
+        final context = EngineContext(
+          api: peer.api,
+          db: peer.db,
+          clock: peers.clock.call,
+          random: SeededRandom('two-engines'),
+          config: fastConfig,
+        );
+        context.setIdentity(await LocalIdentity.load(peer.db));
+        return DbSenderKeyStore(context);
+      }
+
+      final first = await storeOn(alice);
+      final second = await storeOn(other);
+      final stale = (await first.ownKey(groupId))!;
+      final current = (await second.ownKey(groupId))!;
+      await second.commit([OwnSenderKeyWrite(current)]);
+
+      await expectLater(
+        first.commit([OwnSenderKeyWrite(stale)]),
+        throwsA(
+          isA<StaleSenderKeyState>().having(
+            (e) => e.groupId,
+            'groupId',
+            groupId,
+          ),
+        ),
+      );
+      // After a fresh read the same store writes again.
+      final reread = (await first.ownKey(groupId))!;
+      await first.commit([OwnSenderKeyWrite(reread)]);
     },
   );
 

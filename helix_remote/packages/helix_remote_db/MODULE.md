@@ -54,6 +54,10 @@ step-by-step migration cannot alter a table, and the step-by-step helpers only
 create entities, so this step is the one raw statement in the strategy.
 Existing rows start at 0, which is the revision a first read expects.
 
+Schema 4 does the same for `sender_keys.version` (`from3To4`, the same kind of
+`ALTER TABLE`): this device's own sending key in a group gets the revision
+sessions have.
+
 ## Two engines, one database file
 
 The app and its FCM background isolate are two engines over the same SQLCipher
@@ -73,6 +77,13 @@ and the GHASH key.
   a normal one-slot record, because deleting the rows would lose the revision
   and make the next write un-comparable. `deleteSessions` is for a full wipe
   (sign-out, revocation) only.
+- **`sender_keys.version` does the same for this device's own sending
+  key.** `CryptoDao.saveOwnSenderKey` compares the highest revision of the
+  device's rows in the group, stores `expectedVersion + 1`, drops the device's
+  other keys in that group (a rotation), and returns false otherwise; the
+  engine raises `StaleSenderKeyState` and encrypts the group message again.
+  Keys received from other devices go through `saveSenderKey` and stay at 0:
+  receiving never encrypts.
 - **`busy_timeout` is 5 s** (`busyTimeout` in `opening.dart`). SQLite's default
   is zero, which fails the second writer at once; the compare-and-set is only
   reachable if the losing writer can take its turn.

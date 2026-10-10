@@ -8,6 +8,7 @@ import 'package:test/test.dart';
 import 'generated/schema.dart';
 import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
+import 'generated/schema_v3.dart' as v3;
 
 /// Migration tests against the checked-in schema dumps (plan §6.2: every
 /// migration has a drift_dev test from the first release onward).
@@ -96,6 +97,52 @@ void main() {
         now: DateTime.utc(2026, 10, 9),
         expectedVersion: 0,
       ),
+      isFalse,
+    );
+  });
+
+  test('3 to 4 keeps every sender key and gives it revision 0', () async {
+    final schema = await verifier.schemaAt(3);
+    final old = v3.DatabaseAtV3(schema.newConnection());
+    for (final (account, dist) in [('me', 'k1'), ('bob', 'k2')]) {
+      await old.customStatement(
+        'INSERT INTO sender_keys (group_id, account_id, device_id, dist_id, '
+        "state, created_at, updated_at) VALUES ('g1', '$account', 'd1', "
+        "'$dist', x'7b7d', 1000, 1000)",
+      );
+    }
+    await old.close();
+
+    final db = HelixDb.withExecutor(schema.newConnection());
+    addTearDown(db.close);
+    await verifier.migrateAndValidate(db, 4);
+
+    for (final account in ['me', 'bob']) {
+      final rows = await db.cryptoDao.senderKeysOf(
+        groupId: 'g1',
+        account: account,
+        device: 'd1',
+      );
+      expect(rows.single.version, 0);
+      expect(rows.single.createdAt.millisecondsSinceEpoch, 1000);
+    }
+    // The revision is usable: the first compare-and-set from revision 0
+    // lands, and a second write from the same revision is refused.
+    SenderKeysCompanion own() => SenderKeysCompanion.insert(
+      groupId: 'g1',
+      accountId: 'me',
+      deviceId: 'd1',
+      distId: 'k1',
+      state: Uint8List.fromList([1]),
+      createdAt: DateTime.utc(2026, 10, 9),
+      updatedAt: DateTime.utc(2026, 10, 9),
+    );
+    expect(
+      await db.cryptoDao.saveOwnSenderKey(own(), expectedVersion: 0),
+      isTrue,
+    );
+    expect(
+      await db.cryptoDao.saveOwnSenderKey(own(), expectedVersion: 0),
       isFalse,
     );
   });

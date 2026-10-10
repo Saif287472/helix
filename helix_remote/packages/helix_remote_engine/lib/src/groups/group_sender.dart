@@ -27,7 +27,10 @@ import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 /// 4. **Commit, then send.** The sender key's new state (and every ratchet
 ///    state used for the distributions) is committed before the request
 ///    leaves; a retry encrypts again, which skips an iteration the
-///    receivers forward-skip.
+///    receivers forward-skip. The commit is a compare-and-set on the key's
+///    revision: when another engine on this database file sent from the same
+///    key first ([StaleSenderKeyState]), nothing is sent and the message is
+///    encrypted again from the stored key, up to [staleAttempts] times.
 /// 5. **Digest.** The server compares the digest with its member devices;
 ///    on `device_list_stale` it returns every member's devices, this device
 ///    adopts them (reading the group again if the accounts differ) and the
@@ -95,6 +98,7 @@ final class GroupMessageSender {
       await _forgetDistribution(groupId, redistribute);
     }
     var attempts = _ctx.config.staleListRetries + 1;
+    var staleKeys = 0;
     while (true) {
       final roster = await _roster.rosterForSend(groupId);
       if (roster == null) {
@@ -120,7 +124,15 @@ final class GroupMessageSender {
       }
       // Commit before the request leaves (the ratchet states of the
       // distributions were committed by `encryptFor`).
-      await _store.commit(encryption.writes);
+      try {
+        await _store.commit(encryption.writes);
+      } on StaleSenderKeyState {
+        // Another engine sent from this key first: encrypt again from the
+        // key it stored. The distributions sealed for this attempt are
+        // dropped; their receivers forward-skip the ratchet step.
+        if (++staleKeys >= staleAttempts) rethrow;
+        continue;
+      }
       final request = GroupMessageRequest(
         id: requestId,
         payload: encryption.payload.encode(),
@@ -146,13 +158,19 @@ final class GroupMessageSender {
       }
       final delivered = distributions?.delivered ?? const <DeviceAddress>{};
       if (delivered.isNotEmpty) {
-        await _store.commit(
-          await protocol.markDelivered(
-            groupId: groupId,
-            keyId: encryption.keyId,
-            devices: delivered,
-          ),
-        );
+        try {
+          await _store.commit(
+            await protocol.markDelivered(
+              groupId: groupId,
+              keyId: encryption.keyId,
+              devices: delivered,
+            ),
+          );
+        } on StaleSenderKeyState {
+          // The message is sent. Another engine moved the key since, so
+          // these devices stay unmarked and get the key again with the next
+          // send, which costs a distribution and nothing else.
+        }
       }
       return;
     }
@@ -165,13 +183,22 @@ final class GroupMessageSender {
     String groupId,
     List<DeviceAddress> devices,
   ) async {
-    final key = await _store.ownKey(groupId);
-    if (key == null) return;
-    await _store.commit([
-      OwnSenderKeyWrite(
-        key.copyWith(distributedTo: {...key.distributedTo}..removeAll(devices)),
-      ),
-    ]);
+    for (var attempt = 1; ; attempt++) {
+      final key = await _store.ownKey(groupId);
+      if (key == null) return;
+      try {
+        await _store.commit([
+          OwnSenderKeyWrite(
+            key.copyWith(
+              distributedTo: {...key.distributedTo}..removeAll(devices),
+            ),
+          ),
+        ]);
+        return;
+      } on StaleSenderKeyState {
+        if (attempt >= staleAttempts) rethrow;
+      }
+    }
   }
 
   /// Seals the sender-key distribution for the devices that need it. Starts
