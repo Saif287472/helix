@@ -193,7 +193,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 
 | Name | Req | Default | Dev | Secret | What it does |
 |---|---|---|---|---|---|
-| `HELIX_ADMIN_PASSWORD` | no | none | no | **yes** | Creates the first operator on a server that has none. At least 12 characters. It **never replaces** an existing password (unlike v1's `HELIX_REMOTE_ADMIN_PASSWORD`, which overrode it). Remove it after the first start. |
+| `HELIX_ADMIN_PASSWORD` | no | none | no | **yes** | Creates the first operator on a server that has none. At least 12 characters. It **never replaces** an existing password (unlike v1's `HELIX_REMOTE_ADMIN_PASSWORD`, which overrode it). Remove it after the first start: while an operator exists, a start with it set logs `admin_seed_still_set`. To change a forgotten password use `dart run bin/admin_tool.dart reset-password`. |
 | `HELIX_ADMIN_KDF_MEMORY_KIB` | no | 19456 (the Argon2id recommendation) | **yes** | no | Argon2id memory cost for admin passwords. Outside dev mode it can only raise the cost; in dev mode it can lower it (minimum 64). |
 
 ### federation (`modules/federation/config.dart`, `modules/ops/module.dart`)

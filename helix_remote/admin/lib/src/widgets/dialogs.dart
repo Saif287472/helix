@@ -42,12 +42,15 @@ Future<bool> showConfirmDialog(
 typedef Reason = ({String? text});
 
 /// Asks to confirm an action with an optional reason. Null when cancelled.
+/// With a [phrase], the action also needs it typed in full, as
+/// [showTypedConfirmDialog] does (for actions that cannot be undone).
 Future<Reason?> showReasonDialog(
   BuildContext context, {
   required String title,
   required String message,
   required String action,
   bool destructive = false,
+  String? phrase,
 }) => showDialog<Reason>(
   context: context,
   builder: (context) => _ReasonDialog(
@@ -55,6 +58,7 @@ Future<Reason?> showReasonDialog(
     message: message,
     action: action,
     destructive: destructive,
+    phrase: phrase,
   ),
 );
 
@@ -64,12 +68,14 @@ class _ReasonDialog extends StatefulWidget {
     required this.message,
     required this.action,
     required this.destructive,
+    required this.phrase,
   });
 
   final String title;
   final String message;
   final String action;
   final bool destructive;
+  final String? phrase;
 
   @override
   State<_ReasonDialog> createState() => _ReasonDialogState();
@@ -77,16 +83,20 @@ class _ReasonDialog extends StatefulWidget {
 
 class _ReasonDialogState extends State<_ReasonDialog> {
   final _reason = TextEditingController();
+  final _typed = TextEditingController();
 
   @override
   void dispose() {
     _reason.dispose();
+    _typed.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final phrase = widget.phrase;
+    final confirmed = phrase == null || _typed.text.trim() == phrase;
     return AlertDialog(
       title: Text(widget.title),
       content: Column(
@@ -104,6 +114,17 @@ class _ReasonDialogState extends State<_ReasonDialog> {
               border: OutlineInputBorder(),
             ),
           ),
+          if (phrase != null) ...[
+            const SizedBox(height: HelixSpace.sm),
+            TextField(
+              controller: _typed,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Type $phrase to confirm',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
         ],
       ),
       actions: [
@@ -112,10 +133,14 @@ class _ReasonDialogState extends State<_ReasonDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () {
-            final text = _reason.text.trim();
-            Navigator.pop<Reason>(context, (text: text.isEmpty ? null : text));
-          },
+          onPressed: confirmed
+              ? () {
+                  final text = _reason.text.trim();
+                  Navigator.pop<Reason>(context, (
+                    text: text.isEmpty ? null : text,
+                  ));
+                }
+              : null,
           style: widget.destructive
               ? FilledButton.styleFrom(backgroundColor: scheme.error)
               : null,

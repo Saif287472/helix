@@ -34,8 +34,9 @@ deletion contract. The v1 version is in git history (tag `v1-final`).
   (15 minutes) are not stored.
 - Idempotency records 24 hours, send records 7 days, rate-limit buckets 1 hour after last use, call
   metrics 90 days, pending calls 120 seconds.
-- Audit records (operator actions) and reports: operational retention. Reports survive account deletion
-  as the moderation record until resolved.
+- Audit records (operator actions): one year, deleted daily (`admin.purge_audit`); the account ids in
+  them outlive a deleted account by at most that year. Reports: operational retention; they survive
+  account deletion as the moderation record until resolved.
 - Logs: JSON lines on stdout and an optional file (`HELIX_LOG_FILE`); rotation is the operator's.
 
 ## Account deletion

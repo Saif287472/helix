@@ -720,6 +720,14 @@ abstract final class Routes {
     module: 'admin',
     access: _pub,
   );
+
+  /// Ends every session of the signed-in operator, this one included.
+  static const adminSignOut = ApiRoute(
+    _delete,
+    '/v1/admin/sessions',
+    module: 'admin',
+    access: _adm,
+  );
   static const adminPassword = ApiRoute(
     _put,
     '/v1/admin/password',
@@ -880,7 +888,8 @@ abstract final class Routes {
     exportData, deleteAccount, //
     serverIdentity, s2sMessages, s2sKeys, s2sGroupMessages, s2sGroup,
     s2sGroupActions, s2sGroupSync, s2sCallSignals, //
-    adminSetupStatus, adminSetup, adminSignIn, adminPassword, adminAccounts,
+    adminSetupStatus, adminSetup, adminSignIn, adminSignOut, adminPassword,
+    adminAccounts,
     adminAccount, adminSuspend, adminUnsuspend, adminBan, adminDeleteAccount,
     adminRevokeDevice, adminRecoveryCode, adminInvites, adminCreateInvite,
     adminCancelInvite, adminReports, adminResolveReport, adminAudit,

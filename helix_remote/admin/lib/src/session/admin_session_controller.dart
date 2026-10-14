@@ -57,11 +57,17 @@ final class AdminSessionController extends ChangeNotifier {
   ServerAddress? _pendingAddress;
 
   bool _busy = false;
+  bool _authenticating = false;
+  DateTime? _backgroundedAt;
   bool? _setupRequired;
   String? _error;
   String? _notice;
   String? _lockError;
   String _lastServerUrl = '';
+
+  /// How long the console may stay in the background before App lock asks
+  /// again (review B-06; the operator's choice was one minute).
+  static const relockAfter = Duration(minutes: 1);
 
   SessionPhase get phase => _phase;
 
@@ -118,7 +124,15 @@ final class AdminSessionController extends ChangeNotifier {
     _busy = true;
     _lockError = null;
     notifyListeners();
-    final ok = await services.deviceLock.authenticate('Unlock Helix Admin');
+    // The system prompt sends the app to the background on Android; that is
+    // not the operator leaving ([backgrounded]).
+    _authenticating = true;
+    final bool ok;
+    try {
+      ok = await services.deviceLock.authenticate('Unlock Helix Admin');
+    } finally {
+      _authenticating = false;
+    }
     _busy = false;
     if (_disposed) return;
     if (ok) {
@@ -338,9 +352,27 @@ final class AdminSessionController extends ChangeNotifier {
     _scheduleExpiry(session.expiresAt);
   }
 
-  /// Signs out: forgets the token everywhere. (There is no server call: the
-  /// token simply expires.)
-  Future<void> signOut() => _end(null);
+  /// Signs out: the server ends every admin session (this token and any copy
+  /// of it, review B-02), then the token is forgotten here. When the server
+  /// cannot be reached the console still signs out here, and says the
+  /// session stays valid on the server until it expires.
+  Future<void> signOut() async {
+    final api = _api;
+    if (_phase != SessionPhase.signedIn || api == null) return;
+    String? notice;
+    try {
+      await api.admin.signOut();
+    } on Object catch (e) {
+      // A refused token has already ended the session on the server.
+      if (!endsAdminSession(e)) {
+        notice =
+            'Signed out on this device only: the server could not be '
+            'reached, so the session stays valid there until it expires. '
+            'Sign in and sign out again to end it.';
+      }
+    }
+    await _end(notice);
+  }
 
   Future<void> _end(String? notice) async {
     final api = _api;
@@ -374,6 +406,41 @@ final class AdminSessionController extends ChangeNotifier {
   }
 
   // ----------------------------------------------------------------- app lock
+
+  /// The app went to the background (hidden or paused).
+  void backgrounded() {
+    if (_authenticating) return;
+    _backgroundedAt ??= services.now();
+  }
+
+  /// The app is in front again. With App lock on, a signed-in console that
+  /// was away for [relockAfter] or longer locks as a restart would: the
+  /// session stays in the vault, and unlocking checks it with the server
+  /// again.
+  void resumed() {
+    final since = _backgroundedAt;
+    _backgroundedAt = null;
+    if (since == null || !appLockEnabled) return;
+    final away = services.now().difference(since);
+    if (!away.isNegative && away < relockAfter) return;
+    _relock();
+  }
+
+  void _relock() {
+    final api = _api;
+    if (_phase != SessionPhase.signedIn || api == null) return;
+    _api = null;
+    _session = null;
+    _address = null;
+    _expiryTimer?.cancel();
+    _expiryTimer = null;
+    final sub = _signedOutSub;
+    _signedOutSub = null;
+    unawaited(sub?.cancel());
+    unawaited(api.close());
+    _lockError = null;
+    _setPhase(SessionPhase.locked);
+  }
 
   /// Turns App lock on or off. Turning it on needs a device screen lock;
   /// returns a problem to show, or null.

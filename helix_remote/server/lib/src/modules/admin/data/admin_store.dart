@@ -141,8 +141,10 @@ final class AdminStore {
   /// attempt locks that address for [firstLock], doubling per further
   /// attempt up to [maxLock]. Globally: the [global]th attempt since the
   /// last success locks every address for [globalLock] and restarts the
-  /// count. Returns the lock end if the attempt is refused (nothing is
-  /// counted then); a successful sign-in clears both counters.
+  /// count. A null [global] (the local network) neither counts towards nor
+  /// is stopped by the global lock. Returns the lock end if the attempt is
+  /// refused (nothing is counted then); a successful sign-in clears both
+  /// counters.
   Future<DateTime?> reserveAttempt(
     Tx tx,
     String id,
@@ -150,7 +152,7 @@ final class AdminStore {
     required int perIp,
     required Duration firstLock,
     required Duration maxLock,
-    required int global,
+    required int? global,
     required Duration globalLock,
   }) async {
     final admin = (await tx.queryOne(
@@ -158,7 +160,9 @@ final class AdminStore {
       'WHERE id = @id:uuid FOR UPDATE',
       {'id': id},
     ))!;
-    if (admin.boolean('locked')) return admin.time('locked_until');
+    if (global != null && admin.boolean('locked')) {
+      return admin.time('locked_until');
+    }
     final counted = await tx.queryOne(
       'INSERT INTO $s.sign_in_failures AS f (ip, failed_attempts) VALUES (@ip:text, 1) '
       'ON CONFLICT (ip) DO UPDATE SET failed_attempts = f.failed_attempts + 1, '
@@ -180,6 +184,7 @@ final class AdminStore {
         {'ip': ip},
       ))!.time('locked_until');
     }
+    if (global == null) return null;
     await tx.execute(
       'UPDATE $s.admins SET '
       'locked_until = CASE WHEN failed_attempts + 1 >= @g:int4 '
@@ -201,6 +206,18 @@ final class AdminStore {
       'ip': ip,
     });
   }
+
+  /// Clears every address's lock and count (a password reset).
+  Future<void> clearSignInFailures(SqlSession db) =>
+      db.execute('DELETE FROM $s.sign_in_failures');
+
+  /// Ends every token of [id] issued before [validAfter] (sign-out).
+  Future<void> endSessions(SqlSession db, String id, DateTime validAfter) =>
+      db.execute(
+        'UPDATE $s.admins SET tokens_valid_after = @v:timestamptz '
+        'WHERE id = @id:uuid',
+        {'id': id, 'v': _millis(validAfter)},
+      );
 
   /// Forgets addresses that have been quiet and unlocked for two days.
   Future<int> purgeSignInFailures(SqlSession db) => db.execute(
@@ -250,6 +267,12 @@ final class AdminStore {
       },
     );
   }
+
+  /// Deletes audit rows older than [age] (the retention job).
+  Future<int> purgeAudit(SqlSession db, Duration age) => db.execute(
+    'DELETE FROM $s.audit WHERE at < now() - make_interval(secs => @s:int8)',
+    {'s': age.inSeconds},
+  );
 
   Future<Page<AuditEntry>> auditLog(
     SqlSession db, {

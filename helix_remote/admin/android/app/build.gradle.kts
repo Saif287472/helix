@@ -14,6 +14,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    dependencies {
+        // The launch themes are AppCompat-based, which local_auth's unlock
+        // prompt needs (the same as the user app).
+        implementation("androidx.appcompat:appcompat:1.7.1")
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.helix.helix_admin"

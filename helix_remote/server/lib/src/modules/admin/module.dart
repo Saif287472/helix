@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:helix_remote_server/src/kernel/jwt.dart';
 import 'package:helix_remote_server/src/modules/admin/data/admin_store.dart';
+import 'package:helix_remote_server/src/modules/admin/domain/local_address.dart';
 import 'package:helix_remote_server/src/modules/admin/domain/password_hash.dart';
 import 'package:helix_remote_server/src/modules/calls/api.dart';
 import 'package:helix_remote_server/src/modules/identity/api.dart';
@@ -14,6 +15,7 @@ import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
+import 'package:helix_remote_server/src/platform/http/websocket_limits.dart';
 import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
@@ -55,7 +57,19 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   @override
   late final Authenticator authenticator;
 
-  final Set<WebSocketChannel> _logSockets = {};
+  /// Live log streams and the token each was opened with, re-checked every
+  /// [logStreamRecheck] and at once after a sign-out or password change.
+  final Map<WebSocketChannel, String> _logSockets = {};
+  Timer? _logCheck;
+
+  static const logStreamRecheck = Duration(seconds: 60);
+
+  /// The console never sends on the log stream; anything bigger than this
+  /// closes it before it is buffered.
+  static const maxLogStreamMessageBytes = 1024;
+
+  /// Audit rows older than this are deleted daily (the operator's choice).
+  static const auditRetention = Duration(days: 365);
 
   static const sessionLifetime = Duration(hours: 12);
   static const audience = 'helix.admin';
@@ -67,8 +81,11 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   static const firstLock = Duration(minutes: 15);
   static const maxLock = Duration(hours: 24);
 
-  /// Global safety cap, whatever the addresses: 100 failures since the last
-  /// success lock sign-in for 15 minutes (then the count restarts).
+  /// Global safety cap: 100 failures since the last success, from addresses
+  /// outside the local network, lock sign-in from those addresses for 15
+  /// minutes (then the count restarts). This machine and the LAN are exempt
+  /// ([isLocalNetworkAddress]), so nobody on the internet can lock the
+  /// operator at home out (review B-08).
   static const globalLockAfter = 100;
   static const globalLock = Duration(minutes: 15);
 
@@ -116,6 +133,11 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       const Duration(hours: 6),
       () => _store.purgeSignInFailures(context.db),
     ),
+    PeriodicJob(
+      'admin.purge_audit',
+      const Duration(hours: 24),
+      () => _store.purgeAudit(context.db, auditRetention),
+    ),
   ];
 
   @override
@@ -129,6 +151,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       )
       ..add(name, Routes.adminSetup, _setup, rateLimit: _setupLimit)
       ..add(name, Routes.adminSignIn, _signIn, rateLimit: _signInLimit)
+      ..add(name, Routes.adminSignOut, _signOut)
       ..add(name, Routes.adminPassword, _changePassword)
       ..add(name, Routes.adminAccounts, _accounts)
       ..add(name, Routes.adminAccount, _account)
@@ -158,9 +181,25 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   /// replaces an existing password.
   @override
   Future<void> start() async {
+    _logCheck = Timer.periodic(logStreamRecheck, (_) {
+      unawaited(
+        recheckLogStreams().catchError((Object e) {
+          log.warn('log_stream_check_failed', {
+            'error': e.runtimeType.toString(),
+          });
+        }),
+      );
+    });
     final seed = context.config.env['HELIX_ADMIN_PASSWORD'];
     if (seed == null || seed.isEmpty) return;
-    if (await _store.configured(context.db)) return;
+    if (await _store.configured(context.db)) {
+      // It never replaces a password; left in .env it is only a stale
+      // plaintext secret (review B-07).
+      log.warn('admin_seed_still_set', {
+        'why': 'an admin exists; remove HELIX_ADMIN_PASSWORD from .env',
+      });
+      return;
+    }
     if (seed.length < AdminPasswordRequest.minLength) {
       log.warn('admin_seed_ignored', {'why': 'too short'});
       return;
@@ -179,7 +218,8 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
 
   @override
   Future<void> stop() async {
-    for (final ws in _logSockets.toList()) {
+    _logCheck?.cancel();
+    for (final ws in _logSockets.keys.toList()) {
       await ws.sink.close(RealtimeCloseCode.goingAway, 'server shutting down');
     }
   }
@@ -271,7 +311,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
         perIp: lockAfter,
         firstLock: firstLock,
         maxLock: maxLock,
-        global: globalLockAfter,
+        global: isLocalNetworkAddress(q.clientIp) ? null : globalLockAfter,
         globalLock: globalLock,
       ),
     );
@@ -286,9 +326,56 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       log.warn('admin_sign_in_failed');
       throw const ApiError(ErrorCode.invalidCredentials);
     }
-    await _store.recordSuccess(context.db, admin.id, q.clientIp);
-    await _store.audit(context.db, adminId: admin.id, action: 'admin.sign_in');
+    await context.db.tx((tx) async {
+      await _store.recordSuccess(tx, admin.id, q.clientIp);
+      await _store.audit(tx, adminId: admin.id, action: 'admin.sign_in');
+    });
     return jsonResponse(_issue(admin.id).toJson());
+  }
+
+  /// Ends every session of this operator, this one included: the console's
+  /// "Sign out", and the way to cut off a token that may have leaked (review
+  /// B-02). Open log streams close at once.
+  Future<Response> _signOut(HelixRequest q) async {
+    final id = q.admin.adminId;
+    await context.db.tx((tx) async {
+      await _store.endSessions(tx, id, context.clock.now());
+      await _audit(tx, q, 'admin.sign_out');
+    });
+    await recheckLogStreams();
+    return noContent();
+  }
+
+  /// `bin/admin_tool.dart reset-password`: sets the operator's password
+  /// (creating the operator if there is none), ends every admin session and
+  /// clears every sign-in lock, with an audit row (review B-07). Throws
+  /// `invalid_field` for a password outside 12 to 256 characters.
+  Future<void> resetPassword(String password) async {
+    _checkPassword(password, 'password');
+    final hash = await PasswordHash.create(password, _kdf);
+    final now = context.clock.now();
+    await context.db.tx((tx) async {
+      final admin = await _store.first(tx);
+      if (admin == null) {
+        final id = Uuid.v7();
+        await _store.createFirst(tx, id, hash, now);
+        await _store.audit(
+          tx,
+          adminId: id,
+          action: 'admin.password_reset',
+          details: {'by': 'admin_tool', 'created': 'true'},
+        );
+        return;
+      }
+      await _store.setPassword(tx, admin.id, hash, now);
+      await _store.clearSignInFailures(tx);
+      await _store.audit(
+        tx,
+        adminId: admin.id,
+        action: 'admin.password_reset',
+        details: {'by': 'admin_tool'},
+      );
+    });
   }
 
   Future<Response> _changePassword(HelixRequest q) async {
@@ -304,6 +391,7 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       await _store.setPassword(tx, admin.id, hash, now);
       await _store.audit(tx, adminId: admin.id, action: 'admin.password');
     });
+    await recheckLogStreams();
     return jsonResponse(_issue(admin.id).toJson());
   }
 
@@ -449,9 +537,14 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
 
   Future<Response> _recoveryCode(HelixRequest q) async {
     final id = q.uuidParam('account');
-    final code = await identity.admin.issueRecoveryCode(id);
+    final code = await context.db.tx((tx) async {
+      final code = await identity.admin.issueRecoveryCode(tx, id);
+      if (code != null) {
+        await _audit(tx, q, 'recovery_code.issue', target: id);
+      }
+      return code;
+    });
     if (code == null) throw const ApiError(ErrorCode.notFound);
-    await _audit(context.db, q, 'recovery_code.issue', target: id);
     return jsonResponse(code.toJson(), status: 201);
   }
 
@@ -463,17 +556,22 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
   }
 
   Future<Response> _createInvite(HelixRequest q) async {
-    final invite = await identity.admin.createInvite();
-    await _audit(context.db, q, 'invite.create', target: invite.inviteId);
+    final invite = await context.db.tx((tx) async {
+      final invite = await identity.admin.createInvite(tx);
+      await _audit(tx, q, 'invite.create', target: invite.inviteId);
+      return invite;
+    });
     return jsonResponse(invite.toJson(), status: 201);
   }
 
   Future<Response> _cancelInvite(HelixRequest q) async {
     final id = q.uuidParam('invite_id');
-    if (!await identity.admin.cancelInvite(context.db, id)) {
-      throw const ApiError(ErrorCode.notFound);
-    }
-    await _audit(context.db, q, 'invite.cancel', target: id);
+    final cancelled = await context.db.tx((tx) async {
+      if (!await identity.admin.cancelInvite(tx, id)) return false;
+      await _audit(tx, q, 'invite.cancel', target: id);
+      return true;
+    });
+    if (!cancelled) throw const ApiError(ErrorCode.notFound);
     return noContent();
   }
 
@@ -611,10 +709,16 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
     );
   }
 
-  /// Live redacted log lines of this node as WS text frames.
+  /// Live redacted log lines of this node as WS text frames. The token is
+  /// checked again every [logStreamRecheck] and after a sign-out or password
+  /// change: a stream does not outlive its session (review B-03).
   Future<Response> _logStream(HelixRequest q) async {
+    // The route authenticated this bearer token; keep it to re-check.
+    final token = q.raw.headers[HelixHeaders.authorization]!
+        .substring(7)
+        .trim();
     final handler = webSocketHandler((WebSocketChannel ws, String? _) {
-      _logSockets.add(ws);
+      _logSockets[ws] = token;
       final lines = context.log.lines.listen(ws.sink.add);
       ws.stream.listen(
         (_) {},
@@ -626,20 +730,36 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
         cancelOnError: true,
       );
     }, pingInterval: const Duration(seconds: 30));
-    return handler(q.raw);
+    return handler(
+      limitWebSocketFrames(q.raw, maxMessageBytes: maxLogStreamMessageBytes),
+    );
+  }
+
+  /// Closes every live log stream whose token no longer verifies (expired,
+  /// signed out, password changed) with 4001. Public for tests.
+  Future<void> recheckLogStreams() async {
+    for (final MapEntry(key: ws, value: token)
+        in _logSockets.entries.toList()) {
+      if (await _verify(token) != null) continue;
+      _logSockets.remove(ws);
+      await ws.sink.close(RealtimeCloseCode.unauthorized, 'session ended');
+    }
   }
 
   Future<Response> _purge(HelixRequest q) async {
-    final removed = {
-      ...await identity.admin.purgeExpired(context.db),
-      'dead_jobs': await context.outbox.purgeDead(context.db),
-    };
-    await _audit(
-      context.db,
-      q,
-      'purge',
-      details: {for (final e in removed.entries) e.key: '${e.value}'},
-    );
+    final removed = await context.db.tx((tx) async {
+      final removed = {
+        ...await identity.admin.purgeExpired(tx),
+        'dead_jobs': await context.outbox.purgeDead(tx),
+      };
+      await _audit(
+        tx,
+        q,
+        'purge',
+        details: {for (final e in removed.entries) e.key: '${e.value}'},
+      );
+      return removed;
+    });
     return jsonResponse(PurgeResult(removed: removed).toJson());
   }
 }

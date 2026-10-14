@@ -101,6 +101,8 @@ class _AccountDetailViewState extends State<AccountDetailView> {
           'the account. It cannot be undone.',
       action: 'Ban and delete',
       destructive: true,
+      // As heavy as deleting, which it includes (review B-05).
+      phrase: 'BAN',
     );
     if (reason == null) return;
     final problem = await _controller.ban(reason: reason.text);

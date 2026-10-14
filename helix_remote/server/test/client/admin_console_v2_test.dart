@@ -231,6 +231,20 @@ void main() {
       await console().admin.signIn(newPassword);
     });
 
+    test('signing out ends every admin session, copies included', () async {
+      await start();
+      final main = await signedIn();
+      final other = await signedIn();
+      await main.admin.signOut();
+      expect(main.auth.session, isNull, reason: 'forgotten here');
+      await expectLater(
+        other.admin.config(),
+        throwsA(isA<SignedOutException>()),
+        reason: 'the server ended the other copy too',
+      );
+      await console().admin.signIn(password);
+    });
+
     test('a device token is not an admin token, and a made-up one signs the '
         'console out', () async {
       await start();

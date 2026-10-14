@@ -217,6 +217,7 @@ void main() {
     Routes.adminSetupStatus: (c) => c.admin.setupStatus(),
     Routes.adminSetup: (c) => c.admin.setup('password'),
     Routes.adminSignIn: (c) => c.admin.signIn('password'),
+    Routes.adminSignOut: (c) => c.admin.signOut(),
     Routes.adminPassword: (c) =>
         c.admin.changePassword(current: 'a', next: 'b'),
     Routes.adminAccounts: (c) => c.admin.accounts(),

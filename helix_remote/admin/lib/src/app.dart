@@ -18,7 +18,8 @@ class HelixAdminApp extends StatefulWidget {
   State<HelixAdminApp> createState() => _HelixAdminAppState();
 }
 
-class _HelixAdminAppState extends State<HelixAdminApp> {
+class _HelixAdminAppState extends State<HelixAdminApp>
+    with WidgetsBindingObserver {
   late final AdminSessionController _session;
   final _navigator = GlobalKey<NavigatorState>();
 
@@ -28,6 +29,23 @@ class _HelixAdminAppState extends State<HelixAdminApp> {
     _session = AdminSessionController(widget.services)
       ..addListener(_closeRoutesWhenSignedOut)
       ..start();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// App lock asks again after time in the background
+  /// ([AdminSessionController.relockAfter]).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        _session.backgrounded();
+      case AppLifecycleState.resumed:
+        _session.resumed();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   /// Account pages and dialogs sit above the shell, not inside it: when the
@@ -40,6 +58,7 @@ class _HelixAdminAppState extends State<HelixAdminApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _session
       ..removeListener(_closeRoutesWhenSignedOut)
       ..dispose();

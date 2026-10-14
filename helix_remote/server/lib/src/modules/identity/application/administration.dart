@@ -96,15 +96,14 @@ final class Administration implements IdentityAdminApi {
   }
 
   @override
-  Future<AdminRecoveryCode?> issueRecoveryCode(String accountId) =>
-      c.db.tx((tx) async {
-        if (await c.store.account(tx, accountId) == null) return null;
-        final issued = await registration.issueRecoveryCode(tx, accountId);
-        return AdminRecoveryCode(
-          recoveryCode: issued.code,
-          expiresAt: issued.expiresAt,
-        );
-      });
+  Future<AdminRecoveryCode?> issueRecoveryCode(Tx tx, String accountId) async {
+    if (await c.store.account(tx, accountId) == null) return null;
+    final issued = await registration.issueRecoveryCode(tx, accountId);
+    return AdminRecoveryCode(
+      recoveryCode: issued.code,
+      expiresAt: issued.expiresAt,
+    );
+  }
 
   @override
   Future<Page<AdminInvite>> invites(
@@ -113,8 +112,8 @@ final class Administration implements IdentityAdminApi {
   }) => store.invites(s, page: page, now: c.clock.now());
 
   @override
-  Future<CreatedInvite> createInvite() async {
-    final invite = await signUp.issueInvite(c.db);
+  Future<CreatedInvite> createInvite(SqlSession s) async {
+    final invite = await signUp.issueInvite(s);
     return CreatedInvite(
       inviteId: invite.id,
       inviteCode: invite.code,

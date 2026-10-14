@@ -242,6 +242,7 @@ tokens never open each other's routes.
 | `GET /v1/admin/setup` | — → `AdminSetupStatus` | Public. |
 | `POST /v1/admin/setup` | `AdminPasswordRequest` → 201 `AdminSession` | Public, only before setup (`already_exists` after). 5 per hour per IP. |
 | `POST /v1/admin/sessions` | `AdminPasswordRequest` → `AdminSession` | Public, 10 per minute per IP. Per IP, 5 failures lock that address (15 min, doubling to 24 h); 100 failures from anywhere since the last success lock sign-in for 15 min. Attempts are counted before the password is checked (`password_locked`). 12-hour token. |
+| `DELETE /v1/admin/sessions` | → 204 | Signs the operator out everywhere: every admin token issued until now stops working, and open log streams close with 4001. |
 | `PUT /v1/admin/password` | `ChangeAdminPasswordRequest` → `AdminSession` | Ends every other admin session. |
 | `GET /v1/admin/accounts` | — → `Page<AdminAccount>` | `status`, `q` (name prefix or last 4 digits). Last 4 digits only. |
 | `GET /v1/admin/accounts/{account}` | — → `AdminAccountDetail` | |
@@ -262,5 +263,5 @@ tokens never open each other's routes.
 | `GET /v1/admin/feature-flags` | — → `FeatureFlags` | |
 | `PUT /v1/admin/feature-flags/{name}` | `SetFeatureFlagRequest` → 204 | Allow-listed names only (`not_found`). |
 | `GET /v1/admin/logs` | — → `AdminLogLines` | `limit` 1–500. This node, redacted. |
-| `GET /v1/admin/logs/stream` | WebSocket of redacted JSON lines | |
+| `GET /v1/admin/logs/stream` | WebSocket of redacted JSON lines | The token is checked again every 60 s and after a sign-out or password change: 4001 when it no longer verifies. Client messages over 1 KiB close it. |
 | `POST /v1/admin/purge` | — → `PurgeResult` | Dead jobs and expired identity rows. |

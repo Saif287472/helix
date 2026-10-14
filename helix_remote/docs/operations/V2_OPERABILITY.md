@@ -130,6 +130,7 @@ identifiers into a ticket or chat without checking it first.
   | `sms_country_refused` | A code was asked for a number outside `HELIX_SMS_COUNTRIES` (`purpose`; never the number). |
   | `after_commit_failed` | A step after a committed write (a bus publish) failed (`error` type). The write stands; sockets catch up at their next refresh. |
   | `admin_setup`, `admin_seeded`, `admin_seed_ignored`, `admin_sign_in_failed` | Operator account events. |
+  | `admin_seed_still_set` | `HELIX_ADMIN_PASSWORD` is still in `.env` although an operator exists; it is ignored. Remove it. |
   | `peer_key_changed` | A federation peer's key changed. |
   | `client_crash` | An opt-in client crash report (redacted). |
 
@@ -692,21 +693,25 @@ A request without a valid token is refused with HTTP 401 before any upgrade.
 (`modules/realtime/module.dart`. The `4001`, `4004` and `4029` codes in
 `REALTIME_V2.md` are not emitted by the server.)
 
-**An admin is locked out, or the password is lost.** There is no reset tool.
-With every node stopped, as the operator:
+**An admin is locked out, or the password is lost.** On the server's
+machine, from `helix_remote/server` (the server may keep running):
 
-```sql
--- Locked only: clear the lock.
-UPDATE admin.admins SET failed_attempts = 0, locked_until = NULL;
-
--- Forgotten password: remove the operator, then start the server with
--- HELIX_ADMIN_PASSWORD set (it seeds the first admin), or run setup again.
-DELETE FROM admin.admins;
+```powershell
+dart run bin/admin_tool.dart reset-password
 ```
 
-Then remove `HELIX_ADMIN_PASSWORD` from `.env`. The audit log keeps the old
-admin id. (SQL derived from `modules/admin/data/admin_store.dart`; not covered
-by tests.)
+It asks for the new password twice (not shown), sets it (creating the
+operator if there is none), ends every admin session, clears every sign-in
+lock and writes `admin.password_reset` to the audit log. Run it in PowerShell
+or cmd: Git Bash's terminal cannot hide the typing. (`bin/admin_tool.dart`,
+`AdminModule.resetPassword`; covered by `test/modules/admin_hardening_test.dart`.)
+Signing in from this machine or the LAN is never stopped by the global
+100-failure cap, only by the per-address lock.
+
+**A stolen or leaked admin token.** Sign out in the console (Ops & Logs,
+Config): `DELETE /v1/admin/sessions` ends every admin token, copies included,
+and closes open log streams. Changing the password does the same for every
+other session.
 
 **Federation fails.**
 - `federation_unavailable` (502): the switch is off, the peer is down, the peer
@@ -742,9 +747,9 @@ recorded with the phase report, not here (`LOAD_TESTING.md`).
 
 - No handling found for a phone cursor ahead of the server after a restore
   (above).
-- `admin.audit` has no retention; the plan's monthly partitions and retention
-  jobs are not built.
-- There is no operator reset for the admin password and no retry route for a
-  single dead job.
+- `admin.audit` keeps rows for a year (`admin.purge_audit`, daily); the
+  plan's monthly partitions are not built (the table is small).
+- There is no retry route for a single dead job. (The admin password reset
+  is `bin/admin_tool.dart reset-password`.)
 - Resolved in S7: `4001`, `4004` and `4029` are sent (token expiry, suspension,
   too many upgrades or frames), and the pool size is `HELIX_DB_POOL_SIZE`.

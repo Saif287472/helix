@@ -99,7 +99,9 @@ class ConfigView extends StatelessWidget {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Sign out?',
-      message: 'You will need the admin password to sign in again.',
+      message:
+          'This ends every admin session on the server, on this device and '
+          'any other. You will need the admin password to sign in again.',
       action: 'Sign out',
     );
     if (confirmed && context.mounted) {
@@ -396,8 +398,9 @@ class ConfigView extends StatelessWidget {
                     titleColor: HelixConsoleColors.onDanger,
                     subtitleColor: HelixConsoleColors.danger,
                     subtitle:
-                        'Clears the saved admin session from this device. '
-                        'You will need the admin password to sign back in',
+                        'Ends every admin session on the server and clears '
+                        'it from this device. You will need the admin '
+                        'password to sign back in',
                     trailing: FilledButton(
                       onPressed: () => _signOut(context),
                       style: ConsoleButtons.filledTone(

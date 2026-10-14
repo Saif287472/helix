@@ -105,8 +105,8 @@ this file as a change.
 | A-04 | Medium | Server | One hung job stalls every background job on the node | `helix_remote/server/lib/src/platform/jobs/jobs.dart:159-170` | confirmed; fixed in Batch 5 |
 | A-05 | Medium | Server | No global SMS budget or country allow-list | `helix_remote/server/lib/src/modules/identity/application/sign_up.dart:18-48` | confirmed; fixed in Batch 5 (Bangladesh only, 500 a day by default) |
 | A-06 | Medium | Server | Password routes are an unauthenticated account oracle; lockout DoS | `helix_remote/server/lib/src/modules/identity/application/sign_in.dart:35-60` | confirmed; fixed in Batch 5 |
-| B-01 | Medium | Admin | Android console App lock locks the operator out | `helix_remote/admin/android/app/src/main/kotlin/com/helix/helix_admin/MainActivity.kt:5` | confirmed |
-| B-02 | Medium | Admin | Admin API public behind one password, no server sign-out | `helix_remote/server/lib/src/modules/admin/module.dart:121-153` | confirmed; exposure half: Batch 1 Caddyfile written, user installs |
+| B-01 | Medium | Admin | Android console App lock locks the operator out | `helix_remote/admin/android/app/src/main/kotlin/com/helix/helix_admin/MainActivity.kt:5` | confirmed; fixed in Batch 6 (device check needs the admin APK) |
+| B-02 | Medium | Admin | Admin API public behind one password, no server sign-out | `helix_remote/server/lib/src/modules/admin/module.dart:121-153` | confirmed; exposure half: Batch 1 Caddyfile written, user installs; code half fixed in Batch 6 (server sign-out; no TOTP, 12-hour tokens kept, by choice) |
 | C-01 | Medium | Security | Two engines can write the same ratchet state (key/nonce reuse) | `helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart:29-44` | confirmed (code); fixed in Batch 4 (sessions, then group sender keys the same day) |
 | E-03 | Medium | App | Windows app raises no notifications | `helix_remote/app/lib/core/notifications/local_notifications.dart:61-65` | confirmed |
 | F-01 | Medium | Tests | Platform glue (FCM, notifications, local_auth) untested | `.github/workflows/ci.yml:143-157` | confirmed; push and notification logic tested in Batch 3, device checklist added |
@@ -120,13 +120,13 @@ this file as a change.
 | A-10 | Low | Server | Media rows deleted before blobs; failures leak files | `helix_remote/server/lib/src/modules/media/module.dart:349-372` | confirmed |
 | A-11 | Low | Server | Presence and profile reads have no per-account limit | `helix_remote/server/lib/src/modules/people/module.dart:326-359` | confirmed; fixed in Batch 5 |
 | A-12 | Low | Server | Per-target bundle limit can be exhausted | `helix_remote/server/lib/src/modules/keys/module.dart:32-43` | confirmed; fixed in Batch 5 |
-| B-03 | Low | Admin | Live log WebSocket outlives the admin session | `helix_remote/server/lib/src/modules/admin/module.dart:615-630` | confirmed |
-| B-04 | Low | Admin | Some audits outside their transaction; no audit retention | `helix_remote/server/lib/src/modules/admin/module.dart:450-478` | confirmed |
-| B-05 | Low | Admin | Ban confirmed more lightly than delete | `helix_remote/admin/lib/src/features/accounts/account_detail_screen.dart:95-114` | confirmed |
-| B-06 | Low | Admin | Console App lock asked only at launch | `helix_remote/admin/lib/src/session/admin_session_controller.dart:105-113` | confirmed |
-| B-07 | Low | Admin | No way to reset a forgotten admin password | `helix_remote/server/lib/src/modules/admin/module.dart:156-178` | confirmed |
-| B-08 | Low | Admin | Distributed attacker can keep admin sign-in locked | `helix_remote/server/lib/src/modules/admin/module.dart:70-73` | confirmed |
-| B-09 | Low | Admin | macOS console lacks the network-client entitlement | `helix_remote/admin/macos/Runner/Release.entitlements` | confirmed |
+| B-03 | Low | Admin | Live log WebSocket outlives the admin session | `helix_remote/server/lib/src/modules/admin/module.dart:615-630` | confirmed; fixed in Batch 6 |
+| B-04 | Low | Admin | Some audits outside their transaction; no audit retention | `helix_remote/server/lib/src/modules/admin/module.dart:450-478` | confirmed; fixed in Batch 6 (1-year retention) |
+| B-05 | Low | Admin | Ban confirmed more lightly than delete | `helix_remote/admin/lib/src/features/accounts/account_detail_screen.dart:95-114` | confirmed; fixed in Batch 6 |
+| B-06 | Low | Admin | Console App lock asked only at launch | `helix_remote/admin/lib/src/session/admin_session_controller.dart:105-113` | confirmed; fixed in Batch 6 (1 minute) |
+| B-07 | Low | Admin | No way to reset a forgotten admin password | `helix_remote/server/lib/src/modules/admin/module.dart:156-178` | confirmed; fixed in Batch 6 |
+| B-08 | Low | Admin | Distributed attacker can keep admin sign-in locked | `helix_remote/server/lib/src/modules/admin/module.dart:70-73` | confirmed; fixed in Batch 6 |
+| B-09 | Low | Admin | macOS console lacks the network-client entitlement | `helix_remote/admin/macos/Runner/Release.entitlements` | confirmed; fixed in Batch 6 (network entitlement; keychain unverified) |
 | C-02 | Low | Privacy | Reports kept forever (docs: until resolved) | `helix_remote/server/lib/src/modules/people/module.dart:575-592` | confirmed |
 | C-03 | Low | Privacy | Privacy and crypto documents slightly wrong | `helix_remote/docs/protocol/v2/CRYPTO_V2.md` (§11, §14) | confirmed |
 | D-01 | Low | Engine | Heavy crypto runs on the UI isolate | `helix_remote/packages/helix_remote_crypto/lib/src/v2/password.dart:54-63` | unverified |
@@ -1336,6 +1336,58 @@ the batch.
 - **APK / restart.** New admin APK; server restart (no migration unless the
   audit retention needs an index).
 - **Model.** Sonnet 5.5.
+- **Status (2026-10-10).** Done; the device checks need the new admin APK.
+  The user chose: server sign-out only (no TOTP; tokens stay 12 hours), keep
+  and fix macOS, audit retention one year, re-lock after one minute in the
+  background. No migration, no `.env` line; one new admin-access route.
+  - **B-01:** the console's `MainActivity` is a `FlutterFragmentActivity`, its
+    launch themes are AppCompat (with the `appcompat` dependency the user app
+    already has); a rule test checks both.
+  - **B-02 (code half):** `DELETE /v1/admin/sessions` (admin access, so the
+    public-route snapshot is unchanged) sets `tokens_valid_after`: every token
+    of the operator, copies included, stops working and log streams close.
+    `AdminClient.signOut`; the console's "Sign out" calls it, and signs out
+    here anyway (saying so) when the server cannot be reached. The exposure
+    half is the Batch 1 Caddyfile, which the user installs.
+  - **B-03:** the log stream keeps its token, re-checks it every 60 s and at
+    once after a sign-out or password change (4001), and refuses client
+    messages over 1 KiB (`limitWebSocketFrames`).
+  - **B-04:** recovery codes and invites go through identity's facade with the
+    caller's transaction (`issueRecoveryCode(tx, ...)`, `createInvite(s)`);
+    invite cancel, purge, sign-in and sign-out write their audit row in the
+    same transaction. `admin.purge_audit` deletes rows older than a year,
+    daily (no index: the table is small); RETENTION_AND_DELETION and
+    METADATA_INVENTORY say so.
+  - **B-05:** ban needs `BAN` typed in its reason dialog, as delete needs
+    `DELETE`.
+  - **B-06:** with App lock on, a signed-in console away in the background
+    for a minute or more locks as a restart would (the session stays in the
+    vault and is checked again on unlock); the unlock prompt's own pause does
+    not count.
+  - **B-07:** `dart run bin/admin_tool.dart reset-password` (no echo, asked
+    twice) calls `AdminModule.resetPassword`: sets the password or creates the
+    operator, ends every session, clears every address lock, audits
+    `admin.password_reset`. A start with `HELIX_ADMIN_PASSWORD` still set while
+    an operator exists logs `admin_seed_still_set`.
+  - **B-08:** loopback and LAN addresses neither count towards nor are stopped
+    by the global 100-failure cap; MODULE.md corrected (an operator signing in
+    from the internet can still be capped).
+  - **B-09:** both macOS entitlement files have `network.client`. Whether
+    `flutter_secure_storage` also needs a keychain-sharing entitlement (which
+    needs a signing team) could not be checked without a Mac.
+  - **Tests:** server `test/modules/admin_hardening_test.dart` (sign-out,
+    log-stream close and frame cap, LAN exemption, audit retention, audits of
+    codes/invites/purge, reset-password with and without an operator, the
+    address classifier) and `admin_console_v2_test` (AdminClient sign-out);
+    protocol and API route-parity tests; admin `rules_test` (activity class,
+    themes, entitlements), `accounts_test` (typed ban), `session_flow_test`
+    (server sign-out, offline sign-out, re-lock after a minute, the prompt's
+    pause, no lock without App lock). Full server suite 379 on Postgres; the
+    two failures under its load (`cli_test`, `devices_test`) pass alone and
+    are in AGENTS.md's timing-sensitive list.
+  - **On the phone (new admin APK):** turn App lock on, close and reopen the
+    console, unlock; leave it in the background for over a minute and come
+    back; sign out and check the console asks for the password.
 
 ### Batch 7: Retention and hygiene
 

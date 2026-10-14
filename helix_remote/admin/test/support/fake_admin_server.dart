@@ -128,7 +128,7 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
 
     final isPublic =
         path == '/v1/admin/setup' ||
-        path == '/v1/admin/sessions' ||
+        (path == '/v1/admin/sessions' && request.method == 'POST') ||
         path.startsWith('/v1/health/');
     if (!isPublic) {
       final auth = request.headers['authorization'] ?? '';
@@ -171,6 +171,11 @@ helix_http_request_seconds_count{route="/v1/x",status="5xx"} 10
       }
       failedSignIns = 0;
       return _json(issue().toJson());
+    }
+    if (m == 'DELETE' && path == '/v1/admin/sessions') {
+      validTokens.clear();
+      _record('admin.sign_out');
+      return http.Response('', 204);
     }
     if (m == 'PUT' && path == '/v1/admin/password') {
       final body = _body(request);

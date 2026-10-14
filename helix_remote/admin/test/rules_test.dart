@@ -295,4 +295,47 @@ void main() {
       expect(code, contains('_isLocalHost'));
     });
   });
+
+  group('platform rules', () {
+    test(
+      'the Android activity is a fragment activity, so App lock unlocks',
+      () {
+        // local_auth refuses to show its prompt in a plain FlutterActivity
+        // (review B-01): the toggle worked and every later unlock failed.
+        final activity = File(
+          'android/app/src/main/kotlin/com/helix/helix_admin/MainActivity.kt',
+        ).readAsStringSync();
+        expect(
+          activity,
+          contains('class MainActivity : FlutterFragmentActivity()'),
+        );
+        for (final styles in [
+          'android/app/src/main/res/values/styles.xml',
+          'android/app/src/main/res/values-night/styles.xml',
+        ]) {
+          final parents = RegExp(
+            r'parent="([^"]+)"',
+          ).allMatches(File(styles).readAsStringSync()).map((m) => m.group(1));
+          expect(
+            parents,
+            everyElement(startsWith('Theme.AppCompat')),
+            reason: styles,
+          );
+        }
+      },
+    );
+
+    test('the sandboxed macOS console may open connections', () {
+      for (final entitlements in [
+        'macos/Runner/DebugProfile.entitlements',
+        'macos/Runner/Release.entitlements',
+      ]) {
+        expect(
+          File(entitlements).readAsStringSync(),
+          contains('<key>com.apple.security.network.client</key>'),
+          reason: entitlements,
+        );
+      }
+    });
+  });
 }

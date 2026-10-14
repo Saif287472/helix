@@ -12,7 +12,13 @@ hash with its parameters, lockout counters, `tokens_valid_after`) and
   `POST /v1/admin/setup` sets the first password, once (a table lock makes
   concurrent setups safe), and returns a session. Alternatively,
   `HELIX_ADMIN_PASSWORD` seeds the first admin at start; it never replaces
-  an existing password.
+  an existing password, and while an admin exists a start with it still set
+  logs `admin_seed_still_set` (remove it from `.env`).
+- **Forgotten password:** `dart run bin/admin_tool.dart reset-password`
+  on the server's machine (it reads `server/.env`) asks for a new password
+  twice without echo and calls `AdminModule.resetPassword`: it sets the
+  password (or creates the operator), ends every admin session, clears
+  every address lock and writes an `admin.password_reset` audit row.
 - **Passwords:** 12 to 256 characters. Argon2id at 19 MiB, 2 passes,
   1 lane, run on a separate isolate. Parameters are stored per hash.
   `HELIX_ADMIN_KDF_MEMORY_KIB` can lower the memory cost only in dev mode
@@ -20,26 +26,44 @@ hash with its parameters, lockout counters, `tokens_valid_after`) and
 - **Sign-in:** `POST /v1/admin/sessions`, limited to 10 per minute per IP.
   Lockout is per client address (`sign_in_failures`, migration 2): after 5
   failures that address locks for 15 minutes, doubling per further failure
-  up to 24 hours, so an attacker elsewhere cannot lock the operator out.
+  up to 24 hours.
   A global safety cap on `admins.failed_attempts`: 100 failures from
-  anywhere since the last success lock sign-in for 15 minutes, then the
-  count restarts. Each attempt is counted in SQL *before* the password is
+  addresses outside the local network since the last success lock sign-in
+  from those addresses for 15 minutes, then the count restarts. Loopback
+  and LAN addresses (`domain/local_address.dart`) neither count towards it
+  nor are stopped by it, so an attacker on the internet cannot lock out the
+  operator at home; one signing in from the internet can still be locked
+  out by it (with the hardened Caddyfile the admin API is LAN-only anyway).
+  This relies on `HELIX_TRUSTED_PROXIES` naming the proxy: otherwise every
+  request looks like loopback and only the per-address lock applies. Each attempt is counted in SQL *before* the password is
   checked, with the admin row locked, so parallel requests get no extra
   guesses (`password_locked` with `Retry-After`). A success clears both.
   Quiet unlocked addresses are purged after two days
-  (`admin.purge_sign_in_failures`). The log WebSocket closes with 4503 at
-  shutdown.
+  (`admin.purge_sign_in_failures`).
 - **Tokens:** `HmacJwt` with audience `helix.admin`, type `admin`,
   `sub` = admin id, valid for 12 hours, on the server's JWT key ring. The
   audience and type keep device and admin tokens apart in both
   directions. Changing the password sets `tokens_valid_after`, which ends
   every other session, and returns a new one.
+- **Sign-out:** `DELETE /v1/admin/sessions` sets `tokens_valid_after` to
+  now: every token of the operator stops working, the caller's and any
+  copy of it (the way to cut off a token that may have leaked). The console's
+  "Sign out" calls it.
+- **Log stream:** `GET /v1/admin/logs/stream` keeps the token it was opened
+  with and checks it again every 60 s and at once after a sign-out or a
+  password change; a token that no longer verifies closes the stream with
+  4001. Client messages over 1 KiB close it (`limitWebSocketFrames`). It
+  closes with 4503 at shutdown.
 
 ## Actions
 
 Every mutating action writes an `audit` row (action, target id, small
-string details) in the same transaction. Codes, tokens and passwords are
-never audited, and reasons pass through `redactString`.
+string details) in the same transaction, sign-in and sign-out included
+(recovery codes and invites go through identity's facade with the caller's
+transaction). Codes, tokens and passwords are never audited, and reasons
+pass through `redactString`. Rows older than a year are deleted daily
+(`admin.purge_audit`); they hold account ids, which therefore outlive a
+deleted account by at most a year.
 
 | Area | Routes | Notes |
 |---|---|---|

@@ -244,11 +244,19 @@ void main() {
       expect(find.text('Resume account'), findsNothing);
     });
 
-    testWidgets('banning confirms, removes the account and reloads the '
-        'list', (tester) async {
+    testWidgets('banning needs the word BAN typed, removes the account and '
+        'reloads the list', (tester) async {
       await openAlice(tester);
       await tapText(tester, 'Ban');
       expect(find.text('Ban this person?'), findsOneWidget);
+      FilledButton confirm() => tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Ban and delete'),
+      );
+      expect(confirm().onPressed, isNull, reason: 'as heavy as deleting');
+      await enter(tester, 'Type BAN to confirm', 'ban');
+      expect(confirm().onPressed, isNull);
+      await enter(tester, 'Type BAN to confirm', 'BAN');
+      expect(confirm().onPressed, isNotNull);
       await tapText(tester, 'Ban and delete');
 
       expect(find.text('Account banned and deleted.'), findsOneWidget);
@@ -413,6 +421,7 @@ void main() {
       await tester.drag(find.byType(ListView).last, const Offset(0, -900));
       await tester.pumpAndSettle();
       await tapText(tester, 'Ban');
+      await enter(tester, 'Type BAN to confirm', 'BAN');
       await tapText(tester, 'Ban and delete');
 
       expect(find.text('Users & Devices'), findsOneWidget);

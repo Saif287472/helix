@@ -32,12 +32,16 @@ final class FakeDeviceLock implements DeviceLock {
   bool allow = true;
   int prompts = 0;
 
+  /// Runs while the prompt is up (the real one pauses the app on Android).
+  void Function()? whilePrompting;
+
   @override
   Future<bool> isSupported() async => supported;
 
   @override
   Future<bool> authenticate(String reason) async {
     prompts++;
+    whilePrompting?.call();
     return allow;
   }
 }

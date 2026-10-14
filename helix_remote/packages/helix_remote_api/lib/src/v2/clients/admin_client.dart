@@ -47,6 +47,13 @@ final class AdminClient {
     ),
   );
 
+  /// Ends every session of this operator on the server (any other copy of
+  /// the token too), then forgets the token here.
+  Future<void> signOut() async {
+    await _t.empty(Routes.adminSignOut);
+    auth.forget();
+  }
+
   /// Ends every other admin session; this one continues with the returned
   /// token.
   Future<AdminSession> changePassword({

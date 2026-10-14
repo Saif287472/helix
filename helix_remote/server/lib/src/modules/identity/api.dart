@@ -234,12 +234,13 @@ abstract interface class IdentityAdminApi {
   /// device of [accountId].
   Future<bool> revokeDevice(Tx tx, String accountId, String deviceId);
 
-  /// A 48-hour single-use recovery code (replaces any unused one).
-  Future<AdminRecoveryCode?> issueRecoveryCode(String accountId);
+  /// A 48-hour single-use recovery code (replaces any unused one), in the
+  /// caller's transaction so the audit row commits with it.
+  Future<AdminRecoveryCode?> issueRecoveryCode(Tx tx, String accountId);
 
   Future<Page<AdminInvite>> invites(SqlSession s, {required PageRequest page});
 
-  Future<CreatedInvite> createInvite();
+  Future<CreatedInvite> createInvite(SqlSession s);
 
   /// False unless the invite exists and is still open.
   Future<bool> cancelInvite(SqlSession s, String inviteId);

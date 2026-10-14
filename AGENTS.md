@@ -227,9 +227,9 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ### Known pre-existing test failures
 
-None as of 2026-10-06, at the Phase X cutover (server 339 on Postgres, app 799,
-engine 292, api 190, admin 181, ui 183 with 5 golden tests skipped off Linux, db
-131, protocol 83, crypto 73, rules 20, cli 13, calls 5; `flutter analyze` and
+None as of 2026-10-14, after review batch 6 (server 379 on Postgres, app 814,
+engine 299, api 191, admin 191, ui 183 with 5 golden tests skipped off Linux, db
+139, protocol 83, crypto 73, rules 20, cli 13, calls 5; `flutter analyze` and
 `dart analyze server tool` clean; the governance check passes).
 
 Some server tests are timing-sensitive and can fail while the machine is busy
@@ -239,9 +239,11 @@ per account"), `test/client/engine/calls_test.dart` ("two callee devices
 ring, one answers..."), and, seen 2026-10-09/10 under the full suite (a pool
 connection not acquired, or the 30 s test timeout), `devices_test.dart`
 ("changing the password needs the current one..."), `messaging_test.dart`
-("two engines talking at once...") and `recovery_test.dart` ("a full
-recovery-code redeem..."): the client's password hashing runs in the server's
-isolate there. Do not run Flutter analysis or tests alongside the server suite.
+("two engines talking at once..."), `recovery_test.dart` ("a full
+recovery-code redeem...") and `cli_test.dart` ("two CLI homes exchange
+messages..."): the client's password hashing runs in the server's isolate
+there. `devices_test.dart` has also failed once when run alone (2026-10-14; it
+failed the same way before any review batch) and passed on the next runs. Do not run Flutter analysis or tests alongside the server suite.
 The two timing budgets in `app/test/performance_budget_test.dart` can likewise
 flake under load.
 
