@@ -86,10 +86,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               mode: PeopleSearchMode.chats,
               embedded: true,
             ),
+            onSearchSubmitted: PeopleSearchPanel.submit,
           ),
           callsTab: CallsTabScreen(
             peopleSearch: (context, query, onCall) =>
                 PeopleSearchPanel(query: query, mode: PeopleSearchMode.calls),
+            onSearchSubmitted: PeopleSearchPanel.submit,
           ),
           settingsTab: const SettingsTab(),
         ),

@@ -66,6 +66,11 @@ PeopleSearchPanel(query: c.text, mode: PeopleSearchMode.chats /* or .calls */)
   (tap opens the conversation, creating it).
 - **A3a** mounts it in the Calls tab's search with `PeopleSearchMode.calls`
   (tap places a voice call; each row also has voice and video buttons).
+- Both show it as soon as the search opens (the new chat and new call buttons
+  open it), so the contacts card and "Refresh contacts" are reachable, and
+  both pass `PeopleSearchPanel.submit` as the keyboard's search key
+  (`onSearchSubmitted`). Until 2026-10-14 neither did: with nothing typed the
+  tabs showed their own empty state, so the contacts could never be allowed.
 - A standalone screen exists too: `PeoplePaths.search` /
   `PeoplePaths.searchFor(calls: true)`. `helix://contact` links land on
   `/home/people` (the same screen).

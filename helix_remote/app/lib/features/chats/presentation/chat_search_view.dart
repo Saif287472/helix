@@ -15,8 +15,17 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 typedef PeopleSearchBuilder =
     Widget Function(BuildContext context, String query);
 
+/// The keyboard's search key in a search that has people in it: the people
+/// feature looks a typed number or `~name` up on the server (only then, since
+/// each lookup spends the daily discovery budget). Supplied by the router,
+/// like [PeopleSearchBuilder].
+typedef PeopleSearchSubmit = void Function(WidgetRef ref, String text);
+
 /// The Chats tab while the person is searching: chats by name, people (the
 /// seam), and messages by their text.
+///
+/// With nothing typed it shows the people seam alone: the people on Helix
+/// from the phone's contacts, and the way to let Helix check them.
 class ChatSearchView extends ConsumerWidget {
   const ChatSearchView({super.key, this.peopleResults});
 
@@ -25,6 +34,12 @@ class ChatSearchView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = ref.watch(chatSearchQueryProvider).trim();
+    if (query.isEmpty && peopleResults != null) {
+      return ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        children: [peopleResults!(context, '')],
+      );
+    }
     if (query.isEmpty) {
       return const HelixEmptyState(
         icon: Icons.search,

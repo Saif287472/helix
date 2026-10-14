@@ -22,6 +22,10 @@ typedef CallsPeopleSearchCall =
 ///     PeopleSearchResults(query: query, onPerson: (p) => onCall(p, video: false)))
 /// ```
 ///
+/// It is shown from the moment the search opens: with nothing typed it lists
+/// the people on Helix from the phone's contacts (and the way to let Helix
+/// check them).
+///
 /// Without one the tab searches its own call log by name, so the search
 /// button always does something useful.
 typedef CallsPeopleSearchBuilder =
@@ -31,16 +35,21 @@ typedef CallsPeopleSearchBuilder =
       CallsPeopleSearchCall onCall,
     );
 
+/// The keyboard's search key in the people search: the people feature looks
+/// a typed number or `~name` up on the server. Supplied by the router.
+typedef CallsPeopleSearchSubmit = void Function(WidgetRef ref, String text);
+
 /// Calls: recent calls, newest first, and search.
 ///
 /// Calls with the same person in the same direction on one day fold into one
 /// row. Tap opens the call detail; the call button calls back (voice or video,
 /// as the call was); long-press and swipe delete the entry from the history.
 class CallsTabScreen extends ConsumerStatefulWidget {
-  const CallsTabScreen({super.key, this.peopleSearch});
+  const CallsTabScreen({super.key, this.peopleSearch, this.onSearchSubmitted});
 
   /// The people search plugged in by the router; null uses the log filter.
   final CallsPeopleSearchBuilder? peopleSearch;
+  final CallsPeopleSearchSubmit? onSearchSubmitted;
 
   @override
   ConsumerState<CallsTabScreen> createState() => _CallsTabScreenState();
@@ -143,8 +152,8 @@ class _CallsTabScreenState extends ConsumerState<CallsTabScreen> {
   @override
   Widget build(BuildContext context) {
     final peopleSearch = widget.peopleSearch;
-    final searchingPeople =
-        peopleSearch != null && _searching && _query.trim().isNotEmpty;
+    final searchingPeople = peopleSearch != null && _searching;
+    final submit = widget.onSearchSubmitted;
     final showShortcuts = peopleSearch != null && !_searching;
     return Scaffold(
       floatingActionButton: showShortcuts
@@ -165,6 +174,9 @@ class _CallsTabScreenState extends ConsumerState<CallsTabScreen> {
           if (!value) _query = '';
         }),
         onQueryChanged: (value) => setState(() => _query = value),
+        onSubmitted: peopleSearch == null || submit == null
+            ? null
+            : (text) => submit(ref, text),
       ),
       body: searchingPeople
           ? peopleSearch(context, _query, _call)

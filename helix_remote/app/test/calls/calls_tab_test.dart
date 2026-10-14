@@ -24,9 +24,13 @@ void main() {
   Widget tab(
     FakeCallsPort port, {
     CallsPeopleSearchBuilder? peopleSearch,
+    CallsPeopleSearchSubmit? onSearchSubmitted,
     FakeCallPermissions? permissions,
   }) => harness(
-    home: CallsTabScreen(peopleSearch: peopleSearch),
+    home: CallsTabScreen(
+      peopleSearch: peopleSearch,
+      onSearchSubmitted: onSearchSubmitted,
+    ),
     routes: [stubRoute('/home/calls/:callId', 'detail')],
     overrides: callOverrides(
       port: port,
@@ -265,8 +269,10 @@ void main() {
 
       await tester.tap(find.byTooltip('Search'));
       await tester.pumpAndSettle();
-      // Nothing typed yet: the log is still showing.
-      expect(find.text('Bob'), findsOneWidget);
+      // Nothing typed yet: the people search shows already (the people on
+      // Helix from the phone's contacts), not the log.
+      expect(find.text('people results for ""'), findsOneWidget);
+      expect(find.text('Bob'), findsNothing);
       await tester.enterText(find.byType(TextField), 'dan');
       await tester.pumpAndSettle();
 
@@ -274,6 +280,28 @@ void main() {
       await tester.tap(find.text('people results for "dan"'));
       await tester.pumpAndSettle();
       expect(port.calls, ['start found-person video:false']);
+    });
+
+    testWidgets('the keyboard search key goes to the people search', (
+      tester,
+    ) async {
+      final submitted = <String>[];
+      await tester.pumpWidget(
+        tab(
+          withLog(),
+          peopleSearch: (context, query, onCall) => Text('people for $query'),
+          onSearchSubmitted: (ref, text) => submitted.add(text),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('New call'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '+8801711000002');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+
+      expect(submitted, ['+8801711000002']);
     });
   });
 

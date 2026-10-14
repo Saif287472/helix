@@ -54,11 +54,14 @@ conversation header) and A2b (contact info) bind their buttons to this;
 
 ## Calls tab and the people-search seam
 
-`CallsTabScreen({peopleSearch})`. The router hands it to `HomeScreen(callsTab:)`.
-`peopleSearch` is a `CallsPeopleSearchBuilder(context, query, onCall)`: the router
-mounts the people feature's `PeopleSearchPanel(mode: calls)` there (features never
-import each other); a tap calls through `placeCallProvider`. Without one, the search
-button filters the call log by name. Names come from `peopleDirectoryProvider`
+`CallsTabScreen({peopleSearch, onSearchSubmitted})`. The router hands it to
+`HomeScreen(callsTab:)`. `peopleSearch` is a `CallsPeopleSearchBuilder(context,
+query, onCall)`: the router mounts the people feature's
+`PeopleSearchPanel(mode: calls)` there (features never import each other), from
+the moment the search opens (with nothing typed it lists the people on Helix and
+the contacts card), and `PeopleSearchPanel.submit` as the keyboard's search key; a
+tap calls through `placeCallProvider`. Without one, the search button filters the
+call log by name. Names come from `peopleDirectoryProvider`
 (`core/people/people_names.dart`): phone book, nickname, number, `~Helix name`.
 
 ## How a call reaches the screen

@@ -90,6 +90,7 @@ class HelixSearchAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.controller,
     this.searchHint = 'Search',
     this.onQueryChanged,
+    this.onSubmitted,
     this.actions = const [],
   });
 
@@ -102,6 +103,9 @@ class HelixSearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   final TextEditingController controller;
   final String searchHint;
   final ValueChanged<String>? onQueryChanged;
+
+  /// The keyboard's search key.
+  final ValueChanged<String>? onSubmitted;
 
   /// Shown after the search button when not searching.
   final List<Widget> actions;
@@ -127,6 +131,7 @@ class HelixSearchAppBar extends StatelessWidget implements PreferredSizeWidget {
           hint: searchHint,
           autofocus: true,
           onChanged: onQueryChanged,
+          onSubmitted: onSubmitted,
         ),
       );
     }

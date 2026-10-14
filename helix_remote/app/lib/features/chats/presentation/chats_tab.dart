@@ -18,15 +18,22 @@ import 'package:helix_remote_ui/helix_remote_ui.dart';
 ///
 /// [peopleResults] is the seam to the people feature (see
 /// [PeopleSearchBuilder]); without it the search shows chats and messages.
+/// [onSearchSubmitted] is its keyboard search key ([PeopleSearchSubmit]).
 ///
 /// [detailBuilder] is the seam to the conversation feature: on a window wide
 /// enough for two panes the list sits on the left and the chosen chat opens
 /// on the right instead of on a page of its own. Without it the chat always
 /// opens as a page.
 class ChatsTab extends ConsumerStatefulWidget {
-  const ChatsTab({super.key, this.peopleResults, this.detailBuilder});
+  const ChatsTab({
+    super.key,
+    this.peopleResults,
+    this.onSearchSubmitted,
+    this.detailBuilder,
+  });
 
   final PeopleSearchBuilder? peopleResults;
+  final PeopleSearchSubmit? onSearchSubmitted;
   final Widget Function(BuildContext context, String conversationId)?
   detailBuilder;
 
@@ -77,6 +84,9 @@ class _ChatsTabState extends ConsumerState<ChatsTab> {
             searchHint: 'Search chats, messages and people',
             onQueryChanged: (value) =>
                 ref.read(chatSearchQueryProvider.notifier).set(value),
+            onSubmitted: widget.onSearchSubmitted == null
+                ? null
+                : (text) => widget.onSearchSubmitted!(ref, text),
             actions: [
               PopupMenuButton<_ChatsMenu>(
                 tooltip: 'More options',

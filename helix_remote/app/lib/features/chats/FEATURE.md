@@ -29,9 +29,12 @@ conversation needs the same ones and features may not import each other.
 
 ## Seams
 
-- **People search** (A2b): `ChatsTab(peopleResults: ...)`. The router passes
-  `PeopleSearchPanel(mode: chats, embedded: true)`; a tap opens (or starts) the
-  conversation.
+- **People search** (A2b): `ChatsTab(peopleResults: ..., onSearchSubmitted:
+  ...)`. The router passes `PeopleSearchPanel(mode: chats, embedded: true)`
+  and `PeopleSearchPanel.submit` (the keyboard's search key looks a typed
+  number or `~name` up); a tap opens (or starts) the conversation. With
+  nothing typed (the search, or the new chat button) the panel shows alone:
+  the "Allow contacts" card or "Refresh contacts", and the people on Helix.
 - **Menu**: New group and Join a group with a link (`GroupPaths`).
 - Naming: `peopleDirectoryProvider` (`core/people/people_names.dart`) is the one source.
 

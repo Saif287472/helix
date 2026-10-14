@@ -141,6 +141,36 @@ void main() {
     expect(find.byKey(const ValueKey('people')), findsOneWidget);
   });
 
+  chatTest('with nothing typed the search shows the people seam', (
+    tester,
+    gateway,
+  ) async {
+    final submitted = <String>[];
+    await tester.pumpWidget(
+      chatApp(
+        gateway,
+        ChatsTab(
+          peopleResults: (context, query) =>
+              Text('people for "$query"', key: const ValueKey('people')),
+          onSearchSubmitted: (ref, text) => submitted.add(text),
+        ),
+      ),
+    );
+    await settle(tester);
+    await tester.tap(find.byTooltip('New chat'));
+    await tester.pump();
+    await settle(tester);
+    // The contacts on Helix (and the way to let Helix check them) show
+    // before anything is typed.
+    expect(find.text('people for ""'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '+8801711000002');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle(tester, rounds: 20);
+    expect(submitted, ['+8801711000002']);
+  });
+
   chatTest('lays out at 2x text without overflow', (tester, gateway) async {
     final bob = await tester.runAsync(
       () => gateway.chatWith('bob', name: 'Bob'),
