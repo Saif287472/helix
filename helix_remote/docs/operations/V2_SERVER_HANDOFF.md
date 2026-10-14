@@ -103,7 +103,8 @@ dart run bin/server.dart
   full `.env` (pepper, SMS, TURN and so on), not just the database URL.
 - **Stop with Ctrl+C.** The server stops accepting new requests and lets
   in-flight ones finish for up to 10 seconds, stops the scheduler and job
-  runner, closes WebSockets with code 1001, and closes the database.
+  runner, closes WebSockets with code 4503 (going away), and closes the
+  database.
 - **On Windows, only Ctrl+C is handled.** `bin/server.dart` listens for
   SIGTERM only on other platforms. Closing the console window or killing the
   process is a hard stop. It is safe for data (transactions, and job leases

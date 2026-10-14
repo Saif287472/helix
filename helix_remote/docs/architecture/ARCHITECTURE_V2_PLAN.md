@@ -1,9 +1,9 @@
 # Helix Remote Architecture v2 — Plan of Record
 
-Status: **cutover in progress — everything is built; v2 is being merged into `main`; the user then runs the server steps** · Written 2026-09-30 · Owner: hasan
+Status: **live** - v2 has run Helix Global since the Phase X cutover (2026-10-06); the tracker (§11) is the history of how it was built · Written 2026-09-30 · Owner: hasan
 
-> **Authoritative copy:** this file on branch `architecture-v2` (worktree
-> `J:\hx2`). The copy on `main` is a snapshot from before Phase 0.
+> **Authoritative copy:** this file on `main` (the `architecture-v2` branch
+> was merged at cutover).
 
 This is the single plan for rebuilding Helix Remote so it can grow ~10× in
 features and serve millions of users without another architecture change.
@@ -113,7 +113,7 @@ until cutover (§10). At cutover `backend/` is deleted.
 server/
   bin/server.dart               entry: load config -> build platform -> modules -> serve
   bin/migrate.dart              run migrations only (deploy step)
-  bin/admin_tool.dart           reset admin password etc.
+  bin/admin_tool.dart           reset-password (added 2026-10-14, review B-07)
   lib/src/platform/             no business logic
     config/                     typed, validated config from env (one class)
     db/                         Db, Tx interfaces; Postgres pool impl; migration runner
@@ -204,8 +204,10 @@ own rows, tracked to completion by `compliance`.
 - **Time:** `timestamptz`. Payloads are `bytea`, never base64 text. JSON only
   as `jsonb` for genuinely schemaless data.
 - **Partitioning:** the mailbox is hash-partitioned by `device_id` from day
-  one (16 partitions). Audit and metrics tables are range-partitioned by
-  month, with retention jobs that drop partitions.
+  one (16 partitions). Audit and metrics tables were planned as
+  range-partitioned by month; they are plain tables with retention jobs
+  instead (`admin.purge_audit`, one year; call metrics 90 days), which is
+  enough at their size (§12, 2026-10-14).
 - **Indexing rule:** every query in a repository has an index, verified by an
   `EXPLAIN` test for the hot paths (send, fetch mailbox, ack, auth lookup).
 
@@ -468,8 +470,9 @@ lib/
 
 1. **Architecture tests** (fail CI):
    - Server: modules import only other modules' `api.dart`. No `dart:io` File
-     use outside `platform/blobs`. No SQL outside `data/`. The public-route
-     snapshot.
+     use outside `platform/blobs`. A module's SQL stays in its own files and
+     schema, never in `api.dart` or `kernel/` (§12, 2026-10-14). The
+     public-route snapshot.
    - Client: the package DAG in §6.1. Presentation import rules. No `sqlite3`
      or `drift` import outside `helix_remote_db`. No `http`/`WebSocket`
      outside `helix_remote_api`.
@@ -672,6 +675,7 @@ C1 and C2 may run once P1 is done. C3 needs S3. A1 needs C3. X comes last.
 
 | Date | Change | Approved in |
 |---|---|---|
+| 2026-10-14 | Review batch 8 (G-02, G-03): the rule "no SQL outside `data/`" (§8.1) was never kept or tested - eight modules keep SQL in `module.dart` - so the rule becomes the one the code keeps: a module's SQL lives in its own files and names only its own schema, never in `api.dart` or `kernel/`, enforced by the server's `architecture_test.dart`. Modules split into `http/`, `application/`, `domain/`, `data/` when they grow; only identity has all four. Audit and metrics tables stay unpartitioned, with retention jobs (§4.3). The header no longer says cutover is in progress. | the user, 2026-10-14 ("Document the real rule") |
 | 2026-10-02 | A1: the app depends on `helix_remote_engine` and reads everything through a `RuntimeFactory` seam, so no test opens a keystore, a database file or a socket; `runtimeProvider` is rebuilt (and the old runtime closed) when the server changes. `presentation/` may import only its own feature, `shared/`, `helix_remote_ui` and `helix_remote_domain` - the Settings tab reads one `SettingsTabModel` instead of `serverUrlProvider`, and sign-out is a `SignOutAction` in the application layer. Drift watch streams do not cross isolates (the open A1 item): the FCM isolate writes the same file the UI isolate has open, so its changes reach the UI on the next query, not live; the app reconciles with `syncOnce` on resume. The FCM handler is registered before `runApp` and runs a headless engine. v2 `PhoneVerifyResponse` carries `hasPassword` and `account_id`, so the sign-in order is phone → SMS → (password \| name) rather than v1's lookup-then-decide; the optional sign-up password is on the name page for now. `helix_code.dart`, `deep_link.dart` and `link_channel.dart` are carried over unchanged from v1 (one fix: a `join?invite=` link now yields the bare origin instead of a URL with a trailing `?#`). Riverpod 3.4.3 and go_router 18.0.2 as registered in Phase 0; `cryptography_flutter` is not needed (crypto v2 has `SecureCryptoRandom`). Group calls stay deferred. | this session (autonomous run) |
 | 2026-09-30 | Plan created (D1–D5). | this session |
 | 2026-10-02 | C3b: the engine requests a §13a re-send after authentication failures of user-visible messages (the `urgent` flag); receipts, reactions, edits, deletes, votes, typing and `decryption_error` are sent non-urgent and get no placeholder, repair request or push; one fresh session per device per 10 minutes at most. `decryption_error` names the failed envelope id; re-sends use a new request id (the server de-duplicates by sending device and id). `signOut` always wipes the local db and revokes the device. The db package gained DAO methods only. The server's `test/client/` may import engine, db, crypto and CLI packages. Review items: reset requests triggered by authentication failures (a hostile server can make a client start cooldown-limited sessions); recovery lookup lacks `account_id` (fixed in C4); drift watch streams do not cross isolates (A1 decides). | this session (autonomous run) |

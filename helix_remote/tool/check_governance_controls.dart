@@ -208,9 +208,12 @@ const controls = <GovernanceControl>[
         'reinstate it.',
   ),
   GovernanceControl(
-    'file_picker prerelease exception is recorded',
+    'the file_picker prerelease exception is retired',
     'docs/adr/024-file-picker-prerelease-exception.md',
-    'file_picker',
+    'Retired (2026-10-14',
+    because:
+        'G-01 — the app resolves stable file_picker 13.1.0; the exception '
+        'must not quietly come back.',
   ),
   GovernanceControl(
     'file_picker is still declared where the register says it is',
@@ -290,6 +293,65 @@ List<String> regressionMatrixFailures() {
   ];
 }
 
+/// Packages the register names that are not in Helix Remote's lockfile, with
+/// the reason. Anything else the register names must be in it.
+const _notInRemoteLock = {
+  // Resolved by Helix Local's workspace, which has its own lockfile.
+  'sqlite3_flutter_libs',
+};
+
+/// Every `| `package` | `version` |` row of the dependency register (and its
+/// `a` / `b` form) must name the version `pubspec.lock` resolves (review
+/// G-01: the register said "held at ^18" while the app had moved to 22).
+List<String> registerVersionFailures() {
+  const register = '../docs/dependencies/DEPENDENCY_RISK_REGISTER.md';
+  const lockPath = 'pubspec.lock';
+  final regFile = File(register);
+  final lockFile = File(lockPath);
+  if (!regFile.existsSync()) return ['$register does not exist'];
+  if (!lockFile.existsSync()) return ['$lockPath does not exist'];
+  final resolved = <String, String>{};
+  for (final m in RegExp(
+    r'^  ([a-z0-9_]+):\r?\n(?:    .*\r?\n)*?    version: "([^"]+)"',
+    multiLine: true,
+  ).allMatches(lockFile.readAsStringSync())) {
+    resolved[m.group(1)!] = m.group(2)!;
+  }
+  final row = RegExp(
+    r'^\| `([a-z0-9_]+)`((?: / `[a-z0-9_]+`)*) \| `([^`]+)`((?: / `[^`]+`)*) \|',
+  );
+  final ticked = RegExp('`([^`]+)`');
+  final failures = <String>[];
+  var rows = 0;
+  for (final line in regFile.readAsLinesSync()) {
+    final m = row.firstMatch(line);
+    if (m == null) continue;
+    final names = [
+      m.group(1)!,
+      for (final t in ticked.allMatches(m.group(2) ?? '')) t.group(1)!,
+    ];
+    final versions = [
+      m.group(3)!,
+      for (final t in ticked.allMatches(m.group(4) ?? '')) t.group(1)!,
+    ];
+    for (var i = 0; i < names.length && i < versions.length; i++) {
+      rows++;
+      final name = names[i];
+      if (_notInRemoteLock.contains(name)) continue;
+      final locked = resolved[name];
+      if (locked == null) {
+        failures.add('$register lists $name, which $lockPath does not resolve');
+      } else if (locked != versions[i]) {
+        failures.add(
+          '$register says $name ${versions[i]}; $lockPath resolves $locked',
+        );
+      }
+    }
+  }
+  if (rows == 0) failures.add('$register has no package rows to check');
+  return failures;
+}
+
 void main() {
   final missing = <String>[];
   for (final control in controls) {
@@ -297,6 +359,7 @@ void main() {
     if (failure != null) missing.add(failure);
   }
   missing.addAll(regressionMatrixFailures());
+  missing.addAll(registerVersionFailures());
 
   if (missing.isNotEmpty) {
     stderr.writeln('Governance control verification failed:');

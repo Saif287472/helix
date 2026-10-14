@@ -1,6 +1,8 @@
 # ADR 024: File-picker prerelease dependency exception
 
 Status: superseded (2026-09-26) by the stable `file_picker ^13.1.0` bump.
+Retired (2026-10-14, review G-01): the app resolves stable `file_picker`
+13.1.0, and the dependency register no longer lists the exception.
 
 `file_picker ^12.0.0-beta.5` remains temporarily required because stable 11
 depends on `win32 ^5`, while the current `share_plus ^13.1.0` requires

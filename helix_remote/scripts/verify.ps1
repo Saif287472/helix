@@ -106,7 +106,12 @@ if (-not (Test-BuildOnlyEnabled)) {
 
     foreach ($pkg in (Get-ChildItem packages -Directory)) {
         $testDir = Join-Path $pkg.FullName "test"
-        if (-not (Test-Path $testDir)) { continue }
+        # Only real packages: a folder without pubspec.yaml is a leftover
+        # build directory of a deleted package.
+        if (-not (Test-Path (Join-Path $pkg.FullName "pubspec.yaml"))) { continue }
+        if (-not (Test-Path $testDir)) {
+            throw "packages/$($pkg.Name) has no test/ directory: every package needs tests."
+        }
 
         Invoke-Step "Tests: packages/$($pkg.Name)" {
             Push-Location $pkg.FullName

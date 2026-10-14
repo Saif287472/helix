@@ -295,8 +295,12 @@ devices are vouched for by the AIK certificate.
   `auth_key = HKDF(out, info="helix.v2.password.auth", 32)` and
   `wrap_key = HKDF(out, info="helix.v2.password.wrap", 32)`.
 - **Only `auth_key` is ever sent** (the password never leaves the device).
-  The server stores a hash of `auth_key` (Argon2id with a server-side salt),
-  locks out after 5 failures for 15 minutes, doubling to 24 hours.
+  The server stores an HMAC-SHA256 verifier of `auth_key` (keyed with a
+  random per-account salt stored next to it), not a second Argon2id: `auth_key` is already the output of
+  the client's Argon2id, so a fast keyed hash is enough and costs a stolen
+  database one full Argon2id run per guess (THREAT_MODEL T-7). It locks out
+  after 5 failures for 15 minutes, doubling to 24 hours; a number with no
+  password answers with a 32-byte decoy salt and the same lockout.
 - `wrapped_aik = AES-256-GCM(wrap_key, AIK_priv, aad = "helix.v2.wrapped-aik" ‖ account_id)`
   is stored on the server so password sign-in on a new device needs no other
   device (T-4 in the threat model, unchanged).
@@ -572,9 +576,11 @@ following; each was fixed with a test that fails without the fix.
 - *Group sender keys under two engines.* Closed for sending in schema 4 (the
   own key's revision, above). Received keys still save last-writer-wins, which
   costs at most a re-derived key on the receiving side.
-- *No HTTPS enforcement.* `HelixApi` and `LinkCode` accept `http://` origins
-  (needed for tests and a LAN personal server); the app must refuse them for
-  Helix Global.
+- *HTTPS enforcement.* Closed: `HelixApi` and `LinkCode` still accept
+  `http://` origins (tests, a LAN personal server), but the app refuses them
+  outside debug builds and development hosts (`ServerPolicy`,
+  `app/lib/core/engine/server_policy.dart`; `app/test/server_link_test.dart`,
+  "https is fine, cleartext is not").
 - *Group key planting.* A member can hand another member a wrong group key
   (the name stays unreadable until an admin's key arrives); sender keys are
   redistributed on a re-send request from any current member that passes the

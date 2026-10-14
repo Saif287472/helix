@@ -114,6 +114,39 @@ void main() {
     expect(offenders, isEmpty, reason: 'AGENTS.md: one session mint point');
   });
 
+  test('SQL lives only in its own module (or the platform), never in api.dart '
+      'or the kernel', () {
+    // The rule the code keeps (AGENTS.md, plan §8.1 as amended 2026-10-14,
+    // review G-02): a module's SQL may sit in module.dart, application/ or
+    // data/, but never in its api.dart (the facade other modules import),
+    // never in kernel/, and it names only the module's own schema - nobody
+    // asks for another module's schema by name.
+    final sql = RegExp(
+      r'\b(SELECT\s[^;]*?\sFROM\s|INSERT INTO\s|DELETE FROM\s|UPDATE\s+\$)',
+    );
+    final offenders = <String>[];
+    var scanned = 0;
+    for (final file in Directory(
+      'lib',
+    ).listSync(recursive: true).whereType<File>()) {
+      final path = file.path.replaceAll(r'\', '/');
+      if (!path.endsWith('.dart')) continue;
+      final source = file.readAsStringSync();
+      final inModule = path.startsWith('lib/src/modules/');
+      if (inModule) scanned++;
+      final facade = inModule && path.endsWith('/api.dart');
+      final kernel = path.startsWith('lib/src/kernel/');
+      if ((facade || kernel) && sql.hasMatch(source)) {
+        offenders.add('$path: SQL in a facade or the kernel');
+      }
+      if (inModule && source.contains('schemas.of(')) {
+        offenders.add("$path: names another module's schema");
+      }
+    }
+    expect(scanned, greaterThan(20));
+    expect(offenders, isEmpty, reason: offenders.join('\n'));
+  });
+
   test('is pure Dart', () {
     expectClean([
       ForbiddenDirectiveRule(

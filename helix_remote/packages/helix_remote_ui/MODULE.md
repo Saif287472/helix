@@ -138,19 +138,21 @@ or add a content type here in the phase that needs it.
   to be checked by the app's own performance-budget test (plan 6.4).
 - `package_rules_test.dart`: colour literals, tooltips, Flutter-only
   dependencies, no localisation or screenshot blocking.
-- `component_gallery_golden_test.dart` (existing) and
-  `chat_components_golden_test.dart`: goldens.
+- `component_gallery_golden_test.dart`: the one golden (the component
+  gallery, light theme).
 
 ### Goldens
 
 Linux is the reference platform (CI's `ubuntu-latest`); on other platforms the
-golden tests skip. `chat_components_golden_test.dart` also skips while a
-baseline PNG is missing, so a new golden never turns a run red. To create or
-refresh baselines, on Linux, from `helix_remote/packages/helix_remote_ui`:
+golden test skips. Four chat-component goldens were removed on 2026-10-14
+(review F-02): their baselines were never generated, so they checked nothing
+anywhere. To refresh the gallery baseline, on Linux, from
+`helix_remote/packages/helix_remote_ui`:
 
-    flutter test test/chat_components_golden_test.dart --update-goldens
+    flutter test test/component_gallery_golden_test.dart --update-goldens
 
-then review every PNG in `test/goldens/` and commit them. To look at the output
+then review the PNG in `test/goldens/` and commit it. A failed golden run
+writes `test/failures/`, which is ignored (never commit it). To look at the output
 on another OS without committing, run with `HELIX_GOLDENS_ANY_PLATFORM=1` and
 `--update-goldens`, and delete the PNGs afterwards: text and icon rasterisation
 differs per platform.

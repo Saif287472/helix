@@ -489,7 +489,7 @@ day of messages that were not yet delivered.
 | Situation | Recovery |
 |---|---|
 | Server process crashed or the PC rebooted | Start Postgres, coturn, Caddy, the server (`V2_SERVER_HANDOFF.md`, "Start and stop"). State is in Postgres; jobs resume when their leases end. WebSocket routes in the ephemeral store expire within 75 s. |
-| Postgres service down | `ready` goes 503 (`database: false`). Start `postgresql-x64-17`. **Then restart every server node** (see "Troubleshooting": the bus connection is not re-opened). |
+| Postgres service down | `ready` goes 503 (`database: false`). Start `postgresql-x64-17`. The nodes reconnect by themselves: the pool opens new connections and the `LISTEN` connection reopens with backoff (see "Troubleshooting"); no restart is needed. Rate-limit buckets and the ephemeral store were UNLOGGED, so a Postgres crash emptied them (limits start full, pending codes and links are gone). |
 | Postgres crashed | On restart Postgres empties the UNLOGGED tables itself. That resets rate limits, WebSocket routes, presence, challenges and the federation replay memory. Devices reconnect and refresh their routes. For the 10 minutes after, a captured federation request could be replayed (reasoning from the replay window in `federation/MODULE.md`). |
 | Database lost or corrupt | Restore the newest dump (above), then start. |
 | Whole PC lost | New PC: install PostgreSQL 17, run `setup_local_postgres.ps1`, restore the dump and blobs, restore `.env` and the Firebase key file, install Caddy and coturn (`deploy/coturn/README.md`), fix the router forwards and firewall rules, then start. DNS points at the router's public address and does not change. |
@@ -692,15 +692,18 @@ the nodes is needed.
 
 | Code | Meaning |
 |---|---|
+| 4001 | The token expired or predates a session cut-off (sign-out, password change). The phone refreshes and reconnects. |
 | 4003 | Device revoked or account deleted. The phone must sign out. |
+| 4004 | The account was suspended. |
 | 4008 | Replaced by a newer connection of the same device (any node). |
 | 4010 | No frame from the phone for two heartbeats (50 s). |
+| 4029 | Too many upgrades or frames from this device. Back off at least 30 s. |
 | 4400 | Wrong or missing subprotocol (`helix.v1+json`) or a malformed frame. |
-| 1001 | The node is shutting down. Reconnect (another node, or after restart). |
+| 4503 | The node is shutting down, or could not deliver. Reconnect with backoff (another node, or after restart). Not 1001: WebSocket libraries let applications send only 1000 or 3000-4999. |
 
 A request without a valid token is refused with HTTP 401 before any upgrade.
-(`modules/realtime/module.dart`. The `4001`, `4004` and `4029` codes in
-`REALTIME_V2.md` are not emitted by the server.)
+(`modules/realtime/module.dart`, `RealtimeCloseCode` in the protocol package,
+`REALTIME_V2.md`. The admin log stream uses 4001 and 4503 too.)
 
 **An admin is locked out, or the password is lost.** On the server's
 machine, from `helix_remote/server` (the server may keep running):

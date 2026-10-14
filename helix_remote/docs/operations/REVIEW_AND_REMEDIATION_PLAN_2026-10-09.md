@@ -110,7 +110,7 @@ this file as a change.
 | C-01 | Medium | Security | Two engines can write the same ratchet state (key/nonce reuse) | `helix_remote/packages/helix_remote_engine/lib/src/crypto/db_stores.dart:29-44` | confirmed (code); fixed in Batch 4 (sessions, then group sender keys the same day) |
 | E-03 | Medium | App | Windows app raises no notifications | `helix_remote/app/lib/core/notifications/local_notifications.dart:61-65` | confirmed |
 | F-01 | Medium | Tests | Platform glue (FCM, notifications, local_auth) untested | `.github/workflows/ci.yml:143-157` | confirmed; push and notification logic tested in Batch 3, device checklist added |
-| G-01 | Medium | Deps | Dependency risk register no longer matches the lockfile | `docs/dependencies/DEPENDENCY_RISK_REGISTER.md:65-70` | confirmed |
+| G-01 | Medium | Deps | Dependency risk register no longer matches the lockfile | `docs/dependencies/DEPENDENCY_RISK_REGISTER.md:65-70` | confirmed; fixed in Batch 8 (device checks recorded as pending) |
 | H-02 | Medium | Ops | Production runs from the development working tree | `helix_remote/docs/operations/V2_SERVER_HANDOFF.md:74-90` | confirmed |
 | H-03 | Medium | Ops | Nothing restarts the service after reboot or crash | `helix_remote/server/lib/src/platform/db/postgres_db.dart:21-24` | confirmed |
 | H-04 | Medium | Ops | Caddy site has no HSTS and no admin restriction | `J:\Projects\Servers\helix_server\Caddyfile` | confirmed; Batch 1 Caddyfile written, user installs |
@@ -128,15 +128,15 @@ this file as a change.
 | B-08 | Low | Admin | Distributed attacker can keep admin sign-in locked | `helix_remote/server/lib/src/modules/admin/module.dart:70-73` | confirmed; fixed in Batch 6 |
 | B-09 | Low | Admin | macOS console lacks the network-client entitlement | `helix_remote/admin/macos/Runner/Release.entitlements` | confirmed; fixed in Batch 6 (network entitlement; keychain unverified) |
 | C-02 | Low | Privacy | Reports kept forever (docs: until resolved) | `helix_remote/server/lib/src/modules/people/module.dart:575-592` | confirmed; fixed in Batch 7 (180 days after closing) |
-| C-03 | Low | Privacy | Privacy and crypto documents slightly wrong | `helix_remote/docs/protocol/v2/CRYPTO_V2.md` (§11, §14) | confirmed |
+| C-03 | Low | Privacy | Privacy and crypto documents slightly wrong | `helix_remote/docs/protocol/v2/CRYPTO_V2.md` (§11, §14) | confirmed; fixed in Batch 8 |
 | D-01 | Low | Engine | Heavy crypto runs on the UI isolate | `helix_remote/packages/helix_remote_crypto/lib/src/v2/password.dart:54-63` | unverified |
 | E-04 | Low | App | Documented gaps against v1 (return-to-call bar, group calls…) | `helix_remote/app/lib/features/calls/FEATURE.md:93-96` | known |
-| F-02 | Low | Tests | Four of five UI golden tests check nothing, even on CI | `helix_remote/packages/helix_remote_ui/test/chat_components_golden_test.dart:27-36` | confirmed |
-| F-03 | Low | Tests | Golden failure images committed | `helix_remote/packages/helix_remote_ui/test/failures/` | confirmed |
-| F-04 | Low | Tests | A third load-sensitive server test | `helix_remote/server/test/client/engine/devices_test.dart` | confirmed |
-| F-05 | Low | Tests | Small gaps (domain tests, fake lock, stale registrants) | `helix_remote/scripts/verify.ps1:107-110` | confirmed |
-| G-02 | Low | Architecture | Stated rules (SQL only in `data/`) not followed or tested | `helix_remote/server/test/architecture_test.dart` | confirmed |
-| G-03 | Low | Docs | Ten documents that contradict the code | `helix_remote/docs/architecture/ARCHITECTURE_V2_PLAN.md:3-6` | confirmed |
+| F-02 | Low | Tests | Four of five UI golden tests check nothing, even on CI | `helix_remote/packages/helix_remote_ui/test/chat_components_golden_test.dart:27-36` | confirmed; fixed in Batch 8 (the four tests removed) |
+| F-03 | Low | Tests | Golden failure images committed | `helix_remote/packages/helix_remote_ui/test/failures/` | confirmed; fixed in Batch 8 |
+| F-04 | Low | Tests | A third load-sensitive server test | `helix_remote/server/test/client/engine/devices_test.dart` | confirmed; documented in Batch 8 (timing-sensitive list; no safe test-only fix) |
+| F-05 | Low | Tests | Small gaps (domain tests, fake lock, stale registrants) | `helix_remote/scripts/verify.ps1:107-110` | confirmed; fixed in Batch 8 |
+| G-02 | Low | Architecture | Stated rules (SQL only in `data/`) not followed or tested | `helix_remote/server/test/architecture_test.dart` | confirmed; fixed in Batch 8 (rule documented as kept, and tested) |
+| G-03 | Low | Docs | Ten documents that contradict the code | `helix_remote/docs/architecture/ARCHITECTURE_V2_PLAN.md:3-6` | confirmed; fixed in Batch 8 |
 | G-04 | Low | Architecture | Very large files | `helix_remote/server/lib/src/modules/groups/module.dart` | confirmed |
 | H-05 | Low | Ops | No monitoring, no log rotation | `helix_remote/server/lib/src/platform/observability/log.dart:93-115` | confirmed |
 | H-06 | Low | Ops | PC off more than three days fails queued sends | `helix_remote/packages/helix_remote_engine/lib/src/config.dart:15` | confirmed; fixed in Batch 7 (30 days) |
@@ -1446,6 +1446,46 @@ the batch.
 - **Verify.** Governance check, ui suite on Linux, server suite.
 - **APK / restart.** None.
 - **Model.** Sonnet 5.5.
+- **Status (2026-10-14).** Done; nothing to deploy. The user chose: document
+  the SQL rule the code keeps, record the plugin device checks as pending, and
+  remove the four goldens without baselines.
+  - **G-01:** the register lists the resolved versions (`file_picker` 13.1.0
+    stable, `drift` 2.34.0) and a new "Client platform plugins" table
+    (notifications 22, secure storage 11, contacts 2.5, connectivity 7,
+    `firebase_core`/`firebase_messaging`, `local_auth`, `shared_preferences`)
+    with the device check of each marked pending; the checks are in
+    `REMOTE_RELEASE_CHECKLIST.md` ("Platform plugin majors"). ADR-024 is
+    retired. `tool/check_governance_controls.dart` now compares every
+    version in the register with `pubspec.lock` (Local's
+    `sqlite3_flutter_libs` excepted, by name).
+  - **G-02:** AGENTS.md, the repository map and plan §8.1 state the rule kept
+    (SQL in a module's own files and schema, never in `api.dart` or
+    `kernel/`); the server's `architecture_test.dart` checks it. Plan §12 has
+    the change-log entry, approved by the user.
+  - **G-03:** plan header (live, `main` authoritative), §4.1 (`admin_tool`),
+    §4.3 (no partitions; retention jobs); V2_OPERABILITY disaster recovery
+    (no restart after Postgres comes back) and close codes (4001, 4004, 4029,
+    4503); V2_SERVER_HANDOFF stop (4503); THREAT_MODEL T-10 (UNLOGGED limits);
+    T-7, admin MODULE.md and the metadata documents were done in Batches 5-7.
+  - **C-03:** METADATA_V2 (admin sign-in failures keep addresses 2 days),
+    METADATA_INVENTORY (when the raw number is sent; `messaging.sends` keeps
+    the sender account), CRYPTO_V2 §11 (an HMAC-SHA256 verifier with a
+    per-account salt) and §14 (HTTPS enforcement closed, with its test).
+  - **F-02, F-03:** `chat_components_golden_test.dart` and the committed
+    `test/failures/` images are deleted, and `test/failures/` is ignored;
+    the gallery golden stays (Linux only).
+  - **F-04:** not fixable by test hygiene alone: the failing request waits for
+    a pool connection while the client's Argon2id (the v2 minimum, enforced
+    by the crypto package and the server, so tests may not lower it) runs in
+    the server's isolate; the implementation already yields between blocks,
+    so this is CPU starvation under the parallel suite, not a leaked
+    request. It stays in AGENTS.md's timing-sensitive list (it passes
+    alone).
+  - **F-05:** `helix_remote_domain` has tests (legal documents, architecture)
+    and both verify scripts fail on a package with a `pubspec.yaml` and no
+    `test/`; the admin plugin registrants are committed as regenerated
+    (`share_plus` and `url_launcher` gone), and AGENTS.md says when such a
+    change is real.
 
 ### Batch 9: Operations code
 

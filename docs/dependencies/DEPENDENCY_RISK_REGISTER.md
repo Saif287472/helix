@@ -3,7 +3,7 @@
 | Package | Resolved version | Risk | Owner | Remediation |
 |---|---:|---|---|---|
 | `sqlite3_flutter_libs` | `0.6.0+eol` | EOL marker in resolved package version. Remote no longer depends on it (the v1 `helix_remote_storage` was deleted at Phase X; the v2 client database uses `sqlite3` with the SQLCipher build hook); Local storage still resolves it and must be reviewed separately. | storage-team | Keep visible until Local storage removes the obsolete shim or records a product-specific exception. |
-| `file_picker` | `12.0.0-beta.7` | **Directly declared** by Helix Remote at `helix_remote/app/pubspec.yaml`, as a prerelease *ahead of* the 11.x stable line, so no stability guarantee applies. Recorded as an accepted exception in [ADR-024](../../helix_remote/docs/adr/024-file-picker-prerelease-exception.md). The committed `helix_remote/pubspec.lock` is what pins it; the declared caret range does not. | platform-team | Hold at the locked resolution. Revisit when `file_picker` 12 reaches stable, and retire the exception then. |
+| `file_picker` | `13.1.0` | **Directly declared** by Helix Remote at `helix_remote/app/pubspec.yaml`, a stable release. The prerelease exception of [ADR-024](../../helix_remote/docs/adr/024-file-picker-prerelease-exception.md) is retired (2026-10-14, review G-01): the app resolves stable 13.1.0. The committed `helix_remote/pubspec.lock` is what pins it. | platform-team | Take minor releases with the attachment tests; the Android and Windows attachment picker is a real-device check (`REMOTE_RELEASE_CHECKLIST.md`). |
 
 ## Architecture v2 dependency intake (2026-09-30)
 
@@ -16,7 +16,7 @@ stable releases checked on 2026-09-30.
 | Package | Version | Declared by | Phase | Risk | Owner | Remediation |
 |---|---:|---|---|---|---|---|
 | `postgres` | `3.5.17` | `helix_remote/server` (**added in Phase 0**) | 0 | The only maintained pure-Dart PostgreSQL driver, with a small maintainer base. All SQL for the v2 server goes through it. | server-team | The `Db`/`Tx` interface (Phase S1) keeps it replaceable. Pin via the lockfile. The Postgres test suites run in CI against a real `postgres:17` service. |
-| `drift` / `drift_dev` | `2.34.4` / `2.34.0` | `packages/helix_remote_db` (**added in C1**; `drift_dev` dev-only) | C1 | Code generation. Stale generated code could diverge from the schema. It must work with the `sqlite3` SQLCipher hook. Held one minor below the 2.35.0 checked on 2026-09-30: `drift_dev` 2.35 needs `analyzer` ≥ 13, which conflicts with the `test_api` that Flutter 3.44 pins. | client-team | Generated code is committed and CI fails when it is stale (`tool/codegen.dart --check`, a governance control). The SQLCipher wrong-key and no-plaintext tests (P2-01) are carried over in `helix_remote_db/test/encryption_test.dart`. The schema dump (`drift_schemas/`) and the migration test are checked in from schema 1. Move to 2.35+ together with the Flutter SDK bump that lifts the `test_api` pin. |
+| `drift` / `drift_dev` | `2.34.0` / `2.34.0` | `packages/helix_remote_db` (**added in C1**; `drift_dev` dev-only) | C1 | Code generation. Stale generated code could diverge from the schema. It must work with the `sqlite3` SQLCipher hook. Held one minor below the 2.35.0 checked on 2026-09-30: `drift_dev` 2.35 needs `analyzer` ≥ 13, which conflicts with the `test_api` that Flutter 3.44 pins. | client-team | Generated code is committed and CI fails when it is stale (`tool/codegen.dart --check`, a governance control). The SQLCipher wrong-key and no-plaintext tests (P2-01) are carried over in `helix_remote_db/test/encryption_test.dart`. The schema dump (`drift_schemas/`) and the migration test are checked in from schema 1. Move to 2.35+ together with the Flutter SDK bump that lifts the `test_api` pin. |
 | `build_runner` | `2.15.1` | dev-only (`helix_remote_db`, **added in C1**) | C1 | Dev tool only, with a large transitive tree (`build`, `build_daemon`, `source_gen`, `dart_style`, …). 2.15.1 is the newest that resolves with `drift_dev` 2.34. | client-team | Keep it in `dev_dependencies` only. It is not part of the shipped app. |
 | `flutter_riverpod` | `3.4.3` | `helix_remote/app` | A1 | Central to UI state. A major bump later would touch every feature. | client-team | Use plain providers, with no `riverpod_generator`, so there is less codegen to keep in step. Take upgrades on their own, with the widget suite. |
 | `go_router` | `18.0.2` | `helix_remote/app` | A1 | Routing and deep links (`helix://`, `/open` links). A regression breaks shared links silently. | client-team | Deep-link tests for both link forms, plus the hidden advanced-mode entry. |
@@ -58,20 +58,41 @@ taken from 1.6.0 to 2.3.3 — it is pure Dart, and the v1 test of its FCM token 
 (`platform/push/push.dart`) has no automated test, because it needs Google's endpoints: the first real
 push on cutover day is its check (`helix_remote/docs/operations/V2_SERVER_HANDOFF.md`, "The day").
 
-The remainder are **deliberately not upgraded**, and are recorded here rather than left as silent
-staleness. Each is a major version bump on a platform plugin whose failure mode is invisible to a
-headless test suite — the suite would stay green while the shipped app broke.
+Until 2026-10 the four below were **deliberately not upgraded**: each is a major version bump on a
+platform plugin whose failure mode is invisible to a headless test suite. They were then taken anyway,
+without the device matrix this section asked for (review G-01, 2026-10-09). The current state is in
+"Client platform plugins" below; the table here is the record of why they were held.
 
-| Package | Declared | Latest | Why it is held |
+| Package | Held at | Latest then | Why it was held |
 |---|---:|---:|---|
-| `flutter_local_notifications` | `^18.0.0` | 22.2.0 | Four majors of API change, plus Android 14/15 behavioural and permission-model changes. The audit's own risk table calls this "a migration, not a bump" and requires a dedicated device test matrix, done alone. Nothing in CI can observe whether a notification actually arrives. |
-| `flutter_secure_storage` | `^10.3.1` | 11.0.0 | Holds the SQLCipher database key. A migration that changes where or how the key is stored locks existing users out of their own message history, and the failure appears only on a device that already has data. Needs an upgrade-in-place test on a real install, not a fresh one. |
-| `flutter_contacts` | `^1.1.9+2` | 2.3.1 | Major bump on the contacts permission surface, which feeds contact sync (P0-3). Permission regressions surface as an empty contact list, not an error. |
-| `connectivity_plus` | `^6.1.3` | 7.3.1 | Drives the offline/outbox banner. A behavioural change in connectivity reporting degrades quietly — the app looks online while queueing. |
+| `flutter_local_notifications` | ^18.0.0 | 22.2.0 | Four majors of API change, plus Android 14/15 behavioural and permission-model changes. The audit's own risk table calls this "a migration, not a bump" and requires a dedicated device test matrix, done alone. Nothing in CI can observe whether a notification actually arrives. |
+| `flutter_secure_storage` | ^10.3.1 | 11.0.0 | Holds the SQLCipher database key. A migration that changes where or how the key is stored locks existing users out of their own message history, and the failure appears only on a device that already has data. Needs an upgrade-in-place test on a real install, not a fresh one. |
+| `flutter_contacts` | ^1.1.9+2 | 2.3.1 | Major bump on the contacts permission surface, which feeds contact sync (P0-3). Permission regressions surface as an empty contact list, not an error. |
+| `connectivity_plus` | ^6.1.3 | 7.3.1 | Drives the offline/outbox banner. A behavioural change in connectivity reporting degrades quietly — the app looks online while queueing. |
 
-Each needs its own change, its own device matrix, and its own release. Bundling them, or taking any
+Each needed its own change, its own device matrix, and its own release. Bundling them, or taking any
 one of them on a green CI run alone, is how a messaging app ships a build that cannot notify, cannot
-unlock, or cannot sync.
+unlock, or cannot sync - which is what the 2026-10-09 review then found (E-01, E-03, B-01).
+
+## Client platform plugins (2026-10-14)
+
+Plugins whose failures a headless suite cannot see. Versions are the resolved ones in
+`helix_remote/pubspec.lock`; `tool/check_governance_controls.dart` fails when a version in this
+register (in any table) differs from the lockfile. "Device check" says whether a real-phone check of
+the current major is recorded; the user confirmed on 2026-10-14 that none has been done yet, so each
+stays **pending** until one is written here with its date and phone. The checks are listed in
+`helix_remote/docs/release/REMOTE_RELEASE_CHECKLIST.md` ("Platform plugin majors").
+
+| Package | Resolved | Declared by | Risk | Device check |
+|---|---:|---|---|---|
+| `flutter_local_notifications` | `22.3.1` | app | Four majors past 18: a notification that never shows is silent. | pending |
+| `flutter_secure_storage` | `11.2.0` | app, admin | Holds the SQLCipher key (app) and the admin session (console); a storage change locks people out of their history, visible only on an upgraded install. | pending (upgrade in place) |
+| `flutter_contacts` | `2.5.0` | app | Contacts permission and the people-naming order; a regression shows as an empty list. | pending |
+| `connectivity_plus` | `7.3.1` | app | Offline detection for the outbox banner; a regression looks online while queueing. | pending |
+| `firebase_core` | `4.15.0` | app | FCM initialisation (the 2026-10-09 review found it was never initialised in the UI isolate, E-01). | pending (with the push checks) |
+| `firebase_messaging` | `16.7.0` | app | Wake-up pushes; no test reaches FCM. | pending (with the push checks) |
+| `local_auth` | `3.0.1` | app, admin | App lock; on Android it needs a `FragmentActivity` (B-01), which only a phone shows. | pending |
+| `shared_preferences` | `2.5.5` | admin | Console settings (server address, App lock switch). Low risk. | not needed |
 
 ## Correcting the record
 

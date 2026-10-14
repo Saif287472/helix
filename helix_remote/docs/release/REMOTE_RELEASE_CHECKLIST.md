@@ -57,6 +57,20 @@ user asks.
     no notification. Previews on: one new message shows its text.
   - Sign out, sign in on another server (advanced mode), and repeat the first
     check there.
+- Platform plugin majors (`DEPENDENCY_RISK_REGISTER.md`, "Client platform
+  plugins"; taken without a recorded phone check, pending since 2026-10-14).
+  Record the date and phone in the register once each is done:
+  - `flutter_secure_storage` 11, upgrade in place: install the previous
+    release, sign in and send messages, install the new build over it; the
+    chats must still open (the database key survived). The admin console must
+    keep its saved sign-in the same way.
+  - `flutter_local_notifications` 22 and `firebase_*`: the push checks above.
+  - `flutter_contacts` 2.5: the contacts prompt appears once, and contact names
+    show in Chats and Calls.
+  - `connectivity_plus` 7: airplane mode shows offline and queues a message;
+    turning it off sends it.
+  - `local_auth` 3: App lock on, swipe the app away, reopen and unlock (app and
+    admin console).
 
 ## Remote Server
 

@@ -79,7 +79,13 @@ run_step "Flutter tests (admin)" bash -c 'cd admin && flutter test "$@"' _ "${fl
 run_step "Tests: server" bash -c 'cd server && dart test'
 
 for pkg in packages/*/; do
-  [ -d "$pkg" ] || continue
+  # Only real packages: a folder without pubspec.yaml is a leftover build
+  # directory of a deleted package.
+  [ -f "${pkg}pubspec.yaml" ] || continue
+  if [ ! -d "${pkg}test" ]; then
+    echo "${pkg%/} has no test/ directory: every package needs tests." >&2
+    exit 1
+  fi
   if [ -d "${pkg}test" ]; then
     # Always use `flutter test`, even for packages whose own pubspec.yaml
     # has no `sdk: flutter` line: it runs pure-Dart package tests correctly

@@ -133,7 +133,8 @@ metadata). The cryptography has **not been externally reviewed**
 - **Description**: Floods, oversized bodies, malformed input, replayed or tampered envelopes.
 - **Mitigation**: Credentials and signatures are checked before bodies are read; bodies and JSON depth
   are capped; every public route declares a rate-limit policy, and limits live in Postgres so they hold
-  across nodes and restarts; sends and WebSocket frames are limited; a tampered or replayed envelope
+  across nodes and server restarts (the table is UNLOGGED: a Postgres crash or power loss empties it, and
+  every limit starts full again); sends and WebSocket frames are limited; a tampered or replayed envelope
   becomes a visible "couldn't decrypt" row and never blocks the stream. Reading other people's
   presence and profiles is limited per account (120 a minute, 2,000 distinct people a day), so an
   account cannot poll everyone's last seen. Key bundles are limited per (requester, target), with no

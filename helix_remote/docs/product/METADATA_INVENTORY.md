@@ -26,7 +26,7 @@ timers are inside the encrypted content, so they are not server data at all.
 | Limit markers (ephemeral store) | the password lockout of a number with no password (keyed by the peppered phone hash: failures and lock time); which accounts an account read the presence or profile of today (`people:seen:<reader>:<target>`); which target devices gave an account a one-time prekey this hour (`keys:otk:<account>:<device>`) | The decoy lockout (threat T-7), the distinct-people read budget and the one-time prekey rule | The lockout 25 hours, reads 1 day, prekeys 1 hour (TTL); cleared by a crash |
 | Prekeys (`keys.signed_prekeys`, `keys.one_time_prekeys`) | device id, public prekeys and the AIK/DSK signature over the signed prekey | Start encrypted sessions with an offline device | One-time prekeys are deleted when handed out; all prekeys of a revoked device are purged |
 | Mailbox (`messaging.mailbox`, hash-partitioned by device) | recipient device id, per-device sequence number, the sealed envelope (ciphertext), sender hint (sender account and device), created_at, expires_at | Offline delivery. One row per recipient device, including the sender's other devices | **Deleted when the device acknowledges it**; undelivered rows expire after 30 days |
-| Device sequence and sends (`messaging.device_seq`, `messaging.sends`) | device id and next sequence; sending device, message id, accepted_at | Ordering and idempotent sends | Sequence while the device exists; send records 7 days |
+| Device sequence and sends (`messaging.device_seq`, `messaging.sends`) | device id and next sequence; sending account and device, message id, accepted_at | Ordering and idempotent sends | Sequence while the device exists; send records 7 days |
 | Profiles and privacy (`people.profiles`, `people.privacy`) | the profile blob as ciphertext (display name, about, avatar reference are inside it, sealed with the person's profile key), version; audience settings for phone discovery, presence and last seen | Showing people, privacy controls | Until changed or account deletion |
 | Blocks and contacts (`people.blocks`, `people.contacts`) | account ids; for the `contacts` audience, the account ids of the uploaded phone-book matches (replace-all, at most 5,000) | Silent drop of blocked senders and callers; presence by audience. There are no contact requests | Until removal or account deletion |
 | Discovery budget (`people.discovery_budget`) | account id, day, lookups used | The 5,000-per-day budget on phone-hash matching (the online oracle remains an accepted risk, threat T-5) | Daily counter |
@@ -50,8 +50,10 @@ timers are inside the encrypted content, so they are not server data at all.
 - Push is data-only. A wake-up carries the kind and a call id, never content;
   the app fetches and decrypts after waking.
 - The server identifies accounts by `phone_hash` and the keyed discovery index.
-  The raw number is sent once per code request, so it can be hashed and passed
-  to the SMS gateway (BulkSMSBD); it is not persisted from that request.
+  The raw number is sent with each code request (so it can be hashed and passed
+  to the SMS gateway, BulkSMSBD), with password sign-in and its parameters
+  request, and when discovery is turned back on (`PrivacySettings.phone_number`);
+  it is not stored from any of them.
   Phone discovery, once turned back on, needs the account's own number again.
 - Phone-hash discovery (`POST /v1/people/discover`) needs authentication, is
   limited per device and capped at 5,000 matches a day; only volume is logged,

@@ -35,9 +35,12 @@ commit is tagged `v1-final`.
   crypto and metadata). Golden fixtures in `helix_remote/contracts/v2/fixtures/`
   change only deliberately (`HELIX_UPDATE_FIXTURES=1 dart test` in the
   protocol package).
-- `flutter pub get` rewrites line endings of the generated plugin registrant
-  files under `app/windows/flutter` and `admin/{linux,macos,windows}`; they
-  are noise - `git checkout --` them before committing.
+- `flutter pub get` regenerates the plugin registrant files under
+  `app/windows/flutter` and `admin/{linux,macos,windows}`, and git often lists
+  them as modified with no content change - `git checkout --` them before
+  committing. When a plugin is added or removed, the content does change
+  (`git diff --ignore-cr-at-eol` shows it): commit the regenerated files with
+  that change.
 
 ## Repository map
 
@@ -56,9 +59,11 @@ helix_remote/                pub workspace (run commands from here)
     lib/src/modules/<name>/  one module per area: identity, keys, messaging,
                              realtime, people, media, backup, groups, calls,
                              federation, ops, admin, compliance; each has
-                             module.dart, api.dart (the only file other modules
-                             may import), http/, application/, domain/, data/
-                             and a MODULE.md (routes, tables, jobs, invariants)
+                             module.dart and a MODULE.md (routes, tables, jobs,
+                             invariants), and all but realtime an api.dart (the
+                             only file other modules may import); the larger
+                             ones split into http/, application/, domain/,
+                             data/ (identity has all four)
     test/                    per-module + platform + e2e (two nodes) + client/
                              (drives the server with the real api/engine/cli)
     tool/                    load harness, local Postgres setup script
@@ -175,7 +180,9 @@ instructions. `docs/codebase/` is a gitignored code dump - never read it.
 - A new public route is declared deliberately with `r.public(...)`, which
   requires a rate-limit policy; the public-route snapshot test fails until the
   new route is an intentional diff. Modules import only another module's
-  `api.dart`, and no SQL lives outside `data/`.
+  `api.dart`. A module's SQL lives in its own files (`module.dart`,
+  `application/` or `data/`), names only its own schema, and is never in its
+  `api.dart` or in `kernel/` (`test/architecture_test.dart`).
 - Crypto code changes need test vectors and a note in
   `docs/security/remote_cryptographic_design_review.md`. The crypto has had
   no external review, and the docs keep saying so.
@@ -228,8 +235,8 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 ### Known pre-existing test failures
 
 None as of 2026-10-14, after review batch 7 (server 385 on Postgres, app 814,
-engine 299, api 191, admin 191, ui 183 with 5 golden tests skipped off Linux, db
-139, protocol 83, crypto 73, rules 20, cli 13, calls 5; `flutter analyze` and
+engine 299, api 191, admin 191, ui 183 with 1 golden test skipped off Linux, db
+139, protocol 83, crypto 73, rules 20, cli 13, calls 5, domain 4; `flutter analyze` and
 `dart analyze server tool` clean; the governance check passes).
 
 Some server tests are timing-sensitive and can fail while the machine is busy
