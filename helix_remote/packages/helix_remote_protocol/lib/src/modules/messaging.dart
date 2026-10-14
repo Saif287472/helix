@@ -106,6 +106,7 @@ final class MailboxPage {
     required this.envelopes,
     required this.lastSeq,
     required this.more,
+    this.seqHead,
   });
 
   final List<Envelope> envelopes;
@@ -114,16 +115,25 @@ final class MailboxPage {
   final int lastSeq;
   final bool more;
 
+  /// The highest `seq` ever given to this device (it survives acks), or
+  /// null from a server that predates it. A cursor above it means the
+  /// server's database was restored from a backup: the client resets its
+  /// cursor to 0, and the server replays from the start rather than from the
+  /// cursor (REALTIME_V2.md, "Restored server").
+  final int? seqHead;
+
   JsonMap toJson() => {
     'envelopes': [for (final e in envelopes) e.toJson()],
     'last_seq': lastSeq,
     'more': more,
+    'seq_head': ?seqHead,
   };
 
   factory MailboxPage.fromJson(JsonReader json) => MailboxPage(
     envelopes: json.objects('envelopes', Envelope.fromJson),
     lastSeq: json.integer('last_seq'),
     more: json.boolean('more'),
+    seqHead: json.optInt('seq_head'),
   );
 }
 

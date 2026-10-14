@@ -71,9 +71,30 @@ phones --UDP/TCP 3478, 49160-49200--> coturn (WSL1)   (credentials minted by the
 - **Caddy** terminates TLS (`J:\Projects\Servers\helix_server`).
 - **coturn** runs in WSL1 (`helix_remote/deploy/coturn/`).
 
-## Start and stop
+## Production process (scheduled task, since 2026-10-14)
 
-Order after a PC reboot: PostgreSQL, coturn, Caddy, then the server.
+Production runs a compiled release from `J:\Projects\Servers\helix_server\helix`,
+never the development checkout (review H-02, H-03; the user's choice in
+batch 9). The scripts are in `helix_remote/deploy/windows/`; its README,
+"Running production", has the one-time move and every command.
+
+| Piece | What it does |
+|---|---|
+| `release-helix.ps1 -Tag <tag>` | Compiles `helix-server.exe`, `helix-migrate.exe` and `helix-admin-tool.exe` from a git tag (a temporary worktree, the committed lockfile) into `<prod>\releases\<tag>\`. Touches nothing running. |
+| `deploy-helix.ps1 -Tag <tag>` | Graceful stop (the stop file), swap into `<prod>\bin\` (the old one kept as `bin-previous\`), `helix-migrate.exe` (puts the old version back if it fails), start, wait for `ready`. |
+| Task "Helix Server" | At boot, whether or not anyone is logged on (S4U: your account, no stored password), runs `run-helix-server.ps1`, which starts the server in `<prod>` (so `<prod>\.env` is read) and starts it again when it stops: 5 s, doubling to 60 s. |
+| Stop file `<prod>\stop` | `HELIX_STOP_FILE` (set by the wrapper): the server stops gracefully, as on Ctrl+C, when the file appears; the wrapper then exits instead of starting it again. |
+| Start-up retry | `bin/server.dart` and `bin/migrate.dart` retry an unreachable database for a minute (`platform/startup.dart`), so a boot that starts the task before PostgreSQL is ready does not fail. |
+| Task "Helix Health Check" | Every 5 minutes while you are logged on: `ready`, the task's state, free disk, and (with `HELIX_METRICS_TOKEN`) dead jobs and the mailbox backlog. A change is written to the Application event log (source `Helix`) and shown as a Windows notification. |
+| Log file | `HELIX_LOG_FILE` rotates itself at midnight UTC into `<name>-YYYY-MM-DD<ext>` and keeps `HELIX_LOG_KEEP_DAYS` (default 14) days. The wrapper keeps the last run's stderr in `<prod>\logs\stderr-last-run.log`. |
+
+Optional tasks: "Helix Caddy" (Caddy at boot) and "Helix TURN" (coturn at
+log-on), from the same installer.
+
+## Start and stop (by hand)
+
+The development way, and production's way until it is moved. Order after a
+PC reboot: PostgreSQL, coturn, Caddy, then the server.
 
 ```powershell
 Get-Service postgresql-x64-17        # must be Running (Start-Service needs an admin shell)
@@ -155,7 +176,9 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 | `HELIX_TRUST_X_REAL_IP` | no | `false` | no | no | `true` also believes `X-Real-IP` from a trusted proxy, ahead of `X-Forwarded-For`. Only for a proxy that always overwrites that header (`header_up X-Real-IP {remote_host}` in Caddy); a client can set it otherwise. |
 | `HELIX_DEV_MODE` | no | `false` | **yes** | no | Allows local blobs with `cluster`, plain-HTTP federation and a cheaper admin password hash. Never in production. |
 | `HELIX_SCHEMA_PREFIX` | no | empty | **yes** | no | Prefixes every schema name (`[a-z][a-z0-9_]*`). For tests (isolation). Never set it in production: it would point the server at differently named schemas. |
-| `HELIX_LOG_FILE` | no | none | no | no | Log lines (JSON, redacted) are also appended to this file; stdout keeps them too. Opened at start (an unwritable path exits with 78). Rotate it with a copy-and-truncate tool. |
+| `HELIX_LOG_FILE` | no | none | no | no | Log lines (JSON, redacted) are also appended to this file; stdout keeps them too. Opened at start (an unwritable path exits with 78). Rotated by the server at midnight UTC into `<name>-YYYY-MM-DD<ext>`; a file left from an earlier day is rotated at start. In production use an absolute path, for example `J:\Projects\Servers\helix_server\helix\logs\helix.log`. |
+| `HELIX_LOG_KEEP_DAYS` | no | `14` | no | no | Days of rotated log files kept, 1 to 3650. Older ones are deleted at rotation. |
+| `HELIX_STOP_FILE` | no | none | no | no | When this file appears, the server stops gracefully (as on Ctrl+C). The scheduled task's wrapper sets it to `<prod>\stop`; you do not set it in `.env`. |
 | `HELIX_DB_POOL_SIZE` | no | `10` | no | no | Connections in the main Postgres pool, 2 to 200. Count every node's pool plus 5 per node (ephemeral pool and `LISTEN`) against Postgres `max_connections`. |
 | `HELIX_MAX_INFLIGHT_BODY_BYTES` | no | `268435456` (256 MiB) | no | no | Request body bytes one node buffers at once, across all requests (at least 1 MiB). Over it, requests get 503 `unavailable` with `Retry-After: 2`. Keep it above the largest route limit (a full backup is up to 64 MiB). |
 | `HELIX_STORAGE_BUDGET_BYTES` | no | none (no budget) | no | no | The most Helix's tables (with indexes) plus stored media may hold, in bytes, at least 1 GiB (any size in dev mode). Measured at most once a minute per node. Over it, media uploads, backups and sends of payloads over 16 KiB get `quota_exceeded`; short messages still go through. Set it below the free space of the disk, for example `53687091200` (50 GiB). Watch `helix_storage_used_bytes`. |

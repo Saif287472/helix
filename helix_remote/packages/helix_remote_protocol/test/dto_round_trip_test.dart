@@ -322,6 +322,7 @@ void main() {
           ],
           lastSeq: 41,
           more: false,
+          seqHead: 45,
         ),
         (v) => v.toJson(),
         MailboxPage.fromJson,

@@ -180,6 +180,62 @@ void main() {
       });
     });
 
+    test('a hello whose seq_head is below the cursor (a restored server) '
+        'resets it: the replay is delivered and no stale ack is sent', () {
+      fakeAsync((async) {
+        final r = Rig(async);
+        final socket = r.sockets.next();
+        r.client.start(after: 10);
+        r.settle();
+        expect(r.sockets.uris.last.queryParameters['after'], '10');
+        socket.hello(seqHead: 3);
+        r.settle();
+        expect(r.client.state.cursorReset, isTrue);
+        expect(socket.acks, isEmpty, reason: 'the server never gave seq 10');
+        socket
+          ..envelope(2)
+          ..envelope(3);
+        r.settle();
+        expect(r.envelopes.map((e) => e.seq), [2, 3]);
+        r.client.ack(3);
+        r.settle();
+        expect(socket.acks, [3]);
+      });
+    });
+
+    test('a cursor that moved while connecting is judged by the one it '
+        'resumed from', () {
+      fakeAsync((async) {
+        final r = Rig(async);
+        final socket = r.sockets.next();
+        r.client.start(after: 2);
+        r.settle();
+        // A REST fetch processed seq 10 after the server read its head (9).
+        r.client.ack(10);
+        socket.hello(seqHead: 9);
+        r.settle();
+        expect(r.client.state.cursorReset, isFalse);
+        expect(socket.acks, [10]);
+      });
+    });
+
+    test('a seq_head at or above the cursor changes nothing', () {
+      fakeAsync((async) {
+        final r = Rig(async);
+        final socket = r.sockets.next();
+        r.client.start(after: 10);
+        r.settle();
+        socket.hello(seqHead: 12);
+        r.settle();
+        expect(socket.acks, [10], reason: 'the cursor is re-sent as before');
+        socket
+          ..envelope(9)
+          ..envelope(11);
+        r.settle();
+        expect(r.envelopes.map((e) => e.seq), [11]);
+      });
+    });
+
     test('acks made while disconnected are sent after the next hello', () {
       fakeAsync((async) {
         final r = Rig(async);

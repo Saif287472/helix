@@ -36,6 +36,21 @@ class InboxDao extends DatabaseAccessor<HelixDb> with _$InboxDaoMixin {
     );
   }
 
+  /// Moves the cursor back to 0: the only way it ever moves backwards. For a
+  /// server restored from a backup, whose sequence head is below the cursor
+  /// (REALTIME_V2.md, "Restored server"); the replay that follows is
+  /// deduplicated by `processed_envelopes`.
+  Future<void> resetCursor({required DateTime now}) async {
+    await customInsert(
+      'INSERT INTO inbox_cursor (id, last_processed_seq, last_acked_seq, '
+      'updated_at) VALUES (1, 0, 0, ?) ON CONFLICT (id) DO UPDATE SET '
+      'last_processed_seq = 0, last_acked_seq = 0, '
+      'updated_at = excluded.updated_at',
+      variables: [Variable.withInt(now.millisecondsSinceEpoch)],
+      updates: {inboxCursor},
+    );
+  }
+
   /// True if the envelope was processed before (replay after reconnect).
   Future<bool> isProcessed(String envelopeId, {String? senderDevice}) async =>
       await (select(processedEnvelopes)..where(

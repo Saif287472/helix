@@ -97,9 +97,10 @@ identifiers into a ticket or chat without checking it first.
 - **Format.** One JSON object per line on **stdout**: `ts`, `level`, `event`,
   then fields. The level is `info` and above (no setting changes this).
   With `HELIX_LOG_FILE` set, the same lines are also appended to that file
-  (opened at start; an unwritable path exits with 78). Rotate it with a
-  copy-and-truncate tool. (`platform/observability/log.dart`,
-  `bin/server.dart`.)
+  (opened at start; an unwritable path exits with 78). The server rotates
+  it at midnight UTC into `<name>-YYYY-MM-DD<ext>` and keeps
+  `HELIX_LOG_KEEP_DAYS` days (default 14); copy-and-truncate tools do not
+  work on Windows. (`platform/observability/log.dart`, `bin/server.dart`.)
 - **Access log.** Every request logs event `http` with `request_id`, `method`,
   `route` (the template, not the URL), `status` and `ms`. It carries no client
   address, no query string and no body.
@@ -442,15 +443,16 @@ Practice this (see the drill below) before you need it.
 - Devices revoked after the backup become active again, and accounts deleted
   after it come back. Revoke and delete them again.
 - One-time prekeys already handed out can be handed out again.
-- Mailbox sequence numbers go back (`messaging.device_seq.last_seq`). A phone
-  keeps its own cursor and asks for `seq > cursor` (`messaging/data/mailbox_store.dart`).
-  I found no handling in the code or in `REALTIME_V2.md` for a phone whose
-  cursor is ahead of the server, so new messages could be skipped by phones
-  that had acknowledged beyond the restored numbers. Gaps in sequence numbers
-  are allowed (`messaging/MODULE.md`), so raising every counter by a large
-  amount (`UPDATE messaging.device_seq SET last_seq = last_seq + 1000000`) is
-  an idea to try in a drill. It is **not** a verified procedure. Decide this
-  before relying on restores.
+- Mailbox sequence numbers go back (`messaging.device_seq.last_seq`), below
+  the cursors phones already hold. This is handled (review batch 9,
+  `REALTIME_V2.md`, "Restored server"): a cursor above the device's
+  `last_seq` is answered by replaying the mailbox from the start, `hello` and
+  the mailbox page carry `seq_head`, an ack above `last_seq` deletes nothing,
+  and the app (from the batch 9 APK) resets its cursor and deduplicates the
+  replay. Phones on an older APK drop the socket replay but still get new
+  mail through REST (push wake-ups and the periodic sync), since the server
+  replays there too. Tested in `test/modules/restore_cursor_test.dart` and
+  `test/client/engine/restore_test.dart`; nothing to do by hand.
 - Messages sent after the backup and not yet delivered are lost.
 
 ### Restore drill (monthly)
@@ -757,8 +759,6 @@ recorded with the phase report, not here (`LOAD_TESTING.md`).
 
 ## Review items found while writing this document
 
-- No handling found for a phone cursor ahead of the server after a restore
-  (above).
 - `admin.audit` keeps rows for a year (`admin.purge_audit`, daily); the
   plan's monthly partitions are not built (the table is small).
 - There is no retry route for a single dead job. (The admin password reset

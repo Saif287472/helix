@@ -244,8 +244,14 @@ final class RealtimeModule extends ModuleBase {
     WebSocketChannel ws,
     DevicePrincipal principal,
     String token,
-    int after,
+    int requested,
   ) async {
+    // A cursor from before a database restore replays from the start
+    // (REALTIME_V2.md, "Restored server"); hello tells the client so.
+    final (:after, :head) = await messaging.resume(
+      principal.deviceId,
+      requested,
+    );
     final connection = _Connection(
       this,
       ws,
@@ -253,6 +259,7 @@ final class RealtimeModule extends ModuleBase {
       token,
       Uuid.v7(),
       after,
+      head,
     );
     final previous = _connections[principal.deviceId];
     _connections[principal.deviceId] = connection;
@@ -296,6 +303,7 @@ final class _Connection {
     this._token,
     this.id,
     this._lastSent,
+    this._head,
   ) : deviceId = principal.deviceId,
       accountId = principal.accountId,
       suspended = principal.suspended;
@@ -312,6 +320,9 @@ final class _Connection {
   /// The account was already suspended when the socket opened.
   final bool suspended;
   int _lastSent;
+
+  /// The device's sequence head at connect time, sent in `hello`.
+  final int _head;
   double _frameTokens = RealtimeModule.frameBurst.toDouble();
   DateTime _frameAt = DateTime.now();
   final List<int> _unacked = [];
@@ -379,6 +390,7 @@ final class _Connection {
         heartbeatSeconds: RealtimeModule.heartbeat.inSeconds,
         window: RealtimeModule.window,
         lastSeq: await _m.messaging.lastSeq(deviceId),
+        seqHead: _head,
       ),
     );
     pump();

@@ -13,6 +13,74 @@ Caddyfile.
 | `install-backup-task.ps1` | One-time setup: the `pgpass.conf` entry, disk checks, the Task Scheduler task, and a first run. |
 | `restore-drill.ps1` | The restore drill: restores a dump into `helix_drill`, starts a node on it, checks `ready`, and cleans up. |
 | `Caddyfile.example` | The site block with HSTS and the operator-route restriction. |
+| `release-helix.ps1` | Builds a release (`helix-server.exe`, `helix-migrate.exe`, `helix-admin-tool.exe`) from a git tag into the production folder's `releases\`. Touches nothing running. |
+| `deploy-helix.ps1` | Switches production to a built release: graceful stop, swap, migrate, start, ready check. |
+| `install-helix-tasks.ps1` | One-time, as administrator: the "Helix Server" task (at boot, restarted when it stops), the "Helix Health Check" task, the `Helix` event source; optionally Caddy and coturn tasks. |
+| `run-helix-server.ps1` | What the "Helix Server" task runs: starts the server in the production folder and starts it again when it stops, until the stop file appears. |
+| `helix-health-check.ps1` | What the health-check task runs: ready, the task, disk space, dead jobs and backlog; the event log and a notification when something changes. |
+
+## Running production
+
+Since review batch 9 (2026-10-14) production is meant to run a compiled
+release from `J:\Projects\Servers\helix_server\helix`, started at boot by a
+scheduled task, instead of `dart run` in the development checkout (where a
+restart could start half-finished work). You do the move once; deploys are
+then two commands.
+
+### Move it there, once
+
+1. **Tag the commit to run** (from `J:\Projects\helix`): `git tag server-2026-10-14`.
+2. **Build it** (any PowerShell, from this folder):
+   `.\release-helix.ps1 -Tag server-2026-10-14`
+3. **Give the production folder its own `.env`.** Copy
+   `helix_remote\server\.env` to `J:\Projects\Servers\helix_server\helix\.env`,
+   then change in the copy (the server now starts in that folder, so
+   relative paths would point somewhere new):
+   - `HELIX_BLOB_DIR=` the **absolute** path of the blob folder you use today.
+     If the line is missing, that is `J:\Projects\helix\helix_remote\server\helix_blobs`:
+     add `HELIX_BLOB_DIR=J:\Projects\helix\helix_remote\server\helix_blobs`
+     (or move the folder somewhere else first, with the server stopped, and
+     point at that). The backup task's `-BlobDir` must name the same folder.
+   - `HELIX_FCM_SERVICE_ACCOUNT=` an absolute path, if it is a path.
+   - Add `HELIX_LOG_FILE=J:\Projects\Servers\helix_server\helix\logs\helix.log`
+     (the task has no console, so this is where the log is).
+   - Optional: `HELIX_METRICS_TOKEN=` (32 or more random characters), so the
+     health check can see dead jobs and the backlog.
+   From then on, `.env` changes go into this copy.
+4. **Register the tasks**, in an administrator PowerShell, from this folder:
+   `.\install-helix-tasks.ps1`
+   (add `-CaddyExe J:\Projects\Servers\helix_server\caddy.exe -Caddyfile J:\Projects\Servers\helix_server\Caddyfile`
+   to start Caddy at boot as well, and
+   `-TurnScript J:\Projects\helix\helix_remote\deploy\coturn\windows\start-turn.ps1`
+   for coturn at log-on). It starts nothing yet.
+5. **Switch**: stop the console server (Ctrl+C in its window), then
+   `.\deploy-helix.ps1 -Tag server-2026-10-14`. It installs the release,
+   migrates and starts the task, and waits for `ready`.
+6. Reboot once when convenient and check that Helix Global comes back by
+   itself (the event log, source `Helix`, and `logs\wrapper.log` show the
+   starts).
+
+### Deploy a new version
+
+```powershell
+git tag server-2026-11-02                      # in J:\Projects\helix
+.\release-helix.ps1 -Tag server-2026-11-02     # build; production keeps running
+.\deploy-helix.ps1  -Tag server-2026-11-02     # stop, swap, migrate, start
+```
+
+To go back, deploy the previous tag (its build stays in `releases\`).
+Migrations only ever expand the schema, so an older version runs on it.
+
+### When something is wrong
+
+- **The task**: `Get-ScheduledTask 'Helix Server'`; start or stop with
+  `Start-ScheduledTask` / `deploy-helix.ps1`. Stopping it with
+  `Stop-ScheduledTask` is a hard stop (in-flight requests are lost); to stop
+  gracefully, create the file `stop` in the production folder.
+- **Why it stopped**: `logs\stderr-last-run.log` (configuration errors, exit
+  78), `logs\wrapper.log`, and the Application event log (source `Helix`).
+- **The health check**: `health-state.json` in the production folder holds
+  the last result; notifications appear only when the result changes.
 
 ## Backups
 

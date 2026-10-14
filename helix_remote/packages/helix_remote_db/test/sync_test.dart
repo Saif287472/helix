@@ -174,6 +174,30 @@ void main() {
       expect(cursor.lastAckedSeq, 10);
     });
 
+    test(
+      'only a reset moves the cursor back, and processed ids stay',
+      () async {
+        final inbox = db.inboxDao;
+        await inbox.advanceCursor(processedSeq: 12, ackedSeq: 10, now: at(1));
+        await inbox.markProcessed(
+          'env1',
+          outcome: EnvelopeOutcome.applied,
+          at: at(1),
+        );
+        await inbox.resetCursor(now: at(2));
+        final cursor = (await inbox.cursor())!;
+        expect(cursor.lastProcessedSeq, 0);
+        expect(cursor.lastAckedSeq, 0);
+        expect(
+          await inbox.isProcessed('env1'),
+          isTrue,
+          reason: 'the replay after a restore is still deduplicated',
+        );
+        await inbox.advanceCursor(processedSeq: 3, now: at(3));
+        expect((await inbox.cursor())!.lastProcessedSeq, 3);
+      },
+    );
+
     test('deferred actions wait for their target, then expire', () async {
       final inbox = db.inboxDao;
       DeferredActionsCompanion action(String target, int expiresIn) =>

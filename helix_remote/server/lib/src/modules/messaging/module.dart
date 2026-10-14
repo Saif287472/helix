@@ -424,8 +424,9 @@ final class MessagingModule extends ModuleBase
   }
 
   Future<Response> _mailbox(HelixRequest q) async {
-    final after = int.tryParse(q.query('after') ?? '') ?? 0;
+    final requested = int.tryParse(q.query('after') ?? '') ?? 0;
     final limit = (int.tryParse(q.query('limit') ?? '') ?? 100).clamp(1, 500);
+    final (:after, :head) = await api.resume(q.device.deviceId, requested);
     final envelopes = await api.fetch(
       q.device.deviceId,
       after: after,
@@ -437,6 +438,7 @@ final class MessagingModule extends ModuleBase
         envelopes: envelopes.take(limit).toList(),
         lastSeq: await api.lastSeq(q.device.deviceId),
         more: more,
+        seqHead: head,
       ).toJson(),
     );
   }
@@ -719,6 +721,17 @@ final class _MessagingFacade implements MessagingApi {
   @override
   Future<int> lastSeq(String deviceId) =>
       _store.lastSeq(_m.context.db, deviceId);
+
+  @override
+  Future<int> head(String deviceId) => _store.head(_m.context.db, deviceId);
+
+  @override
+  Future<({int after, int head})> resume(String deviceId, int after) async {
+    final head = await this.head(deviceId);
+    if (after <= head) return (after: after, head: head);
+    _m.log.warn('mailbox_cursor_ahead', {'device_id': deviceId});
+    return (after: 0, head: head);
+  }
 
   @override
   void setBlockPolicy(BlockPolicy policy) => _m._blockPolicy = policy;

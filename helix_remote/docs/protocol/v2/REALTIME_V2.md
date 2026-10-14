@@ -13,7 +13,7 @@ subprotocol name, negotiated alongside). Optional `?after=<seq>`: the last
 - One connection per device. A new one replaces the old one (close
   `4008 superseded`).
 - The server's first frame is `hello` (`server_time`, `heartbeat_s`,
-  `window`, `last_seq`). The client sends a frame at least every
+  `window`, `last_seq`, and `seq_head` since 2026-10-14). The client sends a frame at least every
   `heartbeat_s` seconds (a `ping` when idle).
 - A client message (all its fragments) is at most 64 KiB; a larger one
   drops the connection without a close frame (reconnect normally).
@@ -76,3 +76,26 @@ sockets close with `4004`.
 - An unknown server frame type is ignored; if it has a `seq`, it is acked.
 - An envelope of unknown `kind` is acked and ignored.
 - Unknown fields are ignored.
+
+## Restored server (2026-10-14)
+
+A server restored from a backup gives out `seq`s again from below the
+cursors phones already hold. `seq_head` (in `hello` and in the REST mailbox
+page) is the highest `seq` ever given to the device; it survives acks, unlike
+`last_seq`. It is optional: a client must accept its absence (an older
+server).
+
+- **Server.** A cursor (`?after=` on the socket, `after` on `GET
+  /v1/mailbox`) above `seq_head` is answered as if it were 0: everything in
+  the mailbox is sent. An ack above `seq_head` deletes nothing (the server
+  never gave that `seq`; honouring it would delete undelivered mail).
+- **Client.** When the cursor it resumed from (the `?after=` of this
+  connection, or the `after` of this mailbox request: the value the server
+  judged, not one that moved meanwhile) is above `seq_head`, it sets the
+  cursor to 0,
+  does not re-send the old cursor's ack after `hello`, and processes the
+  replay; envelopes it already processed are dropped by their ids
+  (`processed_envelopes`), so nothing shows twice.
+
+In normal operation a cursor is never above `seq_head`, so neither side
+changes behaviour.

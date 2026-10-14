@@ -3,5 +3,6 @@
   "server_time": 1790856000000,
   "heartbeat_s": 25,
   "window": 100,
-  "last_seq": 1041
+  "last_seq": 1041,
+  "seq_head": 1041
 }

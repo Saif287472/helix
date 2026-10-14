@@ -19,7 +19,8 @@ one Postgres database.
 | Object storage | `blobs/object_storage.dart` | local directory; `list(prefix)` walks it (the media orphan sweep) | S3-compatible (SigV4; `list` is ListObjectsV2) |
 | Push | `push/push.dart` | FCM HTTP v1, data-only wake-ups | + APNs |
 | HTTP | `http/routes.dart`, `pipeline.dart`, `request.dart`, `idempotency.dart`, `websocket_limits.dart` | shelf; auth and route limit before the body, per-node body budget, sealed idempotency rows, WebSocket message cap | same |
-| Observability | `observability/log.dart`, `metrics.dart` | JSON logs with redaction (ring buffer + live `lines` stream for the admin console), Prometheus text | scrape per node |
+| Observability | `observability/log.dart`, `metrics.dart` | JSON logs with redaction (ring buffer + live `lines` stream for the admin console), Prometheus text; `HELIX_LOG_FILE` rotates itself daily (UTC) and keeps `HELIX_LOG_KEEP_DAYS` | scrape per node |
+| Start-up | `startup.dart` | `retryStartup` (an unreachable database is retried for a minute) and `watchStopFile` (`HELIX_STOP_FILE`, how the Windows task stops the server) | same |
 | Modules | `module.dart` | `HelixModule`, `ModuleBase`, `HealthRegistry`; capability interfaces `ProvidesAuthentication`, `ProvidesMaintenance`, `ProvidesAccountExport` | — |
 
 ## Rules (enforced by `test/architecture_test.dart` where possible)

@@ -120,12 +120,18 @@ final class FakeSocket implements RealtimeSocket {
 
   void pushRaw(String text) => _incoming.add(text);
 
-  void hello({int window = 100, int lastSeq = 0, int heartbeat = 25}) => push(
+  void hello({
+    int window = 100,
+    int lastSeq = 0,
+    int heartbeat = 25,
+    int? seqHead,
+  }) => push(
     HelloFrame(
       serverTime: DateTime.utc(2026),
       heartbeatSeconds: heartbeat,
       window: window,
       lastSeq: lastSeq,
+      seqHead: seqHead,
     ),
   );
 

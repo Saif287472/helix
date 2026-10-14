@@ -86,8 +86,8 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | Route | Body → response | Rules |
 |---|---|---|
 | `POST /v1/messages` | `SendMessageRequest` → `SendMessageResponse` | Each recipient account must be addressed on **all** its active devices (the sender's own: all except the sending device) or the request fails with `device_list_stale` (`StaleDevices` details) and nothing is sent. Blocked-by-recipient: accepted and silently dropped. Payload ≤ 256 KiB. Each device keeps its newest 10,000 undelivered envelopes; beyond that its oldest are dropped, and the send still succeeds. `ephemeral`: online devices only, never stored. Rate-limited per device (200 burst, 5/s) and per account (400 burst, 10/s); stored sends also draw on the account's stored-envelope budget, shared with group sends (one unit per started 16 KiB per recipient device; 50,000 burst, 250/s; `rate_limited`). A payload over 16 KiB while the server is over its storage budget: `quota_exceeded` (details `reason: server_storage`). |
-| `GET /v1/mailbox` | `?after=&limit=` → `MailboxPage` | Oldest first. |
-| `POST /v1/mailbox/ack` | `AckRequest` → `AckResponse` | Cumulative; deletes acked envelopes. Undelivered envelopes expire after 30 days. |
+| `GET /v1/mailbox` | `?after=&limit=` → `MailboxPage` | Oldest first. `seq_head` is the highest `seq` ever given to the device; an `after` above it (a restored server) is read as 0 (REALTIME_V2.md, "Restored server"). |
+| `POST /v1/mailbox/ack` | `AckRequest` → `AckResponse` | Cumulative; deletes acked envelopes. An ack above `seq_head` deletes nothing. Undelivered envelopes expire after 30 days. |
 
 ## realtime
 

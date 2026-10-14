@@ -48,6 +48,7 @@ final class RealtimeState {
     this.attempt = 0,
     this.hello,
     this.error,
+    this.cursorReset = false,
   });
 
   final RealtimePhase phase;
@@ -63,6 +64,11 @@ final class RealtimeState {
 
   /// The current connection's `hello` (while connected).
   final HelloFrame? hello;
+
+  /// This connection's `hello` showed the server restored from a backup
+  /// (its `seq_head` below the cursor the client resumed from), so the
+  /// client reset its cursor to 0. Whoever stores a cursor resets it too.
+  final bool cursorReset;
 
   /// Why the last connection failed, when it was not a close code.
   final Object? error;
@@ -195,6 +201,7 @@ final class RealtimeClient {
   HelloFrame? _hello;
 
   int _cursor = 0;
+  int _resumedFrom = 0;
   int _ackedOnSocket = 0;
   final SplayTreeSet<int> _outstanding = SplayTreeSet();
   final Set<int> _skippable = {};
@@ -320,6 +327,9 @@ final class RealtimeClient {
   }
 
   Uri _url() {
+    // The cursor the server judges this connection by (REALTIME_V2.md,
+    // "Restored server"); [_cursor] may move before `hello` arrives.
+    _resumedFrom = _cursor;
     final prefix = baseUrl.path.endsWith('/')
         ? baseUrl.path.substring(0, baseUrl.path.length - 1)
         : baseUrl.path;
@@ -467,10 +477,28 @@ final class RealtimeClient {
     switch (frame) {
       case final HelloFrame hello:
         _hello = hello;
+        final head = hello.seqHead;
+        final reset = head != null && _resumedFrom > head;
+        if (reset) {
+          // The server's database was restored from a backup: its sequence
+          // head is below what we processed, and it replays from the start.
+          // Without this reset every replayed envelope would look old and
+          // be dropped, and the ack below would be refused.
+          _cursor = 0;
+          _ackedOnSocket = 0;
+          _outstanding.clear();
+          _skippable.clear();
+        }
         _refreshedForThisAttempt = false;
         _heartbeat = Duration(seconds: max(1, hello.heartbeatSeconds));
         _armHeartbeat(_heartbeat);
-        _emit(RealtimeState(RealtimePhase.connected, hello: hello));
+        _emit(
+          RealtimeState(
+            RealtimePhase.connected,
+            hello: hello,
+            cursorReset: reset,
+          ),
+        );
         if (_cursor > _ackedOnSocket) _sendAck(_cursor);
       case EnvelopeFrame(:final envelope):
         _onEnvelope(envelope);

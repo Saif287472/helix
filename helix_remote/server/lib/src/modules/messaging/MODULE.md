@@ -10,6 +10,12 @@ deliver through it.
   device (16 partitions). It is deleted when the device acks
   (cumulative). Undelivered rows expire after 30 days (`messaging.expire`,
   every 10 minutes).
+- **Restored database** (review batch 9): `device_seq.last_seq` is the
+  device's head, the highest `seq` ever given (`MailboxStore.head`). A
+  cursor above it (`MessagingApi.resume`, used by `GET /v1/mailbox` and the
+  realtime upgrade) is read as 0, and `seq_head` tells the client to reset;
+  an ack above it deletes nothing (`MailboxStore.ack`). The log says
+  `mailbox_cursor_ahead`.
 - **Per-device `seq`** comes from `device_seq` under the row lock of an
   `INSERT … ON CONFLICT DO UPDATE`, taken in device-id order so overlapping
   sends cannot deadlock. Concurrent sends from any node never share a

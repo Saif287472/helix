@@ -202,15 +202,22 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 ## Deployment
 
 - Helix Global runs on the user's PC: Caddy (`J:\Projects\Servers\helix_server`)
-  in front of `dart run bin/server.dart` in `helix_remote/server`, against the
-  PostgreSQL 17 service `postgresql-x64-17` (role `helix`, database `helix`),
-  with local object storage next to the server and coturn in WSL1
-  (`deploy/coturn/windows/start-turn.ps1`, which reads the secret from
-  `server/.env`). That server process is live production - **never stop or
-  restart it**.
-- Deploying = the user restarts the server (`bin/migrate.dart` first if the
-  change adds a migration; every node also migrates at start). After server
-  changes, say so, and say which migration or `.env` line is new.
+  in front of the server, against the PostgreSQL 17 service
+  `postgresql-x64-17` (role `helix`, database `helix`), with local object
+  storage and coturn in WSL1 (`deploy/coturn/windows/start-turn.ps1`). The
+  process model chosen on 2026-10-14 (review batch 9): a compiled release in
+  `J:\Projects\Servers\helix_server\helix` (`bin\helix-server.exe`, its own
+  `.env`), run at boot by the scheduled task "Helix Server"
+  (`deploy/windows/`, README "Running production"). Until the user has moved
+  it there, production is still `dart run bin/server.dart` in
+  `helix_remote/server`. Either way it is live production - **never stop or
+  restart it**, and never run the deploy, install or release scripts.
+- Deploying = the user tags a commit, builds it (`release-helix.ps1 -Tag`)
+  and switches to it (`deploy-helix.ps1 -Tag`: graceful stop, swap, migrate,
+  start, ready check); the old console way is a restart (`bin/migrate.dart`
+  first if the change adds a migration; every node also migrates at start).
+  After server changes, say so, and say which migration or `.env` line is
+  new (and that the production `.env` is the one in the production folder).
 - Never hand-edit live state (the production database, `server/.env`); tell
   the user the exact line to add instead. Agents never handle Postgres
   passwords; the test database URL is the Windows user variable
@@ -234,9 +241,9 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ### Known pre-existing test failures
 
-None as of 2026-10-14, after review batch 7 (server 385 on Postgres, app 814,
-engine 299, api 191, admin 191, ui 183 with 1 golden test skipped off Linux, db
-139, protocol 83, crypto 73, rules 20, cli 13, calls 5, domain 4; `flutter analyze` and
+None as of 2026-10-14, after review batch 9 (server 398 on Postgres, app 814,
+engine 299, api 194, admin 191, ui 183 with 1 golden test skipped off Linux, db
+140, protocol 84, crypto 73, rules 20, cli 13, calls 5, domain 4; `flutter analyze` and
 `dart analyze server tool` clean; the governance check passes).
 
 Some server tests are timing-sensitive and can fail while the machine is busy

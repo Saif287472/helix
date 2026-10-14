@@ -35,6 +35,7 @@ final class HelloFrame extends ServerFrame {
     required this.heartbeatSeconds,
     required this.window,
     required this.lastSeq,
+    this.seqHead,
   });
 
   final DateTime serverTime;
@@ -49,6 +50,13 @@ final class HelloFrame extends ServerFrame {
   /// empty). Replay of anything after the client's cursor follows.
   final int lastSeq;
 
+  /// The highest `seq` ever given to this device (it survives acks), or
+  /// null from a server that predates it. A cursor above it means the
+  /// server's database was restored from a backup: the client resets its
+  /// cursor to 0, and the server replays from the start rather than from the
+  /// cursor (REALTIME_V2.md, "Restored server").
+  final int? seqHead;
+
   @override
   String get type => 'hello';
 
@@ -59,6 +67,7 @@ final class HelloFrame extends ServerFrame {
     'heartbeat_s': heartbeatSeconds,
     'window': window,
     'last_seq': lastSeq,
+    'seq_head': ?seqHead,
   };
 
   factory HelloFrame.fromJson(JsonReader json) => HelloFrame(
@@ -66,6 +75,7 @@ final class HelloFrame extends ServerFrame {
     heartbeatSeconds: json.integer('heartbeat_s'),
     window: json.integer('window'),
     lastSeq: json.integer('last_seq'),
+    seqHead: json.optInt('seq_head'),
   );
 }
 

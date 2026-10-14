@@ -109,6 +109,13 @@ or the REST mailbox (`fetchOnce`); both share one serial queue and
    `delivered` receipt, `processed_envelopes` and the cursor.
 5. **Ack** after the commit: over the socket when connected (returns window
    credit), else REST. The cursor in `inbox_cursor` is the resume point.
+   It only moves forward, except after a server restore: when the realtime
+   client reports `cursorReset` (the cursor it resumed from was above the
+   `hello`'s `seq_head`) or a mailbox page's `seq_head` is below the cursor
+   it was asked from, `InboundRunner` resets it to 0
+   (`InboxDao.resetCursor`, in the inbound queue) and processes the replay;
+   `processed_envelopes` drops what was already handled. The realtime client
+   resets its own cursor on that `hello` too.
 
 Rules:
 

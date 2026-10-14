@@ -170,9 +170,25 @@ final class MailboxStore {
     return r!.integer('m');
   }
 
+  /// The highest `seq` ever given to [deviceId] (0 if none): unlike
+  /// [lastSeq] it survives acks, so a client cursor above it means the
+  /// database was restored from a backup.
+  Future<int> head(SqlSession db, String deviceId) async {
+    final r = await db.queryOne(
+      'SELECT last_seq FROM $s.device_seq WHERE device_id = @d:uuid',
+      {'d': deviceId},
+    );
+    return r?.integer('last_seq') ?? 0;
+  }
+
+  /// Deletes envelopes up to [seq]. An ack above [head] deletes nothing: the
+  /// server never gave that `seq`, so the cursor behind it is from before a
+  /// restore, and honouring it would delete messages never delivered.
   Future<int> ack(Tx tx, String deviceId, int seq) async {
     final deleted = await tx.execute(
-      'DELETE FROM $s.mailbox WHERE device_id = @d:uuid AND seq <= @q:int8',
+      'DELETE FROM $s.mailbox WHERE device_id = @d:uuid AND seq <= @q:int8 '
+      'AND @q:int8 <= (SELECT coalesce(max(last_seq), 0) FROM $s.device_seq '
+      'WHERE device_id = @d:uuid)',
       {'d': deviceId, 'q': seq},
     );
     if (deleted > 0) {

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
@@ -143,6 +145,22 @@ void main() {
   });
 
   group('realtime frames', () {
+    test('hello carries seq_head; from an older server it is absent', () {
+      final hello = HelloFrame(
+        serverTime: t0,
+        heartbeatSeconds: 25,
+        window: 100,
+        lastSeq: 9,
+        seqHead: 12,
+      );
+      expect((ServerFrame.decode(hello.encode()) as HelloFrame).seqHead, 12);
+      final legacy = Map.of(hello.toJson())..remove('seq_head');
+      expect(
+        (ServerFrame.decode(jsonEncode(legacy)) as HelloFrame).seqHead,
+        isNull,
+      );
+    });
+
     test('server frames round-trip', () {
       final frames = <ServerFrame>[
         HelloFrame(

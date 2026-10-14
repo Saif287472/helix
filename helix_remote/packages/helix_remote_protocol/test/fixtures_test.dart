@@ -138,6 +138,7 @@ final _fixtures = <String, (Object, JsonMap Function(JsonReader))>{
       heartbeatSeconds: 25,
       window: 100,
       lastSeq: 1041,
+      seqHead: 1041,
     ),
     (j) => ServerFrame.decode(jsonEncode(j.json)).toJson(),
   ),

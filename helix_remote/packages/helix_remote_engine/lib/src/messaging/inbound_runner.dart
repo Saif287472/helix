@@ -180,6 +180,10 @@ final class InboundRunner {
   }
 
   void _onState(RealtimeState state) {
+    final head = state.hello?.seqHead;
+    if (state.cursorReset && head != null) {
+      unawaited(_serial.run(_queue, () => _resetIfAhead(head)));
+    }
     switch (state.phase) {
       case RealtimePhase.revoked:
         unawaited(onDeviceRevoked());
@@ -189,6 +193,16 @@ final class InboundRunner {
         _ctx.emit(const SuspensionChanged(suspended: true));
       default:
     }
+  }
+
+  /// A server restored from a backup gives out `seq`s again from below our
+  /// cursor ([head] is its highest). The stored cursor goes back to 0 so the
+  /// replay is processed (duplicates are skipped by `processed_envelopes`)
+  /// instead of being skipped as old. Run in the inbound queue.
+  Future<void> _resetIfAhead(int head) async {
+    final cursor = (await _ctx.db.inboxDao.cursor())?.lastProcessedSeq ?? 0;
+    if (cursor <= head) return;
+    await _ctx.db.inboxDao.resetCursor(now: _ctx.now());
   }
 
   /// Acks through [seq]: on the socket when it is connected (which returns
@@ -232,6 +246,11 @@ final class InboundRunner {
         } on ApiException catch (e) {
           if (e.code == ErrorCode.deviceRevoked) unawaited(onDeviceRevoked());
           rethrow;
+        }
+        final head = batch.seqHead;
+        if (head != null && cursor > head) {
+          // The server replayed from the start (a restored database).
+          await _serial.run(_queue, () => _resetIfAhead(head));
         }
         var last = 0;
         for (final envelope in batch.envelopes) {

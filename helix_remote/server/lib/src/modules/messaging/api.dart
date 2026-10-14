@@ -116,6 +116,15 @@ abstract interface class MessagingApi {
 
   Future<int> lastSeq(String deviceId);
 
+  /// The highest `seq` ever given to [deviceId] (0 if none); survives acks.
+  /// A client cursor above it is from before a database restore.
+  Future<int> head(String deviceId);
+
+  /// [after] as the client gave it, or 0 when it is above [head] (a cursor
+  /// from before a restore: replay everything rather than skip new mail).
+  /// Returns the effective cursor and the head.
+  Future<({int after, int head})> resume(String deviceId, int after);
+
   /// An ephemeral envelope parked for the realtime gateway.
   Future<Envelope?> takeEphemeral(String ref);
 

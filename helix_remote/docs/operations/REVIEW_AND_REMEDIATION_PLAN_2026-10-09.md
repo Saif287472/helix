@@ -100,7 +100,7 @@ this file as a change.
 | A-02 | High | Server | Group sends have no rate limit and are copied to every member device | `helix_remote/server/lib/src/modules/groups/module.dart:177-182` | confirmed; fixed in Batch 2 |
 | E-01 | High | App | No message notification while the app is backgrounded but running | `helix_remote/app/lib/core/push/push_background.dart:110-113` | confirmed (code); fixed in Batch 3 (device check pending) |
 | E-02 | High | App | Push token registered only at app launch | `helix_remote/app/lib/main.dart:111-138` | confirmed, worse than recorded (Firebase was never initialised in the UI isolate); fixed in Batch 3 (device check pending) |
-| H-01 | High | Ops | No backup of the production database set up or proven | `helix_remote/docs/operations/V2_OPERABILITY.md:298-427` | confirmed (no task, no backup folder, 2026-10-09); Batch 1 scripts written, user installs |
+| H-01 | High | Ops | No backup of the production database set up or proven | `helix_remote/docs/operations/V2_OPERABILITY.md:298-427` | confirmed (no task, no backup folder, 2026-10-09); Batch 1 scripts written, user installs; restore-cursor half fixed in Batch 9 (the backup itself is Batch 1, which the user installs) |
 | A-03 | Medium | Server | No global storage guard; per-account quotas fill one disk | `helix_remote/server/lib/src/modules/media/module.dart:27-31` | confirmed; fixed in Batch 2 (budget off until `HELIX_STORAGE_BUDGET_BYTES` is set) |
 | A-04 | Medium | Server | One hung job stalls every background job on the node | `helix_remote/server/lib/src/platform/jobs/jobs.dart:159-170` | confirmed; fixed in Batch 5 |
 | A-05 | Medium | Server | No global SMS budget or country allow-list | `helix_remote/server/lib/src/modules/identity/application/sign_up.dart:18-48` | confirmed; fixed in Batch 5 (Bangladesh only, 500 a day by default) |
@@ -111,8 +111,8 @@ this file as a change.
 | E-03 | Medium | App | Windows app raises no notifications | `helix_remote/app/lib/core/notifications/local_notifications.dart:61-65` | confirmed |
 | F-01 | Medium | Tests | Platform glue (FCM, notifications, local_auth) untested | `.github/workflows/ci.yml:143-157` | confirmed; push and notification logic tested in Batch 3, device checklist added |
 | G-01 | Medium | Deps | Dependency risk register no longer matches the lockfile | `docs/dependencies/DEPENDENCY_RISK_REGISTER.md:65-70` | confirmed; fixed in Batch 8 (device checks recorded as pending) |
-| H-02 | Medium | Ops | Production runs from the development working tree | `helix_remote/docs/operations/V2_SERVER_HANDOFF.md:74-90` | confirmed |
-| H-03 | Medium | Ops | Nothing restarts the service after reboot or crash | `helix_remote/server/lib/src/platform/db/postgres_db.dart:21-24` | confirmed |
+| H-02 | Medium | Ops | Production runs from the development working tree | `helix_remote/docs/operations/V2_SERVER_HANDOFF.md:74-90` | confirmed; fixed in Batch 9 (scripts written; the user moves production) |
+| H-03 | Medium | Ops | Nothing restarts the service after reboot or crash | `helix_remote/server/lib/src/platform/db/postgres_db.dart:21-24` | confirmed; fixed in Batch 9 (scheduled task; the user installs it) |
 | H-04 | Medium | Ops | Caddy site has no HSTS and no admin restriction | `J:\Projects\Servers\helix_server\Caddyfile` | confirmed; Batch 1 Caddyfile written, user installs |
 | A-07 | Low | Server | No statement or lock timeout on the pool | `helix_remote/server/lib/src/platform/db/postgres_db.dart:14-19` | confirmed (code); fixed in Batch 5 |
 | A-08 | Low | Server | A failing after-commit action becomes a request error | `helix_remote/server/lib/src/platform/db/postgres_db.dart:82-84` | confirmed; fixed in Batch 5 |
@@ -138,7 +138,7 @@ this file as a change.
 | G-02 | Low | Architecture | Stated rules (SQL only in `data/`) not followed or tested | `helix_remote/server/test/architecture_test.dart` | confirmed; fixed in Batch 8 (rule documented as kept, and tested) |
 | G-03 | Low | Docs | Ten documents that contradict the code | `helix_remote/docs/architecture/ARCHITECTURE_V2_PLAN.md:3-6` | confirmed; fixed in Batch 8 |
 | G-04 | Low | Architecture | Very large files | `helix_remote/server/lib/src/modules/groups/module.dart` | confirmed |
-| H-05 | Low | Ops | No monitoring, no log rotation | `helix_remote/server/lib/src/platform/observability/log.dart:93-115` | confirmed |
+| H-05 | Low | Ops | No monitoring, no log rotation | `helix_remote/server/lib/src/platform/observability/log.dart:93-115` | confirmed; fixed in Batch 9 |
 | H-06 | Low | Ops | PC off more than three days fails queued sends | `helix_remote/packages/helix_remote_engine/lib/src/config.dart:15` | confirmed; fixed in Batch 7 (30 days) |
 | C-04 | Info | Security | What an external crypto reviewer should focus on | — | — |
 | D-02 | Info | Engine | Items already tracked as open | `helix_remote/docs/protocol/v2/CRYPTO_V2.md` §14 | known |
@@ -1508,6 +1508,50 @@ the batch.
 - **APK / restart.** Server restart into the new process model (the user does
   it); a new app APK for the cursor reaction.
 - **Model.** Opus 5.5 for the cursor protocol change; Sonnet 5.5 for the scripts.
+- **Status (2026-10-14).** Done in code and scripts; moving production and
+  installing the tasks are the user's steps (`deploy/windows/README.md`,
+  "Running production"). The user chose: scheduled tasks (not a service,
+  nothing downloaded), production in `J:\Projects\Servers\helix_server\helix`,
+  alerts in the Event Log plus a desktop notification. AGENTS.md
+  "Deployment" says so.
+  - **H-01 (restore cursor):** `seq_head` (additive, optional) in the
+    realtime `hello` and `MailboxPage`: the highest `seq` ever given to the
+    device (`device_seq.last_seq`). The server reads a cursor above it as 0
+    (`MessagingApi.resume`, socket and REST) and an ack above it deletes
+    nothing: without that guard, the ack an app re-sends after `hello` would
+    have deleted undelivered mail after a restore. The realtime client and
+    the engine reset their cursor (`InboxDao.resetCursor`, the only backwards
+    move) and the replay is deduplicated by `processed_envelopes`. The
+    decision uses the cursor the connection resumed from (what the server
+    judged), not one that moved before `hello` arrived (`cursorReset` in
+    `RealtimeState`). Older APKs
+    get new mail through REST (push wake, periodic sync). Fixture
+    `realtime_hello.json` gained `seq_head`; REALTIME_V2.md has a "Restored
+    server" section.
+  - **H-02:** `release-helix.ps1` compiles `helix-server.exe`,
+    `helix-migrate.exe` and `helix-admin-tool.exe` from a git tag (temporary
+    worktree, lockfile enforced); `deploy-helix.ps1` stops gracefully, swaps
+    (keeping `bin-previous`), migrates (rolling back on failure), starts and
+    waits for `ready`.
+  - **H-03:** the "Helix Server" task runs at boot as the user (S4U, no stored
+    password) through `run-helix-server.ps1`, which restarts the server
+    (5 s doubling to 60 s) and stops on the `HELIX_STOP_FILE` file; the
+    server retries an unreachable database for a minute
+    (`platform/startup.dart`). Optional Caddy and coturn tasks.
+  - **H-05:** `helix-health-check.ps1` every 5 minutes (ready, the task, disk,
+    dead jobs, backlog), reporting changes to the Event Log and as a
+    notification; the server rotates `HELIX_LOG_FILE` daily and keeps
+    `HELIX_LOG_KEEP_DAYS` (default 14).
+  - **Tests:** server `test/modules/restore_cursor_test.dart` (replay,
+    `seq_head`, the ack guard, the socket),
+    `test/client/engine/restore_test.dart` (a real engine by REST and by
+    socket), `test/platform/operations_test.dart` (retry, stop file, log
+    rotation, `HELIX_LOG_KEEP_DAYS`); api `realtime_client_test` (reset on
+    `hello`, no change otherwise); db `sync_test` (`resetCursor`); protocol
+    `wire_test` and the fixture. The PowerShell scripts were run against
+    fakes in a scratch folder (two crashes then a graceful stop; the health
+    check against a down port and a fake server with dead jobs); none was run
+    against production.
 
 ### Not batched
 
