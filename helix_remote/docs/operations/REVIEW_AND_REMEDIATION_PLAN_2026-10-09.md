@@ -117,7 +117,7 @@ this file as a change.
 | A-07 | Low | Server | No statement or lock timeout on the pool | `helix_remote/server/lib/src/platform/db/postgres_db.dart:14-19` | confirmed (code); fixed in Batch 5 |
 | A-08 | Low | Server | A failing after-commit action becomes a request error | `helix_remote/server/lib/src/platform/db/postgres_db.dart:82-84` | confirmed; fixed in Batch 5 |
 | A-09 | Low | Server | Device lists checked outside the send transaction | `helix_remote/server/lib/src/modules/messaging/module.dart:308-352` | confirmed; fixed in Batch 2 |
-| A-10 | Low | Server | Media rows deleted before blobs; failures leak files | `helix_remote/server/lib/src/modules/media/module.dart:349-372` | confirmed |
+| A-10 | Low | Server | Media rows deleted before blobs; failures leak files | `helix_remote/server/lib/src/modules/media/module.dart:349-372` | confirmed; fixed in Batch 7 |
 | A-11 | Low | Server | Presence and profile reads have no per-account limit | `helix_remote/server/lib/src/modules/people/module.dart:326-359` | confirmed; fixed in Batch 5 |
 | A-12 | Low | Server | Per-target bundle limit can be exhausted | `helix_remote/server/lib/src/modules/keys/module.dart:32-43` | confirmed; fixed in Batch 5 |
 | B-03 | Low | Admin | Live log WebSocket outlives the admin session | `helix_remote/server/lib/src/modules/admin/module.dart:615-630` | confirmed; fixed in Batch 6 |
@@ -127,7 +127,7 @@ this file as a change.
 | B-07 | Low | Admin | No way to reset a forgotten admin password | `helix_remote/server/lib/src/modules/admin/module.dart:156-178` | confirmed; fixed in Batch 6 |
 | B-08 | Low | Admin | Distributed attacker can keep admin sign-in locked | `helix_remote/server/lib/src/modules/admin/module.dart:70-73` | confirmed; fixed in Batch 6 |
 | B-09 | Low | Admin | macOS console lacks the network-client entitlement | `helix_remote/admin/macos/Runner/Release.entitlements` | confirmed; fixed in Batch 6 (network entitlement; keychain unverified) |
-| C-02 | Low | Privacy | Reports kept forever (docs: until resolved) | `helix_remote/server/lib/src/modules/people/module.dart:575-592` | confirmed |
+| C-02 | Low | Privacy | Reports kept forever (docs: until resolved) | `helix_remote/server/lib/src/modules/people/module.dart:575-592` | confirmed; fixed in Batch 7 (180 days after closing) |
 | C-03 | Low | Privacy | Privacy and crypto documents slightly wrong | `helix_remote/docs/protocol/v2/CRYPTO_V2.md` (§11, §14) | confirmed |
 | D-01 | Low | Engine | Heavy crypto runs on the UI isolate | `helix_remote/packages/helix_remote_crypto/lib/src/v2/password.dart:54-63` | unverified |
 | E-04 | Low | App | Documented gaps against v1 (return-to-call bar, group calls…) | `helix_remote/app/lib/features/calls/FEATURE.md:93-96` | known |
@@ -139,7 +139,7 @@ this file as a change.
 | G-03 | Low | Docs | Ten documents that contradict the code | `helix_remote/docs/architecture/ARCHITECTURE_V2_PLAN.md:3-6` | confirmed |
 | G-04 | Low | Architecture | Very large files | `helix_remote/server/lib/src/modules/groups/module.dart` | confirmed |
 | H-05 | Low | Ops | No monitoring, no log rotation | `helix_remote/server/lib/src/platform/observability/log.dart:93-115` | confirmed |
-| H-06 | Low | Ops | PC off more than three days fails queued sends | `helix_remote/packages/helix_remote_engine/lib/src/config.dart:15` | confirmed |
+| H-06 | Low | Ops | PC off more than three days fails queued sends | `helix_remote/packages/helix_remote_engine/lib/src/config.dart:15` | confirmed; fixed in Batch 7 (30 days) |
 | C-04 | Info | Security | What an external crypto reviewer should focus on | — | — |
 | D-02 | Info | Engine | Items already tracked as open | `helix_remote/docs/protocol/v2/CRYPTO_V2.md` §14 | known |
 | G-05 | Info | Repo | Local v1 leftovers (untracked) | `helix_remote/packages/helix_remote_storage/` | confirmed |
@@ -1402,6 +1402,30 @@ the batch.
 - **Verify.** Server and engine suites.
 - **APK / restart.** Server restart; new app APK for the outbox change.
 - **Model.** Sonnet 5.5.
+- **Status (2026-10-14).** Done. The user chose: reports deleted 180 days
+  after they are resolved or dismissed, and phones keep trying unsent
+  messages for 30 days. B-04's retention was done in Batch 6.
+  - **A-10:** `media.expire` and `media.purge_account` delete each blob before
+    its row; a blob that cannot be deleted keeps its row (`media_delete_failed`
+    in the log; the purge job throws so the outbox retries it).
+    `media.sweep_orphans` (weekly) deletes blobs with no row once they are a
+    day old, through a new `ObjectStorage.list` (a directory walk locally,
+    ListObjectsV2 on S3).
+  - **C-02:** people migration 3 adds `reports.resolved_at` (closed reports
+    start their 180 days at the migration); `people.purge_reports` (daily)
+    deletes closed reports 180 days after closing. Open reports stay.
+    RETENTION_AND_DELETION and METADATA_INVENTORY say so.
+  - **H-06:** `EngineConfig.outboxMaxAge` and `TransferConfig.maxAge` are 30
+    days (the server's mailbox retention), so a PC server off over a long
+    weekend fails nothing. The transfer limit moved too: a message with an
+    attachment waits for its upload.
+  - **Tests:** server `test/modules/retention_test.dart` (a locked blob keeps
+    its row and goes next run; the purge retries; the orphan sweep and its
+    grace; report retention), `infra_test` (local and S3 listing); engine
+    `outbox_test` and `transfer_worker_test` (4 days offline fail nothing,
+    31 days give up).
+  - **Deploy:** restart the server (people migration 3 runs at start). New
+    app APK for the 30-day limit (phones on the old APK keep 3 days).
 
 ### Batch 8: Documents, register and test gates
 

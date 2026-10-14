@@ -634,6 +634,13 @@ void main() {
       await alice.engine.drainTransfers();
       world.clock.advance(const Duration(days: 4));
       await alice.engine.drainTransfers();
+      expect(
+        (await alice.engine.media.viewsOf(sent.localRowid)).single.phase,
+        isNot(TransferPhase.failed),
+        reason: 'four days offline fail nothing (review H-06)',
+      );
+      world.clock.advance(const Duration(days: 27));
+      await alice.engine.drainTransfers();
       final view = (await alice.engine.media.viewsOf(sent.localRowid)).single;
       expect(view.phase, TransferPhase.failed);
       expect(view.failure, TransferFailure.gaveUp);

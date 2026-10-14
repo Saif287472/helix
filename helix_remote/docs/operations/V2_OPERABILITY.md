@@ -214,7 +214,16 @@ any node runs it. (`platform/jobs/jobs.dart`, `platform/platform_migrations.dart
   conditional update of `platform.periodic_jobs`): `platform.sweep_ephemeral`
   (1 min), `platform.sweep_rate_buckets` (10 min), `platform.sweep_idempotency`
   (1 h), `messaging.expire` (10 min), `calls.expire` (5 min),
-  `identity.purge_expired` (6 h), `media.expire` (30 min).
+  `identity.purge_expired` (6 h), `identity.revoke_inactive` (6 h, only with
+  `HELIX_DEVICE_INACTIVE_DAYS`), `media.expire` (30 min),
+  `media.sweep_orphans` (7 days), `people.purge_reports` (1 day),
+  `admin.purge_sign_in_failures` (6 h), `admin.purge_audit` (1 day).
+  Each run is given up on after 5 minutes.
+- **Media deletes** (`media.expire`, `media.purge_account`) remove the blob
+  first and the row after it. A blob that cannot be deleted (a file held open
+  by an antivirus scan) keeps its row: the log says `media_delete_failed`
+  with a count, and the next run tries again. `media.sweep_orphans` deletes
+  blobs that have had no row for a day (`media_orphans_removed`).
 
 ### Inspect
 

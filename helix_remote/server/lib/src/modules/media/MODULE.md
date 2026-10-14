@@ -29,6 +29,10 @@ Bytes live in `ObjectStorage` under `<kind>/<id>`.
   302 to a 5-minute presigned GET. Unfinished or expired objects are 404.
 - **Housekeeping:** `media.expire` (every 30 minutes) deletes expired
   objects and uploads abandoned for a day. Account deletion enqueues
-  `media.purge_account`.
+  `media.purge_account`. Both delete each blob before its row: a blob that
+  cannot be deleted keeps its row for the next try (the purge job throws, so
+  the outbox retries it). `media.sweep_orphans` (weekly) lists the store
+  (`ObjectStorage.list`) and deletes blobs under a kind's prefix whose id has
+  no row and that are older than a day (`orphanGrace`).
 - **What the server never learns:** which message uses an object
   (there is no reference tracking, unlike v1), or what is in it.

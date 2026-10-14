@@ -16,7 +16,7 @@ final class TransferConfig {
       initial: Duration(seconds: 3),
       max: Duration(minutes: 5),
     ),
-    this.maxAge = const Duration(days: 3),
+    this.maxAge = const Duration(days: 30),
     this.idlePoll = const Duration(minutes: 1),
     this.maxDownloadBytes = 2 * 1024 * 1024 * 1024,
     this.maxThumbnailBytes = 512 * 1024,
@@ -45,7 +45,9 @@ final class TransferConfig {
   final Backoff backoff;
 
   /// A transfer that kept failing for this long is given up on (the UI
-  /// offers a retry).
+  /// offers a retry). The same 30 days as `EngineConfig.outboxMaxAge`: a
+  /// message with an attachment waits for its upload, so a shorter limit
+  /// here would fail it first (review H-06).
   final Duration maxAge;
 
   /// With nothing queued the worker still looks at the queue this often: an

@@ -128,7 +128,12 @@ void main() {
       });
       peers.server.failNext(Routes.sendMessage, times: 100);
       await alice.engine.drainOutbox();
+      // A server off for a long weekend fails nothing (review H-06).
       peers.clock.advance(const Duration(days: 4));
+      await alice.engine.drainOutbox();
+      expect((await opOf(row)).state, isNot(OutboxState.failed));
+      expect(await statusOf(row), isNot(MessageStatus.failed));
+      peers.clock.advance(const Duration(days: 27));
       await alice.engine.drainOutbox();
       final op = await opOf(row);
       expect(op.state, OutboxState.failed);

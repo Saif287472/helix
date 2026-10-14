@@ -42,7 +42,10 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   removed again when the read is refused). Reading yourself is free.
 - **Reports:** `reports` stores no message content. The admin console
   lists and resolves them through `PeopleApi.reports` / `resolveReport`.
-  They survive account deletion as the moderation record (ids only).
+  They survive account deletion as the moderation record (ids only) while
+  open. Resolving or dismissing sets `resolved_at` (migration 3), and
+  `people.purge_reports` (daily) deletes them 180 days later
+  (`reportRetention`).
 - **Export:** profile version, privacy, blocked accounts, contact count,
   reports filed.
 - **Remote accounts:** blocks accept `uuid@domain` (stored qualified;

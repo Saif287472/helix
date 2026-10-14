@@ -24,7 +24,10 @@ deletion contract. The v1 version is in git history (tag `v1-final`).
   (never an account's most recently used device).
 - Attachments: 30 days from upload (backup media 90 days, refreshed by each full backup; avatars and
   group pictures until deleted). Objects have random ids and no link to a message, so there is no
-  reference counting: deleting a message does not delete its object, and expiry does.
+  reference counting: deleting a message does not delete its object, and expiry does. The bytes go
+  before the row: a file that cannot be deleted (held open by an antivirus scan) keeps its row and is
+  tried again on the next run, and a weekly sweep (`media.sweep_orphans`) deletes stored bytes that
+  have had no row for a day.
 - Backups: the latest encrypted history backup and full backup, replaced by a higher version. The
   history backup is deleted when the account identity key rotates and with the account.
 - Account password: until changed, the identity key rotates (the row is replaced or deleted), or the
@@ -35,8 +38,9 @@ deletion contract. The v1 version is in git history (tag `v1-final`).
 - Idempotency records 24 hours, send records 7 days, rate-limit buckets 1 hour after last use, call
   metrics 90 days, pending calls 120 seconds.
 - Audit records (operator actions): one year, deleted daily (`admin.purge_audit`); the account ids in
-  them outlive a deleted account by at most that year. Reports: operational retention; they survive
-  account deletion as the moderation record until resolved.
+  them outlive a deleted account by at most that year. Reports: kept while open, as the moderation
+  record (they survive account deletion); deleted 180 days after the operator resolves or dismisses
+  them (`people.purge_reports`, daily).
 - Logs: JSON lines on stdout and an optional file (`HELIX_LOG_FILE`); rotation is the operator's.
 
 ## Account deletion

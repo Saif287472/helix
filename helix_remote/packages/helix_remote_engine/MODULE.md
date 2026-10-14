@@ -171,7 +171,8 @@ holds back later ones of its chat; failed ops do not), and for each:
 5. **Outcome:** success completes the op and advances the status to `sent`
    (delivered/read come from receipts and only move forward); a retryable error
    (network, 5xx, 429 with `Retry-After`, quota) reschedules with exponential
-   backoff; an op older than `outboxMaxAge` or refused for good
+   backoff; an op older than `outboxMaxAge` (30 days, the server's mailbox
+   retention: a PC server that is off for days fails nothing) or refused for good
    (`forbidden`, `untrusted_peer`, `not_found`, …) fails, the message shows as
    failed and `SendFailedEvent` is emitted; `device_revoked` starts the
    revocation path; a dead session pauses the worker.
@@ -453,7 +454,7 @@ change stream plus a timer for the next retry (and a 1-minute idle poll for
 jobs queued from another isolate). A failure that may pass (network, 5xx, 429
 with `Retry-After`, 401) reschedules with exponential backoff (`Backoff`, 3 s
 doubling to 5 min), **keeps the progress** and gives up only after `maxAge`
-(3 days) as `gave_up`; a failure that cannot pass ends the job as `failed`
+(30 days, like the outbox) as `gave_up`; a failure that cannot pass ends the job as `failed`
 with a `TransferFailure` code (`quota_exceeded`, `too_large`, `file_missing`,
 `digest_mismatch`, `decrypt_failed`, `size_mismatch`, `expired` (404 or 410:
 past the server's 30 days), `rejected`, `gave_up`, `unknown`). A worker that

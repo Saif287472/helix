@@ -12,7 +12,7 @@ final class EngineConfig {
     this.deviceName = 'Helix device',
     this.platform = DevicePlatform.other,
     this.outboxBackoff = const Backoff(),
-    this.outboxMaxAge = const Duration(days: 3),
+    this.outboxMaxAge = const Duration(days: 30),
     this.outboxLease = const Duration(minutes: 2),
     this.staleListRetries = 3,
     this.resendWindow = const Duration(hours: 24),
@@ -84,7 +84,10 @@ final class EngineConfig {
   final Backoff outboxBackoff;
 
   /// An op that has not been sent after this long is given up on (the
-  /// message is shown as failed).
+  /// message is shown as failed). 30 days, as long as the server keeps an
+  /// undelivered message: Helix Global is a PC that is not always on, and a
+  /// long weekend with it off must not fail every message written meanwhile
+  /// (review H-06; it was 3 days).
   final Duration outboxMaxAge;
 
   /// How long a claimed op stays claimed if the worker dies.

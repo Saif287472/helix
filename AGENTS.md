@@ -227,7 +227,7 @@ This applies to both `helix_remote/app` and `helix_remote/admin`.
 
 ### Known pre-existing test failures
 
-None as of 2026-10-14, after review batch 6 (server 379 on Postgres, app 814,
+None as of 2026-10-14, after review batch 7 (server 385 on Postgres, app 814,
 engine 299, api 191, admin 191, ui 183 with 5 golden tests skipped off Linux, db
 139, protocol 83, crypto 73, rules 20, cli 13, calls 5; `flutter analyze` and
 `dart analyze server tool` clean; the governance check passes).

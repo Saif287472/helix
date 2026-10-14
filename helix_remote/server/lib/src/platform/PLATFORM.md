@@ -16,7 +16,7 @@ one Postgres database.
 | Storage budget | `storage/storage_budget.dart` | `HELIX_STORAGE_BUDGET_BYTES` (optional): the size of this server's tables with indexes and TOAST (`pg_total_relation_size` over the catalogue, its own schema prefix only; not `pg_database_size`, which lists every file and took seconds on the shared test database) plus what modules `report` (media objects), measured at most once a minute per node; `check()` throws `quota_exceeded` (`reason: server_storage`) when over it and lets requests through when it cannot measure; gauge `helix_storage_used_bytes`; `close` waits for a measurement in flight | same (S3 bytes reported by media) |
 | Outbox + jobs | `jobs/jobs.dart` | `platform.jobs`, `SKIP LOCKED` leases, backoff, dead letters; a handler is given up on after 60 s (`JobRunnerSettings.jobTimeout`, shorter than the 2-minute lease) | same |
 | Periodic jobs | `jobs/jobs.dart` | row-lease, once per interval cluster-wide; each run given up on after 5 minutes | same |
-| Object storage | `blobs/object_storage.dart` | local directory | S3-compatible (SigV4) |
+| Object storage | `blobs/object_storage.dart` | local directory; `list(prefix)` walks it (the media orphan sweep) | S3-compatible (SigV4; `list` is ListObjectsV2) |
 | Push | `push/push.dart` | FCM HTTP v1, data-only wake-ups | + APNs |
 | HTTP | `http/routes.dart`, `pipeline.dart`, `request.dart`, `idempotency.dart`, `websocket_limits.dart` | shelf; auth and route limit before the body, per-node body budget, sealed idempotency rows, WebSocket message cap | same |
 | Observability | `observability/log.dart`, `metrics.dart` | JSON logs with redaction (ring buffer + live `lines` stream for the admin console), Prometheus text | scrape per node |

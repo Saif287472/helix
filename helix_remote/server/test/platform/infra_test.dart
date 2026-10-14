@@ -5,6 +5,8 @@ import 'package:helix_remote_server/src/platform/blobs/object_storage.dart';
 import 'package:helix_remote_server/src/platform/config/server_config.dart';
 import 'package:helix_remote_server/src/platform/observability/log.dart';
 import 'package:helix_remote_server/src/platform/observability/metrics.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 const _key = 'dGVzdC1vbmx5LWp3dC1rZXktdGhhdC1pcy0zMi1ieXRlcw';
@@ -230,6 +232,19 @@ void main() {
       expect(await storage.size('media/a1'), isNull);
     });
 
+    test('lists the objects under a prefix with their change times', () async {
+      for (final key in ['attachment/a1', 'attachment/b2', 'backup/c3']) {
+        await storage.append(key, Stream.value([1]), offset: 0, maxSize: 4);
+      }
+      final listed = await storage.list('attachment/').toList();
+      expect(
+        listed.map((o) => o.key),
+        unorderedEquals(['attachment/a1', 'attachment/b2']),
+      );
+      expect(listed.first.modified.isUtc, isTrue);
+      expect(await storage.list('nothing/').toList(), isEmpty);
+    });
+
     test('keys cannot escape the root', () {
       for (final key in [
         '../x',
@@ -242,6 +257,47 @@ void main() {
       ]) {
         expect(() => storage.size(key), throwsArgumentError, reason: key);
       }
+    });
+  });
+
+  group('S3ObjectStorage listing', () {
+    test('pages through ListObjectsV2', () async {
+      final asked = <Map<String, String>>[];
+      final client = MockClient((request) async {
+        asked.add(request.url.queryParameters);
+        final second =
+            request.url.queryParameters['continuation-token'] != null;
+        return http.Response(
+          second
+              ? '<ListBucketResult><IsTruncated>false</IsTruncated>'
+                    '<Contents><Key>attachment/b2</Key>'
+                    '<LastModified>2026-10-02T00:00:00.000Z</LastModified>'
+                    '</Contents></ListBucketResult>'
+              : '<ListBucketResult><IsTruncated>true</IsTruncated>'
+                    '<NextContinuationToken>next-page</NextContinuationToken>'
+                    '<Contents><Key>attachment/a1</Key>'
+                    '<LastModified>2026-10-01T00:00:00.000Z</LastModified>'
+                    '</Contents></ListBucketResult>',
+          200,
+        );
+      });
+      final storage = S3ObjectStorage(
+        S3Config(
+          endpoint: Uri.parse('http://127.0.0.1:9000'),
+          region: 'us-east-1',
+          bucket: 'helix',
+          accessKeyId: 'a',
+          secretAccessKey: 'b',
+        ),
+        client: client,
+        now: () => DateTime.utc(2026, 10, 1),
+      );
+      final listed = await storage.list('attachment/').toList();
+      expect(listed.map((o) => o.key), ['attachment/a1', 'attachment/b2']);
+      expect(listed.last.modified, DateTime.utc(2026, 10, 2));
+      expect(asked.first['list-type'], '2');
+      expect(asked.first['prefix'], 'attachment/');
+      expect(asked.last['continuation-token'], 'next-page');
     });
   });
 

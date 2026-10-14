@@ -4,6 +4,7 @@ import 'package:helix_remote_server/src/modules/identity/module.dart';
 import 'package:helix_remote_server/src/modules/identity/sms.dart';
 import 'package:helix_remote_server/src/modules/messaging/module.dart';
 import 'package:helix_remote_server/src/modules/realtime/module.dart';
+import 'package:helix_remote_server/src/platform/blobs/object_storage.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
 import 'package:helix_remote_server/src/platform/push/push.dart';
 
@@ -36,11 +37,13 @@ final class Harness {
     bool global = true,
     Map<String, String> extra = const {},
     Clock clock = const SystemClock(),
+    ObjectStorage? blobs,
   }) async {
     final push = RecordingPushProvider();
     final env = await TestPlatform.open(
       push: push,
       clock: clock,
+      blobs: blobs,
       extra: {
         'HELIX_PHONE_PEPPER': testPepper,
         'HELIX_GLOBAL_MODE': '$global',

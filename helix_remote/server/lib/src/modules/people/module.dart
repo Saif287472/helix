@@ -7,6 +7,7 @@ import 'package:helix_remote_server/src/platform/db/db.dart';
 import 'package:helix_remote_server/src/platform/db/migrations.dart';
 import 'package:helix_remote_server/src/platform/http/request.dart';
 import 'package:helix_remote_server/src/platform/http/routes.dart';
+import 'package:helix_remote_server/src/platform/jobs/jobs.dart';
 import 'package:helix_remote_server/src/platform/module.dart';
 import 'package:helix_remote_server/src/platform/ratelimit/rate_limiter.dart';
 import 'package:shelf/shelf.dart';
@@ -60,6 +61,24 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
     const Duration(days: 1),
   );
 
+  /// Resolved and dismissed reports are deleted this long after they were
+  /// closed (review C-02; the operator's choice). Open reports stay until
+  /// the operator handles them.
+  static const reportRetention = Duration(days: 180);
+
+  @override
+  List<PeriodicJob> get periodic => [
+    PeriodicJob(
+      'people.purge_reports',
+      const Duration(hours: 24),
+      () => context.db.execute(
+        'DELETE FROM $s.reports WHERE resolved_at < now() - '
+        'make_interval(secs => @age:int8)',
+        {'age': reportRetention.inSeconds},
+      ),
+    ),
+  ];
+
   @override
   String get name => 'people';
 
@@ -67,7 +86,17 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
   List<Migration> get migrations => const [
     Migration(1, 'people_baseline', _baseline),
     Migration(2, 'federated_blocks', _federatedBlocks),
+    Migration(3, 'report_resolved_at', _reportResolvedAt),
   ];
+
+  /// When a report was resolved or dismissed, for [reportRetention].
+  /// Reports already closed start their retention at this migration.
+  static String _reportResolvedAt(String s) =>
+      '''
+ALTER TABLE $s.reports ADD COLUMN resolved_at timestamptz;
+UPDATE $s.reports SET resolved_at = now() WHERE status <> 'open';
+CREATE INDEX reports_resolved ON $s.reports (resolved_at) WHERE resolved_at IS NOT NULL;
+''';
 
   /// Blocked accounts on other servers are stored qualified (`uuid@domain`).
   static String _federatedBlocks(String s) =>
@@ -630,7 +659,8 @@ final class _PeopleFacade implements PeopleApi {
       );
     }
     return await db.execute(
-          "UPDATE ${_m.s}.reports SET status = @to:text WHERE id = @id:uuid AND status = 'open'",
+          'UPDATE ${_m.s}.reports SET status = @to:text, resolved_at = now() '
+          "WHERE id = @id:uuid AND status = 'open'",
           {'id': reportId, 'to': to.wire},
         ) ==
         1;

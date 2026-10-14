@@ -31,6 +31,10 @@ final class MediaModule extends ModuleBase implements ProvidesAccountExport {
   late final MediaApi api;
 
   static const purgeJob = 'media.purge_account';
+
+  /// A blob with no row is deleted by the weekly sweep once it is this old,
+  /// so an upload whose row is being written is never touched.
+  static const orphanGrace = Duration(days: 1);
   static const persistentMaxBytes = 5 * 1024 * 1024;
   static const backupMaxBytes = 100 * 1024 * 1024;
   static const attachmentQuota = 4 * 1024 * 1024 * 1024;
@@ -104,6 +108,11 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
   @override
   List<PeriodicJob> get periodic => [
     PeriodicJob('media.expire', const Duration(minutes: 30), _expire),
+    PeriodicJob(
+      'media.sweep_orphans',
+      const Duration(days: 7),
+      () => sweepOrphans(),
+    ),
   ];
 
   @override
@@ -354,30 +363,100 @@ CREATE INDEX objects_incomplete ON $s.objects (created_at) WHERE completed_at IS
     return noContent();
   }
 
-  /// Expired objects, and uploads abandoned for a day.
+  /// Expired objects, and uploads abandoned for a day. Each blob goes
+  /// before its row (review A-10): a blob that cannot be deleted (a file an
+  /// antivirus scan holds open) keeps its row, so the next run tries again
+  /// instead of forgetting the file.
   Future<void> _expire() async {
+    var after = '00000000-0000-0000-0000-000000000000';
+    var failed = 0;
     while (true) {
       final rows = await context.db.query(
-        "DELETE FROM $s.objects WHERE id IN (SELECT id FROM $s.objects WHERE expires_at < now() "
-        "OR (completed_at IS NULL AND created_at < now() - interval '1 day') LIMIT 500) "
-        'RETURNING id, kind',
+        'SELECT id, kind FROM $s.objects WHERE id > @after:uuid AND '
+        "(expires_at < now() OR (completed_at IS NULL AND created_at < now() - interval '1 day')) "
+        'ORDER BY id LIMIT 500',
+        {'after': after},
       );
-      if (rows.isEmpty) return;
+      if (rows.isEmpty) break;
       for (final r in rows) {
-        await _blobs.delete(_key(_kind(r), r.string('id')));
+        if (!await _deleteObject(r)) failed++;
       }
+      after = rows.last.string('id');
     }
+    if (failed > 0) log.warn('media_delete_failed', {'count': failed});
   }
 
+  /// Every object of a deleted account, blob before row. Throws when a blob
+  /// could not be deleted, so the job retries the rows that are left.
   Future<void> _purgeAccount(Map<String, Object?> payload) async {
     final account = payload['account']! as String;
     final rows = await context.db.query(
-      'DELETE FROM $s.objects WHERE owner_account = @a:uuid RETURNING id, kind',
+      'SELECT id, kind FROM $s.objects WHERE owner_account = @a:uuid',
       {'a': account},
     );
+    var failed = 0;
     for (final r in rows) {
-      await _blobs.delete(_key(_kind(r), r.string('id')));
+      if (!await _deleteObject(r)) failed++;
     }
+    if (failed > 0) {
+      throw StateError('$failed media blobs could not be deleted');
+    }
+  }
+
+  /// Deletes one object's blob, then its row. False (row kept) when the
+  /// blob delete failed.
+  Future<bool> _deleteObject(Row r) async {
+    final id = r.string('id');
+    try {
+      await _blobs.delete(_key(_kind(r), id));
+    } on Object {
+      return false;
+    }
+    await context.db.execute('DELETE FROM $s.objects WHERE id = @id:uuid', {
+      'id': id,
+    });
+    return true;
+  }
+
+  /// Blobs with no row, older than [orphanGrace]: left by a crash between
+  /// the two deletes, or by a delete that failed before rows were kept for
+  /// a retry. Weekly; returns how many were deleted (public for tests).
+  Future<int> sweepOrphans() async {
+    var removed = 0;
+    final cutoff = context.clock.now().subtract(orphanGrace);
+    for (final kind in MediaKind.values) {
+      final batch = <String, StoredObject>{};
+      Future<void> flush() async {
+        if (batch.isEmpty) return;
+        final known = {
+          for (final r in await context.db.query(
+            'SELECT id FROM $s.objects WHERE id = ANY(@ids:_uuid)',
+            {'ids': batch.keys.toList()},
+          ))
+            r.string('id'),
+        };
+        for (final MapEntry(key: id, value: object) in batch.entries) {
+          if (known.contains(id)) continue;
+          try {
+            await _blobs.delete(object.key);
+            removed++;
+          } on Object {
+            // Tried again next week.
+          }
+        }
+        batch.clear();
+      }
+
+      await for (final object in _blobs.list('${kind.wire}/')) {
+        final id = object.key.substring(kind.wire.length + 1);
+        if (!Uuid.isValid(id) || object.modified.isAfter(cutoff)) continue;
+        batch[id] = object;
+        if (batch.length >= 500) await flush();
+      }
+      await flush();
+    }
+    if (removed > 0) log.info('media_orphans_removed', {'count': removed});
+    return removed;
   }
 }
 

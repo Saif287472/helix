@@ -32,7 +32,13 @@ abstract interface class ObjectStorage {
   /// Reads bytes `[start, endInclusive]` (whole object by default).
   Stream<List<int>> read(String key, {int start = 0, int? endInclusive});
 
+  /// Deletes [key]; nothing happens if it does not exist.
   Future<void> delete(String key);
+
+  /// Every object under the key prefix [prefix] (`attachment/`), with the
+  /// time it last changed. For the media module's orphan sweep; order is
+  /// not defined.
+  Stream<StoredObject> list(String prefix);
 
   /// A presigned PUT for exactly [contentLength] bytes: the length is a
   /// signed header, so the store refuses any other size.
@@ -41,6 +47,14 @@ abstract interface class ObjectStorage {
   Uri presignGet(String key, Duration ttl);
 
   Future<bool> ping();
+}
+
+/// One entry of [ObjectStorage.list].
+final class StoredObject {
+  const StoredObject(this.key, this.modified);
+
+  final String key;
+  final DateTime modified;
 }
 
 final class ObjectTooLarge implements Exception {
@@ -124,6 +138,20 @@ final class LocalObjectStorage implements ObjectStorage {
   Future<void> delete(String key) async {
     final file = _file(key);
     if (await file.exists()) await file.delete();
+  }
+
+  @override
+  Stream<StoredObject> list(String prefix) async* {
+    final dir = Directory(p.join(root, prefix));
+    if (!p.isWithin(root, p.normalize(dir.path)) || !await dir.exists()) {
+      return;
+    }
+    await for (final entry in dir.list(recursive: true, followLinks: false)) {
+      if (entry is! File) continue;
+      final key = p.relative(entry.path, from: root).replaceAll(r'\', '/');
+      if (!_key.hasMatch(key)) continue;
+      yield StoredObject(key, (await entry.lastModified()).toUtc());
+    }
   }
 
   @override
@@ -262,6 +290,43 @@ final class S3ObjectStorage implements ObjectStorage {
       throw HttpException('S3 DELETE failed (${response.statusCode})');
     }
   }
+
+  /// ListObjectsV2, a page of up to 1000 keys at a time.
+  @override
+  Stream<StoredObject> list(String prefix) async* {
+    String? token;
+    do {
+      final uri = _bucketUri().replace(
+        queryParameters: {
+          'list-type': '2',
+          'prefix': prefix,
+          'continuation-token': ?token,
+        },
+      );
+      final response = await _signed(AWSHttpMethod.get, uri);
+      if (response.statusCode != 200) {
+        throw HttpException('S3 LIST failed (${response.statusCode})');
+      }
+      final body = response.body;
+      for (final m in _contents.allMatches(body)) {
+        final entry = m.group(1)!;
+        final key = _tag('Key', entry);
+        final modified = DateTime.tryParse(_tag('LastModified', entry) ?? '');
+        if (key == null || modified == null) continue;
+        yield StoredObject(key, modified.toUtc());
+      }
+      token = _tag('IsTruncated', body) == 'true'
+          ? _tag('NextContinuationToken', body)
+          : null;
+    } while (token != null);
+  }
+
+  static final _contents = RegExp(r'<Contents>(.*?)</Contents>', dotAll: true);
+
+  /// The text of the first `<name>` element in [xml] (keys here are
+  /// `[a-z0-9_/-]`, so no entity decoding is needed).
+  static String? _tag(String name, String xml) =>
+      RegExp('<$name>(.*?)</$name>', dotAll: true).firstMatch(xml)?.group(1);
 
   @override
   Future<bool> ping() async {
