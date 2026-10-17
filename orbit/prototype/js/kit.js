@@ -52,7 +52,9 @@ const Kit = (() => {
 
   /** KeyCodeDisplay: label over a large monospaced code */
   function code(label, value, opts = {}) {
-    return `<div class="codebox ${opts.cls || ''}"><span class="eyebrow">${esc(label)}</span><span class="cb-code">${esc(value)}</span>${opts.note ? `<span class="cb-note">${opts.note}</span>` : ''}</div>`;
+    // groups: wrap only between dash-separated groups, never inside one.
+    const shown = opts.groups ? value.split('-').map((g, i, a) => `<span class="cb-grp">${esc(g)}${i < a.length - 1 ? '-' : ''}</span>`).join('') : esc(value);
+    return `<div class="codebox ${opts.cls || ''}"><span class="eyebrow">${esc(label)}</span><span class="cb-code">${shown}</span>${opts.note ? `<span class="cb-note">${opts.note}</span>` : ''}</div>`;
   }
 
   function progress(p) {
@@ -82,6 +84,54 @@ const Kit = (() => {
   function page({ title, sub, body, actions = '', back = true, cls = '' }) {
     return `${UI.appbar({ title, sub, back, actions })}<div class="scroll ${cls}" data-keep-scroll="page" style="padding-bottom:40px">${body}</div>`;
   }
+
+  // ------------------------------------------------------------ You style
+  // The parts every You-style page is built from (the You page, its topics and
+  // the pages under them). Flutter: OrbitTopicPage, OrbitSummaryCard,
+  // OrbitStatusRing, OrbitSection, OrbitDangerZone, OrbitStepPills, OrbitRules.
+
+  /** A You-style page: the flat header on the page colour, then the body. */
+  function youPage(title, body, { close = false, back = true, keep = 'topic' } = {}) {
+    const lead = !back ? '<span style="width:8px"></span>' : close ? ibtn('x', 'Close', 'data-back') : ibtn('arrow-left', 'Back', 'data-back');
+    return `<header class="appbar flat you-bar">${lead}<div class="ab-title"><h1>${title}</h1></div></header><div class="scroll" data-keep-scroll="${keep}" style="padding-bottom:36px">${body}</div>`;
+  }
+
+  /**
+   * The summary card at the top of a You-style page.
+   * { ic, title, sub, pills: [{ icon, text, tone }], slot, tone, art }
+   * tone ok | warn | danger tints the icon; art replaces the icon (a ring, an avatar).
+   */
+  function hero({ ic, title, sub, pills = [], slot = '', tone = '', art = '' }) {
+    const lead = art || `<span class="hc-ico">${icon(ic, 'fill')}</span>`;
+    return `<div class="hero-card ${tone ? `tone-${tone}` : ''}"><div class="hc-top">${lead}<div class="hc-text"><div class="hc-title">${title}</div>${sub ? `<div class="hc-sub">${sub}</div>` : ''}</div></div>
+      ${slot}${pills.length ? `<div class="hc-pills">${pills.map((p) => `<span class="hc-pill ${p.tone || ''}">${icon(p.icon, p.tone ? 'fill' : '')}${p.text}</span>`).join('')}</div>` : ''}</div>`;
+  }
+
+  /** Status ring: ok | bad | run (with p from 0 to 1) | idle (with an icon). */
+  function ring(state, { p = 0, ic = 'cloud-arrow-down' } = {}) {
+    if (state === 'run') return `<span class="b-ring run" style="--p:${p}"><span>${Math.round(p * 100)}%</span></span>`;
+    if (state === 'bad') return `<span class="b-ring bad">${icon('warning', 'fill')}</span>`;
+    if (state === 'ok') return `<span class="b-ring ok">${icon('check', 'bold')}</span>`;
+    return `<span class="b-ring idle">${icon(ic)}</span>`;
+  }
+
+  /** The red-edged danger zone at the bottom of a page. */
+  function danger(rows, footer) {
+    return `<div class="group-title eyebrow dz-title">Danger zone</div><div class="card danger-zone">${rows.join('')}</div>${footer ? `<p class="sec-foot">${footer}</p>` : ''}`;
+  }
+
+  /** Where a flow is: [label] with the current index; earlier steps show a tick. */
+  function steps(labels, current) {
+    return `<div class="hc-pills step-pills" aria-label="Step ${current + 1} of ${labels.length}">${labels.map((l, i) => `<span class="hc-pill ${i < current ? 'ok' : i === current ? 'accent' : ''}">${i < current ? icon('check-circle', 'fill') : `<b class="sp-n">${i + 1}</b>`}${l}</span>`).join('')}</div>`;
+  }
+
+  /** Rules that tick as the person types: [{ ok, text }]. */
+  function rules(list) {
+    return `<div class="rules" aria-live="polite">${list.map((r) => `<span class="rule ${r.ok ? 'ok' : ''}">${icon(r.ok ? 'check-circle' : 'circle', r.ok ? 'fill' : '')}${r.text}</span>`).join('')}</div>`;
+  }
+
+  /** A card that holds fields rather than rows. */
+  const formCard = (html) => `<div class="card form-card">${html}</div>`;
 
   /** Wire the common behaviour of kit pages. */
   function wire(el, entry) {
@@ -137,5 +187,5 @@ const Kit = (() => {
     h.panel.querySelector('[data-ok]').addEventListener('click', () => { h.close(); run && run(inp.value); });
   }
 
-  return { field, seg, notice, intro, qr, code, progress, check, section, sw, choice, page, wire, confirm, inputDialog };
+  return { field, seg, notice, intro, qr, code, progress, check, section, sw, choice, page, wire, confirm, inputDialog, youPage, hero, ring, danger, steps, rules, formCard };
 })();

@@ -197,27 +197,32 @@
   });
 
   // ------------------------------------------------- restore step / history
+  // You style: a status ring card says where the restore is (ready, running,
+  // nothing found, done); offers from your other devices sit under it.
   function restorePage(params, st) {
     const after = !!params.afterSignIn;
     const phase = st.phase || 'idle';
     const phases = ['Looking for your backup...', 'Downloading your backup...', 'Unlocking it...', 'Adding messages...'];
-    let status = '';
-    if (phase === 'running') status = `<div class="pad" style="margin-top:16px;font-weight:600">${phases[st.p || 0]}</div>${Kit.progress((st.p || 0) / 4 + 0.1)}<div class="pad" style="margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--ink-3)">${st.p >= 3 ? '1,204 messages added so far' : ''}</div>`;
-    if (phase === 'failed') status = notice('error', 'No backup was found for this account. Back up on your other phone first, then try again.');
-    if (phase === 'done') status = notice('success', 'Restored 2,318 messages.');
+    const p = Math.min(0.95, (st.p || 0) / 4 + 0.1);
+    const card = {
+      idle: { art: Kit.ring('idle'), title: after ? 'Bring your chats back' : 'Restore from your backup', sub: 'Text messages only · files are not in the backup' },
+      running: { art: Kit.ring('run', { p }), title: phases[st.p || 0], sub: st.p >= 3 ? '1,204 messages added so far' : 'Encrypted with a key only your devices have' },
+      failed: { art: Kit.ring('bad'), title: 'No backup was found', sub: 'Back up on your other phone first, then try again' },
+      done: { art: Kit.ring('ok'), title: 'Restored 2,318 messages', sub: 'Messages already here were kept' },
+    }[phase];
     const offers = after || params.offer ? `<div class="group-title eyebrow">From your other devices</div>
       <div class="xfer" style="margin-top:0"><div class="xf-title">${icon('device-mobile', 'fill')}History from Galaxy S23</div><div class="xf-status">Ready to receive. Nothing is downloaded until you accept.</div>
       <div class="xf-actions"><button class="btn primary" data-snack="Receiving your history">Accept</button><button class="btn secondary" data-snack="Declined">Decline</button></div></div>
-      <div style="height:1px;background:var(--line);margin:18px var(--gutter) 0"></div>` : '';
+      <div class="group-title eyebrow">From your backup</div>` : '';
     const buttons = phase === 'done'
       ? `<div class="btn-row"><button class="btn primary block" data-continue>${after ? 'Continue' : 'Done'}</button></div>`
       : `<div class="btn-row" style="flex-direction:column">
-          <button class="btn primary block" data-restore ${phase === 'running' ? 'disabled style="opacity:.6"' : ''}>${icon('cloud-arrow-down')}${phase === 'failed' ? 'Try again' : 'Restore from my backup'}</button>
+          <button class="btn primary block" data-restore ${phase === 'running' ? 'disabled' : ''}>${icon('cloud-arrow-down')}${phase === 'failed' ? 'Try again' : 'Restore from my backup'}</button>
           <button class="btn secondary block" data-go="recovery" data-params='{"tab":"restore"}'>${icon('key')}I have a recovery secret</button>
           ${after ? '<button class="btn ghost block" data-skip>Skip for now</button>' : ''}</div>`;
-    return `${Kit.intro(after ? 'Welcome back' : '', 'Text messages you backed up can come back to this phone. Files are not in the backup. Messages already here are kept.')}
-      ${offers}${status}${buttons}
-      ${after ? '<p class="sec-foot" style="text-align:center;margin-top:16px">You can restore later from Settings, Backup.</p>' : ''}`;
+    return `${after ? Kit.intro('Welcome back', '') : ''}${offers}${Kit.hero(card)}
+      ${buttons}
+      <p class="sec-foot" style="text-align:center;margin-top:16px">${after ? 'You can restore later from You, Backup.' : 'Text messages you backed up come back to this device. Messages already here are kept.'}</p>`;
   }
 
   App.register({
@@ -230,7 +235,7 @@
     ],
     render(params, entry) {
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, phase: params.phase, p: params.p });
-      return Kit.page({ title: params.afterSignIn ? 'Restore your chats' : 'Restore history', back: !params.afterSignIn, body: restorePage(params, st) });
+      return Kit.youPage(params.afterSignIn ? 'Restore your chats' : 'Restore history', restorePage(params, st), { back: !params.afterSignIn });
     },
     mount(el, params, entry) {
       const st = entry.state; Kit.wire(el, entry);

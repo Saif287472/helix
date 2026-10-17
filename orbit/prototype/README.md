@@ -127,7 +127,7 @@ table in `js/app.js` says where each screen opens.
 | `css/window.css` | The Windows layout: panes, title bar, sign-in box, overlays on a window | `OrbitWindowScaffold` and the wide routes |
 | `css/pages.css` | Fields, segmented controls, notices, QR, code boxes, sign-in, settings-style pages | `helix_remote_ui` form and page widgets |
 | `js/ui.js` | Component functions that take view-model-shaped data | `HelixChatListTile`, `HelixMessageBubble`, … |
-| `js/kit.js` | Page kit: field, segmented, notice, intro, QR, code box, progress, checkbox, section, switch and choice rows | `HelixTextField`, `InlineNotice`, `KeyCodeDisplay`, … |
+| `js/kit.js` | Page kit: field, segmented, notice, intro, QR, code box, progress, checkbox, section, switch and choice rows, and the You-style parts (page, summary card, status ring, steps, rules, danger zone) | `HelixTextField`, `InlineNotice`, `KeyCodeDisplay`, `OrbitSummaryCard`, … |
 | `js/data.js` | Sample data shaped like `view_models.dart` | (the app's real providers) |
 | `js/screens/*.js` | Screens and their states: `signin`, `home`, `conversation`, `chat_pages`, `calls`, `people`, `groups`, `settings`, `devices_backup`, `you`, `topics` | `features/*/presentation` |
 | `assets/orbit-mark.svg` | The Orbit logo mark (sign-in, viewer) | the new app icon |
@@ -172,9 +172,8 @@ the phone and in the Windows window.
 - **Backup:** the backup page, restore history, sending to your other devices,
   and the recovery backup.
 
+Every settings page now uses the You style (`SCREENS.md` design change 16).
+
 **Still to do (Phase 0 of `../PORT_PLAN.md`):**
-- Restyle the older pages in the You style: Help and about, Advanced,
-  Blocked, Change password, Delete account, Restore, Send to your devices,
-  Recovery backup, Security activity and Link a device.
 - Note each screen's interactions in `screens.json`.
 - Then the Flutter port, but only when you say the design is final.

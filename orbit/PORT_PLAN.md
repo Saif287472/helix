@@ -152,7 +152,8 @@ Progress:
 - [x] The wide Windows layout (2026-10-17, `SCREENS.md` design change 15).
 - [x] Bare mode, `tools/shoot.py` and `tools/manifest.py` writing
   `screens.json` (181 screen states, each with its window placement).
-- [ ] The older-style pages restyled in the You style.
+- [x] The older-style pages restyled in the You style (2026-10-17,
+  `SCREENS.md` design change 16).
 - [ ] Each screen's interactions noted in `screens.json`.
 
 **Review 0:** you approve the finished designs.

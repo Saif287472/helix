@@ -9,7 +9,8 @@
 */
 (() => {
   const { esc, icon, ibtn, avatar, row } = UI;
-  const { sw, wire, confirm, progress } = Kit;
+  const { sw, wire, confirm, progress, hero, section, danger } = Kit;
+  const page = (title, body) => Kit.youPage(title, body);
   const base = [{ screen: 'home', params: { tab: 'chats' } }, { screen: 'settings-page', params: {} }];
 
   // Shared, so a change made on one page shows on the You tiles and survives navigation.
@@ -24,10 +25,7 @@
   const set = (path, v) => { const ks = path.split('.'); const last = ks.pop(); ks.reduce((o, k) => o[k], P)[last] = v; };
 
   // ------------------------------------------------------------- shared parts
-  function hero({ ic, title, sub, pills = [], slot = '' }) {
-    return `<div class="hero-card"><div class="hc-top"><span class="hc-ico">${icon(ic, 'fill')}</span><div class="hc-text"><div class="hc-title">${title}</div><div class="hc-sub">${sub}</div></div></div>
-      ${slot}${pills.length ? `<div class="hc-pills">${pills.map((p) => `<span class="hc-pill ${p.tone || ''}">${icon(p.icon, p.tone ? 'fill' : '')}${p.text}</span>`).join('')}</div>` : ''}</div>`;
-  }
+  // hero, section, danger and the page frame come from Kit (the You style).
   // A setting whose few choices sit inline under its title.
   function segRow(path, title, sub, options, ic, color) {
     const v = get(path);
@@ -35,9 +33,6 @@
       <div class="seg sm" role="radiogroup" aria-label="${esc(title)}">${options.map((o) => `<button role="radio" aria-checked="${o === v}" class="${o === v ? 'on' : ''}" data-pref="${path}" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>`;
   }
   const swPref = (path, title, sub, ic, color) => row({ icon: ic, color, title, sub, end: 'switch', on: !!get(path), attrs: `data-switch data-pref-bool="${path}"` });
-  const section = (title, items, foot) => `${title ? `<div class="group-title eyebrow">${title}</div>` : '<div style="height:14px"></div>'}<div class="card">${items.join('')}</div>${foot ? `<p class="sec-foot">${foot}</p>` : ''}`;
-  const danger = (items, foot) => `<div class="group-title eyebrow dz-title">Danger zone</div><div class="card danger-zone">${items.join('')}</div>${foot ? `<p class="sec-foot">${foot}</p>` : ''}`;
-  const page = (title, body) => `<header class="appbar flat you-bar">${ibtn('arrow-left', 'Back', 'data-back')}<div class="ab-title"><h1>${title}</h1></div></header><div class="scroll" data-keep-scroll="topic" style="padding-bottom:36px">${body}</div>`;
 
   function wirePrefs(el, entry) {
     wire(el, entry);

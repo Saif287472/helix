@@ -212,6 +212,62 @@ When the design is ported, these need real Flutter work, not just restyling:
       screen opens. It becomes the app's routing for wide windows: list,
       detail, info or full. Screens themselves do not know which layout they
       are in. `screens.json` lists each screen state with its placement.
+16. **The pages under the topics, in the You style (2026-10-17).**
+    - **Which pages:**
+      - Change or set a password, Delete my account, Blocked.
+      - Help and about, Terms and Privacy Policy, Advanced.
+      - Link a new device, Security activity.
+      - Restore history, and the restore step after sign-in, which shares it.
+      - Send to my other devices, Recovery backup.
+    - **The shared look:** each page opens on a summary card. The card has a
+      gradient icon (or a status ring, or the Orbit logo), a title, a one-line
+      status in mono and status pills. Grouped cards and footnotes follow,
+      with live feedback where it helps.
+    - **Shared parts:**
+      - In `js/kit.js`: `Kit.youPage`, `hero`, `ring`, `steps`, `rules`,
+        `formCard`, `danger`. The topic pages use the same parts.
+      - In Flutter: `OrbitTopicPage`, `OrbitSummaryCard`, `OrbitStatusRing`,
+        `OrbitStepPills`, `OrbitRules`, `OrbitSection`, `OrbitDangerZone`.
+    - **New on these pages:**
+      - **Password:** rules tick as you type: 8 characters, not the current
+        one, and both new passwords match. The button stays off until all
+        three pass. Pills say "Checked on this device" and "Never sent to
+        Orbit".
+      - **Delete my account:**
+        - a red summary card;
+        - a "What happens" list;
+        - "Export my data first";
+        - the confirmation in a red-edged card.
+      - **Blocked:** says "Orbit tells them they are blocked", because blocks
+        are visible since ADR-030.
+      - **Help and about:**
+        - the Orbit logo card;
+        - Terms and Privacy as two tiles, each opening its own document;
+        - Server details opens Advanced.
+      - **Advanced:**
+        - status pills: Connected or "Cannot reach it", the server version,
+          and whether new accounts can join;
+        - server features as On/Off tags;
+        - an "Up to date" tag after checking.
+      - **Link a new device and Recovery backup show their steps:**
+        - Scan → Check → Done;
+        - Save the secret → Confirm → Create.
+      - **Security activity:**
+        - grouped into This week and Earlier;
+        - the key reset flagged "Check";
+        - "Something you do not recognise?" with Review your devices and
+          Change your password.
+      - **Restore:** a status ring shows ready, running with a percentage,
+        nothing found, or done.
+      - **Send to my other devices:** pills for "encrypted" and "they accept
+        it first", and how many transfers are waiting here.
+      - **Recovery secret:** it wraps only between its groups.
+    - **Copy fix:** "That is not an Orbit link code" (it said "a Orbit").
+    - **For Phase 1:** check whether the app has the data these pages show:
+      - when the password was last changed;
+      - 30 days of security activity;
+      - the server's feature flags and version;
+      - whether a recovery backup exists.
 
 ---
 

@@ -1,14 +1,25 @@
 /*
-  Settings pages and Profile. Flutter: features/settings/presentation/*,
-  features/profile/presentation/profile_page.dart. Copy from SCREENS.md.
+  The pages under You's topics, in the You style (2026-10-17): Change or set a
+  password, Delete my account, Blocked, Help and about, Terms and Privacy
+  Policy, Advanced. Each opens on a summary card (Kit.hero), then grouped
+  cards, with live feedback where it helps (password rules that tick as you
+  type). Flutter: features/settings/presentation/*. Copy from SCREENS.md.
 */
 (() => {
-  const { esc, icon, ibtn, avatar, row } = UI;
-  const { section, sw, field, intro, notice, check, wire, confirm, progress } = Kit;
+  const { esc, icon, avatar, row } = UI;
+  const { section, sw, field, notice, check, wire, progress, youPage, hero, ring, rules, formCard } = Kit;
   const base = [{ screen: 'home', params: { tab: 'chats' } }, { screen: 'settings-page', params: {} }];
   const deeper = (screen, params = {}) => [base, { screen, params }];
   const reg = (def) => App.register({ group: 'Settings', order: 60, ...def, entries: def.entries.map((e) => ({ base, ...e })) });
 
+  // ---------------------------------------------------------------- password
+  // The rules tick as you type; the password is checked on this device only.
+  function pwRules(st, set) {
+    const list = [{ ok: (st.pw1 || '').length >= 8, text: 'At least 8 characters' }];
+    if (!set) list.push({ ok: !!st.pw1 && st.pw1 !== st.pw0, text: 'Not the same as your current one' });
+    list.push({ ok: !!st.pw2 && st.pw1 === st.pw2, text: 'Both new passwords match' });
+    return list;
+  }
   reg({
     id: 'password', title: 'Change password',
     entries: [
@@ -18,25 +29,44 @@
       { key: 'password-done', label: 'Change password · saved', params: { done: true }, base: deeper('account') },
     ],
     render(params, entry) {
-      const st = entry.state; if (!st.init) Object.assign(st, { init: true, done: params.done, show: false });
+      const st = entry.state;
+      if (!st.init) Object.assign(st, { init: true, done: params.done, show: false, pw0: params.error ? 'old-password' : '', pw1: params.error ? 'sunrise-42' : '', pw2: params.error ? 'sunrise-24' : '' });
+      const title = params.set ? 'Set a password' : 'Change password';
+      if (st.done) {
+        return youPage(title, `${hero({ art: ring('ok'), title: 'Password saved', sub: 'Use it to sign in on a new phone' })}
+          <div class="btn-row"><button class="btn primary block" data-back>Done</button></div>`);
+      }
       const t = st.show ? 'text' : 'password';
-      if (st.done) return Kit.page({ title: params.set ? 'Set a password' : 'Change password', body: `${notice('success', 'Your password is saved. Use it to sign in on a new phone.')}<div class="btn-row"><button class="btn primary block" data-back>Done</button></div>` });
-      return Kit.page({ title: params.set ? 'Set a password' : 'Change password', body: `
-        ${intro('', params.set ? 'A password lets you sign in on a new phone without another device. Choose one you will remember: Orbit cannot reset it.' : 'Enter your current password, then choose a new one.')}
-        <div class="pad" style="margin-top:16px">
-          ${params.set ? '' : field({ id: 'pw0', label: 'Current password', type: t })}
-          ${field({ id: 'pw1', label: 'New password', type: t, helper: 'At least 8 characters' })}
-          ${field({ id: 'pw2', label: 'Confirm new password', type: t, error: params.error ? 'The passwords do not match.' : '' })}
-          ${check('Show passwords', st.show, 'data-show')}
-          <button class="btn primary block" style="margin-top:8px" data-save>${st.busy ? '<i class="ph ph-spinner-gap spin"></i>' : params.set ? 'Set password' : 'Change password'}</button></div>` });
+      const list = pwRules(st, params.set);
+      const mismatch = params.error && st.pw2 && st.pw1 !== st.pw2;
+      return youPage(title, `
+        ${hero(params.set
+          ? { ic: 'password', title: 'Set a password', sub: 'Sign in on a new phone without another device', pills: [{ icon: 'warning-circle', text: 'Orbit cannot reset it', tone: 'warn' }] }
+          : { ic: 'password', title: 'Change password', sub: 'Last changed 3 weeks ago', pills: [{ icon: 'device-mobile', text: 'Checked on this device' }, { icon: 'lock-simple', text: 'Never sent to Orbit' }] })}
+        <div class="group-title eyebrow">${params.set ? 'Your new password' : 'Passwords'}</div>
+        ${formCard(`${params.set ? '' : field({ id: 'pw0', label: 'Current password', type: t, value: st.pw0 })}
+          ${field({ id: 'pw1', label: 'New password', type: t, value: st.pw1 })}
+          ${field({ id: 'pw2', label: 'Confirm new password', type: t, value: st.pw2, error: mismatch ? 'The passwords do not match.' : '' })}
+          ${rules(list)}
+          ${check('Show passwords', st.show, 'data-show')}`)}
+        <div class="btn-row"><button class="btn primary block" data-save ${list.every((r) => r.ok) ? '' : 'disabled'}>${st.busy ? '<i class="ph ph-spinner-gap spin"></i>' : title}</button></div>
+        <p class="sec-foot">${params.set ? 'Choose one you will remember: Orbit cannot reset it.' : 'Only a key made from your password leaves this device, so Orbit cannot reset it.'}</p>`);
     },
     mount(el, params, entry) {
       const st = entry.state; wire(el, entry);
+      // Typing updates the rules and the button in place, so the field keeps focus.
+      el.querySelectorAll('#pw0, #pw1, #pw2').forEach((i) => i.addEventListener('input', () => {
+        st[i.id] = i.value;
+        const list = pwRules(st, params.set);
+        el.querySelector('.rules').outerHTML = rules(list);
+        el.querySelector('[data-save]').disabled = !list.every((r) => r.ok);
+      }));
       el.querySelector('[data-show]')?.addEventListener('toggle', (e) => { st.show = e.detail; el.querySelectorAll('.fld input').forEach((i) => { i.type = e.detail ? 'text' : 'password'; }); });
-      el.querySelector('[data-save]')?.addEventListener('click', () => { st.busy = true; entry.rerender(); setTimeout(() => { st.busy = false; st.done = true; entry.rerender(); }, 900); });
+      el.querySelector('[data-save]')?.addEventListener('click', () => { st.busy = true; entry.rerender(); setTimeout(() => { st.busy = false; st.done = true; if (entry.el.isConnected) entry.rerender(); }, 900); });
     },
   });
 
+  // ---------------------------------------------------------- delete account
   reg({
     id: 'delete-account', title: 'Delete my account',
     entries: [
@@ -48,15 +78,24 @@
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, sent: false, typed: '' });
       let proof = '';
       if (params.proof === 'password') proof = field({ id: 'dpw', label: 'Your password', type: 'password', eye: true, helper: 'It is checked on this phone; Orbit never sees it.' });
-      if (params.proof === 'sms') proof = st.sent ? `<p class="fld-help" style="margin:0 2px 10px">We sent a 6-digit code to ${esc(Data.me.masked)}.</p>${field({ id: 'dcode', label: 'Code', inputmode: 'numeric', max: 6, mono: true })}<button class="btn ghost" style="height:36px;padding:0 4px;margin:-6px 0 10px" data-resend>Send a new code</button>` : '<p class="fld-help" style="margin:0 2px 12px">Orbit will text a code to your phone number to check that it is you.</p>';
-      if (params.proof === 'key') proof = '<p class="fld-help" style="margin:0 2px 12px">This phone will prove it is yours with its own key. Nothing else to enter.</p>';
+      if (params.proof === 'sms') proof = st.sent ? `<p class="fld-help" style="margin:0 2px 10px">We sent a 6-digit code to ${esc(Data.me.masked)}.</p>${field({ id: 'dcode', label: 'Code', inputmode: 'numeric', max: 6, mono: true })}<button class="btn ghost" style="height:36px;padding:0 4px;margin:-6px 0 10px" data-resend>Send a new code</button>` : '<p class="fld-help" style="margin:0 2px 14px">Orbit will text a code to your phone number to check that it is you.</p>';
+      if (params.proof === 'key') proof = '<p class="fld-help" style="margin:0 2px 14px">This phone will prove it is yours with its own key. Nothing else to enter.</p>';
       const primary = params.proof === 'sms' && !st.sent ? 'Send me a code' : 'Delete my account';
-      return Kit.page({ title: 'Delete my account', body: `
-        ${intro('This cannot be undone', 'Your account, your devices and everything the server holds for you are removed. Messages on your other devices are deleted when they are signed out. People you talked to keep their copies.')}
-        <div class="pad" style="margin-top:16px">${field({ id: 'dtype', label: 'Type DELETE to confirm', hint: 'DELETE', mono: true, value: st.typed })}${proof}
-        ${st.busy ? progress(null) : ''}
-        <button class="btn danger block" style="margin-top:8px" data-del>${icon('trash')}${primary}</button>
-        <button class="btn secondary block" style="margin-top:10px" data-back>Cancel</button></div>` });
+      const what = (ic, title) => row({ icon: ic, color: 7, title, tag: 'div' });
+      return youPage('Delete my account', `
+        ${hero({ ic: 'warning', tone: 'danger', title: 'Delete your account', sub: 'Permanent · every device · cannot be undone' })}
+        ${section('What happens', [
+          what('user-minus', 'Your account and your devices are removed'),
+          what('cloud-x', 'Everything the server holds for you is deleted'),
+          what('devices', 'Your other devices lose their messages when they are signed out'),
+          what('chats', 'People you talked to keep their copies'),
+        ])}
+        ${section('', [row({ icon: 'export', color: 2, title: 'Export my data first', sub: 'Account details, devices and settings', end: 'chevron', attrs: 'data-snack="Opens the share sheet with orbit-account.json"' })])}
+        <div class="group-title eyebrow dz-title">Confirm it is you</div>
+        <div class="card form-card danger-zone">${field({ id: 'dtype', label: 'Type DELETE to confirm', hint: 'DELETE', mono: true, value: st.typed })}${proof}</div>
+        ${st.busy ? `<div class="pad" style="margin-top:14px">${progress(null)}</div>` : ''}
+        <div class="btn-row" style="flex-direction:column"><button class="btn danger block" data-del>${icon('trash')}${primary}</button>
+          <button class="btn secondary block" data-back>Cancel</button></div>`);
     },
     mount(el, params, entry) {
       const st = entry.state; wire(el, entry);
@@ -71,29 +110,47 @@
     },
   });
 
+  // ----------------------------------------------------------------- blocked
+  // Since ADR-030 a blocked person is told they are blocked, so the page says so.
   reg({
     id: 'blocked', title: 'Blocked',
     entries: [{ key: 'blocked', label: 'Blocked', params: {}, base: deeper('privacy') }, { key: 'blocked-empty', label: 'Blocked · nobody', params: { empty: true }, base: deeper('privacy') }],
     render(params, entry) {
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, list: params.empty ? [] : ['shuvo'] });
-      if (!st.list.length) return Kit.page({ title: 'Blocked', body: UI.empty({ icon: 'prohibit', title: 'Nobody is blocked', text: 'People you block cannot message or call you. Block someone from their chat.' }) });
-      return Kit.page({ title: 'Blocked', body: `<div style="height:14px"></div><div class="card">${st.list.map((id) => `<div class="row">${avatar(Data.av(Data.people[id]), 40)}<span class="rw-body"><span class="rw-title" style="display:block">${esc(Data.displayName(Data.people[id]))}</span><span class="rw-sub mono" style="display:block">${esc(Data.people[id].names.number)}</span></span><button class="btn secondary" style="height:38px" data-unblock="${id}">Unblock</button></div>`).join('')}</div>` });
+      const n = st.list.length;
+      const person = (id) => { const p = Data.people[id]; return `<div class="row">${avatar(Data.av(p), 40)}<span class="rw-body"><span class="rw-title" style="display:block">${esc(Data.displayName(p))}</span><span class="rw-sub mono" style="display:block">${esc(p.names.number)}</span></span><button class="btn secondary" style="height:38px" data-unblock="${id}">Unblock</button></div>`; };
+      return youPage('Blocked', `
+        ${hero({ ic: 'prohibit', title: n ? `${n} blocked ${n === 1 ? 'person' : 'people'}` : 'Nobody is blocked', sub: n ? 'They cannot message or call you' : 'People you block cannot message or call you',
+          pills: [{ icon: 'eye', text: 'Orbit tells them they are blocked' }] })}
+        ${n ? section('Blocked', st.list.map(person)) : ''}
+        <p class="sec-foot">${n ? '' : 'Nobody is blocked. '}To block someone, open their chat or their contact page.</p>`);
     },
     mount(el, params, entry) {
       wire(el, entry);
-      el.querySelectorAll('[data-unblock]').forEach((b) => b.addEventListener('click', () => App.dialog({ title: 'Unblock Shuvo?', text: 'They will be able to message and call you again.', actions: [{ label: 'Cancel' }, { label: 'Unblock', kind: 'primary', run: () => { entry.state.list = []; entry.rerender(); } }] })));
+      el.querySelectorAll('[data-unblock]').forEach((b) => b.addEventListener('click', () => App.dialog({ title: `Unblock ${Data.displayName(Data.people[b.dataset.unblock])}?`, text: 'They will be able to message and call you again.', actions: [{ label: 'Cancel' }, { label: 'Unblock', kind: 'primary', run: () => { entry.state.list = entry.state.list.filter((x) => x !== b.dataset.unblock); entry.rerender(); App.snack('Unblocked'); } }] })));
     },
   });
 
   // ------------------------------------------------------------ about, legal
+  const DOCS = {
+    terms: ['Orbit Terms of Service', '3', 'These terms explain how you may use Orbit and what we promise in return.\n\nYour account. You sign up with your phone number. Keep your password and your devices safe.\n\nYour messages. Messages and calls are end-to-end encrypted. The server stores them only until they are delivered and cannot read them.\n\nAcceptable use. Do not use Orbit to send spam, to harass people, or to break the law.'],
+    privacy: ['Orbit Privacy Policy', '4', 'What the server keeps: your phone number, your devices and their public keys, and encrypted messages until they are delivered.\n\nWhat it never sees: the content of your messages and calls, your profile name, about line and picture.\n\nContacts are hashed on your phone before any check; names never leave it.'],
+  };
   reg({
     id: 'about', title: 'Help and about',
     entries: [{ key: 'about', label: 'Help and about', params: {} }],
     render() {
-      return Kit.page({ title: 'Help and about', body: `
-        ${section('Orbit', [row({ icon: 'info', color: 0, title: 'Version', value: '<span class="mono">2.0.0 (412)</span>', tag: 'div' }), row({ icon: 'globe-simple', color: 1, title: 'Server', sub: `Orbit Global (${Data.me.host})`, tag: 'div' })])}
-        ${section('Legal', [row({ icon: 'scroll', color: 2, title: 'Terms of Service and Privacy Policy', sub: 'Terms 3, privacy 4', end: 'chevron', attrs: 'data-go="legal"' }), row({ icon: 'code', color: 7, title: 'Open-source licences', end: 'chevron', attrs: 'data-snack="Opens Flutter’s licence page"' })])}
-        ${section('Diagnostics', [sw('Send crash reports', 'Only the error’s type, the app version and the platform', false)], 'A crash report never contains messages, names, numbers or keys.')}` });
+      const doc = (k, ic, color, title) => `<button class="stile" data-go="legal" data-params='{"doc":"${k}"}'><span class="rw-ico av-${color}">${icon(ic)}</span><span class="st-title">${title}</span><span class="st-meta">Version ${DOCS[k][1]}</span></button>`;
+      return youPage('Help and about', `
+        ${hero({ art: '<span class="hc-logo" role="img" aria-label="Orbit"></span>', title: 'Orbit', sub: 'Version 2.0.0 (412)',
+          pills: [{ icon: 'globe-simple', text: 'Orbit Global' }, { icon: 'lock-simple', text: 'End-to-end encrypted' }] })}
+        <div class="group-title eyebrow">Legal</div>
+        <div class="stiles" style="padding-top:0">${doc('terms', 'scroll', 2, 'Terms of Service')}${doc('privacy', 'shield-check', 3, 'Privacy Policy')}</div>
+        ${section('More', [
+          row({ icon: 'hard-drives', color: 1, title: 'Server details', sub: `Orbit Global (${Data.me.host})`, end: 'chevron', attrs: 'data-go="advanced"' }),
+          row({ icon: 'code', color: 7, title: 'Open-source licences', end: 'chevron', attrs: 'data-snack="Opens Flutter’s licence page"' }),
+        ])}
+        ${section('Diagnostics', [sw('Send crash reports', 'Only the error’s type, the app version and the platform', false)], 'A crash report never contains messages, names, numbers or keys.')}`);
     },
     mount(el, params, entry) { wire(el, entry); },
   });
@@ -102,11 +159,10 @@
     id: 'legal', title: 'Terms and Privacy Policy',
     entries: [{ key: 'legal', label: 'Terms and Privacy Policy', params: {}, base: deeper('about') }],
     render(params, entry) {
-      const st = entry.state; st.doc = st.doc || 'terms';
-      const docs = { terms: ['Orbit Terms of Service', '3', 'These terms explain how you may use Orbit and what we promise in return.\n\nYour account. You sign up with your phone number. Keep your password and your devices safe.\n\nYour messages. Messages and calls are end-to-end encrypted. The server stores them only until they are delivered and cannot read them.\n\nAcceptable use. Do not use Orbit to send spam, to harass people, or to break the law.'], privacy: ['Orbit Privacy Policy', '4', 'What the server keeps: your phone number, your devices and their public keys, and encrypted messages until they are delivered.\n\nWhat it never sees: the content of your messages and calls, your profile name, about line and picture.\n\nContacts are hashed on your phone before any check; names never leave it.'] };
-      const [t, v, b] = docs[st.doc];
-      return Kit.page({ title: 'Terms and Privacy Policy', body: `<div class="pad" style="margin-top:12px">${Kit.seg([['terms', 'Terms', 'file-text'], ['privacy', 'Privacy', 'shield-check']], st.doc, 'data-doc')}</div>
-        <div class="pintro"><h2>${t}</h2><p class="mono" style="font-size:11.5px">Version ${v}</p></div><div class="legal-body">${esc(b)}</div>` });
+      const st = entry.state; st.doc = st.doc || params.doc || 'terms';
+      const [t, v, b] = DOCS[st.doc];
+      return youPage('Terms and Privacy Policy', `<div class="pad" style="margin-top:6px">${Kit.seg([['terms', 'Terms', 'file-text'], ['privacy', 'Privacy', 'shield-check']], st.doc, 'data-doc')}</div>
+        <div class="card doc-card"><div class="doc-head"><h2>${t}</h2><span class="tag">Version ${v}</span></div><div class="legal-body">${esc(b)}</div></div>`, { keep: 'legal' });
     },
     mount(el, params, entry) { wire(el, entry); el.querySelectorAll('[data-doc]').forEach((b) => b.addEventListener('click', () => { entry.state.doc = b.dataset.doc; entry.rerender(); })); },
   });
@@ -117,19 +173,22 @@
     entries: [{ key: 'advanced', label: 'Advanced', params: {} }, { key: 'advanced-offline', label: 'Advanced · server unreachable', params: { offline: true } }],
     render(params, entry) {
       const st = entry.state;
-      const fact = (t, v) => row({ title: t, value: `<span class="mono">${v}</span>`, tag: 'div' });
-      const feat = (t, on) => row({ title: t, value: on ? 'On' : 'Off', end: icon(on ? 'check-circle' : 'circle', on ? 'fill' : ''), tag: 'div' });
-      return Kit.page({ title: 'Advanced', body: `
+      const fact = (ic, color, t, v) => row({ icon: ic, color, title: t, value: `<span class="mono">${v}</span>`, tag: 'div' });
+      const feat = (t, on) => row({ title: t, end: `<span class="tag ${on ? 'success' : ''}">${on ? 'On' : 'Off'}</span>`, tag: 'div' });
+      const pills = params.offline
+        ? [{ icon: 'warning-circle', text: 'Cannot reach it', tone: 'warn' }]
+        : [{ icon: 'check-circle', text: 'Connected', tone: 'ok' }, { icon: 'tag', text: 'Server 2.0.4' }, { icon: 'user-plus', text: 'New accounts can join' }];
+      const sync = st.syncing ? '<i class="ph ph-spinner-gap spin"></i>' : st.synced ? `<span class="tag success">${icon('check', 'bold')}Up to date</span>` : '';
+      return youPage('Advanced', `
+        ${hero({ ic: 'hard-drives', title: 'Orbit Global', sub: Data.me.host, pills, tone: params.offline ? 'warn' : '' })}
         ${params.offline ? notice('error', 'The server could not be reached, so its details are not available.', { label: 'Try again', attr: 'data-snack="Trying again…"' })
-          : `${section('Server', [fact('Name', 'Orbit Global'), fact('Address', Data.me.host), fact('Server version', '2.0.4'), fact('New accounts', 'Can join'), fact('Largest attachment', '100 MB'), fact('Terms version', '3'), fact('Privacy policy version', '4')])}
+          : `${section('Limits and documents', [fact('paperclip', 2, 'Largest attachment', '100 MB'), fact('scroll', 3, 'Terms version', '3'), fact('shield-check', 1, 'Privacy policy version', '4')])}
           ${section('Server features', [feat('Crash reports accepted', true), feat('Minimal usage counts', false), feat('Group calls', false)], 'Switched by the server’s operator.')}`}
-        ${st.synced ? notice('success', 'Up to date.') : ''}
-        ${section('Connection', [row({ icon: 'arrows-clockwise', color: 0, title: 'Check for messages now', end: st.syncing ? '<i class="ph ph-spinner-gap spin"></i>' : '', attrs: 'data-sync' })], 'Orbit keeps a live connection to the server while it is open, so this is rarely needed.')}` });
+        ${section('Connection', [row({ icon: 'arrows-clockwise', color: 0, title: 'Check for messages now', end: sync, attrs: 'data-sync' })], 'Orbit keeps a live connection to the server while it is open, so this is rarely needed.')}`);
     },
     mount(el, params, entry) {
       const st = entry.state; wire(el, entry);
       el.querySelector('[data-sync]').addEventListener('click', () => { st.syncing = true; st.synced = false; entry.rerender(); setTimeout(() => { st.syncing = false; st.synced = true; if (entry.el.isConnected) entry.rerender(); }, 900); });
     },
   });
-
 })();
