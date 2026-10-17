@@ -1,0 +1,3655 @@
+{
+ "devices": {
+  "phone": {
+   "w": 412,
+   "h": 866,
+   "label": "Phone"
+  },
+  "window-m": {
+   "w": 960,
+   "h": 720,
+   "label": "Window 960"
+  },
+  "window-l": {
+   "w": 1280,
+   "h": 800,
+   "label": "Window 1280"
+  }
+ },
+ "listWidth": 380,
+ "placement": {
+  "home": "list",
+  "archived": "list",
+  "settings-page": "list",
+  "group-new": "list",
+  "group-join": "list",
+  "chat": "detail",
+  "call-detail": "detail",
+  "contact": "info",
+  "group-info": "info",
+  "shared": "info",
+  "chat-settings": "info",
+  "message-info": "info",
+  "call": "full",
+  "media-viewer": "full",
+  "signin": "full",
+  "reset": "full",
+  "lock": "full"
+ },
+ "screens": [
+  {
+   "key": "signin",
+   "group": "Sign-in",
+   "label": "Sign in · phone",
+   "screen": "signin",
+   "params": {
+    "step": "phone"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-phone-error",
+   "group": "Sign-in",
+   "label": "Sign in · phone error",
+   "screen": "signin",
+   "params": {
+    "step": "phone",
+    "phone": "1711 00",
+    "error": "badPhone"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-offline",
+   "group": "Sign-in",
+   "label": "Sign in · cannot reach server",
+   "screen": "signin",
+   "params": {
+    "step": "phone",
+    "phone": "1711 000001",
+    "error": "offline"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-code",
+   "group": "Sign-in",
+   "label": "SMS code",
+   "screen": "signin",
+   "params": {
+    "step": "code",
+    "phone": "1711 000001"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-code-error",
+   "group": "Sign-in",
+   "label": "SMS code · wrong code",
+   "screen": "signin",
+   "params": {
+    "step": "code",
+    "phone": "1711 000001",
+    "code": "482910",
+    "error": "badCode"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-password",
+   "group": "Sign-in",
+   "label": "Password (welcome back)",
+   "screen": "signin",
+   "params": {
+    "step": "password",
+    "phone": "1711 000001"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-password-error",
+   "group": "Sign-in",
+   "label": "Password · too many tries",
+   "screen": "signin",
+   "params": {
+    "step": "password",
+    "phone": "1711 000001",
+    "error": "lockedPass"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-name",
+   "group": "Sign-in",
+   "label": "New account · your name",
+   "screen": "signin",
+   "params": {
+    "step": "name",
+    "phone": "1711 000001"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-name-terms",
+   "group": "Sign-in",
+   "label": "New account · terms not accepted",
+   "screen": "signin",
+   "params": {
+    "step": "name",
+    "phone": "1711 000001",
+    "name": "Hasan",
+    "error": "terms"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-takeover",
+   "group": "Sign-in",
+   "label": "Take-over confirmation",
+   "screen": "signin",
+   "params": {
+    "step": "takeover"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-advanced",
+   "group": "Sign-in",
+   "label": "Advanced · personal server code",
+   "screen": "signin",
+   "params": {
+    "step": "advCode"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-advanced-rec",
+   "group": "Sign-in",
+   "label": "Advanced · recovery code detected",
+   "screen": "signin",
+   "params": {
+    "step": "advCode",
+    "setup": "HLX-REC-7Q2M-K9TD-XR4P"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-advanced-error",
+   "group": "Sign-in",
+   "label": "Advanced · not a code",
+   "screen": "signin",
+   "params": {
+    "step": "advCode",
+    "setup": "hello",
+    "error": "badSetup"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-server",
+   "group": "Sign-in",
+   "label": "Advanced · confirm the server",
+   "screen": "signin",
+   "params": {
+    "step": "serverConfirm"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-join",
+   "group": "Sign-in",
+   "label": "Advanced · join the server (phone)",
+   "screen": "signin",
+   "params": {
+    "step": "phoneAdv"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-legal",
+   "group": "Sign-in",
+   "label": "Terms and Privacy sheet",
+   "screen": "signin",
+   "params": {
+    "step": "phone",
+    "legal": true
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "restore",
+   "group": "Sign-in",
+   "label": "Restore step (after sign-in)",
+   "screen": "restore",
+   "params": {
+    "afterSignIn": true
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "restore-running",
+   "group": "Sign-in",
+   "label": "Restore step · running",
+   "screen": "restore",
+   "params": {
+    "afterSignIn": true,
+    "phase": "running",
+    "p": 3
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "restore-failed",
+   "group": "Sign-in",
+   "label": "Restore step · no backup",
+   "screen": "restore",
+   "params": {
+    "afterSignIn": true,
+    "phase": "failed"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "restore-done",
+   "group": "Sign-in",
+   "label": "Restore step · done",
+   "screen": "restore",
+   "params": {
+    "afterSignIn": true,
+    "phase": "done"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "link-device",
+   "group": "Sign-in",
+   "label": "Link this device · QR",
+   "screen": "link-device",
+   "params": {},
+   "base": [
+    {
+     "screen": "signin",
+     "params": {
+      "step": "password",
+      "phone": "1711 000001"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "link-device-expired",
+   "group": "Sign-in",
+   "label": "Link this device · code expired",
+   "screen": "link-device",
+   "params": {
+    "phase": "expired"
+   },
+   "base": [
+    {
+     "screen": "signin",
+     "params": {
+      "step": "password",
+      "phone": "1711 000001"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "link-device-confirm",
+   "group": "Sign-in",
+   "label": "Link this device · is this your account?",
+   "screen": "link-device",
+   "params": {
+    "phase": "confirm"
+   },
+   "base": [
+    {
+     "screen": "signin",
+     "params": {
+      "step": "password",
+      "phone": "1711 000001"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "reset-window",
+   "group": "App",
+   "label": "Already open in another window",
+   "screen": "reset",
+   "params": {
+    "kind": "window"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "reset-key",
+   "group": "App",
+   "label": "Reset required · key missing",
+   "screen": "reset",
+   "params": {
+    "kind": "key"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "reset-decrypt",
+   "group": "App",
+   "label": "Reset required · cannot decrypt",
+   "screen": "reset",
+   "params": {
+    "kind": "decrypt"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "lock",
+   "group": "App",
+   "label": "App lock",
+   "screen": "lock",
+   "params": {},
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "chats",
+   "group": "Home",
+   "label": "Chats",
+   "screen": "home",
+   "params": {
+    "tab": "chats"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-groups",
+   "group": "Home",
+   "label": "Chats · Groups filter",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "filter": "groups"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-unread",
+   "group": "Home",
+   "label": "Chats · Unread filter",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "filter": "unread"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-menu",
+   "group": "Home",
+   "label": "Chats · menu (Archived chats)",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "menu": true
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-select",
+   "group": "Home",
+   "label": "Chats · selection mode",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "select": [
+     "direct:arif",
+     "group:design"
+    ]
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search",
+   "group": "Home",
+   "label": "Chats · search (contacts card)",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-synced",
+   "group": "Home",
+   "label": "Chats · search (contacts allowed)",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "contacts": "done"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-q",
+   "group": "Home",
+   "label": "Chats · search results",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "query": "ar"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-num",
+   "group": "Home",
+   "label": "Chats · find a number",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "query": "+880 1711 000002"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-short",
+   "group": "Home",
+   "label": "Chats · number without country code",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "query": "01711 000002"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-none",
+   "group": "Home",
+   "label": "Chats · lookup: not on Orbit",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "query": "+880 1711 000002",
+    "lookup": "none"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-empty",
+   "group": "Home",
+   "label": "Chats · empty (new account)",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "empty": true
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "calls",
+   "group": "Home",
+   "label": "Calls",
+   "screen": "home",
+   "params": {
+    "tab": "calls"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "calls-search",
+   "group": "Home",
+   "label": "Calls · new call (search)",
+   "screen": "home",
+   "params": {
+    "tab": "calls",
+    "callSearching": true,
+    "contacts": "done"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "calls-empty",
+   "group": "Home",
+   "label": "Calls · empty",
+   "screen": "home",
+   "params": {
+    "tab": "calls",
+    "callsEmpty": true
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "archived",
+   "group": "Home",
+   "label": "Archived chats",
+   "screen": "archived",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "archived-empty",
+   "group": "Home",
+   "label": "Archived chats · empty",
+   "screen": "archived",
+   "params": {
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "chat",
+   "group": "Conversation",
+   "label": "Direct chat",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-typing",
+   "group": "Conversation",
+   "label": "Composer · typing",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "draft": "On my way, see you in 10"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-reply",
+   "group": "Conversation",
+   "label": "Composer · reply",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "reply": "n8",
+    "draft": "They look amazing!"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-edit",
+   "group": "Conversation",
+   "label": "Composer · edit",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "edit": "n5"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-attach",
+   "group": "Conversation",
+   "label": "Composer · attach sheet",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "attach": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-emoji",
+   "group": "Conversation",
+   "label": "Composer · emoji panel",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "emoji": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-rec",
+   "group": "Conversation",
+   "label": "Composer · recording (hold)",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "recording": "hold"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-rec-lock",
+   "group": "Conversation",
+   "label": "Composer · recording (locked)",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "recording": "locked"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-actions",
+   "group": "Conversation",
+   "label": "Message actions · their message",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "actions": "n6"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-actions-mine",
+   "group": "Conversation",
+   "label": "Message actions · your message",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "actions": "n5"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-select",
+   "group": "Conversation",
+   "label": "Selecting messages",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "select": [
+     "n3",
+     "n5"
+    ]
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-search",
+   "group": "Conversation",
+   "label": "Search in chat",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "searching": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-search-q",
+   "group": "Conversation",
+   "label": "Search in chat · results",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "searching": true,
+    "query": "the"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-kinds",
+   "group": "Conversation",
+   "label": "Message kinds (link, poll, view once…)",
+   "screen": "chat",
+   "params": {
+    "id": "direct:arif"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-transfer",
+   "group": "Conversation",
+   "label": "Downloads, key change, failed send",
+   "screen": "chat",
+   "params": {
+    "id": "direct:rafiq"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-new",
+   "group": "Conversation",
+   "label": "New chat (empty)",
+   "screen": "chat",
+   "params": {
+    "id": "direct:sadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "group",
+   "group": "Conversation",
+   "label": "Group chat",
+   "screen": "chat",
+   "params": {
+    "id": "group:family"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "group-mention",
+   "group": "Conversation",
+   "label": "Group · @mention picker",
+   "screen": "chat",
+   "params": {
+    "id": "group:family",
+    "draft": "Thanks @",
+    "mention": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "group-pending",
+   "group": "Conversation",
+   "label": "Group · unconfirmed member (admin)",
+   "screen": "chat",
+   "params": {
+    "id": "group:family",
+    "pending": "admin"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "group-pending-member",
+   "group": "Conversation",
+   "label": "Group · unconfirmed member (member)",
+   "screen": "chat",
+   "params": {
+    "id": "group:family",
+    "pending": "member"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "group-left",
+   "group": "Conversation",
+   "label": "Group · you left",
+   "screen": "chat",
+   "params": {
+    "id": "group:family",
+    "left": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-blocked",
+   "group": "Conversation",
+   "label": "Blocked (you blocked them)",
+   "screen": "chat",
+   "params": {
+    "id": "direct:shuvo",
+    "blocked": "byMe"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-blocked-me",
+   "group": "Conversation",
+   "label": "Blocked (they blocked you)",
+   "screen": "chat",
+   "params": {
+    "id": "direct:shuvo",
+    "blocked": "byThem"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "forward",
+   "group": "Conversation pages",
+   "label": "Forward message",
+   "screen": "forward",
+   "params": {
+    "n": 1
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "forward-picked",
+   "group": "Conversation pages",
+   "label": "Forward · chats picked",
+   "screen": "forward",
+   "params": {
+    "n": 2,
+    "sel": [
+     "group:family",
+     "direct:arif"
+    ]
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "message-info",
+   "group": "Conversation pages",
+   "label": "Message info (direct)",
+   "screen": "message-info",
+   "params": {
+    "id": "direct:nadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "message-info-group",
+   "group": "Conversation pages",
+   "label": "Message info (group)",
+   "screen": "message-info",
+   "params": {
+    "id": "group:family"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "message-info-gone",
+   "group": "Conversation pages",
+   "label": "Message info · not found",
+   "screen": "message-info",
+   "params": {
+    "gone": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "media-viewer",
+   "group": "Conversation pages",
+   "label": "Media viewer",
+   "screen": "media-viewer",
+   "params": {
+    "i": 0
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "media-video",
+   "group": "Conversation pages",
+   "label": "Video player",
+   "screen": "media-viewer",
+   "params": {
+    "i": 2
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "media-video-failed",
+   "group": "Conversation pages",
+   "label": "Video player · cannot play",
+   "screen": "media-viewer",
+   "params": {
+    "i": 2,
+    "failed": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "media-not-here",
+   "group": "Conversation pages",
+   "label": "Media viewer · not on this device",
+   "screen": "media-viewer",
+   "params": {
+    "missing": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "media-viewonce-opened",
+   "group": "Conversation pages",
+   "label": "View once · already opened",
+   "screen": "media-viewer",
+   "params": {
+    "viewOnce": "opened"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "media-viewonce-mine",
+   "group": "Conversation pages",
+   "label": "View once · your own",
+   "screen": "media-viewer",
+   "params": {
+    "viewOnce": "mine"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "send-files",
+   "group": "Conversation pages",
+   "label": "Send files",
+   "screen": "send-files",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "send-files-empty",
+   "group": "Conversation pages",
+   "label": "Send files · nothing left",
+   "screen": "send-files",
+   "params": {
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "shared",
+   "group": "Conversation pages",
+   "label": "Media, links and docs",
+   "screen": "shared",
+   "params": {
+    "id": "direct:nadia",
+    "tab": "media"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "shared-docs",
+   "group": "Conversation pages",
+   "label": "Shared · docs",
+   "screen": "shared",
+   "params": {
+    "id": "direct:nadia",
+    "tab": "docs"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "shared-links",
+   "group": "Conversation pages",
+   "label": "Shared · links",
+   "screen": "shared",
+   "params": {
+    "id": "direct:nadia",
+    "tab": "links"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "shared-empty",
+   "group": "Conversation pages",
+   "label": "Shared · nothing yet",
+   "screen": "shared",
+   "params": {
+    "id": "direct:arif",
+    "tab": "media",
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:arif"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "chat-settings",
+   "group": "Conversation pages",
+   "label": "Chat settings (direct)",
+   "screen": "chat-settings",
+   "params": {
+    "id": "direct:nadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "chat-settings-group",
+   "group": "Conversation pages",
+   "label": "Chat settings (group)",
+   "screen": "chat-settings",
+   "params": {
+    "id": "group:family"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "chat-settings-blocked",
+   "group": "Conversation pages",
+   "label": "Chat settings · blocked",
+   "screen": "chat-settings",
+   "params": {
+    "id": "direct:shuvo"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:shuvo"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "call-incoming",
+   "group": "Calls",
+   "label": "Incoming voice call",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "incoming"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-incoming-video",
+   "group": "Calls",
+   "label": "Incoming video call",
+   "screen": "call",
+   "params": {
+    "peer": "arif",
+    "phase": "incoming",
+    "video": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-incoming-notice",
+   "group": "Calls",
+   "label": "Incoming · with a notice",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "incoming",
+    "notice": "Orbit needs the microphone to make calls. Allow it in your phone’s settings, then try again."
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-outgoing",
+   "group": "Calls",
+   "label": "Calling…",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "outgoing"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-ringing",
+   "group": "Calls",
+   "label": "Ringing…",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "ringing"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-connecting",
+   "group": "Calls",
+   "label": "Connecting…",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "connecting"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-active",
+   "group": "Calls",
+   "label": "Voice call",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "active"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-active-weak",
+   "group": "Calls",
+   "label": "Voice call · poor connection",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "active",
+    "weak": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-reconnecting",
+   "group": "Calls",
+   "label": "Voice call · reconnecting",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "reconnecting"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-video",
+   "group": "Calls",
+   "label": "Video call",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "active",
+    "video": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-video-dialing",
+   "group": "Calls",
+   "label": "Video call · calling (your camera)",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "outgoing",
+    "video": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-ended",
+   "group": "Calls",
+   "label": "Call ended",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "ended",
+    "reason": "ended",
+    "stay": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-busy",
+   "group": "Calls",
+   "label": "Busy: on another call",
+   "screen": "call",
+   "params": {
+    "peer": "arif",
+    "phase": "ended",
+    "reason": "busy",
+    "stay": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-failed",
+   "group": "Calls",
+   "label": "Call failed",
+   "screen": "call",
+   "params": {
+    "peer": "arif",
+    "phase": "ended",
+    "reason": "failed",
+    "stay": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-detail",
+   "group": "Calls",
+   "label": "Call details",
+   "screen": "call-detail",
+   "params": {
+    "id": "call3"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "contact",
+   "group": "People",
+   "label": "Contact info",
+   "screen": "contact",
+   "params": {
+    "id": "nadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "contact-keychanged",
+   "group": "People",
+   "label": "Contact info · safety number changed",
+   "screen": "contact",
+   "params": {
+    "id": "rafiq"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:rafiq"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "contact-nokey",
+   "group": "People",
+   "label": "Contact info · no safety number yet",
+   "screen": "contact",
+   "params": {
+    "id": "sadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:sadia"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "contact-blocked",
+   "group": "People",
+   "label": "Contact info · blocked",
+   "screen": "contact",
+   "params": {
+    "id": "shuvo"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:shuvo"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "contact-number",
+   "group": "People",
+   "label": "Contact info · known only by number",
+   "screen": "contact",
+   "params": {
+    "id": "unknown"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:unknown"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "safety",
+   "group": "People",
+   "label": "Safety number · verified",
+   "screen": "safety",
+   "params": {
+    "id": "nadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "contact",
+     "params": {
+      "id": "nadia"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "safety-unverified",
+   "group": "People",
+   "label": "Safety number · not verified",
+   "screen": "safety",
+   "params": {
+    "id": "arif"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "contact",
+     "params": {
+      "id": "arif"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "safety-changed",
+   "group": "People",
+   "label": "Safety number · changed",
+   "screen": "safety",
+   "params": {
+    "id": "rafiq"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "contact",
+     "params": {
+      "id": "rafiq"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "safety-none",
+   "group": "People",
+   "label": "Safety number · none yet",
+   "screen": "safety",
+   "params": {
+    "id": "sadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "contact",
+     "params": {
+      "id": "sadia"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "scan",
+   "group": "People",
+   "label": "Scan code",
+   "screen": "scan",
+   "params": {
+    "id": "arif"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "safety",
+     "params": {
+      "id": "arif"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "scan-nocamera",
+   "group": "People",
+   "label": "Scan code · no camera",
+   "screen": "scan",
+   "params": {
+    "id": "arif",
+    "noCamera": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "safety",
+     "params": {
+      "id": "arif"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "scan-contact",
+   "group": "People",
+   "label": "Scan someone’s Orbit code",
+   "screen": "scan",
+   "params": {
+    "id": "arif",
+    "mode": "contact"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "safety",
+     "params": {
+      "id": "arif"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "people",
+   "group": "People",
+   "label": "People search (from a contact link)",
+   "screen": "people",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-new",
+   "group": "Groups",
+   "label": "New group",
+   "screen": "group-new",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-new-picked",
+   "group": "Groups",
+   "label": "New group · people picked",
+   "screen": "group-new",
+   "params": {
+    "name": "Weekend trip",
+    "sel": [
+     "nadia",
+     "arif",
+     "sadia"
+    ]
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-new-error",
+   "group": "Groups",
+   "label": "New group · name missing",
+   "screen": "group-new",
+   "params": {
+    "sel": [
+     "nadia"
+    ],
+    "error": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-info",
+   "group": "Groups",
+   "label": "Group info (you are an admin)",
+   "screen": "group-info",
+   "params": {
+    "role": "admin"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "group-info-owner",
+   "group": "Groups",
+   "label": "Group info (owner view)",
+   "screen": "group-info",
+   "params": {
+    "role": "owner"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "group-info-member",
+   "group": "Groups",
+   "label": "Group info (plain member)",
+   "screen": "group-info",
+   "params": {
+    "role": "member"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "group-info-gone",
+   "group": "Groups",
+   "label": "Group info · not in the group",
+   "screen": "group-info",
+   "params": {
+    "gone": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "group-settings",
+   "group": "Groups",
+   "label": "Group settings",
+   "screen": "group-settings",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-settings-member",
+   "group": "Groups",
+   "label": "Group settings · not an admin",
+   "screen": "group-settings",
+   "params": {
+    "member": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-invite",
+   "group": "Groups",
+   "label": "Invite links",
+   "screen": "group-invite",
+   "params": {
+    "links": 2
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-invite-empty",
+   "group": "Groups",
+   "label": "Invite links · none yet",
+   "screen": "group-invite",
+   "params": {
+    "links": 0
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-requests",
+   "group": "Groups",
+   "label": "Join requests",
+   "screen": "group-requests",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-requests-empty",
+   "group": "Groups",
+   "label": "Join requests · nobody waiting",
+   "screen": "group-requests",
+   "params": {
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-banned",
+   "group": "Groups",
+   "label": "Banned people",
+   "screen": "group-banned",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-banned-empty",
+   "group": "Groups",
+   "label": "Banned people · none",
+   "screen": "group-banned",
+   "params": {
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-add",
+   "group": "Groups",
+   "label": "Add members",
+   "screen": "group-add",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    },
+    {
+     "screen": "group-info",
+     "params": {
+      "role": "admin"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "group-join",
+   "group": "Groups",
+   "label": "Join a group · paste link",
+   "screen": "group-join",
+   "params": {
+    "phase": "input"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-join-preview",
+   "group": "Groups",
+   "label": "Join a group · preview",
+   "screen": "group-join",
+   "params": {
+    "phase": "preview"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-join-approval",
+   "group": "Groups",
+   "label": "Join a group · approval link",
+   "screen": "group-join",
+   "params": {
+    "phase": "preview",
+    "approval": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-join-member",
+   "group": "Groups",
+   "label": "Join a group · already a member",
+   "screen": "group-join",
+   "params": {
+    "phase": "preview",
+    "member": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-join-done",
+   "group": "Groups",
+   "label": "Join a group · joined",
+   "screen": "group-join",
+   "params": {
+    "phase": "joined"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-join-pending",
+   "group": "Groups",
+   "label": "Join a group · request sent",
+   "screen": "group-join",
+   "params": {
+    "phase": "pending"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "group-join-failed",
+   "group": "Groups",
+   "label": "Join a group · link expired",
+   "screen": "group-join",
+   "params": {
+    "phase": "failed"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "password",
+   "group": "Settings",
+   "label": "Change password",
+   "screen": "password",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "password-set",
+   "group": "Settings",
+   "label": "Set a password",
+   "screen": "password",
+   "params": {
+    "set": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {
+      "noPassword": true
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "password-error",
+   "group": "Settings",
+   "label": "Change password · mismatch",
+   "screen": "password",
+   "params": {
+    "error": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "password-done",
+   "group": "Settings",
+   "label": "Change password · saved",
+   "screen": "password",
+   "params": {
+    "done": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "delete-account",
+   "group": "Settings",
+   "label": "Delete my account · password",
+   "screen": "delete-account",
+   "params": {
+    "proof": "password"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "delete-account-sms",
+   "group": "Settings",
+   "label": "Delete my account · SMS code",
+   "screen": "delete-account",
+   "params": {
+    "proof": "sms"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "delete-account-key",
+   "group": "Settings",
+   "label": "Delete my account · this phone’s key",
+   "screen": "delete-account",
+   "params": {
+    "proof": "key"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "blocked",
+   "group": "Settings",
+   "label": "Blocked",
+   "screen": "blocked",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "privacy",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "blocked-empty",
+   "group": "Settings",
+   "label": "Blocked · nobody",
+   "screen": "blocked",
+   "params": {
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "privacy",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "about",
+   "group": "Settings",
+   "label": "Help and about",
+   "screen": "about",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "legal",
+   "group": "Settings",
+   "label": "Terms and Privacy Policy",
+   "screen": "legal",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "about",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "advanced",
+   "group": "Settings",
+   "label": "Advanced",
+   "screen": "advanced",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "advanced-offline",
+   "group": "Settings",
+   "label": "Advanced · server unreachable",
+   "screen": "advanced",
+   "params": {
+    "offline": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "approve-device",
+   "group": "Profile and devices",
+   "label": "Link a new device · scan",
+   "screen": "approve-device",
+   "params": {
+    "step": "enter"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "devices",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "approve-device-error",
+   "group": "Profile and devices",
+   "label": "Link a new device · expired code",
+   "screen": "approve-device",
+   "params": {
+    "step": "enter",
+    "error": "That code has expired. Codes last ten minutes. Ask the new device to show a new one."
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "devices",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "approve-device-review",
+   "group": "Profile and devices",
+   "label": "Link a new device · approve?",
+   "screen": "approve-device",
+   "params": {
+    "step": "review"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "devices",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "approve-device-done",
+   "group": "Profile and devices",
+   "label": "Link a new device · done",
+   "screen": "approve-device",
+   "params": {
+    "step": "done"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "devices",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "activity",
+   "group": "Profile and devices",
+   "label": "Security activity",
+   "screen": "activity",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "devices",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "restore-history",
+   "group": "Backup",
+   "label": "Restore history (from Settings)",
+   "screen": "restore-history",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "backup",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "transfer",
+   "group": "Backup",
+   "label": "Send to my other devices",
+   "screen": "transfer",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "backup",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "transfer-empty",
+   "group": "Backup",
+   "label": "Send to my other devices · nothing waiting",
+   "screen": "transfer",
+   "params": {
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "backup",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "recovery",
+   "group": "Backup",
+   "label": "Recovery backup · create",
+   "screen": "recovery",
+   "params": {
+    "tab": "create"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "backup",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "recovery-restore",
+   "group": "Backup",
+   "label": "Recovery backup · restore",
+   "screen": "recovery",
+   "params": {
+    "tab": "restore"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "backup",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "settings",
+   "group": "You (settings and profile)",
+   "label": "You · checkup needs attention",
+   "screen": "settings-page",
+   "params": {
+    "checkup": "attention"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "you-allgood",
+   "group": "You (settings and profile)",
+   "label": "You · all checks pass",
+   "screen": "settings-page",
+   "params": {
+    "allGood": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "you-share",
+   "group": "You (settings and profile)",
+   "label": "You · share your Orbit code",
+   "screen": "settings-page",
+   "params": {
+    "share": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "settings-search",
+   "group": "You (settings and profile)",
+   "label": "You · search settings",
+   "screen": "settings-page",
+   "params": {
+    "setQuery": "pass"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
+   "key": "profile",
+   "group": "You (settings and profile)",
+   "label": "Edit profile",
+   "screen": "profile",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "profile-taken",
+   "group": "You (settings and profile)",
+   "label": "Edit profile · ~name taken",
+   "screen": "profile",
+   "params": {
+    "helixName": "nadia"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "profile-new",
+   "group": "You (settings and profile)",
+   "label": "Edit profile · new account (empty)",
+   "screen": "profile",
+   "params": {
+    "blank": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "privacy",
+   "group": "Settings",
+   "label": "Privacy",
+   "screen": "privacy",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "privacy-lock",
+   "group": "Settings",
+   "label": "Privacy · app lock on",
+   "screen": "privacy",
+   "params": {
+    "lock": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "notifications",
+   "group": "Settings",
+   "label": "Notifications",
+   "screen": "notifications",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "notifications-off",
+   "group": "Settings",
+   "label": "Notifications · off in phone settings",
+   "screen": "notifications",
+   "params": {
+    "osOff": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "chats-settings",
+   "group": "Settings",
+   "label": "Chats settings",
+   "screen": "chats-settings",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "storage",
+   "group": "Settings",
+   "label": "Storage and data",
+   "screen": "storage",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "devices",
+   "group": "Settings",
+   "label": "Devices",
+   "screen": "devices",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "backup",
+   "group": "Settings",
+   "label": "Backup",
+   "screen": "backup",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "backup-running",
+   "group": "Settings",
+   "label": "Backup · backing up",
+   "screen": "backup",
+   "params": {
+    "running": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "backup-failed",
+   "group": "Settings",
+   "label": "Backup · last backup failed",
+   "screen": "backup",
+   "params": {
+    "failed": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "account",
+   "group": "Settings",
+   "label": "Account",
+   "screen": "account",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "account-nopass",
+   "group": "Settings",
+   "label": "Account · no password set",
+   "screen": "account",
+   "params": {
+    "noPassword": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "appearance",
+   "group": "You (settings and profile)",
+   "label": "Appearance · pick a theme",
+   "screen": "appearance",
+   "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  }
+ ]
+}

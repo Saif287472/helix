@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "helix-prototype",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["J:/Projects/helix/orbit/prototype/serve.py"],
+      "port": 5317
+    }
+  ]
+}

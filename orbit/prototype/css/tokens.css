@@ -1,0 +1,168 @@
+/*
+  Helix design tokens — direction B: calm surfaces, precise "future" accents.
+
+  Every value the screens use lives here, so the Flutter port is a straight
+  copy into helix_remote_ui (HelixTokens / ThemeData). Names map 1:1:
+    --accent        -> HelixTokens.accent
+    --out           -> HelixTokens.outgoingBubble
+    --r-md          -> HelixTokens.radiusMd
+  Light theme only (product rule). The call screen is the one dark surface
+  has its own --call-* set (the logo's teal-to-blue gradient).
+*/
+:root {
+  /* ---- Ink: text and the few dark fills ---- */
+  --ink: #131722;          /* primary text, dock highlight */
+  --ink-2: #394152;        /* strong secondary text */
+  --ink-3: #636C80;        /* secondary text, metadata (4.9:1 on white) */
+  --ink-4: #8E96A8;        /* placeholders, disabled, decorative only */
+  --line: #E2E6ED;         /* hairlines, card edges */
+  --line-2: #ECEFF3;       /* faint separators */
+
+  /* ---- Surfaces ---- */
+  --bg: #F5F7FA;           /* page behind lists and settings */
+  --surface: #FFFFFF;      /* cards, rows, sheets, app bars */
+  --field: #EEF1F5;        /* search and text fields */
+  --pressed: #E8EBF0;      /* row hover / pressed */
+  --chat-bg: #F4F6F9;      /* behind the messages */
+  --chat-dot: #D6DCE5;     /* the dot grid on it */
+  --scrim: rgba(13, 16, 25, 0.42);
+
+  /* ---- Accent: Helix blue (the app icon's blue, HelixColorTokens.signInBlue) ---- */
+  --accent: #2563EB;
+  --accent-ink: #1D4FC4;   /* accent used as text on white/tints */
+  --accent-soft: #E8F0FE;  /* selected rows, chips */
+  --accent-line: #C4D6FB;
+  --on-accent: #FFFFFF;
+
+  /* ---- Cyan: your own messages ---- */
+  --cyan: #13B4D2;
+  --cyan-ink: #0A6C80;
+  --out: #E1F7FC;          /* outgoing bubble */
+  --out-line: #B2E7F2;     /* its edge */
+  --out-ink: #0A2A33;      /* its text */
+  --out-meta: #3B6D79;     /* its time and ticks (4.6:1 on --out) */
+
+  /* ---- Incoming bubble ---- */
+  --in: #FFFFFF;
+  --in-line: #E2E6ED;
+  --in-ink: #131722;
+  --in-meta: #636C80;
+
+  /* ---- Status ---- */
+  --success: #12905A;
+  --success-soft: #E3F5EC;
+  --warning: #B86E00;
+  --warning-soft: #FCF1DE;
+  --danger: #D23A3A;
+  --danger-soft: #FCEAEA;
+  --read: #2563EB;         /* read ticks (= accent) */
+
+  /* ---- Avatar palette: tint + ink pairs, index = colorIndexFor(id) % 8 ---- */
+  --av-0-bg: #E3ECFD; --av-0-ink: #1D4FC4;  /* blue */
+  --av-1-bg: #DCF3F8; --av-1-ink: #0A6C80;  /* cyan */
+  --av-2-bg: #EEE7FB; --av-2-ink: #6940AE;  /* violet */
+  --av-3-bg: #DCF2EB; --av-3-ink: #116F59;  /* teal */
+  --av-4-bg: #FAEEDA; --av-4-ink: #87580A;  /* amber */
+  --av-5-bg: #FBE5EA; --av-5-ink: #A23355;  /* rose */
+  --av-6-bg: #E9F4D8; --av-6-ink: #4B6912;  /* lime */
+  --av-7-bg: #E6EAF0; --av-7-ink: #3E4A5D;  /* slate */
+
+  /* ---- Call screen: the logo's teal-to-blue gradient (white text >= 5:1) ---- */
+  --call-top: #0B7A84;     /* teal */
+  --call-mid: #1D63D8;     /* Helix blue */
+  --call-bottom: #1A3C9E;  /* deep blue */
+  --call-text: #FFFFFF;
+  --call-muted: rgba(255, 255, 255, 0.82);
+  --call-glass: rgba(255, 255, 255, 0.14);
+  --call-glass-2: rgba(255, 255, 255, 0.22);
+  --call-line: rgba(255, 255, 255, 0.24);
+  --call-live: #B9F6D4;    /* connected timer, quality bars */
+  --brand-gradient: linear-gradient(150deg, var(--call-top) 0%, var(--call-mid) 55%, var(--call-bottom) 100%); /* call screen, Helix ID pass */
+
+  /* ---- Semantic roles every theme sets (themes.css overrides them) ---- */
+  --inverse: #131722;        /* strong pills: active dock tab, chosen chip, selection bar, snackbar, mic */
+  --on-inverse: #FFFFFF;
+  --inverse-accent: #9DBDFF; /* an action on the inverse colour (snackbar Undo) */
+  --hover: rgba(19, 23, 34, 0.035);
+  --dock-bg: rgba(255, 255, 255, 0.97);
+  --notice-bg: rgba(255, 255, 255, 0.86);
+  --tint: rgba(19, 23, 34, 0.04);      /* quotes and link cards inside incoming bubbles */
+  --tint-out: rgba(10, 42, 51, 0.06);  /* ... inside your bubbles */
+  --media-ph: #DCE1E8;
+  --map-bg: #E8EEF3;
+  --map-line: #D7DFE7;
+  --wave-idle: #C2C9D5;
+  --wave-out-idle: #9FCFDA;
+  --mark: #FFE58F;                     /* search highlight */
+  --switch-off: #D3D8E1;
+  --switch-knob: #FFFFFF;
+  --control-line: #B8C0CD;             /* checkbox, radio, dashed placeholder edges */
+  --success-line: #B9E4CD;
+  --warning-line: #F1D9AE;
+  --danger-line: #F3C9C9;
+  --danger-zone-bg: #FFFCFC;
+  --danger-zone-line: #F6DCDC;
+  --gesture: rgba(19, 23, 34, 0.32);
+  --on-brand: #FFFFFF;                 /* text and icons on the brand gradient */
+  --glass-bg: rgba(255, 255, 255, 0.92);  /* light panels floating on the gradient */
+  --glass-ink: #131722;
+  --glass-accent: #1D4FC4;
+  --wordmark-gradient: linear-gradient(100deg, #0EA5B7 0%, #2563EB 48%, #7C3AED 100%);
+  --wordmark-tracking: -0.045em;
+  --chat-pattern: none;                /* the theme's chat background pattern */
+  --chat-pattern-size: auto;
+  --glow: 0 0 0 transparent;           /* Arcade sets a neon glow */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;  /* titles and the wordmark */
+  --display-weight: 650;
+  --display-tracking: -0.02em;
+  --display-transform: none;
+
+  /* ---- Night: camera and media viewer only ---- */
+  --night: #090C15;
+  --night-2: #111626;
+  --night-3: #1B2236;
+  --night-line: #263049;
+  --night-text: #EAEEF8;
+  --night-muted: #9099B2;
+  --night-dot: #1C2336;
+  --call-accept: #18A867;
+  --call-end: #E5484D;
+
+  /* ---- Shape ---- */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --r-pill: 999px;
+  --avatar-r: 18%;         /* rounded square */
+  --bubble-r: 10px;
+  --bubble-cut: 5px;       /* the one sharp corner on the first bubble of a run */
+
+  /* ---- Type ---- */
+  --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  --text-scale: 1;
+  --t-display: calc(30px * var(--text-scale));   /* tab titles */
+  --t-title: calc(20px * var(--text-scale));     /* page titles */
+  --t-headline: calc(16px * var(--text-scale));  /* row titles, names */
+  --t-body: calc(15px * var(--text-scale));      /* messages, body */
+  --t-small: calc(13.5px * var(--text-scale));   /* previews, subtitles */
+  --t-caption: calc(12px * var(--text-scale));   /* helper text */
+  --t-meta: calc(11px * var(--text-scale));      /* mono: times, status, labels */
+
+  /* ---- Spacing (4 pt grid) ---- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px;
+  --gutter: 16px;          /* screen side padding */
+  --row-h: 72px;           /* chat list row (density tweak changes it) */
+  --target: 48px;          /* minimum tap target (accessibility rule) */
+
+  /* ---- Elevation and motion ---- */
+  --shadow-card: 0 1px 2px rgba(19, 23, 34, 0.04);
+  --shadow-float: 0 14px 34px -10px rgba(19, 23, 34, 0.22), 0 2px 6px rgba(19, 23, 34, 0.06);
+  --shadow-sheet: 0 -10px 40px rgba(19, 23, 34, 0.14);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 180ms;
+  --dur-page: 260ms;
+}
