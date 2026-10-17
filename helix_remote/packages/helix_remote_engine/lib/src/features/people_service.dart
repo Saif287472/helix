@@ -251,22 +251,38 @@ final class PeopleService {
 
   /// Publishes this account's name and about line, encrypted with the
   /// profile key (created on first use).
+  ///
+  /// The server keeps the highest version. A device whose count started
+  /// again (a new install signed in with the password, an account registered
+  /// again on its number) is behind a profile it cannot read: the server
+  /// says `version_conflict`, and the profile is published again just above
+  /// the server's version, so what the person typed is what is saved.
   Future<void> setOwnProfile({required String name, String? about}) async {
     final self = _ctx.identity;
     final row = (await _db.accountDao.current())!;
     final key = row.profileKey ?? newSymmetricKey(_ctx.random);
-    final version = row.profileVersion + 1;
-    final blob = await SealedBlobCipher.profile.seal(
-      secret: key,
-      plaintext: utf8.encode(
-        jsonEncode(ProfileContent(name: name, about: about).toJson()),
-      ),
-      aad: SealedBlobCipher.profileAad(self.accountId, version),
-      random: _ctx.random,
-    );
-    await _ctx.api.people.setOwnProfile(
-      EncryptedProfile(version: version, ciphertext: blob),
-    );
+    Future<void> publish(int version) async {
+      final blob = await SealedBlobCipher.profile.seal(
+        secret: key,
+        plaintext: utf8.encode(
+          jsonEncode(ProfileContent(name: name, about: about).toJson()),
+        ),
+        aad: SealedBlobCipher.profileAad(self.accountId, version),
+        random: _ctx.random,
+      );
+      await _ctx.api.people.setOwnProfile(
+        EncryptedProfile(version: version, ciphertext: blob),
+      );
+    }
+
+    var version = row.profileVersion + 1;
+    try {
+      await publish(version);
+    } on ApiException catch (e) {
+      if (e.code != ErrorCode.versionConflict) rethrow;
+      version = (await _ctx.api.people.profile(self.accountId)).version + 1;
+      await publish(version);
+    }
     await _db.accountDao.save(
       SelfAccountCompanion.insert(
         accountId: row.accountId,
@@ -277,6 +293,41 @@ final class PeopleService {
         profileVersion: Value(version),
         profileName: Value(name),
       ),
+    );
+    try {
+      // The operator console's copy (ADR-030); contacts read the profile.
+      await _ctx.api.people.setOwnName(name);
+    } on Object {
+      // Best effort: the profile itself is saved.
+    }
+  }
+
+  /// Tells the server this account's own number and name once (after a
+  /// sign-in, and once on a device that signed in before the server kept
+  /// them), for the operator console (ADR-030). A failure is tried again on
+  /// the next start; a number the server will not take is not.
+  Future<void> reportForConsole() async {
+    if (await _db.settingsDao.get(EngineState.consoleDetailsReported)) return;
+    final row = await _db.accountDao.current();
+    if (row == null) return;
+    try {
+      final phone = row.phoneNumber;
+      if (phone != null && phone.isNotEmpty) {
+        await _ctx.api.identity.setPhoneNumber(phone);
+      }
+      final name = row.profileName;
+      if (name != null && name.isNotEmpty) {
+        await _ctx.api.people.setOwnName(name);
+      }
+    } on ApiException catch (e) {
+      if (e.code != ErrorCode.invalidField) return;
+    } on Object {
+      return;
+    }
+    await _db.settingsDao.set(
+      EngineState.consoleDetailsReported,
+      true,
+      now: _ctx.now(),
     );
   }
 
@@ -328,8 +379,17 @@ final class PeopleService {
     }
   }
 
-  /// Blocks [account]: the server drops its messages and calls, and so does
-  /// this device.
+  /// Whether [account] has blocked this account (the server told this device:
+  /// REST_V2.md, blocks). Its messages are not delivered and its calls are
+  /// refused until it unblocks.
+  Future<bool> blocksMe(String account) =>
+      _db.settingsDao.get(PersonState.blocksMe(account));
+
+  Stream<bool> watchBlocksMe(String account) =>
+      _db.settingsDao.watch(PersonState.blocksMe(account));
+
+  /// Blocks [account]: the server drops its messages and calls (and tells
+  /// it so), and so does this device.
   Future<void> block(String account) async {
     await _ctx.api.people.block(account);
     await _db.peopleDao.setBlocked(account, true, now: _ctx.now());

@@ -345,7 +345,8 @@ final class MessagingModule extends ModuleBase
     }
     await beforeDelivery?.call();
 
-    // Recipients who blocked the sender get nothing; the sender is not told.
+    // Recipients who blocked the sender get nothing, and the sender is told
+    // which ones (`blocked_by`): blocks are not secret.
     final blockers = await api.blockedBy(
       context.db,
       senderAccount,
@@ -364,9 +365,13 @@ final class MessagingModule extends ModuleBase
       urgent: urgent,
     );
 
+    final blockedBy = blockers.toList()..sort();
     if (ephemeral) {
       await api.deliverEphemeral(payloads, delivery);
-      return SendMessageResponse(acceptedAt: context.clock.now());
+      return SendMessageResponse(
+        acceptedAt: context.clock.now(),
+        blockedBy: blockedBy,
+      );
     }
 
     final accepted = await context.db.tx((tx) async {
@@ -392,7 +397,7 @@ final class MessagingModule extends ModuleBase
         replayed: true,
       );
     }
-    return SendMessageResponse(acceptedAt: accepted);
+    return SendMessageResponse(acceptedAt: accepted, blockedBy: blockedBy);
   }
 
   Future<SendMessageResponse> _receive(

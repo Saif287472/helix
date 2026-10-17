@@ -9,6 +9,7 @@ import 'package:helix_remote_engine/src/calls/call_signaling.dart';
 import 'package:helix_remote_engine/src/errors.dart';
 import 'package:helix_remote_engine/src/events.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
+import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_engine/src/util/ids.dart';
 import 'package:helix_remote_engine/src/util/keyed_lock.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
@@ -334,6 +335,9 @@ final class CallsService implements CallSignalSink {
       call.media = media;
       call.cameraOn = video;
       _wireMedia(call);
+      // The camera is on while it rings: the screen shows the preview now,
+      // not only once the other side answers.
+      _publish(call);
       sdp = await media.createOffer();
     } on Object {
       await _finish(call, CallEnd.failed, post: false);
@@ -353,8 +357,15 @@ final class CallsService implements CallSignalSink {
       );
     } on Object catch (e) {
       await _finish(call, CallEnd.failed, post: false);
-      throw CallFailedException(_classify(e));
+      final reason = _classify(e);
+      if (reason == CallFailure.blockedByPeer) {
+        await PersonState.markBlocksMe(_db, peer, blocked: true, now: _now());
+      }
+      throw CallFailedException(reason);
     }
+    // The offer went out, so they have not blocked this account (or no
+    // longer have).
+    await PersonState.markBlocksMe(_db, peer, blocked: false, now: _now());
     call.ringTimer = Timer(
       _config.ringTimeout,
       () => unawaited(_run(() => _ringTimedOut(call))),
@@ -948,6 +959,7 @@ final class CallsService implements CallSignalSink {
 
   CallFailure _classify(Object error) => switch (error) {
     ApiException(code: ErrorCode.rateLimited) => CallFailure.rateLimited,
+    ApiException(code: ErrorCode.blocked) => CallFailure.blockedByPeer,
     _ => CallFailure.unavailable,
   };
 }

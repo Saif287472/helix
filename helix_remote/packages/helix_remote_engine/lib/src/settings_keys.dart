@@ -18,6 +18,30 @@ abstract final class EngineSettings {
   );
 }
 
+/// What the engine knows about one other person, kept next to the settings
+/// (no table of its own).
+abstract final class PersonState {
+  /// [account] has blocked this account. Blocks are not secret: the server
+  /// says so with a `block_change` envelope, `blocked_by` on a send and a
+  /// refused call offer. Cleared when they unblock (the envelope, or a send
+  /// or offer that reaches them again).
+  static Setting<bool> blocksMe(String account) =>
+      Setting<bool>('people.blocks_me:$account', false);
+
+  /// Sets [blocksMe] for [account], writing only when it changes (every send
+  /// reports it).
+  static Future<void> markBlocksMe(
+    HelixDb db,
+    String account, {
+    required bool blocked,
+    required DateTime now,
+  }) async {
+    final setting = blocksMe(account);
+    if (await db.settingsDao.get(setting) == blocked) return;
+    await db.settingsDao.set(setting, blocked, now: now);
+  }
+}
+
 /// Engine bookkeeping stored next to the user's settings. Not for UI.
 abstract final class EngineState {
   /// The device session (access and refresh token) as JSON. Protected by the
@@ -32,6 +56,13 @@ abstract final class EngineState {
 
   /// Epoch ms of the last prekey status check.
   static const lastPrekeyCheck = Setting<int>('crypto.last_prekey_check', 0);
+
+  /// This account's own number and name have been reported for the operator
+  /// console (ADR-030; `PeopleService.reportForConsole`).
+  static const consoleDetailsReported = Setting<bool>(
+    'account.console_details_reported',
+    false,
+  );
 
   /// Epoch ms of the last own-device-list refresh.
   static const lastOwnDevicesRefresh = Setting<int>(

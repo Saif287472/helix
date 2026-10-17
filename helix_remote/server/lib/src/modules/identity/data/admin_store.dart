@@ -1,12 +1,17 @@
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+import 'package:helix_remote_server/src/modules/identity/domain/phone_seal.dart';
 import 'package:helix_remote_server/src/platform/db/db.dart';
 
 /// SQL behind the operator console's account and invite views.
 final class AdminStore {
-  AdminStore(this.s);
+  AdminStore(this.s, {this.phoneSeal});
 
   /// Schema name.
   final String s;
+
+  /// Opens the full numbers apps reported (ADR-030); null without
+  /// `HELIX_PHONE_KEY`, and then the console shows the last four digits.
+  final PhoneSeal? phoneSeal;
 
   static String? _cursorId(PageRequest page) {
     final cursor = page.cursor;
@@ -33,8 +38,21 @@ final class AdminStore {
     lastSeenOn: r.optTime('last_seen_on'),
   );
 
+  /// [_account], with the full number when one was reported and opens.
+  Future<AdminAccount> _accountOf(Row r) async {
+    final account = _account(r);
+    final number = await _number(account.accountId, r.optBytes('phone_sealed'));
+    return number == null ? account : account.copyWith(phoneNumber: number);
+  }
+
+  Future<String?> _number(String accountId, List<int>? sealed) async {
+    final seal = phoneSeal;
+    if (sealed == null || seal == null) return null;
+    return seal.open(accountId, sealed);
+  }
+
   static const _accountSelect =
-      'SELECT a.id, a.status, a.created_at, a.helix_name, a.phone_last4, '
+      'SELECT a.id, a.status, a.created_at, a.helix_name, a.phone_last4, a.phone_sealed, '
       "(SELECT count(*)::int8 FROM {s}.devices d WHERE d.account_id = a.id AND d.status = 'active') AS active_devices, "
       '(SELECT max(d.last_seen_on) FROM {s}.devices d WHERE d.account_id = a.id) AS last_seen_on '
       'FROM {s}.accounts a';
@@ -65,7 +83,7 @@ final class AdminStore {
         'limit': page.limit + 1,
       },
     );
-    final items = [for (final r in rows.take(page.limit)) _account(r)];
+    final items = [for (final r in rows.take(page.limit)) await _accountOf(r)];
     return Page(
       items: items,
       nextCursor: rows.length > page.limit ? items.last.accountId : null,
@@ -76,7 +94,7 @@ final class AdminStore {
     final r = await db.queryOne('$_select WHERE a.id = @id:uuid', {
       'id': accountId,
     });
-    return r == null ? null : _account(r);
+    return r == null ? null : await _accountOf(r);
   }
 
   Future<List<AdminDevice>> devices(SqlSession db, String accountId) async {
@@ -166,7 +184,7 @@ final class AdminStore {
   Future<Map<String, Object?>> export(SqlSession db, String accountId) async {
     final account = await db.queryOne(
       'SELECT id, identity_key, status, created_at, helix_name, phone_last4, '
-      'identity_key_changed_at FROM $s.accounts WHERE id = @id:uuid',
+      'phone_sealed, identity_key_changed_at FROM $s.accounts WHERE id = @id:uuid',
       {'id': accountId},
     );
     if (account == null) return const {};
@@ -192,6 +210,11 @@ final class AdminStore {
         'created_at': toWireTime(account.time('created_at')),
         'helix_name': account.optString('helix_name'),
         'phone_last4': account.optString('phone_last4'),
+        // What the server keeps for the operator console (ADR-030).
+        'phone_number': await _number(
+          accountId,
+          account.optBytes('phone_sealed'),
+        ),
         'identity_key': encodeBytes(account.bytes('identity_key')),
         'identity_key_changed_at': identityKeyChanged == null
             ? null

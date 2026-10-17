@@ -341,6 +341,27 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('your preview can be dragged, but not off the screen', (
+      tester,
+    ) async {
+      await live(tester);
+      final preview = find.textContaining('video:local');
+      final before = tester.getCenter(preview);
+
+      await tester.drag(preview, const Offset(-150, 300));
+      await tester.pumpAndSettle();
+      final moved = tester.getCenter(preview);
+      expect(moved.dx, lessThan(before.dx - 100));
+      expect(moved.dy, greaterThan(before.dy + 200));
+
+      await tester.drag(preview, const Offset(-5000, 5000));
+      await tester.pumpAndSettle();
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      final parked = tester.getCenter(preview);
+      expect(parked.dx, inInclusiveRange(0, screen.width));
+      expect(parked.dy, inInclusiveRange(0, screen.height));
+    });
+
     testWidgets('the camera button turns the camera off', (tester) async {
       await live(tester);
 

@@ -63,6 +63,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `PUT /v1/account/password` | `SetPasswordRequest` → 204 | Needs the current auth key or a fresh verification token. A wrong current auth key counts towards password sign-in's lockout (`password_locked`). 10 per hour per account. Other devices get `password_changed`. |
 | `PUT /v1/account/helix-name` | `SetHelixNameRequest` → 204 | `name_taken` on conflict. |
 | `DELETE /v1/account/helix-name` | — → 204 | |
+| `PUT /v1/account/phone-number` | `SetPhoneNumberRequest` → 204 | This account's own number, for the operator console (ADR-030). It must hash to the account's verified phone hash, else `invalid_field`. Kept sealed under `HELIX_PHONE_KEY` (AES-256-GCM, bound to the account); without that key nothing is kept. Apps send it once after signing in. |
 | `GET /v1/account/security-events` | paged → `Page<SecurityEvent>` | |
 | `GET /v1/devices` | — → `DeviceList` | No push tokens. |
 | `PATCH /v1/devices/{device_id}` | `RenameDeviceRequest` → 204 | |
@@ -85,7 +86,7 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 
 | Route | Body → response | Rules |
 |---|---|---|
-| `POST /v1/messages` | `SendMessageRequest` → `SendMessageResponse` | Each recipient account must be addressed on **all** its active devices (the sender's own: all except the sending device) or the request fails with `device_list_stale` (`StaleDevices` details) and nothing is sent. Blocked-by-recipient: accepted and silently dropped. Payload ≤ 256 KiB. Each device keeps its newest 10,000 undelivered envelopes; beyond that its oldest are dropped, and the send still succeeds. `ephemeral`: online devices only, never stored. Rate-limited per device (200 burst, 5/s) and per account (400 burst, 10/s); stored sends also draw on the account's stored-envelope budget, shared with group sends (one unit per started 16 KiB per recipient device; 50,000 burst, 250/s; `rate_limited`). A payload over 16 KiB while the server is over its storage budget: `quota_exceeded` (details `reason: server_storage`). |
+| `POST /v1/messages` | `SendMessageRequest` → `SendMessageResponse` | Each recipient account must be addressed on **all** its active devices (the sender's own: all except the sending device) or the request fails with `device_list_stale` (`StaleDevices` details) and nothing is sent. Blocked-by-recipient: accepted, those accounts' devices get nothing, and `blocked_by` in the response names them (blocks are not secret). Payload ≤ 256 KiB. Each device keeps its newest 10,000 undelivered envelopes; beyond that its oldest are dropped, and the send still succeeds. `ephemeral`: online devices only, never stored. Rate-limited per device (200 burst, 5/s) and per account (400 burst, 10/s); stored sends also draw on the account's stored-envelope budget, shared with group sends (one unit per started 16 KiB per recipient device; 50,000 burst, 250/s; `rate_limited`). A payload over 16 KiB while the server is over its storage budget: `quota_exceeded` (details `reason: server_storage`). |
 | `GET /v1/mailbox` | `?after=&limit=` → `MailboxPage` | Oldest first. `seq_head` is the highest `seq` ever given to the device; an `after` above it (a restored server) is read as 0 (REALTIME_V2.md, "Restored server"). |
 | `POST /v1/mailbox/ack` | `AckRequest` → `AckResponse` | Cumulative; deletes acked envelopes. An ack above `seq_head` deletes nothing. Undelivered envelopes expire after 30 days. |
 
@@ -105,8 +106,9 @@ Replaces v1's hand-written OpenAPI file for v2 (plan change log 2026-10-01).
 | `GET /v1/people/{account}/profile` | — → `EncryptedProfile` | Ciphertext only; readable by anyone with the profile key. |
 | `GET /v1/people/{account}/presence` | — → `PresenceResponse` | Filtered by the owner's `online`/`last_seen` audience. |
 | `PUT /v1/profile` | `EncryptedProfile` → 204 | `version` must increase. ≤ 16 KiB. |
+| `PUT /v1/profile/name` | `SetOwnNameRequest` → 204 | The name this account gives itself, **in the clear**, for the operator console only (ADR-030); contacts read the encrypted profile. ≤ 80 characters; empty removes it. Apps send it with every profile save and once after signing in. |
 | `GET /v1/people/blocks` | — → `BlockList` | |
-| `PUT /v1/people/blocks/{account}` | — → 204 | Blocked accounts' messages and calls are dropped silently; they cannot add you to groups. |
+| `PUT /v1/people/blocks/{account}` | — → 204 | Blocks are not secret. The blocked account's devices get a `block_change` envelope (`BlockChangeEvent`: `account`, `blocked: true`) at once, and `DELETE` sends one with `blocked: false`; only an actual change is announced, and an account on another server is not told. Its messages reach nobody (`blocked_by` on its sends), its call offers are refused with `blocked` (403), and it cannot add you to groups. |
 | `DELETE /v1/people/blocks/{account}` | — → 204 | |
 | `GET /v1/people/privacy` | — → `PrivacySettings` | |
 | `PUT /v1/people/privacy` | `PrivacySettings` → 204 | Turning `discoverable_by_phone` off deletes the server's discovery entry for the account. Turning it back on needs `phone_number` (the account's own number, E.164; checked against the verified number, `invalid_field` otherwise); other changes while it stays on need none. Never returned by `GET`. |
@@ -144,7 +146,7 @@ member device (and to removed members, so they know).
 | Route | Body → response | Rules |
 |---|---|---|
 | `GET /v1/calls/turn` | — → `TurnCredentials` | 1-hour coturn REST credentials; 10/hour per device. `username` is `<expiry>:<random id>` (new each time, never an account or device id, because it crosses the network unencrypted on `turn:`). `urls` may include `turns:` (TLS, 5349). |
-| `POST /v1/calls/{call_id}/signals` | `CallSignalRequest` → `CallSignalResponse` | Online devices get a `call_signal` envelope now; for `offer`, offline devices get a pending call (TTL ≤ 120 s) and a high-priority push. A pending offer is refreshed only by the same caller device; anyone else's offer under that call id is not stored. `end` clears only pending offers the sender is in (as caller or callee). Blocked: dropped silently. Offers: 30 per 10 minutes per account; every other kind: 240 per minute per sending device. |
+| `POST /v1/calls/{call_id}/signals` | `CallSignalRequest` → `CallSignalResponse` | Online devices get a `call_signal` envelope now; for `offer`, offline devices get a pending call (TTL ≤ 120 s) and a high-priority push. A pending offer is refreshed only by the same caller device; anyone else's offer under that call id is not stored. `end` clears only pending offers the sender is in (as caller or callee). An `offer` to a callee who blocked the caller: `blocked` (403, details `accounts`) and nothing rings; the call's other signals from a blocked caller are dropped silently. Offers: 30 per 10 minutes per account; every other kind: 240 per minute per sending device. |
 | `PUT /v1/calls/{call_id}/state` | `CallStateRequest` → 204 | Clears pending offers the account is in (as caller or callee); other devices of the same account stop ringing. |
 | `GET /v1/calls/pending` | — → `PendingCallList` | |
 | `POST /v1/calls/metrics` | `CallMetricsRequest` → 204 | 100 per day per account. |
@@ -244,7 +246,7 @@ tokens never open each other's routes.
 | `POST /v1/admin/sessions` | `AdminPasswordRequest` → `AdminSession` | Public, 10 per minute per IP. Per IP, 5 failures lock that address (15 min, doubling to 24 h); 100 failures from anywhere since the last success lock sign-in for 15 min. Attempts are counted before the password is checked (`password_locked`). 12-hour token. |
 | `DELETE /v1/admin/sessions` | → 204 | Signs the operator out everywhere: every admin token issued until now stops working, and open log streams close with 4001. |
 | `PUT /v1/admin/password` | `ChangeAdminPasswordRequest` → `AdminSession` | Ends every other admin session. |
-| `GET /v1/admin/accounts` | — → `Page<AdminAccount>` | `status`, `q` (name prefix or last 4 digits). Last 4 digits only. |
+| `GET /v1/admin/accounts` | — → `Page<AdminAccount>` | `status`, `q` (Helix name prefix or last 4 digits). Each account carries `display_name` and the full `phone_number` once its app has reported them (ADR-030; the number only with `HELIX_PHONE_KEY`), else the last 4 digits. |
 | `GET /v1/admin/accounts/{account}` | — → `AdminAccountDetail` | |
 | `PUT /v1/admin/accounts/{account}/suspension` | optional `AdminActionRequest` → 204 | |
 | `DELETE /v1/admin/accounts/{account}/suspension` | — → 204 | |

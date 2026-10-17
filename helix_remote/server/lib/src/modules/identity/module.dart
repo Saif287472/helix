@@ -65,7 +65,7 @@ final class IdentityModule extends ModuleBase
       clock: context.clock,
     );
     api = _IdentityFacade(this);
-    _adminStore = AdminStore(schema);
+    _adminStore = AdminStore(schema, phoneSeal: _ctx.phoneSeal);
     administration = Administration(
       _ctx,
       store: _adminStore,

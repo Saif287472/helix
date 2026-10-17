@@ -84,7 +84,9 @@ offer was known (`PendingCallDecision`, valid for the ring time).
   `setProximityScreenOff` in `MainActivity` (a proximity wake lock, 3 h cap).
 - Audio routing: `WebRtcAudioOutputs` (new, in `helix_remote_calls`): earpiece,
   speaker, Bluetooth, wired headset where the plugin reports them; none on Windows
-  (the route control hides).
+  (the route control hides). The plugin knows the outputs once the microphone is
+  open, so the route controller begins then (`CallScreenState.mediaOpen`): a
+  call being placed can go to the speaker while it rings.
 - Permissions: `WebRtcMediaPermissions` opens and closes the device to raise the
   OS prompt, so the person meets it before the call, not in it.
 - Media: relay-only candidates (`IpPrivacyMode.relayOnly`) with the engine's TURN
@@ -95,6 +97,10 @@ offer was known (`PendingCallDecision`, valid for the ring time).
 
 - Back is ignored while a call is live (leaving is hanging up); there is no
   minimised "return to call" bar yet.
+- A video call rings with the camera on (your picture fills the screen until
+  the other side's arrives); the camera button works once the call is
+  answered. The small preview can be dragged anywhere on the screen, and a tap
+  swaps the two pictures.
 - The notification's Decline opens the app (no background engine to decline from).
 - Group calls, call links and scheduled calls: not built.
 - No APK is needed to review the code; one is needed to try calls on a phone

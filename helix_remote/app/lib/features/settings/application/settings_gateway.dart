@@ -115,9 +115,11 @@ final class EngineSettingsGateway implements SettingsGateway {
       final profile = row?.profileName;
       yield SettingsHeader(
         accountId: row?.accountId ?? '',
+        // Empty: the account has no name yet (skipped at sign-up, or a phone
+        // signed in with the password cannot read the old one).
         name: (profile != null && profile.isNotEmpty)
             ? profile
-            : (helix != null && helix.isNotEmpty ? '~$helix' : 'Helix'),
+            : (helix != null && helix.isNotEmpty ? '~$helix' : ''),
         about: about,
         serverHost: runtime.serverUrl.host,
       );

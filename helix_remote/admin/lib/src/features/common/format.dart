@@ -1,3 +1,5 @@
+import 'package:helix_remote_protocol/helix_remote_protocol.dart';
+
 /// "2026-10-02 14:03" in the operator's local time.
 String formatTime(DateTime time) {
   final t = time.toLocal();
@@ -13,6 +15,22 @@ String _two(int n) => n.toString().padLeft(2, '0');
 
 /// The first 8 characters of an id, enough to tell rows apart.
 String shortId(String id) => id.length <= 8 ? id : id.substring(0, 8);
+
+/// What the console calls [account]: the name the person gave themselves
+/// (their app reports it, ADR-030), else their Helix name.
+String accountTitle(AdminAccount account) {
+  final name = account.displayName?.trim() ?? '';
+  if (name.isNotEmpty) return name;
+  final helix = account.helixName ?? '';
+  return helix.isEmpty ? 'No Helix name' : helix;
+}
+
+/// The full number once the account's app has reported it and the server
+/// keeps numbers (`HELIX_PHONE_KEY`, ADR-030), else the last four digits.
+String accountPhone(AdminAccount account) {
+  final number = account.phoneNumber ?? '';
+  return number.isNotEmpty ? number : maskedPhone(account.phoneLast4);
+}
 
 /// A phone number as the server reports it: the last four digits only.
 String maskedPhone(String? last4) =>

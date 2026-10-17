@@ -345,6 +345,15 @@ CREATE TABLE $s.call_metrics (
       senderAccount,
       addressed.keys.where((a) => a != senderAccount),
     );
+    // A blocked caller is told at once (blocks are not secret) rather than
+    // left ringing; the other signals of a call are still dropped silently.
+    if (kind == CallSignalKind.offer && blockers.isNotEmpty) {
+      throw ApiError(
+        ErrorCode.blocked,
+        message: 'the callee has blocked you',
+        details: {'accounts': blockers.toList()..sort()},
+      );
+    }
     for (final account in blockers) {
       addressed[account]!.forEach(payloads.remove);
     }

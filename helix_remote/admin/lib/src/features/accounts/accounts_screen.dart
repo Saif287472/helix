@@ -245,7 +245,7 @@ class AccountTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = account.helixName;
+    final name = accountTitle(account);
     final devices = account.activeDevices == 1
         ? '1 device'
         : '${account.activeDevices} devices';
@@ -264,7 +264,7 @@ class AccountTile extends StatelessWidget {
         onTap: onTap,
         child: Row(
           children: [
-            AccountAvatar(name: name),
+            AccountAvatar(name: account.displayName ?? account.helixName),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -274,7 +274,7 @@ class AccountTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          name == null || name.isEmpty ? 'No Helix name' : name,
+                          name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -290,7 +290,7 @@ class AccountTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    maskedPhone(account.phoneLast4),
+                    accountPhone(account),
                     style: const TextStyle(
                       fontSize: 12,
                       color: HelixConsoleColors.textBody,

@@ -148,8 +148,12 @@ Fakes for tests: `test/support/people_fakes.dart`.
   explanation, as read+write together (reading finds people, writing keeps a
   rename in the phone). `denied` leaves the card; `permanentlyDenied` offers
   "Open settings"; Windows (`unsupported`) shows nothing.
-- **When it syncs** (`PhoneBookSyncHost`, mounted in `main.dart`): on start, on
-  resume, hourly while open, and 30 s after the address book changes. The
+- **When it syncs** (`PhoneBookSyncHost`, mounted in `main.dart`): when the
+  device becomes signed in (on start once the engine has opened, and after a
+  fresh sign-in; until 2026-10-14 the start-up check ran on the first frame,
+  before the engine was ready, and was skipped), on resume, hourly while open,
+  and 30 s after the address book changes. Triggers that arrive together run
+  one sync. The
   controller decides if it is *due*: at most every 12 h by itself (1 h after an
   address-book change), never on a day when the last sync showed less budget
   left than it spent, and the daily limit being hit is remembered until the next

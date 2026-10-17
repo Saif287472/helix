@@ -70,7 +70,9 @@ undelivered rows at scrape time.
    active devices (the sender's own: all except the sending one), or
    `device_list_stale` with `StaleDevices` details.
 3. **Blocks:** devices of recipients who blocked the sender are dropped
-   silently (`BlockPolicy`, which the people module installs in S4).
+   (`BlockPolicy`, which the people module installs in S4), and the
+   response names those accounts in `blocked_by`: the send still succeeds
+   for everyone else (the sender's own devices, other recipients).
 4. **Ephemeral sends** (`ephemeral: true`) go to online devices only: the
    envelope is parked in the ephemeral store for 60 s, and
    `realtime.ephemeral` on the bus tells the socket's node.

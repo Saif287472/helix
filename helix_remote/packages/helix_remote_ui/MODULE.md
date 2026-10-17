@@ -52,7 +52,8 @@ rebuilds of equal items.
 **Chat list**: `HelixChatListTile` (avatar, title, preview with tick and
 sender prefix, time, unread and mention badges, pinned / muted / archived,
 typing, verified), `HelixSwipeableChatListTile` (+ `HelixSwipeAction`, with
-matching screen-reader actions), `HelixSelectionBar` (+ `HelixBarAction`),
+matching screen-reader actions), `HelixSelectionBar` (+ `HelixBarAction` for its two or three icons,
+`HelixMenuAction` for the rest, behind "More options"),
 `HelixSectionHeader`, `HelixArchivedRow`, `HelixChatListEmpty`,
 `HelixChatListSkeleton`, `HelixCountBadge`.
 

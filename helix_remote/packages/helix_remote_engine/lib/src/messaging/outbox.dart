@@ -356,12 +356,20 @@ final class OutboxWorker {
       switch (op.kind) {
         case OutboxKinds.sendContent:
           final payload = SendContentPayload.decode(op.payload);
-          await _sender.send(
+          final response = await _sender.send(
             requestId: op.idempotencyKey,
             content: payload.content.encode(),
             accounts: payload.audience,
             urgent: payload.urgent,
           );
+          final self = _ctx.identity.accountId;
+          final others = payload.audience.where((a) => a != self).toSet();
+          if (others.isNotEmpty && others.every(response.blockedBy.contains)) {
+            // Everyone it was for has blocked this account: it reached
+            // nobody, so it is not delivered (the chat says why).
+            await _giveUp(op, 'blocked');
+            return;
+          }
         case OutboxKinds.sessionReset:
           await _reset(SessionResetPayload.decode(op.payload));
         case GroupOutboxKinds.sendGroupContent:

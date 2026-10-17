@@ -183,6 +183,22 @@ final class PresenceResponse {
 }
 
 /// `GET /v1/people/blocks`.
+/// `PUT /v1/profile/name`: the name this account gives itself, in the clear,
+/// for the operator console only (ADR-030); contacts read the encrypted
+/// profile. An empty name clears it.
+final class SetOwnNameRequest {
+  const SetOwnNameRequest({required this.name});
+
+  static const maxLength = 80;
+
+  final String name;
+
+  JsonMap toJson() => {'name': name};
+
+  factory SetOwnNameRequest.fromJson(JsonReader json) =>
+      SetOwnNameRequest(name: json.string('name'));
+}
+
 final class BlockList {
   const BlockList({required this.accounts});
 

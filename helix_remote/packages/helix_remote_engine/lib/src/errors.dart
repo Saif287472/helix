@@ -129,6 +129,10 @@ enum CallFailure {
   /// This user blocked the person: unblock first.
   blocked,
 
+  /// The person blocked this user: the server refused the offer, and no call
+  /// reaches them until they unblock.
+  blockedByPeer,
+
   /// No network, a server that is down, or a recipient that cannot be
   /// reached.
   unavailable,

@@ -43,7 +43,9 @@ const openPageHtml = r'''<!doctype html>
 </main>
 <script>
   var code = decodeURIComponent((location.hash || '').slice(1)).trim();
-  var valid = /^HLX-(INV|REC|GRP)-[A-Za-z0-9_-]+$/i.test(code);
+  // Base64url, plus the "." a group link puts between its token and the key
+  // that opens its preview (HLX-GRP-<token>.<key>).
+  var valid = /^HLX-(INV|REC|GRP)-[A-Za-z0-9_.-]+$/i.test(code);
   var open = document.getElementById('open');
   if (!valid) {
     document.getElementById('lead').textContent =

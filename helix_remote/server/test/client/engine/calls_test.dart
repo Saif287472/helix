@@ -346,51 +346,52 @@ void main() {
       expect(await callEntries(bob, alice), hasLength(1));
     });
 
-    test(
-      'a blocked caller rings into the void; blocking is also local',
-      () async {
-        final alice = await world.register('alice', aliceNumber);
-        final bob = await world.register('bob', bobNumber);
-        media(alice);
-        media(bob);
-        final chat = await alice.engine.chats.openDirect(bob.account);
-        await alice.engine.chats.sendText(chat.id, 'ping');
-        await waitForText(bob, alice, 'ping');
+    test('a blocked caller is told at once; blocking is also local', () async {
+      final alice = await world.register('alice', aliceNumber);
+      final bob = await world.register('bob', bobNumber);
+      media(alice);
+      media(bob);
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      await alice.engine.chats.sendText(chat.id, 'ping');
+      await waitForText(bob, alice, 'ping');
 
-        await bob.engine.people.block(alice.account);
-        final started = await alice.engine.calls.startCall(bob.account);
-        // The caller learns nothing: it looks like any call nobody answers.
-        expect(alice.engine.calls.current!.phase, CallPhase.calling);
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-        expect(alice.engine.calls.current!.phase, CallPhase.calling);
-        expect(bob.engine.calls.current, isNull);
-        expect(await bob.db.callsDao.recent(), isEmpty);
-        expect((await bob.api.calls.pending()).calls, isEmpty);
-        await alice.engine.calls.hangUp();
-        final row = await logOf(alice, started.callId, state: 'cancelled');
-        expect(row.direction, 'outgoing');
-
-        // Alice cannot call someone she blocked.
-        await alice.engine.people.block(bob.account);
-        await expectLater(
-          alice.engine.calls.startCall(bob.account),
-          throwsA(
-            isA<CallFailedException>().having(
-              (e) => e.reason,
-              'reason',
-              CallFailure.blocked,
-            ),
+      await bob.engine.people.block(alice.account);
+      // Blocks are not secret: the offer is refused, nothing rings.
+      await expectLater(
+        alice.engine.calls.startCall(bob.account),
+        throwsA(
+          isA<CallFailedException>().having(
+            (e) => e.reason,
+            'reason',
+            CallFailure.blockedByPeer,
           ),
-        );
-        // Unblocked on both sides, calls work again.
-        await alice.engine.people.unblock(bob.account);
-        await bob.engine.people.unblock(alice.account);
-        final again = await alice.engine.calls.startCall(bob.account);
-        await waitForCall(bob, (c) => c.callId == again.callId);
-        await bob.engine.calls.decline();
-        await waitForNoCall(alice);
-      },
-    );
+        ),
+      );
+      expect(await alice.engine.people.blocksMe(bob.account), isTrue);
+      expect(bob.engine.calls.current, isNull);
+      expect(await bob.db.callsDao.recent(), isEmpty);
+      expect((await bob.api.calls.pending()).calls, isEmpty);
+
+      // Alice cannot call someone she blocked.
+      await alice.engine.people.block(bob.account);
+      await expectLater(
+        alice.engine.calls.startCall(bob.account),
+        throwsA(
+          isA<CallFailedException>().having(
+            (e) => e.reason,
+            'reason',
+            CallFailure.blocked,
+          ),
+        ),
+      );
+      // Unblocked on both sides, calls work again.
+      await alice.engine.people.unblock(bob.account);
+      await bob.engine.people.unblock(alice.account);
+      final again = await alice.engine.calls.startCall(bob.account);
+      await waitForCall(bob, (c) => c.callId == again.callId);
+      await bob.engine.calls.decline();
+      await waitForNoCall(alice);
+    });
 
     test('both call each other at once: one call survives', () async {
       final alice = await world.register('alice', aliceNumber);

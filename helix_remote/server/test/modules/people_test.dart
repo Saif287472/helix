@@ -217,12 +217,19 @@ void main() {
       expect(read.version, 1);
     });
 
-    test('blocks stop messages silently, in the real block policy', () async {
+    test('blocks stop messages, and the blocked person is told', () async {
       await h.api.call(
         Routes.block,
         params: {'account': alice.accountId},
         bearer: bob.bearer,
       );
+      final told = [
+        for (final e in (await mailbox(h, alice)).envelopes)
+          if (e.kind == EnvelopeKind.blockChange)
+            BlockChangeEvent.fromJson(JsonReader(e.data!)),
+      ];
+      expect(told.single.account, bob.accountId);
+      expect(told.single.blocked, isTrue);
       expect(
         BlockList.fromJson(
           (await h.api.call(Routes.blocks, bearer: bob.bearer)).json,
@@ -232,7 +239,12 @@ void main() {
       final sent = await send(h, alice, {
         bob.accountId: [bob.id],
       });
-      expect(sent.status, 200, reason: 'the sender is not told');
+      expect(sent.status, 200);
+      expect(
+        SendMessageResponse.fromJson(sent.json).blockedBy,
+        [bob.accountId],
+        reason: 'blocks are not secret: the sender is told',
+      );
       expect(
         (await mailbox(
           h,
@@ -245,6 +257,12 @@ void main() {
         params: {'account': alice.accountId},
         bearer: bob.bearer,
       );
+      final changes = [
+        for (final e in (await mailbox(h, alice)).envelopes)
+          if (e.kind == EnvelopeKind.blockChange)
+            BlockChangeEvent.fromJson(JsonReader(e.data!)).blocked,
+      ];
+      expect(changes, [true, false], reason: 'unblocking is told too');
       await send(h, alice, {
         bob.accountId: [bob.id],
       });

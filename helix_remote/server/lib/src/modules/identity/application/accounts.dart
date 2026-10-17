@@ -214,6 +214,31 @@ final class Accounts {
   Future<void> clearHelixName(DevicePrincipal me) =>
       c.store.setHelixName(c.db, me.accountId, null);
 
+  /// Keeps this account's own number, sealed, for the operator console
+  /// (ADR-030). Only the number the account verified is taken: it must hash
+  /// to the stored phone hash. Without `HELIX_PHONE_KEY` nothing is kept.
+  Future<void> setPhoneNumber(
+    DevicePrincipal me,
+    SetPhoneNumberRequest req,
+  ) async {
+    final e164 = requireE164(req.phoneNumber);
+    final stored = await c.store.phoneHashOf(c.db, me.accountId);
+    if (stored == null || !constantTimeEquals(c.phoneHash(e164), stored)) {
+      throw const ApiError(
+        ErrorCode.invalidField,
+        message: 'this is not the number the account verified',
+        details: {'field': 'phone_number'},
+      );
+    }
+    final seal = c.phoneSeal;
+    if (seal == null) return;
+    await c.store.setPhoneSealed(
+      c.db,
+      me.accountId,
+      await seal.seal(me.accountId, e164),
+    );
+  }
+
   Future<Page<SecurityEvent>> events(
     DevicePrincipal me,
     PageRequest page,

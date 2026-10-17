@@ -339,6 +339,23 @@ within the hour (a reset, another of its devices) has no one-time prekey,
 which weakens replay resistance of its first message, not its secrecy.
 `test/modules/server_hardening_test.dart` covers it.
 
+## 14. Reported phone numbers at rest (2026-10-14, ADR-030)
+
+**Not externally reviewed.** Server-side storage, not end-to-end crypto; no
+client crypto changed. An app reports its account's own number; the server
+takes it only when `HMAC(HELIX_PHONE_PEPPER, number)` equals the stored phone
+hash (constant-time compare), then seals it with AES-256-GCM
+(`package:cryptography`, random 96-bit nonce, 128-bit tag) under
+`HELIX_PHONE_KEY`, a 32-byte secret kept outside the database, with
+`"helix.v2.phone-number\n" + account id` as associated data, so a sealed
+number copied to another account's row does not open. Stored as nonce ‖
+ciphertext ‖ tag in `identity.accounts.phone_sealed`; the admin console and
+the account's export open it. There is one key and no key id: rotating it
+leaves old rows unreadable until apps report again. `server/test/modules/
+phone_seal_test.dart` covers the round trip, the account binding,
+tampering and a wrong key. Display names are sent in the clear by design
+(ADR-030) and involve no crypto.
+
 ## Independent review pass, 2026-10-05
 
 An independent, read-only review of the v2 client crypto and engine was done

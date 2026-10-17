@@ -79,7 +79,9 @@ final class CallEffects {
         setLockBypass(value: next.stage != CallStage.dialing);
         await _stopRinging(next.callId);
         await _startService(next);
-        if (next.stage != CallStage.dialing) {
+        // The outputs can be read once the microphone is open, which a call
+        // being placed reaches while it rings: the speaker works from then.
+        if (next.stage != CallStage.dialing || next.mediaOpen) {
           await audio.begin(video: next.video);
         }
         if (next.stage == CallStage.active &&
@@ -160,7 +162,8 @@ final callEffectsProvider = Provider<CallEffects>((ref) {
     // Only the changes that decide an effect: not every tick of the notice.
     if (previous?.callId == next?.callId &&
         previous?.stage == next?.stage &&
-        previous?.video == next?.video) {
+        previous?.video == next?.video &&
+        previous?.mediaOpen == next?.mediaOpen) {
       if (previous?.audio.route != next?.audio.route) {
         unawaited(effects.onRouteChanged(next));
       }

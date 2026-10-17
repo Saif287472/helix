@@ -214,23 +214,29 @@ void main() {
       expect(h.push.sent, isEmpty, reason: 'non-urgent sends never push');
     });
 
-    test('blocked senders are dropped silently', () async {
-      h.messaging.api.setBlockPolicy(
-        (db, sender, recipients) async =>
-            sender == a1.accountId ? recipients.toSet() : <String>{},
-      );
-      final response = await send(h, a1, {
-        b1.accountId: [b1.id],
-        a1.accountId: [a2.id],
-      });
-      expect(response.status, 200);
-      expect((await mailbox(h, b1)).envelopes, isEmpty);
-      expect(
-        (await mailbox(h, a2)).envelopes,
-        hasLength(1),
-        reason: 'own devices still get the copy',
-      );
-    });
+    test(
+      'blocked senders reach nobody, and are told who blocked them',
+      () async {
+        h.messaging.api.setBlockPolicy(
+          (db, sender, recipients) async =>
+              sender == a1.accountId ? recipients.toSet() : <String>{},
+        );
+        final response = await send(h, a1, {
+          b1.accountId: [b1.id],
+          a1.accountId: [a2.id],
+        });
+        expect(response.status, 200);
+        expect(SendMessageResponse.fromJson(response.json).blockedBy, [
+          b1.accountId,
+        ]);
+        expect((await mailbox(h, b1)).envelopes, isEmpty);
+        expect(
+          (await mailbox(h, a2)).envelopes,
+          hasLength(1),
+          reason: 'own devices still get the copy',
+        );
+      },
+    );
 
     test(
       'a new sign-in is announced to the other devices; the list change too',

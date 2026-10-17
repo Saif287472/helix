@@ -32,6 +32,10 @@ enum EnvelopeKind implements WireEnum {
   /// Server-generated: this device should upload more one-time prekeys.
   prekeysLow('prekeys_low'),
 
+  /// Server-generated: another account blocked or unblocked this one
+  /// ([BlockChangeEvent]). Blocks are not secret: the blocked person is told.
+  blockChange('block_change'),
+
   /// A kind this client does not know yet. Acked and ignored.
   unknown('unknown');
 
@@ -227,6 +231,22 @@ final class DeviceListChangeEvent {
 
   factory DeviceListChangeEvent.fromJson(JsonReader json) =>
       DeviceListChangeEvent(account: json.nonEmpty('account'));
+}
+
+/// [EnvelopeKind.blockChange] data: [account] blocked this account, or
+/// ([blocked] false) unblocked it.
+final class BlockChangeEvent {
+  const BlockChangeEvent({required this.account, required this.blocked});
+
+  final String account;
+  final bool blocked;
+
+  JsonMap toJson() => {'account': account, 'blocked': blocked};
+
+  factory BlockChangeEvent.fromJson(JsonReader json) => BlockChangeEvent(
+    account: json.nonEmpty('account'),
+    blocked: json.flag('blocked'),
+  );
 }
 
 /// [EnvelopeKind.keyChange] data.

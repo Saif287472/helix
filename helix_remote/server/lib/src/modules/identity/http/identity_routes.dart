@@ -259,6 +259,13 @@ void registerIdentityRoutes(
       await accounts.clearHelixName(q.device);
       return noContent();
     })
+    ..add(m, Routes.setPhoneNumber, (q) async {
+      await accounts.setPhoneNumber(
+        q.device,
+        q.json(SetPhoneNumberRequest.fromJson),
+      );
+      return noContent();
+    })
     ..add(m, Routes.securityEvents, allowSuspended: true, (q) async {
       final page = await accounts.events(
         q.device,

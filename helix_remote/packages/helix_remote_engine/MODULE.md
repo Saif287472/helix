@@ -322,8 +322,14 @@ deterministic `FakeCallMediaFactory`.
   is not bound to is ignored; ring timeout (`CallConfig.ringTimeout`, 60 s),
   connect timeout (30 s), media failure all end the call and tell the peer.
   Calling someone this user blocked throws `blocked`; a blocked caller's offer
-  is dropped without a ring or a row; the server drops a call from someone the
-  callee blocked silently, so that caller sees an ordinary unanswered call.
+  is dropped without a ring or a row; the server refuses a call from someone
+  the callee blocked (`blocked`), which fails as `CallFailure.blockedByPeer`.
+- **Blocked by someone:** `PeopleService.blocksMe` / `watchBlocksMe`, kept in
+  `PersonState.blocksMe` (a setting, no schema change). Set by the server's
+  `block_change` envelope, by `blocked_by` on a send (`MessageSender.send`)
+  and by a refused offer; cleared by the unblock envelope, a send that
+  reaches them or an offer that goes out. A message that reached nobody
+  because everyone it was for blocked this account fails (`blocked`).
 - **Pending calls:** an offer for a device that was offline waits on the server
   (TTL up to 120 s) and a high-priority push wakes it. `Engine.syncOnce()`
   (headless, FCM isolate) returns `SyncSummary.pendingCalls` (who is calling,

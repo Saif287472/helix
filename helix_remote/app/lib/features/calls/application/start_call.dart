@@ -15,6 +15,9 @@ enum PlaceCallStatus {
   cameraDenied,
   busy,
   blocked,
+
+  /// The person blocked this account; the server refused the call.
+  blockedByPeer,
   rateLimited,
 
   /// The server has no call relay, so no call can connect.
@@ -104,6 +107,7 @@ PlaceCallOutcome _outcomeOf(CallFailure reason, CallMediaProblem? problem) {
   final status = switch (reason) {
     CallFailure.busy => PlaceCallStatus.busy,
     CallFailure.blocked => PlaceCallStatus.blocked,
+    CallFailure.blockedByPeer => PlaceCallStatus.blockedByPeer,
     CallFailure.rateLimited => PlaceCallStatus.rateLimited,
     CallFailure.noMedia ||
     CallFailure.unavailable ||

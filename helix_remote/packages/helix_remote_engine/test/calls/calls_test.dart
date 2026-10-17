@@ -4,6 +4,7 @@ import 'package:helix_remote_api/v2.dart';
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_engine/src/calls/call_log_mirror.dart';
+import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 import 'package:test/test.dart';
 
@@ -358,23 +359,37 @@ void main() {
       expect(carol.posted.single.$2.outcome, CallOutcome.missed);
     });
 
-    test('a caller the callee blocked rings into the void', () async {
-      final fast = const CallConfig(
-        ringTimeout: Duration(milliseconds: 150),
-        iceBatchDelay: Duration.zero,
-        signalTimeout: Duration(seconds: 2),
-      );
-      final alice = await net.add('alice', config: fast);
+    test('a caller the callee blocked is told at once', () async {
+      final alice = await net.add('alice');
       final bob = await net.add('bob');
       net.blocks.add((bob.account, alice.account));
-      final call = await alice.service.startCall(bob.account);
-      // Alice learns nothing: the call looks exactly like an unanswered one.
-      expect(alice.current!.phase, CallPhase.calling);
-      await alice.until(() => alice.current == null);
-      expect((await alice.logRow(call.callId))!.state, 'unanswered');
+      // Blocks are not secret: the call fails straight away, and Alice's
+      // engine remembers that Bob blocked her.
+      await expectLater(
+        alice.service.startCall(bob.account),
+        throwsA(
+          isA<CallFailedException>().having(
+            (e) => e.reason,
+            'reason',
+            CallFailure.blockedByPeer,
+          ),
+        ),
+      );
+      expect(
+        await alice.db.settingsDao.get(PersonState.blocksMe(bob.account)),
+        isTrue,
+      );
       expect(bob.current, isNull);
       expect(await bob.db.callsDao.recent(), isEmpty);
       expect(bob.events, isEmpty);
+
+      // Once Bob unblocks her, her next call rings and clears the mark.
+      net.blocks.remove((bob.account, alice.account));
+      await alice.service.startCall(bob.account);
+      expect(
+        await alice.db.settingsDao.get(PersonState.blocksMe(bob.account)),
+        isFalse,
+      );
     });
 
     test(

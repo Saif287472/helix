@@ -189,6 +189,7 @@ Every boolean, core and module alike, accepts `1/true/yes` and `0/false/no`
 | Name | Req | Default | Dev | Secret | What it does |
 |---|---|---|---|---|---|
 | `HELIX_PHONE_PEPPER` | yes | none | no | **yes** | Key for stored phone hashes: `<generate: 32 random bytes, base64url>`, at least 32 bytes. Keep it out of database backups. It also keys the phone discovery index, so a stolen database cannot be used to test numbers without it. Changing it orphans every stored phone hash and discovery index, so treat it as permanent. Every node needs the same value. |
+| `HELIX_PHONE_KEY` | no | none | no | **yes** | Encrypts the full phone numbers apps report, so the admin console can show them (ADR-030): `<generate: 32 random bytes, base64url>`, exactly 32 bytes. Unset, no number is kept beyond its hash and last four digits. Keep it out of database backups (a dump without it shows no numbers). Changing it makes the stored numbers unreadable until the apps report them again. Every node needs the same value. |
 | `HELIX_SMS_PROVIDER` | no | `none` | no | no | `none` or `bulksmsbd`. Required to be `bulksmsbd` when `HELIX_GLOBAL_MODE=true`. |
 | `HELIX_SMS_API_KEY` | if `bulksmsbd` | none | no | **yes** | BulkSMSBD API key. |
 | `HELIX_SMS_SENDER_ID` | if `bulksmsbd` | none | no | no | BulkSMSBD approved sender id. |

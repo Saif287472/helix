@@ -9,6 +9,7 @@ import 'package:helix_remote_server/src/platform/config/server_config.dart';
 final class IdentityConfig {
   IdentityConfig._({
     required this.phonePepper,
+    required this.phoneKey,
     required this.sms,
     required this.termsVersion,
     required this.globalMode,
@@ -23,6 +24,11 @@ final class IdentityConfig {
   /// Key for the stored phone hash. Kept outside the database, so a stolen
   /// database does not let anyone test numbers against stored hashes.
   final Uint8List phonePepper;
+
+  /// `HELIX_PHONE_KEY` (base64url, 32 random bytes): encrypts the full phone
+  /// numbers apps report, for the operator console (ADR-030). Unset, the
+  /// default: no number is kept beyond its hash and last four digits.
+  final Uint8List? phoneKey;
   final SmsProvider sms;
   final String termsVersion;
   final bool globalMode;
@@ -85,6 +91,19 @@ final class IdentityConfig {
         }
       } on Object {
         problems.add('HELIX_PHONE_PEPPER must be base64url');
+      }
+    }
+
+    final phoneKeyRaw = env['HELIX_PHONE_KEY']?.trim() ?? '';
+    Uint8List? phoneKey;
+    if (phoneKeyRaw.isNotEmpty) {
+      try {
+        phoneKey = decodeBytes(phoneKeyRaw);
+        if (phoneKey.length != 32) {
+          problems.add('HELIX_PHONE_KEY must be 32 bytes (base64url)');
+        }
+      } on Object {
+        problems.add('HELIX_PHONE_KEY must be base64url');
       }
     }
 
@@ -168,6 +187,7 @@ final class IdentityConfig {
 
     return IdentityConfig._(
       phonePepper: pepper,
+      phoneKey: phoneKey,
       sms: provider,
       termsVersion: env['HELIX_TERMS_VERSION']?.trim().isNotEmpty == true
           ? env['HELIX_TERMS_VERSION']!.trim()

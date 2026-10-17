@@ -109,6 +109,10 @@ final class CallScreenState {
   /// Both sides can see each other's video.
   bool get showsVideo => video && stage != CallStage.incoming;
 
+  /// This device's microphone (and camera) are open: the media has published
+  /// its surfaces. A call being placed reaches this before it is answered.
+  bool get mediaOpen => local != null;
+
   /// The mute, camera and audio controls apply: media is up or coming.
   bool get hasControls =>
       stage == CallStage.active ||

@@ -226,6 +226,10 @@ class ChatGateway {
 
   Future<void> unblock(String account) => _engine.people.unblock(account);
 
+  /// Whether [account] has blocked this account (the server says so).
+  Stream<bool> watchBlocksMe(String account) =>
+      _engine.people.watchBlocksMe(account);
+
   Future<PresenceResponse?> presence(String account) async {
     try {
       return await _engine.people.presence(account);

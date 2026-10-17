@@ -81,21 +81,31 @@ final class SendMessageRequest {
 }
 
 final class SendMessageResponse {
-  const SendMessageResponse({required this.acceptedAt, this.replayed = false});
+  const SendMessageResponse({
+    required this.acceptedAt,
+    this.replayed = false,
+    this.blockedBy = const [],
+  });
 
   final DateTime acceptedAt;
 
   /// The same request id was already accepted; nothing was sent again.
   final bool replayed;
 
+  /// Recipient accounts that blocked the sender: their devices got nothing.
+  /// The rest of the send went out as usual.
+  final List<String> blockedBy;
+
   JsonMap toJson() => {
     'accepted_at': toWireTime(acceptedAt),
     if (replayed) 'replayed': true,
+    if (blockedBy.isNotEmpty) 'blocked_by': blockedBy,
   };
 
   factory SendMessageResponse.fromJson(JsonReader json) => SendMessageResponse(
     acceptedAt: json.time('accepted_at'),
     replayed: json.flag('replayed'),
+    blockedBy: json.optStrings('blocked_by'),
   );
 }
 

@@ -127,7 +127,9 @@ class ConversationAppBar extends ConsumerWidget implements PreferredSizeWidget {
               ),
             ),
       actions: [
-        if (peer != null && !(header?.blocked ?? false)) ...[
+        if (peer != null &&
+            !(header?.blocked ?? false) &&
+            !(header?.blockedByPeer ?? false)) ...[
           IconButton(
             icon: const Icon(Icons.videocam_outlined),
             tooltip: 'Video call',

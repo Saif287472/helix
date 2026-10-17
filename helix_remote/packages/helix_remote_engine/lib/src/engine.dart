@@ -387,6 +387,7 @@ final class Engine {
       // log still shows as ringing or live is left over from a crash.
       await calls.recoverUnfinished();
       await _inbound.startRealtime();
+      unawaited(people.reportForConsole());
       // Offers that came while this device was offline wait on the server;
       // ring them whenever the socket (re)connects.
       _callWakes = _ctx.api.realtime.states.listen((state) {

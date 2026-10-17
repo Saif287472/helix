@@ -444,16 +444,22 @@ final class AdminModule extends ModuleBase implements ProvidesAuthentication {
       status: status,
       query: q.query('q'),
     );
-    return jsonResponse(page.toJson((a) => a.toJson()));
+    final names = await people.displayNames(context.db, [
+      for (final a in page.items) a.accountId,
+    ]);
+    return jsonResponse(
+      page.toJson((a) => a.copyWith(displayName: names[a.accountId]).toJson()),
+    );
   }
 
   Future<Response> _account(HelixRequest q) async {
     final id = q.uuidParam('account');
     final detail = await identity.admin.accountDetail(context.db, id);
     if (detail == null) throw const ApiError(ErrorCode.notFound);
+    final names = await people.displayNames(context.db, [id]);
     return jsonResponse(
       AdminAccountDetail(
-        account: detail.account,
+        account: detail.account.copyWith(displayName: names[id]),
         devices: detail.devices,
         hasPassword: detail.hasPassword,
         openReports: await people.openReportsAbout(context.db, id),

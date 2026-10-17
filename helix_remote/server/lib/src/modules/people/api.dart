@@ -31,4 +31,11 @@ abstract interface class PeopleApi {
   Future<bool> resolveReport(SqlSession db, String reportId, ReportStatus to);
 
   Future<int> openReportsAbout(SqlSession db, String accountId);
+
+  /// The names [accounts] gave themselves, as their apps reported them for
+  /// the operator console (ADR-030); accounts without one are left out.
+  Future<Map<String, String>> displayNames(
+    SqlSession db,
+    Iterable<String> accounts,
+  );
 }

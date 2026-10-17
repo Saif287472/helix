@@ -7,6 +7,7 @@ import 'package:helix_remote_engine/src/context.dart';
 import 'package:helix_remote_engine/src/crypto/pairwise_crypto.dart';
 import 'package:helix_remote_engine/src/crypto/peer_directory.dart';
 import 'package:helix_remote_engine/src/errors.dart';
+import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// Encrypts one content message for every device of its audience and posts
@@ -55,8 +56,25 @@ final class MessageSender {
         ),
       ),
     );
-    // Nobody to send to (an account with no other devices).
-    return response ?? SendMessageResponse(acceptedAt: _ctx.now());
+    if (response == null) {
+      // Nobody to send to (an account with no other devices).
+      return SendMessageResponse(acceptedAt: _ctx.now());
+    }
+    if (!response.replayed) {
+      // The server names the recipients who blocked this account; everyone
+      // else it addressed has not (or no longer has).
+      final self = _ctx.identity.accountId;
+      for (final account in accounts.toSet()) {
+        if (account == self) continue;
+        await PersonState.markBlocksMe(
+          _ctx.db,
+          account,
+          blocked: response.blockedBy.contains(account),
+          now: _ctx.now(),
+        );
+      }
+    }
+    return response;
   }
 
   /// The plan, encrypt-and-commit and stale-list loop behind [send], for any

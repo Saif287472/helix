@@ -8,7 +8,8 @@
   server sees the call id, the parties and the kind (`offer`, `update`,
   `end`).
   - Online devices get a `call_signal` envelope at once (ephemeral, via
-    messaging). Blocked callers reach nobody.
+    messaging). Blocked callers reach nobody: their `offer` is refused with
+    `blocked` (403), their other signals are dropped.
   - An `offer` must address every active device of the callee
     (`device_list_stale` otherwise). Devices that are offline get a
     `pending_calls` row (TTL up to 120 s) and a high-priority `call` push.

@@ -111,13 +111,18 @@ final class PhoneBookSyncController extends Notifier<PhoneBookSyncState> {
   static const minInterval = Duration(hours: 12);
   static const changedInterval = Duration(hours: 1);
 
+  /// Set before the first await of a sync, so triggers that arrive together
+  /// (the app resuming as the permission dialog closes, a sign-in during a
+  /// resume) run one sync and spend the budget once.
+  bool _running = false;
+
   @override
   PhoneBookSyncState build() => const PhoneBookSyncState();
 
-  /// Syncs when it is time: the host calls this on start, on resume, on a
-  /// timer and when the address book changes.
+  /// Syncs when it is time: the host calls this once signed in, on resume, on
+  /// a timer and when the address book changes.
   Future<void> syncIfDue({bool addressBookChanged = false}) async {
-    if (state.status == PhoneBookStatus.syncing) return;
+    if (_running) return;
     final access = ref.read(contactsAccessProvider);
     if (await access.permission() != ContactsPermission.granted) return;
     final PeopleGateway gateway;
@@ -144,9 +149,18 @@ final class PhoneBookSyncController extends Notifier<PhoneBookSyncState> {
     await syncNow();
   }
 
-  /// Matches the address book now.
+  /// Matches the address book now, unless a sync is already running.
   Future<void> syncNow() async {
-    if (state.status == PhoneBookStatus.syncing) return;
+    if (_running) return;
+    _running = true;
+    try {
+      await _match();
+    } finally {
+      _running = false;
+    }
+  }
+
+  Future<void> _match() async {
     final access = ref.read(contactsAccessProvider);
     if (await access.permission() != ContactsPermission.granted) {
       state = state.copyWith(status: PhoneBookStatus.needsPermission);

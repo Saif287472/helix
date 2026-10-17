@@ -7,11 +7,21 @@ Schema `people`. Facade: `api.dart` (`PeopleApi`).
   profile key (CRYPTO_V2.md §9). `version` must increase, and the limit
   is 16 KiB. Any signed-in device may read a profile: it is useless
   without the key.
+- **Display names:** `display_names` (migration 4), the name each account
+  gives itself **in the clear**, from `PUT /v1/profile/name` (≤ 80
+  characters, empty deletes it). Apps send it with every profile save and
+  once after signing in. Only the admin console reads it
+  (`PeopleApi.displayNames`, ADR-030); it is in the account's export and is
+  purged with the account.
 - **Privacy:** `privacy`, defaults `everyone`. The `contacts` audience
   means the account's uploaded `contacts` list (phone-book matches,
   replace-all, at most 5,000 entries).
 - **Blocks:** `blocks`. Installed as messaging's `BlockPolicy`, so sends
-  and calls from a blocked account are dropped silently. Blocked
+  and calls from a blocked account reach nobody. Blocks are not secret:
+  blocking and unblocking send the blocked account's devices a
+  `block_change` envelope in the same transaction (only when the row
+  changed; accounts on other servers are not told), sends name the blockers
+  in `blocked_by`, and calls refuse the offer with `blocked`. Blocked
   accounts also cannot discover you, find your `~name`, see your presence
   or add you to groups.
 - **Discovery:** `POST /v1/people/discover` takes client-computed

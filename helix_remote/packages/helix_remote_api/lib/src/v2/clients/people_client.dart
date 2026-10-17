@@ -41,6 +41,11 @@ final class PeopleClient {
   Future<void> setOwnProfile(EncryptedProfile profile) =>
       _t.empty(Routes.setOwnProfile, json: profile.toJson());
 
+  /// The name this account gives itself, in the clear, for the operator
+  /// console (contacts read the encrypted profile).
+  Future<void> setOwnName(String name) =>
+      _t.empty(Routes.setOwnName, json: SetOwnNameRequest(name: name).toJson());
+
   Future<BlockList> blocks() => _t.call(Routes.blocks, BlockList.fromJson);
 
   Future<void> block(String account) =>

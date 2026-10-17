@@ -49,6 +49,9 @@ abstract final class CallCopy {
   static String failure(CallFailure failure) => switch (failure) {
     CallFailure.busy => 'You are already in a call.',
     CallFailure.blocked => 'You blocked this person. Unblock them to call.',
+    // No name: this lands in a snackbar (people_rules_test).
+    CallFailure.blockedByPeer =>
+      "This person has blocked you. You can't message or call them.",
     CallFailure.unavailable =>
       'The call could not be placed. Check your connection and try again.',
     CallFailure.rateLimited =>

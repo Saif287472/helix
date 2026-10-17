@@ -8,9 +8,10 @@ import 'package:helix_remote/features/people/application/phone_book_sync.dart';
 
 /// Keeps the people the phone's contacts know in step with Helix.
 ///
-/// It asks [PhoneBookSyncController.syncIfDue] on start, when the app comes
-/// back to the foreground, every hour while it is open, and (after a short
-/// pause, so a burst of edits is one sync) when the address book changes. The
+/// It asks [PhoneBookSyncController.syncIfDue] once the device is signed in
+/// (on start, when the engine has opened, and after a fresh sign-in), when the
+/// app comes back to the foreground, every hour while it is open, and (after a
+/// short pause, so a burst of edits is one sync) when the address book changes. The
 /// controller decides whether a sync is actually due: it spends the daily
 /// discovery budget, so it will not run more than twice a day by itself, and
 /// not at all without the permission (which this never asks for).
@@ -46,6 +47,15 @@ class _PhoneBookSyncHostState extends ConsumerState<PhoneBookSyncHost>
         PhoneBookSyncHost.settle,
         () => _sync(addressBookChanged: true),
       );
+    });
+    // On the first frame the engine is usually still opening the database,
+    // so the start-up sync is the moment the device becomes signed in (a
+    // fresh sign-in or registration is that moment too).
+    ref.listenManual(authStateProvider, (previous, next) {
+      if (next.value == AppAuthState.ready &&
+          previous?.value != AppAuthState.ready) {
+        _sync();
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
   }

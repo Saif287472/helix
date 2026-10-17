@@ -15,10 +15,16 @@ import.
 - **Device trust:** a device is added only if its certificate verifies
   under the account's AIK *and* its proof verifies under its own DSK
   (`domain/secrets.dart`, CRYPTO_V2.md §2).
-- **Phone numbers:** only `HMAC(HELIX_PHONE_PEPPER, E.164)` (lookup), the
-  discovery index and the last four digits are stored. The number exists in
-  memory only while a code is texted (and while an account turns discovery
-  back on, below).
+- **Phone numbers:** `HMAC(HELIX_PHONE_PEPPER, E.164)` (lookup), the
+  discovery index and the last four digits are stored. The number from a
+  code request exists in memory only while the code is texted (and while an
+  account turns discovery back on, below). Since ADR-030 an app reports its
+  account's own number once after signing in (`PUT /v1/account/phone-number`,
+  `Accounts.setPhoneNumber`): only the number that hashes to the account's
+  phone hash is taken, and it is kept in `accounts.phone_sealed` (migration
+  3), AES-256-GCM under `HELIX_PHONE_KEY` with the account id as associated
+  data (`domain/phone_seal.dart`), for the admin console (`AdminStore`
+  opens it) and the account's own export. Without the key nothing is kept.
 - **Discovery index:** clients hash contacts as `hex(HMAC(discovery_salt,
   E.164))` under the public salt. The server never stores that: it stores
   and looks up `hex(HMAC(K, client hash))` with `K = HMAC(HELIX_PHONE_PEPPER,
@@ -140,6 +146,7 @@ envelopes; backup (S4) drops the AIK-keyed history backup on key change.
 | Variable | Meaning |
 |---|---|
 | `HELIX_PHONE_PEPPER` | required: base64url, at least 32 random bytes |
+| `HELIX_PHONE_KEY` | optional: base64url, exactly 32 random bytes; seals reported numbers for the admin console (ADR-030). Unset: none are kept |
 | `HELIX_SMS_PROVIDER` | `none` or `bulksmsbd`, with `HELIX_SMS_API_KEY` and `HELIX_SMS_SENDER_ID` |
 | `HELIX_TERMS_VERSION` | current terms (default `2026-09`) |
 | `HELIX_OTP_RESEND_SECONDS` | resend gap (default 30) |

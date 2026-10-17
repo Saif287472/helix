@@ -1016,6 +1016,21 @@ final class AccountInfo {
 
 /// `PUT /v1/account/helix-name`. Names are 3-32 characters of `[a-z0-9_.]`,
 /// starting with a letter, stored lowercase; shown as `~name`.
+/// `PUT /v1/account/phone-number`: this account's own number (E.164), which
+/// the server keeps encrypted for the operator console (ADR-030). It must be
+/// the number the account verified (its phone hash); anything else is
+/// `invalid_field`.
+final class SetPhoneNumberRequest {
+  const SetPhoneNumberRequest({required this.phoneNumber});
+
+  final String phoneNumber;
+
+  JsonMap toJson() => {'phone_number': phoneNumber};
+
+  factory SetPhoneNumberRequest.fromJson(JsonReader json) =>
+      SetPhoneNumberRequest(phoneNumber: json.nonEmpty('phone_number'));
+}
+
 final class SetHelixNameRequest {
   const SetHelixNameRequest({required this.name});
 

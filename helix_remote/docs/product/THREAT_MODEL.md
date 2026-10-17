@@ -14,6 +14,10 @@ metadata). The cryptography has **not been externally reviewed**
   server and to whoever can watch its network (`docs/protocol/v2/METADATA_V2.md`).
 - The operator of a server is trusted with availability and with the account directory, not
   with content. A malicious operator can drop or delay messages, and can refuse service.
+  Since ADR-030 the directory includes each account's own name (sent in the clear) and its
+  full phone number (sealed under `HELIX_PHONE_KEY`, opened for the admin console), so a
+  dump holds the names, and a dump plus that key holds the numbers. Blocks are not secret:
+  a blocked account is told at once.
 - A device is trusted with everything on it. SQLCipher and the app lock protect a lost,
   locked phone; they do not protect a phone that is unlocked and in the attacker's hands.
 

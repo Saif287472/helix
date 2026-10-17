@@ -67,7 +67,7 @@ deleted account by at most a year.
 
 | Area | Routes | Notes |
 |---|---|---|
-| Accounts | list (`status`, `q` = name prefix or last 4 digits, cursor), detail | No phone numbers beyond the last 4 digits. Detail adds open reports. |
+| Accounts | list (`status`, `q` = Helix name prefix or last 4 digits, cursor), detail | Each account's own name (people's `displayNames`) and full phone number (identity, opened from `phone_sealed` with `HELIX_PHONE_KEY`) once its app reported them (ADR-030), else the last 4 digits. Detail adds open reports. |
 | Suspend | `PUT` / `DELETE …/suspension` | The account keeps its devices; only `allowSuspended` routes answer. |
 | Ban | `POST …/ban` | Bans the phone hash, then deletes the account. |
 | Delete | `DELETE …/{account}` | identity's full deletion (every module's hook). |

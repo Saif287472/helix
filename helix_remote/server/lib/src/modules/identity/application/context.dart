@@ -8,6 +8,7 @@ import 'package:helix_remote_server/src/modules/identity/application/sessions.da
 import 'package:helix_remote_server/src/modules/identity/config.dart';
 import 'package:helix_remote_server/src/modules/identity/data/credential_store.dart';
 import 'package:helix_remote_server/src/modules/identity/data/identity_store.dart';
+import 'package:helix_remote_server/src/modules/identity/domain/phone_seal.dart';
 import 'package:helix_remote_server/src/modules/identity/domain/secrets.dart';
 import 'package:helix_remote_server/src/platform/bus/event_bus.dart';
 import 'package:helix_remote_server/src/platform/clock.dart';
@@ -79,6 +80,12 @@ final class IdentityContext {
   final IdentityHooks hooks;
   final SessionIssuer sessions;
   final Log log;
+
+  /// Seals reported phone numbers (ADR-030); null when `HELIX_PHONE_KEY` is
+  /// not set, and then no number is kept.
+  late final PhoneSeal? phoneSeal = config.phoneKey == null
+      ? null
+      : PhoneSeal(config.phoneKey!);
 
   Uint8List? _discoverySalt;
 

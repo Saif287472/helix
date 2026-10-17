@@ -272,8 +272,37 @@ void main() {
       expect(find.text('3 selected'), findsOneWidget);
       expect(find.byTooltip('Archive'), findsOneWidget);
       expect(find.byTooltip('Delete'), findsOneWidget);
+      expect(find.byTooltip('More options'), findsNothing);
       await tester.tap(find.byTooltip('Cancel selection'));
       expect(closed, isTrue);
+    });
+
+    testWidgets('the menu actions are behind "More options"', (tester) async {
+      var pinned = false;
+      await pumpHelix(tester, const SizedBox.shrink(), scaffold: false);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: HelixThemes.light(),
+          home: Scaffold(
+            appBar: HelixSelectionBar(
+              count: 1,
+              onClose: _noop,
+              menu: [
+                HelixMenuAction(label: 'Pin', onPressed: () => pinned = true),
+                const HelixMenuAction(label: 'Mute', onPressed: null),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Pin'), findsNothing);
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Mute'), findsOneWidget);
+      await tester.tap(find.text('Pin'));
+      await tester.pumpAndSettle();
+      expect(pinned, isTrue);
+      expect(find.text('Pin'), findsNothing);
     });
   });
 

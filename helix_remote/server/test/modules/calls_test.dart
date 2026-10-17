@@ -186,13 +186,15 @@ void main() {
           params: {'account': alice.accountId},
           bearer: bob1.bearer,
         );
-        final blocked = CallSignalResponse.fromJson(
-          (await signal('call-${Uuid.v7()}', CallSignalKind.offer, {
+        final blocked = await signal(
+          'call-${Uuid.v7()}',
+          CallSignalKind.offer,
+          {
             bob1.accountId: [bob1.id, bob2.id],
-          })).json,
+          },
         );
-        expect(blocked.delivered, isEmpty);
-        expect(blocked.pending, isEmpty);
+        expect(blocked.status, 403, reason: 'a blocked caller is told at once');
+        expect(blocked.errorCode, 'blocked');
       },
     );
 

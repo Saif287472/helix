@@ -145,6 +145,12 @@ final class IdentityClient {
     json: SetHelixNameRequest(name: name).toJson(),
   );
 
+  /// Reports this account's own (verified) number, for the operator console.
+  Future<void> setPhoneNumber(String e164) => _t.empty(
+    Routes.setPhoneNumber,
+    json: SetPhoneNumberRequest(phoneNumber: e164).toJson(),
+  );
+
   Future<void> clearHelixName() => _t.empty(Routes.clearHelixName);
 
   Future<Page<SecurityEvent>> securityEvents({

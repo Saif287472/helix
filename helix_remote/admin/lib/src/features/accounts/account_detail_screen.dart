@@ -206,7 +206,7 @@ class _AccountDetailViewState extends State<AccountDetailView> {
         }
         final account = detail.account;
         final suspended = account.status == AccountStatus.suspended;
-        final name = account.helixName;
+        final name = accountTitle(account);
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -225,16 +225,17 @@ class _AccountDetailViewState extends State<AccountDetailView> {
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      AccountAvatar(name: name, radius: 24),
+                      AccountAvatar(
+                        name: account.displayName ?? account.helixName,
+                        radius: 24,
+                      ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              name == null || name.isEmpty
-                                  ? 'No Helix name'
-                                  : name,
+                              name,
                               style: const TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w800,
@@ -243,7 +244,7 @@ class _AccountDetailViewState extends State<AccountDetailView> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              maskedPhone(account.phoneLast4),
+                              accountPhone(account),
                               style: const TextStyle(
                                 fontSize: 13,
                                 color: HelixConsoleColors.textBody,

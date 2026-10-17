@@ -195,6 +195,12 @@ abstract final class Routes {
     module: 'identity',
     access: _dev,
   );
+  static const setPhoneNumber = ApiRoute(
+    _put,
+    '/v1/account/phone-number',
+    module: 'identity',
+    access: _dev,
+  );
   static const securityEvents = ApiRoute(
     _get,
     '/v1/account/security-events',
@@ -332,6 +338,12 @@ abstract final class Routes {
   static const setOwnProfile = ApiRoute(
     _put,
     '/v1/profile',
+    module: 'people',
+    access: _dev,
+  );
+  static const setOwnName = ApiRoute(
+    _put,
+    '/v1/profile/name',
     module: 'people',
     access: _dev,
   );
@@ -867,12 +879,14 @@ abstract final class Routes {
     passwordParams, passwordSignIn, linkCreate, linkPoll, addDevice,
     deviceChallenge, deviceSignIn, refreshSession, recoveryLookup,
     recoveryRedeem, signOut, account, setPassword, setHelixName,
-    clearHelixName, securityEvents, devices, renameDevice, revokeDevice,
+    clearHelixName, setPhoneNumber, securityEvents, devices, renameDevice,
+    revokeDevice,
     revokeOtherDevices, approveLink, setPushToken, clearPushToken,
     setSignedPrekey, addOneTimePrekeys, keyStatus, accountKeys, //
     sendMessage, mailbox, ackMailbox, websocket, //
     discoverySalt, discover, findByName, profile, presence, setOwnProfile,
-    blocks, block, unblock, privacy, setPrivacy, setContacts, report, //
+    setOwnName, blocks, block, unblock, privacy, setPrivacy, setContacts,
+    report, //
     createGroup, myGroups, group, deleteGroup, setGroupState,
     setGroupSettings, addGroupMembers, removeGroupMember, setGroupRole,
     banFromGroup, unbanFromGroup, createInviteLink, revokeInviteLink,

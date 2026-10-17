@@ -448,6 +448,9 @@ final class SignInController extends Notifier<SignInState> {
     final number = state.e164;
     if (number == null) return _fail(SignInCopy.badPhoneNumber);
 
+    // Read before register(): the moment the device is signed in this flow is
+    // reset (`_resetFlow`), and the name typed on this page goes with it.
+    final name = skip ? '' : state.displayName.trim();
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final runtime = await _currentRuntime();
@@ -463,7 +466,6 @@ final class SignInController extends Notifier<SignInState> {
         phoneNumber: number,
         deviceName: (await ref.read(engineConfigProvider.future)).deviceName,
       );
-      final name = skip ? '' : state.displayName.trim();
       if (name.isNotEmpty) {
         // Best effort: a failure here must not undo a registration that
         // already succeeded.

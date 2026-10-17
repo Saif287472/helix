@@ -94,6 +94,8 @@ final class AdminAccount {
     required this.activeDevices,
     this.helixName,
     this.phoneLast4,
+    this.phoneNumber,
+    this.displayName,
     this.lastSeenOn,
   });
 
@@ -104,8 +106,28 @@ final class AdminAccount {
   final String? helixName;
   final String? phoneLast4;
 
+  /// The full number (E.164), once the account's app has reported it and the
+  /// server keeps numbers (`HELIX_PHONE_KEY`, ADR-030); null otherwise.
+  final String? phoneNumber;
+
+  /// The name the person gave themselves, as their app reported it (ADR-030).
+  final String? displayName;
+
   /// The most recent day any device was seen (day precision only).
   final DateTime? lastSeenOn;
+
+  AdminAccount copyWith({String? phoneNumber, String? displayName}) =>
+      AdminAccount(
+        accountId: accountId,
+        status: status,
+        createdAt: createdAt,
+        activeDevices: activeDevices,
+        helixName: helixName,
+        phoneLast4: phoneLast4,
+        phoneNumber: phoneNumber ?? this.phoneNumber,
+        displayName: displayName ?? this.displayName,
+        lastSeenOn: lastSeenOn,
+      );
 
   JsonMap toJson() => compact({
     'account_id': accountId,
@@ -114,6 +136,8 @@ final class AdminAccount {
     'active_devices': activeDevices,
     'helix_name': helixName,
     'phone_last4': phoneLast4,
+    'phone_number': phoneNumber,
+    'display_name': displayName,
     'last_seen_on': lastSeenOn == null ? null : toWireTime(lastSeenOn!),
   });
 
@@ -128,6 +152,8 @@ final class AdminAccount {
     activeDevices: json.integer('active_devices'),
     helixName: json.optString('helix_name'),
     phoneLast4: json.optString('phone_last4'),
+    phoneNumber: json.optString('phone_number'),
+    displayName: json.optString('display_name'),
     lastSeenOn: json.optTime('last_seen_on'),
   );
 }

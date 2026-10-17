@@ -121,6 +121,7 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
   Widget build(BuildContext context) {
     final header = ref.watch(settingsHeaderProvider).value;
     final avatar = ref.watch(settingsAvatarProvider);
+    final named = header == null || header.name.isNotEmpty;
     final name = header?.name ?? 'Helix';
     final about = (header?.about ?? '').isNotEmpty ? header!.about : null;
     final host = header?.serverHost;
@@ -164,7 +165,7 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
           if (!searching)
             HelixProfileHeaderTile(
               avatar: HelixAvatarModel(
-                name: name,
+                name: named ? name : 'Helix',
                 image: avatar == null ? null : MemoryImage(avatar),
                 colorIndex: HelixAvatarModel.colorIndexFor(
                   (header?.accountId ?? '').isEmpty
@@ -172,7 +173,7 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
                       : header!.accountId,
                 ),
               ),
-              name: name,
+              name: named ? name : 'Add your name',
               about: about,
               detail: host == null || host.isEmpty
                   ? null

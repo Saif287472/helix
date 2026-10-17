@@ -667,19 +667,35 @@ class HelixBarAction {
   final VoidCallback? onPressed;
 }
 
+/// One entry of a bar's "More options" menu.
+class HelixMenuAction {
+  const HelixMenuAction({required this.label, required this.onPressed});
+
+  /// The item's text, and its accessible name.
+  final String label;
+  final VoidCallback? onPressed;
+}
+
 /// The app bar shown while chats or messages are selected: close, "3
-/// selected", and the actions that apply.
+/// selected", the actions that apply, and a "More options" menu for the rest.
+///
+/// Keep [actions] to two or three: each is a 48 px button, and on a phone (or
+/// a narrow window) more of them squeeze "3 selected" to "3 s...".
 class HelixSelectionBar extends StatelessWidget implements PreferredSizeWidget {
   const HelixSelectionBar({
     super.key,
     required this.count,
     required this.onClose,
     this.actions = const [],
+    this.menu = const [],
   });
 
   final int count;
   final VoidCallback onClose;
   final List<HelixBarAction> actions;
+
+  /// Behind the three-dot button, by name; no button when empty.
+  final List<HelixMenuAction> menu;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -702,6 +718,19 @@ class HelixSelectionBar extends StatelessWidget implements PreferredSizeWidget {
             icon: Icon(action.icon),
             tooltip: action.tooltip,
             onPressed: action.onPressed,
+          ),
+        if (menu.isNotEmpty)
+          PopupMenuButton<int>(
+            tooltip: 'More options',
+            onSelected: (index) => menu[index].onPressed?.call(),
+            itemBuilder: (context) => [
+              for (var i = 0; i < menu.length; i++)
+                PopupMenuItem(
+                  value: i,
+                  enabled: menu[i].onPressed != null,
+                  child: Text(menu[i].label),
+                ),
+            ],
           ),
       ],
     );

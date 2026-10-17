@@ -4,7 +4,13 @@ import 'package:helix_remote_server/src/platform/db/migrations.dart';
 const identityMigrations = [
   Migration(1, 'identity_baseline', _baseline),
   Migration(2, 'discovery_index', _discoveryIndex),
+  Migration(3, 'phone_sealed', _phoneSealed),
 ];
+
+/// The full number an account's app reports, sealed under `HELIX_PHONE_KEY`
+/// (`PhoneSeal`), for the operator console (ADR-030). Null until reported.
+String _phoneSealed(String s) =>
+    'ALTER TABLE $s.accounts ADD COLUMN phone_sealed bytea;';
 
 /// Discovery hashes become pepper-keyed indexes (the salted hash clients send
 /// was testable by anyone holding a database dump, because the salt is

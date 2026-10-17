@@ -199,6 +199,7 @@ class ChatSelectionBar extends ConsumerWidget implements PreferredSizeWidget {
     final notifier = ref.read(chatSelectionProvider.notifier);
     final allPinned = selected.isNotEmpty && selected.every((c) => c.pinned);
     final anyMuted = selected.any((c) => c.muted);
+    final allMuted = selected.isNotEmpty && selected.every((c) => c.muted);
     final anyUnread = selected.any((c) => c.hasUnread);
 
     Future<void> done(Future<void> work) async {
@@ -206,19 +207,23 @@ class ChatSelectionBar extends ConsumerWidget implements PreferredSizeWidget {
       notifier.clear();
     }
 
+    // Archive and delete stay on the bar; the rest is in "More options", so
+    // a phone-width bar still has room for "3 selected".
     return HelixSelectionBar(
       count: ids.length,
       onClose: notifier.clear,
-      actions: [
+      menu: [
         if (!archivedList)
-          HelixBarAction(
-            icon: allPinned ? Icons.push_pin_outlined : Icons.push_pin,
-            tooltip: allPinned ? 'Unpin chats' : 'Pin chats',
+          HelixMenuAction(
+            label: allPinned ? 'Unpin' : 'Pin',
             onPressed: () => done(actions.pin(ids, pinned: !allPinned)),
           ),
-        HelixBarAction(
-          icon: anyMuted ? Icons.volume_up : Icons.volume_off,
-          tooltip: anyMuted ? 'Unmute or mute chats' : 'Mute chats',
+        HelixMenuAction(
+          label: allMuted
+              ? 'Unmute'
+              : anyMuted
+              ? 'Mute or unmute'
+              : 'Mute',
           onPressed: () async {
             final choice = await showMuteSheet(context, offerUnmute: anyMuted);
             switch (choice) {
@@ -231,17 +236,18 @@ class ChatSelectionBar extends ConsumerWidget implements PreferredSizeWidget {
             }
           },
         ),
+        if (anyUnread)
+          HelixMenuAction(
+            label: 'Mark as read',
+            onPressed: () => done(actions.markRead(ids)),
+          ),
+      ],
+      actions: [
         HelixBarAction(
           icon: archivedList ? Icons.unarchive : Icons.archive,
           tooltip: archivedList ? 'Unarchive chats' : 'Archive chats',
           onPressed: () => done(actions.archive(ids, archived: !archivedList)),
         ),
-        if (anyUnread)
-          HelixBarAction(
-            icon: Icons.mark_chat_read_outlined,
-            tooltip: 'Mark as read',
-            onPressed: () => done(actions.markRead(ids)),
-          ),
         HelixBarAction(
           icon: Icons.delete_outline,
           tooltip: 'Delete chats',

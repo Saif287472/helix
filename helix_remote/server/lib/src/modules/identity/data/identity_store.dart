@@ -68,6 +68,15 @@ final class IdentityStore {
         : (id: r.string('id'), hasPassword: r.boolean('has_password'));
   }
 
+  Future<void> setPhoneSealed(
+    SqlSession db,
+    String accountId,
+    Uint8List sealed,
+  ) => db.execute(
+    'UPDATE $s.accounts SET phone_sealed = @p:bytea WHERE id = @id:uuid',
+    {'id': accountId, 'p': sealed},
+  );
+
   Future<Uint8List?> phoneHashOf(SqlSession db, String accountId) async {
     final r = await db.queryOne(
       'SELECT phone_hash FROM $s.accounts WHERE id = @id:uuid',

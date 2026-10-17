@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:helix_remote_api/v2.dart' show ApiException;
 import 'package:helix_remote_db/helix_remote_db.dart';
 import 'package:helix_remote_engine/helix_remote_engine.dart';
 import 'package:helix_remote_engine/src/util/ids.dart' show IdFactory;
@@ -13,7 +14,8 @@ import 'peers.dart';
 /// An in-memory stand-in for the server's `calls` module and the realtime
 /// socket, between [CallDevice]s: signals reach online devices a moment
 /// later (like a network hop), offers for offline devices wait as pending
-/// calls, `end` clears them, a blocker's callers are dropped silently and
+/// calls, `end` clears them, a blocker's callers have their offers refused
+/// (`blocked`) and their other signals dropped silently, and
 /// `setState` stops the account's other devices ringing, as the real server
 /// does. Signals are not sealed here (the sealing is covered by the
 /// end-to-end tests); everything else is the state machine's own.
@@ -161,6 +163,10 @@ final class CallDevice implements CallSignaling {
         if (devices == null || devices.contains(d.device)) d,
     ];
     final blocked = net.blocks.contains((account, this.account));
+    if (blocked && payload.type == CallSignalType.offer) {
+      // A blocked caller is refused at once, as the server does.
+      throw const ApiException(status: 403, code: ErrorCode.blocked);
+    }
     final delivered = <String>[];
     final pending = <String>[];
     for (final target in targets) {

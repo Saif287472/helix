@@ -26,6 +26,7 @@ class ConversationHeader {
     this.typing = false,
     this.verified = false,
     this.blocked = false,
+    this.blockedByPeer = false,
     this.muted = false,
     this.disappearingSeconds,
     this.composerDisabledReason,
@@ -46,6 +47,10 @@ class ConversationHeader {
   final bool typing;
   final bool verified;
   final bool blocked;
+
+  /// The other person blocked this account: nothing reaches them, so the
+  /// composer and the call buttons are gone until they unblock.
+  final bool blockedByPeer;
   final bool muted;
   final int? disappearingSeconds;
 
@@ -65,6 +70,7 @@ class ConversationHeader {
       other.typing == typing &&
       other.verified == verified &&
       other.blocked == blocked &&
+      other.blockedByPeer == blockedByPeer &&
       other.muted == muted &&
       other.disappearingSeconds == disappearingSeconds &&
       other.composerDisabledReason == composerDisabledReason;
@@ -80,6 +86,7 @@ class ConversationHeader {
     typing,
     verified,
     blocked,
+    blockedByPeer,
     muted,
     disappearingSeconds,
     composerDisabledReason,
@@ -115,6 +122,16 @@ final groupMembersProvider = StreamProvider.autoDispose
 /// The group id inside a `group:<id>` conversation id, or null.
 String? groupIdOf(String conversationId) =>
     conversationId.startsWith('group:') ? conversationId.substring(6) : null;
+
+/// Whether the other person of a direct chat has blocked this account (the
+/// server tells the blocked person at once).
+final peerBlocksMeProvider = StreamProvider.autoDispose.family<bool, String>((
+  ref,
+  account,
+) async* {
+  final gateway = await ref.watch(chatGatewayProvider.future);
+  yield* gateway.watchBlocksMe(account);
+});
 
 /// Whether a person is online, and when they were last seen: asked of the
 /// server when the conversation opens and every minute after. Null when it is
@@ -159,6 +176,8 @@ final conversationHeaderProvider = Provider.autoDispose
       if (peer != null) {
         final presence = ref.watch(peerPresenceProvider(peer)).value;
         final blocked = people.isBlocked(peer);
+        final blockedByPeer =
+            ref.watch(peerBlocksMeProvider(peer)).value ?? false;
         final String? subtitle;
         if (typing.isNotEmpty) {
           subtitle = 'typing...';
@@ -178,10 +197,13 @@ final conversationHeaderProvider = Provider.autoDispose
           typing: typing.isNotEmpty,
           verified: people.isVerified(peer),
           blocked: blocked,
+          blockedByPeer: blockedByPeer,
           muted: muted,
           disappearingSeconds: chat.disappearingSeconds,
           composerDisabledReason: blocked
               ? 'You blocked this contact. Open chat settings to unblock.'
+              : blockedByPeer
+              ? "$title has blocked you. You can't message or call them."
               : null,
         );
       }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:helix_remote/features/calls/application/call_audio.dart';
 import 'package:helix_remote/features/calls/application/call_screen_state.dart';
@@ -71,7 +73,8 @@ class CallCallbacks {
 ///
 /// Voice: Speaker, Video (unavailable), Mute, End. Video: Flip camera, Video,
 /// Mute, Speaker, End. Everything but the audio-less case waits until the call
-/// can use it, and is disabled once the call has finished.
+/// can use it, and is disabled once the call has finished. A video call rings
+/// with the camera on, and the camera can be turned off once it is answered.
 List<CallControl> buildCallControls(
   CallScreenState state,
   CallCallbacks callbacks,
@@ -110,7 +113,10 @@ List<CallControl> buildCallControls(
         : 'Turn camera on',
     toggled: state.video ? !state.cameraOn : null,
     onPressed: live(
-      !state.video || callbacks.onCamera == null || !state.hasControls
+      !state.video ||
+              callbacks.onCamera == null ||
+              !state.hasControls ||
+              state.stage == CallStage.dialing
           ? null
           : () => callbacks.onCamera!(enabled: !state.cameraOn),
     ),
@@ -135,7 +141,8 @@ List<CallControl> buildCallControls(
 /// The screen of a call that is not ringing here: dialing, connecting, live,
 /// or just ended. Voice calls (and a video call before the picture arrives)
 /// sit on the calm gradient; a video call fills the screen with the other
-/// person's video and floats the camera preview in a corner.
+/// person's video and floats the camera preview in a corner, from where the
+/// person can drag it anywhere on the screen.
 class InCallView extends StatefulWidget {
   const InCallView({
     super.key,
@@ -346,10 +353,45 @@ class _VideoLayoutState extends State<_VideoLayout> {
   /// preview.
   bool _swapped = false;
 
+  /// Where the person dragged the preview (its top-left corner); null until
+  /// they do, which keeps it in the top corner, clear of the header.
+  Offset? _previewAt;
+
+  static const _previewSize = Size(100, 142);
+  static const _previewMargin = 12.0;
+
+  /// [at], moved back inside the safe area of a [size] screen.
+  static Offset _onScreen(Offset at, Size size, EdgeInsets padding) {
+    final minX = padding.left + _previewMargin;
+    final minY = padding.top + _previewMargin;
+    final maxX = math.max(
+      minX,
+      size.width - padding.right - _previewMargin - _previewSize.width,
+    );
+    final maxY = math.max(
+      minY,
+      size.height - padding.bottom - _previewMargin - _previewSize.height,
+    );
+    return Offset(at.dx.clamp(minX, maxX), at.dy.clamp(minY, maxY));
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, box) => _build(context, box.biggest));
+
+  Widget _build(BuildContext context, Size size) {
     final state = widget.state;
     final media = MediaQuery.of(context);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final previewAt = _onScreen(
+      _previewAt ??
+          Offset(
+            rtl ? 0 : size.width,
+            media.padding.top + (widget.controlsVisible ? 120 : 0),
+          ),
+      size,
+      media.padding,
+    );
     final fade = media.disableAnimations
         ? Duration.zero
         : const Duration(milliseconds: 220);
@@ -412,11 +454,11 @@ class _VideoLayoutState extends State<_VideoLayout> {
           ),
         ),
         if (preview != null)
-          PositionedDirectional(
-            end: 12,
-            top: media.padding.top + (widget.controlsVisible ? 120 : 12),
-            width: 100,
-            height: 142,
+          Positioned(
+            left: previewAt.dx,
+            top: previewAt.dy,
+            width: _previewSize.width,
+            height: _previewSize.height,
             child: Semantics(
               button: true,
               label: _swapped
@@ -424,17 +466,27 @@ class _VideoLayoutState extends State<_VideoLayout> {
                   : 'Show your camera full screen',
               child: GestureDetector(
                 onTap: () => setState(() => _swapped = !_swapped),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: HelixNeutralColors.videoPlaceholder,
-                    borderRadius: HelixRadius.card,
-                    border: Border.all(
-                      color: HelixScrimColors.onBackdropSubtle,
-                    ),
+                onPanUpdate: (drag) => setState(
+                  () => _previewAt = _onScreen(
+                    (_previewAt ?? previewAt) + drag.delta,
+                    size,
+                    media.padding,
                   ),
-                  child: ClipRRect(
-                    borderRadius: HelixRadius.card,
-                    child: preview,
+                ),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.move,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: HelixNeutralColors.videoPlaceholder,
+                      borderRadius: HelixRadius.card,
+                      border: Border.all(
+                        color: HelixScrimColors.onBackdropSubtle,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: HelixRadius.card,
+                      child: preview,
+                    ),
                   ),
                 ),
               ),

@@ -11,6 +11,7 @@ import 'package:helix_remote_engine/src/groups/group_inbound.dart';
 import 'package:helix_remote_engine/src/messaging/apply.dart';
 import 'package:helix_remote_engine/src/messaging/kinds.dart';
 import 'package:helix_remote_engine/src/messaging/outbox.dart';
+import 'package:helix_remote_engine/src/settings_keys.dart';
 import 'package:helix_remote_protocol/helix_remote_protocol.dart';
 
 /// What the inbound pipeline asks the rest of the engine to do.
@@ -114,6 +115,17 @@ final class InboundProcessor {
         final remaining = _parse(envelope, PrekeysLowEvent.fromJson)?.remaining;
         if (remaining != null) {
           await _bestEffort(() => _hooks.onPrekeysLow(remaining));
+        }
+        return _record(envelope, EnvelopeOutcome.applied);
+      case EnvelopeKind.blockChange:
+        final event = _parse(envelope, BlockChangeEvent.fromJson);
+        if (event != null && event.account != _ctx.identity.accountId) {
+          await PersonState.markBlocksMe(
+            _db,
+            event.account,
+            blocked: event.blocked,
+            now: _ctx.now(),
+          );
         }
         return _record(envelope, EnvelopeOutcome.applied);
       case EnvelopeKind.callSignal:

@@ -217,27 +217,35 @@ void main() {
       expect((await bob.api.messaging.mailbox()).envelopes, isEmpty);
     });
 
-    test(
-      'a blocked sender reaches nobody, and the sender is not told',
-      () async {
-        final alice = await world.register('alice', aliceNumber);
-        final bob = await world.register('bob', bobNumber);
-        final chat = await alice.engine.chats.openDirect(bob.account);
-        await alice.engine.chats.sendText(chat.id, 'before');
-        await waitForText(bob, alice, 'before');
-        await bob.engine.people.block(alice.account);
+    test('a blocked sender reaches nobody, and is told so', () async {
+      final alice = await world.register('alice', aliceNumber);
+      final bob = await world.register('bob', bobNumber);
+      final chat = await alice.engine.chats.openDirect(bob.account);
+      await alice.engine.chats.sendText(chat.id, 'before');
+      await waitForText(bob, alice, 'before');
+      await bob.engine.people.block(alice.account);
 
-        final blocked = await alice.engine.chats.sendText(chat.id, 'blocked');
-        await settle(() async {
-          final row = await alice.db.messagesDao.byRowid(blocked.localRowid);
-          expect(row!.status, MessageStatus.sent);
-        });
-        await alice.engine.chats.sendText(chat.id, 'blocked too');
-        await Future<void>.delayed(const Duration(milliseconds: 400));
-        final texts = [for (final m in await messagesWith(bob, alice)) m.body];
-        expect(texts, ['before']);
-      },
-    );
+      // The server tells Alice's devices at once (`block_change`).
+      await settle(() async {
+        expect(await alice.engine.people.blocksMe(bob.account), isTrue);
+      });
+      final blocked = await alice.engine.chats.sendText(chat.id, 'blocked');
+      await settle(() async {
+        final row = await alice.db.messagesDao.byRowid(blocked.localRowid);
+        expect(row!.status, MessageStatus.failed, reason: 'not delivered');
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      final texts = [for (final m in await messagesWith(bob, alice)) m.body];
+      expect(texts, ['before']);
+
+      // Unblocking is told too, and messages go through again.
+      await bob.engine.people.unblock(alice.account);
+      await settle(() async {
+        expect(await alice.engine.people.blocksMe(bob.account), isFalse);
+      });
+      await alice.engine.chats.sendText(chat.id, 'after');
+      await waitForText(bob, alice, 'after');
+    });
 
     test('disappearing messages start counting when first displayed', () async {
       final alice = await world.register('alice', aliceNumber);

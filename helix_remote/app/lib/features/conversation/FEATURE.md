@@ -45,6 +45,10 @@ conversation_routes.dart    /chat/:id and its sub-routes
 - **Calls:** the header buttons go through `callLauncherProvider`
   (`core/calls/call_launcher.dart`), which resolves to `placeCallProvider`; a failure
   is the outcome's sentence in a snackbar.
+- **Blocks:** when you blocked them, or they blocked you (`peerBlocksMeProvider`,
+  told by the server at once), the header has no call buttons and the composer
+  shows `ConversationHeader.composerDisabledReason` ("<Name> has blocked you.
+  You can't message or call them.") instead of the text field.
 - **Info pages:** the header title and the menu open the contact info (direct chat,
   `PeoplePaths.person`) or the group info (`GroupPaths.info`); see
   `application/conversation_links.dart`.

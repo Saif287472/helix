@@ -69,7 +69,10 @@ void main() {
     await tester.pump();
     expect(find.text('1 selected'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Pin chats'));
+    await tester.tap(find.byTooltip('More options'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Pin'));
     await settle(tester);
     final row = await tester.runAsync(
       () => gateway.db.conversationsDao.byId(bob!),

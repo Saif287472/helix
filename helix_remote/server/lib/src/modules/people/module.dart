@@ -87,7 +87,19 @@ final class PeopleModule extends ModuleBase implements ProvidesAccountExport {
     Migration(1, 'people_baseline', _baseline),
     Migration(2, 'federated_blocks', _federatedBlocks),
     Migration(3, 'report_resolved_at', _reportResolvedAt),
+    Migration(4, 'display_names', _displayNames),
   ];
+
+  /// The name each account gives itself, as its app reports it in the clear
+  /// for the operator console (ADR-030). Contacts read the encrypted profile.
+  static String _displayNames(String s) =>
+      '''
+CREATE TABLE $s.display_names (
+  account_id uuid PRIMARY KEY,
+  name text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+''';
 
   /// When a report was resolved or dismissed, for [reportRetention].
   /// Reports already closed start their retention at this migration.
@@ -157,6 +169,7 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       ..add(name, Routes.profile, _profile)
       ..add(name, Routes.presence, _presence)
       ..add(name, Routes.setOwnProfile, _setProfile, maxBodyBytes: 64 * 1024)
+      ..add(name, Routes.setOwnName, _setOwnName)
       ..add(name, Routes.blocks, _blocks, allowSuspended: true)
       ..add(name, Routes.block, _block, allowSuspended: true)
       ..add(name, Routes.unblock, _unblock, allowSuspended: true)
@@ -189,6 +202,10 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
       'WHERE reporter = @a:uuid ORDER BY id DESC LIMIT 500',
       {'a': accountId},
     );
+    final displayName = await db.queryOne(
+      'SELECT name FROM $s.display_names WHERE account_id = @a:uuid',
+      {'a': accountId},
+    );
     return {
       // The profile itself is end-to-end encrypted; only its version is
       // meaningful here.
@@ -198,6 +215,8 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
               'version': profile.integer('version'),
               'updated_at': toWireTime(profile.time('updated_at')),
             },
+      // The copy of the name kept for the operator console (ADR-030).
+      'display_name': displayName?.string('name'),
       'privacy': (await api.privacy(db, accountId)).toJson(),
       'blocked': [
         for (final r in blocks)
@@ -221,7 +240,12 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
   }
 
   Future<void> _purge(Tx tx, String accountId) async {
-    for (final table in ['profiles', 'privacy', 'discovery_budget']) {
+    for (final table in [
+      'profiles',
+      'privacy',
+      'discovery_budget',
+      'display_names',
+    ]) {
       await tx.execute('DELETE FROM $s.$table WHERE account_id = @a:uuid', {
         'a': accountId,
       });
@@ -358,6 +382,28 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
     }
   }
 
+  /// Keeps the name this account gives itself, for the operator console
+  /// (ADR-030); empty removes it.
+  Future<Response> _setOwnName(HelixRequest q) async {
+    final name = q.json(SetOwnNameRequest.fromJson).name.trim();
+    if (name.length > SetOwnNameRequest.maxLength) {
+      throw const ApiError(ErrorCode.invalidField, details: {'field': 'name'});
+    }
+    if (name.isEmpty) {
+      await context.db.execute(
+        'DELETE FROM $s.display_names WHERE account_id = @a:uuid',
+        {'a': q.device.accountId},
+      );
+    } else {
+      await context.db.execute(
+        'INSERT INTO $s.display_names (account_id, name) VALUES (@a:uuid, @n:text) '
+        'ON CONFLICT (account_id) DO UPDATE SET name = excluded.name, updated_at = now()',
+        {'a': q.device.accountId, 'n': name},
+      );
+    }
+    return noContent();
+  }
+
   Future<Response> _setProfile(HelixRequest q) async {
     final req = q.json(EncryptedProfile.fromJson);
     if (req.ciphertext.length > EncryptedProfile.maxBytes) {
@@ -458,23 +504,55 @@ CREATE INDEX reports_open ON $s.reports (created_at) WHERE status = 'open';
   }
 
   Future<Response> _block(HelixRequest q) async {
+    final me = q.device.accountId;
     final target = _blockTarget(q);
-    if (target == q.device.accountId) {
+    if (target == me) {
       throw const ApiError(ErrorCode.invalidField);
     }
-    await context.db.execute(
-      'INSERT INTO $s.blocks (account_id, blocked) VALUES (@a:uuid, @b:text) ON CONFLICT DO NOTHING',
-      {'a': q.device.accountId, 'b': target},
-    );
+    await context.db.tx((tx) async {
+      final added = await tx.execute(
+        'INSERT INTO $s.blocks (account_id, blocked) VALUES (@a:uuid, @b:text) ON CONFLICT DO NOTHING',
+        {'a': me, 'b': target},
+      );
+      if (added > 0) await _tellBlocked(tx, me, target, blocked: true);
+    });
     return noContent();
   }
 
   Future<Response> _unblock(HelixRequest q) async {
-    await context.db.execute(
-      'DELETE FROM $s.blocks WHERE account_id = @a:uuid AND blocked = @b:text',
-      {'a': q.device.accountId, 'b': _blockTarget(q)},
-    );
+    final me = q.device.accountId;
+    final target = _blockTarget(q);
+    await context.db.tx((tx) async {
+      final removed = await tx.execute(
+        'DELETE FROM $s.blocks WHERE account_id = @a:uuid AND blocked = @b:text',
+        {'a': me, 'b': target},
+      );
+      if (removed > 0) await _tellBlocked(tx, me, target, blocked: false);
+    });
     return noContent();
+  }
+
+  /// Blocks are not secret: [target]'s devices learn at once that [blocker]
+  /// blocked (or unblocked) them, so their chat says so before they type.
+  /// An account on another server is not told (federation has no such
+  /// signal); it learns from its next send.
+  Future<void> _tellBlocked(
+    Tx tx,
+    String blocker,
+    String target, {
+    required bool blocked,
+  }) async {
+    if (!Uuid.isValid(target)) return;
+    final devices = await identity.activeDevices(tx, target);
+    if (devices.isEmpty) return;
+    await messaging.deliver(
+      tx,
+      {for (final d in devices) d.id: null},
+      Delivery(
+        kind: EnvelopeKind.blockChange,
+        data: BlockChangeEvent(account: blocker, blocked: blocked).toJson(),
+      ),
+    );
   }
 
   Future<Response> _privacy(HelixRequest q) async => jsonResponse(
@@ -664,6 +742,20 @@ final class _PeopleFacade implements PeopleApi {
           {'id': reportId, 'to': to.wire},
         ) ==
         1;
+  }
+
+  @override
+  Future<Map<String, String>> displayNames(
+    SqlSession db,
+    Iterable<String> accounts,
+  ) async {
+    final ids = accounts.toSet().toList();
+    if (ids.isEmpty) return const {};
+    final rows = await db.query(
+      'SELECT account_id, name FROM ${_m.s}.display_names WHERE account_id = ANY(@ids:_uuid)',
+      {'ids': ids},
+    );
+    return {for (final r in rows) r.string('account_id'): r.string('name')};
   }
 
   @override
