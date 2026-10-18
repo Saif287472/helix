@@ -38,6 +38,15 @@
   // --------------------------------------------------------------- new group
   App.register({
     id: 'group-new', title: 'New group', group: 'Groups', order: 50,
+    interactions: [
+      ['tap', 'Picture circle', 'Adds a picture; when one is set, a sheet offers another or removing it.'],
+      ['type', 'Group name', 'Names the group; creating without a name shows the error.'],
+      ['tap', 'Person', 'Picks or unpicks them; picked people show as chips above.'],
+      ['tap', '× on a chip', 'Unpicks that person.'],
+      ['type', 'Member search', 'Filters people; a number or ~name shows a “Find on Orbit” row.'],
+      ['tap', 'Find on Orbit row', 'Looks them up; says when nobody matches.'],
+      ['tap', 'Create with N', 'Creates the group; explains anyone who could not be added; then opens the group chat.'],
+    ],
     entries: [
       { key: 'group-new', label: 'New group', params: {} },
       { key: 'group-new-picked', label: 'New group · people picked', params: { name: 'Weekend trip', sel: ['nadia', 'arif', 'sadia'] } },
@@ -75,6 +84,16 @@
   // -------------------------------------------------------------- group info
   App.register({
     id: 'group-info', title: 'Group info', group: 'Groups', order: 50,
+    interactions: [
+      ['tap', 'Group picture (admin)', 'Sheet: choose or remove the picture.'],
+      ['tap', 'Edit (admin)', 'Sheet with the name and description, and Save.'],
+      ['tap', 'Disappearing messages', 'Sheet: Off, 24 hours, 7 days, 90 days.'],
+      ['tap', 'Member', 'Sheet: Make or remove admin, Make owner (owner only, asks), Remove (asks), Remove and ban (asks).'],
+      ['tap', 'Add members / Invite with a link / Join requests / Banned people / Group settings', 'Opens that page.'],
+      ['tap', 'Confirm / Remove on an unconfirmed member', 'Confirms them, or asks before removing them.'],
+      ['tap', 'Leave group', 'Asks first, then returns to Chats and says you left.'],
+      ['tap', 'Delete group (owner)', 'Asks first, then returns to Chats.'],
+    ],
     entries: [
       { key: 'group-info', label: 'Group info (you are an admin)', params: { role: 'admin' } },
       { key: 'group-info-owner', label: 'Group info (owner view)', params: { role: 'owner' } },
@@ -145,6 +164,9 @@
   // ---------------------------------------------------------- group settings
   App.register({
     id: 'group-settings', title: 'Group settings', group: 'Groups', order: 50,
+    interactions: [
+      ['tap', 'Edit group info / Add members / Send messages', 'Sheet: Only admins or Everyone.'],
+    ],
     entries: [
       { key: 'group-settings', label: 'Group settings', params: {} },
       { key: 'group-settings-member', label: 'Group settings · not an admin', params: { member: true } },
@@ -160,6 +182,12 @@
   // ------------------------------------------------------------ invite links
   App.register({
     id: 'group-invite', title: 'Invite with a link', group: 'Groups', order: 50,
+    interactions: [
+      ['tap', 'Approve new members', 'Switch: new links need an admin’s approval.'],
+      ['tap', 'Create a link', 'A new link appears at the top.'],
+      ['tap', 'Share / Copy', 'Shares the invite text or copies the link.'],
+      ['tap', 'Revoke', 'Asks first; the link stops working.'],
+    ],
     entries: [
       { key: 'group-invite', label: 'Invite links', params: { links: 2 } },
       { key: 'group-invite-empty', label: 'Invite links · none yet', params: { links: 0 } },
@@ -186,6 +214,9 @@
   // ------------------------------------------------- join requests and bans
   App.register({
     id: 'group-requests', title: 'Join requests', group: 'Groups', order: 50,
+    interactions: [
+      ['tap', 'Approve / Reject', 'Lets the person in, or turns them away.'],
+    ],
     entries: [
       { key: 'group-requests', label: 'Join requests', params: {} },
       { key: 'group-requests-empty', label: 'Join requests · nobody waiting', params: { empty: true } },
@@ -205,6 +236,9 @@
 
   App.register({
     id: 'group-banned', title: 'Banned people', group: 'Groups', order: 50,
+    interactions: [
+      ['tap', 'Unban', 'Lets the person join again with a link.'],
+    ],
     entries: [
       { key: 'group-banned', label: 'Banned people', params: {} },
       { key: 'group-banned-empty', label: 'Banned people · none', params: { empty: true } },
@@ -224,6 +258,11 @@
   // ------------------------------------------------------------- add members
   App.register({
     id: 'group-add', title: 'Add members', group: 'Groups', order: 50,
+    interactions: [
+      ['tap', 'Person', 'Picks or unpicks them.'],
+      ['type', 'Search', 'Filters people; a number or ~name can be looked up.'],
+      ['tap', 'Add', 'Adds them; explains when nobody could be added; returns with “Added N people”.'],
+    ],
     entries: [{ key: 'group-add', label: 'Add members', params: {}, base: infoBase }],
     render(params, entry) {
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, sel: new Set(), q: '' });
@@ -245,6 +284,14 @@
   // -------------------------------------------------------- join with a link
   App.register({
     id: 'group-join', title: 'Join a group', group: 'Groups', order: 50,
+    interactions: [
+      ['type', 'Link', 'The group link to join.'],
+      ['tap', 'Paste', 'Pastes the link.'],
+      ['tap', 'Continue', 'Checks it (“not an Orbit group link” when wrong), loads, then shows the group preview.'],
+      ['tap', 'Join', 'Joins, or waits for an admin when the link needs approval.'],
+      ['tap', 'Open', 'Opens the group chat.'],
+      ['tap', 'Try again', 'Back to the link field after a failure.'],
+    ],
     entries: [
       { key: 'group-join', label: 'Join a group · paste link', params: { phase: 'input' } },
       { key: 'group-join-preview', label: 'Join a group · preview', params: { phase: 'preview' } },
@@ -284,7 +331,7 @@
       el.querySelector('[data-paste]')?.addEventListener('click', (e) => { e.preventDefault(); st.link = 'https://helix.agiletechbd.com/open#HLX-GRP-8KQ2-ZP4M-W7DX-3RTA'; entry.rerender(); });
       el.querySelector('[data-continue]')?.addEventListener('click', () => {
         st.link = el.querySelector('#jlink').value.trim();
-        if (!/HLX-GRP-/i.test(st.link)) { App.snack('That is not a Orbit group link. Check that you copied all of it.'); return; }
+        if (!/HLX-GRP-/i.test(st.link)) { App.snack('That is not an Orbit group link. Check that you copied all of it.'); return; }
         to('loading', 900, 'preview');
       });
       el.querySelector('[data-join]')?.addEventListener('click', () => to('joining', 900, params.approval ? 'pending' : 'joined'));

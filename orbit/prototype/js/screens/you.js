@@ -64,6 +64,14 @@
 
   App.register({
     id: 'settings-page', title: 'You', group: 'You (settings and profile)', order: 58,
+    interactions: [
+      ['tap', 'Orbit ID pass', 'Opens the profile editor (Enter and Space do too).'],
+      ['tap', 'QR on the pass', 'Share sheet: your code and link, Copy link, Share, Scan someone’s code.'],
+      ['tap', 'Fix / Turn on in the checkup', 'Opens Recovery backup, or asks to turn on app lock.'],
+      ['tap', 'See all 5 checks', 'Sheet with every check; each opens its page or fixes it.'],
+      ['tap', 'Tile or row', 'Opens that topic. On a window it opens on the right and stays marked.'],
+      ['tap', 'Search', 'Search field: finds settings as you type; ← closes.'],
+    ],
     entries: [
       { key: 'settings', label: 'You · checkup needs attention', params: { checkup: 'attention' } },
       { key: 'you-allgood', label: 'You · all checks pass', params: { allGood: true } },
@@ -145,6 +153,13 @@
 
   App.register({
     id: 'profile', title: 'Edit profile', group: 'You (settings and profile)', order: 58,
+    interactions: [
+      ['type', 'Name / About', 'The pass preview at the top updates as you type.'],
+      ['type', '~name', 'Checked as you type: available, or which rule fails.'],
+      ['tap', 'Photo', 'Adds a photo; Remove takes it off.'],
+      ['tap', 'Remove my ~name', 'Asks first.'],
+      ['tap', 'Save', 'Checks the name and ~name, saves, goes back and says “Profile saved”.'],
+    ],
     entries: [
       { key: 'profile', label: 'Edit profile', params: {} },
       { key: 'profile-taken', label: 'Edit profile · ~name taken', params: { helixName: 'nadia' } },

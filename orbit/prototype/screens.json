@@ -36,6 +36,1747 @@
   "reset": "full",
   "lock": "full"
  },
+ "interactions": {
+  "global": [
+   {
+    "gesture": "tap",
+    "on": "Back arrow",
+    "does": "Returns to the previous page; on a window, in the same pane."
+   },
+   {
+    "gesture": "key",
+    "on": "Esc",
+    "does": "Closes the topmost thing: a menu or sheet, then a call or the viewer, the info pane, the right pane.",
+    "only": "window"
+   },
+   {
+    "gesture": "key",
+    "on": "Esc",
+    "does": "Goes back, like the back arrow.",
+    "only": "phone"
+   },
+   {
+    "gesture": "tap",
+    "on": "Outside a sheet, menu or dialog",
+    "does": "Closes it."
+   },
+   {
+    "gesture": "tap",
+    "on": "Menu or sheet row",
+    "does": "Runs it and closes the menu or sheet."
+   },
+   {
+    "gesture": "tap",
+    "on": "Undo on a toast",
+    "does": "Undoes what the toast reported."
+   },
+   {
+    "gesture": "auto",
+    "on": "Toast",
+    "does": "Disappears after 2.8 s."
+   },
+   {
+    "gesture": "tap",
+    "on": "A row, tile or chat in the list pane",
+    "does": "Replaces what the right pane shows; it stays marked in the list.",
+    "only": "window"
+   },
+   {
+    "gesture": "auto",
+    "on": "Right pane",
+    "does": "Remembers its page for each list (Chats, Calls, You) and brings it back.",
+    "only": "window"
+   },
+   {
+    "gesture": "auto",
+    "on": "Info pages (contact, group, media, chat settings, message info)",
+    "does": "Open beside the chat from 1200 px, over it below.",
+    "only": "window"
+   },
+   {
+    "gesture": "auto",
+    "on": "Menus",
+    "does": "Hang from the button that opened them.",
+    "only": "window"
+   },
+   {
+    "gesture": "auto",
+    "on": "Sheets",
+    "does": "Open as centred dialogs; a sheet from the composer pops up above its button.",
+    "only": "window"
+   }
+  ],
+  "components": [
+   {
+    "gesture": "tap",
+    "on": "Row with a chevron, or a tile",
+    "does": "Opens its page."
+   },
+   {
+    "gesture": "tap",
+    "on": "Switch row",
+    "does": "Toggles the switch; the whole row is the target."
+   },
+   {
+    "gesture": "tap",
+    "on": "Choice row (value on the right)",
+    "does": "Opens a sheet of options; the current one is ticked; picking sets it."
+   },
+   {
+    "gesture": "tap",
+    "on": "Segmented control option",
+    "does": "Selects it."
+   },
+   {
+    "gesture": "tap",
+    "on": "Checkbox row",
+    "does": "Ticks or unticks it."
+   },
+   {
+    "gesture": "tap",
+    "on": "Eye in a password field",
+    "does": "Shows or hides the password."
+   },
+   {
+    "gesture": "tap",
+    "on": "Paste in a field",
+    "does": "Pastes from the clipboard."
+   },
+   {
+    "gesture": "type",
+    "on": "Field with a counter",
+    "does": "The counter shows length out of the maximum."
+   },
+   {
+    "gesture": "tap",
+    "on": "Button that starts work",
+    "does": "Shows a spinner in place of its label until the work ends."
+   }
+  ]
+ },
+ "screenDefs": {
+  "signin": {
+   "title": "Sign in",
+   "group": "Sign-in",
+   "placement": "full",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Phone number",
+     "does": "Shows which country it detected; Next checks the length."
+    },
+    {
+     "gesture": "type",
+     "on": "SMS code",
+     "does": "Digits only; the sixth digit continues by itself."
+    },
+    {
+     "gesture": "tap",
+     "on": "Resend code",
+     "does": "Sends a new code."
+    },
+    {
+     "gesture": "tap",
+     "on": "Next / Sign in / Create account / Continue",
+     "does": "Shows a spinner, then the next step or an error under the field."
+    },
+    {
+     "gesture": "tap",
+     "on": "Forgot password?",
+     "does": "Opens the take-over step."
+    },
+    {
+     "gesture": "tap",
+     "on": "Link from another device instead",
+     "does": "Opens Link this device."
+    },
+    {
+     "gesture": "tap",
+     "on": "Terms checkbox (new account)",
+     "does": "Needed before Create account."
+    },
+    {
+     "gesture": "tap",
+     "on": "Skip (name step)",
+     "does": "Creates the account without a name."
+    },
+    {
+     "gesture": "tap",
+     "on": "Back arrow on a step",
+     "does": "Returns to the previous step."
+    },
+    {
+     "gesture": "tap",
+     "on": "Terms & Privacy",
+     "does": "Sheet with both documents."
+    },
+    {
+     "gesture": "tap",
+     "on": "Bottom-right corner ×3 (each within 2 s)",
+     "does": "Shows “Advanced mode” for 2 s; tapping it opens the personal-server code."
+    },
+    {
+     "gesture": "type",
+     "on": "Personal-server code",
+     "does": "Accepts HLX-INV- and HLX-REC- codes; Paste fills it; then the server is confirmed."
+    }
+   ]
+  },
+  "restore": {
+   "title": "Restore your chats",
+   "group": "Sign-in",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Restore from my backup",
+     "does": "Runs with a percentage; then done, or nothing found."
+    },
+    {
+     "gesture": "tap",
+     "on": "I have a recovery secret",
+     "does": "Opens Recovery backup on Restore."
+    },
+    {
+     "gesture": "tap",
+     "on": "Accept / Decline (history from another device)",
+     "does": "Receives it, or declines."
+    },
+    {
+     "gesture": "tap",
+     "on": "Skip for now / Continue",
+     "does": "Goes on to Chats."
+    }
+   ]
+  },
+  "link-device": {
+   "title": "Link this device",
+   "group": "Sign-in",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "auto",
+     "on": "Code timer",
+     "does": "Counts down to the code’s expiry."
+    },
+    {
+     "gesture": "tap",
+     "on": "Show a new code (expired)",
+     "does": "Shows a fresh code and restarts the timer."
+    },
+    {
+     "gesture": "tap",
+     "on": "Simulate approval (prototype only)",
+     "does": "Shows “Is this your account?”."
+    },
+    {
+     "gesture": "tap",
+     "on": "Yes, this is my account",
+     "does": "Signs in, then the restore step."
+    },
+    {
+     "gesture": "tap",
+     "on": "No, cancel",
+     "does": "Goes back."
+    }
+   ]
+  },
+  "reset": {
+   "title": "Reset",
+   "group": "App",
+   "placement": "full",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Type DELETE",
+     "does": "Turns on Reset Orbit."
+    },
+    {
+     "gesture": "tap",
+     "on": "Reset Orbit",
+     "does": "Deletes the local data and returns to sign-in."
+    }
+   ]
+  },
+  "lock": {
+   "title": "App lock",
+   "group": "App",
+   "placement": "full",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Unlock",
+     "does": "Asks for your fingerprint, face or PIN (Windows Hello on Windows), then opens Orbit."
+    }
+   ]
+  },
+  "home": {
+   "title": "Chats",
+   "group": "Home",
+   "placement": "list",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Dock tab",
+     "does": "Switches between Chats and Calls."
+    },
+    {
+     "gesture": "swipe",
+     "on": "Tabs",
+     "does": "Swipes between Chats and Calls.",
+     "only": "phone"
+    },
+    {
+     "gesture": "tap",
+     "on": "Profile picture",
+     "does": "Opens You."
+    },
+    {
+     "gesture": "tap",
+     "on": "Round button",
+     "does": "Chats: opens the search to start a chat. Calls: opens the people search to call."
+    },
+    {
+     "gesture": "tap",
+     "on": "Filter chip",
+     "does": "All, Unread or Groups."
+    },
+    {
+     "gesture": "tap",
+     "on": "⋮",
+     "does": "Menu: New group, Join a group with a link, Archived chats (N)."
+    },
+    {
+     "gesture": "tap",
+     "on": "Chat row",
+     "does": "Opens the chat. On a window it opens on the right and the row stays marked."
+    },
+    {
+     "gesture": "swipe-right",
+     "on": "Chat row",
+     "does": "Pins or unpins it."
+    },
+    {
+     "gesture": "swipe-left",
+     "on": "Chat row",
+     "does": "Archives it, with Undo."
+    },
+    {
+     "gesture": "long-press",
+     "on": "Chat row",
+     "does": "Starts selecting; tap more rows to add or remove them."
+    },
+    {
+     "gesture": "right-click",
+     "on": "Chat row",
+     "does": "Starts selecting."
+    },
+    {
+     "gesture": "tap",
+     "on": "Selection bar",
+     "does": "Archive (with Undo), Delete (asks), ⋮ for Pin, Mute (sheet), Mark as read; × stops."
+    },
+    {
+     "gesture": "type",
+     "on": "Search",
+     "does": "Finds chats, people and messages as you type; × clears; ← closes."
+    },
+    {
+     "gesture": "key",
+     "on": "Enter in the search",
+     "does": "Looks up a full number or ~name: searching, then the result or why not."
+    },
+    {
+     "gesture": "tap",
+     "on": "Allow contacts / Refresh contacts",
+     "does": "Checking, then how many contacts are on Orbit."
+    },
+    {
+     "gesture": "tap",
+     "on": "Person in the search",
+     "does": "Chats: opens a chat with them. Calls: calls them."
+    },
+    {
+     "gesture": "long-press",
+     "on": "Person in the search",
+     "does": "Opens their contact info."
+    },
+    {
+     "gesture": "tap",
+     "on": "Call row",
+     "does": "Opens the call details."
+    },
+    {
+     "gesture": "tap",
+     "on": "Call icon on a call row",
+     "does": "Calls back the same way."
+    },
+    {
+     "gesture": "long-press",
+     "on": "Call row",
+     "does": "Sheet: Voice call, Video call, Delete from call history."
+    },
+    {
+     "gesture": "right-click",
+     "on": "Call row",
+     "does": "The same sheet."
+    },
+    {
+     "gesture": "swipe-left",
+     "on": "Call row",
+     "does": "Asks to delete it from the call history."
+    },
+    {
+     "gesture": "tap",
+     "on": "Quick row: Call / Keypad / a recent person",
+     "does": "Opens the people search, the keypad, or calls them."
+    },
+    {
+     "gesture": "tap",
+     "on": "Keypad digits",
+     "does": "Types the number; ⌫ deletes; the call button turns on at 6 digits and hands the number to the search."
+    },
+    {
+     "gesture": "long-press",
+     "on": "Keypad 0",
+     "does": "Types +."
+    }
+   ]
+  },
+  "archived": {
+   "title": "Archived chats",
+   "group": "Home",
+   "placement": "list",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Chat row",
+     "does": "Opens the chat."
+    },
+    {
+     "gesture": "swipe-left",
+     "on": "Chat row",
+     "does": "Unarchives it, with Undo."
+    },
+    {
+     "gesture": "long-press",
+     "on": "Chat row",
+     "does": "Starts selecting; the bar offers Unarchive (with Undo), Delete (asks), ⋮ for Mute and Mark as read."
+    }
+   ]
+  },
+  "chat": {
+   "title": "Conversation",
+   "group": "Conversation",
+   "placement": "detail",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Header (name or picture)",
+     "does": "Opens contact info or group info."
+    },
+    {
+     "gesture": "tap",
+     "on": "Voice / Video",
+     "does": "Places a call."
+    },
+    {
+     "gesture": "tap",
+     "on": "⋮",
+     "does": "Menu: Search, Contact or Group info, Media links and docs, Chat settings."
+    },
+    {
+     "gesture": "scroll",
+     "on": "Timeline",
+     "does": "A “scroll to latest” button appears 160 px above the bottom, with the unread count."
+    },
+    {
+     "gesture": "tap",
+     "on": "Scroll to latest",
+     "does": "Scrolls to the newest message."
+    },
+    {
+     "gesture": "swipe-right",
+     "on": "Their message",
+     "does": "Past 56 px: reply to it."
+    },
+    {
+     "gesture": "swipe-left",
+     "on": "Your message",
+     "does": "Past 56 px: reply to it."
+    },
+    {
+     "gesture": "long-press",
+     "on": "Message",
+     "does": "Opens the actions view: reactions, the message, and Reply, Copy, Forward, Edit (yours, sent), Message info (yours), Select, Delete for me, Delete for everyone (yours, sent)."
+    },
+    {
+     "gesture": "right-click",
+     "on": "Message",
+     "does": "Opens the same actions view."
+    },
+    {
+     "gesture": "tap",
+     "on": "Outside the actions view",
+     "does": "Closes it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Reaction in the actions view",
+     "does": "Adds your reaction, swaps it, or removes it when it is the same one."
+    },
+    {
+     "gesture": "tap",
+     "on": "+ in the reactions",
+     "does": "Sheet with every emoji."
+    },
+    {
+     "gesture": "tap",
+     "on": "Reaction under a message",
+     "does": "Sheet: who reacted with what; yours can be removed."
+    },
+    {
+     "gesture": "tap",
+     "on": "Photo in a message",
+     "does": "Opens the media viewer at it."
+    },
+    {
+     "gesture": "tap",
+     "on": "View-once message",
+     "does": "Opens it once; says when it was already opened or when you sent it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Voice message play / speed",
+     "does": "Plays or pauses; speed cycles 1x, 1.5x, 2x."
+    },
+    {
+     "gesture": "tap",
+     "on": "Document button",
+     "does": "Downloads it, or shares it once downloaded."
+    },
+    {
+     "gesture": "tap",
+     "on": "Retry on a failed message",
+     "does": "Sends it again."
+    },
+    {
+     "gesture": "tap",
+     "on": "Quoted reply",
+     "does": "Jumps to the original message."
+    },
+    {
+     "gesture": "tap",
+     "on": "Messages while selecting",
+     "does": "Adds or removes them; the bar offers Copy, Forward, Delete (for me, asks first) and × to stop."
+    },
+    {
+     "gesture": "type",
+     "on": "Message box",
+     "does": "The send button replaces the mic; the box grows up to 128 px."
+    },
+    {
+     "gesture": "key",
+     "on": "Enter in the message box",
+     "does": "Sends; Shift+Enter adds a line."
+    },
+    {
+     "gesture": "type",
+     "on": "@ in a group",
+     "does": "Opens the mention picker; tapping a person inserts @Name."
+    },
+    {
+     "gesture": "tap",
+     "on": "Send",
+     "does": "Sends; ticks go sent, delivered, read. In the demo chat Nadia types, then replies."
+    },
+    {
+     "gesture": "tap",
+     "on": "Save edit",
+     "does": "Replaces the text and marks the message Edited."
+    },
+    {
+     "gesture": "tap",
+     "on": "× on the reply or edit banner",
+     "does": "Cancels the reply or the edit."
+    },
+    {
+     "gesture": "tap",
+     "on": "Emoji",
+     "does": "Opens the emoji panel with tabs; tapping an emoji adds it; focusing the text closes the panel."
+    },
+    {
+     "gesture": "tap",
+     "on": "Camera",
+     "does": "Sheet: Take a photo, Record a video, then Send files."
+    },
+    {
+     "gesture": "tap",
+     "on": "Paperclip",
+     "does": "Attach sheet: Document, Camera, Gallery, Audio."
+    },
+    {
+     "gesture": "hold",
+     "on": "Microphone",
+     "does": "Records while held; releasing sends; sliding onto the lock keeps recording hands-free."
+    },
+    {
+     "gesture": "tap",
+     "on": "Microphone (not held)",
+     "does": "Says “Hold the microphone to record a voice message.”"
+    },
+    {
+     "gesture": "tap",
+     "on": "Send / Delete while recording is locked",
+     "does": "Sends the recording or throws it away."
+    },
+    {
+     "gesture": "type",
+     "on": "Search in chat",
+     "does": "Lists matching messages as you type; × clears; ← closes."
+    },
+    {
+     "gesture": "tap",
+     "on": "Search result",
+     "does": "Closes search, scrolls to the message and highlights it briefly."
+    },
+    {
+     "gesture": "tap",
+     "on": "Confirm / Remove on an unconfirmed member (group)",
+     "does": "Confirms them, or asks before removing them."
+    },
+    {
+     "gesture": "auto",
+     "on": "Composer when blocked or left",
+     "does": "The composer is replaced by a line saying why you cannot send."
+    }
+   ]
+  },
+  "forward": {
+   "title": "Forward",
+   "group": "Conversation pages",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Chat row",
+     "does": "Picks or unpicks it; several can be picked."
+    },
+    {
+     "gesture": "type",
+     "on": "Search",
+     "does": "Filters the chats as you type."
+    },
+    {
+     "gesture": "tap",
+     "on": "Send to N chats",
+     "does": "Sends, closes, and says “Forwarded”."
+    }
+   ]
+  },
+  "message-info": {
+   "title": "Message info",
+   "group": "Conversation pages",
+   "placement": "info",
+   "night": false,
+   "interactions": []
+  },
+  "media-viewer": {
+   "title": "Media viewer",
+   "group": "Conversation pages",
+   "placement": "full",
+   "night": true,
+   "interactions": [
+    {
+     "gesture": "swipe-left",
+     "on": "Picture",
+     "does": "Next item.",
+     "only": "phone"
+    },
+    {
+     "gesture": "swipe-right",
+     "on": "Picture",
+     "does": "Previous item.",
+     "only": "phone"
+    },
+    {
+     "gesture": "tap",
+     "on": "Previous / Next buttons",
+     "does": "Previous or next item; the arrow keys do the same.",
+     "only": "window"
+    },
+    {
+     "gesture": "key",
+     "on": "← / →",
+     "does": "Previous or next item.",
+     "only": "window"
+    },
+    {
+     "gesture": "tap",
+     "on": "Play / Pause (video)",
+     "does": "Plays or pauses; the controls hide after 3 s of playing."
+    },
+    {
+     "gesture": "tap",
+     "on": "Video",
+     "does": "Shows or hides the controls."
+    },
+    {
+     "gesture": "tap",
+     "on": "Speed",
+     "does": "Cycles 1x, 1.5x, 2x."
+    },
+    {
+     "gesture": "tap",
+     "on": "Share",
+     "does": "Opens the system share sheet."
+    },
+    {
+     "gesture": "tap",
+     "on": "Open video (cannot play)",
+     "does": "Opens the video in another app."
+    }
+   ]
+  },
+  "send-files": {
+   "title": "Send files",
+   "group": "Conversation pages",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "× on a file",
+     "does": "Removes it from what will be sent."
+    },
+    {
+     "gesture": "tap",
+     "on": "View once",
+     "does": "Turns view once on or off."
+    },
+    {
+     "gesture": "type",
+     "on": "Caption",
+     "does": "Adds a caption."
+    },
+    {
+     "gesture": "tap",
+     "on": "Send",
+     "does": "Sends and returns to the chat."
+    }
+   ]
+  },
+  "shared": {
+   "title": "Media, links and docs",
+   "group": "Conversation pages",
+   "placement": "info",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Media / Links / Docs",
+     "does": "Switches the tab."
+    },
+    {
+     "gesture": "tap",
+     "on": "Photo or video",
+     "does": "Opens the media viewer at it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Back to the chat (empty state)",
+     "does": "Returns to the chat."
+    }
+   ]
+  },
+  "chat-settings": {
+   "title": "Chat settings",
+   "group": "Conversation pages",
+   "placement": "info",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Mute notifications",
+     "does": "Sheet: 8 hours, 1 week, Always, and Unmute while muted."
+    },
+    {
+     "gesture": "tap",
+     "on": "Disappearing messages",
+     "does": "Sheet: Off, 5 minutes, 1 hour, 1 day, 1 week, 90 days."
+    },
+    {
+     "gesture": "tap",
+     "on": "Clear chat",
+     "does": "Asks first, then removes the messages from this device."
+    },
+    {
+     "gesture": "tap",
+     "on": "Block / Unblock",
+     "does": "Block asks first; unblock happens at once."
+    }
+   ]
+  },
+  "call": {
+   "title": "Call",
+   "group": "Calls",
+   "placement": "full",
+   "night": true,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Answer (incoming)",
+     "does": "Shows Connecting, then the call is live a moment later."
+    },
+    {
+     "gesture": "tap",
+     "on": "Decline (incoming)",
+     "does": "Ends the call as declined; the screen closes after 2 s."
+    },
+    {
+     "gesture": "tap",
+     "on": "End",
+     "does": "Ends the call and shows why it ended; the screen closes after 2 s."
+    },
+    {
+     "gesture": "tap",
+     "on": "Mute",
+     "does": "Turns your microphone off or on."
+    },
+    {
+     "gesture": "tap",
+     "on": "Camera",
+     "does": "Turns your camera off or on (video calls)."
+    },
+    {
+     "gesture": "tap",
+     "on": "Flip",
+     "does": "Switches between the front and back camera."
+    },
+    {
+     "gesture": "tap",
+     "on": "Audio output",
+     "does": "Sheet: Phone, Speaker, Bluetooth, Headset; the current one is ticked."
+    },
+    {
+     "gesture": "tap",
+     "on": "Notice × (weak connection, reconnecting)",
+     "does": "Hides the notice."
+    },
+    {
+     "gesture": "tap",
+     "on": "Video picture",
+     "does": "Hides or shows the controls."
+    },
+    {
+     "gesture": "drag",
+     "on": "Your own camera tile",
+     "does": "Moves it anywhere on the screen."
+    },
+    {
+     "gesture": "tap",
+     "on": "Your own camera tile",
+     "does": "Swaps it with the big picture."
+    },
+    {
+     "gesture": "auto",
+     "on": "Outgoing call",
+     "does": "Calling, then Ringing after 1.4 s, then live after 3.6 s; the timer counts while live."
+    }
+   ]
+  },
+  "call-detail": {
+   "title": "Call details",
+   "group": "Calls",
+   "placement": "detail",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Voice call / Video call",
+     "does": "Places that call."
+    },
+    {
+     "gesture": "tap",
+     "on": "Contact",
+     "does": "Opens contact info."
+    },
+    {
+     "gesture": "tap",
+     "on": "Delete (app bar)",
+     "does": "Asks “Delete from call history?”, then removes these calls."
+    }
+   ]
+  },
+  "contact": {
+   "title": "Contact info",
+   "group": "People",
+   "placement": "info",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Message / Voice call / Video call",
+     "does": "Opens the chat or places the call."
+    },
+    {
+     "gesture": "tap",
+     "on": "Rename",
+     "does": "Dialog for a name only you see; then asks to save it in the phone’s contacts too."
+    },
+    {
+     "gesture": "tap",
+     "on": "Mute",
+     "does": "Switch on: sheet with 8 hours, 1 week, Always. Off: unmutes."
+    },
+    {
+     "gesture": "tap",
+     "on": "Disappearing messages",
+     "does": "Sheet: Off, 24 hours, 7 days, 90 days."
+    },
+    {
+     "gesture": "tap",
+     "on": "Safety number",
+     "does": "Opens it; says to send a message first when there is no key yet."
+    },
+    {
+     "gesture": "tap",
+     "on": "Group in common",
+     "does": "Opens that group chat."
+    },
+    {
+     "gesture": "tap",
+     "on": "Block / Unblock",
+     "does": "Block asks first (Orbit tells them); unblock happens at once."
+    },
+    {
+     "gesture": "tap",
+     "on": "Report",
+     "does": "Sheet of reasons, then an optional note, then Reported."
+    }
+   ]
+  },
+  "safety": {
+   "title": "Safety number",
+   "group": "People",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Scan their code",
+     "does": "Opens the scanner."
+    },
+    {
+     "gesture": "tap",
+     "on": "Mark as verified / not verified",
+     "does": "Toggles the verified mark."
+    }
+   ]
+  },
+  "scan": {
+   "title": "Scan code",
+   "group": "People",
+   "placement": "inherit",
+   "night": true,
+   "interactions": [
+    {
+     "gesture": "auto",
+     "on": "Camera",
+     "does": "Scans a code held in the frame."
+    },
+    {
+     "gesture": "tap",
+     "on": "Simulate a match / a mismatch (prototype only)",
+     "does": "Match: verified, back to the safety number. Mismatch: explains."
+    }
+   ]
+  },
+  "people": {
+   "title": "People",
+   "group": "People",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Search",
+     "does": "Filters people as you type."
+    },
+    {
+     "gesture": "tap",
+     "on": "Person",
+     "does": "Opens a chat with them."
+    }
+   ]
+  },
+  "group-new": {
+   "title": "New group",
+   "group": "Groups",
+   "placement": "list",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Picture circle",
+     "does": "Adds a picture; when one is set, a sheet offers another or removing it."
+    },
+    {
+     "gesture": "type",
+     "on": "Group name",
+     "does": "Names the group; creating without a name shows the error."
+    },
+    {
+     "gesture": "tap",
+     "on": "Person",
+     "does": "Picks or unpicks them; picked people show as chips above."
+    },
+    {
+     "gesture": "tap",
+     "on": "× on a chip",
+     "does": "Unpicks that person."
+    },
+    {
+     "gesture": "type",
+     "on": "Member search",
+     "does": "Filters people; a number or ~name shows a “Find on Orbit” row."
+    },
+    {
+     "gesture": "tap",
+     "on": "Find on Orbit row",
+     "does": "Looks them up; says when nobody matches."
+    },
+    {
+     "gesture": "tap",
+     "on": "Create with N",
+     "does": "Creates the group; explains anyone who could not be added; then opens the group chat."
+    }
+   ]
+  },
+  "group-info": {
+   "title": "Group info",
+   "group": "Groups",
+   "placement": "info",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Group picture (admin)",
+     "does": "Sheet: choose or remove the picture."
+    },
+    {
+     "gesture": "tap",
+     "on": "Edit (admin)",
+     "does": "Sheet with the name and description, and Save."
+    },
+    {
+     "gesture": "tap",
+     "on": "Disappearing messages",
+     "does": "Sheet: Off, 24 hours, 7 days, 90 days."
+    },
+    {
+     "gesture": "tap",
+     "on": "Member",
+     "does": "Sheet: Make or remove admin, Make owner (owner only, asks), Remove (asks), Remove and ban (asks)."
+    },
+    {
+     "gesture": "tap",
+     "on": "Add members / Invite with a link / Join requests / Banned people / Group settings",
+     "does": "Opens that page."
+    },
+    {
+     "gesture": "tap",
+     "on": "Confirm / Remove on an unconfirmed member",
+     "does": "Confirms them, or asks before removing them."
+    },
+    {
+     "gesture": "tap",
+     "on": "Leave group",
+     "does": "Asks first, then returns to Chats and says you left."
+    },
+    {
+     "gesture": "tap",
+     "on": "Delete group (owner)",
+     "does": "Asks first, then returns to Chats."
+    }
+   ]
+  },
+  "group-settings": {
+   "title": "Group settings",
+   "group": "Groups",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Edit group info / Add members / Send messages",
+     "does": "Sheet: Only admins or Everyone."
+    }
+   ]
+  },
+  "group-invite": {
+   "title": "Invite with a link",
+   "group": "Groups",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Approve new members",
+     "does": "Switch: new links need an admin’s approval."
+    },
+    {
+     "gesture": "tap",
+     "on": "Create a link",
+     "does": "A new link appears at the top."
+    },
+    {
+     "gesture": "tap",
+     "on": "Share / Copy",
+     "does": "Shares the invite text or copies the link."
+    },
+    {
+     "gesture": "tap",
+     "on": "Revoke",
+     "does": "Asks first; the link stops working."
+    }
+   ]
+  },
+  "group-requests": {
+   "title": "Join requests",
+   "group": "Groups",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Approve / Reject",
+     "does": "Lets the person in, or turns them away."
+    }
+   ]
+  },
+  "group-banned": {
+   "title": "Banned people",
+   "group": "Groups",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Unban",
+     "does": "Lets the person join again with a link."
+    }
+   ]
+  },
+  "group-add": {
+   "title": "Add members",
+   "group": "Groups",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Person",
+     "does": "Picks or unpicks them."
+    },
+    {
+     "gesture": "type",
+     "on": "Search",
+     "does": "Filters people; a number or ~name can be looked up."
+    },
+    {
+     "gesture": "tap",
+     "on": "Add",
+     "does": "Adds them; explains when nobody could be added; returns with “Added N people”."
+    }
+   ]
+  },
+  "group-join": {
+   "title": "Join a group",
+   "group": "Groups",
+   "placement": "list",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Link",
+     "does": "The group link to join."
+    },
+    {
+     "gesture": "tap",
+     "on": "Paste",
+     "does": "Pastes the link."
+    },
+    {
+     "gesture": "tap",
+     "on": "Continue",
+     "does": "Checks it (“not an Orbit group link” when wrong), loads, then shows the group preview."
+    },
+    {
+     "gesture": "tap",
+     "on": "Join",
+     "does": "Joins, or waits for an admin when the link needs approval."
+    },
+    {
+     "gesture": "tap",
+     "on": "Open",
+     "does": "Opens the group chat."
+    },
+    {
+     "gesture": "tap",
+     "on": "Try again",
+     "does": "Back to the link field after a failure."
+    }
+   ]
+  },
+  "password": {
+   "title": "Change password",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Password fields",
+     "does": "The rules tick as you type; the button turns on when all of them pass."
+    },
+    {
+     "gesture": "tap",
+     "on": "Show passwords",
+     "does": "Shows or hides all three fields."
+    },
+    {
+     "gesture": "tap",
+     "on": "Change password / Set password",
+     "does": "Saves, then shows Password saved."
+    }
+   ]
+  },
+  "delete-account": {
+   "title": "Delete my account",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Type DELETE",
+     "does": "Must read DELETE before anything is deleted."
+    },
+    {
+     "gesture": "tap",
+     "on": "Send me a code (SMS)",
+     "does": "Sends a code; the code field appears with “Send a new code”."
+    },
+    {
+     "gesture": "tap",
+     "on": "Eye in the password field",
+     "does": "Shows or hides the password."
+    },
+    {
+     "gesture": "tap",
+     "on": "Delete my account",
+     "does": "Deletes, wipes this device, and returns to sign-in."
+    },
+    {
+     "gesture": "tap",
+     "on": "Export my data first / Cancel",
+     "does": "Shares the account data, or goes back."
+    }
+   ]
+  },
+  "blocked": {
+   "title": "Blocked",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Unblock",
+     "does": "Asks first, then removes them from the list."
+    }
+   ]
+  },
+  "about": {
+   "title": "Help and about",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Terms of Service / Privacy Policy tile",
+     "does": "Opens that document."
+    },
+    {
+     "gesture": "tap",
+     "on": "Server details",
+     "does": "Opens Advanced."
+    },
+    {
+     "gesture": "tap",
+     "on": "Open-source licences",
+     "does": "Opens the licence page."
+    },
+    {
+     "gesture": "tap",
+     "on": "Send crash reports",
+     "does": "Switch."
+    }
+   ]
+  },
+  "legal": {
+   "title": "Terms and Privacy Policy",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Terms / Privacy",
+     "does": "Switches the document."
+    }
+   ]
+  },
+  "advanced": {
+   "title": "Advanced",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Check for messages now",
+     "does": "Spinner, then Up to date."
+    },
+    {
+     "gesture": "tap",
+     "on": "Try again (cannot reach the server)",
+     "does": "Tries again."
+    }
+   ]
+  },
+  "approve-device": {
+   "title": "Link a new device",
+   "group": "Profile and devices",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Paste",
+     "does": "Pastes the link code."
+    },
+    {
+     "gesture": "tap",
+     "on": "Continue",
+     "does": "Checks the code: an error if it is not an Orbit link code, otherwise the approve step."
+    },
+    {
+     "gesture": "tap",
+     "on": "Approve",
+     "does": "Asks for your fingerprint, face or PIN (Windows Hello on Windows), then Approving, then Done."
+    },
+    {
+     "gesture": "tap",
+     "on": "Send (history)",
+     "does": "Sends your history to the new device; the row turns to Sent."
+    },
+    {
+     "gesture": "tap",
+     "on": "Cancel / Done",
+     "does": "Goes back."
+    }
+   ]
+  },
+  "activity": {
+   "title": "Security activity",
+   "group": "Profile and devices",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Review your devices",
+     "does": "Opens Devices."
+    },
+    {
+     "gesture": "tap",
+     "on": "Change your password",
+     "does": "Opens Change password."
+    }
+   ]
+  },
+  "restore-history": {
+   "title": "Restore history",
+   "group": "Backup",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Restore from my backup",
+     "does": "Runs: looking, downloading, unlocking, adding messages, with a percentage; then done, or nothing found."
+    },
+    {
+     "gesture": "tap",
+     "on": "I have a recovery secret",
+     "does": "Opens Recovery backup on Restore."
+    },
+    {
+     "gesture": "tap",
+     "on": "Done",
+     "does": "Goes back."
+    }
+   ]
+  },
+  "transfer": {
+   "title": "Send to my other devices",
+   "group": "Backup",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Send my history",
+     "does": "A sending card appears and shows its progress."
+    },
+    {
+     "gesture": "tap",
+     "on": "Cancel (sending)",
+     "does": "Stops sending."
+    },
+    {
+     "gesture": "tap",
+     "on": "Accept / Decline (waiting here)",
+     "does": "Accept starts receiving with progress; Decline removes it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Pause / Dismiss",
+     "does": "Pauses receiving, or clears a finished transfer."
+    }
+   ]
+  },
+  "recovery": {
+   "title": "Recovery backup",
+   "group": "Backup",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Create / Restore",
+     "does": "Switches the tab."
+    },
+    {
+     "gesture": "tap",
+     "on": "Copy / Share",
+     "does": "Copies or shares the secret; step 1 is ticked and a note says what to do next."
+    },
+    {
+     "gesture": "tap",
+     "on": "I saved it somewhere safe",
+     "does": "Turns on the Create button."
+    },
+    {
+     "gesture": "tap",
+     "on": "Create recovery backup",
+     "does": "Creates it; the checkup item is fixed."
+    },
+    {
+     "gesture": "tap",
+     "on": "Restore from recovery backup",
+     "does": "Restores; with an empty field it asks for the secret first."
+    }
+   ]
+  },
+  "settings-page": {
+   "title": "You",
+   "group": "You (settings and profile)",
+   "placement": "list",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Orbit ID pass",
+     "does": "Opens the profile editor (Enter and Space do too)."
+    },
+    {
+     "gesture": "tap",
+     "on": "QR on the pass",
+     "does": "Share sheet: your code and link, Copy link, Share, Scan someone’s code."
+    },
+    {
+     "gesture": "tap",
+     "on": "Fix / Turn on in the checkup",
+     "does": "Opens Recovery backup, or asks to turn on app lock."
+    },
+    {
+     "gesture": "tap",
+     "on": "See all 5 checks",
+     "does": "Sheet with every check; each opens its page or fixes it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Tile or row",
+     "does": "Opens that topic. On a window it opens on the right and stays marked."
+    },
+    {
+     "gesture": "tap",
+     "on": "Search",
+     "does": "Search field: finds settings as you type; ← closes."
+    }
+   ]
+  },
+  "profile": {
+   "title": "Edit profile",
+   "group": "You (settings and profile)",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Name / About",
+     "does": "The pass preview at the top updates as you type."
+    },
+    {
+     "gesture": "type",
+     "on": "~name",
+     "does": "Checked as you type: available, or which rule fails."
+    },
+    {
+     "gesture": "tap",
+     "on": "Photo",
+     "does": "Adds a photo; Remove takes it off."
+    },
+    {
+     "gesture": "tap",
+     "on": "Remove my ~name",
+     "does": "Asks first."
+    },
+    {
+     "gesture": "tap",
+     "on": "Save",
+     "does": "Checks the name and ~name, saves, goes back and says “Profile saved”."
+    }
+   ]
+  },
+  "privacy": {
+   "title": "Privacy",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Everyone / Nobody choices",
+     "does": "The “What Nadia sees” preview follows at once."
+    },
+    {
+     "gesture": "tap",
+     "on": "Read receipts / Typing / Being found",
+     "does": "Switches; the preview follows."
+    },
+    {
+     "gesture": "tap",
+     "on": "Disappearing messages for new chats",
+     "does": "Off, 24 h, 7 d, 90 d."
+    },
+    {
+     "gesture": "tap",
+     "on": "Lock Orbit",
+     "does": "Switch; when on, Lock again appears (Now, 1 min, 5 min, 30 min)."
+    },
+    {
+     "gesture": "tap",
+     "on": "Blocked",
+     "does": "Opens the Blocked page."
+    }
+   ]
+  },
+  "notifications": {
+   "title": "Notifications",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Messages / Groups / Calls tiles",
+     "does": "Each turns its alerts on or off."
+    },
+    {
+     "gesture": "tap",
+     "on": "Sound / Vibrate / Show message previews",
+     "does": "Switches; the lock-screen preview follows."
+    },
+    {
+     "gesture": "tap",
+     "on": "Unmute (muted chat)",
+     "does": "Unmutes it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Allow notifications (when off)",
+     "does": "Opens the phone’s notification settings."
+    }
+   ]
+  },
+  "chats-settings": {
+   "title": "Chats",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Text size buttons",
+     "does": "The preview grows or shrinks at once."
+    },
+    {
+     "gesture": "tap",
+     "on": "Enter key sends",
+     "does": "Switch."
+    },
+    {
+     "gesture": "tap",
+     "on": "Download automatically choices",
+     "does": "Never, Wi-Fi or Always for each kind."
+    }
+   ]
+  },
+  "storage": {
+   "title": "Storage and data",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Chat in Biggest chats",
+     "does": "Sheet: remove its photos and videos, or its documents; messages stay."
+    },
+    {
+     "gesture": "tap",
+     "on": "Download automatically / Backup over mobile data",
+     "does": "Opens Chats or Backup."
+    }
+   ]
+  },
+  "devices": {
+   "title": "Devices",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Device card",
+     "does": "Sheet: Rename, Remove this device (asks), Lost or stolen (asks)."
+    },
+    {
+     "gesture": "tap",
+     "on": "Link a new device",
+     "does": "Opens Link a new device."
+    },
+    {
+     "gesture": "tap",
+     "on": "See all activity",
+     "does": "Opens Security activity."
+    },
+    {
+     "gesture": "tap",
+     "on": "Sign out all other devices",
+     "does": "Asks first, then signs them out."
+    }
+   ]
+  },
+  "backup": {
+   "title": "Backup",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Back up now / Try again",
+     "does": "The ring fills to 100%, then “Backed up just now”."
+    },
+    {
+     "gesture": "tap",
+     "on": "Back up every day / Use mobile data",
+     "does": "Switches."
+    },
+    {
+     "gesture": "tap",
+     "on": "Restore / Send to a device tiles",
+     "does": "Opens Restore history or Send to my other devices."
+    },
+    {
+     "gesture": "tap",
+     "on": "Create (recovery backup)",
+     "does": "Opens Recovery backup."
+    },
+    {
+     "gesture": "tap",
+     "on": "Delete my server backup",
+     "does": "Asks first, then deletes it."
+    }
+   ]
+  },
+  "account": {
+   "title": "Account",
+   "group": "Settings",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Change or set a password / Security activity",
+     "does": "Opens that page."
+    },
+    {
+     "gesture": "tap",
+     "on": "Export my data",
+     "does": "Shares orbit-account.json."
+    },
+    {
+     "gesture": "tap",
+     "on": "Sign out",
+     "does": "Asks first, then returns to sign-in."
+    },
+    {
+     "gesture": "tap",
+     "on": "Delete my account",
+     "does": "Dialog: Export first or Continue to the delete page."
+    }
+   ]
+  },
+  "appearance": {
+   "title": "Appearance",
+   "group": "You (settings and profile)",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Theme card",
+     "does": "Switches the whole app to that theme at once, keeps it, and says “<Theme> theme on”. The current theme does nothing."
+    }
+   ]
+  }
+ },
  "screens": [
   {
    "key": "signin",

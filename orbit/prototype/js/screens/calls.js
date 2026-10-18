@@ -36,6 +36,20 @@
 
   App.register({
     id: 'call', title: 'Call', group: 'Calls', order: 30, night: true, modal: true,
+    interactions: [
+      ['tap', 'Answer (incoming)', 'Shows Connecting, then the call is live a moment later.'],
+      ['tap', 'Decline (incoming)', 'Ends the call as declined; the screen closes after 2 s.'],
+      ['tap', 'End', 'Ends the call and shows why it ended; the screen closes after 2 s.'],
+      ['tap', 'Mute', 'Turns your microphone off or on.'],
+      ['tap', 'Camera', 'Turns your camera off or on (video calls).'],
+      ['tap', 'Flip', 'Switches between the front and back camera.'],
+      ['tap', 'Audio output', 'Sheet: Phone, Speaker, Bluetooth, Headset; the current one is ticked.'],
+      ['tap', 'Notice × (weak connection, reconnecting)', 'Hides the notice.'],
+      ['tap', 'Video picture', 'Hides or shows the controls.'],
+      ['drag', 'Your own camera tile', 'Moves it anywhere on the screen.'],
+      ['tap', 'Your own camera tile', 'Swaps it with the big picture.'],
+      ['auto', 'Outgoing call', 'Calling, then Ringing after 1.4 s, then live after 3.6 s; the timer counts while live.'],
+    ],
     entries: [
       { key: 'call-incoming', label: 'Incoming voice call', params: { peer: 'nadia', phase: 'incoming' } },
       { key: 'call-incoming-video', label: 'Incoming video call', params: { peer: 'arif', phase: 'incoming', video: true } },
@@ -147,6 +161,11 @@
   // ---------------------------------------------------------------- call details
   App.register({
     id: 'call-detail', title: 'Call details', group: 'Calls', order: 30,
+    interactions: [
+      ['tap', 'Voice call / Video call', 'Places that call.'],
+      ['tap', 'Contact', 'Opens contact info.'],
+      ['tap', 'Delete (app bar)', 'Asks “Delete from call history?”, then removes these calls.'],
+    ],
     entries: [{ key: 'call-detail', label: 'Call details', params: { id: 'call3' }, base: { screen: 'home', params: { tab: 'calls' } } }],
     render(params) {
       const c = Data.calls.find((x) => x.id === params.id) || Data.calls[0];

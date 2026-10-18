@@ -20,6 +20,16 @@
   // ------------------------------------------------------------ contact info
   App.register({
     id: 'contact', title: 'Contact info', group: 'People', order: 40,
+    interactions: [
+      ['tap', 'Message / Voice call / Video call', 'Opens the chat or places the call.'],
+      ['tap', 'Rename', 'Dialog for a name only you see; then asks to save it in the phone’s contacts too.'],
+      ['tap', 'Mute', 'Switch on: sheet with 8 hours, 1 week, Always. Off: unmutes.'],
+      ['tap', 'Disappearing messages', 'Sheet: Off, 24 hours, 7 days, 90 days.'],
+      ['tap', 'Safety number', 'Opens it; says to send a message first when there is no key yet.'],
+      ['tap', 'Group in common', 'Opens that group chat.'],
+      ['tap', 'Block / Unblock', 'Block asks first (Orbit tells them); unblock happens at once.'],
+      ['tap', 'Report', 'Sheet of reasons, then an optional note, then Reported.'],
+    ],
     entries: [
       { key: 'contact', label: 'Contact info', params: { id: 'nadia' } },
       { key: 'contact-keychanged', label: 'Contact info · safety number changed', params: { id: 'rafiq' } },
@@ -88,7 +98,7 @@
       el.querySelectorAll('[data-open-chat]').forEach((b) => b.addEventListener('click', () => App.push('chat', { id: b.dataset.openChat })));
       el.querySelector('[data-block]').addEventListener('click', () => {
         if (st.blocked) { st.blocked = false; rerender(); App.snack('Unblocked.'); return; }
-        App.dialog({ title: `Block ${n}?`, text: 'They will not be able to message or call you, and will not be told that you blocked them.', actions: [{ label: 'Cancel' }, { label: 'Block', kind: 'primary', run: () => { st.blocked = true; rerender(); App.snack('Blocked.'); } }] });
+        App.dialog({ title: `Block ${n}?`, text: 'They will not be able to message or call you. Orbit tells them that you blocked them.', actions: [{ label: 'Cancel' }, { label: 'Block', kind: 'primary', run: () => { st.blocked = true; rerender(); App.snack('Blocked.'); } }] });
       });
       el.querySelector('[data-report]').addEventListener('click', () => App.sheet({
         title: `Report ${n}`, text: 'Orbit only learns who you reported and why. No messages are sent with the report.',
@@ -100,6 +110,10 @@
   // ----------------------------------------------------------- safety number
   App.register({
     id: 'safety', title: 'Safety number', group: 'People', order: 40,
+    interactions: [
+      ['tap', 'Scan their code', 'Opens the scanner.'],
+      ['tap', 'Mark as verified / not verified', 'Toggles the verified mark.'],
+    ],
     entries: [
       { key: 'safety', label: 'Safety number · verified', params: { id: 'nadia' } },
       { key: 'safety-unverified', label: 'Safety number · not verified', params: { id: 'arif' } },
@@ -126,6 +140,10 @@
 
   App.register({
     id: 'scan', title: 'Scan code', group: 'People', order: 40, night: true,
+    interactions: [
+      ['auto', 'Camera', 'Scans a code held in the frame.'],
+      ['tap', 'Simulate a match / a mismatch (prototype only)', 'Match: verified, back to the safety number. Mismatch: explains.'],
+    ],
     entries: [
       { key: 'scan', label: 'Scan code', params: { id: 'arif' } },
       { key: 'scan-nocamera', label: 'Scan code · no camera', params: { id: 'arif', noCamera: true } },
@@ -149,6 +167,10 @@
   // ------------------------------------------------- people search (own page)
   App.register({
     id: 'people', title: 'People', group: 'People', order: 40,
+    interactions: [
+      ['type', 'Search', 'Filters people as you type.'],
+      ['tap', 'Person', 'Opens a chat with them.'],
+    ],
     entries: [{ key: 'people', label: 'People search (from a contact link)', params: {}, base: { screen: 'home', params: { tab: 'chats' } } }],
     render(params, entry) {
       const st = entry.state; st.q = st.q || '';

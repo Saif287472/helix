@@ -47,6 +47,23 @@ const App = (() => {
 
   // The right pane remembers what it showed for each list (Chats, Calls, You).
   const contextOf = (e) => (e.id === 'home' ? (e.state && e.state.tab) || e.params.tab || 'chats' : e.id === 'settings-page' ? 'you' : 'chats');
+  // Behaviour every screen gets from the app frame, not from the screen itself
+  // ([gesture, on, does, layout?]). Exported to screens.json with each screen's own list.
+  const GLOBAL_INTERACTIONS = [
+    ['tap', 'Back arrow', 'Returns to the previous page; on a window, in the same pane.'],
+    ['key', 'Esc', 'Closes the topmost thing: a menu or sheet, then a call or the viewer, the info pane, the right pane.', 'window'],
+    ['key', 'Esc', 'Goes back, like the back arrow.', 'phone'],
+    ['tap', 'Outside a sheet, menu or dialog', 'Closes it.'],
+    ['tap', 'Menu or sheet row', 'Runs it and closes the menu or sheet.'],
+    ['tap', 'Undo on a toast', 'Undoes what the toast reported.'],
+    ['auto', 'Toast', 'Disappears after 2.8 s.'],
+    ['tap', 'A row, tile or chat in the list pane', 'Replaces what the right pane shows; it stays marked in the list.', 'window'],
+    ['auto', 'Right pane', 'Remembers its page for each list (Chats, Calls, You) and brings it back.', 'window'],
+    ['auto', 'Info pages (contact, group, media, chat settings, message info)', 'Open beside the chat from 1200 px, over it below.', 'window'],
+    ['auto', 'Menus', 'Hang from the button that opened them.', 'window'],
+    ['auto', 'Sheets', 'Open as centred dialogs; a sheet from the composer pops up above its button.', 'window'],
+  ];
+
   const PLACEHOLDER = {
     chats: { icon: 'chats-circle', title: 'Pick a chat', text: 'Choose a conversation on the left, or start a new one.', note: 'Messages are end-to-end encrypted' },
     calls: { icon: 'phone', title: 'Pick a call', text: 'Choose a call on the left to see its details, or start a new call.' },
@@ -561,8 +578,17 @@ const App = (() => {
         base: [e.base].flat(Infinity).filter(Boolean).map((b) => ({ screen: b.screen, params: b.params || {} })),
         placement: placement(e.screen, e.params),
       }));
+      const screenDefs = Object.fromEntries([...screens.values()].map((d) => [d.id, {
+        title: d.title, group: d.group, placement: placement(d.id, {}), night: !!d.night,
+        interactions: d.interactions === undefined ? null : d.interactions.map(([gesture, on, does, only]) => ({ gesture, on, does, ...(only ? { only } : {}) })),
+      }]));
+      const items = (list) => list.map(([gesture, on, does, only]) => ({ gesture, on, does, ...(only ? { only } : {}) }));
       const pre = document.createElement('pre'); pre.id = 'manifest';
-      pre.textContent = JSON.stringify({ devices: DEVICES, listWidth: LIST_W, placement: PLACEMENT, screens: screensOut });
+      pre.textContent = JSON.stringify({
+        devices: DEVICES, listWidth: LIST_W, placement: PLACEMENT,
+        interactions: { global: items(GLOBAL_INTERACTIONS), components: items(Kit.INTERACTIONS) },
+        screenDefs, screens: screensOut,
+      });
       document.body.replaceChildren(pre);
       return;
     }

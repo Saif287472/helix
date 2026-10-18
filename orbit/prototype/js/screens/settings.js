@@ -22,6 +22,11 @@
   }
   reg({
     id: 'password', title: 'Change password',
+    interactions: [
+      ['type', 'Password fields', 'The rules tick as you type; the button turns on when all of them pass.'],
+      ['tap', 'Show passwords', 'Shows or hides all three fields.'],
+      ['tap', 'Change password / Set password', 'Saves, then shows Password saved.'],
+    ],
     entries: [
       { key: 'password', label: 'Change password', params: {}, base: deeper('account') },
       { key: 'password-set', label: 'Set a password', params: { set: true }, base: deeper('account', { noPassword: true }) },
@@ -69,6 +74,13 @@
   // ---------------------------------------------------------- delete account
   reg({
     id: 'delete-account', title: 'Delete my account',
+    interactions: [
+      ['type', 'Type DELETE', 'Must read DELETE before anything is deleted.'],
+      ['tap', 'Send me a code (SMS)', 'Sends a code; the code field appears with “Send a new code”.'],
+      ['tap', 'Eye in the password field', 'Shows or hides the password.'],
+      ['tap', 'Delete my account', 'Deletes, wipes this device, and returns to sign-in.'],
+      ['tap', 'Export my data first / Cancel', 'Shares the account data, or goes back.'],
+    ],
     entries: [
       { key: 'delete-account', label: 'Delete my account · password', params: { proof: 'password' }, base: deeper('account') },
       { key: 'delete-account-sms', label: 'Delete my account · SMS code', params: { proof: 'sms' }, base: deeper('account') },
@@ -114,6 +126,9 @@
   // Since ADR-030 a blocked person is told they are blocked, so the page says so.
   reg({
     id: 'blocked', title: 'Blocked',
+    interactions: [
+      ['tap', 'Unblock', 'Asks first, then removes them from the list.'],
+    ],
     entries: [{ key: 'blocked', label: 'Blocked', params: {}, base: deeper('privacy') }, { key: 'blocked-empty', label: 'Blocked · nobody', params: { empty: true }, base: deeper('privacy') }],
     render(params, entry) {
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, list: params.empty ? [] : ['shuvo'] });
@@ -138,6 +153,12 @@
   };
   reg({
     id: 'about', title: 'Help and about',
+    interactions: [
+      ['tap', 'Terms of Service / Privacy Policy tile', 'Opens that document.'],
+      ['tap', 'Server details', 'Opens Advanced.'],
+      ['tap', 'Open-source licences', 'Opens the licence page.'],
+      ['tap', 'Send crash reports', 'Switch.'],
+    ],
     entries: [{ key: 'about', label: 'Help and about', params: {} }],
     render() {
       const doc = (k, ic, color, title) => `<button class="stile" data-go="legal" data-params='{"doc":"${k}"}'><span class="rw-ico av-${color}">${icon(ic)}</span><span class="st-title">${title}</span><span class="st-meta">Version ${DOCS[k][1]}</span></button>`;
@@ -157,6 +178,9 @@
 
   reg({
     id: 'legal', title: 'Terms and Privacy Policy',
+    interactions: [
+      ['tap', 'Terms / Privacy', 'Switches the document.'],
+    ],
     entries: [{ key: 'legal', label: 'Terms and Privacy Policy', params: {}, base: deeper('about') }],
     render(params, entry) {
       const st = entry.state; st.doc = st.doc || params.doc || 'terms';
@@ -170,6 +194,10 @@
   // ----------------------------------------------------------------- advanced
   reg({
     id: 'advanced', title: 'Advanced',
+    interactions: [
+      ['tap', 'Check for messages now', 'Spinner, then Up to date.'],
+      ['tap', 'Try again (cannot reach the server)', 'Tries again.'],
+    ],
     entries: [{ key: 'advanced', label: 'Advanced', params: {} }, { key: 'advanced-offline', label: 'Advanced · server unreachable', params: { offline: true } }],
     render(params, entry) {
       const st = entry.state;

@@ -14,6 +14,13 @@
   const LINK_STEPS = ['Scan', 'Check', 'Done'];
   App.register({
     id: 'approve-device', title: 'Link a new device', group: 'Profile and devices', order: 70,
+    interactions: [
+      ['tap', 'Paste', 'Pastes the link code.'],
+      ['tap', 'Continue', 'Checks the code: an error if it is not an Orbit link code, otherwise the approve step.'],
+      ['tap', 'Approve', 'Asks for your fingerprint, face or PIN (Windows Hello on Windows), then Approving, then Done.'],
+      ['tap', 'Send (history)', 'Sends your history to the new device; the row turns to Sent.'],
+      ['tap', 'Cancel / Done', 'Goes back.'],
+    ],
     entries: [
       { key: 'approve-device', label: 'Link a new device · scan', params: { step: 'enter' } },
       { key: 'approve-device-error', label: 'Link a new device · expired code', params: { step: 'enter', error: 'That code has expired. Codes last ten minutes. Ask the new device to show a new one.' } },
@@ -62,6 +69,10 @@
   // -------------------------------------------------------- security activity
   App.register({
     id: 'activity', title: 'Security activity', group: 'Profile and devices', order: 70,
+    interactions: [
+      ['tap', 'Review your devices', 'Opens Devices.'],
+      ['tap', 'Change your password', 'Opens Change password.'],
+    ],
     entries: [{ key: 'activity', label: 'Security activity', params: {}, base: [base, { screen: 'devices', params: {} }] }],
     render() {
       const ev = (ic, t, d, w, warn) => row({ icon: warn ? 'warning' : ic, color: warn ? 4 : 7, title: t, sub: `${d} · ${w}`, tag: 'div', end: warn ? '<span class="tag warning">Check</span>' : '' });
@@ -79,6 +90,11 @@
 
   App.register({
     id: 'restore-history', title: 'Restore history', group: 'Backup', order: 80,
+    interactions: [
+      ['tap', 'Restore from my backup', 'Runs: looking, downloading, unlocking, adding messages, with a percentage; then done, or nothing found.'],
+      ['tap', 'I have a recovery secret', 'Opens Recovery backup on Restore.'],
+      ['tap', 'Done', 'Goes back.'],
+    ],
     entries: [{ key: 'restore-history', label: 'Restore history (from Settings)', params: {}, base: [base, { screen: 'backup', params: {} }] }],
     render(params, entry) { return youPage('Restore history', window.HelixRestorePage({}, entry.state)); },
     mount(el, params, entry) {
@@ -106,6 +122,12 @@
   }
   App.register({
     id: 'transfer', title: 'Send to my other devices', group: 'Backup', order: 80,
+    interactions: [
+      ['tap', 'Send my history', 'A sending card appears and shows its progress.'],
+      ['tap', 'Cancel (sending)', 'Stops sending.'],
+      ['tap', 'Accept / Decline (waiting here)', 'Accept starts receiving with progress; Decline removes it.'],
+      ['tap', 'Pause / Dismiss', 'Pauses receiving, or clears a finished transfer.'],
+    ],
     entries: [
       { key: 'transfer', label: 'Send to my other devices', params: {} },
       { key: 'transfer-empty', label: 'Send to my other devices · nothing waiting', params: { empty: true } },
@@ -137,6 +159,13 @@
   const REC_STEPS = ['Save the secret', 'Confirm', 'Create'];
   App.register({
     id: 'recovery', title: 'Recovery backup', group: 'Backup', order: 80,
+    interactions: [
+      ['tap', 'Create / Restore', 'Switches the tab.'],
+      ['tap', 'Copy / Share', 'Copies or shares the secret; step 1 is ticked and a note says what to do next.'],
+      ['tap', 'I saved it somewhere safe', 'Turns on the Create button.'],
+      ['tap', 'Create recovery backup', 'Creates it; the checkup item is fixed.'],
+      ['tap', 'Restore from recovery backup', 'Restores; with an empty field it asks for the secret first.'],
+    ],
     entries: [
       { key: 'recovery', label: 'Recovery backup · create', params: { tab: 'create' } },
       { key: 'recovery-restore', label: 'Recovery backup · restore', params: { tab: 'restore' } },

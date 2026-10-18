@@ -99,6 +99,20 @@
 
   App.register({
     id: 'signin', title: 'Sign in', group: 'Sign-in', order: 5,
+    interactions: [
+      ['type', 'Phone number', 'Shows which country it detected; Next checks the length.'],
+      ['type', 'SMS code', 'Digits only; the sixth digit continues by itself.'],
+      ['tap', 'Resend code', 'Sends a new code.'],
+      ['tap', 'Next / Sign in / Create account / Continue', 'Shows a spinner, then the next step or an error under the field.'],
+      ['tap', 'Forgot password?', 'Opens the take-over step.'],
+      ['tap', 'Link from another device instead', 'Opens Link this device.'],
+      ['tap', 'Terms checkbox (new account)', 'Needed before Create account.'],
+      ['tap', 'Skip (name step)', 'Creates the account without a name.'],
+      ['tap', 'Back arrow on a step', 'Returns to the previous step.'],
+      ['tap', 'Terms & Privacy', 'Sheet with both documents.'],
+      ['tap', 'Bottom-right corner ×3 (each within 2 s)', 'Shows “Advanced mode” for 2 s; tapping it opens the personal-server code.'],
+      ['type', 'Personal-server code', 'Accepts HLX-INV- and HLX-REC- codes; Paste fills it; then the server is confirmed.'],
+    ],
     entries: [
       { key: 'signin', label: 'Sign in · phone', params: { step: 'phone' } },
       { key: 'signin-phone-error', label: 'Sign in · phone error', params: { step: 'phone', phone: '1711 00', error: 'badPhone' } },
@@ -227,6 +241,12 @@
 
   App.register({
     id: 'restore', title: 'Restore your chats', group: 'Sign-in', order: 5,
+    interactions: [
+      ['tap', 'Restore from my backup', 'Runs with a percentage; then done, or nothing found.'],
+      ['tap', 'I have a recovery secret', 'Opens Recovery backup on Restore.'],
+      ['tap', 'Accept / Decline (history from another device)', 'Receives it, or declines.'],
+      ['tap', 'Skip for now / Continue', 'Goes on to Chats.'],
+    ],
     entries: [
       { key: 'restore', label: 'Restore step (after sign-in)', params: { afterSignIn: true } },
       { key: 'restore-running', label: 'Restore step · running', params: { afterSignIn: true, phase: 'running', p: 3 } },
@@ -254,6 +274,13 @@
   // ------------------------------------------- link this device (new device)
   App.register({
     id: 'link-device', title: 'Link this device', group: 'Sign-in', order: 5,
+    interactions: [
+      ['auto', 'Code timer', 'Counts down to the code’s expiry.'],
+      ['tap', 'Show a new code (expired)', 'Shows a fresh code and restarts the timer.'],
+      ['tap', 'Simulate approval (prototype only)', 'Shows “Is this your account?”.'],
+      ['tap', 'Yes, this is my account', 'Signs in, then the restore step.'],
+      ['tap', 'No, cancel', 'Goes back.'],
+    ],
     entries: [
       { key: 'link-device', label: 'Link this device · QR', params: {} },
       { key: 'link-device-expired', label: 'Link this device · code expired', params: { phase: 'expired' } },
@@ -295,6 +322,10 @@
   // -------------------------------------------------------- reset and lock
   App.register({
     id: 'reset', title: 'Reset', group: 'App', order: 95,
+    interactions: [
+      ['type', 'Type DELETE', 'Turns on Reset Orbit.'],
+      ['tap', 'Reset Orbit', 'Deletes the local data and returns to sign-in.'],
+    ],
     entries: [
       { key: 'reset-window', label: 'Already open in another window', params: { kind: 'window' } },
       { key: 'reset-key', label: 'Reset required · key missing', params: { kind: 'key' } },
@@ -324,6 +355,9 @@
 
   App.register({
     id: 'lock', title: 'App lock', group: 'App', order: 95,
+    interactions: [
+      ['tap', 'Unlock', 'Asks for your fingerprint, face or PIN (Windows Hello on Windows), then opens Orbit.'],
+    ],
     entries: [{ key: 'lock', label: 'App lock', params: {} }],
     render() {
       return `<div class="center-page" style="background:var(--bg)"><div class="cp-icon" style="background:var(--surface);border:1px solid var(--line);color:var(--accent);box-shadow:0 0 0 10px var(--bg),0 0 0 11px var(--line-2)">${icon('lock-simple', 'fill')}</div>

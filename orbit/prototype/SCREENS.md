@@ -262,12 +262,26 @@ When the design is ported, these need real Flutter work, not just restyling:
       - **Send to my other devices:** pills for "encrypted" and "they accept
         it first", and how many transfers are waiting here.
       - **Recovery secret:** it wraps only between its groups.
-    - **Copy fix:** "That is not an Orbit link code" (it said "a Orbit").
+    - **Copy fix:** "That is not an Orbit link code" and "…an Orbit group link" (they said "a Orbit").
     - **For Phase 1:** check whether the app has the data these pages show:
       - when the password was last changed;
       - 30 days of security activity;
       - the server's feature flags and version;
       - whether a recovery backup exists.
+17. **Fixes found while listing every interaction (2026-10-17).**
+    - **The block dialogs follow ADR-030.** On the contact page and in chat
+      settings they now say that Orbit tells the person they are blocked.
+    - **Archived chats: swipe left to unarchive, with Undo.** The swipe
+      background was already drawn, but the gesture was missing.
+    - **A slow swipe on a chat row no longer starts selection mode.** It
+      pins, archives or unarchives as intended.
+    - **"…an Orbit group link"** (it said "a Orbit").
+    - **The interaction lists:**
+      - Each screen's interactions live next to its code (`interactions` in
+        `js/screens/*.js`).
+      - The app frame's are in `js/app.js` and the page kit's in `js/kit.js`.
+      - `tools/manifest.py` exports them to `screens.json` and to the
+        `INTERACTIONS.md` checklist, and fails when a screen has no list.
 
 ---
 

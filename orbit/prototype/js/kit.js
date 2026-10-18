@@ -187,5 +187,19 @@ const Kit = (() => {
     h.panel.querySelector('[data-ok]').addEventListener('click', () => { h.close(); run && run(inp.value); });
   }
 
-  return { field, seg, notice, intro, qr, code, progress, check, section, sw, choice, page, wire, confirm, inputDialog, youPage, hero, ring, danger, steps, rules, formCard };
+  // What the kit's parts do wherever they appear ([gesture, on, does]).
+  // Exported to screens.json, so each screen lists only its own behaviour.
+  const INTERACTIONS = [
+    ['tap', 'Row with a chevron, or a tile', 'Opens its page.'],
+    ['tap', 'Switch row', 'Toggles the switch; the whole row is the target.'],
+    ['tap', 'Choice row (value on the right)', 'Opens a sheet of options; the current one is ticked; picking sets it.'],
+    ['tap', 'Segmented control option', 'Selects it.'],
+    ['tap', 'Checkbox row', 'Ticks or unticks it.'],
+    ['tap', 'Eye in a password field', 'Shows or hides the password.'],
+    ['tap', 'Paste in a field', 'Pastes from the clipboard.'],
+    ['type', 'Field with a counter', 'The counter shows length out of the maximum.'],
+    ['tap', 'Button that starts work', 'Shows a spinner in place of its label until the work ends.'],
+  ];
+
+  return { field, seg, notice, intro, qr, code, progress, check, section, sw, choice, page, wire, confirm, inputDialog, youPage, hero, ring, danger, steps, rules, formCard, INTERACTIONS };
 })();

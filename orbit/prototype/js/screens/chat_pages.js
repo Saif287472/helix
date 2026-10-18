@@ -13,6 +13,11 @@
   // ------------------------------------------------------------------ forward
   App.register({
     id: 'forward', title: 'Forward', group: 'Conversation pages', order: 25,
+    interactions: [
+      ['tap', 'Chat row', 'Picks or unpicks it; several can be picked.'],
+      ['type', 'Search', 'Filters the chats as you type.'],
+      ['tap', 'Send to N chats', 'Sends, closes, and says “Forwarded”.'],
+    ],
     entries: [
       { key: 'forward', label: 'Forward message', params: { n: 1 } },
       { key: 'forward-picked', label: 'Forward · chats picked', params: { n: 2, sel: ['group:family', 'direct:arif'] } },
@@ -38,6 +43,7 @@
   // ------------------------------------------------------------- message info
   App.register({
     id: 'message-info', title: 'Message info', group: 'Conversation pages', order: 25,
+    interactions: [],
     entries: [
       { key: 'message-info', label: 'Message info (direct)', params: { id: 'direct:nadia' }, base: chatBase('direct:nadia') },
       { key: 'message-info-group', label: 'Message info (group)', params: { id: 'group:family' }, base: chatBase('group:family') },
@@ -63,6 +69,17 @@
   ];
   App.register({
     id: 'media-viewer', title: 'Media viewer', group: 'Conversation pages', order: 25, night: true,
+    interactions: [
+      ['swipe-left', 'Picture', 'Next item.', 'phone'],
+      ['swipe-right', 'Picture', 'Previous item.', 'phone'],
+      ['tap', 'Previous / Next buttons', 'Previous or next item; the arrow keys do the same.', 'window'],
+      ['key', '← / →', 'Previous or next item.', 'window'],
+      ['tap', 'Play / Pause (video)', 'Plays or pauses; the controls hide after 3 s of playing.'],
+      ['tap', 'Video', 'Shows or hides the controls.'],
+      ['tap', 'Speed', 'Cycles 1x, 1.5x, 2x.'],
+      ['tap', 'Share', 'Opens the system share sheet.'],
+      ['tap', 'Open video (cannot play)', 'Opens the video in another app.'],
+    ],
     entries: [
       { key: 'media-viewer', label: 'Media viewer', params: { i: 0 } },
       { key: 'media-video', label: 'Video player', params: { i: 2 } },
@@ -114,6 +131,12 @@
   // --------------------------------------------------------------- send files
   App.register({
     id: 'send-files', title: 'Send files', group: 'Conversation pages', order: 25,
+    interactions: [
+      ['tap', '× on a file', 'Removes it from what will be sent.'],
+      ['tap', 'View once', 'Turns view once on or off.'],
+      ['type', 'Caption', 'Adds a caption.'],
+      ['tap', 'Send', 'Sends and returns to the chat.'],
+    ],
     entries: [
       { key: 'send-files', label: 'Send files', params: {} },
       { key: 'send-files-empty', label: 'Send files · nothing left', params: { empty: true } },
@@ -142,6 +165,11 @@
   // ------------------------------------------------------------- shared media
   App.register({
     id: 'shared', title: 'Media, links and docs', group: 'Conversation pages', order: 25,
+    interactions: [
+      ['tap', 'Media / Links / Docs', 'Switches the tab.'],
+      ['tap', 'Photo or video', 'Opens the media viewer at it.'],
+      ['tap', 'Back to the chat (empty state)', 'Returns to the chat.'],
+    ],
     entries: [
       { key: 'shared', label: 'Media, links and docs', params: { id: 'direct:nadia', tab: 'media' } },
       { key: 'shared-docs', label: 'Shared · docs', params: { id: 'direct:nadia', tab: 'docs' } },
@@ -169,6 +197,12 @@
   // ------------------------------------------------------------ chat settings
   App.register({
     id: 'chat-settings', title: 'Chat settings', group: 'Conversation pages', order: 25,
+    interactions: [
+      ['tap', 'Mute notifications', 'Sheet: 8 hours, 1 week, Always, and Unmute while muted.'],
+      ['tap', 'Disappearing messages', 'Sheet: Off, 5 minutes, 1 hour, 1 day, 1 week, 90 days.'],
+      ['tap', 'Clear chat', 'Asks first, then removes the messages from this device.'],
+      ['tap', 'Block / Unblock', 'Block asks first; unblock happens at once.'],
+    ],
     entries: [
       { key: 'chat-settings', label: 'Chat settings (direct)', params: { id: 'direct:nadia' } },
       { key: 'chat-settings-group', label: 'Chat settings (group)', params: { id: 'group:family' } },
@@ -205,7 +239,7 @@
       el.querySelector('[data-clear]').addEventListener('click', () => confirm('Clear this chat?', 'All messages are removed from this device. The chat stays in your list.', 'Clear', () => App.snack('Chat cleared')));
       el.querySelector('[data-block]')?.addEventListener('click', () => {
         if (st.blocked) { st.blocked = false; entry.rerender(); return; }
-        confirm(`Block ${n}?`, 'They will not be able to message or call you. You can unblock them here at any time.', 'Block', () => { st.blocked = true; entry.rerender(); });
+        confirm(`Block ${n}?`, 'They will not be able to message or call you, and Orbit tells them that you blocked them. You can unblock them here at any time.', 'Block', () => { st.blocked = true; entry.rerender(); });
       });
     },
   });

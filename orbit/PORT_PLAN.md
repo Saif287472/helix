@@ -154,9 +154,12 @@ Progress:
   `screens.json` (181 screen states, each with its window placement).
 - [x] The older-style pages restyled in the You style (2026-10-17,
   `SCREENS.md` design change 16).
-- [ ] Each screen's interactions noted in `screens.json`.
+- [x] Each screen's interactions noted in `screens.json` (2026-10-17).
+  - 266 items in `INTERACTIONS.md`: 245 on the screens, plus 21 shared ones
+    (the app frame and the page kit).
+  - Each one becomes a widget test in Phase 3 or Phase 4.
 
-**Review 0:** you approve the finished designs.
+**Review 0:** you approve the finished designs. Approved 2026-10-18.
 
 ### Phase 1: contracts and the gap list (no UI yet)
 

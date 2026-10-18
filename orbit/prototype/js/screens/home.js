@@ -174,6 +174,33 @@
   // =============================================================== the screen
   App.register({
     id: 'home', title: 'Chats', group: 'Home', order: 10, refreshOnReturn: true,
+    interactions: [
+      ['tap', 'Dock tab', 'Switches between Chats and Calls.'],
+      ['swipe', 'Tabs', 'Swipes between Chats and Calls.', 'phone'],
+      ['tap', 'Profile picture', 'Opens You.'],
+      ['tap', 'Round button', 'Chats: opens the search to start a chat. Calls: opens the people search to call.'],
+      ['tap', 'Filter chip', 'All, Unread or Groups.'],
+      ['tap', '⋮', 'Menu: New group, Join a group with a link, Archived chats (N).'],
+      ['tap', 'Chat row', 'Opens the chat. On a window it opens on the right and the row stays marked.'],
+      ['swipe-right', 'Chat row', 'Pins or unpins it.'],
+      ['swipe-left', 'Chat row', 'Archives it, with Undo.'],
+      ['long-press', 'Chat row', 'Starts selecting; tap more rows to add or remove them.'],
+      ['right-click', 'Chat row', 'Starts selecting.'],
+      ['tap', 'Selection bar', 'Archive (with Undo), Delete (asks), ⋮ for Pin, Mute (sheet), Mark as read; × stops.'],
+      ['type', 'Search', 'Finds chats, people and messages as you type; × clears; ← closes.'],
+      ['key', 'Enter in the search', 'Looks up a full number or ~name: searching, then the result or why not.'],
+      ['tap', 'Allow contacts / Refresh contacts', 'Checking, then how many contacts are on Orbit.'],
+      ['tap', 'Person in the search', 'Chats: opens a chat with them. Calls: calls them.'],
+      ['long-press', 'Person in the search', 'Opens their contact info.'],
+      ['tap', 'Call row', 'Opens the call details.'],
+      ['tap', 'Call icon on a call row', 'Calls back the same way.'],
+      ['long-press', 'Call row', 'Sheet: Voice call, Video call, Delete from call history.'],
+      ['right-click', 'Call row', 'The same sheet.'],
+      ['swipe-left', 'Call row', 'Asks to delete it from the call history.'],
+      ['tap', 'Quick row: Call / Keypad / a recent person', 'Opens the people search, the keypad, or calls them.'],
+      ['tap', 'Keypad digits', 'Types the number; ⌫ deletes; the call button turns on at 6 digits and hands the number to the search.'],
+      ['long-press', 'Keypad 0', 'Types +.'],
+    ],
     entries: [
       { key: 'chats', label: 'Chats', params: { tab: 'chats' } },
       { key: 'chats-groups', label: 'Chats · Groups filter', params: { tab: 'chats', filter: 'groups' } },
@@ -247,7 +274,7 @@
       const openChat = (id, jump) => App.push('chat', { id, jump });
       el.querySelectorAll('[data-chat]').forEach((b) => {
         let timer = null, long = false;
-        b.addEventListener('pointerdown', () => { long = false; if (st.searching) return; timer = setTimeout(() => { long = true; st.selected.add(b.dataset.chat); rerender(); }, 450); });
+        b.addEventListener('pointerdown', () => { long = false; if (st.searching) return; timer = setTimeout(() => { if (b.dataset.swiping) return; long = true; st.selected.add(b.dataset.chat); rerender(); }, 450); });
         ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, () => clearTimeout(timer)));
         b.addEventListener('contextmenu', (e) => { e.preventDefault(); if (!st.searching) { st.selected.add(b.dataset.chat); rerender(); } });
         b.addEventListener('click', () => {
@@ -325,7 +352,7 @@
         r.addEventListener('pointermove', (e) => {
           if (!on) return; d = e.clientX - x0;
           if (isCall && d > 0) d = 0;
-          if (!horiz && Math.abs(d) > 10 && Math.abs(d) > Math.abs(e.clientY - y0)) horiz = true;
+          if (!horiz && Math.abs(d) > 10 && Math.abs(d) > Math.abs(e.clientY - y0)) { horiz = true; r.dataset.swiping = '1'; }
           if (!horiz) return;
           r.style.transition = 'none'; r.style.transform = `translateX(${d}px)`;
           if (!isCall) bg.style.background = 'var(--accent)';
@@ -333,7 +360,7 @@
           bg.querySelector('.sw-end').style.opacity = d < 0 ? 1 : 0;
         });
         const done = () => {
-          if (!on) return; on = false; r.style.transition = 'transform 200ms var(--ease)'; r.style.transform = '';
+          if (!on) return; on = false; r.style.transition = 'transform 200ms var(--ease)'; r.style.transform = ''; delete r.dataset.swiping;
           if (!horiz) return;
           r.addEventListener('click', (ev) => ev.stopImmediatePropagation(), { once: true, capture: true });
           const width = r.offsetWidth;
@@ -420,6 +447,11 @@
   // ============================================================ Archived chats
   App.register({
     id: 'archived', title: 'Archived chats', group: 'Home', order: 10,
+    interactions: [
+      ['tap', 'Chat row', 'Opens the chat.'],
+      ['swipe-left', 'Chat row', 'Unarchives it, with Undo.'],
+      ['long-press', 'Chat row', 'Starts selecting; the bar offers Unarchive (with Undo), Delete (asks), ⋮ for Mute and Mark as read.'],
+    ],
     entries: [
       { key: 'archived', label: 'Archived chats', params: {}, base: { screen: 'home', params: { tab: 'chats' } } },
       { key: 'archived-empty', label: 'Archived chats · empty', params: { empty: true }, base: { screen: 'home', params: { tab: 'chats' } } },
@@ -442,9 +474,28 @@
       el.querySelector('[data-more]')?.addEventListener('click', () => App.menu([{ icon: 'bell-slash', label: 'Mute…', run: () => muteSheet(true, () => { st.selected.clear(); rerender(); }) }, { icon: 'checks', label: 'Mark as read' }]));
       el.querySelectorAll('[data-chat]').forEach((b) => {
         let t = null, long = false;
-        b.addEventListener('pointerdown', () => { long = false; t = setTimeout(() => { long = true; st.selected.add(b.dataset.chat); rerender(); }, 450); });
+        b.addEventListener('pointerdown', () => { long = false; t = setTimeout(() => { if (b.dataset.swiping) return; long = true; st.selected.add(b.dataset.chat); rerender(); }, 450); });
         ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, () => clearTimeout(t)));
         b.addEventListener('click', () => { if (long) return; if (st.selected.size) { st.selected.has(b.dataset.chat) ? st.selected.delete(b.dataset.chat) : st.selected.add(b.dataset.chat); rerender(); return; } App.push('chat', { id: b.dataset.chat }); });
+      });
+      // Swipe a row left to unarchive it (the same gesture that archived it).
+      el.querySelectorAll('.swipe-wrap').forEach((w) => {
+        const r = w.querySelector('.chat-row'); const label = w.querySelector('.sw-end');
+        let x0 = 0, y0 = 0, on = false, d = 0, horiz = false;
+        r.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; on = true; d = 0; horiz = false; });
+        r.addEventListener('pointermove', (e) => {
+          if (!on) return; d = Math.min(0, e.clientX - x0);
+          if (!horiz && Math.abs(d) > 10 && Math.abs(d) > Math.abs(e.clientY - y0)) { horiz = true; r.dataset.swiping = '1'; }
+          if (!horiz) return;
+          r.style.transition = 'none'; r.style.transform = `translateX(${d}px)`; label.style.opacity = d < 0 ? 1 : 0;
+        });
+        const done = () => {
+          if (!on) return; on = false; r.style.transition = 'transform 200ms var(--ease)'; r.style.transform = ''; delete r.dataset.swiping;
+          if (!horiz) return;
+          r.addEventListener('click', (ev) => ev.stopImmediatePropagation(), { once: true, capture: true });
+          if (d < -r.offsetWidth * 0.3) App.snack('Chat unarchived', { label: 'Undo' });
+        };
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => r.addEventListener(ev, done));
       });
     },
   });

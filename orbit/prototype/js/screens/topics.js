@@ -53,6 +53,13 @@
   }
   reg({
     id: 'privacy', title: 'Privacy',
+    interactions: [
+      ['tap', 'Everyone / Nobody choices', 'The “What Nadia sees” preview follows at once.'],
+      ['tap', 'Read receipts / Typing / Being found', 'Switches; the preview follows.'],
+      ['tap', 'Disappearing messages for new chats', 'Off, 24 h, 7 d, 90 d.'],
+      ['tap', 'Lock Orbit', 'Switch; when on, Lock again appears (Now, 1 min, 5 min, 30 min).'],
+      ['tap', 'Blocked', 'Opens the Blocked page.'],
+    ],
     entries: [{ key: 'privacy', label: 'Privacy', params: {} }, { key: 'privacy-lock', label: 'Privacy · app lock on', params: { lock: true } }],
     render(params, entry) {
       if (params.lock && !entry.state.init) { you().lock = true; }
@@ -100,6 +107,12 @@
   }
   reg({
     id: 'notifications', title: 'Notifications',
+    interactions: [
+      ['tap', 'Messages / Groups / Calls tiles', 'Each turns its alerts on or off.'],
+      ['tap', 'Sound / Vibrate / Show message previews', 'Switches; the lock-screen preview follows.'],
+      ['tap', 'Unmute (muted chat)', 'Unmutes it.'],
+      ['tap', 'Allow notifications (when off)', 'Opens the phone’s notification settings.'],
+    ],
     entries: [{ key: 'notifications', label: 'Notifications', params: {} }, { key: 'notifications-off', label: 'Notifications · off in phone settings', params: { osOff: true } }],
     render(params, entry) {
       const n = P.notify;
@@ -129,6 +142,11 @@
   const SIZES = { Small: 0.9, Default: 1, Large: 1.15, 'Extra large': 1.3 };
   reg({
     id: 'chats-settings', title: 'Chats',
+    interactions: [
+      ['tap', 'Text size buttons', 'The preview grows or shrinks at once.'],
+      ['tap', 'Enter key sends', 'Switch.'],
+      ['tap', 'Download automatically choices', 'Never, Wi-Fi or Always for each kind.'],
+    ],
     entries: [{ key: 'chats-settings', label: 'Chats settings', params: {} }],
     render() {
       const c = P.chats; const s = SIZES[c.size];
@@ -151,6 +169,10 @@
   const BIG = [['group:family', 412, 380], ['direct:nadia', 260, 241], ['group:design', 198, 170], ['group:lunch', 64, 51], ['direct:arif', 38, 30]];
   reg({
     id: 'storage', title: 'Storage and data',
+    interactions: [
+      ['tap', 'Chat in Biggest chats', 'Sheet: remove its photos and videos, or its documents; messages stay.'],
+      ['tap', 'Download automatically / Backup over mobile data', 'Opens Chats or Backup.'],
+    ],
     entries: [{ key: 'storage', label: 'Storage and data', params: {} }],
     render() {
       const chat = (id) => Data.chats.find((c) => c.id === id);
@@ -182,6 +204,12 @@
   const DEVICES = [{ id: 'd1', name: 'Pixel 8', platform: 'Android', ic: 'device-mobile', self: true, when: 'This device' }, { id: 'd2', name: 'Office PC', platform: 'Windows', ic: 'desktop', when: 'Active 5 minutes ago' }];
   reg({
     id: 'devices', title: 'Devices',
+    interactions: [
+      ['tap', 'Device card', 'Sheet: Rename, Remove this device (asks), Lost or stolen (asks).'],
+      ['tap', 'Link a new device', 'Opens Link a new device.'],
+      ['tap', 'See all activity', 'Opens Security activity.'],
+      ['tap', 'Sign out all other devices', 'Asks first, then signs them out.'],
+    ],
     entries: [{ key: 'devices', label: 'Devices', params: {} }],
     render(params, entry) {
       const st = entry.state; st.list = st.list || DEVICES.map((d) => ({ ...d }));
@@ -215,6 +243,13 @@
   // ================================================================== Backup
   reg({
     id: 'backup', title: 'Backup',
+    interactions: [
+      ['tap', 'Back up now / Try again', 'The ring fills to 100%, then “Backed up just now”.'],
+      ['tap', 'Back up every day / Use mobile data', 'Switches.'],
+      ['tap', 'Restore / Send to a device tiles', 'Opens Restore history or Send to my other devices.'],
+      ['tap', 'Create (recovery backup)', 'Opens Recovery backup.'],
+      ['tap', 'Delete my server backup', 'Asks first, then deletes it.'],
+    ],
     entries: [
       { key: 'backup', label: 'Backup', params: {} },
       { key: 'backup-running', label: 'Backup · backing up', params: { running: true } },
@@ -253,6 +288,12 @@
   // ================================================================= Account
   reg({
     id: 'account', title: 'Account',
+    interactions: [
+      ['tap', 'Change or set a password / Security activity', 'Opens that page.'],
+      ['tap', 'Export my data', 'Shares orbit-account.json.'],
+      ['tap', 'Sign out', 'Asks first, then returns to sign-in.'],
+      ['tap', 'Delete my account', 'Dialog: Export first or Continue to the delete page.'],
+    ],
     entries: [
       { key: 'account', label: 'Account', params: {} },
       { key: 'account-nopass', label: 'Account · no password set', params: { noPassword: true } },

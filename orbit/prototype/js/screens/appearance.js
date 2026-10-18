@@ -22,6 +22,9 @@
 
   App.register({
     id: 'appearance', title: 'Appearance', group: 'You (settings and profile)', order: 58,
+    interactions: [
+      ['tap', 'Theme card', 'Switches the whole app to that theme at once, keeps it, and says “<Theme> theme on”. The current theme does nothing.'],
+    ],
     entries: [{ key: 'appearance', label: 'Appearance · pick a theme', params: {}, base }],
     render() {
       const all = window.OrbitThemes || [];
