@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:orbit_ui/src/components/avatar.dart';
 import 'package:orbit_ui/src/components/icon_button.dart';
 import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
@@ -36,7 +37,11 @@ class OrbitComposerActions {
     this.onCancelRecording,
     this.onSendRecording,
     this.onChanged,
+    this.onMention,
   });
+
+  /// A person was picked from the mention list (their display name).
+  final ValueChanged<String>? onMention;
 
   final ValueChanged<String>? onSend;
   final VoidCallback? onMic;
@@ -74,8 +79,13 @@ class OrbitComposer extends StatefulWidget {
     this.disabled,
     this.disabledIcon = false,
     this.emojiOpen = false,
+    this.mentions = const [],
     this.actions = const OrbitComposerActions(),
   });
+
+  /// People an "@" in a group can mention (`.mentions`): shown over the
+  /// field while there are any.
+  final List<HelixPersonItem> mentions;
 
   final String initialText;
   final HelixComposerBannerModel? banner;
@@ -173,6 +183,8 @@ class _OrbitComposerState extends State<OrbitComposer> {
             children: [
               if (banner != null && w.recording == OrbitRecording.none)
                 _Banner(model: banner, onCancel: w.actions.onCancelBanner),
+              if (w.mentions.isNotEmpty && w.recording == OrbitRecording.none)
+                _Mentions(people: w.mentions, onPick: w.actions.onMention),
               row,
             ],
           ),
@@ -647,6 +659,82 @@ class _LockPill extends StatelessWidget {
               size: 14,
               color: t.ink3,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// `.mentions`: who an "@" can name. A card (corner 14, `--surface`, a
+/// `--line` edge, `--shadow-float`) 4px in and 8px over the field; 52px rows,
+/// 12px in, a 34px picture 10px before the name (weight 560, `--t-small`)
+/// and their number or ~name in mono 10.5px.
+class _Mentions extends StatelessWidget {
+  const _Mentions({required this.people, this.onPick});
+
+  final List<HelixPersonItem> people;
+  final ValueChanged<String>? onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = OrbitTokens.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border.all(color: t.line),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: t.shadowFloat,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(13),
+        child: Column(
+          children: [
+            for (final p in people)
+              Semantics(
+                button: true,
+                child: InkWell(
+                  onTap: () => onPick?.call(p.names.display),
+                  hoverColor: t.field,
+                  splashFactory: NoSplash.splashFactory,
+                  child: SizedBox(
+                    height: 52,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          OrbitAvatar(avatar: p.avatar, size: 34),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                OrbitText(
+                                  p.names.display,
+                                  style: t.font.style(
+                                    size: OrbitType.small,
+                                    weight: 560,
+                                    color: t.ink,
+                                  ),
+                                ),
+                                OrbitText(
+                                  p.names.secondary ?? '',
+                                  style: t.mono.style(
+                                    size: 10.5,
+                                    color: t.ink3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

@@ -430,6 +430,11 @@ pending your review:
   row and the dial pad) and `ArchivedChatsScreen`, with `HomeModel` and the
   shared types from `contracts/home.md`. The preview recomputes the searches
   as you type. 26 keys, 0.5% to 5.2% in Orbit.
+- [x] Batch 3: the conversation (`ChatScreen`, `ChatModel`, `ChatActions`):
+  the header, pending-member cards, the timeline, the composer with the
+  mention picker, selection, in-chat search, the message actions, the attach
+  sheet and the emoji panel. 26 keys, 0.5% to 9.6% in Orbit (two keys higher
+  where the prototype's shot stops short of the bottom; see `DEVIATIONS.md`).
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

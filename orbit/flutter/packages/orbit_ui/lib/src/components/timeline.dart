@@ -26,6 +26,8 @@ class OrbitTimeline extends StatelessWidget {
     required this.items,
     this.group = false,
     this.onRetry,
+    this.onTapMessage,
+    this.onLongPressMessage,
   });
 
   final List<HelixTimelineItem> items;
@@ -33,6 +35,8 @@ class OrbitTimeline extends StatelessWidget {
   /// A group chat: incoming messages show their author and picture.
   final bool group;
   final ValueChanged<String>? onRetry;
+  final ValueChanged<String>? onTapMessage;
+  final ValueChanged<String>? onLongPressMessage;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -41,7 +45,13 @@ class OrbitTimeline extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final it in items)
-          OrbitTimelineEntry(item: it, group: group, onRetry: onRetry),
+          OrbitTimelineEntry(
+            item: it,
+            group: group,
+            onRetry: onRetry,
+            onTapMessage: onTapMessage,
+            onLongPressMessage: onLongPressMessage,
+          ),
       ],
     ),
   );
@@ -55,11 +65,15 @@ class OrbitTimelineEntry extends StatelessWidget {
     required this.item,
     this.group = false,
     this.onRetry,
+    this.onTapMessage,
+    this.onLongPressMessage,
   });
 
   final HelixTimelineItem item;
   final bool group;
   final ValueChanged<String>? onRetry;
+  final ValueChanged<String>? onTapMessage;
+  final ValueChanged<String>? onLongPressMessage;
 
   @override
   Widget build(BuildContext context) => switch (item) {
@@ -69,6 +83,10 @@ class OrbitTimelineEntry extends StatelessWidget {
       group: group,
       selected: m.selected,
       onRetry: onRetry == null ? null : () => onRetry!(m.message.id),
+      onTap: onTapMessage == null ? null : () => onTapMessage!(m.message.id),
+      onLongPress: onLongPressMessage == null
+          ? null
+          : () => onLongPressMessage!(m.message.id),
     ),
     final HelixDateSeparatorItem d => OrbitDaySeparator(d.label),
     final HelixUnreadDividerItem u => OrbitUnreadDivider(u.count),
@@ -701,10 +719,7 @@ class _Bubble extends StatelessWidget {
         stripe: stripe,
         shadows: shadows,
       ),
-      child: Padding(
-        padding: padding + widths,
-        child: content,
-      ),
+      child: Padding(padding: padding + widths, child: content),
     );
   }
 }

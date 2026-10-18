@@ -208,3 +208,24 @@ The port follows the prototype, so these changed the prototype itself:
   undecryptable message has a solid stripe on one side and dashes on the
   rest. The port does the same.
   - **Owner:** pending (Review 3.5).
+
+## Phase 4 batch 3 (the conversation)
+
+- **`ChatModel` and `ChatActions` cover what the prototype draws.** The
+  contract's other fields and actions (rows newest first with message ids,
+  `hasOlder`/`hasNewer`, `jump`, `unreadCount`, the search state and hits,
+  `enterSends`, the voice gestures, the async signatures that return a
+  sentence) are added when the screen is wired in Part B. The timeline items
+  are oldest first for now.
+  - **Owner:** pending (batch 3).
+- **Not built yet, inside the screen:** swipe-to-reply, the scroll-to-latest
+  button, the "+" emoji sheet and the Reactions sheet, the camera sheet after
+  Camera in the attach sheet, the hold-to-record gesture, the "Copied" toast.
+  The drawn states all match; these arrive with the wiring.
+  - **Owner:** pending (batch 3).
+- **Two prototype shots stop short of the bottom.** `chat-select` (the
+  composer goes away after the prototype scrolls) and `chat-edit` (the field
+  grows to two lines after it scrolls) leave the newest message cut off. The
+  port opens at the newest message, as the prototype means to; those two keys
+  score 20-28% for that reason alone.
+  - **Owner:** pending (batch 3).
