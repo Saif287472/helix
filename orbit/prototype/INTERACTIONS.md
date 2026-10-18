@@ -611,6 +611,13 @@ States: `kit-primitives`
 - [ ] **tap** Checkbox: Ticks or unticks the checkbox.
 - [ ] **tap** Filter chip: Selects the chip.
 
+### Kit: overlays (`kit-overlays`, opens: inherit)
+
+States: `kit-overlays`, `kit-overlays-sheet`, `kit-overlays-actions`, `kit-overlays-menu`, `kit-overlays-dialog`, `kit-overlays-input`, `kit-overlays-toast`, `kit-overlays-toast-error`, `kit-overlays-toast-undo`
+
+- [ ] **tap** A button on the sheet: Opens that overlay as the app opens it.
+- [ ] **tap** Scrim: Closes a sheet, menu or dialog.
+
 ### Kit: shell (`kit-shell`, opens: inherit)
 
 States: `kit-shell`

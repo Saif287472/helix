@@ -43,6 +43,8 @@ class OrbitTextField extends StatefulWidget {
     this.keyboardType,
     this.enabled = true,
     this.onChanged,
+    this.autofocus = false,
+    this.bottom = 14,
   });
 
   final String label;
@@ -66,6 +68,13 @@ class OrbitTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final bool enabled;
   final ValueChanged<String>? onChanged;
+
+  /// Focused when it opens (a dialog's field).
+  final bool autofocus;
+
+  /// The space under the field: 14px, or none where the margin collapses
+  /// into a larger one below it (a dialog's buttons).
+  final double bottom;
 
   @override
   State<OrbitTextField> createState() => _OrbitTextFieldState();
@@ -114,6 +123,7 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
     final input = TextField(
       controller: _controller,
       focusNode: _focus,
+      autofocus: w.autofocus,
       enabled: w.enabled,
       obscureText: w.obscure && !_shown,
       keyboardType: rows != null ? TextInputType.multiline : w.keyboardType,
@@ -195,7 +205,7 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
     );
     final max = w.maxLength;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: EdgeInsets.only(bottom: w.bottom),
       child: Stack(
         children: [
           Column(

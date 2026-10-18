@@ -111,9 +111,18 @@ class OrbitButton extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (lead != null) ...[lead, const SizedBox(width: 8)],
-                  Text(
-                    label,
-                    style: t.font.style(size: fontSize, weight: 560, color: fg),
+                  // A label too wide for its button wraps and stays centred,
+                  // as the prototype's does (Terminal's "Error toast").
+                  Flexible(
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: t.font.style(
+                        size: fontSize,
+                        weight: 560,
+                        color: fg,
+                      ),
+                    ),
                   ),
                 ],
               ),

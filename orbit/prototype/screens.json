@@ -2029,6 +2029,24 @@
     }
    ]
   },
+  "kit-overlays": {
+   "title": "Kit: overlays",
+   "group": "Design system",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "A button on the sheet",
+     "does": "Opens that overlay as the app opens it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Scrim",
+     "does": "Closes a sheet, menu or dialog."
+    }
+   ]
+  },
   "kit-shell": {
    "title": "Kit: shell",
    "group": "Design system",
@@ -6719,6 +6737,103 @@
    "label": "Primitives · buttons, avatars, chips, toggles",
    "screen": "kit-primitives",
    "params": {},
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays",
+   "group": "Design system",
+   "label": "Overlays · the page",
+   "screen": "kit-overlays",
+   "params": {},
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays-sheet",
+   "group": "Design system",
+   "label": "Overlays · a sheet with a choice",
+   "screen": "kit-overlays",
+   "params": {
+    "open": "sheet"
+   },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays-actions",
+   "group": "Design system",
+   "label": "Overlays · a sheet of actions",
+   "screen": "kit-overlays",
+   "params": {
+    "open": "actions"
+   },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays-menu",
+   "group": "Design system",
+   "label": "Overlays · a menu",
+   "screen": "kit-overlays",
+   "params": {
+    "open": "menu"
+   },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays-dialog",
+   "group": "Design system",
+   "label": "Overlays · a dialog",
+   "screen": "kit-overlays",
+   "params": {
+    "open": "dialog"
+   },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays-input",
+   "group": "Design system",
+   "label": "Overlays · a dialog with a field",
+   "screen": "kit-overlays",
+   "params": {
+    "open": "input"
+   },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays-toast",
+   "group": "Design system",
+   "label": "Overlays · a toast",
+   "screen": "kit-overlays",
+   "params": {
+    "open": "toast"
+   },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays-toast-error",
+   "group": "Design system",
+   "label": "Overlays · an error toast",
+   "screen": "kit-overlays",
+   "params": {
+    "open": "toast-error"
+   },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-overlays-toast-undo",
+   "group": "Design system",
+   "label": "Overlays · a toast with undo",
+   "screen": "kit-overlays",
+   "params": {
+    "open": "toast-undo"
+   },
    "base": [],
    "placement": "inherit"
   },

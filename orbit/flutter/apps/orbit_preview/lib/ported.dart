@@ -11,6 +11,11 @@ final Map<String, WidgetBuilder> orbitPorted = <String, WidgetBuilder>{
   'startup': (context) => const OrbitStartup(),
   'kit-primitives': (context) => const KitPrimitivesScreen(),
   'kit-shell': (context) => const KitShellScreen(),
+  'state-kit': (context) => const KitStateScreen(),
+  'kit-rows': (context) => const KitRowsScreen(),
+  'kit-overlays': (context) => const KitOverlaysScreen(),
+  for (final o in KitOverlay.values)
+    o.key: (context) => KitOverlaysScreen(open: o),
 };
 
 /// The six pack themes' font families, which this app declares in its own

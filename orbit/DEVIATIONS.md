@@ -152,3 +152,22 @@ The port follows the prototype, so these changed the prototype itself:
   mean a per-font nudge measured against Chrome on Windows, whose rounding is
   not the phone's.
 - **Owner:** pending (Review 3.2).
+
+## Review 3.3
+
+- **Prototype addition:** a `kit-overlays` sheet (`js/screens/states.js`),
+  with a key per overlay (`kit-overlays-sheet`, `-actions`, `-menu`,
+  `-dialog`, `-input`, `-toast`, `-toast-error`, `-toast-undo`), each opened
+  by the same `App.sheet`, `App.menu`, `App.dialog`, `Kit.inputDialog` and
+  `App.snack` calls the screens make, with real text from those screens.
+  - **Owner:** pending (Review 3.3).
+- **The preview's phone has its own navigator**, so overlays open inside the
+  phone and under its status bar, as the prototype's overlay layer does. In
+  the app (Part B) they open on the app's navigator, under the system's
+  status bar: the same picture.
+  - **Owner:** pending (Review 3.3).
+- **A dialog's field puts the caret at the end of its text.** The
+  prototype's `input.focus()` leaves Chrome's caret at the start; Flutter's
+  focused field puts it after the text, which is where someone renaming
+  expects it.
+  - **Owner:** pending (Review 3.3).

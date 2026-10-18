@@ -161,6 +161,41 @@
     },
   });
 
+  // The overlays every screen opens, each as the app opens it. One entry per
+  // overlay, so each can be compared on its own over the same page.
+  const OVERLAYS = {
+    sheet: ['A sheet with a choice', () => App.sheet({ title: 'Disappearing messages', text: 'New messages in this group disappear after this long, for everyone.', items: ['Off', '24 hours', '7 days', '90 days'].map((o) => ({ icon: 'timer', label: o, on: o === 'Off' })) })],
+    actions: ['A sheet of actions', () => App.sheet({ title: 'Nadia Rahman', items: [{ icon: 'phone', label: 'Voice call' }, { icon: 'video-camera', label: 'Video call' }, { icon: 'trash', label: 'Delete from call history', danger: true }] })],
+    menu: ['A menu', () => App.menu([{ icon: 'users-three', label: 'New group' }, { icon: 'link-simple', label: 'Join a group with a link' }, '-', { icon: 'archive', label: `Archived chats (${Data.archived.length})` }])],
+    dialog: ['A dialog', () => App.dialog({ title: 'Delete this chat?', text: 'The messages are removed from this device. People you chatted with keep their copies.', actions: [{ label: 'Cancel' }, { label: 'Delete', kind: 'danger' }] })],
+    input: ['A dialog with a field', () => Kit.inputDialog({ title: 'Rename', label: 'Name', value: 'Nadia Rahman', max: 60 })],
+    toast: ['A toast', () => App.snack('Chat muted for 8 hours', null, { stay: true })],
+    'toast-error': ['An error toast', () => App.snack('The message could not be sent. Check your connection.', null, { tone: 'error', stay: true })],
+    'toast-undo': ['A toast with Undo', () => App.snack('Chat archived', { label: 'Undo' }, { stay: true })],
+  };
+
+  App.register({
+    id: 'kit-overlays', title: 'Kit: overlays', group: 'Design system', order: 98.7,
+    interactions: [
+      ['tap', 'A button on the sheet', 'Opens that overlay as the app opens it.'],
+      ['tap', 'Scrim', 'Closes a sheet, menu or dialog.'],
+    ],
+    entries: [
+      { key: 'kit-overlays', label: 'Overlays · the page', params: {} },
+      ...Object.entries(OVERLAYS).map(([k, [label]]) => ({ key: `kit-overlays-${k}`, label: `Overlays · ${label.toLowerCase()}`, params: { open: k } })),
+    ],
+    render() {
+      return Kit.youPage('Overlays', `
+        <p class="sec-foot" style="margin-top:4px">Sheets, menus, dialogs and toasts, each opened as a screen opens it.</p>
+        <div class="btn-row" style="flex-direction:column">${Object.entries(OVERLAYS).map(([k, [label]]) => `<button class="btn secondary" data-open="${k}">${label}</button>`).join('')}</div>`, { back: false, keep: 'kit-overlays' });
+    },
+    mount(el, params) {
+      Kit.wire(el, null);
+      el.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => OVERLAYS[b.dataset.open][1]()));
+      if (params.open) setTimeout(() => OVERLAYS[params.open][1](), 0);
+    },
+  });
+
   App.register({
     id: 'kit-shell', title: 'Kit: shell', group: 'Design system', order: 98.5,
     interactions: [

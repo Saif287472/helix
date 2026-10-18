@@ -359,6 +359,15 @@ and pending your review):
   `kit-shell` in Orbit, Night, Arcade, Papyrus, Terminal and Mochi, top to
   bottom: 1.8% to 7.2% of pixels differ by more than 16 levels, text and edges;
   boxes within 1px. `kit-primitives` improved to 1.9% to 3.1%.
+- [x] Review 3.3 (pending your review): the overlays, opened through their
+  own routes as the prototype's are (`showOrbitSheet`, `showOrbitMenu`,
+  `showOrbitDialog`, `showOrbitInputDialog`, `showOrbitToast`; the panels
+  `OrbitSheetPanel`, `OrbitMenuPanel`, `OrbitDialogPanel`, `OrbitToast`), and
+  the state kit (`OrbitSkeleton`, `OrbitPageLoading`, `OrbitLoadFailed`,
+  `OrbitPermissionCard`, `OrbitFieldLock`). A new prototype sheet,
+  `kit-overlays`, has one key per overlay. Compared on `state-kit` (four
+  scrolls) and every `kit-overlays-*` key in Orbit, Night, Arcade, Papyrus,
+  Terminal and Mochi: 0.6% to 6.0% of pixels differ by more than 16 levels.
 
 ### Phase 4: the screens, batch by batch
 

@@ -61,7 +61,15 @@ class OrbitDeviceSurface extends StatelessWidget {
             color: tokens.bg,
             child: Stack(
               children: [
-                Positioned.fill(child: child),
+                // The screen's own navigator, so a sheet, dialog or toast
+                // opens inside the phone, under its status bar, as the
+                // prototype's overlay layer does.
+                Positioned.fill(
+                  child: Navigator(
+                    pages: [MaterialPage<void>(child: child)],
+                    onDidRemovePage: (_) {},
+                  ),
+                ),
                 if (_phone) ...[
                   const Positioned(
                     left: 0,
