@@ -1,7 +1,8 @@
 """Write screens.json and INTERACTIONS.md: every screen state and what it does.
 
-The prototype must be running (python serve.py). Headless Chrome opens
-?manifest, which prints the index as JSON.
+Node runs the prototype's scripts (tools/manifest_node.js) and asks the
+engine for App.manifest(); no browser or server is needed. The prototype's
+?manifest address prints the same JSON in a browser.
 
 screens.json has:
   screens       every screen state: key (the part after # in the address),
@@ -16,18 +17,14 @@ outside GESTURES. A screen with nothing to do declares an empty list.
 
   python tools/manifest.py
 """
-import html
 import json
 import os
 import re
 import subprocess
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-sys.path.insert(0, HERE)
-from shoot import browser  # noqa: E402
 
 GESTURES = {'tap', 'long-press', 'right-click', 'swipe-left', 'swipe-right', 'swipe', 'drag', 'hold', 'type', 'key', 'scroll', 'auto'}
 LAYOUTS = {'phone', 'window'}
@@ -79,19 +76,21 @@ def checklist(data):
 
 
 def main():
-    base = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:5317'
-    m = None
-    for _ in range(3):  # a fresh headless profile sometimes returns before the page runs
-        with tempfile.TemporaryDirectory() as tmp:
-            out = subprocess.run([browser(), '--headless=new', '--disable-gpu', f'--user-data-dir={tmp}',
-                                  '--virtual-time-budget=4000', '--dump-dom', f'{base}/?manifest'],
-                                 capture_output=True, text=True, encoding='utf-8', timeout=90).stdout
-        m = re.search(r'<pre id="manifest">(.*?)</pre>', out, re.S)
-        if m:
-            break
-    if not m:
-        sys.exit('No manifest in the page. Is the prototype running?')
-    data = json.loads(html.unescape(m.group(1)))
+    # Every screen the source defines must be in the manifest, so a script
+    # that failed to load can never shrink the checklist unnoticed.
+    expected = set()
+    for f in os.listdir(os.path.join(ROOT, 'js', 'screens')):
+        src = open(os.path.join(ROOT, 'js', 'screens', f), encoding='utf-8').read()
+        expected |= set(re.findall(r"\bid: '([\w-]+)', title: ", src))
+    # Node runs the prototype's own scripts and asks the engine (App.manifest);
+    # no browser, so nothing can be captured half-loaded.
+    run = subprocess.run(['node', os.path.join(HERE, 'manifest_node.js')], capture_output=True, text=True, encoding='utf-8', timeout=120)
+    if run.returncode != 0:
+        sys.exit('The prototype scripts failed to load in Node:\n' + run.stderr[-2000:])
+    data = json.loads(run.stdout)
+    got = set(data['screenDefs'])
+    if not got >= expected:
+        sys.exit('Some screens did not register; nothing was written. Missing: ' + ', '.join(sorted(expected - got)))
     problems = check(data)
     if problems:
         sys.exit('Interactions are incomplete:\n  ' + '\n  '.join(problems))

@@ -79,12 +79,17 @@
       ['tap', 'Speed', 'Cycles 1x, 1.5x, 2x.'],
       ['tap', 'Share', 'Opens the system share sheet.'],
       ['tap', 'Open video (cannot play)', 'Opens the video in another app.'],
+      ['tap', 'Play again (video played to the end)', 'Plays the video from the start.'],
+      ['auto', 'Video buffering', 'A spinner where the play button is until the video can play.'],
     ],
     entries: [
       { key: 'media-viewer', label: 'Media viewer', params: { i: 0 } },
       { key: 'media-video', label: 'Video player', params: { i: 2 } },
       { key: 'media-video-failed', label: 'Video player · cannot play', params: { i: 2, failed: true } },
       { key: 'media-not-here', label: 'Media viewer · not on this device', params: { missing: true } },
+      { key: 'media-cannot-show', label: 'Media viewer · picture cannot be shown', params: { cannotShow: true } },
+      { key: 'media-video-buffering', label: 'Video player · buffering', params: { i: 2, buffering: true } },
+      { key: 'media-video-ended', label: 'Video player · played to the end', params: { i: 2, ended: true } },
       { key: 'media-viewonce-opened', label: 'View once · already opened', params: { viewOnce: 'opened' } },
       { key: 'media-viewonce-mine', label: 'View once · your own', params: { viewOnce: 'mine' } },
     ].map((e) => ({ ...e, base: chatBase() })),
@@ -93,6 +98,7 @@
       const back = `<header class="appbar">${ibtn('arrow-left', 'Back', 'data-back')}<div class="ab-title"><h1 style="font-size:16px">${params.viewOnce === 'mine' ? 'View once' : 'Nadia Rahman'}</h1><div class="ab-sub">${params.missing || params.viewOnce ? '' : `${ITEMS[st.i].time} (${st.i + 1} of ${ITEMS.length})`}</div></div>${params.missing || params.viewOnce ? '' : ibtn('share-network', 'Share', 'data-share')}</header>`;
       const msg = (t) => `${back}<div class="mv-stage"><p style="color:#C9D0DF;text-align:center;max-width:260px;line-height:1.5">${t}</p></div>`;
       if (params.missing) return msg('This file is not on your device yet.');
+      if (params.cannotShow) return msg('This picture cannot be shown.');
       if (params.viewOnce === 'opened') return msg('This view-once message has already been opened.');
       if (params.viewOnce === 'mine') return msg('You cannot open a view-once message you sent.');
       const it = ITEMS[st.i];
@@ -100,6 +106,8 @@
       if (it.video) {
         stage = params.failed
           ? `<div style="text-align:center;color:#C9D0DF;padding:24px">${icon('warning-circle')}<p style="line-height:1.5">This video cannot be played.</p><button class="btn secondary" style="background:#1B2236;border-color:#2B3550;color:#fff" data-snack="Opens the share sheet">Open video</button></div>`
+          : params.buffering ? `<div class="mv-img ${it.photo}" data-tap></div><span class="vp-big" role="status" aria-label="Loading the video"><i class="ph ph-spinner-gap spin"></i></span>`
+          : params.ended && !st.replayed ? `<div class="mv-img ${it.photo}" data-tap></div><button class="vp-big" data-replay title="Play again" aria-label="Play again">${icon('arrow-counter-clockwise', 'bold')}</button>`
           : `<div class="mv-img ${it.photo}" data-tap></div>${st.ctrl ? `<button class="vp-big" data-play title="${st.playing ? 'Pause' : 'Play'}" aria-label="${st.playing ? 'Pause' : 'Play'}">${icon(st.playing ? 'pause' : 'play', 'fill')}</button>
             <div class="vp-ctrl"><span>${st.playing ? '0:07' : '0:00'}</span><input type="range" min="0" max="24" value="${st.playing ? 7 : 0}" aria-label="Seek"><span>0:24</span><button class="speedb" data-speed title="Playback speed">${st.speed}x</button></div>` : ''}`;
       } else stage = `<div class="mv-img ${it.photo}"></div>`;
@@ -112,6 +120,7 @@
       el.querySelector('[data-share]')?.addEventListener('click', () => App.snack('Opens the share sheet'));
       el.querySelector('[data-play]')?.addEventListener('click', () => { st.playing = !st.playing; entry.rerender(); if (st.playing) setTimeout(() => { if (entry.el.isConnected && st.playing) { st.ctrl = false; entry.rerender(); } }, 3000); });
       el.querySelector('[data-tap]')?.addEventListener('click', () => { st.ctrl = !st.ctrl; entry.rerender(); });
+      el.querySelector('[data-replay]')?.addEventListener('click', () => { st.replayed = true; st.playing = true; entry.rerender(); });
       el.querySelector('[data-speed]')?.addEventListener('click', () => { st.speed = st.speed === 1 ? 1.5 : st.speed === 1.5 ? 2 : 1; entry.rerender(); });
       const step = (d) => { const i = Math.max(0, Math.min(ITEMS.length - 1, st.i + d)); if (i === st.i) return; st.i = i; st.playing = false; st.ctrl = true; entry.rerender(); };
       el.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => step(+b.dataset.step)));
@@ -175,12 +184,21 @@
       { key: 'shared-docs', label: 'Shared · docs', params: { id: 'direct:nadia', tab: 'docs' } },
       { key: 'shared-links', label: 'Shared · links', params: { id: 'direct:nadia', tab: 'links' } },
       { key: 'shared-empty', label: 'Shared · nothing yet', params: { id: 'direct:arif', tab: 'media', empty: true } },
+      { key: 'shared-docs-empty', label: 'Shared · no documents yet', params: { id: 'direct:arif', tab: 'docs', empty: true } },
+      { key: 'shared-links-empty', label: 'Shared · no links yet', params: { id: 'direct:arif', tab: 'links', empty: true } },
     ].map((e) => ({ ...e, base: chatBase(e.params.id) })),
     render(params, entry) {
       const st = entry.state; st.tab = st.tab || params.tab;
       const tabs = `<div class="tabs">${[['media', 'Media'], ['docs', 'Docs'], ['links', 'Links']].map(([k, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab3="${k}">${l}</button>`).join('')}</div>`;
       let body;
-      if (params.empty) body = UI.empty({ media: 1, icon: 'images', title: 'No media yet', text: 'Photos and videos you share in this chat show up here.' });
+      // Each tab has its own empty state (Review 1).
+      if (params.empty) {
+        body = {
+          media: UI.empty({ icon: 'images', title: 'No media yet', text: 'Photos and videos you share in this chat show up here.' }),
+          docs: UI.empty({ icon: 'file-text', title: 'No documents yet', text: 'Files you share in this chat show up here.' }),
+          links: UI.empty({ icon: 'link-simple', title: 'No links yet', text: 'Web links sent in this chat show up here.' }),
+        }[st.tab];
+      }
       else if (st.tab === 'media') body = `<div class="sm-grid">${['ph-e', 'ph-c', 'ph-b', 'ph-d', 'ph-a', 'ph-f', 'ph-c', 'ph-e', 'ph-d'].map((p, i) => `<span class="mi ${p}" data-open="${i % 6}">${i === 2 || i === 7 ? `<span class="dur">${icon('play-circle', 'fill')}0:24</span>` : ''}</span>`).join('')}</div>`;
       else if (st.tab === 'docs') body = `<div style="height:12px"></div><div class="card">${[['Launch deck v3.pdf', '4.2 MB · PDF · Yesterday'], ['Venue floor plan.png', '880 KB · PNG · 3 Oct']].map(([n, d]) => row({ icon: 'file-text', color: 3, weight: 'fill', title: esc(n), sub: d, attrs: 'data-snack="Opens the share sheet"' })).join('')}</div>`;
       else body = `<div style="height:12px"></div><div class="card">${[['https://helix.agiletechbd.com/blog/v2', 'helix.agiletechbd.com, today'], ['https://maps.google.com/?q=Inani+Beach', 'maps.google.com, yesterday']].map(([u, d]) => `<div class="row">${`<span class="rw-ico av-1">${icon('link-simple')}</span>`}<span class="rw-body"><span class="rw-title mono" style="display:block;font-size:12.5px;word-break:break-all">${esc(u)}</span><span class="rw-sub" style="display:block">${d}</span></span>${ibtn('chat-circle', 'Show in chat', 'data-pop')}</div>`).join('')}</div>`;

@@ -15,9 +15,11 @@
   const S = { recovery: false, lock: false };
   window.HelixYouState = S; // the recovery page marks its check done
   const CHECKS = () => [
-    { key: 'backup', ok: true, icon: 'cloud-check', title: 'Chat backup', okText: 'Backed up 5 hours ago', go: 'backup' },
-    { key: 'devices', ok: true, icon: 'devices', title: 'Linked devices', okText: '2 devices, both signed in by you', go: 'devices' },
-    { key: 'password', ok: true, icon: 'password', title: 'Password', okText: 'Set. You can sign in on a new phone', go: 'password' },
+    // Needs attention (Review 1): backup when none in 7 days or never; devices
+    // when one has not been used for 30 days; password when none is set.
+    { key: 'backup', ok: true, icon: 'cloud-check', title: 'Chat backup', okText: 'Backed up 5 hours ago', badText: 'No backup in the last 7 days', fix: 'Back up', go: 'backup' },
+    { key: 'devices', ok: true, icon: 'devices', title: 'Linked devices', okText: '2 devices, both used this month', badText: 'A device has not been used for 30 days', fix: 'Review', go: 'devices' },
+    { key: 'password', ok: true, icon: 'password', title: 'Password', okText: 'Set. You can sign in on a new phone', badText: 'No password set', fix: 'Set one', go: 'password' },
     { key: 'recovery', ok: S.recovery, icon: 'key', title: 'Recovery backup', okText: 'Made today', badText: 'No recovery backup yet', fix: 'Fix', go: 'recovery' },
     { key: 'lock', ok: S.lock, icon: 'lock-simple', title: 'App lock', okText: 'On. Locks after 1 minute', badText: 'App lock is off', fix: 'Turn on' },
   ];
@@ -167,27 +169,29 @@
     if (n.length < 3) return ['bad', 'Names are at least 3 characters.'];
     if (!/^[a-z]/.test(n)) return ['bad', 'Names start with a letter.'];
     if (!/^[a-z0-9._]+$/.test(n)) return ['bad', 'Use only letters, numbers, dots and underscores.'];
-    if (/admin|support|helix|official/.test(n) || ['nadia', 'arif', 'sadia'].includes(n)) return ['bad', 'That name is not available. Try another.'];
-    return ['ok', `~${n} is available`];
+    // Whether a name is free is the server's answer on Save: checking as you
+    // type would let anyone probe which names are taken (Review 1).
+    return ['ok', `~${n} looks good. Orbit checks that it is free when you save.`];
   }
 
   App.register({
     id: 'profile', title: 'Edit profile', group: 'You (settings and profile)', order: 58,
     interactions: [
+      ['tap', 'Save with a ~name someone has', 'Shows the server’s answer under the ~name field.'],
       ['type', 'Name / About', 'The profile preview at the top (the orbit) updates as you type.'],
-      ['type', '~name', 'Checked as you type: available, or which rule fails.'],
+      ['type', '~name', 'The name rules are checked as you type; whether it is free is checked on Save.'],
       ['tap', 'Photo', 'Adds a photo; Remove takes it off.'],
       ['tap', 'Remove my ~name', 'Asks first.'],
       ['tap', 'Save', 'Checks the name and ~name, saves, goes back and says “Profile saved”.'],
     ],
     entries: [
       { key: 'profile', label: 'Edit profile', params: {} },
-      { key: 'profile-taken', label: 'Edit profile · ~name taken', params: { helixName: 'nadia' } },
+      { key: 'profile-taken', label: 'Edit profile · ~name refused on Save', params: { helixName: 'nadia', taken: true } },
       { key: 'profile-new', label: 'Edit profile · new account (empty)', params: { blank: true } },
     ].map((e) => ({ ...e, base: [base, { screen: 'settings-page', params: {} }] })),
     render(params, entry) {
       const st = entry.state;
-      if (!st.init) Object.assign(st, { init: true, name: params.blank ? '' : Data.me.name, about: params.blank ? '' : Data.me.about, helixName: params.blank ? '' : (params.helixName || Data.me.helixName), photo: false });
+      if (!st.init) Object.assign(st, { init: true, taken: !!params.taken, name: params.blank ? '' : Data.me.name, about: params.blank ? '' : Data.me.about, helixName: params.blank ? '' : (params.helixName || Data.me.helixName), photo: false });
       const ns = nameState(st.helixName);
       const vis = (ic, what, who, tag) => `<div class="row" style="min-height:52px">${`<span class="rw-ico" style="background:var(--field)">${icon(ic)}</span>`}<span class="rw-body"><span class="rw-title" style="display:block;font-size:14px">${what}</span><span class="rw-sub" style="display:block">${who}</span></span>${tag}</div>`;
       return `<header class="appbar">${ibtn('arrow-left', 'Back', 'data-back')}<div class="ab-title"><h1>Edit profile</h1></div><button class="btn ghost" data-save style="margin-right:4px">Save</button></header>
@@ -197,13 +201,14 @@
           <div class="pad" style="margin-top:18px">
             ${field({ id: 'pfName', label: 'Name', value: st.name, max: 50, counter: true, hint: 'How people see you' })}
             ${field({ id: 'pfAbout', label: 'About', value: st.about, max: 139, counter: true, hint: 'A line about you' })}
-            ${field({ id: 'pfHelix', label: '~Orbit name', prefix: '~', value: st.helixName.replace(/^~/, ''), mono: true, hint: 'anna.k', error: ns && ns[0] === 'bad' ? ns[1] : '', helper: ns && ns[0] === 'ok' ? `<span style="color:var(--success)">${icon('check-circle', 'fill')} ${ns[1]}</span>` : '3 to 32 letters, numbers, dots or underscores, starting with a letter.' })}
+            ${field({ id: 'pfHelix', label: '~Orbit name', prefix: '~', value: st.helixName.replace(/^~/, ''), mono: true, hint: 'anna.k', error: ns && ns[0] === 'bad' ? ns[1] : st.taken ? 'That name is not available. It may already be taken, or it may be one that could be mistaken for Orbit staff. Try another.' : '', helper: ns && ns[0] === 'ok' && !st.taken ? `<span style="color:var(--success)">${icon('check-circle', 'fill')} ${ns[1]}</span>` : '3 to 32 letters, numbers, dots or underscores, starting with a letter.' })}
           </div>
           <div class="group-title eyebrow">Who sees what</div>
           <div class="card">
-            ${vis('user', 'Name, about and photo', 'People you have messaged', '<span class="tag success">' + icon('lock-simple', 'fill') + 'Encrypted</span>')}
+            ${vis('user', 'Name', 'People you message, and Orbit’s operator', '<span class="tag">Operator sees it</span>')}
+            ${vis('image', 'About and photo', 'Only people you message', '<span class="tag success">' + icon('lock-simple', 'fill') + 'Encrypted</span>')}
             ${vis('at', '~Orbit name', 'Anyone can look it up to message you', '<span class="tag">Public</span>')}
-            ${vis('phone', 'Phone number', 'Never shown. Only people who already have it can find you', '<span class="tag accent">Hidden</span>')}
+            ${vis('phone', 'Phone number', 'Hidden from people. Orbit’s operator can see it', '<span class="tag accent">Hidden</span>')}
           </div>
           ${st.helixName ? `<div class="card" style="margin-top:12px">${row({ icon: 'trash', title: 'Remove my ~name', sub: 'People can still message you by number', danger: true, attrs: 'data-unclaim' })}</div>` : ''}
         </div>`;
@@ -212,12 +217,15 @@
       const st = entry.state; wire(el, entry);
       const live = (id, key) => { const n = el.querySelector(id); n.addEventListener('input', () => { st[key] = n.value; const p = n.selectionStart; entry.rerender(); const m = entry.el.querySelector(id); m.focus(); m.setSelectionRange(p, p); }); };
       live('#pfName', 'name'); live('#pfAbout', 'about'); live('#pfHelix', 'helixName');
+      el.querySelector('#pfHelix')?.addEventListener('input', () => { st.taken = false; });
       el.querySelector('[data-photo]').addEventListener('click', () => { st.photo = true; entry.rerender(); });
       el.querySelector('[data-unphoto]')?.addEventListener('click', () => { st.photo = false; entry.rerender(); });
       el.querySelector('[data-unclaim]')?.addEventListener('click', () => Kit.confirm('Remove your ~name?', `People will no longer find you by ~${st.helixName}. Someone else may claim it.`, 'Remove', () => { st.helixName = ''; entry.rerender(); }));
       el.querySelector('[data-save]').addEventListener('click', () => {
         const ns = nameState(st.helixName);
         if (ns && ns[0] === 'bad') { App.snack('Fix your ~name first'); return; }
+        const wanted = (st.helixName || '').replace(/^~/, '').toLowerCase();
+        if (wanted && wanted !== Data.me.helixName && (/admin|support|orbit|helix|official/.test(wanted) || ['nadia', 'arif', 'sadia'].includes(wanted))) { st.taken = true; entry.rerender(); return; }
         if (!st.name.trim()) { App.snack('Enter the name people should see.'); return; }
         Data.me.name = st.name.trim(); Data.me.about = st.about.trim(); if (st.helixName) Data.me.helixName = st.helixName.replace(/^~/, '').toLowerCase();
         App.pop(); App.snack('Profile saved');

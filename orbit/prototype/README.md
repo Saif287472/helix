@@ -15,14 +15,18 @@ shows the latest edits. The screen you're on is kept in the address, so
 
 - **Phone, 960 or 1280** (top of the viewer) switches between the phone and
   the Windows window at two widths. Every screen works in all three.
+- **State kit:** the `state-kit` screen shows how every screen draws
+  loading, failure, empty lists, permissions and refusals.
 - **Bare mode** draws only the device at true size, for screenshots and
   side-by-side comparison:
   `http://127.0.0.1:5317/?bare&device=window-l&theme=arcade#group`.
   `device` is `phone`, `window-m` or `window-l`; neither choice is saved.
+  `&scroll=760` scrolls the page, to shoot the lower part of a long page.
 - **Screenshots:** `python tools/shoot.py --device window-l chats group`
   (`--all` shoots every screen in `screens.json`). Images go to `shots/`.
 - **Screen list:** `python tools/manifest.py` rewrites `screens.json` and
-  `INTERACTIONS.md`:
+  `INTERACTIONS.md`. It runs the scripts in Node, so it needs no browser or
+  server:
   - `screens.json` lists every screen state with its key, parameters, the
     screens under it and where it opens on a window. It also holds each
     screen's interactions.
@@ -180,5 +184,7 @@ the phone and in the Windows window.
 
 Every settings page now uses the You style (`SCREENS.md` design change 16).
 
-Phase 0 of `../PORT_PLAN.md` is complete and approved (Review 0, 2026-10-18).
+Phases 0 and 1 of `../PORT_PLAN.md` are complete and approved. Phase 1b (the
+state kit and the Review 1 answers) is done and approved: 236
+screen states and 307 interactions.
 - Then the Flutter port, but only when you say the design is final.

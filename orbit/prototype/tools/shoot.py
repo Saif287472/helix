@@ -76,6 +76,7 @@ def main():
             keys = [s['key'] for s in json.load(f)['screens']]
     if not keys:
         ap.error('name at least one screen key, or use --all')
+    a.out = os.path.abspath(a.out)  # Chrome resolves a relative --screenshot path somewhere else
     os.makedirs(a.out, exist_ok=True)
     exe = browser()
     with tempfile.TemporaryDirectory() as tmp:

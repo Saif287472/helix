@@ -26,25 +26,30 @@
     bind();
   }
 
+  // The country code (Review 1): Bangladesh by default, a picker for the rest.
+  const COUNTRIES = [['+880', 'Bangladesh'], ['+91', 'India'], ['+92', 'Pakistan'], ['+977', 'Nepal'], ['+60', 'Malaysia'], ['+966', 'Saudi Arabia'], ['+971', 'United Arab Emirates'], ['+44', 'United Kingdom'], ['+1', 'United States']];
+  const phoneField = (st, helper) => field({ id: 'siPhone', label: 'Phone number', prefix: st.country || '+880', value: st.phone || '', hint: '1711 000001', inputmode: 'tel', helper })
+    .replace(/<span class="fld-prefix">([^<]*)<\/span>/, `<button class="fld-prefix fld-country" data-country title="Country code" aria-label="Country code $1">$1${icon('caret-down', 'bold')}</button>`);
+
   // ---------------------------------------------------------------- steps
   const STEPS = {
     phone: (st) => ({
       title: 'Sign in', sub: 'Use your phone number to continue to Orbit.', back: false,
-      fields: field({ id: 'siPhone', label: 'Phone number', prefix: '+880', value: st.phone || '', hint: '1711 000001', inputmode: 'tel', helper: 'New to Orbit? Enter your number and we will set up your account.' }),
+      fields: phoneField(st, 'New to Orbit? Enter your number and we will set up your account.'),
       primary: 'Next', foot: true, corner: true,
     }),
     phoneAdv: (st) => ({
       title: st.recovery ? 'Recover your account' : 'Join the server', sub: st.recovery ? 'Enter the phone number of the account.' : 'Enter your phone number.', back: true, badge: true,
-      fields: field({ id: 'siPhone', label: 'Phone number', prefix: '+880', value: st.phone || '', hint: '1711 000001', inputmode: 'tel', helper: 'Continuing moves your account to this phone.' }),
+      fields: phoneField(st, 'Continuing moves your account to this phone.'),
       primary: 'Next',
     }),
     code: (st) => ({
-      title: 'Enter the code', sub: `We sent a 6-digit code by SMS to +880 ${esc(st.phone || '1711 000001')}.`, back: true,
+      title: 'Enter the code', sub: `We sent a 6-digit code by SMS to ${st.country || '+880'} ${esc(st.phone || '1711 000001')}.`, back: true,
       fields: field({ id: 'siCode', label: 'Enter code', value: st.code || '', hint: '••••••', inputmode: 'numeric', max: 6, big: true }),
       secondary: 'Resend code', primary: 'Next',
     }),
     password: (st) => ({
-      title: 'Welcome back', sub: `+880 ${esc(st.phone || '1711 000001')}`, back: true,
+      title: 'Welcome back', sub: `${st.country || '+880'} ${esc(st.phone || '1711 000001')}`, back: true,
       fields: field({ id: 'siPass', label: 'Password', type: 'password', eye: true }) +
         `<p class="fld-help" style="margin:-4px 2px 4px">Your other devices stay signed in. Signing in with an SMS code instead signs them out.</p>
         <button class="btn ghost" data-link-instead style="padding:0 4px;height:44px;align-self:flex-start">${icon('qr-code')}Link from another device instead</button>`,
@@ -59,9 +64,11 @@
         field({ id: 'siNewPass', label: 'Password (optional)', type: 'text', eye: true }),
       secondary: 'Skip', primary: 'Create account',
     }),
-    takeover: () => ({
+    takeover: (st) => ({
       title: 'Welcome back', sub: 'Accept the terms to continue to your account.', back: true,
-      fields: `<div class="inotice warning" style="margin:0 0 14px">${icon('devices', 'fill')}<div class="in-body">Continuing moves your account to this phone and signs your other devices out.</div></div>`,
+      fields: `<div class="inotice warning" style="margin:0 0 14px">${icon('devices', 'fill')}<div class="in-body">Continuing moves your account to this phone and signs your other devices out.</div></div>` +
+        check('I agree to the Orbit Terms of Service and Privacy Policy', st.terms, 'data-terms') +
+        `<button class="btn ghost" data-legal style="padding:0 4px;height:40px;align-self:flex-start;margin:-2px 0 10px">${icon('book-open-text')}Read the Terms and Privacy Policy</button>`,
       secondary: 'Link from another device instead', primary: 'Continue',
     }),
     advCode: (st) => {
@@ -82,7 +89,7 @@
   };
 
   const ERRORS = {
-    badPhone: 'Enter a valid phone number.',
+    badPhone: 'This number looks too short. Check it and try again.',
     taken: 'This phone number already has an account on this server. Ask your server admin for a recovery code to sign back in.',
     offline: 'Could not reach the server. Check your connection and try again.',
     rate: 'Too many attempts. Wait a moment and try again.',
@@ -100,6 +107,9 @@
   App.register({
     id: 'signin', title: 'Sign in', group: 'Sign-in', order: 5,
     interactions: [
+      ['tap', 'Country code (+880 ▾)', 'Sheet of countries; Bangladesh is the default.'],
+      ['tap', 'Use a recovery code instead (number already has an account)', 'Opens the personal-server code step.'],
+      ['tap', 'Terms checkbox (take-over)', 'Needed before Continue moves the account to this phone.'],
       ['type', 'Phone number', 'Shows which country it detected; Next checks the length.'],
       ['type', 'SMS code', 'Digits only; the sixth digit continues by itself.'],
       ['tap', 'Resend code', 'Sends a new code.'],
@@ -123,7 +133,9 @@
       { key: 'signin-password-error', label: 'Password · too many tries', params: { step: 'password', phone: '1711 000001', error: 'lockedPass' } },
       { key: 'signin-name', label: 'New account · your name', params: { step: 'name', phone: '1711 000001' } },
       { key: 'signin-name-terms', label: 'New account · terms not accepted', params: { step: 'name', phone: '1711 000001', name: 'Hasan', error: 'terms' } },
-      { key: 'signin-takeover', label: 'Take-over confirmation', params: { step: 'takeover' } },
+      { key: 'signin-takeover', label: 'Take-over confirmation (with the Terms)', params: { step: 'takeover' } },
+      { key: 'signin-taken', label: 'Personal server · number already has an account', params: { step: 'phoneAdv', phone: '1711 000001', error: 'taken' } },
+      { key: 'signin-country', label: 'Sign in · country code picker', params: { step: 'phone', countries: true } },
       { key: 'signin-advanced', label: 'Advanced · personal server code', params: { step: 'advCode' } },
       { key: 'signin-advanced-rec', label: 'Advanced · recovery code detected', params: { step: 'advCode', setup: 'HLX-REC-7Q2M-K9TD-XR4P' } },
       { key: 'signin-advanced-error', label: 'Advanced · not a code', params: { step: 'advCode', setup: 'hello', error: 'badSetup' } },
@@ -135,7 +147,7 @@
       const st = entry.state;
       if (!st.init) Object.assign(st, { init: true, step: params.step, phone: params.phone, code: params.code, name: params.name, setup: params.setup, error: params.error, terms: false, recovery: false, history: [] });
       const s = STEPS[st.step](st);
-      const err = st.error ? `<div class="si-error">${icon('warning-circle', 'fill')}<span>${ERRORS[st.error] || st.error}</span></div>` : '';
+      const err = st.error ? `<div class="si-error">${icon('warning-circle', 'fill')}<span>${ERRORS[st.error] || st.error}</span></div>${st.error === 'taken' ? `<button class="btn secondary" data-use-recovery style="align-self:flex-start;height:40px;margin:-2px 0 12px">${icon('key')}Use a recovery code instead</button>` : ''}` : '';
       return `<div class="si-top">${s.back ? ibtn('arrow-left', 'Back', 'data-si-back') : ''}</div>
         <div class="si-body">
           <div class="si-logo" role="img" aria-label="Orbit"></div>
@@ -156,7 +168,16 @@
       const go = (step) => { st.history.push(st.step); st.step = step; st.error = null; st.busy = false; rerender(); };
       const busy = (then) => { st.busy = true; rerender(); setTimeout(() => { st.busy = false; then(); }, 700); };
       const val = (id) => (el.querySelector(id)?.value || '').trim();
-      el.querySelector('[data-si-back]')?.addEventListener('click', () => { st.step = st.history.pop() || (st.step === 'advCode' ? 'phone' : 'phone'); st.error = null; rerender(); });
+      el.querySelector('[data-si-back]')?.addEventListener('click', () => {
+        // From the password step, back is the phone step: the SMS code is already used (Review 1).
+        if (st.step === 'password') { st.step = 'phone'; st.history = []; } else st.step = st.history.pop() || 'phone';
+        st.error = null; rerender();
+      });
+      el.querySelector('[data-country]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        App.sheet({ title: 'Country code', items: COUNTRIES.map(([c, n]) => ({ icon: 'globe-simple', label: `${n} (${c})`, on: (st.country || '+880') === c, run: () => { st.country = c; st.phone = el.querySelector('#siPhone')?.value || st.phone; rerender(); } })) });
+      });
+      el.querySelector('[data-use-recovery]')?.addEventListener('click', () => { st.setup = ''; go('advCode'); });
       el.querySelectorAll('[data-legal]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); legalSheet(); }));
       el.querySelector('[data-terms]')?.addEventListener('toggle', (e) => { st.terms = e.detail; });
       el.querySelector('[data-link-instead]')?.addEventListener('click', () => App.push('link-device'));
@@ -176,7 +197,7 @@
           case 'code': if ((st.code || '').length < 6) { st.error = 'badCode'; rerender(); return; } busy(() => go('password')); break;
           case 'password': if (!val('#siPass')) { st.error = 'badPass'; rerender(); return; } busy(() => App.reset('restore', { afterSignIn: true })); break;
           case 'name': if (!st.terms) { st.error = 'terms'; rerender(); return; } busy(() => App.reset('home', { tab: 'chats' })); break;
-          case 'takeover': busy(() => App.reset('home', { tab: 'chats' })); break;
+          case 'takeover': if (!st.terms) { st.error = 'terms'; rerender(); return; } busy(() => App.reset('home', { tab: 'chats' })); break;
           case 'advCode': {
             const v = (st.setup || '').toUpperCase();
             if (!/^HLX-(INV|REC)-/.test(v)) { st.error = 'badSetup'; rerender(); return; }
@@ -207,6 +228,7 @@
         });
       }
       if (params.legal && !st.legalShown) { st.legalShown = true; setTimeout(() => legalSheet(), 60); }
+      if (params.countries && !st.countriesShown) { st.countriesShown = true; setTimeout(() => el.querySelector('[data-country]')?.click(), 60); }
     },
   });
 
@@ -220,7 +242,9 @@
     const p = Math.min(0.95, (st.p || 0) / 4 + 0.1);
     const card = {
       idle: { art: Kit.ring('idle'), title: after ? 'Bring your chats back' : 'Restore from your backup', sub: 'Text messages only · files are not in the backup' },
-      running: { art: Kit.ring('run', { p }), title: phases[st.p || 0], sub: st.p >= 3 ? '1,204 messages added so far' : 'Encrypted with a key only your devices have' },
+      running: { art: Kit.ring('run', { p: ((st.p || 0) + 1) / 4, label: `${(st.p || 0) + 1}/4` }), title: phases[st.p || 0], sub: st.p >= 3 ? '1,204 messages added so far' : 'Encrypted with a key only your devices have' },
+      nothing: { art: Kit.ring('ok'), title: 'Nothing new to add', sub: 'Your backup is already on this phone' },
+      locked: { art: Kit.ring('bad'), title: 'This backup could not be opened', sub: 'It needs a key this device does not have. Try your recovery secret.' },
       failed: { art: Kit.ring('bad'), title: 'No backup was found', sub: 'Back up on your other phone first, then try again' },
       done: { art: Kit.ring('ok'), title: 'Restored 2,318 messages', sub: 'Messages already here were kept' },
     }[phase];
@@ -228,7 +252,7 @@
       <div class="xfer" style="margin-top:0"><div class="xf-title">${icon('device-mobile', 'fill')}History from Galaxy S23</div><div class="xf-status">Ready to receive. Nothing is downloaded until you accept.</div>
       <div class="xf-actions"><button class="btn primary" data-snack="Receiving your history">Accept</button><button class="btn secondary" data-snack="Declined">Decline</button></div></div>
       <div class="group-title eyebrow">From your backup</div>` : '';
-    const buttons = phase === 'done'
+    const buttons = phase === 'done' || phase === 'nothing'
       ? `<div class="btn-row"><button class="btn primary block" data-continue>${after ? 'Continue' : 'Done'}</button></div>`
       : `<div class="btn-row" style="flex-direction:column">
           <button class="btn primary block" data-restore ${phase === 'running' ? 'disabled' : ''}>${icon('cloud-arrow-down')}${phase === 'failed' ? 'Try again' : 'Restore from my backup'}</button>
@@ -242,6 +266,7 @@
   App.register({
     id: 'restore', title: 'Restore your chats', group: 'Sign-in', order: 5,
     interactions: [
+      ['auto', 'Restore ring', 'Counts the four steps (1/4 to 4/4); then done, nothing new to add, or cannot be opened.'],
       ['tap', 'Restore from my backup', 'Runs with a percentage; then done, or nothing found.'],
       ['tap', 'I have a recovery secret', 'Opens Recovery backup on Restore.'],
       ['tap', 'Accept / Decline (history from another device)', 'Receives it, or declines.'],
@@ -252,6 +277,8 @@
       { key: 'restore-running', label: 'Restore step · running', params: { afterSignIn: true, phase: 'running', p: 3 } },
       { key: 'restore-failed', label: 'Restore step · no backup', params: { afterSignIn: true, phase: 'failed' } },
       { key: 'restore-done', label: 'Restore step · done', params: { afterSignIn: true, phase: 'done' } },
+      { key: 'restore-nothing', label: 'Restore step · nothing new to add', params: { afterSignIn: true, phase: 'nothing' } },
+      { key: 'restore-locked', label: 'Restore step · backup cannot be opened', params: { afterSignIn: true, phase: 'locked' } },
     ],
     render(params, entry) {
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, phase: params.phase, p: params.p });
@@ -275,6 +302,9 @@
   App.register({
     id: 'link-device', title: 'Link this device', group: 'Sign-in', order: 5,
     interactions: [
+      ['tap', 'No, this is not my account', 'Stays and explains that nothing was kept; Show a new code starts again.'],
+      ['auto', 'Getting a code', 'A spinner in place of the QR code until the code exists.'],
+      ['auto', 'Code timer at zero', 'Switches to the expired state.'],
       ['auto', 'Code timer', 'Counts down to the code’s expiry.'],
       ['tap', 'Show a new code (expired)', 'Shows a fresh code and restarts the timer.'],
       ['tap', 'Simulate approval (prototype only)', 'Shows “Is this your account?”.'],
@@ -285,6 +315,9 @@
       { key: 'link-device', label: 'Link this device · QR', params: {} },
       { key: 'link-device-expired', label: 'Link this device · code expired', params: { phase: 'expired' } },
       { key: 'link-device-confirm', label: 'Link this device · is this your account?', params: { phase: 'confirm' } },
+      { key: 'link-device-starting', label: 'Link this device · getting a code', params: { phase: 'starting' } },
+      { key: 'link-device-failed', label: 'Link this device · did not work', params: { phase: 'failed' } },
+      { key: 'link-device-declined', label: 'Link this device · not your account', params: { phase: 'declined' } },
     ].map((e) => ({ ...e, base: { screen: 'signin', params: { step: 'password', phone: '1711 000001' } } })),
     render(params, entry) {
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, phase: params.phase || 'waiting', secs: 585 });
@@ -295,17 +328,24 @@
             ${Kit.section('The account', [UI.row({ icon: 'phone', color: 0, title: '+880 17•• ••0001', sub: 'Phone number, shown in part', tag: 'div' }), UI.row({ icon: 'at', color: 1, title: '~hasan', sub: 'Orbit name', tag: 'div' })])}
             ${code('Key code', '4821 9930 1175', { note: 'The same key code is shown on your other device. If it is different, or the account is not yours, choose No.' })}
             <p class="sec-foot">Choosing Yes gives this phone your account’s keys. It can then read your new messages.</p>
-            <div class="btn-row" style="flex-direction:column"><button class="btn primary block" data-yes>${icon('check', 'bold')}Yes, this is my account</button><button class="btn secondary block" data-back>No, cancel</button></div>
+            <div class="btn-row" style="flex-direction:column"><button class="btn primary block" data-yes>${icon('check', 'bold')}Yes, this is my account</button><button class="btn secondary block" data-no>No, this is not my account</button></div>
           </div>`;
+      }
+      if (st.phase === 'declined' || st.phase === 'failed') {
+        const declined = st.phase === 'declined';
+        return Kit.page({ title: 'Link this device', body: `${Kit.hero({ art: Kit.ring('bad'), title: declined ? 'Nothing was kept' : 'That did not work', sub: declined ? 'You said this is not your account, so this device was not linked' : 'The other device’s approval could not be checked' })}
+          <p class="sec-foot">${declined ? 'If that was a mistake, show a new code and approve it again on your other device.' : 'Check your connection, then show a new code and try again.'}</p>
+          <div class="btn-row"><button class="btn primary block" data-new>${icon('qr-code')}Show a new code</button></div>` });
       }
       const t = `${Math.floor(st.secs / 60)}:${String(st.secs % 60).padStart(2, '0')}`;
       const status = st.phase === 'expired'
         ? notice('error', 'This code has expired. Show a new code to try again.', { label: 'Show a new code', attr: 'data-new' })
         : st.phase === 'approved' ? `<div class="pad" style="text-align:center;margin-top:14px;font-weight:600;color:var(--success)">${icon('check-circle', 'fill')} Approved. Signing in...</div>`
-          : `<div class="pad" style="text-align:center;margin-top:14px;font-size:13.5px;color:var(--ink-3)">${icon('spinner-gap')} Waiting for approval. Code expires in <span class="mono" data-left>${t}</span>.</div>`;
+          : st.phase === 'starting' ? `<div class="pad" style="text-align:center;margin-top:14px;font-size:13.5px;color:var(--ink-3)">Getting a code…</div>`
+            : `<div class="pad" style="text-align:center;margin-top:14px;font-size:13.5px;color:var(--ink-3)">${icon('spinner-gap')} Waiting for approval. Code expires in <span class="mono" data-left>${t}</span>.</div>`;
       return Kit.page({ title: 'Link this device', body: `
         ${Kit.intro('', 'On a device that is already signed in to your account, open Settings, Devices, Link a new device, and scan this code. Show it only to your own device.')}
-        <div class="qr-wrap" style="${st.phase === 'expired' ? 'opacity:.25' : ''}"><div class="qr-card">${qr('link-this-device', 220)}</div></div>
+        <div class="qr-wrap" style="${st.phase === 'expired' ? 'opacity:.25' : ''}"><div class="qr-card">${st.phase === 'starting' ? '<div class="qr-wait" role="status" aria-label="Getting a code"><i class="ph ph-spinner-gap spin"></i></div>' : qr('link-this-device', 220)}</div></div>
         ${code('Check number', '72 914', { cls: 'huge' })}
         ${status}
         ${st.phase === 'waiting' ? '<div class="pad" style="text-align:center;margin-top:10px"><button class="btn ghost" data-approve-demo>Simulate approval</button></div>' : ''}` });
@@ -314,8 +354,9 @@
       const st = entry.state; Kit.wire(el, entry);
       el.querySelector('[data-new]')?.addEventListener('click', () => { st.phase = 'waiting'; st.secs = 600; entry.rerender(); });
       el.querySelector('[data-approve-demo]')?.addEventListener('click', () => { st.phase = 'confirm'; entry.rerender(); });
+      el.querySelector('[data-no]')?.addEventListener('click', () => { st.phase = 'declined'; entry.rerender(); });
       el.querySelector('[data-yes]')?.addEventListener('click', () => { st.phase = 'approved'; entry.rerender(); setTimeout(() => App.reset('restore', { afterSignIn: true }), 900); });
-      if (st.phase === 'waiting' && !st.timer) st.timer = setInterval(() => { if (!entry.el.isConnected) { clearInterval(st.timer); return; } st.secs = Math.max(0, st.secs - 1); const n = entry.el.querySelector('[data-left]'); if (n) n.textContent = `${Math.floor(st.secs / 60)}:${String(st.secs % 60).padStart(2, '0')}`; }, 1000);
+      if (st.phase === 'waiting' && !st.timer) st.timer = setInterval(() => { if (!entry.el.isConnected) { clearInterval(st.timer); return; } st.secs = Math.max(0, st.secs - 1); if (!st.secs) { clearInterval(st.timer); st.timer = null; st.phase = 'expired'; entry.rerender(); return; } const n = entry.el.querySelector('[data-left]'); if (n) n.textContent = `${Math.floor(st.secs / 60)}:${String(st.secs % 60).padStart(2, '0')}`; }, 1000);
     },
   });
 
@@ -323,6 +364,7 @@
   App.register({
     id: 'reset', title: 'Reset', group: 'App', order: 95,
     interactions: [
+      ['tap', 'Try again (could not start)', 'Opens Orbit again. Nothing is deleted on this path.'],
       ['type', 'Type DELETE', 'Turns on Reset Orbit.'],
       ['tap', 'Reset Orbit', 'Deletes the local data and returns to sign-in.'],
     ],
@@ -330,11 +372,24 @@
       { key: 'reset-window', label: 'Already open in another window', params: { kind: 'window' } },
       { key: 'reset-key', label: 'Reset required · key missing', params: { kind: 'key' } },
       { key: 'reset-decrypt', label: 'Reset required · cannot decrypt', params: { kind: 'decrypt' } },
+      { key: 'reset-start-failed', label: 'Orbit could not start (no reset offered)', params: { kind: 'start' } },
+      { key: 'reset-fine', label: 'Reset · your local data is fine', params: { kind: 'fine' } },
+      { key: 'reset-failed', label: 'Reset required · the reset did not finish', params: { kind: 'key', failed: true } },
     ],
     render(params, entry) {
       const st = entry.state;
       if (params.kind === 'window') {
         return `${UI.appbar({ title: 'Orbit', back: false })}<div class="center-page"><div class="cp-icon" style="background:var(--accent-soft);color:var(--accent)">${icon('app-window', 'fill')}</div><h2>Orbit is open elsewhere</h2><p>Orbit is already open in another window. Close that one, then try again.</p><button class="btn primary" style="margin-top:10px" data-snack="Trying again…">Try again</button></div>`;
+      }
+      // Only a missing key or data that cannot be decrypted offers the reset; any
+      // other startup failure offers Try again and changes nothing (Review 1, fixes B3).
+      if (params.kind === 'start') {
+        return `${UI.appbar({ title: 'Orbit', back: false })}<div class="center-page"><div class="cp-icon" style="background:var(--warning-soft);color:var(--warning)">${icon('warning', 'fill')}</div><h2>Orbit could not start</h2><p>Something went wrong while opening your data. Nothing was changed.</p>
+          <button class="btn primary" style="margin-top:14px" data-again>${icon('arrows-clockwise')}Try again</button></div>`;
+      }
+      if (params.kind === 'fine') {
+        return `${UI.appbar({ title: 'Orbit', back: false })}<div class="center-page"><div class="cp-icon" style="background:var(--success-soft);color:var(--success)">${icon('check-circle', 'fill')}</div><h2>Your local data is fine</h2><p>There is nothing to reset.</p>
+          <button class="btn primary" style="margin-top:14px" data-again>Continue</button></div>`;
       }
       const text = params.kind === 'key'
         ? 'An existing database was found, but its encryption key is not available in secure storage. A destructive reset is required to continue.'
@@ -343,26 +398,30 @@
       return `${UI.appbar({ title: 'Reset required', back: false })}<div class="center-page" style="justify-content:flex-start;padding-top:40px">
         <div class="cp-icon" style="background:var(--danger-soft);color:var(--danger)">${icon('lock-key', 'fill')}</div><h2>Reset required</h2><p>${text}</p>
         <div style="width:100%;margin-top:18px;text-align:left">${field({ id: 'rsIn', label: 'Type DELETE to confirm', hint: 'DELETE', value: st.typed || '', mono: true })}</div>
-        <button class="btn ${ok ? 'danger' : 'secondary'} block" data-reset ${ok ? '' : 'disabled style="opacity:.5"'}>${st.busy ? 'Deleting…' : 'Reset Orbit'}</button></div>`;
+        <button class="btn ${ok ? 'danger' : 'secondary'} block" data-reset ${ok ? '' : 'disabled style="opacity:.5"'}>${st.busy ? 'Deleting…' : 'Reset Orbit'}</button>
+        ${params.failed && !st.busy ? `<div class="si-error" style="margin-top:12px">${icon('warning-circle', 'fill')}<span>The reset did not finish. Try again.</span></div>` : ''}</div>`;
     },
     mount(el, params, entry) {
       const st = entry.state; Kit.wire(el, entry);
       const inp = el.querySelector('#rsIn');
       if (inp) inp.addEventListener('input', () => { st.typed = inp.value; const pos = inp.selectionStart; entry.rerender(); const n = entry.el.querySelector('#rsIn'); n.focus(); n.setSelectionRange(pos, pos); });
       el.querySelector('[data-reset]')?.addEventListener('click', () => { st.busy = true; entry.rerender(); setTimeout(() => App.reset('signin', { step: 'phone' }), 900); });
+      el.querySelector('[data-again]')?.addEventListener('click', () => App.reset('startup'));
     },
   });
 
   App.register({
     id: 'lock', title: 'App lock', group: 'App', order: 95,
     interactions: [
+      ['auto', 'Unlock prompt failed or cancelled', 'Says “Not unlocked. Try again.” under the button.'],
       ['tap', 'Unlock', 'Asks for your fingerprint, face or PIN (Windows Hello on Windows), then opens Orbit.'],
     ],
-    entries: [{ key: 'lock', label: 'App lock', params: {} }],
-    render() {
+    entries: [{ key: 'lock', label: 'App lock', params: {} }, { key: 'lock-failed', label: 'App lock · not unlocked', params: { failed: true } }],
+    render(params) {
       return `<div class="center-page" style="background:var(--bg)"><div class="cp-icon" style="background:var(--surface);border:1px solid var(--line);color:var(--accent);box-shadow:0 0 0 10px var(--bg),0 0 0 11px var(--line-2)">${icon('lock-simple', 'fill')}</div>
         <h2>Orbit is locked</h2><p>Unlock with ${UI.unlock().full}.</p>
-        <button class="btn primary" style="margin-top:14px" data-unlock>${icon('fingerprint')}Unlock</button></div>`;
+        <button class="btn primary" style="margin-top:14px" data-unlock>${icon('fingerprint')}Unlock</button>
+        ${params.failed ? `<div class="si-error" style="margin-top:12px;justify-content:center">${icon('warning-circle', 'fill')}<span>Not unlocked. Try again.</span></div>` : ''}</div>`;
     },
     mount(el) { el.querySelector('[data-unlock]').addEventListener('click', () => App.reset('home', { tab: 'chats' })); },
   });

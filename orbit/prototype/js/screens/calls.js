@@ -7,25 +7,35 @@
   const { esc, icon, ibtn, avatar } = UI;
   const person = (id) => Data.people[id] || Data.people.nadia;
   const clock = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  // Why a call ended (CallEnd in the app). Talk time shows only after a call
+  // that was answered (Review 1, 2026-10-18).
   const ENDED = {
     ended: ['Call ended', ''],
+    cancelled: ['Call cancelled', ''],
     declined: ['Call declined', ''],
+    missed: ['Missed call', ''],
     busy: ['Busy: on another call', 'They are in another call right now.'],
-    noAnswer: ['No answer', ''],
+    noAnswer: ['No answer', 'They did not pick up.'],
     elsewhere: ['Answered on another device', ''],
+    declinedElsewhere: ['Declined on another device', ''],
     failed: ['Call failed', 'The call could not connect. Check your connection and try again.'],
   };
   const ROUTES = { earpiece: ['ear', 'Phone'], speaker: ['speaker-high', 'Speaker'], bluetooth: ['bluetooth', 'Bluetooth'], headset: ['headphones', 'Headset'] };
 
   function tray(st, video, ended) {
     const b = (k, ic, label, tip, on, disabled) => `<button class="cbtn ${on ? 'on' : ''}" data-c="${k}" title="${tip}" aria-label="${tip}" aria-pressed="${!!on}" ${disabled || ended ? 'disabled' : ''}><span class="cb-ico">${icon(ic, on ? 'fill' : '')}</span>${label}</button>`;
-    const routeLabel = st.route === 'earpiece' ? 'Speaker' : ROUTES[st.route][1];
-    const speaker = b('route', st.route === 'earpiece' ? 'speaker-high' : ROUTES[st.route][0], routeLabel, `Audio output: ${ROUTES[st.route][1]}`, st.route !== 'earpiece');
+    // Audio output (Review 1): with the phone and its speaker only, a toggle;
+    // with a headset or Bluetooth as well, a sheet of what is there; on a
+    // window, nothing (Windows picks its own output).
+    const many = st.outputs.length > 2;
+    const speaker = App.isWide() ? ''
+      : many ? b('route', ROUTES[st.route][0], ROUTES[st.route][1], `Audio output: ${ROUTES[st.route][1]}`, st.route !== 'earpiece')
+        : b('route', 'speaker-high', 'Speaker', st.route === 'speaker' ? 'Turn speaker off' : 'Turn speaker on', st.route === 'speaker');
     const mute = b('mute', st.muted ? 'microphone-slash' : 'microphone', 'Mute', st.muted ? 'Unmute microphone' : 'Mute microphone', st.muted);
     const end = `<button class="cbtn end" data-c="end" title="End call" aria-label="End call" ${ended ? 'disabled' : ''}><span class="cb-ico">${icon('phone-disconnect', 'fill')}</span></button>`;
-    const controls = video
+    const controls = (video
       ? [b('flip', 'camera-rotate', 'Flip', 'Flip camera', false, !st.camera), b('camera', st.camera ? 'video-camera' : 'video-camera-slash', 'Video', st.camera ? 'Turn camera off' : 'Turn camera on', st.camera, st.phase !== 'active'), mute, speaker]
-      : [speaker, b('video', 'video-camera-slash', 'Video', 'Video is not available on a voice call', false, true), mute];
+      : [speaker, b('video', 'video-camera-slash', 'Video', 'Video is not available on a voice call', false, true), mute]).filter(Boolean);
     return `<div class="c-panel hideable" style="grid-template-columns:repeat(${controls.length},1fr)">${controls.join('')}${end}</div>`;
   }
 
@@ -43,8 +53,10 @@
       ['tap', 'Mute', 'Turns your microphone off or on.'],
       ['tap', 'Camera', 'Turns your camera off or on (video calls).'],
       ['tap', 'Flip', 'Switches between the front and back camera.'],
-      ['tap', 'Audio output', 'Sheet: Phone, Speaker, Bluetooth, Headset; the current one is ticked.'],
-      ['tap', 'Notice × (weak connection, reconnecting)', 'Hides the notice.'],
+      ['tap', 'Speaker (phone and speaker only)', 'Turns the speaker on or off.', 'phone'],
+      ['tap', 'Audio output (with a headset or Bluetooth)', 'Sheet of the outputs that are there; the current one is ticked.', 'phone'],
+      ['tap', 'Notice × (a refusal or failure notice)', 'Hides the notice.'],
+      ['key', 'Esc on a live call', 'Does nothing: a call never ends by accident.', 'window'],
       ['tap', 'Video picture', 'Hides or shows the controls.'],
       ['drag', 'Your own camera tile', 'Moves it anywhere on the screen.'],
       ['tap', 'Your own camera tile', 'Swaps it with the big picture.'],
@@ -65,10 +77,16 @@
       { key: 'call-ended', label: 'Call ended', params: { peer: 'nadia', phase: 'ended', reason: 'ended', stay: true } },
       { key: 'call-busy', label: 'Busy: on another call', params: { peer: 'arif', phase: 'ended', reason: 'busy', stay: true } },
       { key: 'call-failed', label: 'Call failed', params: { peer: 'arif', phase: 'ended', reason: 'failed', stay: true } },
+      { key: 'call-cancelled', label: 'Call cancelled (you hung up before they answered)', params: { peer: 'nadia', phase: 'ended', reason: 'cancelled', stay: true } },
+      { key: 'call-no-answer', label: 'No answer', params: { peer: 'arif', phase: 'ended', reason: 'noAnswer', stay: true } },
+      { key: 'call-elsewhere', label: 'Answered on another device', params: { peer: 'nadia', phase: 'ended', reason: 'elsewhere', stay: true } },
+      { key: 'call-active-outputs', label: 'Voice call · headset connected (output sheet)', params: { peer: 'nadia', phase: 'active', outputs: ['earpiece', 'speaker', 'bluetooth'], route: 'bluetooth' } },
+      { key: 'call-video-their-camera-off', label: 'Video call · their camera off', params: { peer: 'nadia', phase: 'active', video: true, theirCameraOff: true } },
+      { key: 'call-camera-refused', label: 'Incoming video · camera refused', params: { peer: 'arif', phase: 'incoming', video: true, notice: 'Orbit needs the camera for video calls. Allow it in your phone’s settings, or answer with voice.' } },
     ].map((e) => ({ ...e, base: { screen: 'home', params: { tab: 'calls' } } })),
     render(params, entry) {
       const st = entry.state;
-      if (!st.init) { st.init = true; st.phase = params.phase; st.camera = !!params.video; st.route = 'earpiece'; st.muted = false; st.secs = params.phase === 'ended' ? 252 : 12; st.reason = params.reason || 'ended'; st.notice = params.notice || null; }
+      if (!st.init) { st.init = true; st.phase = params.phase; st.camera = !!params.video; st.outputs = params.outputs || ['earpiece', 'speaker']; st.route = params.route || (params.video ? 'speaker' : 'earpiece'); st.muted = false; st.secs = params.phase === 'ended' ? 252 : 12; st.reason = params.reason || 'ended'; st.notice = params.notice || null; }
       const p = person(params.peer);
       const name = Data.displayName(p);
       const sub = esc(p.names.number || (p.names.helixName ? `~${p.names.helixName}` : ''));
@@ -87,19 +105,24 @@
 
       const ended = st.phase === 'ended';
       // Video layout once there is a picture: theirs when connected, yours while dialing.
-      if (params.video && st.camera && !ended && (st.phase === 'active' || st.phase === 'outgoing' || st.phase === 'ringing')) {
+      // Your camera off keeps their video full screen without your tile (Review 1).
+      if (params.video && !ended && (st.phase === 'active' || (st.camera && (st.phase === 'outgoing' || st.phase === 'ringing')))) {
         const dialing = st.phase !== 'active';
-        return `<div class="call video connected ${st.controlsOff ? 'controls-off' : ''}"><div class="remote ${dialing ? 'ph-c' : 'ph-e'}" data-remote></div>
+        const remote = params.theirCameraOff && !dialing
+          ? `<div class="remote off" data-remote><div class="r-off">${avatar(Data.av(p), 120)}<span>${icon('video-camera-slash')}Camera off</span></div></div>`
+          : `<div class="remote ${dialing ? 'ph-c' : 'ph-e'}" data-remote></div>`;
+        return `<div class="call video connected ${st.controlsOff ? 'controls-off' : ''}">${remote}
           <div class="hideable" style="position:relative;z-index:2;padding:48px 16px 0">${header(true)}</div>
           <div class="c-who hideable"><h1 class="c-name">${esc(name)}</h1><div class="c-status ${dialing ? '' : 'live'}">${dialing ? (st.phase === 'ringing' ? 'Ringing…' : 'Calling…') : `<span data-clock>${clock(st.secs)}</span>`}</div></div>
-          ${dialing ? '' : '<div class="self ph-c" title="Show your camera full screen"></div>'}
+          ${dialing || !st.camera ? '' : '<div class="self ph-c" title="Show your camera full screen"></div>'}
           ${tray(st, true, false)}</div>`;
       }
 
       let status;
       if (ended) {
         const [reason, detail] = ENDED[st.reason];
-        status = `<div class="c-status" style="color:${st.reason === 'failed' || st.reason === 'busy' ? '#FFD3D5' : 'var(--call-muted)'}">${reason}</div><div class="c-sub" style="margin-top:0">${clock(st.secs)}</div>${detail ? `<p class="c-detail">${detail}</p>` : ''}`;
+        const answered = st.reason === 'ended';
+        status = `<div class="c-status" style="color:${st.reason === 'failed' || st.reason === 'busy' ? '#FFD3D5' : 'var(--call-muted)'}">${reason}</div>${answered ? `<div class="c-sub" style="margin-top:0">${clock(st.secs)}</div>` : ''}${detail ? `<p class="c-detail">${detail}</p>` : ''}`;
       } else if (st.phase === 'active') status = `<div class="c-status live"><span data-clock>${clock(st.secs)}</span></div>${params.weak ? `<span class="c-chip">${icon('cell-signal-low', 'fill')}Poor connection</span>` : ''}${st.muted ? '<p class="c-detail">Your microphone is off</p>' : ''}`;
       else if (st.phase === 'reconnecting') status = `<div class="c-status">${icon('spinner-gap')} Reconnecting…</div>`;
       else status = `<div class="c-status">${{ outgoing: 'Calling…', ringing: 'Ringing…', connecting: 'Connecting…' }[st.phase]}</div>`;
@@ -120,13 +143,13 @@
         const k = b.dataset.c;
         if (k === 'accept') { st.phase = 'connecting'; rerender(); setTimeout(() => { if (App.top() === entry) { st.phase = 'active'; rerender(); } }, 900); }
         if (k === 'decline') finish('declined');
-        if (k === 'end') finish('ended');
+        if (k === 'end') finish(st.phase === 'active' || st.phase === 'reconnecting' ? 'ended' : 'cancelled');
         if (k === 'mute') { st.muted = !st.muted; rerender(); }
         if (k === 'camera') { st.camera = !st.camera; rerender(); }
-        if (k === 'flip') App.snack('Camera flipped');
+        if (k === 'flip') { st.flipped = !st.flipped; } // the mirrored self view shows it; no toast (Review 1)
         if (k === 'route') {
-          const opts = [['earpiece', 'ear', 'Phone'], ['speaker', 'speaker-high', 'Speaker'], ['bluetooth', 'bluetooth', 'Bluetooth'], ['headset', 'headphones', 'Headset']];
-          App.sheet({ title: 'Audio output', items: opts.map(([k2, ic, label]) => ({ icon: ic, label, on: st.route === k2, run: () => { st.route = k2; rerender(); } })) });
+          if (st.outputs.length <= 2) { st.route = st.route === 'speaker' ? 'earpiece' : 'speaker'; rerender(); return; }
+          App.sheet({ title: 'Audio output', items: st.outputs.map((k2) => ({ icon: ROUTES[k2][0], label: ROUTES[k2][1], on: st.route === k2, run: () => { st.route = k2; rerender(); } })) });
         }
       }));
       // Video: tap the picture to hide or show the controls; drag the self tile, tap it to swap.
@@ -162,38 +185,64 @@
   App.register({
     id: 'call-detail', title: 'Call details', group: 'Calls', order: 30,
     interactions: [
+      ['auto', 'Someone who blocked you', 'No call buttons; a line says why.'],
       ['tap', 'Voice call / Video call', 'Places that call.'],
       ['tap', 'Contact', 'Opens contact info.'],
       ['tap', 'Delete (app bar)', 'Asks “Delete from call history?”, then removes these calls.'],
     ],
-    entries: [{ key: 'call-detail', label: 'Call details', params: { id: 'call3' }, base: { screen: 'home', params: { tab: 'calls' } } }],
+    entries: [
+      { key: 'call-detail', label: 'Call details', params: { id: 'call3' } },
+      { key: 'call-detail-kinds', label: 'Call details · every kind of call', params: { id: 'call2', kinds: true } },
+      { key: 'call-detail-blocked', label: 'Call details · they blocked you', params: { id: 'call3', blockedBy: true } },
+      { key: 'call-detail-gone', label: 'Call details · no longer in the history', params: { id: 'call3', state: 'gone' } },
+    ].map((e) => ({ ...e, base: { screen: 'home', params: { tab: 'calls' } } })),
     render(params) {
       const c = Data.calls.find((x) => x.id === params.id) || Data.calls[0];
       const p = person(c.peer);
-      const rows = [
-        ['incoming', 'Incoming voice call', 'Yesterday, 21:30', '32:18'],
-        ['missed', 'Missed voice call', 'Yesterday, 19:02', ''],
-        ['outgoing', 'Outgoing voice call', 'Yesterday, 18:55', '1:04'],
+      if (params.state === 'gone') return `${UI.appbar({ title: 'Call details' })}<div class="scroll">${UI.empty({ icon: 'phone-x', title: 'Call not found', text: 'This call is no longer in your call history.' })}</div>`;
+      // Every kind of row the log can hold (Review 1): voice and video, in and
+      // out, missed (red), declined, failed (red), cancelled, unanswered.
+      const rows = params.kinds ? [
+        ['incoming', 'phone', 'Incoming voice call', 'Today, 10:12', '4:51'],
+        ['outgoing', 'video-camera', 'Outgoing video call', 'Today, 09:40', '12:03'],
+        ['missed', 'phone', 'Missed voice call', 'Today, 08:15', ''],
+        ['declined', 'phone', 'Declined voice call', 'Yesterday, 22:01', ''],
+        ['failed', 'video-camera', 'Video call failed', 'Yesterday, 21:44', ''],
+        ['cancelled', 'phone', 'Cancelled voice call', 'Yesterday, 19:20', ''],
+        ['unanswered', 'phone', 'Unanswered voice call', 'Yesterday, 19:18', ''],
+      ] : [
+        ['incoming', 'phone', 'Incoming voice call', 'Yesterday, 21:30', '32:18'],
+        ['missed', 'phone', 'Missed voice call', 'Yesterday, 19:02', ''],
+        ['outgoing', 'phone', 'Outgoing voice call', 'Yesterday, 18:55', '1:04'],
       ];
-      const ic = { incoming: ['arrow-down-left', 'var(--success)'], missed: ['arrow-down-left', 'var(--danger)'], outgoing: ['arrow-up-right', 'var(--success)'] };
+      const ic = {
+        incoming: ['arrow-down-left', 'var(--success)'], outgoing: ['arrow-up-right', 'var(--success)'], missed: ['arrow-down-left', 'var(--danger)'],
+        declined: ['phone-disconnect', 'var(--ink-3)'], failed: ['warning-circle', 'var(--danger)'], cancelled: ['arrow-up-right', 'var(--ink-3)'], unanswered: ['arrow-up-right', 'var(--ink-3)'],
+      };
       const round = (k, i, label) => `<button class="quick-item" data-k="${k}" title="${label}"><span class="q-ico">${icon(i)}</span><span class="q-lbl">${label}</span></button>`;
+      // Someone who blocked you: no call buttons, and why (Review 1, ADR-030).
+      const actions = params.blockedBy
+        ? `<p class="sec-foot" style="text-align:center;margin:8px 32px 0">${icon('prohibit')} ${esc(Data.displayName(p))} has blocked you. You can’t message or call them.</p><div style="display:flex;justify-content:center;padding:10px 16px 6px">${round('contact', 'user-circle', 'Contact')}</div>`
+        : `<div style="display:flex;justify-content:center;gap:18px;padding:10px 16px 6px">${round('voice', 'phone', 'Voice call')}${round('video', 'video-camera', 'Video call')}${round('contact', 'user-circle', 'Contact')}</div>`;
       return `${UI.appbar({ title: 'Call details', actions: ibtn('trash', 'Delete from call history', 'data-del') })}
         <div class="scroll" style="padding-bottom:30px">
           <div style="display:flex;flex-direction:column;align-items:center;padding:20px 20px 6px;gap:6px;text-align:center">
             ${avatar(Data.av(p), 72)}<div style="font-size:22px;font-weight:640;letter-spacing:-0.02em;margin-top:6px">${esc(Data.displayName(p))}</div>
             <div class="mono" style="font-size:12px;color:var(--ink-3)">${esc(Data.secondary(p) || '')}</div>
           </div>
-          <div style="display:flex;justify-content:center;gap:18px;padding:10px 16px 6px">${round('voice', 'phone', 'Voice call')}${round('video', 'video-camera', 'Video call')}${round('contact', 'user-circle', 'Contact')}</div>
-          ${UI.card(rows.map(([d, t, when, dur]) => UI.row({ icon: ic[d][0], weight: 'bold', title: d === 'missed' ? `<span style="color:var(--danger)">${t}</span>` : t, sub: when, subMono: true, value: dur, tag: 'div' }).replace('class="rw-ico', `style="--av-ink:${ic[d][1]}" class="rw-ico`)), { title: 'Calls' })}
+          ${actions}
+          ${UI.card(rows.map(([d, kind, t, when, dur]) => UI.row({ icon: ic[d][0], weight: 'bold', title: d === 'missed' || d === 'failed' ? `<span style="color:var(--danger)">${t}</span>` : t, sub: `${kind === 'video-camera' ? 'Video · ' : ''}${when}`, subMono: true, value: dur, tag: 'div' }).replace('class="rw-ico', `style="--av-ink:${ic[d][1]}" class="rw-ico`)), { title: 'Calls' })}
         </div>`;
     },
     mount(el, params) {
       const c = Data.calls.find((x) => x.id === params.id) || Data.calls[0];
-      el.querySelector('[data-back]').addEventListener('click', App.pop);
-      el.querySelector('[data-k="voice"]').addEventListener('click', () => App.push('call', { peer: c.peer, phase: 'outgoing' }));
-      el.querySelector('[data-k="video"]').addEventListener('click', () => App.push('call', { peer: c.peer, phase: 'outgoing', video: true }));
-      el.querySelector('[data-k="contact"]').addEventListener('click', () => App.push('contact', { id: c.peer }));
-      el.querySelector('[data-del]').addEventListener('click', () => App.dialog({ title: 'Delete from call history?', text: `All ${c.count || 1} calls with ${c.title} will be removed from your call history.`, actions: [{ label: 'Cancel' }, { label: 'Delete', kind: 'danger', run: () => App.pop() }] }));
+      el.querySelector('[data-back]')?.addEventListener('click', App.pop);
+      el.querySelector('[data-k="voice"]')?.addEventListener('click', () => App.push('call', { peer: c.peer, phase: 'outgoing' }));
+      el.querySelector('[data-k="video"]')?.addEventListener('click', () => App.push('call', { peer: c.peer, phase: 'outgoing', video: true }));
+      el.querySelector('[data-k="contact"]')?.addEventListener('click', () => App.push('contact', { id: c.peer }));
+      // The app counts every call with this person on the page and deletes them all (Review 1).
+      const n = c.count || 1;
+      el.querySelector('[data-del]')?.addEventListener('click', () => App.dialog({ title: 'Delete from call history?', text: n > 1 ? `These ${n} calls with ${c.title} will be removed from your call history.` : `This call with ${c.title} will be removed from your call history.`, actions: [{ label: 'Cancel' }, { label: 'Delete', kind: 'danger', run: () => App.pop() }] }));
     },
   });
 })();

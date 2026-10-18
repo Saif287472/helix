@@ -156,7 +156,7 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px var(--gutter) 6px;
 }
-.list-label .eyebrow .count { color: var(--ink-4); margin-left: 6px; }
+.list-label .eyebrow .count { color: var(--ink-3); margin-left: 6px; } /* a number people read: body-text contrast, not decorative --ink-4 */
 
 /* ================= HelixChatListTile ================= */
 .chat-row {
@@ -418,6 +418,9 @@ button.row:hover, a.row:hover { background: var(--hover); }
   display: flex; align-items: center; gap: 12px;
 }
 .snackbar.in { transform: none; opacity: 1; }
+/* An error toast: the same dark toast (same contrast), marked by a red edge and a warning icon. */
+.snackbar.error { box-shadow: inset 4px 0 0 var(--danger), var(--shadow-float); padding-left: 18px; }
+.snackbar.error > i { font-size: 18px; flex-shrink: 0; color: var(--on-inverse); }
 .snackbar .sn-action { margin-left: auto; color: var(--inverse-accent); font-weight: 600; font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
 
 /* ================= Tweaks: tap-target overlay ================= */

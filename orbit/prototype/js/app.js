@@ -40,7 +40,7 @@ const App = (() => {
     home: 'list', archived: 'list', 'settings-page': 'list', 'group-new': 'list', 'group-join': 'list',
     chat: 'detail', 'call-detail': 'detail',
     contact: 'info', 'group-info': 'info', shared: 'info', 'chat-settings': 'info', 'message-info': 'info',
-    call: 'full', 'media-viewer': 'full', signin: 'full', reset: 'full', lock: 'full',
+    call: 'full', 'media-viewer': 'full', signin: 'full', reset: 'full', lock: 'full', startup: 'full',
   };
   const placement = (id, params) => (id === 'restore' && params.afterSignIn ? 'full' : PLACEMENT[id] || 'inherit');
   const UNBOXED = ['call', 'media-viewer']; // full-window screens that are not drawn as the centred box
@@ -225,6 +225,8 @@ const App = (() => {
   // pane, the right pane, then the list's own back.
   function escape() {
     if (overlayOpen()) { closeOverlays(); return; }
+    const t = top();
+    if (t && t.id === 'call' && t.state.phase !== 'ended') return; // a call never ends by accident (Review 1)
     if (!isWide()) { pop(); return; }
     const pane = ['full', 'info', 'detail'].find((p) => P[p].length);
     if (pane) popFrom(pane, 0); else popFrom('list', 1);
@@ -319,6 +321,7 @@ const App = (() => {
     const e = entries.find((x) => x.key === key) || entries[0];
     currentKey = e.key;
     closeOverlays(true);
+    $('#snackbar').classList.remove('in'); // a toast from the last screen does not follow
     clearAll();
     const bases = [e.base].flat(Infinity).filter(Boolean);
     bases.forEach((b) => push(b.screen, b.params || {}, { animate: false }));
@@ -403,14 +406,18 @@ const App = (() => {
   }
 
   let snackTimer;
-  function snack(text, action) {
+  // A toast. tone 'error' marks a failure (with a warning icon, read out at
+  // once); stay keeps it up until the next toast (for screenshots of a state).
+  function snack(text, action, { tone = '', stay = false } = {}) {
     const s = $('#snackbar');
-    s.innerHTML = `<span>${text}</span>${action ? `<button class="sn-action" style="border:0;background:none">${action.label}</button>` : ''}`;
+    s.classList.toggle('error', tone === 'error');
+    s.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+    s.innerHTML = `${tone === 'error' ? UI.icon('warning-circle', 'fill') : ''}<span>${text}</span>${action ? `<button class="sn-action" style="border:0;background:none">${action.label}</button>` : ''}`;
     if (action) s.querySelector('.sn-action').addEventListener('click', () => { s.classList.remove('in'); action.run && action.run(); });
     s.style.pointerEvents = action ? 'auto' : 'none';
     s.classList.add('in');
     clearTimeout(snackTimer);
-    snackTimer = setTimeout(() => s.classList.remove('in'), 2800);
+    if (!stay) snackTimer = setTimeout(() => s.classList.remove('in'), tone === 'error' ? 4000 : 2800);
   }
 
   // ------------------------------------------------------------ the index
@@ -564,31 +571,37 @@ const App = (() => {
   }
 
   // --------------------------------------------------------------- boot
+  // Every screen state and every interaction, as data (tools/manifest.py
+  // writes it to screens.json and INTERACTIONS.md; it runs this in Node).
+  function manifest() {
+    const items = (list) => list.map(([gesture, on, does, only]) => ({ gesture, on, does, ...(only ? { only } : {}) }));
+    return {
+      devices: DEVICES, listWidth: LIST_W, placement: PLACEMENT,
+      interactions: { global: items(GLOBAL_INTERACTIONS), components: items(Kit.INTERACTIONS) },
+      screenDefs: Object.fromEntries([...screens.values()].map((d) => [d.id, {
+        title: d.title, group: d.group, placement: placement(d.id, {}), night: !!d.night,
+        interactions: d.interactions === undefined ? null : items(d.interactions),
+      }])),
+      screens: entries.map((e) => ({
+        key: e.key, group: e.group, label: e.label, screen: e.screen, params: e.params,
+        base: [e.base].flat(Infinity).filter(Boolean).map((b) => ({ screen: b.screen, params: b.params || {} })),
+        placement: placement(e.screen, e.params),
+      })),
+    };
+  }
+
   // ?bare draws only the device at true size (for screenshots and side-by-side
   // comparison); ?device=phone|window-m|window-l and ?theme=<id> pick without
-  // saving. The screen is the hash: ?bare&device=window-l&theme=arcade#group
+  // saving; ?scroll=<px> scrolls the page. The screen is the hash:
+  // ?bare&device=window-l&theme=arcade#group
   function boot() {
     let dev = null; let q = null;
     try { q = new URLSearchParams(location.search); dev = q.get('device') || localStorage.getItem(DEVICE_KEY); } catch (_) {}
     if (q && q.has('bare')) document.body.classList.add('bare');
     // ?manifest prints every screen state as JSON (tools/manifest.py writes it to screens.json).
     if (q && q.has('manifest')) {
-      const screensOut = entries.map((e) => ({
-        key: e.key, group: e.group, label: e.label, screen: e.screen, params: e.params,
-        base: [e.base].flat(Infinity).filter(Boolean).map((b) => ({ screen: b.screen, params: b.params || {} })),
-        placement: placement(e.screen, e.params),
-      }));
-      const screenDefs = Object.fromEntries([...screens.values()].map((d) => [d.id, {
-        title: d.title, group: d.group, placement: placement(d.id, {}), night: !!d.night,
-        interactions: d.interactions === undefined ? null : d.interactions.map(([gesture, on, does, only]) => ({ gesture, on, does, ...(only ? { only } : {}) })),
-      }]));
-      const items = (list) => list.map(([gesture, on, does, only]) => ({ gesture, on, does, ...(only ? { only } : {}) }));
       const pre = document.createElement('pre'); pre.id = 'manifest';
-      pre.textContent = JSON.stringify({
-        devices: DEVICES, listWidth: LIST_W, placement: PLACEMENT,
-        interactions: { global: items(GLOBAL_INTERACTIONS), components: items(Kit.INTERACTIONS) },
-        screenDefs, screens: screensOut,
-      });
+      pre.textContent = JSON.stringify(manifest());
       document.body.replaceChildren(pre);
       return;
     }
@@ -615,7 +628,10 @@ const App = (() => {
     currentKey = key;
     buildIndex();
     open(key);
+    // ?scroll=<px> scrolls the open page, to screenshot the lower part of a long page.
+    const sy = q && Number(q.get('scroll'));
+    if (sy) setTimeout(() => { const t = top(); const sc = t && t.el.querySelector('.scroll, .timeline'); if (sc) sc.scrollTop = sy; }, 120);
   }
 
-  return { register, push, pop, popTo, replace, reset, open, sheet, menu, dialog, snack, overlay: mountOverlay, closeOverlays, top, boot, $, $$, screens, setTheme, getTheme, themeById, setDevice, isWide, device: () => device, entries };
+  return { register, push, pop, popTo, replace, reset, open, sheet, menu, dialog, snack, overlay: mountOverlay, closeOverlays, top, boot, $, $$, screens, setTheme, getTheme, themeById, setDevice, isWide, device: () => device, entries, manifest };
 })();

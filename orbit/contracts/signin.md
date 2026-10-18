@@ -297,3 +297,46 @@ None.
 
 ### New backend work
 None.
+
+## Decisions and Phase 1b (2026-10-18)
+
+Review 1 approved every recommendation in `../GAPS.md`. For this contract:
+
+- Take-over gets the Terms checkbox (fixes B2).
+- Back from the password step goes to the phone step.
+- A country-code picker, Bangladesh by default (client only).
+- The phone length is checked on the device: “This number looks too short. Check it and try again.” (fixes B10).
+- The restore ring counts the four steps (1/4 to 4/4); no engine total (E9 not built).
+- “No, this is not my account” stays and explains that nothing was kept, with “Show a new code”.
+- An “Opening Orbit…” startup screen (`startup`) while the database opens.
+- An invite or recovery link while signed in says “You’re already signed in…” (drawn on `chats-link-signed-in`).
+- “Use a recovery code instead” under the refused invite.
+- Reset is offered only for a missing key or data that cannot be decrypted; any other startup failure offers Try again and changes nothing (fixes B3).
+- The countdown switches to the expired state at zero (fixes B12).
+
+**How the “keep” rows are drawn.** Every row above marked keep (today’s
+behaviour, in the new style) uses the state kit (`frame.md`, the `state-kit`
+screen):
+- a list that is loading: `Kit.skeleton`;
+- a page that is opening: `Kit.loading`;
+- “could not be loaded”: `Kit.loadFailed`, with Try again;
+- a permission: `Kit.permission`;
+- a field refusal or lockout: the field’s error and `Kit.fieldLock`;
+- any other refusal: an error toast;
+- a sentence on the page: `Kit.notice`.
+
+Rows marked drop are not built.
+
+New prototype states drawn in Phase 1b (keys in `screens.json`):
+
+- `signin-taken`: Personal server · number already has an account
+- `signin-country`: Sign in · country code picker
+- `restore-nothing`: Restore step · nothing new to add
+- `restore-locked`: Restore step · backup cannot be opened
+- `link-device-starting`: Link this device · getting a code
+- `link-device-failed`: Link this device · did not work
+- `link-device-declined`: Link this device · not your account
+- `reset-start-failed`: Orbit could not start (no reset offered)
+- `reset-fine`: Reset · your local data is fine
+- `reset-failed`: Reset required · the reset did not finish
+- `lock-failed`: App lock · not unlocked

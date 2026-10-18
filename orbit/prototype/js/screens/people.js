@@ -21,6 +21,7 @@
   App.register({
     id: 'contact', title: 'Contact info', group: 'People', order: 40,
     interactions: [
+      ['auto', 'Someone who blocked you', 'Says “<Name> has blocked you.” and hides the call tiles.'],
       ['tap', 'Message / Voice call / Video call', 'Opens the chat or places the call.'],
       ['tap', 'Rename', 'Dialog for a name only you see; then asks to save it in the phone’s contacts too.'],
       ['tap', 'Mute', 'Switch on: sheet with 8 hours, 1 week, Always. Off: unmutes.'],
@@ -36,6 +37,7 @@
       { key: 'contact-nokey', label: 'Contact info · no safety number yet', params: { id: 'sadia' } },
       { key: 'contact-blocked', label: 'Contact info · blocked', params: { id: 'shuvo' } },
       { key: 'contact-number', label: 'Contact info · known only by number', params: { id: 'unknown' } },
+      { key: 'contact-blocked-me', label: 'Contact info · they blocked you', params: { id: 'tanvir', blockedBy: true } },
     ].map((e) => ({ ...e, base: [{ screen: 'home', params: { tab: 'chats' } }, { screen: 'chat', params: { id: `direct:${e.params.id}` } }] })),
     render(params, entry) {
       const p = Data.people[params.id] || Data.people.nadia;
@@ -50,11 +52,12 @@
         <div class="hero">${avatar(Data.av(p), 112)}<div class="h-name">${esc(n)}${trust === 'verified' ? '<i class="ph-fill ph-seal-check seal" title="Verified"></i>' : ''}</div>
           <div class="h-sub">${esc(Data.secondary(p) || '')}</div>
           ${st.blocked ? '<div style="color:var(--danger);font-weight:600;font-size:13.5px;margin-top:4px">Blocked</div>' : ''}
+          ${params.blockedBy ? `<div style="color:var(--danger);font-size:13.5px;margin-top:4px">${icon('prohibit')} ${esc(n)} has blocked you.</div>` : ''}
           ${p.about ? `<div class="h-about">${esc(p.about)}</div>` : ''}</div>
         <div class="tiles">
           <button class="tile" data-msg>${icon('chat-circle')}Message</button>
-          <button class="tile" data-voice>${icon('phone')}Voice call</button>
-          <button class="tile" data-video>${icon('video-camera')}Video call</button></div>
+          ${params.blockedBy ? '' : `<button class="tile" data-voice>${icon('phone')}Voice call</button>
+          <button class="tile" data-video>${icon('video-camera')}Video call</button>`}</div>
         ${trust === 'keyChanged' ? keyBanner(p, true) : ''}
         ${section('Name', [
           row({ icon: 'pencil-simple', color: 0, title: 'Rename', sub: st.nickname ? esc(st.nickname) : 'Choose a name only you see', end: 'chevron', attrs: 'data-rename' }),
@@ -79,8 +82,8 @@
       const st = entry.state; const rerender = () => entry.rerender();
       wire(el, entry);
       el.querySelector('[data-msg]').addEventListener('click', () => App.push('chat', { id: `direct:${p.id}` }));
-      el.querySelector('[data-voice]').addEventListener('click', () => App.push('call', { peer: p.id, phase: 'outgoing' }));
-      el.querySelector('[data-video]').addEventListener('click', () => App.push('call', { peer: p.id, phase: 'outgoing', video: true }));
+      el.querySelector('[data-voice]')?.addEventListener('click', () => App.push('call', { peer: p.id, phase: 'outgoing' }));
+      el.querySelector('[data-video]')?.addEventListener('click', () => App.push('call', { peer: p.id, phase: 'outgoing', video: true }));
       el.querySelector('[data-rename]').addEventListener('click', () => inputDialog({ title: 'Rename', label: 'Name', value: st.nickname || n, max: 60, run: (v) => {
         st.nickname = v.trim(); rerender();
         if (p.names.number) App.dialog({ title: 'Save in your phone contacts too?', text: 'Orbit needs permission to change your contacts to keep this name there as well.', actions: [{ label: 'Not now', run: () => App.snack('Saved.') }, { label: 'Allow', kind: 'primary', run: () => App.snack('Saved, and updated in your contacts.') }] });
@@ -111,6 +114,7 @@
   App.register({
     id: 'safety', title: 'Safety number', group: 'People', order: 40,
     interactions: [
+      ['tap', 'Try again (could not be worked out)', 'Works the safety number out again.'],
       ['tap', 'Scan their code', 'Opens the scanner.'],
       ['tap', 'Mark as verified / not verified', 'Toggles the verified mark.'],
     ],
@@ -119,10 +123,12 @@
       { key: 'safety-unverified', label: 'Safety number · not verified', params: { id: 'arif' } },
       { key: 'safety-changed', label: 'Safety number · changed', params: { id: 'rafiq' } },
       { key: 'safety-none', label: 'Safety number · none yet', params: { id: 'sadia' } },
+      { key: 'safety-failed', label: 'Safety number · could not be worked out', params: { id: 'arif', state: 'error' } },
     ].map((e) => ({ ...e, base: [{ screen: 'home', params: { tab: 'chats' } }, { screen: 'contact', params: { id: e.params.id } }] })),
     render(params, entry) {
       const p = Data.people[params.id] || Data.people.nadia; const n = Data.displayName(p);
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, verified: trustOf(p.id) === 'verified' });
+      if (params.state === 'error') return Kit.page({ title: 'Safety number', body: Kit.loadFailed('The safety number could not be worked out.', { sub: 'Try again in a moment.' }) });
       if (trustOf(p.id) === 'noKey') return Kit.page({ title: 'Safety number', body: UI.empty({ icon: 'shield', title: 'No safety number yet', text: 'Send a message first. A safety number needs both of your keys.' }) });
       const body = `${trustOf(p.id) === 'keyChanged' && !st.verified ? keyBanner(p, false) : ''}
         <div class="qr-wrap"><div class="qr-card">${qr(`safety-${p.id}`, 200)}</div></div>
@@ -141,6 +147,7 @@
   App.register({
     id: 'scan', title: 'Scan code', group: 'People', order: 40, night: true,
     interactions: [
+      ['tap', 'Open settings (camera refused)', 'Opens Orbit’s system settings.'],
       ['auto', 'Camera', 'Scans a code held in the frame.'],
       ['tap', 'Simulate a match / a mismatch (prototype only)', 'Match: verified, back to the safety number. Mismatch: explains.'],
     ],
@@ -148,19 +155,23 @@
       { key: 'scan', label: 'Scan code', params: { id: 'arif' } },
       { key: 'scan-nocamera', label: 'Scan code · no camera', params: { id: 'arif', noCamera: true } },
       { key: 'scan-contact', label: 'Scan someone’s Orbit code', params: { id: 'arif', mode: 'contact' } },
+      { key: 'scan-refused', label: 'Scan code · camera refused', params: { id: 'arif', refused: true } },
+      { key: 'scan-contact-nocamera', label: 'Scan someone’s code · no camera', params: { id: 'arif', mode: 'contact', noCamera: true } },
     ].map((e) => ({ ...e, base: [{ screen: 'home', params: { tab: 'chats' } }, { screen: 'safety', params: { id: 'arif' } }] })),
     render(params) {
       const head = `<header class="appbar" style="background:#06080F;border-bottom:0;color:#fff">${ibtn('arrow-left', 'Back', 'data-back')}<div class="ab-title"><h1>Scan code</h1></div></header>`;
-      if (params.noCamera) return `${head}<div class="scanner"><div class="sc-hint">${icon('camera-slash')}<br>This device has no camera to scan with. Compare the numbers on both phones instead.</div></div>`;
+      if (params.refused) return `${head}<div class="scanner">${Kit.permission('camera', { denied: true, dark: true, text: 'Allow camera access for Orbit in your phone’s settings to scan a code.' })}</div>`;
+      if (params.noCamera) return `${head}<div class="scanner"><div class="sc-hint">${icon('camera-slash')}<br>${params.mode === 'contact' ? 'This device has no camera to scan with. Ask them to send you their Orbit link instead.' : 'This device has no camera to scan with. Compare the numbers on both phones instead.'}</div></div>`;
       return `${head}<div class="scanner"><div class="scan-frame"><span class="corner c1"></span><span class="corner c2"></span><span class="corner c3"></span><span class="corner c4"></span><span class="beam"></span></div>
         <div class="sc-hint">${params.mode === 'contact' ? 'Point the camera at someone’s Orbit code to start a chat' : 'Point the camera at the code on their phone'}</div>
         <div style="display:flex;gap:10px"><button class="btn secondary" data-match style="background:#1B2236;border-color:#2B3550;color:#fff">Simulate a match</button><button class="btn secondary" data-mismatch style="background:#1B2236;border-color:#2B3550;color:#fff">Simulate a mismatch</button></div></div>`;
     },
     mount(el) {
       el.querySelector('[data-back]').addEventListener('click', App.pop);
+      el.querySelectorAll('[data-perm]').forEach((b) => b.addEventListener('click', () => App.snack('Opens the system settings for Orbit')));
       el.querySelectorAll('.appbar .ibtn').forEach((b) => { b.style.color = '#fff'; });
       el.querySelector('[data-match]')?.addEventListener('click', () => { App.pop(); App.snack('Verified. Your chat is private.'); });
-      el.querySelector('[data-mismatch]')?.addEventListener('click', () => App.dialog({ title: 'That code does not match', text: 'The code on their phone is not the one Orbit expects for this chat. Make sure you scanned the right person’s code, and compare the numbers instead if you are unsure.', actions: [{ label: 'OK', kind: 'primary' }] }));
+      el.querySelector('[data-mismatch]')?.addEventListener('click', () => App.dialog({ title: 'That code does not match', text: 'The code on their phone is not the one Orbit expects for this chat. Do not trust this chat until you have compared the numbers with them in person.', actions: [{ label: 'OK', kind: 'primary' }] }));
     },
   });
 

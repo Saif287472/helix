@@ -33,13 +33,19 @@ widget test passes. Gestures: auto, drag, hold, key, long-press, right-click, sc
 - [ ] **tap** Paste in a field: Pastes from the clipboard.
 - [ ] **type** Field with a counter: The counter shows length out of the maximum.
 - [ ] **tap** Button that starts work: Shows a spinner in place of its label until the work ends.
+- [ ] **tap** Try again (could not be loaded): Loads the page again; while loading it shows the skeleton or spinner.
+- [ ] **tap** Allow / Open settings (permission card): Allow opens the system prompt; after a refusal, Open settings opens Orbit’s system settings.
+- [ ] **auto** Lists while loading: Placeholder rows the shape of the real ones, announced as loading; they shimmer unless reduce motion is on.
 
 ## Sign-in
 
 ### Sign in (`signin`, opens: full)
 
-States: `signin`, `signin-phone-error`, `signin-offline`, `signin-code`, `signin-code-error`, `signin-password`, `signin-password-error`, `signin-name`, `signin-name-terms`, `signin-takeover`, `signin-advanced`, `signin-advanced-rec`, `signin-advanced-error`, `signin-server`, `signin-join`, `signin-legal`
+States: `signin`, `signin-phone-error`, `signin-offline`, `signin-code`, `signin-code-error`, `signin-password`, `signin-password-error`, `signin-name`, `signin-name-terms`, `signin-takeover`, `signin-taken`, `signin-country`, `signin-advanced`, `signin-advanced-rec`, `signin-advanced-error`, `signin-server`, `signin-join`, `signin-legal`
 
+- [ ] **tap** Country code (+880 ▾): Sheet of countries; Bangladesh is the default.
+- [ ] **tap** Use a recovery code instead (number already has an account): Opens the personal-server code step.
+- [ ] **tap** Terms checkbox (take-over): Needed before Continue moves the account to this phone.
 - [ ] **type** Phone number: Shows which country it detected; Next checks the length.
 - [ ] **type** SMS code: Digits only; the sixth digit continues by itself.
 - [ ] **tap** Resend code: Sends a new code.
@@ -55,8 +61,9 @@ States: `signin`, `signin-phone-error`, `signin-offline`, `signin-code`, `signin
 
 ### Restore your chats (`restore`, opens: inherit)
 
-States: `restore`, `restore-running`, `restore-failed`, `restore-done`
+States: `restore`, `restore-running`, `restore-failed`, `restore-done`, `restore-nothing`, `restore-locked`
 
+- [ ] **auto** Restore ring: Counts the four steps (1/4 to 4/4); then done, nothing new to add, or cannot be opened.
 - [ ] **tap** Restore from my backup: Runs with a percentage; then done, or nothing found.
 - [ ] **tap** I have a recovery secret: Opens Recovery backup on Restore.
 - [ ] **tap** Accept / Decline (history from another device): Receives it, or declines.
@@ -64,8 +71,11 @@ States: `restore`, `restore-running`, `restore-failed`, `restore-done`
 
 ### Link this device (`link-device`, opens: inherit)
 
-States: `link-device`, `link-device-expired`, `link-device-confirm`
+States: `link-device`, `link-device-expired`, `link-device-confirm`, `link-device-starting`, `link-device-failed`, `link-device-declined`
 
+- [ ] **tap** No, this is not my account: Stays and explains that nothing was kept; Show a new code starts again.
+- [ ] **auto** Getting a code: A spinner in place of the QR code until the code exists.
+- [ ] **auto** Code timer at zero: Switches to the expired state.
 - [ ] **auto** Code timer: Counts down to the code’s expiry.
 - [ ] **tap** Show a new code (expired): Shows a fresh code and restarts the timer.
 - [ ] **tap** Simulate approval (prototype only): Shows “Is this your account?”.
@@ -76,22 +86,30 @@ States: `link-device`, `link-device-expired`, `link-device-confirm`
 
 ### Reset (`reset`, opens: full)
 
-States: `reset-window`, `reset-key`, `reset-decrypt`
+States: `reset-window`, `reset-key`, `reset-decrypt`, `reset-start-failed`, `reset-fine`, `reset-failed`
 
+- [ ] **tap** Try again (could not start): Opens Orbit again. Nothing is deleted on this path.
 - [ ] **type** Type DELETE: Turns on Reset Orbit.
 - [ ] **tap** Reset Orbit: Deletes the local data and returns to sign-in.
 
 ### App lock (`lock`, opens: full)
 
-States: `lock`
+States: `lock`, `lock-failed`
 
+- [ ] **auto** Unlock prompt failed or cancelled: Says “Not unlocked. Try again.” under the button.
 - [ ] **tap** Unlock: Asks for your fingerprint, face or PIN (Windows Hello on Windows), then opens Orbit.
+
+### Opening Orbit (`startup`, opens: full)
+
+States: `startup`
+
+- [ ] **auto** Startup: Shows while the encrypted database opens, then goes to Chats, sign-in, the restore step or reset.
 
 ## Home
 
 ### Chats (`home`, opens: list)
 
-States: `chats`, `chats-groups`, `chats-unread`, `chats-menu`, `chats-select`, `chats-search`, `chats-search-synced`, `chats-search-q`, `chats-search-num`, `chats-search-short`, `chats-search-none`, `chats-empty`, `calls`, `calls-search`, `calls-empty`
+States: `chats`, `chats-groups`, `chats-unread`, `chats-menu`, `chats-select`, `chats-search`, `chats-search-synced`, `chats-search-q`, `chats-search-num`, `chats-search-short`, `chats-search-none`, `chats-empty`, `chats-loading`, `chats-error`, `chats-all-archived`, `chats-search-word`, `chats-search-nobody`, `chats-search-contacts-failed`, `chats-search-lookup-failed`, `chats-link-signed-in`, `calls`, `calls-search`, `calls-empty`, `calls-loading`
 
 - [ ] **tap** Dock tab: Switches between Chats and Calls.
 - [ ] **swipe** Tabs: Swipes between Chats and Calls. *(phone only)*
@@ -118,6 +136,10 @@ States: `chats`, `chats-groups`, `chats-unread`, `chats-menu`, `chats-select`, `
 - [ ] **tap** Quick row: Call / Keypad / a recent person: Opens the people search, the keypad, or calls them.
 - [ ] **tap** Keypad digits: Types the number; ⌫ deletes; the call button turns on at 6 digits and hands the number to the search.
 - [ ] **long-press** Keypad 0: Types +.
+- [ ] **type** A number without a country code: Read as a Bangladesh number: offers “Find +880 … on Orbit”.
+- [ ] **type** A plain word: Also offers “Find ~word on Orbit”.
+- [ ] **tap** Open archived chats (every chat archived): Opens Archived chats.
+- [ ] **auto** An invite or recovery link while signed in: Says you are already signed in; nothing else happens.
 
 ### Archived chats (`archived`, opens: list)
 
@@ -131,7 +153,7 @@ States: `archived`, `archived-empty`
 
 ### Conversation (`chat`, opens: detail)
 
-States: `chat`, `chat-typing`, `chat-reply`, `chat-edit`, `chat-attach`, `chat-emoji`, `chat-rec`, `chat-rec-lock`, `chat-actions`, `chat-actions-mine`, `chat-select`, `chat-search`, `chat-search-q`, `chat-kinds`, `chat-transfer`, `chat-new`, `group`, `group-mention`, `group-pending`, `group-pending-member`, `group-left`, `chat-blocked`, `chat-blocked-me`
+States: `chat`, `chat-typing`, `chat-reply`, `chat-edit`, `chat-attach`, `chat-emoji`, `chat-rec`, `chat-rec-lock`, `chat-actions`, `chat-actions-mine`, `chat-select`, `chat-search`, `chat-search-q`, `chat-kinds`, `chat-transfer`, `chat-new`, `group`, `group-mention`, `group-pending`, `group-pending-member`, `group-pending-link`, `chat-loading`, `chat-error`, `group-left`, `chat-blocked`, `chat-blocked-me`
 
 - [ ] **tap** Header (name or picture): Opens contact info or group info.
 - [ ] **tap** Voice / Video: Places a call.
@@ -154,7 +176,8 @@ States: `chat`, `chat-typing`, `chat-reply`, `chat-edit`, `chat-attach`, `chat-e
 - [ ] **tap** Quoted reply: Jumps to the original message.
 - [ ] **tap** Messages while selecting: Adds or removes them; the bar offers Copy, Forward, Delete (for me, asks first) and × to stop.
 - [ ] **type** Message box: The send button replaces the mic; the box grows up to 128 px.
-- [ ] **key** Enter in the message box: Sends; Shift+Enter adds a line.
+- [ ] **key** Enter in the message box: Sends when “Enter key sends” is on (on by default on a window, off on a phone); otherwise adds a line. Shift+Enter always adds a line.
+- [ ] **tap** Try again (could not be opened): Opens the conversation again.
 - [ ] **type** @ in a group: Opens the mention picker; tapping a person inserts @Name.
 - [ ] **tap** Send: Sends; ticks go sent, delivered, read. In the demo chat Nadia types, then replies.
 - [ ] **tap** Save edit: Replaces the text and marks the message Edited.
@@ -188,7 +211,7 @@ Nothing to do here beyond reading and the back arrow.
 
 ### Media viewer (`media-viewer`, opens: full)
 
-States: `media-viewer`, `media-video`, `media-video-failed`, `media-not-here`, `media-viewonce-opened`, `media-viewonce-mine`
+States: `media-viewer`, `media-video`, `media-video-failed`, `media-not-here`, `media-cannot-show`, `media-video-buffering`, `media-video-ended`, `media-viewonce-opened`, `media-viewonce-mine`
 
 - [ ] **swipe-left** Picture: Next item. *(phone only)*
 - [ ] **swipe-right** Picture: Previous item. *(phone only)*
@@ -199,6 +222,8 @@ States: `media-viewer`, `media-video`, `media-video-failed`, `media-not-here`, `
 - [ ] **tap** Speed: Cycles 1x, 1.5x, 2x.
 - [ ] **tap** Share: Opens the system share sheet.
 - [ ] **tap** Open video (cannot play): Opens the video in another app.
+- [ ] **tap** Play again (video played to the end): Plays the video from the start.
+- [ ] **auto** Video buffering: A spinner where the play button is until the video can play.
 
 ### Send files (`send-files`, opens: inherit)
 
@@ -211,7 +236,7 @@ States: `send-files`, `send-files-empty`
 
 ### Media, links and docs (`shared`, opens: info)
 
-States: `shared`, `shared-docs`, `shared-links`, `shared-empty`
+States: `shared`, `shared-docs`, `shared-links`, `shared-empty`, `shared-docs-empty`, `shared-links-empty`
 
 - [ ] **tap** Media / Links / Docs: Switches the tab.
 - [ ] **tap** Photo or video: Opens the media viewer at it.
@@ -230,7 +255,7 @@ States: `chat-settings`, `chat-settings-group`, `chat-settings-blocked`
 
 ### Call (`call`, opens: full)
 
-States: `call-incoming`, `call-incoming-video`, `call-incoming-notice`, `call-outgoing`, `call-ringing`, `call-connecting`, `call-active`, `call-active-weak`, `call-reconnecting`, `call-video`, `call-video-dialing`, `call-ended`, `call-busy`, `call-failed`
+States: `call-incoming`, `call-incoming-video`, `call-incoming-notice`, `call-outgoing`, `call-ringing`, `call-connecting`, `call-active`, `call-active-weak`, `call-reconnecting`, `call-video`, `call-video-dialing`, `call-ended`, `call-busy`, `call-failed`, `call-cancelled`, `call-no-answer`, `call-elsewhere`, `call-active-outputs`, `call-video-their-camera-off`, `call-camera-refused`
 
 - [ ] **tap** Answer (incoming): Shows Connecting, then the call is live a moment later.
 - [ ] **tap** Decline (incoming): Ends the call as declined; the screen closes after 2 s.
@@ -238,8 +263,10 @@ States: `call-incoming`, `call-incoming-video`, `call-incoming-notice`, `call-ou
 - [ ] **tap** Mute: Turns your microphone off or on.
 - [ ] **tap** Camera: Turns your camera off or on (video calls).
 - [ ] **tap** Flip: Switches between the front and back camera.
-- [ ] **tap** Audio output: Sheet: Phone, Speaker, Bluetooth, Headset; the current one is ticked.
-- [ ] **tap** Notice × (weak connection, reconnecting): Hides the notice.
+- [ ] **tap** Speaker (phone and speaker only): Turns the speaker on or off. *(phone only)*
+- [ ] **tap** Audio output (with a headset or Bluetooth): Sheet of the outputs that are there; the current one is ticked. *(phone only)*
+- [ ] **tap** Notice × (a refusal or failure notice): Hides the notice.
+- [ ] **key** Esc on a live call: Does nothing: a call never ends by accident. *(window only)*
 - [ ] **tap** Video picture: Hides or shows the controls.
 - [ ] **drag** Your own camera tile: Moves it anywhere on the screen.
 - [ ] **tap** Your own camera tile: Swaps it with the big picture.
@@ -247,8 +274,9 @@ States: `call-incoming`, `call-incoming-video`, `call-incoming-notice`, `call-ou
 
 ### Call details (`call-detail`, opens: detail)
 
-States: `call-detail`
+States: `call-detail`, `call-detail-kinds`, `call-detail-blocked`, `call-detail-gone`
 
+- [ ] **auto** Someone who blocked you: No call buttons; a line says why.
 - [ ] **tap** Voice call / Video call: Places that call.
 - [ ] **tap** Contact: Opens contact info.
 - [ ] **tap** Delete (app bar): Asks “Delete from call history?”, then removes these calls.
@@ -257,8 +285,9 @@ States: `call-detail`
 
 ### Contact info (`contact`, opens: info)
 
-States: `contact`, `contact-keychanged`, `contact-nokey`, `contact-blocked`, `contact-number`
+States: `contact`, `contact-keychanged`, `contact-nokey`, `contact-blocked`, `contact-number`, `contact-blocked-me`
 
+- [ ] **auto** Someone who blocked you: Says “<Name> has blocked you.” and hides the call tiles.
 - [ ] **tap** Message / Voice call / Video call: Opens the chat or places the call.
 - [ ] **tap** Rename: Dialog for a name only you see; then asks to save it in the phone’s contacts too.
 - [ ] **tap** Mute: Switch on: sheet with 8 hours, 1 week, Always. Off: unmutes.
@@ -270,15 +299,17 @@ States: `contact`, `contact-keychanged`, `contact-nokey`, `contact-blocked`, `co
 
 ### Safety number (`safety`, opens: inherit)
 
-States: `safety`, `safety-unverified`, `safety-changed`, `safety-none`
+States: `safety`, `safety-unverified`, `safety-changed`, `safety-none`, `safety-failed`
 
+- [ ] **tap** Try again (could not be worked out): Works the safety number out again.
 - [ ] **tap** Scan their code: Opens the scanner.
 - [ ] **tap** Mark as verified / not verified: Toggles the verified mark.
 
 ### Scan code (`scan`, opens: inherit)
 
-States: `scan`, `scan-nocamera`, `scan-contact`
+States: `scan`, `scan-nocamera`, `scan-contact`, `scan-refused`, `scan-contact-nocamera`
 
+- [ ] **tap** Open settings (camera refused): Opens Orbit’s system settings.
 - [ ] **auto** Camera: Scans a code held in the frame.
 - [ ] **tap** Simulate a match / a mismatch (prototype only): Match: verified, back to the safety number. Mismatch: explains.
 
@@ -305,8 +336,9 @@ States: `group-new`, `group-new-picked`, `group-new-error`
 
 ### Group info (`group-info`, opens: info)
 
-States: `group-info`, `group-info-owner`, `group-info-member`, `group-info-gone`
+States: `group-info`, `group-info-owner`, `group-info-member`, `group-info-member-open`, `group-info-pending-link`, `group-info-gone`
 
+- [ ] **auto** Members, when the group lets everyone edit and add: They see the picture, Edit group info and Add members too.
 - [ ] **tap** Group picture (admin): Sheet: choose or remove the picture.
 - [ ] **tap** Edit (admin): Sheet with the name and description, and Save.
 - [ ] **tap** Disappearing messages: Sheet: Off, 24 hours, 7 days, 90 days.
@@ -326,6 +358,7 @@ States: `group-settings`, `group-settings-member`
 
 States: `group-invite`, `group-invite-empty`
 
+- [ ] **auto** New links: Join straight away unless “Admins approve new members” is on (off by default).
 - [ ] **tap** Approve new members: Switch: new links need an admin’s approval.
 - [ ] **tap** Create a link: A new link appears at the top.
 - [ ] **tap** Share / Copy: Shares the invite text or copies the link.
@@ -353,7 +386,7 @@ States: `group-add`
 
 ### Join a group (`group-join`, opens: list)
 
-States: `group-join`, `group-join-preview`, `group-join-approval`, `group-join-member`, `group-join-done`, `group-join-pending`, `group-join-failed`
+States: `group-join`, `group-join-preview`, `group-join-approval`, `group-join-member`, `group-join-noname`, `group-join-done`, `group-join-pending`, `group-join-failed`
 
 - [ ] **type** Link: The group link to join.
 - [ ] **tap** Paste: Pastes the link.
@@ -366,15 +399,16 @@ States: `group-join`, `group-join-preview`, `group-join-approval`, `group-join-m
 
 ### Change password (`password`, opens: inherit)
 
-States: `password`, `password-set`, `password-error`, `password-done`
+States: `password`, `password-set`, `password-error`, `password-done`, `password-linked`, `password-wrong`
 
+- [ ] **auto** Linked device: Asks for your phone number once, above the current password.
 - [ ] **type** Password fields: The rules tick as you type; the button turns on when all of them pass.
 - [ ] **tap** Show passwords: Shows or hides all three fields.
 - [ ] **tap** Change password / Set password: Saves, then shows Password saved.
 
 ### Delete my account (`delete-account`, opens: inherit)
 
-States: `delete-account`, `delete-account-sms`, `delete-account-key`
+States: `delete-account`, `delete-account-sms`, `delete-account-key`, `delete-account-linked`
 
 - [ ] **type** Type DELETE: Must read DELETE before anything is deleted.
 - [ ] **tap** Send me a code (SMS): Sends a code; the code field appears with “Send a new code”.
@@ -390,7 +424,7 @@ States: `blocked`, `blocked-empty`
 
 ### Help and about (`about`, opens: inherit)
 
-States: `about`
+States: `about`, `about-no-crash`
 
 - [ ] **tap** Terms of Service / Privacy Policy tile: Opens that document.
 - [ ] **tap** Server details: Opens Advanced.
@@ -412,8 +446,9 @@ States: `advanced`, `advanced-offline`
 
 ### Privacy (`privacy`, opens: inherit)
 
-States: `privacy`, `privacy-lock`
+States: `privacy`, `privacy-lock`, `privacy-number-needed`
 
+- [ ] **type** Your phone number (linked device): Asked once when “By phone number” is turned back on from a linked device.
 - [ ] **tap** Everyone / Nobody choices: The “What Nadia sees” preview follows at once.
 - [ ] **tap** Read receipts / Typing / Being found: Switches; the preview follows.
 - [ ] **tap** Disappearing messages for new chats: Off, 24 h, 7 d, 90 d.
@@ -424,6 +459,7 @@ States: `privacy`, `privacy-lock`
 
 States: `notifications`, `notifications-off`
 
+- [ ] **tap** Ringtone: Sheet: Orbit (default) or the phone’s ringtone. More to download later.
 - [ ] **tap** Messages / Groups / Calls tiles: Each turns its alerts on or off.
 - [ ] **tap** Sound / Vibrate / Show message previews: Switches; the lock-screen preview follows.
 - [ ] **tap** Unmute (muted chat): Unmutes it.
@@ -433,6 +469,7 @@ States: `notifications`, `notifications-off`
 
 States: `chats-settings`
 
+- [ ] **tap** Enter key sends: Switch; until it is set it is on for a computer and off for a phone.
 - [ ] **tap** Text size buttons: The preview grows or shrinks at once.
 - [ ] **tap** Enter key sends: Switch.
 - [ ] **tap** Download automatically choices: Never, Wi-Fi or Always for each kind.
@@ -455,8 +492,9 @@ States: `devices`
 
 ### Backup (`backup`, opens: inherit)
 
-States: `backup`, `backup-running`, `backup-failed`
+States: `backup`, `backup-running`, `backup-failed`, `backup-never`
 
+- [ ] **auto** Never backed up: The ring says “Not backed up yet”; Back up now starts the first one.
 - [ ] **tap** Back up now / Try again: The ring fills to 100%, then “Backed up just now”.
 - [ ] **tap** Back up every day / Use mobile data: Switches.
 - [ ] **tap** Restore / Send to a device tiles: Opens Restore history or Send to my other devices.
@@ -478,6 +516,7 @@ States: `account`, `account-nopass`
 
 States: `approve-device`, `approve-device-error`, `approve-device-review`, `approve-device-done`
 
+- [ ] **type** Link code: Continue turns on once there is a code.
 - [ ] **tap** Paste: Pastes the link code.
 - [ ] **tap** Continue: Checks the code: an error if it is not an Orbit link code, otherwise the approve step.
 - [ ] **tap** Approve: Asks for your fingerprint, face or PIN (Windows Hello on Windows), then Approving, then Done.
@@ -503,8 +542,9 @@ States: `restore-history`
 
 ### Send to my other devices (`transfer`, opens: inherit)
 
-States: `transfer`, `transfer-empty`
+States: `transfer`, `transfer-empty`, `transfer-stopped`, `transfer-only-device`
 
+- [ ] **tap** Resume (stopped) / Dismiss (declined): Continues receiving, or clears the card.
 - [ ] **tap** Send my history: A sending card appears and shows its progress.
 - [ ] **tap** Cancel (sending): Stops sending.
 - [ ] **tap** Accept / Decline (waiting here): Accept starts receiving with progress; Decline removes it.
@@ -512,8 +552,10 @@ States: `transfer`, `transfer-empty`
 
 ### Recovery backup (`recovery`, opens: inherit)
 
-States: `recovery`, `recovery-restore`
+States: `recovery`, `recovery-restore`, `recovery-made`
 
+- [ ] **auto** A recovery backup already exists: Warns that a new one replaces it and the saved secret stops working.
+- [ ] **tap** Delete my recovery backup (danger zone): Asks first, then deletes it; the saved secret stops working.
 - [ ] **tap** Create / Restore: Switches the tab.
 - [ ] **tap** Copy / Share: Copies or shares the secret; step 1 is ticked and a note says what to do next.
 - [ ] **tap** I saved it somewhere safe: Turns on the Create button.
@@ -537,8 +579,9 @@ States: `settings`, `you-allgood`, `you-share`, `settings-search`
 
 States: `profile`, `profile-taken`, `profile-new`
 
+- [ ] **tap** Save with a ~name someone has: Shows the server’s answer under the ~name field.
 - [ ] **type** Name / About: The profile preview at the top (the orbit) updates as you type.
-- [ ] **type** ~name: Checked as you type: available, or which rule fails.
+- [ ] **type** ~name: The name rules are checked as you type; whether it is free is checked on Save.
 - [ ] **tap** Photo: Adds a photo; Remove takes it off.
 - [ ] **tap** Remove my ~name: Asks first.
 - [ ] **tap** Save: Checks the name and ~name, saves, goes back and says “Profile saved”.
@@ -548,4 +591,14 @@ States: `profile`, `profile-taken`, `profile-new`
 States: `appearance`
 
 - [ ] **tap** Theme card: Switches the whole app to that theme at once, keeps it, and says “<Theme> theme on”. The current theme does nothing.
+
+## Design system
+
+### State kit (`state-kit`, opens: inherit)
+
+States: `state-kit`
+
+- [ ] **tap** Show a toast / an error toast / a toast with Undo: Shows that toast.
+- [ ] **tap** Try again: Shows the loading state, then the content.
+- [ ] **tap** Allow / Open settings: Says which system screen opens.
 

@@ -432,3 +432,37 @@ Dart: `ChatSettingsScreen`, `ChatSettingsModel`, `ChatSettingsActions`.
 ### New backend work
 
 None.
+
+## Decisions and Phase 1b (2026-10-18)
+
+Review 1 approved every recommendation in `../GAPS.md`. For this contract:
+
+- Enter follows “Enter key sends”: on by default on a window, off on a phone (fixes B7).
+- A voice note’s “played” mark after a restart: later (E10).
+- A locked recording shows the timer and a still wave; no live waveform.
+- “Show in chat” opens the chat at that message (the app’s way).
+- The block wording is the prototype’s (ADR-030).
+
+**How the “keep” rows are drawn.** Every row above marked keep (today’s
+behaviour, in the new style) uses the state kit (`frame.md`, the `state-kit`
+screen):
+- a list that is loading: `Kit.skeleton`;
+- a page that is opening: `Kit.loading`;
+- “could not be loaded”: `Kit.loadFailed`, with Try again;
+- a permission: `Kit.permission`;
+- a field refusal or lockout: the field’s error and `Kit.fieldLock`;
+- any other refusal: an error toast;
+- a sentence on the page: `Kit.notice`.
+
+Rows marked drop are not built.
+
+New prototype states drawn in Phase 1b (keys in `screens.json`):
+
+- `group-pending-link`: Group · unconfirmed member who joined by link
+- `chat-loading`: Conversation · opening
+- `chat-error`: Conversation · could not be opened
+- `media-cannot-show`: Media viewer · picture cannot be shown
+- `media-video-buffering`: Video player · buffering
+- `media-video-ended`: Video player · played to the end
+- `shared-docs-empty`: Shared · no documents yet
+- `shared-links-empty`: Shared · no links yet

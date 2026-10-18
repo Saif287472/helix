@@ -24,7 +24,7 @@
       <div class="search" style="margin-top:6px">${icon('magnifying-glass')}<input id="mpq" placeholder="Search name, number or ~name" value="${esc(st.q || '')}" aria-label="Search name, number or ~name" autocomplete="off"></div>
       ${lookup}
       ${ppl.length ? ppl.map((p) => `<button class="chat-row" data-pick="${p.id}" style="height:64px">${avatar(Data.av(p), 44)}<span class="cr-body"><span class="cr-name"><span class="nm">${esc(Data.displayName(p))}</span></span><span class="cr-preview mono" style="font-size:12px">${esc(Data.secondary(p) || '')}</span></span><span class="pick ${st.sel.has(p.id) ? 'on' : ''}">${icon('check', 'bold')}</span></button>`).join('')
-        : lookup ? '' : `<p class="sec-foot">No results</p>`}`;
+        : lookup ? '' : st.q ? `<p class="sec-foot">No results</p>` : UI.empty({ icon: 'user-circle-dashed', title: 'Nobody here yet', text: 'Type a phone number or a ~name to find someone on Orbit.' })}`;
   }
   function wirePicker(el, entry, onChange) {
     const st = entry.state;
@@ -74,7 +74,7 @@
         setTimeout(() => {
           st.busy = false;
           const go = () => App.replace('chat', { id: 'group:family' });
-          if (st.sel.has('arif')) App.dialog({ title: 'Some people were not added', text: 'Arif Hossain only lets people they know add them to groups. The group was created; send them an invite link from the group’s page.', actions: [{ label: 'OK', kind: 'primary', run: go }] });
+          if (st.sel.has('arif')) App.dialog({ title: 'Some people were not added', text: 'Arif Hossain could not be added. The group was created; send them an invite link from the group’s page.', actions: [{ label: 'OK', kind: 'primary', run: go }] });
           else go();
         }, 800);
       });
@@ -85,6 +85,7 @@
   App.register({
     id: 'group-info', title: 'Group info', group: 'Groups', order: 50,
     interactions: [
+      ['auto', 'Members, when the group lets everyone edit and add', 'They see the picture, Edit group info and Add members too.'],
       ['tap', 'Group picture (admin)', 'Sheet: choose or remove the picture.'],
       ['tap', 'Edit (admin)', 'Sheet with the name and description, and Save.'],
       ['tap', 'Disappearing messages', 'Sheet: Off, 24 hours, 7 days, 90 days.'],
@@ -98,6 +99,8 @@
       { key: 'group-info', label: 'Group info (you are an admin)', params: { role: 'admin' } },
       { key: 'group-info-owner', label: 'Group info (owner view)', params: { role: 'owner' } },
       { key: 'group-info-member', label: 'Group info (plain member)', params: { role: 'member' } },
+      { key: 'group-info-member-open', label: 'Group info (member; the group lets everyone edit and add)', params: { role: 'member', everyone: true } },
+      { key: 'group-info-pending-link', label: 'Group info · unconfirmed member who joined by link', params: { role: 'admin', pendingReason: 'link' } },
       { key: 'group-info-gone', label: 'Group info · not in the group', params: { gone: true } },
     ].map((e) => ({ ...e, base: [{ screen: 'home', params: { tab: 'chats' } }, { screen: 'chat', params: { id: 'group:family' } }] })),
     render(params, entry) {
@@ -105,17 +108,19 @@
       if (params.gone) return Kit.page({ title: 'Group info', body: UI.empty({ icon: 'users-three', title: 'You are not in this group', text: 'You left it, were removed, or it was deleted. Its messages stay in your chats.', action: '<button class="btn secondary" data-back>Go back</button>' }) });
       const role = params.role || 'admin';
       const admin = role !== 'member';
+      // With Everyone in the group settings, members may edit the group and add people too (Review 1).
+      const open = admin || !!params.everyone;
       const members = FAMILY.members.map((m) => (m.id === 'me' ? { ...m, role } : m.id === 'ammu' && role === 'owner' ? { ...m, role: 'admin' } : m));
       const canAct = (m) => m.id !== 'me' && (role === 'owner' || (role === 'admin' && m.role === 'member'));
       const memberRow = (m) => {
         const sub = [m.unconfirmed && !st.confirmed ? '<span style="color:var(--warning)">Not confirmed</span>' : '', roleLabel[m.role], m.id === 'me' ? '' : esc(Data.secondary(Data.people[m.id]) || '')].filter(Boolean).join(' · ');
         return `<div class="row">${avatar(avOf(m.id), 40)}<span class="rw-body"><span class="rw-title" style="display:block">${esc(nameOf(m.id))}</span><span class="rw-sub" style="display:block">${sub}</span></span>${canAct(m) ? ibtn('dots-three-vertical', `Actions for ${nameOf(m.id)}`, `data-member="${m.id}"`) : ''}</div>`;
       };
-      const pending = st.confirmed ? '' : `<div class="pending-card" style="margin:14px var(--gutter) 0">${icon('shield-warning', 'fill')}<div><div class="pc-title">Confirm Karim Uncle?</div><div class="pc-text">Karim Uncle was added by the server roster, but no admin of this group announced it. Until you confirm, what you send in this group stays unreadable to them.</div>${admin ? '' : '<div class="pc-text" style="margin-top:6px;color:var(--ink-3)">Only an admin can remove someone. If you do not know them, you can leave the group.</div>'}<div class="pc-actions"><button class="btn primary" data-confirm>Confirm</button>${admin ? '<button class="btn secondary" data-remove-pending>Remove</button>' : ''}</div></div></div>`;
+      const pending = st.confirmed ? '' : `<div class="pending-card" style="margin:14px var(--gutter) 0">${icon('shield-warning', 'fill')}<div><div class="pc-title">Confirm Karim Uncle?</div><div class="pc-text">${params.pendingReason === 'link' ? 'Karim Uncle joined this group through its invite link, and nothing else vouches for them.' : 'Karim Uncle was added by the server roster, but no admin of this group announced it.'} Until you confirm, what you send in this group stays unreadable to them.</div>${admin ? '' : '<div class="pc-text" style="margin-top:6px;color:var(--ink-3)">Only an admin can remove someone. If you do not know them, you can leave the group.</div>'}<div class="pc-actions"><button class="btn primary" data-confirm>Confirm</button>${admin ? '<button class="btn secondary" data-remove-pending>Remove</button>' : ''}</div></div></div>`;
       const body = `
-        <div class="hero"><button class="av" style="--size:112px;border:0;padding:0;background:var(--av-0-bg);color:var(--av-0-ink)" ${admin ? 'data-gpic title="Group picture"' : ''}>${icon('users-three', 'fill')}</button>
+        <div class="hero"><button class="av" style="--size:112px;border:0;padding:0;background:var(--av-0-bg);color:var(--av-0-ink)" ${open ? 'data-gpic title="Group picture"' : ''}>${icon('users-three', 'fill')}</button>
           <div class="h-name">${esc(FAMILY.title)}</div><div class="h-sub">${members.length} members</div><div class="h-about">${esc(FAMILY.description)}</div>
-          ${admin ? `<button class="btn secondary" style="margin-top:12px;height:40px" data-edit>${icon('pencil-simple')}Edit group info</button>` : ''}</div>
+          ${open ? `<button class="btn secondary" style="margin-top:12px;height:40px" data-edit>${icon('pencil-simple')}Edit group info</button>` : ''}</div>
         ${pending}
         ${section('Group', [
           row({ icon: 'timer', color: 5, title: 'Disappearing messages', value: st.disappearing, end: admin ? 'chevron' : '', attrs: admin ? 'data-disappear' : '', tag: admin ? 'button' : 'div' }),
@@ -127,7 +132,7 @@
           ] : []),
         ])}
         <div class="group-title eyebrow">${members.length} members</div>
-        <div class="card">${admin ? `<button class="row accent" data-go="group-add"><span class="rw-ico" style="background:var(--accent);color:#fff">${icon('user-plus', 'bold')}</span><span class="rw-body"><span class="rw-title">Add members</span></span></button>` : ''}${members.map(memberRow).join('')}</div>
+        <div class="card">${open ? `<button class="row accent" data-go="group-add"><span class="rw-ico" style="background:var(--accent);color:var(--on-accent)">${icon('user-plus', 'bold')}</span><span class="rw-body"><span class="rw-title">Add members</span></span></button>` : ''}${members.map(memberRow).join('')}</div>
         ${section('', [row({ icon: 'sign-out', title: 'Leave group', danger: true, attrs: 'data-leave' }), ...(role === 'owner' ? [row({ icon: 'trash', title: 'Delete group', danger: true, attrs: 'data-delete' })] : [])])}`;
       return Kit.page({ title: 'Group info', body });
     },
@@ -183,6 +188,7 @@
   App.register({
     id: 'group-invite', title: 'Invite with a link', group: 'Groups', order: 50,
     interactions: [
+      ['auto', 'New links', 'Join straight away unless “Admins approve new members” is on (off by default).'],
       ['tap', 'Approve new members', 'Switch: new links need an admin’s approval.'],
       ['tap', 'Create a link', 'A new link appears at the top.'],
       ['tap', 'Share / Copy', 'Shares the invite text or copies the link.'],
@@ -193,7 +199,7 @@
       { key: 'group-invite-empty', label: 'Invite links · none yet', params: { links: 0 } },
     ].map((e) => ({ ...e, base: infoBase })),
     render(params, entry) {
-      const st = entry.state; if (!st.init) Object.assign(st, { init: true, approve: true, links: params.links === 2 ? [{ approve: true, url: 'https://helix.agiletechbd.com/open#HLX-GRP-8KQ2-ZP4M-W7DX-3RTA' }, { approve: false, url: 'https://helix.agiletechbd.com/open#HLX-GRP-2VNC-HY6Q-5BJE-K9LS' }] : [] });
+      const st = entry.state; if (!st.init) Object.assign(st, { init: true, approve: !!params.approve, links: params.links === 2 ? [{ approve: true, url: 'https://helix.agiletechbd.com/open#HLX-GRP-8KQ2-ZP4M-W7DX-3RTA' }, { approve: false, url: 'https://helix.agiletechbd.com/open#HLX-GRP-2VNC-HY6Q-5BJE-K9LS' }] : [] });
       const cards = st.links.length ? st.links.map((l, i) => `<div class="linkc"><div class="lk-head">${icon(l.approve ? 'shield-check' : 'lightning', 'fill')}${l.approve ? 'Admins approve new members' : 'Joins straight away'}</div><div class="lk-url">${esc(l.url)}</div>
         <div class="lk-actions"><button class="btn primary" data-share>${icon('share-network')}Share</button><button class="btn secondary" data-copy>${icon('copy')}Copy</button><button class="btn ghost" style="color:var(--danger)" data-revoke="${i}">Revoke</button></div></div>`).join('')
         : '<p class="sec-foot" style="text-align:center;margin-top:18px">Links you make appear here so you can share or revoke them.</p>';
@@ -274,7 +280,7 @@
       el.querySelector('[data-add]')?.addEventListener('click', () => {
         st.busy = true; entry.rerender();
         setTimeout(() => {
-          if (st.sel.has('arif') && st.sel.size === 1) { st.busy = false; entry.rerender(); App.dialog({ title: 'No one was added', text: 'Arif Hossain only lets people they know add them to groups. Send them an invite link instead.', actions: [{ label: 'OK', kind: 'primary' }] }); return; }
+          if (st.sel.has('arif') && st.sel.size === 1) { st.busy = false; entry.rerender(); App.dialog({ title: 'No one was added', text: 'Arif Hossain could not be added. Send them an invite link instead.', actions: [{ label: 'OK', kind: 'primary' }] }); return; }
           const n = st.sel.size; App.pop(); App.snack(n === 1 ? 'Added 1 person.' : `Added ${n} people.`);
         }, 800);
       });
@@ -297,6 +303,7 @@
       { key: 'group-join-preview', label: 'Join a group · preview', params: { phase: 'preview' } },
       { key: 'group-join-approval', label: 'Join a group · approval link', params: { phase: 'preview', approval: true } },
       { key: 'group-join-member', label: 'Join a group · already a member', params: { phase: 'preview', member: true } },
+      { key: 'group-join-noname', label: 'Join a group · the link did not open the name', params: { phase: 'preview', noName: true } },
       { key: 'group-join-done', label: 'Join a group · joined', params: { phase: 'joined' } },
       { key: 'group-join-pending', label: 'Join a group · request sent', params: { phase: 'pending' } },
       { key: 'group-join-failed', label: 'Join a group · link expired', params: { phase: 'failed' } },
@@ -311,8 +318,11 @@
         case 'loading':
           body = `<div class="center-page"><i class="ph ph-spinner-gap spin" style="font-size:34px;color:var(--accent)"></i><p>Opening the link…</p></div>`; break;
         case 'preview':
-          body = `<div class="hero" style="padding-top:34px">${avatar(gav, 112)}<div class="h-name">Book Club</div><div class="h-sub">14 members</div><div class="h-about">One book a month, coffee every Saturday.</div></div>
-            ${params.member ? notice('info', 'You are already in this group.') : params.approval ? notice('info', 'An admin has to approve you before you are in.') : ''}
+          body = params.noName
+            ? `<div class="hero" style="padding-top:34px">${avatar({ name: '?', color: 7 }, 112)}<div class="h-name">A group on Orbit</div><div class="h-about">This link did not open the group’s name. It may be cut off; you can still ask to join.</div></div>`
+            : `<div class="hero" style="padding-top:34px">${avatar(gav, 112)}<div class="h-name">Book Club</div><div class="h-sub">14 members</div><div class="h-about">One book a month, coffee every Saturday.</div></div>`;
+          body += `
+${params.member ? notice('info', 'You are already in this group.') : params.approval ? notice('info', 'An admin has to approve you before you are in.') : ''}
             <div class="btn-row" style="flex-direction:column">${params.member ? '<button class="btn primary block" data-open>Open group</button>' : `<button class="btn primary block" data-join>${params.approval ? 'Ask to join' : 'Join group'}</button>`}<button class="btn secondary block" data-back>Cancel</button></div>`; break;
         case 'joining':
           body = `<div class="center-page"><i class="ph ph-spinner-gap spin" style="font-size:34px;color:var(--accent)"></i><p>Joining…</p></div>`; break;

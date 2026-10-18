@@ -376,3 +376,39 @@ None.
 6. **The filter.** Should the chosen chip (All, Unread, Groups) be
    remembered after the app closes? This contract keeps it for the visit
    only.
+
+## Decisions and Phase 1b (2026-10-18)
+
+Review 1 approved every recommendation in `../GAPS.md`. For this contract:
+
+- Every chat archived: “All your chats are archived” with “Open archived chats”.
+- Blocked people appear in search marked “Blocked”.
+- A number without a country code is read as Bangladesh: “Find +880 … on Orbit”.
+- A plain word also offers “Find ~word on Orbit”.
+- A contact link opens that person (fixes B9, Part B).
+- The chosen filter lasts for the visit only.
+
+**How the “keep” rows are drawn.** Every row above marked keep (today’s
+behaviour, in the new style) uses the state kit (`frame.md`, the `state-kit`
+screen):
+- a list that is loading: `Kit.skeleton`;
+- a page that is opening: `Kit.loading`;
+- “could not be loaded”: `Kit.loadFailed`, with Try again;
+- a permission: `Kit.permission`;
+- a field refusal or lockout: the field’s error and `Kit.fieldLock`;
+- any other refusal: an error toast;
+- a sentence on the page: `Kit.notice`.
+
+Rows marked drop are not built.
+
+New prototype states drawn in Phase 1b (keys in `screens.json`):
+
+- `chats-loading`: Chats · loading
+- `chats-error`: Chats · could not be loaded
+- `chats-all-archived`: Chats · every chat archived
+- `chats-search-word`: Chats · search a plain word (~name lookup)
+- `chats-search-nobody`: Chats · search, nobody known yet
+- `chats-search-contacts-failed`: Chats · search, contacts could not be checked
+- `chats-search-lookup-failed`: Chats · lookup failed
+- `chats-link-signed-in`: Chats · an invite link while signed in
+- `calls-loading`: Calls · loading

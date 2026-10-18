@@ -237,3 +237,39 @@ None.
    your tile (the app), or switch to the voice layout (the prototype)?
 5. **The "Camera flipped" toast.** Keep it, or drop it (the app shows
    nothing)?
+
+## Decisions and Phase 1b (2026-10-18)
+
+Review 1 approved every recommendation in `../GAPS.md`. For this contract:
+
+- Audio output: a toggle with the phone and its speaker only, a sheet when a headset or Bluetooth is there, hidden on Windows.
+- Esc on a live call does nothing.
+- Call details for someone who blocked you: no call buttons, and a line saying why.
+- Your camera off on a video call keeps their video full screen, without your tile.
+- No “Camera flipped” toast.
+- Every end reason is drawn; talk time shows only after an answered call; ending before an answer is “Call cancelled”.
+
+**How the “keep” rows are drawn.** Every row above marked keep (today’s
+behaviour, in the new style) uses the state kit (`frame.md`, the `state-kit`
+screen):
+- a list that is loading: `Kit.skeleton`;
+- a page that is opening: `Kit.loading`;
+- “could not be loaded”: `Kit.loadFailed`, with Try again;
+- a permission: `Kit.permission`;
+- a field refusal or lockout: the field’s error and `Kit.fieldLock`;
+- any other refusal: an error toast;
+- a sentence on the page: `Kit.notice`.
+
+Rows marked drop are not built.
+
+New prototype states drawn in Phase 1b (keys in `screens.json`):
+
+- `call-cancelled`: Call cancelled (you hung up before they answered)
+- `call-no-answer`: No answer
+- `call-elsewhere`: Answered on another device
+- `call-active-outputs`: Voice call · headset connected (output sheet)
+- `call-video-their-camera-off`: Video call · their camera off
+- `call-camera-refused`: Incoming video · camera refused
+- `call-detail-kinds`: Call details · every kind of call
+- `call-detail-blocked`: Call details · they blocked you
+- `call-detail-gone`: Call details · no longer in the history

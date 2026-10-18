@@ -23,6 +23,7 @@
   reg({
     id: 'password', title: 'Change password',
     interactions: [
+      ['auto', 'Linked device', 'Asks for your phone number once, above the current password.'],
       ['type', 'Password fields', 'The rules tick as you type; the button turns on when all of them pass.'],
       ['tap', 'Show passwords', 'Shows or hides all three fields.'],
       ['tap', 'Change password / Set password', 'Saves, then shows Password saved.'],
@@ -32,6 +33,8 @@
       { key: 'password-set', label: 'Set a password', params: { set: true }, base: deeper('account', { noPassword: true }) },
       { key: 'password-error', label: 'Change password · mismatch', params: { error: true }, base: deeper('account') },
       { key: 'password-done', label: 'Change password · saved', params: { done: true }, base: deeper('account') },
+      { key: 'password-linked', label: 'Change password · linked device (number needed)', params: { linked: true }, base: deeper('account') },
+      { key: 'password-wrong', label: 'Change password · wrong current password, locked out', params: { wrong: true }, base: deeper('account') },
     ],
     render(params, entry) {
       const st = entry.state;
@@ -49,7 +52,7 @@
           ? { ic: 'password', title: 'Set a password', sub: 'Sign in on a new phone without another device', pills: [{ icon: 'warning-circle', text: 'Orbit cannot reset it', tone: 'warn' }] }
           : { ic: 'password', title: 'Change password', sub: 'Last changed 3 weeks ago', pills: [{ icon: 'device-mobile', text: 'Checked on this device' }, { icon: 'lock-simple', text: 'Never sent to Orbit' }] })}
         <div class="group-title eyebrow">${params.set ? 'Your new password' : 'Passwords'}</div>
-        ${formCard(`${params.set ? '' : field({ id: 'pw0', label: 'Current password', type: t, value: st.pw0 })}
+        ${formCard(`${params.linked ? field({ id: 'pwPhone', label: 'Your phone number', value: '+880 ', inputmode: 'tel', helper: 'Needed once to check your current password, with its country code' }) : ''}${params.set ? '' : field({ id: 'pw0', label: 'Current password', type: t, value: params.wrong ? 'not-it' : st.pw0, error: params.wrong ? 'That is not your current password.' : '' })}${params.wrong ? Kit.fieldLock('Too many tries. Try again in 15 minutes.') : ''}
           ${field({ id: 'pw1', label: 'New password', type: t, value: st.pw1 })}
           ${field({ id: 'pw2', label: 'Confirm new password', type: t, value: st.pw2, error: mismatch ? 'The passwords do not match.' : '' })}
           ${rules(list)}
@@ -85,11 +88,12 @@
       { key: 'delete-account', label: 'Delete my account · password', params: { proof: 'password' }, base: deeper('account') },
       { key: 'delete-account-sms', label: 'Delete my account · SMS code', params: { proof: 'sms' }, base: deeper('account') },
       { key: 'delete-account-key', label: 'Delete my account · this phone’s key', params: { proof: 'key' }, base: deeper('account') },
+      { key: 'delete-account-linked', label: 'Delete my account · linked device (number needed)', params: { proof: 'password', linked: true }, base: deeper('account') },
     ],
     render(params, entry) {
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, sent: false, typed: '' });
       let proof = '';
-      if (params.proof === 'password') proof = field({ id: 'dpw', label: 'Your password', type: 'password', eye: true, helper: 'It is checked on this phone; Orbit never sees it.' });
+      if (params.proof === 'password') proof = (params.linked ? field({ id: 'dPhone', label: 'Your phone number', value: '+880 ', inputmode: 'tel', helper: 'Needed once to check your password, with its country code' }) : '') + field({ id: 'dpw', label: 'Your password', type: 'password', eye: true, helper: 'It is checked on this phone; Orbit never sees it.' });
       if (params.proof === 'sms') proof = st.sent ? `<p class="fld-help" style="margin:0 2px 10px">We sent a 6-digit code to ${esc(Data.me.masked)}.</p>${field({ id: 'dcode', label: 'Code', inputmode: 'numeric', max: 6, mono: true })}<button class="btn ghost" style="height:36px;padding:0 4px;margin:-6px 0 10px" data-resend>Send a new code</button>` : '<p class="fld-help" style="margin:0 2px 14px">Orbit will text a code to your phone number to check that it is you.</p>';
       if (params.proof === 'key') proof = '<p class="fld-help" style="margin:0 2px 14px">This phone will prove it is yours with its own key. Nothing else to enter.</p>';
       const primary = params.proof === 'sms' && !st.sent ? 'Send me a code' : 'Delete my account';
@@ -159,8 +163,8 @@
       ['tap', 'Open-source licences', 'Opens the licence page.'],
       ['tap', 'Send crash reports', 'Switch.'],
     ],
-    entries: [{ key: 'about', label: 'Help and about', params: {} }],
-    render() {
+    entries: [{ key: 'about', label: 'Help and about', params: {} }, { key: 'about-no-crash', label: 'Help and about · server takes no crash reports', params: { noCrash: true } }],
+    render(params) {
       const doc = (k, ic, color, title) => `<button class="stile" data-go="legal" data-params='{"doc":"${k}"}'><span class="rw-ico av-${color}">${icon(ic)}</span><span class="st-title">${title}</span><span class="st-meta">Version ${DOCS[k][1]}</span></button>`;
       return youPage('Help and about', `
         ${hero({ art: '<span class="hc-logo" role="img" aria-label="Orbit"></span>', title: 'Orbit', sub: 'Version 2.0.0 (412)',
@@ -171,7 +175,9 @@
           row({ icon: 'hard-drives', color: 1, title: 'Server details', sub: `Orbit Global (${Data.me.host})`, end: 'chevron', attrs: 'data-go="advanced"' }),
           row({ icon: 'code', color: 7, title: 'Open-source licences', end: 'chevron', attrs: 'data-snack="Opens Flutter’s licence page"' }),
         ])}
-        ${section('Diagnostics', [sw('Send crash reports', 'Only the error’s type, the app version and the platform', false)], 'A crash report never contains messages, names, numbers or keys.')}`);
+        ${params.noCrash
+          ? section('Diagnostics', [row({ icon: 'bug', color: 7, title: 'Crash reports', sub: 'This server does not accept crash reports', tag: 'div' })])
+          : section('Diagnostics', [sw('Send crash reports', 'Only the error’s type, the app version and the platform', false)], 'A crash report never contains messages, names, numbers or keys.')}`);
     },
     mount(el, params, entry) { wire(el, entry); },
   });

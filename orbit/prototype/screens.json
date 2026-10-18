@@ -34,7 +34,8 @@
   "media-viewer": "full",
   "signin": "full",
   "reset": "full",
-  "lock": "full"
+  "lock": "full",
+  "startup": "full"
  },
  "interactions": {
   "global": [
@@ -151,6 +152,21 @@
     "gesture": "tap",
     "on": "Button that starts work",
     "does": "Shows a spinner in place of its label until the work ends."
+   },
+   {
+    "gesture": "tap",
+    "on": "Try again (could not be loaded)",
+    "does": "Loads the page again; while loading it shows the skeleton or spinner."
+   },
+   {
+    "gesture": "tap",
+    "on": "Allow / Open settings (permission card)",
+    "does": "Allow opens the system prompt; after a refusal, Open settings opens Orbit’s system settings."
+   },
+   {
+    "gesture": "auto",
+    "on": "Lists while loading",
+    "does": "Placeholder rows the shape of the real ones, announced as loading; they shimmer unless reduce motion is on."
    }
   ]
  },
@@ -161,6 +177,21 @@
    "placement": "full",
    "night": false,
    "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Country code (+880 ▾)",
+     "does": "Sheet of countries; Bangladesh is the default."
+    },
+    {
+     "gesture": "tap",
+     "on": "Use a recovery code instead (number already has an account)",
+     "does": "Opens the personal-server code step."
+    },
+    {
+     "gesture": "tap",
+     "on": "Terms checkbox (take-over)",
+     "does": "Needed before Continue moves the account to this phone."
+    },
     {
      "gesture": "type",
      "on": "Phone number",
@@ -230,6 +261,11 @@
    "night": false,
    "interactions": [
     {
+     "gesture": "auto",
+     "on": "Restore ring",
+     "does": "Counts the four steps (1/4 to 4/4); then done, nothing new to add, or cannot be opened."
+    },
+    {
      "gesture": "tap",
      "on": "Restore from my backup",
      "does": "Runs with a percentage; then done, or nothing found."
@@ -257,6 +293,21 @@
    "placement": "inherit",
    "night": false,
    "interactions": [
+    {
+     "gesture": "tap",
+     "on": "No, this is not my account",
+     "does": "Stays and explains that nothing was kept; Show a new code starts again."
+    },
+    {
+     "gesture": "auto",
+     "on": "Getting a code",
+     "does": "A spinner in place of the QR code until the code exists."
+    },
+    {
+     "gesture": "auto",
+     "on": "Code timer at zero",
+     "does": "Switches to the expired state."
+    },
     {
      "gesture": "auto",
      "on": "Code timer",
@@ -291,6 +342,11 @@
    "night": false,
    "interactions": [
     {
+     "gesture": "tap",
+     "on": "Try again (could not start)",
+     "does": "Opens Orbit again. Nothing is deleted on this path."
+    },
+    {
      "gesture": "type",
      "on": "Type DELETE",
      "does": "Turns on Reset Orbit."
@@ -308,6 +364,11 @@
    "placement": "full",
    "night": false,
    "interactions": [
+    {
+     "gesture": "auto",
+     "on": "Unlock prompt failed or cancelled",
+     "does": "Says “Not unlocked. Try again.” under the button."
+    },
     {
      "gesture": "tap",
      "on": "Unlock",
@@ -446,6 +507,26 @@
      "gesture": "long-press",
      "on": "Keypad 0",
      "does": "Types +."
+    },
+    {
+     "gesture": "type",
+     "on": "A number without a country code",
+     "does": "Read as a Bangladesh number: offers “Find +880 … on Orbit”."
+    },
+    {
+     "gesture": "type",
+     "on": "A plain word",
+     "does": "Also offers “Find ~word on Orbit”."
+    },
+    {
+     "gesture": "tap",
+     "on": "Open archived chats (every chat archived)",
+     "does": "Opens Archived chats."
+    },
+    {
+     "gesture": "auto",
+     "on": "An invite or recovery link while signed in",
+     "does": "Says you are already signed in; nothing else happens."
     }
    ]
   },
@@ -586,7 +667,12 @@
     {
      "gesture": "key",
      "on": "Enter in the message box",
-     "does": "Sends; Shift+Enter adds a line."
+     "does": "Sends when “Enter key sends” is on (on by default on a window, off on a phone); otherwise adds a line. Shift+Enter always adds a line."
+    },
+    {
+     "gesture": "tap",
+     "on": "Try again (could not be opened)",
+     "does": "Opens the conversation again."
     },
     {
      "gesture": "type",
@@ -744,6 +830,16 @@
      "gesture": "tap",
      "on": "Open video (cannot play)",
      "does": "Opens the video in another app."
+    },
+    {
+     "gesture": "tap",
+     "on": "Play again (video played to the end)",
+     "does": "Plays the video from the start."
+    },
+    {
+     "gesture": "auto",
+     "on": "Video buffering",
+     "does": "A spinner where the play button is until the video can play."
     }
    ]
   },
@@ -864,13 +960,26 @@
     },
     {
      "gesture": "tap",
-     "on": "Audio output",
-     "does": "Sheet: Phone, Speaker, Bluetooth, Headset; the current one is ticked."
+     "on": "Speaker (phone and speaker only)",
+     "does": "Turns the speaker on or off.",
+     "only": "phone"
     },
     {
      "gesture": "tap",
-     "on": "Notice × (weak connection, reconnecting)",
+     "on": "Audio output (with a headset or Bluetooth)",
+     "does": "Sheet of the outputs that are there; the current one is ticked.",
+     "only": "phone"
+    },
+    {
+     "gesture": "tap",
+     "on": "Notice × (a refusal or failure notice)",
      "does": "Hides the notice."
+    },
+    {
+     "gesture": "key",
+     "on": "Esc on a live call",
+     "does": "Does nothing: a call never ends by accident.",
+     "only": "window"
     },
     {
      "gesture": "tap",
@@ -901,6 +1010,11 @@
    "night": false,
    "interactions": [
     {
+     "gesture": "auto",
+     "on": "Someone who blocked you",
+     "does": "No call buttons; a line says why."
+    },
+    {
      "gesture": "tap",
      "on": "Voice call / Video call",
      "does": "Places that call."
@@ -923,6 +1037,11 @@
    "placement": "info",
    "night": false,
    "interactions": [
+    {
+     "gesture": "auto",
+     "on": "Someone who blocked you",
+     "does": "Says “<Name> has blocked you.” and hides the call tiles."
+    },
     {
      "gesture": "tap",
      "on": "Message / Voice call / Video call",
@@ -973,6 +1092,11 @@
    "interactions": [
     {
      "gesture": "tap",
+     "on": "Try again (could not be worked out)",
+     "does": "Works the safety number out again."
+    },
+    {
+     "gesture": "tap",
      "on": "Scan their code",
      "does": "Opens the scanner."
     },
@@ -989,6 +1113,11 @@
    "placement": "inherit",
    "night": true,
    "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Open settings (camera refused)",
+     "does": "Opens Orbit’s system settings."
+    },
     {
      "gesture": "auto",
      "on": "Camera",
@@ -1069,6 +1198,11 @@
    "night": false,
    "interactions": [
     {
+     "gesture": "auto",
+     "on": "Members, when the group lets everyone edit and add",
+     "does": "They see the picture, Edit group info and Add members too."
+    },
+    {
      "gesture": "tap",
      "on": "Group picture (admin)",
      "does": "Sheet: choose or remove the picture."
@@ -1129,6 +1263,11 @@
    "placement": "inherit",
    "night": false,
    "interactions": [
+    {
+     "gesture": "auto",
+     "on": "New links",
+     "does": "Join straight away unless “Admins approve new members” is on (off by default)."
+    },
     {
      "gesture": "tap",
      "on": "Approve new members",
@@ -1244,6 +1383,11 @@
    "placement": "inherit",
    "night": false,
    "interactions": [
+    {
+     "gesture": "auto",
+     "on": "Linked device",
+     "does": "Asks for your phone number once, above the current password."
+    },
     {
      "gesture": "type",
      "on": "Password fields",
@@ -1373,6 +1517,11 @@
    "night": false,
    "interactions": [
     {
+     "gesture": "type",
+     "on": "Link code",
+     "does": "Continue turns on once there is a code."
+    },
+    {
      "gesture": "tap",
      "on": "Paste",
      "does": "Pastes the link code."
@@ -1448,6 +1597,11 @@
    "interactions": [
     {
      "gesture": "tap",
+     "on": "Resume (stopped) / Dismiss (declined)",
+     "does": "Continues receiving, or clears the card."
+    },
+    {
+     "gesture": "tap",
      "on": "Send my history",
      "does": "A sending card appears and shows its progress."
     },
@@ -1474,6 +1628,16 @@
    "placement": "inherit",
    "night": false,
    "interactions": [
+    {
+     "gesture": "auto",
+     "on": "A recovery backup already exists",
+     "does": "Warns that a new one replaces it and the saved secret stops working."
+    },
+    {
+     "gesture": "tap",
+     "on": "Delete my recovery backup (danger zone)",
+     "does": "Asks first, then deletes it; the saved secret stops working."
+    },
     {
      "gesture": "tap",
      "on": "Create / Restore",
@@ -1546,6 +1710,11 @@
    "night": false,
    "interactions": [
     {
+     "gesture": "tap",
+     "on": "Save with a ~name someone has",
+     "does": "Shows the server’s answer under the ~name field."
+    },
+    {
      "gesture": "type",
      "on": "Name / About",
      "does": "The profile preview at the top (the orbit) updates as you type."
@@ -1553,7 +1722,7 @@
     {
      "gesture": "type",
      "on": "~name",
-     "does": "Checked as you type: available, or which rule fails."
+     "does": "The name rules are checked as you type; whether it is free is checked on Save."
     },
     {
      "gesture": "tap",
@@ -1578,6 +1747,11 @@
    "placement": "inherit",
    "night": false,
    "interactions": [
+    {
+     "gesture": "type",
+     "on": "Your phone number (linked device)",
+     "does": "Asked once when “By phone number” is turned back on from a linked device."
+    },
     {
      "gesture": "tap",
      "on": "Everyone / Nobody choices",
@@ -1613,6 +1787,11 @@
    "interactions": [
     {
      "gesture": "tap",
+     "on": "Ringtone",
+     "does": "Sheet: Orbit (default) or the phone’s ringtone. More to download later."
+    },
+    {
+     "gesture": "tap",
      "on": "Messages / Groups / Calls tiles",
      "does": "Each turns its alerts on or off."
     },
@@ -1639,6 +1818,11 @@
    "placement": "inherit",
    "night": false,
    "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Enter key sends",
+     "does": "Switch; until it is set it is on for a computer and off for a phone."
+    },
     {
      "gesture": "tap",
      "on": "Text size buttons",
@@ -1709,6 +1893,11 @@
    "night": false,
    "interactions": [
     {
+     "gesture": "auto",
+     "on": "Never backed up",
+     "does": "The ring says “Not backed up yet”; Back up now starts the first one."
+    },
+    {
      "gesture": "tap",
      "on": "Back up now / Try again",
      "does": "The ring fills to 100%, then “Backed up just now”."
@@ -1773,6 +1962,42 @@
      "gesture": "tap",
      "on": "Theme card",
      "does": "Switches the whole app to that theme at once, keeps it, and says “<Theme> theme on”. The current theme does nothing."
+    }
+   ]
+  },
+  "startup": {
+   "title": "Opening Orbit",
+   "group": "App",
+   "placement": "full",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "auto",
+     "on": "Startup",
+     "does": "Shows while the encrypted database opens, then goes to Chats, sign-in, the restore step or reset."
+    }
+   ]
+  },
+  "state-kit": {
+   "title": "State kit",
+   "group": "Design system",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Show a toast / an error toast / a toast with Undo",
+     "does": "Shows that toast."
+    },
+    {
+     "gesture": "tap",
+     "on": "Try again",
+     "does": "Shows the loading state, then the content."
+    },
+    {
+     "gesture": "tap",
+     "on": "Allow / Open settings",
+     "does": "Says which system screen opens."
     }
    ]
   }
@@ -1895,10 +2120,35 @@
   {
    "key": "signin-takeover",
    "group": "Sign-in",
-   "label": "Take-over confirmation",
+   "label": "Take-over confirmation (with the Terms)",
    "screen": "signin",
    "params": {
     "step": "takeover"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-taken",
+   "group": "Sign-in",
+   "label": "Personal server · number already has an account",
+   "screen": "signin",
+   "params": {
+    "step": "phoneAdv",
+    "phone": "1711 000001",
+    "error": "taken"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "signin-country",
+   "group": "Sign-in",
+   "label": "Sign in · country code picker",
+   "screen": "signin",
+   "params": {
+    "step": "phone",
+    "countries": true
    },
    "base": [],
    "placement": "full"
@@ -2022,6 +2272,30 @@
    "placement": "full"
   },
   {
+   "key": "restore-nothing",
+   "group": "Sign-in",
+   "label": "Restore step · nothing new to add",
+   "screen": "restore",
+   "params": {
+    "afterSignIn": true,
+    "phase": "nothing"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "restore-locked",
+   "group": "Sign-in",
+   "label": "Restore step · backup cannot be opened",
+   "screen": "restore",
+   "params": {
+    "afterSignIn": true,
+    "phase": "locked"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
    "key": "link-device",
    "group": "Sign-in",
    "label": "Link this device · QR",
@@ -2077,6 +2351,63 @@
    "placement": "inherit"
   },
   {
+   "key": "link-device-starting",
+   "group": "Sign-in",
+   "label": "Link this device · getting a code",
+   "screen": "link-device",
+   "params": {
+    "phase": "starting"
+   },
+   "base": [
+    {
+     "screen": "signin",
+     "params": {
+      "step": "password",
+      "phone": "1711 000001"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "link-device-failed",
+   "group": "Sign-in",
+   "label": "Link this device · did not work",
+   "screen": "link-device",
+   "params": {
+    "phase": "failed"
+   },
+   "base": [
+    {
+     "screen": "signin",
+     "params": {
+      "step": "password",
+      "phone": "1711 000001"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "link-device-declined",
+   "group": "Sign-in",
+   "label": "Link this device · not your account",
+   "screen": "link-device",
+   "params": {
+    "phase": "declined"
+   },
+   "base": [
+    {
+     "screen": "signin",
+     "params": {
+      "step": "password",
+      "phone": "1711 000001"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
    "key": "reset-window",
    "group": "App",
    "label": "Already open in another window",
@@ -2110,11 +2441,56 @@
    "placement": "full"
   },
   {
+   "key": "reset-start-failed",
+   "group": "App",
+   "label": "Orbit could not start (no reset offered)",
+   "screen": "reset",
+   "params": {
+    "kind": "start"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "reset-fine",
+   "group": "App",
+   "label": "Reset · your local data is fine",
+   "screen": "reset",
+   "params": {
+    "kind": "fine"
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "reset-failed",
+   "group": "App",
+   "label": "Reset required · the reset did not finish",
+   "screen": "reset",
+   "params": {
+    "kind": "key",
+    "failed": true
+   },
+   "base": [],
+   "placement": "full"
+  },
+  {
    "key": "lock",
    "group": "App",
    "label": "App lock",
    "screen": "lock",
    "params": {},
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "lock-failed",
+   "group": "App",
+   "label": "App lock · not unlocked",
+   "screen": "lock",
+   "params": {
+    "failed": true
+   },
    "base": [],
    "placement": "full"
   },
@@ -2271,6 +2647,108 @@
    "placement": "list"
   },
   {
+   "key": "chats-loading",
+   "group": "Home",
+   "label": "Chats · loading",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "state": "loading"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-error",
+   "group": "Home",
+   "label": "Chats · could not be loaded",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "state": "error"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-all-archived",
+   "group": "Home",
+   "label": "Chats · every chat archived",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "allArchived": true
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-word",
+   "group": "Home",
+   "label": "Chats · search a plain word (~name lookup)",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "query": "arifh"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-nobody",
+   "group": "Home",
+   "label": "Chats · search, nobody known yet",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "contacts": "done",
+    "nobody": true
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-contacts-failed",
+   "group": "Home",
+   "label": "Chats · search, contacts could not be checked",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "contacts": "failed"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-search-lookup-failed",
+   "group": "Home",
+   "label": "Chats · lookup failed",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "searching": true,
+    "query": "+880 1711 000002",
+    "lookup": "failed"
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "chats-link-signed-in",
+   "group": "Home",
+   "label": "Chats · an invite link while signed in",
+   "screen": "home",
+   "params": {
+    "tab": "chats",
+    "linkSignedIn": true
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
    "key": "calls",
    "group": "Home",
    "label": "Calls",
@@ -2302,6 +2780,18 @@
    "params": {
     "tab": "calls",
     "callsEmpty": true
+   },
+   "base": [],
+   "placement": "list"
+  },
+  {
+   "key": "calls-loading",
+   "group": "Home",
+   "label": "Calls · loading",
+   "screen": "home",
+   "params": {
+    "tab": "calls",
+    "state": "loading"
    },
    "base": [],
    "placement": "list"
@@ -2722,6 +3212,64 @@
    "placement": "detail"
   },
   {
+   "key": "group-pending-link",
+   "group": "Conversation",
+   "label": "Group · unconfirmed member who joined by link",
+   "screen": "chat",
+   "params": {
+    "id": "group:family",
+    "pending": "admin",
+    "pendingReason": "link"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-loading",
+   "group": "Conversation",
+   "label": "Conversation · opening",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "state": "loading"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "chat-error",
+   "group": "Conversation",
+   "label": "Conversation · could not be opened",
+   "screen": "chat",
+   "params": {
+    "id": "direct:nadia",
+    "state": "error"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
    "key": "group-left",
    "group": "Conversation",
    "label": "Group · you left",
@@ -3000,6 +3548,80 @@
    "placement": "full"
   },
   {
+   "key": "media-cannot-show",
+   "group": "Conversation pages",
+   "label": "Media viewer · picture cannot be shown",
+   "screen": "media-viewer",
+   "params": {
+    "cannotShow": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "media-video-buffering",
+   "group": "Conversation pages",
+   "label": "Video player · buffering",
+   "screen": "media-viewer",
+   "params": {
+    "i": 2,
+    "buffering": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "media-video-ended",
+   "group": "Conversation pages",
+   "label": "Video player · played to the end",
+   "screen": "media-viewer",
+   "params": {
+    "i": 2,
+    "ended": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:nadia"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
    "key": "media-viewonce-opened",
    "group": "Conversation pages",
    "label": "View once · already opened",
@@ -3176,6 +3798,58 @@
    "params": {
     "id": "direct:arif",
     "tab": "media",
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:arif"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "shared-docs-empty",
+   "group": "Conversation pages",
+   "label": "Shared · no documents yet",
+   "screen": "shared",
+   "params": {
+    "id": "direct:arif",
+    "tab": "docs",
+    "empty": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:arif"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "shared-links-empty",
+   "group": "Conversation pages",
+   "label": "Shared · no links yet",
+   "screen": "shared",
+   "params": {
+    "id": "direct:arif",
+    "tab": "links",
     "empty": true
    },
    "base": [
@@ -3544,12 +4218,199 @@
    "placement": "full"
   },
   {
+   "key": "call-cancelled",
+   "group": "Calls",
+   "label": "Call cancelled (you hung up before they answered)",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "ended",
+    "reason": "cancelled",
+    "stay": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-no-answer",
+   "group": "Calls",
+   "label": "No answer",
+   "screen": "call",
+   "params": {
+    "peer": "arif",
+    "phase": "ended",
+    "reason": "noAnswer",
+    "stay": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-elsewhere",
+   "group": "Calls",
+   "label": "Answered on another device",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "ended",
+    "reason": "elsewhere",
+    "stay": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-active-outputs",
+   "group": "Calls",
+   "label": "Voice call · headset connected (output sheet)",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "active",
+    "outputs": [
+     "earpiece",
+     "speaker",
+     "bluetooth"
+    ],
+    "route": "bluetooth"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-video-their-camera-off",
+   "group": "Calls",
+   "label": "Video call · their camera off",
+   "screen": "call",
+   "params": {
+    "peer": "nadia",
+    "phase": "active",
+    "video": true,
+    "theirCameraOff": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
+   "key": "call-camera-refused",
+   "group": "Calls",
+   "label": "Incoming video · camera refused",
+   "screen": "call",
+   "params": {
+    "peer": "arif",
+    "phase": "incoming",
+    "video": true,
+    "notice": "Orbit needs the camera for video calls. Allow it in your phone’s settings, or answer with voice."
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "full"
+  },
+  {
    "key": "call-detail",
    "group": "Calls",
    "label": "Call details",
    "screen": "call-detail",
    "params": {
     "id": "call3"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "call-detail-kinds",
+   "group": "Calls",
+   "label": "Call details · every kind of call",
+   "screen": "call-detail",
+   "params": {
+    "id": "call2",
+    "kinds": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "call-detail-blocked",
+   "group": "Calls",
+   "label": "Call details · they blocked you",
+   "screen": "call-detail",
+   "params": {
+    "id": "call3",
+    "blockedBy": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "calls"
+     }
+    }
+   ],
+   "placement": "detail"
+  },
+  {
+   "key": "call-detail-gone",
+   "group": "Calls",
+   "label": "Call details · no longer in the history",
+   "screen": "call-detail",
+   "params": {
+    "id": "call3",
+    "state": "gone"
    },
    "base": [
     {
@@ -3682,6 +4543,31 @@
    "placement": "info"
   },
   {
+   "key": "contact-blocked-me",
+   "group": "People",
+   "label": "Contact info · they blocked you",
+   "screen": "contact",
+   "params": {
+    "id": "tanvir",
+    "blockedBy": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "direct:tanvir"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
    "key": "safety",
    "group": "People",
    "label": "Safety number · verified",
@@ -3778,6 +4664,31 @@
    "placement": "inherit"
   },
   {
+   "key": "safety-failed",
+   "group": "People",
+   "label": "Safety number · could not be worked out",
+   "screen": "safety",
+   "params": {
+    "id": "arif",
+    "state": "error"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "contact",
+     "params": {
+      "id": "arif"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
    "key": "scan",
    "group": "People",
    "label": "Scan code",
@@ -3834,6 +4745,57 @@
    "params": {
     "id": "arif",
     "mode": "contact"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "safety",
+     "params": {
+      "id": "arif"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "scan-refused",
+   "group": "People",
+   "label": "Scan code · camera refused",
+   "screen": "scan",
+   "params": {
+    "id": "arif",
+    "refused": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "safety",
+     "params": {
+      "id": "arif"
+     }
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "scan-contact-nocamera",
+   "group": "People",
+   "label": "Scan someone’s code · no camera",
+   "screen": "scan",
+   "params": {
+    "id": "arif",
+    "mode": "contact",
+    "noCamera": true
    },
    "base": [
     {
@@ -3982,6 +4944,56 @@
    "screen": "group-info",
    "params": {
     "role": "member"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "group-info-member-open",
+   "group": "Groups",
+   "label": "Group info (member; the group lets everyone edit and add)",
+   "screen": "group-info",
+   "params": {
+    "role": "member",
+    "everyone": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "chat",
+     "params": {
+      "id": "group:family"
+     }
+    }
+   ],
+   "placement": "info"
+  },
+  {
+   "key": "group-info-pending-link",
+   "group": "Groups",
+   "label": "Group info · unconfirmed member who joined by link",
+   "screen": "group-info",
+   "params": {
+    "role": "admin",
+    "pendingReason": "link"
    },
    "base": [
     {
@@ -4360,6 +5372,25 @@
    "placement": "list"
   },
   {
+   "key": "group-join-noname",
+   "group": "Groups",
+   "label": "Join a group · the link did not open the name",
+   "screen": "group-join",
+   "params": {
+    "phase": "preview",
+    "noName": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    }
+   ],
+   "placement": "list"
+  },
+  {
    "key": "group-join-done",
    "group": "Groups",
    "label": "Join a group · joined",
@@ -4518,6 +5549,58 @@
    "placement": "inherit"
   },
   {
+   "key": "password-linked",
+   "group": "Settings",
+   "label": "Change password · linked device (number needed)",
+   "screen": "password",
+   "params": {
+    "linked": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "password-wrong",
+   "group": "Settings",
+   "label": "Change password · wrong current password, locked out",
+   "screen": "password",
+   "params": {
+    "wrong": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
    "key": "delete-account",
    "group": "Settings",
    "label": "Delete my account · password",
@@ -4596,6 +5679,33 @@
    "placement": "inherit"
   },
   {
+   "key": "delete-account-linked",
+   "group": "Settings",
+   "label": "Delete my account · linked device (number needed)",
+   "screen": "delete-account",
+   "params": {
+    "proof": "password",
+    "linked": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "account",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
    "key": "blocked",
    "group": "Settings",
    "label": "Blocked",
@@ -4651,6 +5761,28 @@
    "label": "Help and about",
    "screen": "about",
    "params": {},
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "about-no-crash",
+   "group": "Settings",
+   "label": "Help and about · server takes no crash reports",
+   "screen": "about",
+   "params": {
+    "noCrash": true
+   },
    "base": [
     {
      "screen": "home",
@@ -4935,6 +6067,59 @@
    "placement": "inherit"
   },
   {
+   "key": "transfer-stopped",
+   "group": "Backup",
+   "label": "Send to my other devices · stopped, and declined",
+   "screen": "transfer",
+   "params": {
+    "stopped": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "backup",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "transfer-only-device",
+   "group": "Backup",
+   "label": "Send to my other devices · this is your only device",
+   "screen": "transfer",
+   "params": {
+    "empty": true,
+    "only": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "backup",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
    "key": "recovery",
    "group": "Backup",
    "label": "Recovery backup · create",
@@ -4967,6 +6152,33 @@
    "screen": "recovery",
    "params": {
     "tab": "restore"
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    },
+    {
+     "screen": "backup",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "recovery-made",
+   "group": "Backup",
+   "label": "Recovery backup · one already made",
+   "screen": "recovery",
+   "params": {
+    "tab": "create",
+    "made": true
    },
    "base": [
     {
@@ -5081,10 +6293,11 @@
   {
    "key": "profile-taken",
    "group": "You (settings and profile)",
-   "label": "Edit profile · ~name taken",
+   "label": "Edit profile · ~name refused on Save",
    "screen": "profile",
    "params": {
-    "helixName": "nadia"
+    "helixName": "nadia",
+    "taken": true
    },
    "base": [
     {
@@ -5149,6 +6362,28 @@
    "screen": "privacy",
    "params": {
     "lock": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
+   "key": "privacy-number-needed",
+   "group": "Settings",
+   "label": "Privacy · your number is needed (linked device)",
+   "screen": "privacy",
+   "params": {
+    "numberNeeded": true
    },
    "base": [
     {
@@ -5331,6 +6566,28 @@
    "placement": "inherit"
   },
   {
+   "key": "backup-never",
+   "group": "Settings",
+   "label": "Backup · not backed up yet",
+   "screen": "backup",
+   "params": {
+    "never": true
+   },
+   "base": [
+    {
+     "screen": "home",
+     "params": {
+      "tab": "chats"
+     }
+    },
+    {
+     "screen": "settings-page",
+     "params": {}
+    }
+   ],
+   "placement": "inherit"
+  },
+  {
    "key": "account",
    "group": "Settings",
    "label": "Account",
@@ -5390,6 +6647,24 @@
      "params": {}
     }
    ],
+   "placement": "inherit"
+  },
+  {
+   "key": "startup",
+   "group": "App",
+   "label": "Opening Orbit (startup)",
+   "screen": "startup",
+   "params": {},
+   "base": [],
+   "placement": "full"
+  },
+  {
+   "key": "state-kit",
+   "group": "Design system",
+   "label": "State kit · every shared state",
+   "screen": "state-kit",
+   "params": {},
+   "base": [],
    "placement": "inherit"
   }
  ]

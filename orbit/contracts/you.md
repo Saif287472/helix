@@ -821,3 +821,39 @@ Nothing.
 8. **Ringtone:** keep "Phone's ringtone" (today's behaviour) as a choice next to the bundled default? On Android: a channel per ringtone, or the app plays the sound?
 9. **Biggest chats and freeing a chat's media:** build (engine, S + M) or hide?
 10. **About:** drop the build number "(412)", or add one to `AppInfo`?
+
+## Decisions and Phase 1b (2026-10-18)
+
+Review 1 approved every recommendation in `../GAPS.md`. For this contract:
+
+- Share your code is built (S1): `/u/<~name>`, app links and scan-to-chat.
+- The ~name rules are checked as you type; whether it is free is the server’s answer on Save (S2 not built).
+- Sharing your profile photo with people you message is built (E1).
+- “Who sees what” follows ADR-030 (W1); the privacy policy text is yours to update (W2).
+- Checkup rules: backup when none in 7 days; devices when one is unused for 30 days; password when none is set; recovery when none is made; app lock when off.
+- The privacy preview shows your most recent chat’s name, or “Someone”.
+- The theme is a device setting, so it survives sign-out; packs come with Part C.
+- Ringtone: Orbit (default) or the phone’s own ringtone; downloads come with Part C.
+- Biggest chats and freeing a chat’s media are built (E2, E3).
+- About shows the version and the build number.
+
+**How the “keep” rows are drawn.** Every row above marked keep (today’s
+behaviour, in the new style) uses the state kit (`frame.md`, the `state-kit`
+screen):
+- a list that is loading: `Kit.skeleton`;
+- a page that is opening: `Kit.loading`;
+- “could not be loaded”: `Kit.loadFailed`, with Try again;
+- a permission: `Kit.permission`;
+- a field refusal or lockout: the field’s error and `Kit.fieldLock`;
+- any other refusal: an error toast;
+- a sentence on the page: `Kit.notice`.
+
+Rows marked drop are not built.
+
+New prototype states drawn in Phase 1b (keys in `screens.json`):
+
+- `privacy-number-needed`: Privacy · your number is needed (linked device)
+- `password-linked`: Change password · linked device (number needed)
+- `password-wrong`: Change password · wrong current password, locked out
+- `delete-account-linked`: Delete my account · linked device (number needed)
+- `about-no-crash`: Help and about · server takes no crash reports

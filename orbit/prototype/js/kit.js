@@ -108,8 +108,9 @@ const Kit = (() => {
   }
 
   /** Status ring: ok | bad | run (with p from 0 to 1) | idle (with an icon). */
-  function ring(state, { p = 0, ic = 'cloud-arrow-down' } = {}) {
-    if (state === 'run') return `<span class="b-ring run" style="--p:${p}"><span>${Math.round(p * 100)}%</span></span>`;
+  function ring(state, { p = 0, ic = 'cloud-arrow-down', label = '' } = {}) {
+    // label replaces the percentage when progress is counted in steps, not bytes.
+    if (state === 'run') return `<span class="b-ring run" style="--p:${p}"><span>${label || `${Math.round(p * 100)}%`}</span></span>`;
     if (state === 'bad') return `<span class="b-ring bad">${icon('warning', 'fill')}</span>`;
     if (state === 'ok') return `<span class="b-ring ok">${icon('check', 'bold')}</span>`;
     return `<span class="b-ring idle">${icon(ic)}</span>`;
@@ -133,6 +134,48 @@ const Kit = (() => {
   /** A card that holds fields rather than rows. */
   const formCard = (html) => `<div class="card form-card">${html}</div>`;
 
+  // ------------------------------------------------------- the state kit
+  // How every screen draws loading, failure, permission and refusal (Phase
+  // 1b, 2026-10-18). The contracts point here instead of drawing each case
+  // again. Flutter: OrbitSkeleton, OrbitLoading, OrbitLoadFailed,
+  // OrbitPermissionCard, OrbitFieldLock; toasts are OrbitToast (App.snack).
+
+  /** Placeholder rows while a list loads. kind: chat | person | row | tile. */
+  function skeleton(n = 6, kind = 'chat', label = 'Loading') {
+    const one = {
+      chat: '<span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-l1"></span><span class="sk sk-l2"></span></span><span class="sk sk-meta"></span>',
+      person: '<span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-l1"></span><span class="sk sk-l2 short"></span></span>',
+      row: '<span class="sk sk-ico"></span><span class="sk-lines"><span class="sk sk-l1"></span></span>',
+      tile: '<span class="sk sk-tile"></span><span class="sk sk-tile"></span>',
+    }[kind];
+    return `<div class="skel skel-${kind}" role="status" aria-label="${esc(label)}">${Array.from({ length: n }, () => `<div class="sk-row">${one}</div>`).join('')}</div>`;
+  }
+
+  /** A page that is opening: a spinner and what it is waiting for. */
+  function loading(label = 'Loading…') {
+    return `<div class="page-loading" role="status"><i class="ph ph-spinner-gap spin" aria-hidden="true"></i><span>${esc(label)}</span></div>`;
+  }
+
+  /** A page or list that could not load, with Try again. compact: inside a card or list. */
+  function loadFailed(title = 'This could not be loaded.', { sub = 'Check your connection and try again.', retry = true, compact = false } = {}) {
+    return `<div class="load-failed ${compact ? 'compact' : ''}" role="alert"><span class="lf-ico">${icon('cloud-slash')}</span>
+      <div class="lf-text"><div class="lf-title">${esc(title)}</div>${sub ? `<div class="lf-sub">${esc(sub)}</div>` : ''}</div>
+      ${retry ? `<button class="btn secondary" data-retry>${icon('arrows-clockwise')}Try again</button>` : ''}</div>`;
+  }
+
+  /** Asking for a system permission. kind: camera | microphone | contacts | notifications. */
+  function permission(kind, { denied = false, dark = false, text = '' } = {}) {
+    const [ic, name] = { camera: ['camera', 'camera'], microphone: ['microphone', 'microphone'], contacts: ['address-book', 'contacts'], notifications: ['bell-ringing', 'notifications'] }[kind];
+    const title = denied ? `Orbit can’t use your ${name}` : `Allow your ${name}`;
+    return `<div class="perm-card ${dark ? 'dark' : ''}"><span class="pc-ico">${icon(ic, 'fill')}</span><div class="pc-body"><div class="pc-title">${title}</div>${text ? `<div class="pc-text">${text}</div>` : ''}
+      <button class="btn ${denied ? 'secondary' : 'primary'}" data-perm="${denied ? 'settings' : 'ask'}">${denied ? 'Open settings' : 'Allow'}</button></div></div>`;
+  }
+
+  /** Under a field: locked for a while after too many tries. */
+  function fieldLock(text) {
+    return `<span class="fld-lock" role="alert">${icon('hourglass-medium', 'fill')}${esc(text)}</span>`;
+  }
+
   /** Wire the common behaviour of kit pages. */
   function wire(el, entry) {
     el.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', App.pop));
@@ -143,6 +186,14 @@ const Kit = (() => {
       App.push(b.dataset.go, params);
     }));
     el.querySelectorAll('[data-snack]').forEach((b) => b.addEventListener('click', () => App.snack(b.dataset.snack)));
+    // State kit: Try again reopens the screen in its normal state; a
+    // permission button hands over to the system.
+    el.querySelectorAll('[data-retry]').forEach((b) => b.addEventListener('click', () => {
+      if (!entry) return;
+      const p = { ...entry.params }; delete p.state;
+      App.replace(entry.id, p);
+    }));
+    el.querySelectorAll('[data-perm]').forEach((b) => b.addEventListener('click', () => App.snack(b.dataset.perm === 'settings' ? 'Opens the system settings for Orbit' : 'Opens the system permission prompt')));
     el.querySelectorAll('[data-switch]').forEach((r) => r.addEventListener('click', () => {
       const s = r.querySelector('.switch'); const on = !s.classList.contains('on');
       s.classList.toggle('on', on); s.setAttribute('aria-checked', String(on));
@@ -199,7 +250,10 @@ const Kit = (() => {
     ['tap', 'Paste in a field', 'Pastes from the clipboard.'],
     ['type', 'Field with a counter', 'The counter shows length out of the maximum.'],
     ['tap', 'Button that starts work', 'Shows a spinner in place of its label until the work ends.'],
+    ['tap', 'Try again (could not be loaded)', 'Loads the page again; while loading it shows the skeleton or spinner.'],
+    ['tap', 'Allow / Open settings (permission card)', 'Allow opens the system prompt; after a refusal, Open settings opens Orbit’s system settings.'],
+    ['auto', 'Lists while loading', 'Placeholder rows the shape of the real ones, announced as loading; they shimmer unless reduce motion is on.'],
   ];
 
-  return { field, seg, notice, intro, qr, code, progress, check, section, sw, choice, page, wire, confirm, inputDialog, youPage, hero, ring, danger, steps, rules, formCard, INTERACTIONS };
+  return { field, seg, notice, intro, qr, code, progress, check, section, sw, choice, page, wire, confirm, inputDialog, youPage, hero, ring, danger, steps, rules, formCard, skeleton, loading, loadFailed, permission, fieldLock, INTERACTIONS };
 })();

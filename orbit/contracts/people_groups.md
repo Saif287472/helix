@@ -667,3 +667,38 @@ None.
 | Disappearing messages, chat and group | Yes; sends a timer notice to the chat | `ChatsService.setDisappearing` (engine `chats_service.dart`) |
 | "Who can add me to groups" when creating or adding | Yes; refused people come back without being added | `PeopleApi.mayAddToGroup`; `CreatedGroupInfo.rejected`, `AddMembersOutcome.rejected` |
 | They blocked me (ADR-030) | In the engine; the people feature does not read it | `PeopleService.watchBlocksMe`; `peerBlocksMeProvider` (conversation) |
+
+## Decisions and Phase 1b (2026-10-18)
+
+Review 1 approved every recommendation in `../GAPS.md`. For this contract:
+
+- The contact page says “<Name> has blocked you.” and hides the call tiles.
+- Invite links need approval only when an admin turns it on (off by default).
+- The list of a group’s live invite links is built (S3, server); the page lists every live link.
+- Bans are not listed from the server (S4 dropped).
+- Someone who could not be added: “<Name> could not be added. Send them an invite link.”
+- Members see the picture, Edit group info and Add members when the group lets everyone.
+- The safety-number mismatch keeps the stronger warning: do not trust this chat until checked in person.
+
+**How the “keep” rows are drawn.** Every row above marked keep (today’s
+behaviour, in the new style) uses the state kit (`frame.md`, the `state-kit`
+screen):
+- a list that is loading: `Kit.skeleton`;
+- a page that is opening: `Kit.loading`;
+- “could not be loaded”: `Kit.loadFailed`, with Try again;
+- a permission: `Kit.permission`;
+- a field refusal or lockout: the field’s error and `Kit.fieldLock`;
+- any other refusal: an error toast;
+- a sentence on the page: `Kit.notice`.
+
+Rows marked drop are not built.
+
+New prototype states drawn in Phase 1b (keys in `screens.json`):
+
+- `contact-blocked-me`: Contact info · they blocked you
+- `safety-failed`: Safety number · could not be worked out
+- `scan-refused`: Scan code · camera refused
+- `scan-contact-nocamera`: Scan someone’s code · no camera
+- `group-info-member-open`: Group info (member; the group lets everyone edit and add)
+- `group-info-pending-link`: Group info · unconfirmed member who joined by link
+- `group-join-noname`: Join a group · the link did not open the name

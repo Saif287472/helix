@@ -36,9 +36,10 @@
           Orbit compares scrambled versions of your contacts’ numbers to find who is on Orbit. Your contacts never leave your phone.
           <div class="bn-actions"><button class="btn ghost" data-allow-contacts>${S.contacts === 'denied' ? 'Open settings' : 'Allow contacts'}</button></div></div></div>`;
       } else {
-        const sub = { checking: 'Checking your contacts...', limit: 'Today’s limit for checking contacts is used up. Orbit will try again tomorrow.', done: '7 contacts are on Orbit.' }[S.contacts] || 'Check which of your contacts are on Orbit.';
+        const sub = { checking: 'Checking your contacts...', limit: 'Today’s limit for checking contacts is used up. Orbit will try again tomorrow.', done: '7 contacts are on Orbit.', failed: 'Your contacts could not be checked. Orbit will try again later.' }[S.contacts] || 'Check which of your contacts are on Orbit.';
         html += `<div class="card" style="margin-top:8px">${row({ icon: 'arrows-clockwise', color: 0, title: 'Refresh contacts', sub, attrs: 'data-refresh-contacts' })}</div>`;
       }
+      if (st.nobody) return html + empty({ icon: 'user-circle-dashed', title: 'Nobody yet', text: 'Type a phone number or a ~name to find someone.' });
       const known = ['nadia', 'arif', 'sadia', 'tanvir', 'ammu', 'abbu', 'rumana', 'karim'].map((id) => Data.people[id]);
       html += `<div class="list-label"><span class="eyebrow">People on Orbit<span class="count">${known.length}</span></span></div>${known.map(personRow).join('')}`;
       return html;
@@ -48,6 +49,8 @@
     const digits = query.replace(/[^\d+]/g, '');
     const looksNumber = /^[+\d][\d\s-]*$/.test(query) && digits.replace('+', '').length >= 3;
     const isHelixName = query.startsWith('~') && query.length > 1;
+    // A plain word may be someone's ~name (Review 1: the app's way).
+    const plainWord = /^[a-z][a-z0-9._]{2,}$/i.test(query);
     const lookupRow = (label, ic) => `<button class="chat-row" data-lookup="${esc(label)}"><span class="av" style="--size:52px;background:var(--accent-soft);color:var(--accent)">${icon(ic, 'bold')}</span>
       <span class="cr-body"><span class="cr-name"><span class="nm">Find ${esc(label)} on Orbit</span></span><span class="cr-preview">${ic === 'at' ? 'Looks up this ~Orbit name once.' : 'Only a scrambled version of the number is sent.'}</span></span></button>`;
     if (st.lookup) {
@@ -57,15 +60,20 @@
         self: ['user-circle', 'That is you', 'This is your own account.'],
         limit: ['hourglass-medium', 'Too many lookups', 'You have looked up as many numbers as Orbit allows today. Try again tomorrow.'],
         offline: ['wifi-slash', 'No connection', 'Check your connection and try again.'],
+        failed: ['warning-circle', 'Could not look this up', 'Something went wrong. Try again in a moment.'],
       };
       const [ic, t, sub] = states[st.lookup];
       html += `<div class="lookup-state"><span class="ls-ico">${icon(ic)}</span><span><span class="ls-title" style="display:block">${t}</span>${sub ? `<span class="ls-sub" style="display:block">${sub}</span>` : ''}</span></div>`;
     } else if (isHelixName) html += lookupRow(query, 'at');
     else if (looksNumber) {
-      const complete = query.trim().startsWith('+') && digits.length >= 12;
-      html += complete ? lookupRow(query.trim(), 'dots-nine')
-        : `<div class="hint-line">${icon('info')}<span>To find someone by number, type the whole number, starting with the country code, like +880 1711 000001.</span></div>`;
-    }
+      // Without a country code the number is read as your own country's (Review 1).
+      const intl = query.trim().startsWith('+');
+      const national = digits.replace(/^0/, '');
+      const complete = intl ? digits.length >= 12 : national.length >= 10;
+      const shown = intl ? query.trim() : `+880 ${national.slice(0, 4)} ${national.slice(4)}`;
+      html += complete ? lookupRow(shown, 'dots-nine')
+        : `<div class="hint-line">${icon('info')}<span>Type the whole number. Without a country code it is read as a Bangladesh number (+880).</span></div>`;
+    } else if (plainWord) html += lookupRow(`~${query.toLowerCase()}`, 'at');
     const gHits = groups.filter((g) => g.title.toLowerCase().includes(lc));
     const pHits = all.filter((p) => Data.displayName(p).toLowerCase().includes(lc) || (p.names.number || '').replace(/\D/g, '').includes(lc.replace(/\D/g, '') || 'x'));
     if (gHits.length) html += `<div class="list-label"><span class="eyebrow">Groups</span></div>${gHits.map((g) => `<button class="chat-row" data-chat="${esc(g.id)}">${avatar(g.avatar, 52)}<span class="cr-body"><span class="cr-name"><span class="nm">${esc(g.title)}</span></span><span class="cr-preview">Group</span></span></button>`).join('')}`;
@@ -114,6 +122,11 @@
           <div class="search" style="flex:1;margin:0 8px 0 0">${icon('magnifying-glass')}<input id="chatSearch" placeholder="Search chats, messages and people" value="${esc(st.query || '')}" aria-label="Search chats, messages and people" autocomplete="off" enterkeyhint="search">${st.query ? ibtn('x', 'Clear search', 'data-search-clear', 'sm') : ''}</div></header>
         <div class="scroll" data-keep-scroll="chat-search" style="padding-bottom:40px">${chatSearch(st)}</div></div>`;
     }
+    if (params.state === 'loading') return `<div class="pane-col">${chatsHeader(st)}<div class="scroll">${Kit.skeleton(8, 'chat', 'Loading chats')}</div></div>`;
+    if (params.state === 'error') return `<div class="pane-col">${chatsHeader(st)}<div class="scroll">${Kit.loadFailed('Your chats could not be loaded.')}</div></div>`;
+    if (params.allArchived) {
+      return `<div class="pane-col">${chatsHeader(st)}<div class="scroll">${empty({ icon: 'archive', title: 'All your chats are archived', text: 'They are kept in Archived chats, out of the way.', action: `<button class="btn secondary" data-open-archived style="margin-top:8px">${icon('archive')}Open archived chats</button>` })}</div></div>`;
+    }
     if (params.empty) {
       return `<div class="pane-col">${chatsHeader(st)}<div class="scroll">${empty({ icon: 'chats-circle', title: 'No chats yet', text: 'Search for a name or a number to start a secure conversation. Anyone on Orbit can message you unless you block them.', action: `<button class="btn primary" data-search-open style="margin-top:8px">${icon('magnifying-glass', 'bold')}Find people</button>` })}</div></div>`;
     }
@@ -144,6 +157,7 @@
         <div class="scroll" data-keep-scroll="call-search" style="padding-bottom:40px">${peoplePanel(st.callQuery || '', 'calls', st)}</div></div>`;
     }
     const head = `<div class="tab-head"><div class="tab-head-top">${wordmark}<div class="tab-actions">${ibtn('magnifying-glass', 'Search', 'data-call-search-open')}${meButton()}</div></div></div>`;
+    if (params.state === 'loading') return `<div class="pane-col">${head}<div class="scroll">${quick()}${Kit.skeleton(6, 'person', 'Loading calls')}</div></div>`;
     if (params.callsEmpty) {
       return `<div class="pane-col">${head}<div class="scroll">${quick()}${empty({ icon: 'phone', title: 'No calls yet', text: 'Calls you make and receive will show up here.' })}</div></div>`;
     }
@@ -200,6 +214,10 @@
       ['tap', 'Quick row: Call / Keypad / a recent person', 'Opens the people search, the keypad, or calls them.'],
       ['tap', 'Keypad digits', 'Types the number; ⌫ deletes; the call button turns on at 6 digits and hands the number to the search.'],
       ['long-press', 'Keypad 0', 'Types +.'],
+      ['type', 'A number without a country code', 'Read as a Bangladesh number: offers “Find +880 … on Orbit”.'],
+      ['type', 'A plain word', 'Also offers “Find ~word on Orbit”.'],
+      ['tap', 'Open archived chats (every chat archived)', 'Opens Archived chats.'],
+      ['auto', 'An invite or recovery link while signed in', 'Says you are already signed in; nothing else happens.'],
     ],
     entries: [
       { key: 'chats', label: 'Chats', params: { tab: 'chats' } },
@@ -214,9 +232,18 @@
       { key: 'chats-search-short', label: 'Chats · number without country code', params: { tab: 'chats', searching: true, query: '01711 000002' } },
       { key: 'chats-search-none', label: 'Chats · lookup: not on Orbit', params: { tab: 'chats', searching: true, query: '+880 1711 000002', lookup: 'none' } },
       { key: 'chats-empty', label: 'Chats · empty (new account)', params: { tab: 'chats', empty: true } },
+      { key: 'chats-loading', label: 'Chats · loading', params: { tab: 'chats', state: 'loading' } },
+      { key: 'chats-error', label: 'Chats · could not be loaded', params: { tab: 'chats', state: 'error' } },
+      { key: 'chats-all-archived', label: 'Chats · every chat archived', params: { tab: 'chats', allArchived: true } },
+      { key: 'chats-search-word', label: 'Chats · search a plain word (~name lookup)', params: { tab: 'chats', searching: true, query: 'arifh' } },
+      { key: 'chats-search-nobody', label: 'Chats · search, nobody known yet', params: { tab: 'chats', searching: true, contacts: 'done', nobody: true } },
+      { key: 'chats-search-contacts-failed', label: 'Chats · search, contacts could not be checked', params: { tab: 'chats', searching: true, contacts: 'failed' } },
+      { key: 'chats-search-lookup-failed', label: 'Chats · lookup failed', params: { tab: 'chats', searching: true, query: '+880 1711 000002', lookup: 'failed' } },
+      { key: 'chats-link-signed-in', label: 'Chats · an invite link while signed in', params: { tab: 'chats', linkSignedIn: true } },
       { key: 'calls', label: 'Calls', params: { tab: 'calls' } },
       { key: 'calls-search', label: 'Calls · new call (search)', params: { tab: 'calls', callSearching: true, contacts: 'done' } },
       { key: 'calls-empty', label: 'Calls · empty', params: { tab: 'calls', callsEmpty: true } },
+      { key: 'calls-loading', label: 'Calls · loading', params: { tab: 'calls', state: 'loading' } },
     ],
     render(params, entry) {
       const st = entry.state;
@@ -225,7 +252,7 @@
         st.searching = !!params.searching; st.query = params.query || '';
         st.callSearching = !!params.callSearching; st.callQuery = '';
         st.selected = new Set(params.select || []);
-        st.lookup = params.lookup || null; st.setQuery = params.setQuery || ''; st.filter = params.filter || 'all';
+        st.lookup = params.lookup || null; st.setQuery = params.setQuery || ''; st.filter = params.filter || 'all'; st.nobody = !!params.nobody;
         S.contacts = params.contacts || (params.searching || params.callSearching ? 'ask' : S.contacts);
       }
       return `<div class="pager" style="--idx:${TABS.indexOf(st.tab)}">
@@ -315,6 +342,10 @@
       el.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => { st.filter = b.dataset.filter; rerender(); }));
       if (params.menu && !st.menuShown) { st.menuShown = true; setTimeout(() => { const b = el.querySelector('[data-chats-menu]'); if (!b) return; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); b.click(); }, 60); }
       el.querySelector('[data-new-group]')?.addEventListener('click', () => App.push('group-new'));
+      el.querySelector('[data-open-archived]')?.addEventListener('click', () => App.push('archived'));
+      Kit.wire(el, entry); // Try again on a list that could not load
+      // An invite or recovery link opened while signed in is not dropped silently (Review 1).
+      if (params.linkSignedIn && !st.linkShown) { st.linkShown = true; setTimeout(() => App.snack('You’re already signed in. Invite and recovery links are for setting up a new device.', null, { stay: true }), 120); }
       el.querySelectorAll('[data-search-open]').forEach((b) => b.addEventListener('click', () => { st.searching = true; st.query = ''; rerender(); focus('#chatSearch'); }));
       el.querySelector('[data-search-close]')?.addEventListener('click', () => { st.searching = false; st.query = ''; st.lookup = null; rerender(); });
       el.querySelector('[data-search-clear]')?.addEventListener('click', () => { st.query = ''; st.lookup = null; rerender(); focus('#chatSearch'); });

@@ -405,6 +405,11 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .call .c-quality { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
 .call .c-quality b { width: 3px; background: var(--call-live); border-radius: 1px; }
 .call .c-quality b.off { background: var(--call-line); }
+/* Their camera off on a video call: their picture where the video was. */
+.call .remote.off { display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.14), transparent 55%), var(--brand-gradient); }
+.call .remote.off .r-off { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.call .remote.off .r-off .av { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22); }
+.call .remote.off .r-off > span:last-child { display: inline-flex; align-items: center; gap: 6px; color: var(--call-muted); font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
 .call .c-note { font-size: 13px; color: var(--call-muted); max-width: 260px; line-height: 1.5; }
 
 .call .c-panel {

@@ -429,3 +429,35 @@ None.
 
 ### New backend work
 None beyond `made` (under Backup).
+
+## Decisions and Phase 1b (2026-10-18)
+
+Review 1 approved every recommendation in `../GAPS.md`. For this contract:
+
+- Security activity says what it holds, not “30 days” (S5 not built, W3).
+- Approving a device compares the check number only; the new device shows the key code after (W5).
+- Making a new recovery backup warns that the old secret stops working.
+- “Delete my recovery backup” is in the danger zone.
+- History transfer: “Sent encrypted. Your other device chooses whether to add it.” (W4).
+- Built in the engine: a backup total (E4), a “waiting for Wi-Fi” failure (E5), and every device knowing about the recovery backup (E6).
+- Not built: a total while sending prepares (E7, a plain moving bar instead); Dismiss uses a local hidden list (E8).
+
+**How the “keep” rows are drawn.** Every row above marked keep (today’s
+behaviour, in the new style) uses the state kit (`frame.md`, the `state-kit`
+screen):
+- a list that is loading: `Kit.skeleton`;
+- a page that is opening: `Kit.loading`;
+- “could not be loaded”: `Kit.loadFailed`, with Try again;
+- a permission: `Kit.permission`;
+- a field refusal or lockout: the field’s error and `Kit.fieldLock`;
+- any other refusal: an error toast;
+- a sentence on the page: `Kit.notice`.
+
+Rows marked drop are not built.
+
+New prototype states drawn in Phase 1b (keys in `screens.json`):
+
+- `backup-never`: Backup · not backed up yet
+- `transfer-stopped`: Send to my other devices · stopped, and declined
+- `transfer-only-device`: Send to my other devices · this is your only device
+- `recovery-made`: Recovery backup · one already made

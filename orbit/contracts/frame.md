@@ -154,3 +154,30 @@ All are **derive**: frame code only, no data.
 ## New backend work
 
 None for the frame in Parts A and B. Part C adds a server endpoint that lists and serves theme, animation and ringtone packs (`PORT_PLAN.md`).
+
+## Decisions and Phase 1b (2026-10-18)
+
+Review 1 approved every recommendation in `../GAPS.md`. For this contract:
+
+- The state kit (`state-kit`) draws loading, failure, empty lists, permissions, field refusals, notices and toasts once.
+- An “Opening Orbit…” startup screen (`startup`), full window.
+- Esc never ends a live call.
+- Reduce motion follows the system setting: no shimmer, looping or sliding.
+
+**How the “keep” rows are drawn.** Every row above marked keep (today’s
+behaviour, in the new style) uses the state kit (`frame.md`, the `state-kit`
+screen):
+- a list that is loading: `Kit.skeleton`;
+- a page that is opening: `Kit.loading`;
+- “could not be loaded”: `Kit.loadFailed`, with Try again;
+- a permission: `Kit.permission`;
+- a field refusal or lockout: the field’s error and `Kit.fieldLock`;
+- any other refusal: an error toast;
+- a sentence on the page: `Kit.notice`.
+
+Rows marked drop are not built.
+
+New prototype states drawn in Phase 1b (keys in `screens.json`):
+
+- `startup`: Opening Orbit (startup)
+- `state-kit`: State kit · every shared state

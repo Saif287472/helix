@@ -70,7 +70,9 @@
     const admin = params.pending === 'admin';
     return `<div class="pending-card">${icon('shield-warning', 'fill')}<div>
       <div class="pc-title">Confirm Karim Uncle?</div>
-      <div class="pc-text">Karim Uncle was added by the server roster, but no admin of this group announced it. Until you confirm, what you send in this group stays unreadable to them.</div>
+      <div class="pc-text">${params.pendingReason === 'link'
+        ? 'Karim Uncle joined this group through its invite link, and nothing else vouches for them.'
+        : 'Karim Uncle was added by the server roster, but no admin of this group announced it.'} Until you confirm, what you send in this group stays unreadable to them.</div>
       ${admin ? '' : '<div class="pc-text" style="margin-top:6px;color:var(--ink-3)">Only an admin can remove someone. If you do not know them, you can leave the group.</div>'}
       <div class="pc-actions"><button class="btn primary" data-confirm-member>Confirm</button>${admin ? '<button class="btn secondary" data-remove-member>Remove</button>' : ''}</div></div></div>`;
   }
@@ -177,7 +179,8 @@
       ['tap', 'Quoted reply', 'Jumps to the original message.'],
       ['tap', 'Messages while selecting', 'Adds or removes them; the bar offers Copy, Forward, Delete (for me, asks first) and × to stop.'],
       ['type', 'Message box', 'The send button replaces the mic; the box grows up to 128 px.'],
-      ['key', 'Enter in the message box', 'Sends; Shift+Enter adds a line.'],
+      ['key', 'Enter in the message box', 'Sends when “Enter key sends” is on (on by default on a window, off on a phone); otherwise adds a line. Shift+Enter always adds a line.'],
+      ['tap', 'Try again (could not be opened)', 'Opens the conversation again.'],
       ['type', '@ in a group', 'Opens the mention picker; tapping a person inserts @Name.'],
       ['tap', 'Send', 'Sends; ticks go sent, delivered, read. In the demo chat Nadia types, then replies.'],
       ['tap', 'Save edit', 'Replaces the text and marks the message Edited.'],
@@ -214,6 +217,9 @@
       { key: 'group-mention', label: 'Group · @mention picker', params: { id: 'group:family', draft: 'Thanks @', mention: true } },
       { key: 'group-pending', label: 'Group · unconfirmed member (admin)', params: { id: 'group:family', pending: 'admin' } },
       { key: 'group-pending-member', label: 'Group · unconfirmed member (member)', params: { id: 'group:family', pending: 'member' } },
+      { key: 'group-pending-link', label: 'Group · unconfirmed member who joined by link', params: { id: 'group:family', pending: 'admin', pendingReason: 'link' } },
+      { key: 'chat-loading', label: 'Conversation · opening', params: { id: 'direct:nadia', state: 'loading' } },
+      { key: 'chat-error', label: 'Conversation · could not be opened', params: { id: 'direct:nadia', state: 'error' } },
       { key: 'group-left', label: 'Group · you left', params: { id: 'group:family', left: true } },
       { key: 'chat-blocked', label: 'Blocked (you blocked them)', params: { id: 'direct:shuvo', blocked: 'byMe' } },
       { key: 'chat-blocked-me', label: 'Blocked (they blocked you)', params: { id: 'direct:shuvo', blocked: 'byThem' } },
@@ -230,6 +236,8 @@
         if (params.jump) { const m = findMsg(c, params.jump); if (m) { m.highlighted = true; setTimeout(() => { m.highlighted = false; }, 1600); } }
       }
       if (st.searching) return `${header(id, c, st, params)}<div class="scroll" data-keep-scroll="hits" style="background:var(--surface)">${searchResults(id, c, st)}</div>`;
+      if (params.state === 'loading') return `${header(id, c, st, params)}${Kit.loading('Opening the conversation…')}`;
+      if (params.state === 'error') return `${header(id, c, st, params)}<div class="scroll">${Kit.loadFailed('This conversation could not be opened.')}</div>`;
       let items = c.items.length ? c.items.slice() : [{ kind: 'empty' }];
       if (st.showTyping) items = items.concat([{ kind: 'typing' }]);
       const unread = c.items.find((it) => it.kind === 'unread');
@@ -409,7 +417,9 @@
           if (had !== has || wantMention !== st.mention || wantMention) { st.mention = wantMention; const pos = draft.selectionStart; rerender(); const n = el.querySelector('#draft'); n.focus(); n.setSelectionRange(pos, pos); }
           else grow();
         });
-        draft.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+        // Enter follows "Enter key sends" (You > Chats): on by default on a window, off on a phone (Review 1).
+        const enterSends = () => { const v = window.OrbitPrefs && window.OrbitPrefs.chats.enter; return v == null ? App.isWide() : v; };
+        draft.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && enterSends()) { e.preventDefault(); send(); } });
         draft.addEventListener('focus', () => { if (st.emoji) { st.emoji = false; rerender(); el.querySelector('#draft')?.focus(); } });
       }
       el.querySelector('[data-send]')?.addEventListener('click', send);

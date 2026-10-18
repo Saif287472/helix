@@ -885,3 +885,65 @@ The UI kit has them, but the app doesn't use them:
 - **Messages:** star, buttons under placeholders, link-preview images, tappable location or contact cards.
 - **Attach sheet:** Location, Contact, Poll.
 - **Calls:** call-log filters, group calls, the minimised call bar.
+20. **Phase 1b: the state kit and the Review 1 answers (2026-10-18).**
+    - **The state kit** (`state-kit` in the index; `Kit.skeleton`, `loading`,
+      `loadFailed`, `permission`, `fieldLock` in `js/kit.js`) draws, once:
+      - placeholder rows while a list loads;
+      - a spinner while a page opens;
+      - "could not be loaded" with Try again, full-page and compact;
+      - empty lists;
+      - permission cards, before and after a refusal;
+      - field refusals and lockouts;
+      - notices;
+      - toasts: plain, error (a red edge and a warning icon, same contrast)
+        and with Undo;
+      - a busy button.
+      Every "keep" row in the contracts uses these.
+    - **Opening Orbit…** (`startup`): the logo and a moving bar while the
+      database opens.
+    - **Reduce motion** follows the system setting: animations and
+      transitions are off.
+    - **55 new states**, listed in each contract under "Decisions and
+      Phase 1b". Among them:
+      - every call end reason;
+      - their camera off;
+      - the headset output sheet;
+      - call details for someone who blocked you, and every kind of call
+        row;
+      - "<Name> has blocked you" on the contact page;
+      - link-device starting, failed and "nothing was kept";
+      - Orbit could not start (no reset offered);
+      - "Not backed up yet";
+      - transfers stopped, declined and "your only device";
+      - the recovery backup already made, with "Delete my recovery backup";
+      - the number needed on a linked device;
+      - the loading and error states of chats, calls, the conversation and
+        the safety number;
+      - video buffering and "Play again".
+    - **Review 1 answers drawn:**
+      - the country-code picker and the on-device length check;
+      - Terms on take-over;
+      - Back from the password step goes to the phone step;
+      - "Use a recovery code instead";
+      - numbers without a country code read as Bangladesh, and plain words
+        offer a ~name lookup;
+      - "All your chats are archived";
+      - Enter follows "Enter key sends" (on for a computer, off for a
+        phone);
+      - the audio output toggle or sheet (hidden on Windows);
+      - Esc never ends a call;
+      - no "Camera flipped" toast;
+      - talk time only after an answered call;
+      - invite approval off by default;
+      - "<Name> could not be added";
+      - members edit and add when the group allows everyone;
+      - the stronger mismatch warning;
+      - the ~name is checked on Save;
+      - "Who sees what" per ADR-030;
+      - the checkup rules;
+      - the Ringtone row;
+      - the footnotes on downloads and lock-screen privacy;
+      - approve compares the check number only;
+      - the transfer and activity wording.
+    - **Contrast:** the people count under "People on Orbit" now uses
+      `--ink-3`, because it was too faint.

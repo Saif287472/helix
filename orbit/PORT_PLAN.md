@@ -203,6 +203,22 @@ Progress (2026-10-18):
 
 **Review 1:** the contracts and both lists. Approved 2026-10-18, with every recommendation in `GAPS.md`.
 
+### Phase 1b: the state kit (added at Review 1, 2026-10-18)
+
+The app shows 272 states the prototype never drew. The port must not invent
+them, so the prototype draws them first:
+- [x] **The state kit** (`state-kit`): list placeholders, page loading,
+  "could not be loaded" with Try again, empty lists, permission cards, field
+  refusals and lockouts, notices, toasts (plain, error, Undo), and busy
+  buttons. Reduce motion is honoured.
+- [x] **55 screen-specific states**, plus the "Opening Orbit…" startup
+  screen.
+- [x] **Every Review 1 answer and wording fix**, drawn in the prototype.
+- [x] **Each contract records its decisions and its new states** ("Decisions
+  and Phase 1b").
+
+**Review 1b:** the state kit and the new states. Approved 2026-10-18.
+
 ### Phase 2: the foundation
 
 - **The Flutter workspace** `orbit/flutter/`, on the same Flutter and Dart
@@ -230,7 +246,10 @@ Progress (2026-10-18):
   412×866, and the same keys as the prototype. It runs on Windows (and on
   your phone with `flutter run`).
 - **The compare tool:**
-  - Headless Chrome screenshots the prototype's bare mode.
+  - Headless Chrome screenshots the prototype's bare mode. It must drive the
+    page and wait until the app reports it is ready: a plain `--screenshot`
+    sometimes captures the page before every script has loaded (seen in
+    Phase 1b).
   - A Flutter test renders each key at 412×866 with the real fonts loaded.
   - The compare page shows both sides with an overlay slider, a difference
     heat map and a score per screen, worst first.

@@ -221,6 +221,15 @@ and the checklist cover them too.
 10. About → **show version and build number** (from the app's package
     info).
 
+## Status (2026-10-18)
+
+Review 1 was approved with every recommendation.
+- The answers and wording fixes are drawn in the prototype (Phase 1b, design
+  change 20).
+- Each contract has a "Decisions and Phase 1b" section.
+- B1 to B4 have a proposed fix session; it runs separately from the
+  redesign.
+
 ## What happens after Review 1
 
 1. B1 to B4 are fixed in a separate session, if you agree.

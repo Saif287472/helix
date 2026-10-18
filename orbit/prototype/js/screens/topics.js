@@ -16,12 +16,14 @@
   // Shared, so a change made on one page shows on the You tiles and survives navigation.
   const P = window.OrbitPrefs = {
     privacy: { lastSeen: 'Everyone', online: 'Everyone', groups: 'Everyone', byNumber: true, byName: true, receipts: true, typing: true, timer: 'Off', lockAfter: '1 min' },
-    notify: { messages: true, groups: true, calls: true, sound: true, vibrate: true, previews: false },
-    chats: { size: 'Default', enter: false, dl: { photos: 'Wi-Fi', voice: 'Always', videos: 'Never', docs: 'Never' } },
+    notify: { messages: true, groups: true, calls: true, sound: true, vibrate: true, previews: false, ringtone: 'Orbit' },
+    // enter: null follows the device: on for a window, off for a phone (Review 1).
+    chats: { size: 'Default', enter: null, dl: { photos: 'Wi-Fi', voice: 'Always', videos: 'Never', docs: 'Never' } },
     backup: { auto: true, mobile: false },
   };
   const you = () => window.HelixYouState || { lock: false, recovery: false };
   const get = (path) => path.split('.').reduce((o, k) => o[k], P);
+  const enterOn = () => (P.chats.enter == null ? App.isWide() : P.chats.enter);
   const set = (path, v) => { const ks = path.split('.'); const last = ks.pop(); ks.reduce((o, k) => o[k], P)[last] = v; };
 
   // ------------------------------------------------------------- shared parts
@@ -54,13 +56,14 @@
   reg({
     id: 'privacy', title: 'Privacy',
     interactions: [
+      ['type', 'Your phone number (linked device)', 'Asked once when “By phone number” is turned back on from a linked device.'],
       ['tap', 'Everyone / Nobody choices', 'The “What Nadia sees” preview follows at once.'],
       ['tap', 'Read receipts / Typing / Being found', 'Switches; the preview follows.'],
       ['tap', 'Disappearing messages for new chats', 'Off, 24 h, 7 d, 90 d.'],
       ['tap', 'Lock Orbit', 'Switch; when on, Lock again appears (Now, 1 min, 5 min, 30 min).'],
       ['tap', 'Blocked', 'Opens the Blocked page.'],
     ],
-    entries: [{ key: 'privacy', label: 'Privacy', params: {} }, { key: 'privacy-lock', label: 'Privacy · app lock on', params: { lock: true } }],
+    entries: [{ key: 'privacy', label: 'Privacy', params: {} }, { key: 'privacy-lock', label: 'Privacy · app lock on', params: { lock: true } }, { key: 'privacy-number-needed', label: 'Privacy · your number is needed (linked device)', params: { numberNeeded: true } }],
     render(params, entry) {
       if (params.lock && !entry.state.init) { you().lock = true; }
       entry.state.init = true;
@@ -93,6 +96,11 @@
     mount(el, params, entry) {
       wirePrefs(el, entry);
       el.querySelector('[data-lock]').addEventListener('toggle', (e) => { you().lock = e.detail; entry.rerender(); });
+      // Turning "By phone number" back on from a linked device needs the number once.
+      if (params.numberNeeded && !entry.state.askedNumber) {
+        entry.state.askedNumber = true;
+        setTimeout(() => Kit.inputDialog({ title: 'Your phone number', label: 'With its country code, like +88017XXXXXXXX', value: '+880 ', max: 20, confirmLabel: 'Turn on', run: () => App.snack('People who have your number can find you again') }), 80);
+      }
     },
   });
 
@@ -108,6 +116,7 @@
   reg({
     id: 'notifications', title: 'Notifications',
     interactions: [
+      ['tap', 'Ringtone', 'Sheet: Orbit (default) or the phone’s ringtone. More to download later.'],
       ['tap', 'Messages / Groups / Calls tiles', 'Each turns its alerts on or off.'],
       ['tap', 'Sound / Vibrate / Show message previews', 'Switches; the lock-screen preview follows.'],
       ['tap', 'Unmute (muted chat)', 'Unmutes it.'],
@@ -128,13 +137,19 @@
           swPref('notify.sound', 'Sound', 'Your phone’s default notification sound', 'speaker-high', 4),
           swPref('notify.vibrate', 'Vibrate', '', 'vibrate', 2),
           swPref('notify.previews', 'Show message previews', 'Who wrote and what they said, on the lock screen', 'eye', 1),
-        ])}
-        ${section(`Muted chats · ${muted.length}`, muted.map((c) => `<div class="row">${avatar(c.avatar, 40)}<span class="rw-body"><span class="rw-title" style="display:block">${esc(c.title)}</span><span class="rw-sub" style="display:block">Muted</span></span><button class="btn ghost" data-unmute>Unmute</button></div>`), 'Mute a chat from the chat itself.')}`);
+          row({ icon: 'phone-call', color: 0, title: 'Ringtone', sub: 'For incoming calls', value: esc(P.notify.ringtone === 'Phone' ? 'Phone’s ringtone' : 'Orbit (default)'), end: 'chevron', attrs: 'data-ringtone' }),
+        ], 'With previews off, a notification only says “New message”. Orbit’s servers and the push service never see message text either way.')}
+        ${section(`Muted chats · ${muted.length}`, muted.map((c, i) => `<div class="row">${avatar(c.avatar, 40)}<span class="rw-body"><span class="rw-title" style="display:block">${esc(c.title)}</span><span class="rw-sub" style="display:block">${i === 0 ? 'Muted for 8 hours' : 'Muted'}</span></span><button class="btn ghost" data-unmute>Unmute</button></div>`), 'Mute a chat from the chat itself.')}`);
     },
     mount(el, params, entry) {
       wirePrefs(el, entry);
       el.querySelectorAll('[data-alert]').forEach((b) => b.addEventListener('click', () => { P.notify[b.dataset.alert] = !P.notify[b.dataset.alert]; entry.rerender(); }));
       el.querySelectorAll('[data-unmute]').forEach((b) => b.addEventListener('click', () => { b.closest('.row').remove(); App.snack('Unmuted'); }));
+      // One bundled ringtone, or the phone's own (Review 1); downloaded ones come with Part C.
+      el.querySelector('[data-ringtone]')?.addEventListener('click', () => App.sheet({ title: 'Ringtone', text: 'More ringtones to download are coming.', items: [
+        { icon: 'music-note', label: 'Orbit (default)', on: P.notify.ringtone === 'Orbit', run: () => { P.notify.ringtone = 'Orbit'; entry.rerender(); } },
+        { icon: 'device-mobile', label: 'Phone’s ringtone', on: P.notify.ringtone === 'Phone', run: () => { P.notify.ringtone = 'Phone'; entry.rerender(); } },
+      ] }));
     },
   });
 
@@ -143,6 +158,7 @@
   reg({
     id: 'chats-settings', title: 'Chats',
     interactions: [
+      ['tap', 'Enter key sends', 'Switch; until it is set it is on for a computer and off for a phone.'],
       ['tap', 'Text size buttons', 'The preview grows or shrinks at once.'],
       ['tap', 'Enter key sends', 'Switch.'],
       ['tap', 'Download automatically choices', 'Never, Wi-Fi or Always for each kind.'],
@@ -153,16 +169,19 @@
       const sizeBtn = (k, i) => `<button class="size-btn ${c.size === k ? 'on' : ''}" data-pref="chats.size" data-v="${k}" aria-label="${k}" title="${k}"><span style="font-size:${13 + i * 4}px">Aa</span><small>${k}</small></button>`;
       const dl = (k, ic, color, label) => segRow(`chats.dl.${k}`, label, '', ['Never', 'Wi-Fi', 'Always'], ic, color);
       return page('Chats', `
-        ${hero({ ic: 'chat-centered-text', title: 'Chats', sub: `Text ${c.size.toLowerCase()} · Enter ${c.enter ? 'sends' : 'adds a line'}`,
+        ${hero({ ic: 'chat-centered-text', title: 'Chats', sub: `Text ${c.size.toLowerCase()} · Enter ${enterOn() ? 'sends' : 'adds a line'}`,
           slot: `<div class="preview-box chatprev" style="--ps:${s}"><div class="pv-label">Preview</div>
             <div class="pv-bubble in">Are you still coming to the launch on Friday? <span class="pv-meta">21:04</span></div>
             <div class="pv-bubble out">Yes! Wouldn’t miss it. <span class="pv-meta">21:06 <i class="ph-bold ph-checks" style="color:var(--read)"></i></span></div></div>` })}
         <div class="group-title eyebrow">Text size</div><div class="size-row">${Object.keys(SIZES).map(sizeBtn).join('')}</div>
         <p class="sec-foot">Multiplies with your phone’s own text size.</p>
-        ${section('Typing', [swPref('chats.enter', 'Enter key sends', 'With a hardware keyboard. Otherwise Enter adds a new line', 'keyboard', 7)])}
-        ${section('Download automatically', [dl('photos', 'image', 2, 'Photos'), dl('voice', 'microphone', 4, 'Voice messages'), dl('videos', 'video-camera', 5, 'Videos'), dl('docs', 'file-text', 3, 'Documents')], 'Anything not downloaded automatically downloads when you tap it. Wi-Fi means Wi-Fi only; Always includes mobile data.')}`);
+        ${section('Typing', [row({ icon: 'keyboard', color: 7, title: 'Enter key sends', sub: 'With a keyboard. Otherwise Enter adds a new line', end: 'switch', on: enterOn(), attrs: 'data-switch data-enter' })], 'On by default on a computer, off on a phone.')}
+        ${section('Download automatically', [dl('photos', 'image', 2, 'Photos'), dl('voice', 'microphone', 4, 'Voice messages'), dl('videos', 'video-camera', 5, 'Videos'), dl('docs', 'file-text', 3, 'Documents')], 'Anything not downloaded automatically downloads when you tap it. Wi-Fi means Wi-Fi only; Always includes mobile data, up to 10 MB for photos and voice, 25 MB for documents and 50 MB for videos. Small previews always load, so a chat is never blank.')}`);
     },
-    mount(el, params, entry) { wirePrefs(el, entry); },
+    mount(el, params, entry) {
+      wirePrefs(el, entry);
+      el.querySelector('[data-enter]')?.addEventListener('toggle', (e) => { P.chats.enter = e.detail; entry.rerender(); });
+    },
   });
 
   // ================================================================= Storage
@@ -244,6 +263,7 @@
   reg({
     id: 'backup', title: 'Backup',
     interactions: [
+      ['auto', 'Never backed up', 'The ring says “Not backed up yet”; Back up now starts the first one.'],
       ['tap', 'Back up now / Try again', 'The ring fills to 100%, then “Backed up just now”.'],
       ['tap', 'Back up every day / Use mobile data', 'Switches.'],
       ['tap', 'Restore / Send to a device tiles', 'Opens Restore history or Send to my other devices.'],
@@ -254,14 +274,16 @@
       { key: 'backup', label: 'Backup', params: {} },
       { key: 'backup-running', label: 'Backup · backing up', params: { running: true } },
       { key: 'backup-failed', label: 'Backup · last backup failed', params: { failed: true } },
+      { key: 'backup-never', label: 'Backup · not backed up yet', params: { never: true } },
     ],
     render(params, entry) {
       const st = entry.state; if (!st.init) Object.assign(st, { init: true, running: !!params.running, failed: !!params.failed, p: 0.62 });
       const b = P.backup; const rec = you().recovery;
+      const never = params.never && !st.justNow && !st.running;
       const ring = st.running ? `<span class="b-ring run" style="--p:${st.p}"><span>${Math.round(st.p * 100)}%</span></span>`
-        : st.failed ? `<span class="b-ring bad">${icon('warning', 'fill')}</span>` : `<span class="b-ring ok">${icon('check', 'bold')}</span>`;
-      const title = st.running ? 'Backing up…' : st.failed ? 'The last backup did not finish' : `Backed up ${st.justNow ? 'just now' : '5 hours ago'}`;
-      const sub = st.failed ? 'You were on mobile data and backups wait for Wi-Fi' : '12,480 messages · 3.1 MB, encrypted';
+        : st.failed ? `<span class="b-ring bad">${icon('warning', 'fill')}</span>` : never ? Kit.ring('idle', { ic: 'cloud-slash' }) : `<span class="b-ring ok">${icon('check', 'bold')}</span>`;
+      const title = st.running ? 'Backing up…' : st.failed ? 'The last backup did not finish' : never ? 'Not backed up yet' : `Backed up ${st.justNow ? 'just now' : '5 hours ago'}`;
+      const sub = st.failed ? 'You were on mobile data and backups wait for Wi-Fi' : never ? 'Back up now to keep your chats if you lose this phone' : '12,480 messages · 3.1 MB, encrypted';
       return page('Backup', `
         <div class="hero-card backup-hero">${ring}<div class="hc-text"><div class="hc-title">${title}</div><div class="hc-sub">${sub}</div></div></div>
         <div class="btn-row"><button class="btn primary block" data-backup ${st.running ? 'disabled style="opacity:.6"' : ''}>${icon('cloud-arrow-up')}${st.failed ? 'Try again' : 'Back up now'}</button></div>
