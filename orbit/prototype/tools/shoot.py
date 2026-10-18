@@ -44,9 +44,9 @@ def browser():
     sys.exit('No Chrome or Edge found.')
 
 
-def shoot(exe, base, key, device, theme, out, profile):
+def shoot(exe, base, key, device, theme, out, profile, query=''):
     w, h = WINDOW.get(device, SIZES[device])
-    url = f'{base}/?bare&device={device}&theme={theme}#{quote(key)}'
+    url = f'{base}/?bare&device={device}&theme={theme}{"&" + query if query else ""}#{quote(key)}'
     path = os.path.join(out, f'{key}.{device}.{theme}.png')
     for _ in range(2):  # one retry: a fresh headless profile sometimes exits without a shot
         subprocess.run([
@@ -67,6 +67,7 @@ def main():
     ap.add_argument('--all', action='store_true', help='every key in screens.json')
     ap.add_argument('--out', default=os.path.join(ROOT, 'shots'))
     ap.add_argument('--base', default='http://127.0.0.1:5317')
+    ap.add_argument('--query', default='', help='extra address options, like profile=orbit')
     ap.add_argument('--jobs', type=int, default=1, help='parallel browsers; more than 1 can catch pages before their styles load')
     a = ap.parse_args()
     keys = a.keys
@@ -80,7 +81,7 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         # One profile per worker thread: Chrome locks its profile directory.
         def run(key):
-            return key, shoot(exe, a.base, key, a.device, a.theme, a.out, os.path.join(tmp, f'p{threading.get_ident()}'))
+            return key, shoot(exe, a.base, key, a.device, a.theme, a.out, os.path.join(tmp, f'p{threading.get_ident()}'), a.query)
         with ThreadPoolExecutor(a.jobs) as pool:
             for key, path in pool.map(run, keys):
                 print(('ok    ' if path else 'FAIL  ') + (path or key))

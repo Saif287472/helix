@@ -1509,12 +1509,12 @@
    "interactions": [
     {
      "gesture": "tap",
-     "on": "Orbit ID pass",
+     "on": "Your profile (the orbit at the top)",
      "does": "Opens the profile editor (Enter and Space do too)."
     },
     {
      "gesture": "tap",
-     "on": "QR on the pass",
+     "on": "QR button under your profile",
      "does": "Share sheet: your code and link, Copy link, Share, Scan someone’s code."
     },
     {
@@ -1548,7 +1548,7 @@
     {
      "gesture": "type",
      "on": "Name / About",
-     "does": "The pass preview at the top updates as you type."
+     "does": "The profile preview at the top (the orbit) updates as you type."
     },
     {
      "gesture": "type",

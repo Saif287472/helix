@@ -38,9 +38,10 @@ When the design is ported, these need real Flutter work, not just restyling:
    limited to today's features. This file stays as the reference for copy and
    rules.
 9. **"You" replaces the Settings page (2026-10-16).** The avatar opens it.
-   - **Helix ID pass:** a card in the brand gradient showing your photo, name,
-     about, ~name, masked number, server and device count. It has two buttons:
-     share your code and edit profile.
+   - **Your profile:** your photo, name, about, ~name, masked number, server
+     and device count, with two buttons: share your code and edit profile.
+     First drawn as a card in the brand gradient (the "Helix ID pass"); since
+     design change 19 it is the Orbit profile.
    - **Privacy checkup:** shows only what needs attention, with one-tap fixes
      (for example "Fix", "Turn on"), and a score "3 of 5". "See all checks"
      lists all five: backup, linked devices, password, recovery backup and app
@@ -49,12 +50,12 @@ When the design is ported, these need real Flutter work, not just restyling:
    - **Topic tiles, each with a live status line:** Privacy, Notifications,
      Chats, Devices, Backup, Storage. Below them, rows for Account, Help and
      about, and Advanced. A search icon opens settings search.
-   - **Share your Helix code (new feature):** a mini pass, a QR code, a link
+   - **Share your Helix code (new feature):** a small profile, a QR code, a link
      (`helix.agiletechbd.com/u/<name>`), "Copy link", "Share", and "Scan
      someone's code" (the scanner with the hint "Point the camera at someone's
      Helix code to start a chat").
 10. **Profile editor redesigned (2026-10-16).**
-    - A live preview of the pass sits at the top and updates as you type.
+    - A live preview of your profile sits at the top and updates as you type.
     - Photo, name and about, and the ~name, which is checked as you type
       ("~x is available" or the rule that fails).
     - A "Who sees what" card:
@@ -71,8 +72,8 @@ When the design is ported, these need real Flutter work, not just restyling:
       (no name) in a gradient ring.
     - It opens You. It shows an amber dot while the privacy checkup needs
       attention.
-    - On You, the whole ID pass is a button into the profile editor, with an
-      "Edit profile ›" pill. The QR button still opens the share sheet.
+    - On You, your whole profile is a button into the profile editor, with an
+      "Edit profile" pill. The QR button still opens the share sheet.
 12. **The product is renamed Orbit (2026-10-16).**
     - Every user-facing "Helix" in the prototype now says Orbit: "Orbit ID",
       "~Orbit name", "Orbit Global", "continue to Orbit", "not even Orbit",
@@ -130,8 +131,8 @@ When the design is ported, these need real Flutter work, not just restyling:
         (army).
     - **What a theme sets ("full vibe"):** colours, heading font, body and
       label fonts, corner shapes, avatar shape, bubble shape, chat pattern,
-      icon weight (light, two-tone, regular or bold), call and ID-pass
-      gradient, wordmark gradient, and small effects (Arcade glow, Terminal
+      icon weight (light, two-tone, regular or bold), call gradient, wordmark
+      gradient (also the ring on your profile), and small effects (Arcade glow, Terminal
       cursor and `[ ]` dividers, Papyrus ❦ ornaments and double-rule cards,
       Mochi ♡, Field side stripes).
     - **What it never changes:** layout and components. The title "Orbit"
@@ -282,6 +283,30 @@ When the design is ported, these need real Flutter work, not just restyling:
       - The app frame's are in `js/app.js` and the page kit's in `js/kit.js`.
       - `tools/manifest.py` exports them to `screens.json` and to the
         `INTERACTIONS.md` checklist, and fails when a screen has no list.
+18. **Shapes (2026-10-18).** Avatars are rounded squares at 25% (was 18%).
+    Bubbles have a 9 px radius (was 10 px). This applies to the Orbit and
+    Orbit Night themes; the other themes keep their own shapes.
+19. **Your profile on You is an orbit (2026-10-18).** It replaces the Orbit ID
+    pass, which read as a credit card. The goal was something that is neither
+    a card nor a usual profile header. It was chosen from four drafts: the
+    card, Orbit, Aura (a soft glow behind a large photo) and Intro (your
+    profile as a chat bubble).
+    - **The planet:** your photo, round in every theme (92 px; 76 px in the
+      editor's preview).
+    - **The ring:** a tilted ellipse in the theme's wordmark gradient. It
+      passes behind the photo at the top and in front of it at the bottom.
+    - **The moons:** ~name, device count and E2E, as small chips riding the
+      ring.
+    - **Under it:** your name (the display font), your about, then the masked
+      number and the server in mono, then "Edit profile" and a QR button.
+    - **No card:** it sits on the page background.
+    - **Tapping:** the whole thing opens the profile editor (Enter and Space
+      do too). The QR button opens the share sheet.
+    - **The share sheet** starts with a small version: the planet and its
+      ring, your name and ~name.
+    - **The data is unchanged,** so the contract only changes in wording.
+    - **Flutter:** `OrbitProfile`; the ring is a CustomPainter with a gradient
+      shader, drawn in two halves around the photo.
 
 ---
 

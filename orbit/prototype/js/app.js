@@ -444,7 +444,7 @@ const App = (() => {
     ink: { label: 'Dark ink', out: '#151A26', line: '#151A26', ink: '#F2F5FB', meta: '#8FD8E8' },
     tint: { label: 'Indigo tint', out: '#ECEEFC', line: '#D6DAF8', ink: '#131722', meta: '#545D86' },
   };
-  const defaults = { accent: 'blue', bubble: 'paleCyan', avatar: 18, bubbleR: 10, cut: true, bg: 'plain', density: 72, text: 100, dockLabels: false, targets: false };
+  const defaults = { accent: 'blue', bubble: 'paleCyan', avatar: 25, bubbleR: 9, cut: true, bg: 'plain', density: 72, text: 100, dockLabels: false, targets: false };
   let tweaks = { ...defaults };
 
   function loadTweaks() { try { Object.assign(tweaks, JSON.parse(localStorage.getItem(TWEAKS_KEY) || '{}')); } catch (_) {} }
@@ -601,7 +601,8 @@ const App = (() => {
     $$('#vDevice [data-device]').forEach((b) => b.addEventListener('click', () => setDevice(b.dataset.device)));
     let saved = null; try { saved = (q && q.get('theme')) || localStorage.getItem(THEME_KEY); } catch (_) {}
     setTheme(saved || 'orbit', { animate: false, save: false });
-    loadTweaks(); applyTweaks(); buildTweaks();
+    loadTweaks();
+    applyTweaks(); buildTweaks();
     $('#tReset').addEventListener('click', () => { tweaks = { ...defaults }; saveTweaks(); applyTweaks(); buildTweaks(); });
     $('#vFilter').addEventListener('input', buildIndex);
     $('#vIndexToggle').addEventListener('click', () => $('#viewer').classList.toggle('index-open'));

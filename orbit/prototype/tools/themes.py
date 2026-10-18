@@ -95,7 +95,7 @@ THEMES = [
          hues=['#2563EB', '#0A8FA8', '#7C4DD8', '#14946F', '#B87A12', '#D04A6E', '#5E8A1A', '#5A6680'],
          font='"Geist", ui-sans-serif, system-ui, sans-serif', display='"Geist", ui-sans-serif, system-ui, sans-serif', mono='"Geist Mono", ui-monospace, monospace',
          display_weight=650, display_tracking='-0.02em', wordmark_tracking='-0.045em', transform='none',
-         radii=dict(xs=6, sm=10, md=14, lg=18, xl=24, pill=999), avatar='18%', bubble=10, cut=5,
+         radii=dict(xs=6, sm=10, md=14, lg=18, xl=24, pill=999), avatar='25%', bubble=9, cut=5,
          pattern='none', pattern_size='auto', glow='0 0 0 transparent', extra='',
          over={'line': '#E2E6ED', 'line-2': '#ECEFF3', 'pressed': '#E8EBF0', 'chat-dot': '#D6DCE5', 'accent-soft': '#E8F0FE', 'accent-line': '#C4D6FB',
                'control-line': '#B8C0CD', 'switch-off': '#D3D8E1', 'media-ph': '#DCE1E8', 'map-bg': '#E8EEF3', 'map-line': '#D7DFE7',
@@ -116,7 +116,7 @@ THEMES = [
          hues=['#5B8CFF', '#2BC4D6', '#A884FF', '#34C6A0', '#F2B544', '#FF7A9A', '#9BD35A', '#9AA8C0'],
          font='"Geist", ui-sans-serif, system-ui, sans-serif', display='"Geist", ui-sans-serif, system-ui, sans-serif', mono='"Geist Mono", ui-monospace, monospace',
          display_weight=650, display_tracking='-0.02em', wordmark_tracking='-0.045em', transform='none',
-         radii=dict(xs=6, sm=10, md=14, lg=18, xl=24, pill=999), avatar='18%', bubble=10, cut=5,
+         radii=dict(xs=6, sm=10, md=14, lg=18, xl=24, pill=999), avatar='25%', bubble=9, cut=5,
          pattern='none', pattern_size='auto', glow='0 0 0 transparent', extra=''),
 
     dict(id='bloom', name='Bloom', vibe='Aesthetic', dark=False, icon='light',

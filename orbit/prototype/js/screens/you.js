@@ -1,10 +1,11 @@
 /*
   "You": the Settings and Profile experience, redesigned (2026-10-16, design
   first). Your avatar on Chats and Calls opens it.
-    - Orbit ID pass: who you are, in the logo's gradient, with your code.
+    - Your profile as an orbit: your photo is the planet, your ~name, devices
+      and encryption ride its ring (design change 18).
     - Privacy checkup: only what needs attention, with a one-tap fix.
     - Topic tiles with live status; Account, Help and Advanced as rows.
-  The profile editor shows a live preview of the pass as you type.
+  The profile editor shows a live preview of it as you type.
 */
 (() => {
   const { esc, icon, ibtn, avatar, row } = UI;
@@ -21,17 +22,36 @@
     { key: 'lock', ok: S.lock, icon: 'lock-simple', title: 'App lock', okText: 'On. Locks after 1 minute', badText: 'App lock is off', fix: 'Turn on' },
   ];
 
-  // The pass: the one bold, branded surface outside calls.
-  function pass({ name = Data.me.name, about = Data.me.about, helixName = Data.me.helixName, photo, actions = true, compact = false } = {}) {
-    return `<div class="pass ${compact ? 'compact' : ''} ${actions ? 'tappable' : ''}" ${actions ? 'role="button" tabindex="0" data-pass aria-label="Edit your profile"' : ''}>
-      <span class="pass-ring" aria-hidden="true"></span>
-      <div class="pass-top"><span class="pass-eyebrow">Orbit ID · ${esc(Data.me.server)}</span><span class="pass-chip">${icon('lock-simple', 'fill')}E2E</span></div>
-      <div class="pass-main">${avatar({ name: name || 'You', seed: 'me', color: 0, photo }, compact ? 52 : 64)}
-        <div class="pass-who"><div class="pass-name">${esc(name || 'Add your name')}</div>${about ? `<div class="pass-about">${esc(about)}</div>` : ''}</div></div>
-      <div class="pass-meta"><span>${helixName ? `~${esc(helixName)}` : 'No ~name yet'}</span><span>${esc(Data.me.masked)}</span></div>
-      <div class="pass-foot"><span class="pass-net">${icon('devices')} 2 devices</span>
-        ${actions ? `<div class="pass-actions"><button class="pass-btn" data-share title="Share your Orbit code" aria-label="Share your Orbit code">${icon('qr-code')}</button><span class="pass-edit">${icon('pencil-simple')}Edit profile${icon('caret-right', 'bold')}</span></div>` : ''}</div>
+  // Your profile at the top of You (design change 18, 2026-10-18): your photo
+  // is the planet, a ring in the wordmark gradient circles it, and your ~name,
+  // devices and encryption ride the ring as moons. No card: it sits on the page.
+  // The whole thing opens the profile editor; the QR button opens the share sheet.
+  // Flutter: OrbitProfile (the ring is a CustomPainter with a gradient shader).
+  function profile(opts = {}) {
+    const o = { name: Data.me.name, about: Data.me.about, helixName: Data.me.helixName, actions: true, compact: false, ...opts };
+    const size = o.compact ? 76 : 92;
+    const handle = o.helixName ? `~${esc(o.helixName)}` : 'No ~name yet';
+    return `<div class="pf pf-orbit ${o.compact ? 'compact' : ''} ${o.actions ? 'tappable' : ''}" ${o.actions ? 'role="button" tabindex="0" data-profile aria-label="Edit your profile"' : ''}>
+      <div class="pfo-system" style="--planet:${size}px">
+        <span class="pfo-ring back" aria-hidden="true"></span>
+        <span class="pfo-planet">${avatar({ name: o.name || 'You', seed: 'me', color: 0, photo: o.photo }, size)}</span>
+        <span class="pfo-ring front" aria-hidden="true"></span>
+        <span class="pfo-moon m1">${icon('at')}${handle}</span>
+        <span class="pfo-moon m2">${icon('devices')}2 devices</span>
+        <span class="pfo-moon m3">${icon('lock-simple', 'fill')}E2E</span>
+      </div>
+      <div class="pfo-name">${esc(o.name || 'Add your name')}</div>
+      ${o.about ? `<div class="pfo-about">${esc(o.about)}</div>` : ''}
+      <div class="pfo-meta mono">${esc(Data.me.masked)} · ${esc(Data.me.server)}</div>
+      ${o.actions ? `<div class="pf-actions"><span class="pf-edit">${icon('pencil-simple')}Edit profile</span><button class="pf-qr" data-share title="Share your Orbit code" aria-label="Share your Orbit code">${icon('qr-code')}</button></div>` : ''}
     </div>`;
+  }
+
+  // The small version at the top of the share sheet: the planet and its ring, your name and ~name.
+  function profileMini() {
+    return `<div class="pf-mini"><div class="pfo-system" style="--planet:44px;--ring-w:92px" aria-hidden="true">
+        <span class="pfo-ring back"></span><span class="pfo-planet">${avatar({ name: Data.me.name, seed: 'me', color: 0 }, 44)}</span><span class="pfo-ring front"></span></div>
+      <div class="pfm-who"><div class="pfm-name">${esc(Data.me.name)}</div><div class="pfm-handle mono">~${esc(Data.me.helixName)}</div></div></div>`;
   }
 
   function checkup(showAll) {
@@ -65,8 +85,8 @@
   App.register({
     id: 'settings-page', title: 'You', group: 'You (settings and profile)', order: 58,
     interactions: [
-      ['tap', 'Orbit ID pass', 'Opens the profile editor (Enter and Space do too).'],
-      ['tap', 'QR on the pass', 'Share sheet: your code and link, Copy link, Share, Scan someone’s code.'],
+      ['tap', 'Your profile (the orbit at the top)', 'Opens the profile editor (Enter and Space do too).'],
+      ['tap', 'QR button under your profile', 'Share sheet: your code and link, Copy link, Share, Scan someone’s code.'],
       ['tap', 'Fix / Turn on in the checkup', 'Opens Recovery backup, or asks to turn on app lock.'],
       ['tap', 'See all 5 checks', 'Sheet with every check; each opens its page or fixes it.'],
       ['tap', 'Tile or row', 'Opens that topic. On a window it opens on the right and stays marked.'],
@@ -92,7 +112,7 @@
       }
       return `<header class="appbar flat you-bar">${ibtn('arrow-left', 'Back', 'data-back')}<div class="ab-title"><h1>You</h1></div>${ibtn('magnifying-glass', 'Search settings', 'data-search')}</header>
         <div class="scroll" data-keep-scroll="you" style="padding-bottom:36px">
-          ${pass()}
+          ${profile()}
           ${checkup(false)}
           <div class="stiles">${TILES().map(([go, ic, c, t, m]) => `<button class="stile" data-go="${go}"><span class="rw-ico av-${c}">${icon(ic)}</span><span class="st-title">${t}</span><span class="st-meta">${m}</span></button>`).join('')}</div>
           <div class="card" style="margin-top:12px">${ROWS.map(([go, ic, c, t, s]) => row({ icon: ic, color: c, title: t, sub: s, end: 'chevron', attrs: `data-go="${go}"` })).join('')}</div>
@@ -106,7 +126,7 @@
       const q = el.querySelector('#youQ');
       if (q) q.addEventListener('input', () => { st.q = q.value; const p = q.selectionStart; entry.rerender(); const n = entry.el.querySelector('#youQ'); n.focus(); n.setSelectionRange(p, p); });
       el.querySelector('[data-share]')?.addEventListener('click', (e) => { e.stopPropagation(); shareSheet(); });
-      const passEl = el.querySelector('[data-pass]');
+      const passEl = el.querySelector('[data-profile]');
       if (passEl) {
         passEl.addEventListener('click', () => App.push('profile'));
         passEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); App.push('profile'); } });
@@ -128,7 +148,7 @@
   function shareSheet() {
     const link = `helix.agiletechbd.com/u/${Data.me.helixName}`;
     const h = App.sheet({ body: `<div class="share-sheet">
-      <div class="pass mini"><span class="pass-ring" aria-hidden="true"></span><div class="pass-main">${avatar({ name: Data.me.name, color: 0 }, 44)}<div class="pass-who"><div class="pass-name">${esc(Data.me.name)}</div><div class="pass-about mono">~${esc(Data.me.helixName)}</div></div></div></div>
+      ${profileMini()}
       <div class="qr-wrap" style="padding-top:20px"><div class="qr-card">${qr('my-helix-code', 200)}</div></div>
       <p class="sec-foot" style="text-align:center;margin:12px 24px 0">Anyone who scans this can message you. Your number stays hidden.</p>
       <div class="lk-url" style="margin:14px var(--gutter) 0;text-align:center">${esc(link)}</div>
@@ -154,7 +174,7 @@
   App.register({
     id: 'profile', title: 'Edit profile', group: 'You (settings and profile)', order: 58,
     interactions: [
-      ['type', 'Name / About', 'The pass preview at the top updates as you type.'],
+      ['type', 'Name / About', 'The profile preview at the top (the orbit) updates as you type.'],
       ['type', '~name', 'Checked as you type: available, or which rule fails.'],
       ['tap', 'Photo', 'Adds a photo; Remove takes it off.'],
       ['tap', 'Remove my ~name', 'Asks first.'],
@@ -172,7 +192,7 @@
       const vis = (ic, what, who, tag) => `<div class="row" style="min-height:52px">${`<span class="rw-ico" style="background:var(--field)">${icon(ic)}</span>`}<span class="rw-body"><span class="rw-title" style="display:block;font-size:14px">${what}</span><span class="rw-sub" style="display:block">${who}</span></span>${tag}</div>`;
       return `<header class="appbar">${ibtn('arrow-left', 'Back', 'data-back')}<div class="ab-title"><h1>Edit profile</h1></div><button class="btn ghost" data-save style="margin-right:4px">Save</button></header>
         <div class="scroll" data-keep-scroll="prof" style="padding-bottom:36px">
-          <div class="live-preview"><span class="eyebrow">Live preview</span>${pass({ name: st.name, about: st.about, helixName: ns && ns[0] === 'ok' ? st.helixName.replace(/^~/, '').toLowerCase() : Data.me.helixName && !params.blank ? Data.me.helixName : '', photo: st.photo ? 'ph-a' : '', actions: false, compact: true })}</div>
+          <div class="live-preview"><span class="eyebrow">Live preview</span>${profile({ name: st.name, about: st.about, helixName: ns && ns[0] === 'ok' ? st.helixName.replace(/^~/, '').toLowerCase() : Data.me.helixName && !params.blank ? Data.me.helixName : '', photo: st.photo ? 'ph-a' : '', actions: false, compact: true })}</div>
           <div class="pad" style="display:flex;gap:8px;margin-top:4px"><button class="btn secondary" style="flex:1" data-photo>${icon('image')}${st.photo ? 'Change photo' : 'Choose a photo'}</button>${st.photo ? `<button class="btn ghost" style="color:var(--danger)" data-unphoto>Remove</button>` : ''}</div>
           <div class="pad" style="margin-top:18px">
             ${field({ id: 'pfName', label: 'Name', value: st.name, max: 50, counter: true, hint: 'How people see you' })}

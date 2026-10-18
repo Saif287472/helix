@@ -49,6 +49,7 @@ This plan answers each of these:
 | What to finish before porting | The wide Windows layout, and the older-style pages restyled in the You style (Phase 0). |
 | High contrast | No special theme. The chosen theme always shows. |
 | Checkpoints | After each batch you approve, commit all uncommitted work (your usual rule), never push. |
+| Themes, animations, ringtones (2026-10-18) | They are downloadable, not packed with the app. Only Orbit and Orbit Night are built in; the other six themes become the first packs. Only data is downloaded, never code. The work is Part C, after Part B. Parts A and B build the seams for it now: a theme is data, effects are a named registry, and motion tokens are part of every theme. |
 
 ## The shape of the code
 
@@ -187,19 +188,39 @@ The phase produces two lists for you:
   and messages the HTML never drew. For each one you decide: add it to the
   design (back to Phase 0 for that screen), or drop it.
 
-**Review 1:** the contracts and both lists.
+Progress (2026-10-18):
+- [x] The contract format: `contracts/README.md`. Tags: have, derive, local,
+  engine, server, demo.
+- [x] Eight contracts: frame, sign-in, home, conversation, calls, people and
+  groups, You, devices and backup. Every cited provider and file was checked
+  against the code.
+- [x] `GAPS.md`, with a recommendation for each item:
+  - 13 bugs in today's app;
+  - 5 server and 11 engine items;
+  - 6 wording fixes;
+  - 272 states the prototype never drew;
+  - 45 product questions.
+
+**Review 1:** the contracts and both lists. Approved 2026-10-18, with every recommendation in `GAPS.md`.
 
 ### Phase 2: the foundation
 
 - **The Flutter workspace** `orbit/flutter/`, on the same Flutter and Dart
   versions and the same lint rules as `helix_remote/`.
-- **The theme generator.** `tools/themes.py` also writes
-  `orbit_themes.g.dart`. CSS and Dart come from one table, and the contrast
-  check covers both.
-- **Fonts.** All 14 families are bundled (all OFL), with the app size cost
-  measured and reported. Icons come from `phosphor_flutter` (light, regular,
-  duotone, bold, fill).
-- **Theme effects** as painters:
+- **Themes are data.**
+  - `tools/themes.py` also writes one JSON file per theme.
+  - `OrbitTokens` loads that JSON, so built-in and downloaded themes share
+    one format. Dart has no per-theme constants.
+  - CSS and the JSON come from one table, and the contrast check covers both.
+- **Fonts and icons.**
+  - Only the built-in themes' fonts are bundled (Geist and Geist Mono).
+  - The preview app loads the other themes' fonts from local files, the way
+    a downloaded pack will.
+  - Icons come from `phosphor_flutter` (light, regular, duotone, bold, fill).
+- **Motion tokens** in every theme: durations, curves, and "reduce motion"
+  following the system setting.
+- **Theme effects** as a fixed, named registry of painters. A theme turns
+  them on by name, with parameters:
   - the chat patterns (dot grid, neon grid, contour lines, grain, hearts),
   - Arcade glow,
   - Terminal scanlines and cursor,
@@ -231,6 +252,15 @@ every state in all eight themes. The app's rules carry over as tests in
 - no colour is typed into a widget (tokens only),
 - list items skip rebuilds when their model is equal (the app's performance
   budgets).
+
+The interface animations are built here, inside the components:
+- page transitions,
+- a message rising when it is sent,
+- reactions popping,
+- swipe springs.
+
+They use the theme's motion tokens, respect reduce motion, and stay within
+`performance_budget_test` with no jank in long chat lists.
 
 **Review 3:** the component gallery.
 
@@ -306,6 +336,61 @@ Part B must never:
 - **Change application logic** beyond the gap items you approved.
 - **Touch the server, protocol or crypto** unless an approved gap item needs
   it.
+
+## Part C: downloadable themes, animations and ringtones (after Part B)
+
+Agreed 2026-10-18. Themes, decorative animations and ringtones are downloaded
+when someone wants them, not packed with the app.
+
+**What can be downloaded:**
+- Only data, never code. App stores forbid downloading code, and a release
+  Flutter build cannot load it anyway.
+- **Theme packs:** colours, fonts, shapes, chat pattern, icon weight,
+  gradients and effect settings.
+- **Decorative animation files** (Lottie or Rive): empty-state art, a
+  theme's ringing visual.
+- **Ringtone audio files.**
+
+**What is built into the app:**
+- the effect types: glow, scanlines, patterns, cursor;
+- all interface motion.
+
+A theme that needs a new effect type needs one app update; later themes can
+reuse that effect.
+
+**The work:**
+1. **A pack format and a signing tool.**
+   - Every pack is signed with the publisher's key.
+   - Before using a pack, the app checks its signature, size limits and
+     format. Font, audio and animation files are a known attack route, so
+     this holds even if the server is hacked.
+2. **A server endpoint on Helix Global** that lists and serves packs, built
+   with the `helix-feature` process.
+   - For now it runs on your PC. A separate file host can come later if
+     users grow.
+3. **A download manager in the app:** cache, delete, update, and accounting
+   on the Storage page.
+4. **A theme gallery on Appearance:** download, delete and "get more".
+   - When a chosen pack is missing or fails its checks, the app falls back
+     to Orbit.
+5. **A ringtone picker** on the Notifications page.
+   - One default ringtone is bundled.
+   - A chosen ringtone is downloaded ahead of time, because a call cannot
+     wait for a download.
+   - On Android, a notification channel's sound is fixed when the channel is
+     created. A custom ringtone needs a channel per ringtone, or the app
+     playing the sound itself. Today's ringer is
+     `features/calls/application/platform/notification_call_ringer.dart`.
+6. **A decorative-animation runtime** (Lottie or Rive), with an entry in the
+   dependency risk register.
+7. **New themes:**
+   - Jungle and Ocean.
+   - Metal: brushed steel and chrome, industrial.
+   - All three go through `tools/themes.py` and its contrast check.
+8. **Bloom, Mochi, Papyrus, Arcade, Terminal and Field become packs.** They
+   are the first ones, and they test the pipeline.
+9. **Later: premium themes.** On Android, selling digital items inside the
+   app means Google Play Billing.
 
 ## Rules for every agent on this work
 

@@ -56,8 +56,8 @@ Most of it is interactive:
   labels and codes.
 - **Icons:** Phosphor (`phosphor_flutter` in Flutter).
 - **Shapes:**
-  - Avatars are rounded squares at 18%.
-  - Bubbles have a 10 px radius, with one sharp 5 px corner on the first
+  - Avatars are rounded squares at 25% (changed from 18% on 2026-10-18).
+  - Bubbles have a 9 px radius (was 10 px), with one sharp 5 px corner on the first
     bubble of a run.
 - **Chat background:** plain (`--chat-bg`). There's no pattern.
 - **List density:** comfortable, with a 72 px chat row.
@@ -69,14 +69,14 @@ Most of it is interactive:
 - **Header:** the "Orbit" wordmark in gradient replaces the tab titles. Your
   round profile picture (gradient ring, no name) at the top-right opens You,
   with an amber dot while the checkup needs attention.
-- **You (settings and profile):** opens from the profile chip. Tapping the
-  whole ID pass opens the profile editor.
-  - The Helix ID pass, in the brand gradient, with share and edit buttons.
+- **You (settings and profile):** opens from the profile chip.
+  - Your profile as an orbit (`SCREENS.md` design change 19): your photo is
+    the planet, a ring in the wordmark gradient circles it, and your ~name,
+    devices and E2E ride the ring. There is no card. Tapping it opens the
+    profile editor; the QR button shares your code.
   - A privacy checkup that shows only what needs fixing.
   - Topic tiles with live status.
-  - The profile editor previews the pass live and says who sees what.
-  - `--brand-gradient` in `tokens.css` is shared by the pass and the call
-    screens.
+  - The profile editor previews your profile live and says who sees what.
 - **Topic pages** (Privacy, Notifications, Chats, Storage, Devices, Backup,
   Account) follow the You style:
   - a summary card,

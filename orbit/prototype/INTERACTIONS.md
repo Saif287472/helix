@@ -526,8 +526,8 @@ States: `recovery`, `recovery-restore`
 
 States: `settings`, `you-allgood`, `you-share`, `settings-search`
 
-- [ ] **tap** Orbit ID pass: Opens the profile editor (Enter and Space do too).
-- [ ] **tap** QR on the pass: Share sheet: your code and link, Copy link, Share, Scan someone’s code.
+- [ ] **tap** Your profile (the orbit at the top): Opens the profile editor (Enter and Space do too).
+- [ ] **tap** QR button under your profile: Share sheet: your code and link, Copy link, Share, Scan someone’s code.
 - [ ] **tap** Fix / Turn on in the checkup: Opens Recovery backup, or asks to turn on app lock.
 - [ ] **tap** See all 5 checks: Sheet with every check; each opens its page or fixes it.
 - [ ] **tap** Tile or row: Opens that topic. On a window it opens on the right and stays marked.
@@ -537,7 +537,7 @@ States: `settings`, `you-allgood`, `you-share`, `settings-search`
 
 States: `profile`, `profile-taken`, `profile-new`
 
-- [ ] **type** Name / About: The pass preview at the top updates as you type.
+- [ ] **type** Name / About: The profile preview at the top (the orbit) updates as you type.
 - [ ] **type** ~name: Checked as you type: available, or which rule fails.
 - [ ] **tap** Photo: Adds a photo; Remove takes it off.
 - [ ] **tap** Remove my ~name: Asks first.

@@ -85,8 +85,8 @@
   --display-weight: 650;
   --display-tracking: -0.02em;
   --display-transform: none;
-  --avatar-r: 18%;
-  --bubble-r: 10px;
+  --avatar-r: 25%;
+  --bubble-r: 9px;
   --bubble-cut: 5px;
   --shadow-card: 0 1px 2px rgba(19, 23, 34, 0.04);
   --shadow-float: 0 14px 34px -10px rgba(19, 23, 34, 0.22), 0 2px 6px rgba(19, 23, 34, 0.06);
@@ -198,8 +198,8 @@
   --display-weight: 650;
   --display-tracking: -0.02em;
   --display-transform: none;
-  --avatar-r: 18%;
-  --bubble-r: 10px;
+  --avatar-r: 25%;
+  --bubble-r: 9px;
   --bubble-cut: 5px;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-float: 0 14px 34px -10px rgba(0, 0, 0, 0.65), 0 2px 6px rgba(0, 0, 0, 0.35);

@@ -459,19 +459,7 @@ body.show-targets .phone-screen .menu-row { outline: 1px dashed rgba(210, 58, 58
 .me-chip .me-dot { position: absolute; top: 4px; left: 32px; width: 11px; height: 11px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 0 2px var(--surface); }
 .tab-head .tab-actions { margin-right: 10px; }
 
-/* The ID pass is one big button into the profile editor */
-.pass.tappable { cursor: pointer; transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
-.pass.tappable:hover { box-shadow: 0 26px 50px -22px rgba(29, 99, 216, 0.85); }
-.pass.tappable:active { transform: scale(0.985); }
-.pass.tappable:focus-visible { outline: 3px solid var(--accent-line); outline-offset: 3px; }
-.pass-edit { display: inline-flex; align-items: center; gap: 6px; height: var(--target); padding: 0 12px 0 14px; border-radius: 16px; background: var(--glass-bg); color: var(--glass-accent); font-weight: 600; font-size: 13px; }
-.pass-edit i { font-size: 15px; }
-.pass-edit i:last-child { font-size: 11px; }
 
-.pass-net { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-.pass-net i { font-size: 15px; }
-.pass-edit { white-space: nowrap; }
-.pass-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px; }
 
 /* ================= Profile picture (round, gradient ring) ================= */
 .me-pic { position: relative; width: var(--target); height: var(--target); margin-left: 4px; border: 0; padding: 0; background: none; border-radius: 50%; display: grid; place-items: center; transition: transform var(--dur) var(--ease); }
