@@ -9,6 +9,7 @@ import 'package:orbit_ui/orbit_ui.dart';
 /// stand-in.
 final Map<String, WidgetBuilder> orbitPorted = <String, WidgetBuilder>{
   'startup': (context) => const OrbitStartup(),
+  'kit-primitives': (context) => const KitPrimitivesScreen(),
 };
 
 /// The six pack themes' font families, which this app declares in its own

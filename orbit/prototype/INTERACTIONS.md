@@ -602,3 +602,12 @@ States: `state-kit`
 - [ ] **tap** Try again: Shows the loading state, then the content.
 - [ ] **tap** Allow / Open settings: Says which system screen opens.
 
+### Kit: primitives (`kit-primitives`, opens: inherit)
+
+States: `kit-primitives`
+
+- [ ] **tap** Icon button / button / FAB: Triggers action or ripples.
+- [ ] **tap** Switch row or standalone switch: Toggles the switch.
+- [ ] **tap** Checkbox: Ticks or unticks the checkbox.
+- [ ] **tap** Filter chip: Selects the chip.
+

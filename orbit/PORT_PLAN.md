@@ -299,9 +299,13 @@ working on a first screen.
 
 ### Phase 3: the components
 
-Components are ported in dependency order, each with a gallery page showing
-every state in all eight themes. The app's rules carry over as tests in
-`orbit_ui`:
+Components are ported in dependency order with their prototype component sheets
+in the "Design system" group (`kit-primitives`, `kit-shell`, `kit-overlays`,
+`kit-rows`, `kit-timeline`), compared against the prototype with `shoot_html.py`
+and `orbit_preview.exe --shoot` across Orbit, Night, Arcade, and Papyrus (plus
+Field for bubble stripe, Terminal for cursor).
+
+The app's rules carry over as tests in `orbit_ui`:
 - every icon button has a tooltip,
 - tap targets are at least 48 px,
 - text scaling is never clamped,
@@ -319,7 +323,28 @@ The interface animations are built here, inside the components:
 They use the theme's motion tokens, respect reduce motion, and stay within
 `performance_budget_test` with no jank in long chat lists.
 
-**Review 3:** the component gallery.
+Reviews:
+- **Review 3.1:** foundations (view models, chat patterns) and core primitives
+  (`kit-primitives`).
+- **Review 3.2:** controls, form fields, cards, app bar, tab header, dock
+  (`kit-shell`).
+- **Review 3.3:** overlays, dialogs, sheets, snackbar, and the state kit
+  (`kit-overlays` and `state-kit`).
+- **Review 3.4:** chat list tile, archived row, call log tile (`kit-rows`).
+- **Review 3.5:** message bubbles, day labels, notices, composer, send and
+  reaction animations (`kit-timeline`).
+
+Progress (2026-10-18, Review 3.1 approved):
+- [x] Review 3.1: `OrbitIconButton`, `OrbitButton` (with Arcade's notched
+  corner), `OrbitFab`, `OrbitAvatar`, `OrbitChip`, `OrbitTag`, `OrbitSwitch`,
+  `OrbitCheckbox`, `OrbitSpinner`; the chat patterns (`OrbitPatternBackground`,
+  `OrbitPageBackground`), with the grain ported from SVG's `feTurbulence`;
+  icons at all five weights chosen by the theme (`OrbitIcon`); the type scale
+  and spacing (`OrbitType`, `OrbitSpace`); the view models copied from
+  `helix_remote_ui`. Compared on `kit-primitives` in all eight themes, top and
+  bottom: every horizontal edge exact, vertical within 1px, patterns within
+  rounding; 2.2% to 4.3% of pixels differ by more than 16 levels, all text and
+  shape edges.
 
 ### Phase 4: the screens, batch by batch
 

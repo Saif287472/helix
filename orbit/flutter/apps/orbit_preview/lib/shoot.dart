@@ -41,6 +41,7 @@ final class ShootRequest {
     required this.out,
     required this.html,
     required this.report,
+    required this.scroll,
   });
 
   /// The request in [args], or null when the app should start normally.
@@ -64,6 +65,7 @@ final class ShootRequest {
       out: option('--out') ?? '$root/flutter',
       html: option('--html') ?? '$root/shots',
       report: option('--report') ?? '$root/report',
+      scroll: int.parse(option('--scroll') ?? '0'),
     );
   }
 
@@ -75,6 +77,10 @@ final class ShootRequest {
   final String out;
   final String html;
   final String report;
+
+  /// `--scroll <px>`: like the prototype's `?scroll=`, scrolls the screen's
+  /// first scrolling list that far before the shot.
+  final int scroll;
 }
 
 /// `orbit/flutter/tools/compare`, found from the working directory, so the
@@ -97,6 +103,10 @@ String _toolsDir() {
 /// Runs [request], prints what it wrote, and returns the exit code.
 Future<int> runShoot(OrbitThemeLibrary library, ShootRequest request) async {
   final stage = ValueNotifier<Widget>(const SizedBox.shrink());
+  // A screen that throws draws Flutter's red error box, which would still
+  // photograph and score. Any error during a shot fails that shot instead.
+  final errors = <FlutterErrorDetails>[];
+  FlutterError.onError = errors.add;
   runApp(_ShootApp(stage: stage));
   var failed = false;
 
@@ -121,10 +131,29 @@ Future<int> runShoot(OrbitThemeLibrary library, ShootRequest request) async {
         ),
       );
       await _settle();
+      if (errors.isNotEmpty) {
+        stderr.writeln('$key: the screen threw, so it was not shot:');
+        stderr.writeln(errors.first.exceptionAsString());
+        errors.clear();
+        failed = true;
+        continue;
+      }
+      if (request.scroll > 0) {
+        final list = _firstScrollable(boundary.currentContext!);
+        if (list == null) {
+          stderr.writeln('$key: nothing scrolls, so --scroll does nothing');
+        } else {
+          list.position.jumpTo(
+            request.scroll.toDouble().clamp(0, list.position.maxScrollExtent),
+          );
+          await _settle();
+        }
+      }
       final spec = OrbitShotSpec(
         key,
         device: request.device,
         theme: request.theme,
+        scroll: request.scroll,
       );
       final image = await captureOrbitShot(boundary, device: request.device);
       final file = await writeOrbitShot(
@@ -179,6 +208,25 @@ Future<int> runShoot(OrbitThemeLibrary library, ShootRequest request) async {
     }
   }
   return failed ? 1 : 0;
+}
+
+/// The first vertical [Scrollable] under [context], depth first.
+ScrollableState? _firstScrollable(BuildContext context) {
+  ScrollableState? found;
+  void visit(Element e) {
+    if (found != null) return;
+    if (e is StatefulElement && e.state is ScrollableState) {
+      final s = e.state as ScrollableState;
+      if (s.position.axis == Axis.vertical) {
+        found = s;
+        return;
+      }
+    }
+    e.visitChildElements(visit);
+  }
+
+  (context as Element).visitChildElements(visit);
+  return found;
 }
 
 /// Lets the stage build, lay out and paint, with fonts and a few frames in.
@@ -316,16 +364,24 @@ class _ShootApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
-    builder: (context, _) => ValueListenableBuilder<Widget>(
-      valueListenable: stage,
-      builder: (context, child, _) => OverflowBox(
-        alignment: Alignment.topLeft,
-        minWidth: 0,
-        minHeight: 0,
-        maxWidth: double.infinity,
-        maxHeight: double.infinity,
-        child: child,
-      ),
+    // An Overlay, because a builder-only MaterialApp has no Navigator to
+    // provide one, and tooltips and menus need it.
+    builder: (context, _) => Overlay(
+      initialEntries: [
+        OverlayEntry(
+          builder: (context) => ValueListenableBuilder<Widget>(
+            valueListenable: stage,
+            builder: (context, child, _) => OverflowBox(
+              alignment: Alignment.topLeft,
+              minWidth: 0,
+              minHeight: 0,
+              maxWidth: double.infinity,
+              maxHeight: double.infinity,
+              child: child,
+            ),
+          ),
+        ),
+      ],
     ),
   );
 }

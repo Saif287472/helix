@@ -93,7 +93,8 @@ class _StatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
-    Widget icon(IconData data) => Icon(data, size: 15, color: t.ink);
+    Widget icon(OrbitGlyph glyph) =>
+        OrbitIcon(glyph, weight: OrbitIconWeight.fill, size: 15, color: t.ink);
     return ExcludeSemantics(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(30, 6, 28, 0),
@@ -106,11 +107,11 @@ class _StatusBar extends StatelessWidget {
             ),
             Row(
               children: [
-                icon(OrbitIcons.cellSignalFullFill),
+                icon(OrbitIcons.cellSignalFull),
                 const SizedBox(width: 5),
-                icon(OrbitIcons.wifiHighFill),
+                icon(OrbitIcons.wifiHigh),
                 const SizedBox(width: 5),
-                icon(OrbitIcons.batteryHighFill),
+                icon(OrbitIcons.batteryHigh),
               ],
             ),
           ],

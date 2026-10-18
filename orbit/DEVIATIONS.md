@@ -74,3 +74,40 @@ Format:
   compare tool shows the drawn mark matching the prototype's to within
   anti-aliasing.
 - **Owner:** approved 2026-10-18 (Review 2).
+
+## QR display — draws the prototype's SVG pattern, not a real encoder
+
+- **Prototype:** `js/kit.js` line 39 (`Kit.qr`), drawing a deterministic 29×29 matrix SVG pattern for display.
+- **Flutter:** `OrbitQrDisplay` (`packages/orbit_ui/lib/src/components/qr_display.dart`) paints the prototype's deterministic matrix pattern.
+- **Why:** Encoding and rendering arbitrary dynamic QR codes needs a QR generator package (e.g. `qr_flutter`), which the app may not have or want as a dependency in `orbit_ui`. The prototype draws the pattern alone.
+- **Owner:** pending (to decide in Part B whether to add a real QR generator or slot).
+
+## Prototype fixes made during Review 3.1 (not deviations; listed for approval)
+
+The port follows the prototype, so these changed the prototype itself:
+
+- **The chat patterns now render.** `tools/themes.py` left `#` unencoded in
+  the pattern SVGs (`url(#n)`, `fill='#FFB3D1'`), which ends a data URL, so
+  Chrome never drew Bloom's and Papyrus's grain, Mochi's hearts or Field's
+  contours: only Arcade's grid and Terminal's scanlines ever showed. With `#`
+  encoded they appear as the theme table describes, including Papyrus's grain
+  behind every page.
+  - **Owner:** approved 2026-10-18 (Review 3.1).
+- **`kit-primitives` shows parts the way the app uses them:** the busy button
+  keeps its label with the spinner (as in `devices_backup.js`), and the
+  checkboxes are `Kit.check` rows rather than bare `.chk` boxes. A chat
+  pattern swatch was added.
+  - **Owner:** approved 2026-10-18 (Review 3.1).
+- **`boot.js` reapplies `?scroll=` after the fonts load.** A page laid out
+  before its fonts arrived was shorter, so a screenshot stopped scrolling
+  early. Screenshot tooling only; nothing a person sees.
+
+## Sub-pixel placement
+
+- **Prototype:** Chrome snaps each box's edges to whole pixels.
+- **Flutter:** draws them at their exact fractional position.
+- **Why:** this is how the two engines render, not a choice. Text line
+  heights such as 10.5px × 1.4 = 14.7px add up, so a shape further down the
+  page can sit up to 1px lower than in the prototype, with a softer edge.
+- **Owner:** approved 2026-10-18 (Review 3.1).
+

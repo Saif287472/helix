@@ -45,7 +45,7 @@
         ${L('A field refusal and a lockout')}${Kit.formCard(`${Kit.field({ id: 'kpw', label: 'Current password', type: 'password', value: 'secret', error: 'That is not your current password.' })}${Kit.fieldLock('Too many tries. Try again in 15 minutes.')}`)}
         ${L('A notice on the page')}${Kit.notice('error', 'That was not saved. Check your connection and try again.')}${Kit.notice('info', 'Saved on this device. Your phone did not let Orbit change your contacts.')}
         ${L('Toasts')}<div class="btn-row" style="padding-top:4px"><button class="btn secondary" data-t="plain">Toast</button><button class="btn secondary" data-t="error">Error toast</button><button class="btn secondary" data-t="undo">With Undo</button></div>
-        ${L('A button at work')}<div class="btn-row" style="padding-top:4px"><button class="btn primary" disabled><i class="ph ph-spinner-gap spin"></i></button><button class="btn secondary" disabled>Not ready</button></div>
+        ${L('A button at work')}<div class="btn-row" style="padding-top:4px"><button class="btn primary"><i class="ph ph-spinner-gap spin"></i>Sending</button><button class="btn secondary" disabled>Not ready</button></div>
         <p class="sec-foot" style="margin-top:18px">Placeholder rows shimmer unless the system asks to reduce motion.</p>`, { back: false, keep: 'kit' });
     },
     mount(el, params, entry) {
@@ -59,6 +59,105 @@
         entry.state.retrying = true; entry.rerender();
         setTimeout(() => { entry.state.retrying = false; if (entry.el.isConnected) entry.rerender(); }, 1200);
       });
+    },
+  });
+
+  App.register({
+    id: 'kit-primitives', title: 'Kit: primitives', group: 'Design system', order: 98,
+    interactions: [
+      ['tap', 'Icon button / button / FAB', 'Triggers action or ripples.'],
+      ['tap', 'Switch row or standalone switch', 'Toggles the switch.'],
+      ['tap', 'Checkbox', 'Ticks or unticks the checkbox.'],
+      ['tap', 'Filter chip', 'Selects the chip.'],
+    ],
+    entries: [{ key: 'kit-primitives', label: 'Primitives · buttons, avatars, chips, toggles', params: {} }],
+    render(params, entry) {
+      const L = (t) => `<div class="kit-label">${t}</div>`;
+      return Kit.youPage('Primitives', `
+        <p class="sec-foot" style="margin-top:4px">Core primitive components: buttons, avatars, chips, tags, switches and checkboxes, and the theme's chat pattern.</p>
+
+        ${L('Icon buttons')}
+        <div class="kit-frame" style="padding:12px;display:flex;align-items:center;gap:12px;background:var(--surface)">
+          ${UI.ibtn('bell', 'Mute')}
+          ${UI.ibtn('magnifying-glass', 'Search', '', 'accent')}
+          ${UI.ibtn('trash', 'Delete', '', 'danger')}
+          ${UI.ibtn('eye', 'Show', '', 'sm')}
+        </div>
+
+        ${L('Buttons')}
+        <div class="kit-frame" style="padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary">Primary</button>
+            <button class="btn ink">Ink</button>
+            <button class="btn secondary">Secondary</button>
+            <button class="btn ghost">Ghost</button>
+            <button class="btn danger">Danger</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn primary"><i class="ph ph-spinner-gap spin"></i>Sending</button>
+            <button class="btn secondary" disabled>Disabled</button>
+            <button class="btn secondary"><i class="ph ph-plus"></i>With icon</button>
+          </div>
+        </div>
+
+        ${L('Floating action button')}
+        <div class="kit-frame" style="padding:14px;background:var(--surface);display:flex;align-items:center;gap:16px">
+          <button class="fab" title="New chat" aria-label="New chat"><i class="ph ph-pencil-simple-line"></i></button>
+        </div>
+
+        ${L('Avatars')}
+        <div class="kit-frame" style="padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            ${UI.avatar(Data.av(Data.people.nadia), 48, { online: true })}
+            ${UI.avatar(Data.av(Data.people.arif), 48)}
+            ${UI.avatar({ name: 'Family', seed: 'family', group: true }, 48)}
+            ${UI.avatar(Data.av(Data.people.tanvir), 48, { check: true })}
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            ${UI.avatar(Data.av(Data.people.nadia), 32)}
+            ${UI.avatar(Data.av(Data.people.nadia), 40)}
+            ${UI.avatar(Data.av(Data.people.nadia), 48)}
+            ${UI.avatar(Data.av(Data.people.nadia), 56)}
+          </div>
+        </div>
+
+        ${L('Chips and tags')}
+        <div class="kit-frame" style="padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="chip on">All</span>
+            <span class="chip">Unread<span class="chip-n">3</span></span>
+            <span class="chip">Groups</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="tag">Default</span>
+            <span class="tag accent">E2E</span>
+            <span class="tag success">Verified</span>
+            <span class="tag warning">Expiring</span>
+            <span class="tag danger">Revoked</span>
+          </div>
+        </div>
+
+        ${L('Switches and checkboxes')}
+        <div class="kit-frame" style="padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="switch" role="switch" aria-checked="false" aria-label="Off" tabindex="0"></div>
+            <div class="switch on" role="switch" aria-checked="true" aria-label="On" tabindex="0"></div>
+          </div>
+          ${Kit.check('Keep me signed in on this computer', false)}
+          ${Kit.check('I have read the Terms', true)}
+        </div>
+
+        ${L('Chat pattern')}
+        <div class="kit-frame"><div class="timeline" style="height:140px" aria-label="The theme's chat background"></div></div>
+      `, { back: false, keep: 'kit-primitives' });
+    },
+    mount(el, params, entry) {
+      Kit.wire(el, null);
+      el.querySelectorAll('.switch').forEach((s) => s.addEventListener('click', () => {
+        const on = !s.classList.contains('on');
+        s.classList.toggle('on', on);
+        s.setAttribute('aria-checked', String(on));
+      }));
     },
   });
 })();

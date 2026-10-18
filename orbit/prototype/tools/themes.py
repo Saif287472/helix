@@ -78,7 +78,7 @@ def fit_bg(colour, text, target=4.6):
 
 
 def svg_url(svg):
-    return "url(\"data:image/svg+xml," + urllib.parse.quote(svg, safe=" =:/'#,.()-") + "\")"
+    return "url(\"data:image/svg+xml," + urllib.parse.quote(svg, safe=" =:/',.()-") + "\")"
 
 
 # ------------------------------------------------------------- chat patterns

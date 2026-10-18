@@ -302,7 +302,7 @@
   --brand-gradient: linear-gradient(150deg, var(--call-top) 0%, var(--call-mid) 55%, var(--call-bottom) 100%);
   --wordmark-gradient: linear-gradient(100deg, #9E5F55 0%, #C08A6E 48%, #6F8F72 100%);
   --wordmark-tracking: -0.02em;
-  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.55 0 0 0 0 0.35 0 0 0 0 0.3 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(#n)'/%3E%3C/svg%3E");
+  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.55 0 0 0 0 0.35 0 0 0 0 0.3 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --chat-pattern-size: 160px 160px;
   --glow: 0 0 0 transparent;
   --font: "DM Sans", ui-sans-serif, system-ui, sans-serif;
@@ -417,7 +417,7 @@
   --brand-gradient: linear-gradient(150deg, var(--call-top) 0%, var(--call-mid) 55%, var(--call-bottom) 100%);
   --wordmark-gradient: linear-gradient(100deg, #FF6FAE 0%, #B98CFF 48%, #6FC8FF 100%);
   --wordmark-tracking: -0.02em;
-  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M16 20c-2-3-7-2-7 2 0 3 4 5 7 8 3-3 7-5 7-8 0-4-5-5-7-2z' fill='#FFB3D1' fill-opacity='.4'/%3E%3Cpath d='M46 40l1.6 3.4 3.4 1.6-3.4 1.6L46 50l-1.6-3.4L41 45l3.4-1.6z' fill='#B9A2FF' fill-opacity='.45'/%3E%3Ccircle cx='50' cy='14' r='1.6' fill='#7FD0F5' fill-opacity='.5'/%3E%3C/svg%3E");
+  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M16 20c-2-3-7-2-7 2 0 3 4 5 7 8 3-3 7-5 7-8 0-4-5-5-7-2z' fill='%23FFB3D1' fill-opacity='.4'/%3E%3Cpath d='M46 40l1.6 3.4 3.4 1.6-3.4 1.6L46 50l-1.6-3.4L41 45l3.4-1.6z' fill='%23B9A2FF' fill-opacity='.45'/%3E%3Ccircle cx='50' cy='14' r='1.6' fill='%237FD0F5' fill-opacity='.5'/%3E%3C/svg%3E");
   --chat-pattern-size: 64px 64px;
   --glow: 0 0 0 transparent;
   --font: "Nunito", ui-rounded, system-ui, sans-serif;
@@ -534,7 +534,7 @@
   --brand-gradient: linear-gradient(150deg, var(--call-top) 0%, var(--call-mid) 55%, var(--call-bottom) 100%);
   --wordmark-gradient: linear-gradient(100deg, #8A5A12 0%, #B8862B 48%, #5C3A12 100%);
   --wordmark-tracking: 0.08em;
-  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.17 0 0 0 0 0.1 0 0 0 0.1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(#n)'/%3E%3C/svg%3E");
+  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.17 0 0 0 0 0.1 0 0 0 0.1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --chat-pattern-size: 160px 160px;
   --glow: 0 0 0 transparent;
   --font: "EB Garamond", Garamond, Georgia, serif;
@@ -888,7 +888,7 @@
   --brand-gradient: linear-gradient(150deg, var(--call-top) 0%, var(--call-mid) 55%, var(--call-bottom) 100%);
   --wordmark-gradient: linear-gradient(100deg, #E4D9A8 0%, #C9B77A 48%, #8A9A5B 100%);
   --wordmark-tracking: 0.05em;
-  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cg fill='none' stroke='#323B29' stroke-width='1.3'%3E%3Cpath d='M-10 110c25-45 65-55 100-32s70 12 80-22 40-30 60-10'/%3E%3Cpath d='M-10 150c35-32 78-38 112-16s62 6 88-26 30-22 40-14'/%3E%3Cpath d='M-10 70c28-28 60-33 88-12s56 2 78-32 40-20 70-8'/%3E%3Cpath d='M-10 195c38-22 82-28 115-6s66 10 104-16'/%3E%3Cpath d='M-10 30c30-20 66-24 96-4s60 0 80-26'/%3E%3C/g%3E%3C/svg%3E");
+  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cg fill='none' stroke='%23323B29' stroke-width='1.3'%3E%3Cpath d='M-10 110c25-45 65-55 100-32s70 12 80-22 40-30 60-10'/%3E%3Cpath d='M-10 150c35-32 78-38 112-16s62 6 88-26 30-22 40-14'/%3E%3Cpath d='M-10 70c28-28 60-33 88-12s56 2 78-32 40-20 70-8'/%3E%3Cpath d='M-10 195c38-22 82-28 115-6s66 10 104-16'/%3E%3Cpath d='M-10 30c30-20 66-24 96-4s60 0 80-26'/%3E%3C/g%3E%3C/svg%3E");
   --chat-pattern-size: 220px 220px;
   --glow: 0 0 0 transparent;
   --font: "Barlow", ui-sans-serif, system-ui, sans-serif;

@@ -2000,6 +2000,34 @@
      "does": "Says which system screen opens."
     }
    ]
+  },
+  "kit-primitives": {
+   "title": "Kit: primitives",
+   "group": "Design system",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Icon button / button / FAB",
+     "does": "Triggers action or ripples."
+    },
+    {
+     "gesture": "tap",
+     "on": "Switch row or standalone switch",
+     "does": "Toggles the switch."
+    },
+    {
+     "gesture": "tap",
+     "on": "Checkbox",
+     "does": "Ticks or unticks the checkbox."
+    },
+    {
+     "gesture": "tap",
+     "on": "Filter chip",
+     "does": "Selects the chip."
+    }
+   ]
   }
  },
  "screens": [
@@ -6663,6 +6691,15 @@
    "group": "Design system",
    "label": "State kit · every shared state",
    "screen": "state-kit",
+   "params": {},
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-primitives",
+   "group": "Design system",
+   "label": "Primitives · buttons, avatars, chips, toggles",
+   "screen": "kit-primitives",
    "params": {},
    "base": [],
    "placement": "inherit"

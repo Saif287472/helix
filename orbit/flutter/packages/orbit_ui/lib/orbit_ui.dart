@@ -9,11 +9,27 @@
 library;
 
 export 'src/brand/orbit_mark.dart';
+export 'src/components/avatar.dart';
+export 'src/components/button.dart';
+export 'src/components/chip_tag.dart';
+export 'src/components/fab.dart';
+export 'src/components/spinner.dart';
+export 'src/components/icon_button.dart';
+export 'src/components/toggles.dart';
 export 'src/gallery/theme_gallery.dart';
+export 'src/icons/orbit_glyph.dart';
 export 'src/icons/orbit_icons.dart';
+export 'src/models/view_models.dart';
+export 'src/screens/kit_primitives.dart';
+export 'src/screens/kit_sheet.dart';
 export 'src/startup/orbit_startup.dart';
+export 'src/theme/effect_shapes.dart';
 export 'src/theme/effects.dart';
 export 'src/theme/motion.dart';
 export 'src/theme/orbit_font_families.dart';
+export 'src/theme/orbit_metrics.dart';
 export 'src/theme/orbit_theme.dart';
 export 'src/theme/orbit_tokens.dart';
+export 'src/theme/pattern_painter.dart';
+export 'src/theme/svg_path.dart';
+export 'src/theme/turbulence.dart';
