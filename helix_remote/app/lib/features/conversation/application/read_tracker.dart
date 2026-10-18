@@ -9,8 +9,9 @@ import 'package:helix_remote/features/conversation/application/conversation_head
 /// scrolled to the bottom. That is what sends read receipts, so a message
 /// scrolled past in the background, or above the fold, is not "read".
 ///
-/// Also starts the disappearing timers of messages that are on screen (a timer
-/// counts from first display).
+/// Also starts the disappearing timers of the messages the timeline says it
+/// drew: a timer counts from first display on this device, so the rows have to
+/// come from the list rather than from the database (see [displayed]).
 final class ReadTracker extends Notifier<void> {
   ReadTracker(this.conversationId);
 
@@ -20,6 +21,12 @@ final class ReadTracker extends Notifier<void> {
   bool _foreground = true;
   Timer? _timer;
   final Set<int> _displayed = {};
+
+  /// Rows the timeline has drawn whose timer has not been started yet. A
+  /// message that arrives while the app is in the background was never really
+  /// seen, so nothing is written then; the rows wait here until the app comes
+  /// back and are started then.
+  final Set<int> _onScreen = {};
 
   /// A little patience, so flinging past the bottom is not a read.
   static const settle = Duration(milliseconds: 300);
@@ -38,6 +45,7 @@ final class ReadTracker extends Notifier<void> {
   /// The app came to the foreground or went away.
   void setForeground(bool value) {
     _foreground = value;
+    if (value) unawaited(_startTimers());
     _maybeMarkRead();
   }
 
@@ -58,14 +66,31 @@ final class ReadTracker extends Notifier<void> {
     });
   }
 
-  /// These messages (with a disappearing timer) are on screen now.
+  /// These messages are on screen now.
+  ///
+  /// The timeline says which rows it drew, and nothing else does: a message
+  /// the person cannot see must not start its disappearing timer. Rows drawn
+  /// while the app was in the background are kept and started when it comes
+  /// back (see [setForeground]).
   Future<void> displayed(Iterable<int> rowids) async {
-    if (!_foreground) return;
+    _onScreen.addAll(rowids);
+    await _startTimers();
+  }
+
+  /// Starts the disappearing timer of everything on screen that has none.
+  ///
+  /// A row is only ever started once per conversation: [_displayed] holds the
+  /// ones that have been, so scrolling back up does not restart a timer.
+  /// Messages with no timer (everything but a disappearing-message chat) cost
+  /// one query each and change nothing, which is the engine's own guard.
+  Future<void> _startTimers() async {
+    if (!_foreground || _onScreen.isEmpty) return;
     final fresh = [
-      for (final id in rowids)
+      for (final id in _onScreen)
         if (_displayed.add(id)) id,
     ];
-    if (fresh.isEmpty) return;
+    _onScreen.clear();
+    if (fresh.isEmpty || !ref.mounted) return;
     final gateway = await ref.read(chatGatewayProvider.future);
     for (final id in fresh) {
       await gateway.markDisplayed(id);

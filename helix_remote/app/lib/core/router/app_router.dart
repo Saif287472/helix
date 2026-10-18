@@ -115,6 +115,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return router;
 });
 
+/// The routes the restore step owns, while it is pending: the step itself and
+/// the recovery page it offers ("I have a recovery secret"). Anything else is
+/// still redirected to the step, which is what keeps it from being skipped.
+const _restoreStepRoutes = {
+  RoutePaths.restoreAfterSignIn,
+  RoutePaths.backupRecovery,
+};
+
 /// Where the user belongs, given where they are.
 ///
 /// The states that mean "wait" return null so the current screen stays up
@@ -135,7 +143,10 @@ String? _redirectFor(Ref ref, String location) {
     // The step after signing in on a new device comes before the tabs, once.
     final step = ref.read(postSignInProvider);
     if (step == PostSignInStep.offerRestore) {
-      return at == RoutePaths.restoreAfterSignIn
+      // It holds the person on its own step, and on the pages that step opens -
+      // "I have a recovery secret" is one of them, and redirecting them off it
+      // made the recovery-secret route after sign-in unreachable.
+      return _restoreStepRoutes.contains(at)
           ? null
           : RoutePaths.restoreAfterSignIn;
     }

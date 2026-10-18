@@ -98,6 +98,34 @@ void main() {
     expect(find.text('Chats'), findsWidgets);
   });
 
+  testWidgets('"I have a recovery secret" is reachable from the step', (
+    tester,
+  ) async {
+    await pump(tester);
+    container.read(postSignInProvider.notifier).offerRestore();
+    auth.add(AppAuthState.ready);
+    await settle(tester);
+    expect(find.text('Restore your chats'), findsOneWidget);
+
+    await tester.tap(find.text('I have a recovery secret'));
+    await settle(tester);
+
+    // The step's redirect used to send every other location back to
+    // /restore, so this page bounced and the recovery-secret route after
+    // sign-in could not be reached at all.
+    expect(find.text('Restore your chats'), findsNothing);
+    expect(find.text('Recovery backup'), findsOneWidget);
+    expect(container.read(postSignInProvider), PostSignInStep.offerRestore);
+
+    // And the step still holds: leaving it is not how it is skipped.
+    container.read(appRouterProvider).go(AppRoutes.home);
+    await settle(tester);
+    expect(find.text('Restore your chats'), findsOneWidget);
+    container.read(postSignInProvider.notifier).done();
+    await settle(tester);
+    expect(find.text('Restore your chats'), findsNothing);
+  });
+
   testWidgets('the step is shown once: signing out and in again without a '
       'request goes straight to the tabs', (tester) async {
     await pump(tester);

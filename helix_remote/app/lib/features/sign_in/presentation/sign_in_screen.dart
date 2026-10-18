@@ -277,7 +277,12 @@ class _NamePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final newAccount = state.isNewAccount;
-    final needsTerms = newAccount && state.requiresTerms;
+    // Taking an existing account over with a verified SMS code is still a
+    // sign-in on Helix Global and moves that account to this phone, so the
+    // Terms are asked for here exactly as they are for a new account. The
+    // state decides it (`showsTerms`), never this screen, so it cannot drift
+    // away from what `completeSetup` will demand.
+    final needsTerms = state.showsTerms;
 
     return SignInFrame(
       title: newAccount ? 'Your name' : 'Welcome back',

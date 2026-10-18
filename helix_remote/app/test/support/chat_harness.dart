@@ -85,6 +85,7 @@ class TestChatGateway extends ChatGateway {
     DateTime? at,
     String sender = 'bob',
     String? id,
+    int? expireSeconds,
   }) {
     final when = at ?? testNow.subtract(Duration(minutes: 600 - _n));
     final messageId = id ?? 'in${_n++}';
@@ -100,6 +101,11 @@ class TestChatGateway extends ChatGateway {
         kind: 'text',
         body: Value(text),
         status: MessageStatus.received,
+        // A received message arrives with no `expires_at`: the timer counts
+        // from first display on this device, which the timeline reports.
+        expireSeconds: expireSeconds == null
+            ? const Value.absent()
+            : Value(expireSeconds),
       ),
     );
   }

@@ -357,6 +357,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
                       ui: this,
                       onAtBottomChanged: tracker.setAtBottom,
                       onVisibleMessages: tracker.messagesChanged,
+                      onDrawnRows: tracker.displayed,
                     ),
             ),
             if (!_searching && !selecting)

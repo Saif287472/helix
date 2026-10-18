@@ -16,6 +16,7 @@ class TimelineView extends ConsumerStatefulWidget {
     required this.ui,
     required this.onAtBottomChanged,
     required this.onVisibleMessages,
+    required this.onDrawnRows,
   });
 
   final TimelineArgs args;
@@ -26,6 +27,13 @@ class TimelineView extends ConsumerStatefulWidget {
 
   /// New snapshot: the newest messages are on screen (for read tracking).
   final VoidCallback onVisibleMessages;
+
+  /// Rows this list has drawn, by database id, once per frame.
+  ///
+  /// This is what starts a disappearing message's timer: the person has seen
+  /// the row, and nothing else knows that. Only the rows the list built are
+  /// reported, so a message scrolled far out of sight never starts one.
+  final Future<void> Function(Iterable<int> rowids) onDrawnRows;
 
   @override
   ConsumerState<TimelineView> createState() => _TimelineViewState();
@@ -44,6 +52,11 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
   GlobalKey? _focusKey;
   bool _openedAtUnread = false;
   bool _seenFirst = false;
+
+  /// Rows built since the last flush to [TimelineView.onDrawnRows], and
+  /// whether a flush is already queued for this frame.
+  final Set<int> _drawn = {};
+  bool _flushQueued = false;
 
   /// The row widget built for each item, reused while nothing about the item
   /// changed (see [TimelineRowView]).
@@ -68,6 +81,26 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
   void dispose() {
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// A message row was built: it is on screen, so a disappearing message's
+  /// timer starts from here. Reported after the frame, never during one -
+  /// the tracker reads a provider and writes to the database, which is not a
+  /// thing a build may do.
+  void _noteDrawn(int? rowid) {
+    if (rowid == null) return;
+    _drawn.add(rowid);
+    if (_flushQueued) return;
+    _flushQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _flushDrawn());
+  }
+
+  Future<void> _flushDrawn() async {
+    _flushQueued = false;
+    if (!mounted || _drawn.isEmpty) return;
+    final rowids = _drawn.toList(growable: false);
+    _drawn.clear();
+    await widget.onDrawnRows(rowids);
   }
 
   void _onScroll() {
@@ -268,6 +301,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
               final entry = snapshot.newestFirst[index - extra];
               final id = entry.item.id;
               final rowid = entry.messageRowid;
+              _noteDrawn(rowid);
               final isSelected = rowid != null && selection.contains(rowid);
               final isHighlighted =
                   highlight != null && entry.messageId == highlight.messageId;

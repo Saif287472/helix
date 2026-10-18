@@ -109,6 +109,16 @@ final class SignInState {
   /// server has its own operator policies and its own legal documents.
   bool get requiresTerms => !isAdvanced;
 
+  /// Whether the last page must offer the Terms box.
+  ///
+  /// Exactly [requiresTerms], and deliberately **not**
+  /// `isNewAccount && requiresTerms`: [SignInController.completeSetup] demands
+  /// the Terms on Helix Global whatever the account's history is, so a screen
+  /// that hides the box for a take-over leaves "Forgot password?" unable to
+  /// finish. The two were once written separately and drifted; this is the one
+  /// place that says it.
+  bool get showsTerms => requiresTerms;
+
   /// The number as it is dialled, for the page subtitle.
   String get phoneLabel =>
       digits.isEmpty ? countryCode : '$countryCode $digits';

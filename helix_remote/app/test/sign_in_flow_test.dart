@@ -278,6 +278,44 @@ void main() {
       expect(await notifier.completeSetup(), isFalse);
       expect(notifier.state.errorMessage, contains('code sent to your phone'));
     });
+
+    test('are asked for when an existing account is taken over', () async {
+      // "Forgot password?" moves an existing account to this phone with the
+      // verified SMS code. That is still Helix Global, so `completeSetup`
+      // demands the Terms - and the page has to offer the box, or the take-over
+      // can never finish.
+      final takenOver = const SignInState().copyWith(
+        page: SignInPage.name,
+        accountExists: true,
+        hasPassword: true,
+      );
+      expect(takenOver.isNewAccount, isFalse);
+      expect(takenOver.requiresTerms, isTrue);
+      expect(
+        takenOver.showsTerms,
+        isTrue,
+        reason: 'the box must appear wherever completeSetup will ask for it',
+      );
+    });
+
+    testWidgets('the box is on the last page on Helix Global', (tester) async {
+      final container = await pumpScreen(tester);
+      container.read(signInControllerProvider.notifier).forgotPassword();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('terms-checkbox')), findsOneWidget);
+      expect(find.text('Read the Terms and Privacy Policy'), findsOneWidget);
+    });
+
+    testWidgets('and absent on a personal server', (tester) async {
+      final container = await pumpScreen(tester);
+      unawaitedOpen(container.read(signInControllerProvider.notifier));
+      container.read(signInControllerProvider.notifier).forgotPassword();
+      await tester.pumpAndSettle();
+
+      expect(container.read(signInControllerProvider).page, SignInPage.name);
+      expect(find.byKey(const ValueKey('terms-checkbox')), findsNothing);
+    });
   });
 
   group('routing', () {

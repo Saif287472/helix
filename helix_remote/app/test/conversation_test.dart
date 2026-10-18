@@ -334,4 +334,114 @@ void main() {
     await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
     await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
   });
+
+  group('disappearing messages', () {
+    /// The timer the screen started for [rowid], or null when it started none.
+    Future<DateTime?> expiryOf(
+      WidgetTester tester,
+      TestChatGateway gateway,
+      int rowid,
+    ) async => (await tester.runAsync(
+      () => gateway.engine.chats.message(rowid),
+    ))?.expiresAt;
+
+    // The framework asserts on lifecycle shortcuts, so the app is walked the
+    // way the platform walks it: resumed -> inactive -> hidden -> paused, and
+    // back the other way.
+    Future<void> leave(WidgetTester tester) async {
+      for (final state in const [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+        await tester.pump();
+      }
+    }
+
+    Future<void> comeBack(WidgetTester tester) async {
+      for (final state in const [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+        await tester.pump();
+      }
+    }
+
+    chatTest('a message on screen starts its timer, and only once', (
+      tester,
+      gateway,
+    ) async {
+      final chat = (await tester.runAsync(
+        () => gateway.chatWith('bob', name: 'Bob'),
+      ))!;
+      final rowid = (await tester.runAsync(
+        () => gateway.incoming(chat, 'this goes away', expireSeconds: 3600),
+      ))!;
+      expect(
+        (await tester.runAsync(
+          () => gateway.engine.chats.message(rowid.localRowid),
+        ))?.expiresAt,
+        isNull,
+        reason: 'a received message arrives with no timer',
+      );
+
+      await open(tester, gateway, chat);
+      expect(
+        await expiryOf(tester, gateway, rowid.localRowid),
+        testNow.toUtc().add(const Duration(hours: 1)),
+      );
+
+      // Scrolling back and forth must not restart it: the timer counts from
+      // first display, and a longer life is not a thing the person agreed to.
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await settle(tester, rounds: 10);
+      await tester.drag(find.byType(ListView), const Offset(0, 400));
+      await settle(tester, rounds: 10);
+      expect(
+        await expiryOf(tester, gateway, rowid.localRowid),
+        testNow.toUtc().add(const Duration(hours: 1)),
+      );
+    });
+
+    chatTest('a message drawn in the background waits for the app to return', (
+      tester,
+      gateway,
+    ) async {
+      final chat = (await tester.runAsync(
+        () => gateway.chatWith('bob', name: 'Bob'),
+      ))!;
+      await open(tester, gateway, chat);
+
+      await leave(tester);
+      final rowid = (await tester.runAsync(
+        () => gateway.incoming(chat, 'sent while away', expireSeconds: 60),
+      ))!;
+      await settle(tester, rounds: 10);
+
+      // Nobody has looked at this, so it must not be disappearing yet.
+      expect(await expiryOf(tester, gateway, rowid.localRowid), isNull);
+
+      await comeBack(tester);
+      await settle(tester, rounds: 10);
+      expect(
+        await expiryOf(tester, gateway, rowid.localRowid),
+        testNow.toUtc().add(const Duration(minutes: 1)),
+      );
+    });
+
+    chatTest('an ordinary message is left alone', (tester, gateway) async {
+      final chat = (await tester.runAsync(
+        () => gateway.chatWith('bob', name: 'Bob'),
+      ))!;
+      final rowid = (await tester.runAsync(
+        () => gateway.incoming(chat, 'this one stays'),
+      ))!;
+      await open(tester, gateway, chat);
+      await settle(tester, rounds: 10);
+      expect(await expiryOf(tester, gateway, rowid.localRowid), isNull);
+    });
+  });
 }
