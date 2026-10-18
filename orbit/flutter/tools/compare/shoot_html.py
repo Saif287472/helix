@@ -415,6 +415,20 @@ def url_for(base, key, device, theme, scroll, query=''):
     return f'{base.rstrip("/")}/{search}#{quote(key)}'
 
 
+def screen_of(key):
+    """The screen id a key opens (screens.json), or None when unknown."""
+    try:
+        with open(os.path.join(PROTOTYPE, 'screens.json'), encoding='utf-8') as f:
+            screens = json.load(f)['screens']
+    except (OSError, KeyError, ValueError):
+        return None
+    return next((s.get('screen') for s in screens if s.get('key') == key), None)
+
+
+# The id of the page on top of the stack: the screen the shot shows.
+OPEN_SCREEN = "(() => { const p = [...document.querySelectorAll('#stack .page')].pop(); return p ? p.dataset.screen : null; })()"
+
+
 def shoot(chrome, base, key, a):
     """One screen state: navigate, wait for readiness, let the page settle,
     capture. Retries once, because the documented failure mode is a shot taken
@@ -461,7 +475,12 @@ def shoot(chrome, base, key, a):
             entry['width'], entry['height'] = size or (0, 0)
             entry['bytes'] = len(data)
             entry['readyMs'] = ready_ms
-            if size != (clip['width'], clip['height']):
+            # A dropped navigation leaves the previous screen up, which still
+            # photographs and scores; so the open screen must be the key's.
+            want, shown = screen_of(key), chrome.evaluate(OPEN_SCREEN)
+            if want and shown != want:
+                entry['reason'] = f'wrong screen: {shown} is open, not {want}'
+            elif size != (clip['width'], clip['height']):
                 entry['reason'] = f'wrong size {size}, wanted {clip["width"]}x{clip["height"]}'
             elif len(data) < a.blank_bytes:
                 entry['reason'] = f'blank? only {len(data)} bytes'

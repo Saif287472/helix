@@ -21,6 +21,8 @@ class OrbitIconButton extends StatelessWidget {
     this.small = false,
     this.weight,
     this.color,
+    this.size = OrbitSpace.target,
+    this.iconSize,
   });
 
   final OrbitGlyph icon;
@@ -35,6 +37,13 @@ class OrbitIconButton extends StatelessWidget {
   /// Overrides the tone's colour (an app bar in selection mode).
   final Color? color;
 
+  /// The drawn size: 48, or 44 inside a text field (`.fld-box .ibtn`), which
+  /// still takes taps across 48px.
+  final double size;
+
+  /// The icon's size when the context sets one (19 in a text field).
+  final double? iconSize;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -45,14 +54,14 @@ class OrbitIconButton extends StatelessWidget {
           OrbitIconButtonTone.accent => t.accent,
           OrbitIconButtonTone.danger => t.danger,
         };
-    return Tooltip(
+    final button = Tooltip(
       message: tooltip,
       excludeFromSemantics: true,
       child: Semantics(
         button: true,
         label: tooltip,
         child: SizedBox.square(
-          dimension: OrbitSpace.target,
+          dimension: size,
           child: Material(
             type: MaterialType.transparency,
             shape: RoundedRectangleBorder(
@@ -69,7 +78,7 @@ class OrbitIconButton extends StatelessWidget {
                 child: OrbitIcon(
                   icon,
                   weight: weight,
-                  size: small ? 20 : 22,
+                  size: iconSize ?? (small ? 20 : 22),
                   color: ink,
                 ),
               ),
@@ -78,5 +87,6 @@ class OrbitIconButton extends StatelessWidget {
         ),
       ),
     );
+    return size < OrbitSpace.target ? OrbitTapArea(child: button) : button;
   }
 }

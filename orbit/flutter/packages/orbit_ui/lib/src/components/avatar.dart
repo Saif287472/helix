@@ -22,12 +22,16 @@ class OrbitAvatar extends StatelessWidget {
     this.size = 48,
     this.check = false,
     this.online = false,
+    this.round = false,
   });
 
   final HelixAvatarModel avatar;
   final double size;
   final bool check;
   final bool online;
+
+  /// A circle instead of the theme's corner (`.me-ring .av`).
+  final bool round;
 
   static (Color, Color) palette(OrbitTokens t, int index) =>
       switch (index % HelixAvatarModel.paletteSize) {
@@ -45,7 +49,9 @@ class OrbitAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final (bg, ink) = palette(t, avatar.colorIndex);
-    final radius = BorderRadius.circular(size * t.avatarR / 100);
+    final radius = BorderRadius.circular(
+      round ? size / 2 : size * t.avatarR / 100,
+    );
     final image = avatar.image;
     final Widget face = image != null
         ? const SizedBox.shrink()

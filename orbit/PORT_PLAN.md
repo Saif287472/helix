@@ -334,7 +334,8 @@ Reviews:
 - **Review 3.5:** message bubbles, day labels, notices, composer, send and
   reaction animations (`kit-timeline`).
 
-Progress (2026-10-18, Review 3.1 approved):
+Progress (2026-10-19; Review 3.1 approved, 3.2 done in the unattended run
+and pending your review):
 - [x] Review 3.1: `OrbitIconButton`, `OrbitButton` (with Arcade's notched
   corner), `OrbitFab`, `OrbitAvatar`, `OrbitChip`, `OrbitTag`, `OrbitSwitch`,
   `OrbitCheckbox`, `OrbitSpinner`; the chat patterns (`OrbitPatternBackground`,
@@ -345,6 +346,19 @@ Progress (2026-10-18, Review 3.1 approved):
   bottom: every horizontal edge exact, vertical within 1px, patterns within
   rounding; 2.2% to 4.3% of pixels differ by more than 16 levels, all text and
   shape edges.
+- [x] Review 3.2 (pending your review): `OrbitTextField`, `OrbitSegmented`,
+  `OrbitInlineNotice`, `OrbitBanner`, `OrbitPageIntro`, `OrbitEmptyState`,
+  `OrbitCodeBox` (regular, huge, and the secret with balanced groups),
+  `OrbitQr` and `OrbitQrCard`, `OrbitProgress`, `OrbitCard` (with Papyrus's
+  `cardRing`), `OrbitListRow`, `OrbitSection`, `OrbitGroupTitle` (with the
+  `group` ornaments), `OrbitDangerZone`, `OrbitAppBar` (plain, flat,
+  selection), `OrbitSearchField`, `OrbitWordmark` (gradient at the CSS
+  angle, italic, glow, cursor, Mochi's heart), `OrbitMePicture`,
+  `OrbitTabHeader`, `OrbitDock` (Mochi's `dockBorder`) and `OrbitDockArea`;
+  `OrbitText`, which keeps CSS line heights; `OrbitCssGradient`. Compared on
+  `kit-shell` in Orbit, Night, Arcade, Papyrus, Terminal and Mochi, top to
+  bottom: 1.8% to 7.2% of pixels differ by more than 16 levels, text and edges;
+  boxes within 1px. `kit-primitives` improved to 1.9% to 3.1%.
 
 ### Phase 4: the screens, batch by batch
 

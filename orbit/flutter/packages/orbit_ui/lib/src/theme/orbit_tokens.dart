@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:orbit_ui/src/theme/css_gradient.dart';
 import 'package:orbit_ui/src/theme/effects.dart';
 import 'package:orbit_ui/src/theme/motion.dart';
 import 'package:orbit_ui/src/theme/orbit_font_families.dart';
@@ -89,9 +90,10 @@ final class OrbitTokens extends ThemeExtension<OrbitTokens> {
         }
         at.add(s['at'] is num ? (s['at']! as num).toDouble() : 0);
       }
-      return LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
+      final angle = v['angle'];
+      if (angle is! num) throw FormatException('no angle', '$key: $v');
+      return OrbitCssGradient(
+        angle: angle.toDouble(),
         colors: colors,
         stops: at,
       );

@@ -49,11 +49,13 @@ App.boot();
       // App.boot scrolls 120 ms after start, which can be before the theme's
       // fonts arrive; the page was shorter then, so the scroll stopped short
       // (seen with Papyrus). Ask again on the open page now that it is laid
-      // out in its own fonts.
+      // out in its own fonts. Set it exactly even when it went past: the
+      // browser's scroll anchoring moves a scrolled page down when the fonts
+      // make the content above taller (seen with kit-shell, 20px).
       const pages = document.querySelectorAll('#stack .page');
       const open = pages[pages.length - 1];
       const target = open && open.querySelector('.scroll, .timeline');
-      if (target && target.scrollTop < want) target.scrollTop = want;
+      if (target) target.scrollTop = want;
       const poll = (until) => {
         if (scrolled()) INFO.scroll = 'applied';
         else if (Date.now() < until) return wait(50).then(() => poll(until));

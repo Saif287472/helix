@@ -3,6 +3,7 @@ import 'dart:ui' show PathMetric;
 import 'package:flutter/material.dart';
 
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
+import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 import 'package:orbit_ui/src/theme/pattern_painter.dart';
 
@@ -42,7 +43,7 @@ class OrbitKitPage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(6 + 8 + 2 + 6, 4, 6, 4),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(
+                  child: OrbitText(
                     orbitTransform(title, t.displayTransform),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -65,7 +66,7 @@ class OrbitKitPage extends StatelessWidget {
                         OrbitSpace.gutter + 6,
                         0,
                       ),
-                      child: Text(
+                      child: OrbitText(
                         intro,
                         style: t.font.style(
                           size: OrbitType.caption,
@@ -103,7 +104,7 @@ class OrbitKitLabel extends StatelessWidget {
         OrbitSpace.gutter + 4,
         6,
       ),
-      child: Text(
+      child: OrbitText(
         text.toUpperCase(),
         style: t.mono.style(size: 10.5, color: t.ink3, letterSpacingEm: 0.08),
       ),
@@ -139,9 +140,14 @@ class OrbitKitFrame extends StatelessWidget {
           child: ColoredBox(
             color: background ?? t.surface,
             child: Padding(
-              // The 1px edge sits inside the box, as CSS's border-box does.
-              padding: padding + const EdgeInsets.all(1),
-              child: child,
+              // The 1px edge sits inside the box, as CSS's border-box does,
+              // and `overflow: hidden` clips the content inside it, to the
+              // edge's inner curve.
+              padding: const EdgeInsets.all(1),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(t.rLg - 1),
+                child: Padding(padding: padding, child: child),
+              ),
             ),
           ),
         ),

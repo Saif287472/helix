@@ -156,6 +156,11 @@ Future<int> runShoot(OrbitThemeLibrary library, ShootRequest request) async {
         scroll: request.scroll,
       );
       final image = await captureOrbitShot(boundary, device: request.device);
+      // Where every text and drawn box landed, for measuring against the
+      // prototype's layout (`<shot>.boxes.txt` beside the PNG).
+      File(
+        '${request.out}/${spec.fileName.replaceFirst('.png', '.boxes.txt')}',
+      ).writeAsStringSync(_boxes(boundary));
       final file = await writeOrbitShot(
         image,
         outDir: request.out,
@@ -208,6 +213,42 @@ Future<int> runShoot(OrbitThemeLibrary library, ShootRequest request) async {
     }
   }
   return failed ? 1 : 0;
+}
+
+/// One line per text and per decorated or custom-painted box under
+/// [boundary]: its kind, its rectangle in the shot, and the text.
+String _boxes(GlobalKey boundary) {
+  final root = boundary.currentContext!.findRenderObject()!;
+  final out = StringBuffer();
+  String f(double v) => v.toStringAsFixed(2);
+  void visit(RenderObject o) {
+    if (o is RenderBox && o.hasSize) {
+      final kind = switch (o) {
+        RenderParagraph() => 'text',
+        RenderDecoratedBox() => 'box',
+        RenderCustomPaint() => 'paint',
+        RenderPhysicalShape() || RenderPhysicalModel() => 'material',
+        RenderEditable() => 'input',
+        _ => null,
+      };
+      if (kind != null) {
+        final at = o.localToGlobal(Offset.zero, ancestor: root);
+        final text = switch (o) {
+          RenderParagraph() => ' "${o.text.toPlainText()}"',
+          RenderEditable() => ' "${o.text?.toPlainText()}"',
+          _ => '',
+        };
+        out.writeln(
+          '$kind ${f(at.dx)} ${f(at.dy)} ${f(o.size.width)} '
+          '${f(o.size.height)}$text',
+        );
+      }
+    }
+    o.visitChildren(visit);
+  }
+
+  visit(root);
+  return out.toString();
 }
 
 /// The first vertical [Scrollable] under [context], depth first.

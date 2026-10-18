@@ -29,6 +29,9 @@ class OrbitButton extends StatelessWidget {
     this.iconWeight,
     this.busy = false,
     this.block = false,
+    this.height = OrbitSpace.target,
+    this.padding = 20,
+    this.fontSize = OrbitType.small,
   });
 
   final String label;
@@ -38,6 +41,12 @@ class OrbitButton extends StatelessWidget {
   final OrbitIconWeight? iconWeight;
   final bool busy;
   final bool block;
+
+  /// The smaller buttons in notices and banners (`height: 36px; padding: 0
+  /// 14px; font-size: 13px`) set these; they still take taps across 48px.
+  final double height;
+  final double padding;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -94,9 +103,9 @@ class OrbitButton extends StatelessWidget {
           hoverColor: hover ?? Colors.transparent,
           highlightColor: Colors.transparent,
           child: SizedBox(
-            height: OrbitSpace.target,
+            height: height,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 21),
+              padding: EdgeInsets.symmetric(horizontal: padding + 1),
               child: Row(
                 mainAxisSize: block ? MainAxisSize.max : MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -104,11 +113,7 @@ class OrbitButton extends StatelessWidget {
                   if (lead != null) ...[lead, const SizedBox(width: 8)],
                   Text(
                     label,
-                    style: t.font.style(
-                      size: OrbitType.small,
-                      weight: 560,
-                      color: fg,
-                    ),
+                    style: t.font.style(size: fontSize, weight: 560, color: fg),
                   ),
                 ],
               ),
@@ -126,11 +131,14 @@ class OrbitButton extends StatelessWidget {
       );
     }
     if (disabled) button = Opacity(opacity: 0.45, child: button);
-    return Semantics(
+    final semantic = Semantics(
       button: true,
       enabled: !disabled,
       label: busy ? '$label, busy' : null,
       child: button,
     );
+    return height < OrbitSpace.target
+        ? OrbitTapArea(child: semantic)
+        : semantic;
   }
 }

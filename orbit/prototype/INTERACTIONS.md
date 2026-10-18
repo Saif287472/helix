@@ -611,3 +611,10 @@ States: `kit-primitives`
 - [ ] **tap** Checkbox: Ticks or unticks the checkbox.
 - [ ] **tap** Filter chip: Selects the chip.
 
+### Kit: shell (`kit-shell`, opens: inherit)
+
+States: `kit-shell`
+
+- [ ] **type** Search field: × clears it.
+- [ ] **tap** Dock tab: Marks that tab.
+

@@ -2028,6 +2028,24 @@
      "does": "Selects the chip."
     }
    ]
+  },
+  "kit-shell": {
+   "title": "Kit: shell",
+   "group": "Design system",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "type",
+     "on": "Search field",
+     "does": "× clears it."
+    },
+    {
+     "gesture": "tap",
+     "on": "Dock tab",
+     "does": "Marks that tab."
+    }
+   ]
   }
  },
  "screens": [
@@ -6700,6 +6718,15 @@
    "group": "Design system",
    "label": "Primitives · buttons, avatars, chips, toggles",
    "screen": "kit-primitives",
+   "params": {},
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-shell",
+   "group": "Design system",
+   "label": "Shell · fields, notices, cards, bars, dock",
+   "screen": "kit-shell",
    "params": {},
    "base": [],
    "placement": "inherit"

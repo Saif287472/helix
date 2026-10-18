@@ -185,6 +185,12 @@
       <button class="fab" data-fab title="${fab[1]}" aria-label="${fab[1]}">${icon(fab[0], 'bold')}</button></div>`;
   }
 
+  // The tab header and the dock alone, for the kit-shell sheet (states.js).
+  App.homeParts = {
+    header: (selected = 0) => chatsHeader({ selected: { size: selected } }),
+    dock: (tab) => dock(tab, { selected: new Set() }),
+  };
+
   // =============================================================== the screen
   App.register({
     id: 'home', title: 'Chats', group: 'Home', order: 10, refreshOnReturn: true,

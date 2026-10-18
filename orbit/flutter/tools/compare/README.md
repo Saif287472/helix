@@ -207,6 +207,21 @@ a backstop.
   `scroll: unreached` in the manifest; the shot is the top of the page, which
   is what that screen is.
 
+- **A shot must show the key's screen.** Even after the address checks out,
+  a shot has caught the previous screen (Home, under `kit-shell`) and reported
+  ok. The tool now reads the top page's `data-screen` and fails the attempt
+  (`reason: wrong screen`) when it is not the key's screen from
+  `screens.json`, so the retry takes it again.
+- **Scroll anchoring moves a scrolled page.** When fonts make the content
+  above the scroll position taller, Chrome scrolls further to keep what was on
+  screen in place, so a shot at `?scroll=1400` came out at 1420. `boot.js`
+  now sets the scroll exactly once the fonts are in.
+- **Where things landed in Flutter.** Every `--shoot` also writes
+  `<shot>.boxes.txt` beside the PNG: one line per text, decorated box, custom
+  paint, material and text field, with its rectangle in the shot. Measure the
+  prototype with `getBoundingClientRect` in a browser at 412×866 and compare
+  numbers instead of pixels.
+
 ## Dependencies
 
 Python 3 and the Chrome binary. Nothing else: no pip packages, no Pillow. The

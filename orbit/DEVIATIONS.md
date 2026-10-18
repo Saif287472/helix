@@ -78,7 +78,7 @@ Format:
 ## QR display — draws the prototype's SVG pattern, not a real encoder
 
 - **Prototype:** `js/kit.js` line 39 (`Kit.qr`), drawing a deterministic 29×29 matrix SVG pattern for display.
-- **Flutter:** `OrbitQrDisplay` (`packages/orbit_ui/lib/src/components/qr_display.dart`) paints the prototype's deterministic matrix pattern.
+- **Flutter:** `OrbitQr` and `OrbitQrCard` (`packages/orbit_ui/lib/src/components/codes.dart`) paint the prototype's matrix cell for cell (`orbitQrCells` ports its FNV and xorshift with JavaScript's 32-bit rules; a test checks it against Node).
 - **Why:** Encoding and rendering arbitrary dynamic QR codes needs a QR generator package (e.g. `qr_flutter`), which the app may not have or want as a dependency in `orbit_ui`. The prototype draws the pattern alone.
 - **Owner:** pending (to decide in Part B whether to add a real QR generator or slot).
 
@@ -111,3 +111,44 @@ The port follows the prototype, so these changed the prototype itself:
   page can sit up to 1px lower than in the prototype, with a softer edge.
 - **Owner:** approved 2026-10-18 (Review 3.1).
 
+## Prototype fixes made during Review 3.2 (not deviations; listed for approval)
+
+- **The search field no longer overflows when it has text.** `.search` had
+  no `min-width: 0`, so with the clear button showing, the input's own width
+  (about 213px) pushed the field 14px past its margin on a narrow bar (the
+  kit frame; a 360px phone would do the same). `css/components.css` now sets
+  it.
+  - **Owner:** pending (Review 3.2, unattended run of 2026-10-19).
+- **`home.js` exposes the tab header and the dock** (`App.homeParts`) so the
+  `kit-shell` sheet draws the real ones. Nothing on Home changes.
+  - **Owner:** pending (Review 3.2).
+- **`boot.js` sets `?scroll=` exactly, even when the page went past it.**
+  Chrome's scroll anchoring moved a scrolled page about 20px further when the
+  fonts made the content above taller, so the prototype's shot was taken
+  lower than asked. Screenshot tooling only.
+  - **Owner:** pending (Review 3.2).
+
+## Text lines take their CSS height (Review 3.2)
+
+- **Prototype:** a line of text is `font-size × line-height` tall, a
+  fraction of a pixel where it falls (12px × 1.4 = 16.8px).
+- **Flutter:** rounds every line to a whole pixel (17px), so each block of
+  text added up to half a pixel and a long page drifted several pixels.
+  `OrbitText` (`lib/src/theme/orbit_text.dart`) takes the CSS height and
+  centres the rounded lines on it; the components use it for text that sits
+  in the flow. Inside a block of several lines, the top and bottom lines can
+  still be up to half a pixel off.
+- **Why:** the rounding is in the engine's paragraph layout, with no switch to
+  turn it off.
+- **Owner:** pending (Review 3.2).
+
+## Glyphs can sit up to 2px lower inside their line (Review 3.2)
+
+- **Prototype:** Chrome places each line's glyphs at a whole-pixel baseline.
+- **Flutter:** the line boxes land within half a pixel of Chrome's (measured
+  with the preview's `.boxes.txt` dump), but the glyphs inside can draw 1px
+  lower, and 2px in JetBrains Mono (Terminal).
+- **Why:** the two engines round the baseline differently. Matching it would
+  mean a per-font nudge measured against Chrome on Windows, whose rounding is
+  not the phone's.
+- **Owner:** pending (Review 3.2).

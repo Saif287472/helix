@@ -139,7 +139,7 @@
 
 /* Search pill (HelixSearchField) */
 .search {
-  margin: 10px var(--gutter) 6px; height: 46px; border-radius: var(--r-md);
+  margin: 10px var(--gutter) 6px; height: 46px; border-radius: var(--r-md); min-width: 0;
   background: var(--field); display: flex; align-items: center; gap: 10px; padding: 0 6px 0 14px;
   color: var(--ink-3); border: 1px solid transparent;
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);

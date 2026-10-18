@@ -4,6 +4,7 @@ import 'package:orbit_ui/src/icons/orbit_glyph.dart';
 import 'package:orbit_ui/src/icons/orbit_icons.dart';
 import 'package:orbit_ui/src/theme/motion.dart';
 import 'package:orbit_ui/src/theme/orbit_metrics.dart';
+import 'package:orbit_ui/src/theme/orbit_text.dart';
 import 'package:orbit_ui/src/theme/orbit_tokens.dart';
 
 /// `.switch` (`css/components.css`): a 44×26 pill in `--switch-off`, or
@@ -140,7 +141,7 @@ class OrbitCheckbox extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
+                  child: OrbitText(
                     label,
                     style: t.font.style(
                       size: OrbitType.small,

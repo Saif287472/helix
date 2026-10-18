@@ -15,6 +15,65 @@ OrbitEffect? orbitEffectOn(OrbitTokens t, String kind, String target) {
   return effect;
 }
 
+/// A colour as the theme table writes an effect's: a literal hex with an
+/// optional alpha, or the name of a token.
+Color orbitEffectColour(OrbitTokens t, Object? spec) {
+  if (spec is Map) {
+    if (spec['kind'] == 'token' && spec['name'] is String) {
+      return t.value<Color>(spec['name']! as String);
+    }
+    final hex = spec['colour'];
+    if (hex is String) {
+      final rgb = int.parse(hex.replaceFirst('#', ''), radix: 16);
+      final alpha = spec['alpha'];
+      return Color.fromARGB(
+        alpha is num ? (alpha * 255).round() : 255,
+        (rgb >> 16) & 0xff,
+        (rgb >> 8) & 0xff,
+        rgb & 0xff,
+      );
+    }
+  }
+  throw FormatException('not an effect colour', '$spec');
+}
+
+/// The `ornament` effects a theme puts on [target] (`day`, `group`,
+/// `wordmark`): glyphs before and after the text.
+({List<OrbitEffect> before, List<OrbitEffect> after}) orbitOrnaments(
+  OrbitTokens t,
+  String target,
+) {
+  final before = <OrbitEffect>[];
+  final after = <OrbitEffect>[];
+  for (final e in t.meta.effects) {
+    if (e.kind != 'ornament' || e.param<String>('target') != target) continue;
+    (e.param<String>('pseudo') == 'after' ? after : before).add(e);
+  }
+  return (before: before, after: after);
+}
+
+/// An ornament as a span in [base]'s style, in its own colour and size
+/// (`0.62em`) when it gives them.
+TextSpan orbitOrnamentSpan(OrbitTokens t, OrbitEffect e, TextStyle base) {
+  final size = e.param<String>('size');
+  final em = size != null && size.endsWith('em')
+      ? double.parse(size.substring(0, size.length - 2))
+      : 1.0;
+  final colour = e.params['colour'];
+  return TextSpan(
+    text: e.param<String>('glyph') ?? '',
+    style: base.copyWith(
+      fontSize: (base.fontSize ?? OrbitTextDefaults.size) * em,
+      color: colour == null ? null : orbitEffectColour(t, colour),
+    ),
+  );
+}
+
+/// The size a span falls back to when its style names none.
+abstract final class OrbitTextDefaults {
+  static const double size = 15;
+}
+
 /// `cornerClip` (Arcade): `clip-path: polygon(n 0, 100% 0, 100% calc(100% -
 /// n), calc(100% - n) 100%, 0 100%, 0 n)`, the top-left and bottom-right
 /// corners cut off at 45 degrees. A clip also removes the shadow outside it,
