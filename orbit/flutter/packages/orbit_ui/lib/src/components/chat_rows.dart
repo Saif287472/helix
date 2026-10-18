@@ -303,7 +303,7 @@ class _RowName extends StatelessWidget {
 ///
 /// - The time is mono `--t-meta` in `--ink-3`; with unread messages (and not
 ///   muted) it is `--accent-ink` at weight 600, and the preview `--ink-2`.
-/// - The preview: a typing label in `--accent-ink`; or "Draft:" in
+/// - The preview: an italic typing label in `--accent-ink`; or "Draft:" in
 ///   `--danger`; or the tick and the sender ("You:", "Ammu:" in `--ink-2`),
 ///   then the kind's icon and the text or the kind's label (italic for a
 ///   deleted, undecryptable or unsupported message).
@@ -400,8 +400,11 @@ class OrbitChatListTile extends StatelessWidget {
         maxLines: 1,
         softWrap: false,
         overflow: TextOverflow.ellipsis,
+        // Italic (`css/screens.css`); `--accent-ink`, except that an unread
+        // row's `--ink-2` comes later in the prototype's CSS and wins.
         style: base.copyWith(
-          color: t.accentInk,
+          color: loud ? t.ink2 : t.accentInk,
+          fontStyle: FontStyle.italic,
           fontWeight: FontWeight.w500,
           fontVariations: const [FontVariation('wght', 500)],
         ),

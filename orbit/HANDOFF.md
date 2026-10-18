@@ -11,7 +11,7 @@ below in order.
 | 1: contracts and the gap list | approved | `eeb1eb2` |
 | 1b: the state kit, and the Review 1 answers drawn | approved | `da028d3` |
 | 2: the Flutter foundation | approved (Review 2) | see `git log` |
-| **3: the components** | **3.1 approved; 3.2 and 3.3 pending review; 3.4 next** (`PORT_PLAN.md`) | see `git log` |
+| **3: the components** | **3.1 approved; 3.2 to 3.4 pending review; 3.5 next** (`PORT_PLAN.md`) | see `git log` |
 | 4: 10 screen batches | later | |
 | Part B: into `helix_remote/` | only when the owner says so | |
 | Part C: downloadable themes, animations, ringtones | after Part B | |

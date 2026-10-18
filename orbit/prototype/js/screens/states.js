@@ -197,6 +197,52 @@
   });
 
   App.register({
+    id: 'kit-rows', title: 'Kit: rows', group: 'Design system', order: 98.6,
+    interactions: [
+      ['swipe-right', 'Chat row', 'Pins or unpins it.'],
+      ['swipe-left', 'Chat row', 'Shows the archive toast with Undo.'],
+      ['swipe-left', 'Call row', 'Shows what is behind it (delete).'],
+    ],
+    entries: [{ key: 'kit-rows', label: 'Rows · chat list and call log', params: {} }],
+    render(params, entry) {
+      const st = entry.state;
+      st.pinned = st.pinned || new Set(Data.chats.filter((c) => c.pinned).map((c) => c.id));
+      const L = (t) => `<div class="kit-label">${t}</div>`;
+      const { icon, chatRow, callRow } = UI;
+      const wrap = (c) => `<div class="swipe-wrap"><div class="swipe-bg"><span class="sw-start">${icon('push-pin', 'fill')}${st.pinned.has(c.id) ? 'Unpin' : 'Pin'}</span><span class="sw-end">${icon('archive', 'fill')}Archive</span></div>${chatRow({ ...c, pinned: st.pinned.has(c.id) })}</div>`;
+      return Kit.youPage('Rows', `
+        <p class="sec-foot" style="margin-top:4px">The chat list and call log rows, every kind of preview in the sample data. Swipe a row to see what is behind it.</p>
+        ${L('Chats')}${Data.chats.map(wrap).join('')}
+        ${L('Selected')}${chatRow(Data.chats[0], { selected: true })}
+        ${L('Archived')}${Data.archived.map((c) => chatRow(c, { showArchived: true })).join('')}
+        ${L('Calls')}${Data.calls.map(callRow).join('')}`, { back: false, keep: 'kit-rows' });
+    },
+    mount(el, params, entry) {
+      Kit.wire(el, null);
+      el.querySelectorAll('.swipe-wrap').forEach((w) => {
+        const r = w.querySelector('.chat-row'); const bg = w.querySelector('.swipe-bg');
+        const isCall = r.classList.contains('call-row');
+        let x0 = 0, on = false, d = 0;
+        r.addEventListener('pointerdown', (e) => { if (e.target.closest('.ibtn')) return; x0 = e.clientX; on = true; d = 0; });
+        r.addEventListener('pointermove', (e) => {
+          if (!on) return; d = e.clientX - x0; if (isCall && d > 0) d = 0;
+          r.style.transition = 'none'; r.style.transform = `translateX(${d}px)`;
+          if (!isCall) bg.style.background = 'var(--accent)';
+          bg.querySelector('.sw-start') && (bg.querySelector('.sw-start').style.opacity = d > 0 ? 1 : 0);
+          bg.querySelector('.sw-end').style.opacity = d < 0 ? 1 : 0;
+        });
+        const done = () => {
+          if (!on) return; on = false; r.style.transition = 'transform 200ms var(--ease)'; r.style.transform = '';
+          const width = r.offsetWidth; const id = r.dataset.chat;
+          if (!isCall && d > width * 0.3) { entry.state.pinned.has(id) ? entry.state.pinned.delete(id) : entry.state.pinned.add(id); setTimeout(() => entry.rerender(), 200); }
+          if (!isCall && d < -width * 0.3) App.snack('Chat archived', { label: 'Undo' });
+        };
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => r.addEventListener(ev, done));
+      });
+    },
+  });
+
+  App.register({
     id: 'kit-shell', title: 'Kit: shell', group: 'Design system', order: 98.5,
     interactions: [
       ['type', 'Search field', '× clears it.'],

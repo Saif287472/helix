@@ -618,6 +618,14 @@ States: `kit-overlays`, `kit-overlays-sheet`, `kit-overlays-actions`, `kit-overl
 - [ ] **tap** A button on the sheet: Opens that overlay as the app opens it.
 - [ ] **tap** Scrim: Closes a sheet, menu or dialog.
 
+### Kit: rows (`kit-rows`, opens: inherit)
+
+States: `kit-rows`
+
+- [ ] **swipe-right** Chat row: Pins or unpins it.
+- [ ] **swipe-left** Chat row: Shows the archive toast with Undo.
+- [ ] **swipe-left** Call row: Shows what is behind it (delete).
+
 ### Kit: shell (`kit-shell`, opens: inherit)
 
 States: `kit-shell`

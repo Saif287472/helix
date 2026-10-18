@@ -171,3 +171,15 @@ The port follows the prototype, so these changed the prototype itself:
   focused field puts it after the text, which is where someone renaming
   expects it.
   - **Owner:** pending (Review 3.3).
+
+## Review 3.4
+
+- **Prototype addition:** a `kit-rows` sheet (`js/screens/states.js`): every
+  chat in `Data.chats` as Home draws it (with the swipe), a selected row, the
+  archived chats with their archive flag, and every call in `Data.calls`.
+  - **Owner:** pending (Review 3.4).
+- **A typing row that has unread messages is `--ink-2`, not
+  `--accent-ink`.** That is what the prototype's CSS does (the unread rule
+  comes after the typing rule), so the port does the same; if the accent was
+  meant, both should change together.
+  - **Owner:** pending (Review 3.4).

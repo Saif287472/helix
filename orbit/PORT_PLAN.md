@@ -368,6 +368,16 @@ and pending your review):
   `kit-overlays`, has one key per overlay. Compared on `state-kit` (four
   scrolls) and every `kit-overlays-*` key in Orbit, Night, Arcade, Papyrus,
   Terminal and Mochi: 0.6% to 6.0% of pixels differ by more than 16 levels.
+- [x] Review 3.4 (pending your review): `OrbitChatListTile` (every preview
+  kind, ticks, sender, draft, typing, flags and badges, selected),
+  `OrbitCallLogTile`, `OrbitSwipeRow` (follows the drag, acts past 30%,
+  springs back over 200ms), `OrbitTick`, `OrbitBadge`, `OrbitListLabel`; the
+  sample data as `OrbitFakes`, generated from `prototype/js/data.js`
+  (`tools/gen_orbit_fakes.py`). A new prototype sheet, `kit-rows`, shows
+  every chat and call in the sample data. Compared in Orbit, Night, Arcade,
+  Papyrus, Terminal and Mochi at three scrolls: 2.0% to 5.5%. The
+  "archived row" (`.archived-row`) has CSS but no screen draws it, so it is
+  not ported.
 
 ### Phase 4: the screens, batch by batch
 

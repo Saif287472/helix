@@ -2047,6 +2047,29 @@
     }
    ]
   },
+  "kit-rows": {
+   "title": "Kit: rows",
+   "group": "Design system",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "swipe-right",
+     "on": "Chat row",
+     "does": "Pins or unpins it."
+    },
+    {
+     "gesture": "swipe-left",
+     "on": "Chat row",
+     "does": "Shows the archive toast with Undo."
+    },
+    {
+     "gesture": "swipe-left",
+     "on": "Call row",
+     "does": "Shows what is behind it (delete)."
+    }
+   ]
+  },
   "kit-shell": {
    "title": "Kit: shell",
    "group": "Design system",
@@ -6834,6 +6857,15 @@
    "params": {
     "open": "toast-undo"
    },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-rows",
+   "group": "Design system",
+   "label": "Rows · chat list and call log",
+   "screen": "kit-rows",
+   "params": {},
    "base": [],
    "placement": "inherit"
   },
