@@ -227,6 +227,7 @@ class HelixPersonItem extends HelixValue {
     this.about,
     this.online = false,
     this.blocked = false,
+    this.verified = false,
   });
 
   final String id;
@@ -236,6 +237,10 @@ class HelixPersonItem extends HelixValue {
   final bool online;
   final bool blocked;
 
+  /// The safety number was verified (the seal after the name). Orbit
+  /// addition (`contracts/home.md`).
+  final bool verified;
+
   HelixAvatarModel get avatar => HelixAvatarModel(
     name: names.display,
     image: image,
@@ -243,7 +248,15 @@ class HelixPersonItem extends HelixValue {
   );
 
   @override
-  List<Object?> get props => [id, names, image, about, online, blocked];
+  List<Object?> get props => [
+    id,
+    names,
+    image,
+    about,
+    online,
+    blocked,
+    verified,
+  ];
 }
 
 // ------------------------------------------------------------ chat list

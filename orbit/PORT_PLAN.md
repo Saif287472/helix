@@ -425,6 +425,11 @@ pending your review:
   shared `OrbitYouPage`, `OrbitPage`, `OrbitButtonRow`, `OrbitTransferCard`,
   `OrbitHeroCard`, `OrbitStatusRing`, `OrbitCenterPage`. 38 keys, 1.0% to
   5.3% in Orbit.
+- [x] Batch 2: Home (`HomeScreen` with the Chats and Calls tabs, filters,
+  selection, swipes, the ⋮ menu, both searches and `PeoplePanel`, the quick
+  row and the dial pad) and `ArchivedChatsScreen`, with `HomeModel` and the
+  shared types from `contracts/home.md`. The preview recomputes the searches
+  as you type. 26 keys, 0.5% to 5.2% in Orbit.
 
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;

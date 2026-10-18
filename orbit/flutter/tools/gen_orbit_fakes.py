@@ -111,7 +111,7 @@ def person(p):
     args = [f"id: {s(p['id'])}", f'names: HelixPersonNames({names})']
     if p.get('about'):
         args.append(f"about: {s(p['about'])}")
-    for key in ('online', 'blocked'):
+    for key in ('online', 'blocked', 'verified'):
         if p.get(key):
             args.append(f'{key}: true')
     return f"HelixPersonItem({', '.join(args)})"
@@ -306,6 +306,9 @@ def main():
     ]
     for pid, p in people.items():
         out.append(f'  static const {camel(pid)} = {person(p)};')
+    out += ['', '  /// `Data.people`, as a map by id.', '  static const people = <String, HelixPersonItem>{']
+    out += [f'    {s(pid)}: {camel(pid)},' for pid in people]
+    out += ['  };']
     out += ['', '  /// `Data.chats`: the chat list, in order.', '  static const chats = <HelixChatListItem>[']
     out += [f'    {chat(c)},' for c in d['chats']]
     out += ['  ];', '', '  /// `Data.archived`.', '  static const archived = <HelixChatListItem>[']

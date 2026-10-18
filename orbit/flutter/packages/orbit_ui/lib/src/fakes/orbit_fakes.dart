@@ -67,6 +67,7 @@ abstract final class OrbitFakes {
     ),
     about: 'Somewhere between deadlines',
     online: true,
+    verified: true,
   );
   static const arif = HelixPersonItem(
     id: 'arif',
@@ -138,6 +139,22 @@ abstract final class OrbitFakes {
       number: '+880 1711-555013',
     ),
   );
+
+  /// `Data.people`, as a map by id.
+  static const people = <String, HelixPersonItem>{
+    'nadia': nadia,
+    'arif': arif,
+    'ammu': ammu,
+    'abbu': abbu,
+    'tanvir': tanvir,
+    'sadia': sadia,
+    'rafiq': rafiq,
+    'unknown': unknown,
+    'mehjabin': mehjabin,
+    'rumana': rumana,
+    'shuvo': shuvo,
+    'karim': karim,
+  };
 
   /// `Data.chats`: the chat list, in order.
   static const chats = <HelixChatListItem>[

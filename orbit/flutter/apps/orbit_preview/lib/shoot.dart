@@ -134,6 +134,9 @@ Future<int> runShoot(OrbitThemeLibrary library, ShootRequest request) async {
       if (errors.isNotEmpty) {
         stderr.writeln('$key: the screen threw, so it was not shot:');
         stderr.writeln(errors.first.exceptionAsString());
+        // Where it came from: the first frames of the stack.
+        final stack = errors.first.stack?.toString().split('\n') ?? const [];
+        stderr.writeln(stack.take(12).join('\n'));
         errors.clear();
         failed = true;
         continue;

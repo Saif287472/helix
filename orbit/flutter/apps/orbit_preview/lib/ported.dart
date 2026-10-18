@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:orbit_ui/orbit_ui.dart';
+import 'package:orbit_preview/previews/home.dart';
 import 'package:orbit_preview/previews/signin.dart';
 
 /// The screen keys that have a Flutter screen, and how to build each on fake
@@ -17,6 +18,7 @@ final Map<String, WidgetBuilder> orbitPorted = <String, WidgetBuilder>{
   'kit-timeline': (context) => const KitTimelineScreen(),
   ...signInPreviews,
   ...entryPreviews,
+  ...homePreviews,
   'kit-overlays': (context) => const KitOverlaysScreen(),
   for (final o in KitOverlay.values)
     o.key: (context) => KitOverlaysScreen(open: o),

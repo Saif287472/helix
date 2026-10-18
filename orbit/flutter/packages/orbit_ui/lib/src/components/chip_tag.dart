@@ -18,7 +18,11 @@ class OrbitChip extends StatelessWidget {
     required this.onTap,
     this.count,
     this.icon,
+    this.height = 34,
   });
+
+  /// 34, or 36 in the chat filters (`.chat-filters .chip`).
+  final double height;
 
   final String label;
   final bool on;
@@ -41,7 +45,7 @@ class OrbitChip extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Container(
-            height: 34,
+            height: height,
             padding: const EdgeInsets.symmetric(horizontal: 13),
             decoration: BoxDecoration(
               color: on ? t.inverse : t.surface,

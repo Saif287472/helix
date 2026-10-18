@@ -605,11 +605,19 @@ class OrbitSwipeRow extends StatefulWidget {
 
 class _OrbitSwipeRowState extends State<OrbitSwipeRow>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _back = AnimationController(vsync: this)
-    ..addListener(() => setState(() => _dx = _from * (1 - _ease(_back.value))));
+  late final AnimationController _back;
   double _dx = 0;
   double _from = 0;
   double Function(double) _ease = (v) => v;
+
+  @override
+  void initState() {
+    super.initState();
+    _back = AnimationController(vsync: this)
+      ..addListener(
+        () => setState(() => _dx = _from * (1 - _ease(_back.value))),
+      );
+  }
 
   @override
   void dispose() {
