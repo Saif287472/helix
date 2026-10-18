@@ -416,6 +416,16 @@ uncommitted work). The batches, in order:
 9. The remaining settings pages, devices and backup.
 10. The wide Windows layout.
 
+Progress (2026-10-19, the unattended run). At the owner's request the
+screens are now built and compared in the default Orbit theme only; the
+other seven themes come in a later app upgrade. Each batch is committed
+pending your review:
+- [x] Batch 1: sign-in (`SignInScreen`, every step and both sheets),
+  `RestoreScreen`, `LinkThisDeviceScreen`, `ResetScreen`, `LockScreen`; the
+  shared `OrbitYouPage`, `OrbitPage`, `OrbitButtonRow`, `OrbitTransferCard`,
+  `OrbitHeroCard`, `OrbitStatusRing`, `OrbitCenterPage`. 38 keys, 1.0% to
+  5.3% in Orbit.
+
 A screen is done when:
 - every one of its keys passes the compare, both by score and by your eye;
 - it works in all eight themes;

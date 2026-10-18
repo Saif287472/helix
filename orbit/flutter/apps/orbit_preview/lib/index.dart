@@ -23,9 +23,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Sign in · phone',
     screen: 'signin',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'step': ScreenParamText('phone'),
-    },
+    params: <String, ScreenParam>{'step': ScreenParamText('phone')},
   ),
   ScreenState(
     key: 'signin-phone-error',
@@ -128,9 +126,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Take-over confirmation (with the Terms)',
     screen: 'signin',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'step': ScreenParamText('takeover'),
-    },
+    params: <String, ScreenParam>{'step': ScreenParamText('takeover')},
   ),
   ScreenState(
     key: 'signin-taken',
@@ -161,9 +157,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Advanced · personal server code',
     screen: 'signin',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'step': ScreenParamText('advCode'),
-    },
+    params: <String, ScreenParam>{'step': ScreenParamText('advCode')},
   ),
   ScreenState(
     key: 'signin-advanced-rec',
@@ -194,9 +188,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Advanced · confirm the server',
     screen: 'signin',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'step': ScreenParamText('serverConfirm'),
-    },
+    params: <String, ScreenParam>{'step': ScreenParamText('serverConfirm')},
   ),
   ScreenState(
     key: 'signin-join',
@@ -204,9 +196,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Advanced · join the server (phone)',
     screen: 'signin',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'step': ScreenParamText('phoneAdv'),
-    },
+    params: <String, ScreenParam>{'step': ScreenParamText('phoneAdv')},
   ),
   ScreenState(
     key: 'signin-legal',
@@ -225,9 +215,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Restore step (after sign-in)',
     screen: 'restore',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'afterSignIn': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'afterSignIn': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'restore-running',
@@ -298,9 +286,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Link this device · code expired',
     screen: 'link-device',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('expired'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('expired')},
   ),
   ScreenState(
     key: 'link-device-confirm',
@@ -308,9 +294,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Link this device · is this your account?',
     screen: 'link-device',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('confirm'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('confirm')},
   ),
   ScreenState(
     key: 'link-device-starting',
@@ -318,9 +302,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Link this device · getting a code',
     screen: 'link-device',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('starting'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('starting')},
   ),
   ScreenState(
     key: 'link-device-failed',
@@ -328,9 +310,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Link this device · did not work',
     screen: 'link-device',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('failed'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('failed')},
   ),
   ScreenState(
     key: 'link-device-declined',
@@ -338,9 +318,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Link this device · not your account',
     screen: 'link-device',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('declined'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('declined')},
   ),
   // App
   ScreenState(
@@ -349,9 +327,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Already open in another window',
     screen: 'reset',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'kind': ScreenParamText('window'),
-    },
+    params: <String, ScreenParam>{'kind': ScreenParamText('window')},
   ),
   ScreenState(
     key: 'reset-key',
@@ -359,9 +335,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Reset required · key missing',
     screen: 'reset',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'kind': ScreenParamText('key'),
-    },
+    params: <String, ScreenParam>{'kind': ScreenParamText('key')},
   ),
   ScreenState(
     key: 'reset-decrypt',
@@ -369,9 +343,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Reset required · cannot decrypt',
     screen: 'reset',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'kind': ScreenParamText('decrypt'),
-    },
+    params: <String, ScreenParam>{'kind': ScreenParamText('decrypt')},
   ),
   ScreenState(
     key: 'reset-start-failed',
@@ -379,9 +351,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Orbit could not start (no reset offered)',
     screen: 'reset',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'kind': ScreenParamText('start'),
-    },
+    params: <String, ScreenParam>{'kind': ScreenParamText('start')},
   ),
   ScreenState(
     key: 'reset-fine',
@@ -389,9 +359,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Reset · your local data is fine',
     screen: 'reset',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'kind': ScreenParamText('fine'),
-    },
+    params: <String, ScreenParam>{'kind': ScreenParamText('fine')},
   ),
   ScreenState(
     key: 'reset-failed',
@@ -417,9 +385,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'App lock · not unlocked',
     screen: 'lock',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'failed': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'failed': ScreenParamFlag(isOn: true)},
   ),
   // Home
   ScreenState(
@@ -428,9 +394,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Chats',
     screen: 'home',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'tab': ScreenParamText('chats'),
-    },
+    params: <String, ScreenParam>{'tab': ScreenParamText('chats')},
   ),
   ScreenState(
     key: 'chats-groups',
@@ -659,9 +623,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Calls',
     screen: 'home',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'tab': ScreenParamText('calls'),
-    },
+    params: <String, ScreenParam>{'tab': ScreenParamText('calls')},
   ),
   ScreenState(
     key: 'calls-search',
@@ -710,9 +672,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Archived chats · empty',
     screen: 'archived',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'empty': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'empty': ScreenParamFlag(isOn: true)},
   ),
   // Conversation
   ScreenState(
@@ -721,9 +681,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Direct chat',
     screen: 'chat',
     placement: 'detail',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('direct:nadia'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('direct:nadia')},
   ),
   ScreenState(
     key: 'chat-typing',
@@ -865,9 +823,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Message kinds (link, poll, view once…)',
     screen: 'chat',
     placement: 'detail',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('direct:arif'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('direct:arif')},
   ),
   ScreenState(
     key: 'chat-transfer',
@@ -875,9 +831,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Downloads, key change, failed send',
     screen: 'chat',
     placement: 'detail',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('direct:rafiq'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('direct:rafiq')},
   ),
   ScreenState(
     key: 'chat-new',
@@ -885,9 +839,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'New chat (empty)',
     screen: 'chat',
     placement: 'detail',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('direct:sadia'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('direct:sadia')},
   ),
   ScreenState(
     key: 'group',
@@ -895,9 +847,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Group chat',
     screen: 'chat',
     placement: 'detail',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('group:family'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('group:family')},
   ),
   ScreenState(
     key: 'group-mention',
@@ -1007,9 +957,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Forward message',
     screen: 'forward',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'n': ScreenParamNumber(1),
-    },
+    params: <String, ScreenParam>{'n': ScreenParamNumber(1)},
   ),
   ScreenState(
     key: 'forward-picked',
@@ -1028,9 +976,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Message info (direct)',
     screen: 'message-info',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('direct:nadia'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('direct:nadia')},
   ),
   ScreenState(
     key: 'message-info-group',
@@ -1038,9 +984,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Message info (group)',
     screen: 'message-info',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('group:family'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('group:family')},
   ),
   ScreenState(
     key: 'message-info-gone',
@@ -1048,9 +992,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Message info · not found',
     screen: 'message-info',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'gone': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'gone': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'media-viewer',
@@ -1058,9 +1000,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Media viewer',
     screen: 'media-viewer',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'i': ScreenParamNumber(0),
-    },
+    params: <String, ScreenParam>{'i': ScreenParamNumber(0)},
   ),
   ScreenState(
     key: 'media-video',
@@ -1068,9 +1008,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Video player',
     screen: 'media-viewer',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'i': ScreenParamNumber(2),
-    },
+    params: <String, ScreenParam>{'i': ScreenParamNumber(2)},
   ),
   ScreenState(
     key: 'media-video-failed',
@@ -1089,9 +1027,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Media viewer · not on this device',
     screen: 'media-viewer',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'missing': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'missing': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'media-cannot-show',
@@ -1099,9 +1035,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Media viewer · picture cannot be shown',
     screen: 'media-viewer',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'cannotShow': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'cannotShow': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'media-video-buffering',
@@ -1131,9 +1065,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'View once · already opened',
     screen: 'media-viewer',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'viewOnce': ScreenParamText('opened'),
-    },
+    params: <String, ScreenParam>{'viewOnce': ScreenParamText('opened')},
   ),
   ScreenState(
     key: 'media-viewonce-mine',
@@ -1141,9 +1073,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'View once · your own',
     screen: 'media-viewer',
     placement: 'full',
-    params: <String, ScreenParam>{
-      'viewOnce': ScreenParamText('mine'),
-    },
+    params: <String, ScreenParam>{'viewOnce': ScreenParamText('mine')},
   ),
   ScreenState(
     key: 'send-files',
@@ -1158,9 +1088,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Send files · nothing left',
     screen: 'send-files',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'empty': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'empty': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'shared',
@@ -1237,9 +1165,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Chat settings (direct)',
     screen: 'chat-settings',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('direct:nadia'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('direct:nadia')},
   ),
   ScreenState(
     key: 'chat-settings-group',
@@ -1247,9 +1173,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Chat settings (group)',
     screen: 'chat-settings',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('group:family'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('group:family')},
   ),
   ScreenState(
     key: 'chat-settings-blocked',
@@ -1257,9 +1181,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Chat settings · blocked',
     screen: 'chat-settings',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('direct:shuvo'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('direct:shuvo')},
   ),
   // Calls
   ScreenState(
@@ -1294,8 +1216,9 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     params: <String, ScreenParam>{
       'peer': ScreenParamText('nadia'),
       'phase': ScreenParamText('incoming'),
-      'notice':
-          ScreenParamText('Orbit needs the microphone to make calls. Allow it in your phone’s settings, then try again.'),
+      'notice': ScreenParamText(
+        'Orbit needs the microphone to make calls. Allow it in your phone’s settings, then try again.',
+      ),
     },
   ),
   ScreenState(
@@ -1503,8 +1426,9 @@ const List<ScreenState> orbitScreens = <ScreenState>[
       'peer': ScreenParamText('arif'),
       'phase': ScreenParamText('incoming'),
       'video': ScreenParamFlag(isOn: true),
-      'notice':
-          ScreenParamText('Orbit needs the camera for video calls. Allow it in your phone’s settings, or answer with voice.'),
+      'notice': ScreenParamText(
+        'Orbit needs the camera for video calls. Allow it in your phone’s settings, or answer with voice.',
+      ),
     },
   ),
   ScreenState(
@@ -1513,9 +1437,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Call details',
     screen: 'call-detail',
     placement: 'detail',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('call3'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('call3')},
   ),
   ScreenState(
     key: 'call-detail-kinds',
@@ -1557,9 +1479,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Contact info',
     screen: 'contact',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('nadia'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('nadia')},
   ),
   ScreenState(
     key: 'contact-keychanged',
@@ -1567,9 +1487,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Contact info · safety number changed',
     screen: 'contact',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('rafiq'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('rafiq')},
   ),
   ScreenState(
     key: 'contact-nokey',
@@ -1577,9 +1495,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Contact info · no safety number yet',
     screen: 'contact',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('sadia'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('sadia')},
   ),
   ScreenState(
     key: 'contact-blocked',
@@ -1587,9 +1503,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Contact info · blocked',
     screen: 'contact',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('shuvo'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('shuvo')},
   ),
   ScreenState(
     key: 'contact-number',
@@ -1597,9 +1511,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Contact info · known only by number',
     screen: 'contact',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('unknown'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('unknown')},
   ),
   ScreenState(
     key: 'contact-blocked-me',
@@ -1618,9 +1530,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Safety number · verified',
     screen: 'safety',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('nadia'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('nadia')},
   ),
   ScreenState(
     key: 'safety-unverified',
@@ -1628,9 +1538,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Safety number · not verified',
     screen: 'safety',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('arif'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('arif')},
   ),
   ScreenState(
     key: 'safety-changed',
@@ -1638,9 +1546,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Safety number · changed',
     screen: 'safety',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('rafiq'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('rafiq')},
   ),
   ScreenState(
     key: 'safety-none',
@@ -1648,9 +1554,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Safety number · none yet',
     screen: 'safety',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('sadia'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('sadia')},
   ),
   ScreenState(
     key: 'safety-failed',
@@ -1669,9 +1573,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Scan code',
     screen: 'scan',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'id': ScreenParamText('arif'),
-    },
+    params: <String, ScreenParam>{'id': ScreenParamText('arif')},
   ),
   ScreenState(
     key: 'scan-nocamera',
@@ -1761,9 +1663,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Group info (you are an admin)',
     screen: 'group-info',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'role': ScreenParamText('admin'),
-    },
+    params: <String, ScreenParam>{'role': ScreenParamText('admin')},
   ),
   ScreenState(
     key: 'group-info-owner',
@@ -1771,9 +1671,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Group info (owner view)',
     screen: 'group-info',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'role': ScreenParamText('owner'),
-    },
+    params: <String, ScreenParam>{'role': ScreenParamText('owner')},
   ),
   ScreenState(
     key: 'group-info-member',
@@ -1781,9 +1679,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Group info (plain member)',
     screen: 'group-info',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'role': ScreenParamText('member'),
-    },
+    params: <String, ScreenParam>{'role': ScreenParamText('member')},
   ),
   ScreenState(
     key: 'group-info-member-open',
@@ -1813,9 +1709,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Group info · not in the group',
     screen: 'group-info',
     placement: 'info',
-    params: <String, ScreenParam>{
-      'gone': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'gone': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'group-settings',
@@ -1830,9 +1724,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Group settings · not an admin',
     screen: 'group-settings',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'member': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'member': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'group-invite',
@@ -1840,9 +1732,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Invite links',
     screen: 'group-invite',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'links': ScreenParamNumber(2),
-    },
+    params: <String, ScreenParam>{'links': ScreenParamNumber(2)},
   ),
   ScreenState(
     key: 'group-invite-empty',
@@ -1850,9 +1740,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Invite links · none yet',
     screen: 'group-invite',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'links': ScreenParamNumber(0),
-    },
+    params: <String, ScreenParam>{'links': ScreenParamNumber(0)},
   ),
   ScreenState(
     key: 'group-requests',
@@ -1867,9 +1755,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Join requests · nobody waiting',
     screen: 'group-requests',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'empty': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'empty': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'group-banned',
@@ -1884,9 +1770,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Banned people · none',
     screen: 'group-banned',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'empty': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'empty': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'group-add',
@@ -1901,9 +1785,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Join a group · paste link',
     screen: 'group-join',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('input'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('input')},
   ),
   ScreenState(
     key: 'group-join-preview',
@@ -1911,9 +1793,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Join a group · preview',
     screen: 'group-join',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('preview'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('preview')},
   ),
   ScreenState(
     key: 'group-join-approval',
@@ -1954,9 +1834,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Join a group · joined',
     screen: 'group-join',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('joined'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('joined')},
   ),
   ScreenState(
     key: 'group-join-pending',
@@ -1964,9 +1842,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Join a group · request sent',
     screen: 'group-join',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('pending'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('pending')},
   ),
   ScreenState(
     key: 'group-join-failed',
@@ -1974,9 +1850,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Join a group · link expired',
     screen: 'group-join',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'phase': ScreenParamText('failed'),
-    },
+    params: <String, ScreenParam>{'phase': ScreenParamText('failed')},
   ),
   // Settings
   ScreenState(
@@ -1992,9 +1866,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Set a password',
     screen: 'password',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'set': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'set': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'password-error',
@@ -2002,9 +1874,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Change password · mismatch',
     screen: 'password',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'error': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'error': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'password-done',
@@ -2012,9 +1882,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Change password · saved',
     screen: 'password',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'done': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'done': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'password-linked',
@@ -2022,9 +1890,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Change password · linked device (number needed)',
     screen: 'password',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'linked': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'linked': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'password-wrong',
@@ -2032,9 +1898,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Change password · wrong current password, locked out',
     screen: 'password',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'wrong': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'wrong': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'delete-account',
@@ -2042,9 +1906,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Delete my account · password',
     screen: 'delete-account',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'proof': ScreenParamText('password'),
-    },
+    params: <String, ScreenParam>{'proof': ScreenParamText('password')},
   ),
   ScreenState(
     key: 'delete-account-sms',
@@ -2052,9 +1914,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Delete my account · SMS code',
     screen: 'delete-account',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'proof': ScreenParamText('sms'),
-    },
+    params: <String, ScreenParam>{'proof': ScreenParamText('sms')},
   ),
   ScreenState(
     key: 'delete-account-key',
@@ -2062,9 +1922,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Delete my account · this phone’s key',
     screen: 'delete-account',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'proof': ScreenParamText('key'),
-    },
+    params: <String, ScreenParam>{'proof': ScreenParamText('key')},
   ),
   ScreenState(
     key: 'delete-account-linked',
@@ -2090,9 +1948,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Blocked · nobody',
     screen: 'blocked',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'empty': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'empty': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'about',
@@ -2107,9 +1963,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Help and about · server takes no crash reports',
     screen: 'about',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'noCrash': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'noCrash': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'legal',
@@ -2131,9 +1985,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Advanced · server unreachable',
     screen: 'advanced',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'offline': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'offline': ScreenParamFlag(isOn: true)},
   ),
   // Profile and devices
   ScreenState(
@@ -2142,9 +1994,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Link a new device · scan',
     screen: 'approve-device',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'step': ScreenParamText('enter'),
-    },
+    params: <String, ScreenParam>{'step': ScreenParamText('enter')},
   ),
   ScreenState(
     key: 'approve-device-error',
@@ -2154,8 +2004,9 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     placement: 'inherit',
     params: <String, ScreenParam>{
       'step': ScreenParamText('enter'),
-      'error':
-          ScreenParamText('That code has expired. Codes last ten minutes. Ask the new device to show a new one.'),
+      'error': ScreenParamText(
+        'That code has expired. Codes last ten minutes. Ask the new device to show a new one.',
+      ),
     },
   ),
   ScreenState(
@@ -2164,9 +2015,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Link a new device · approve?',
     screen: 'approve-device',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'step': ScreenParamText('review'),
-    },
+    params: <String, ScreenParam>{'step': ScreenParamText('review')},
   ),
   ScreenState(
     key: 'approve-device-done',
@@ -2174,9 +2023,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Link a new device · done',
     screen: 'approve-device',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'step': ScreenParamText('done'),
-    },
+    params: <String, ScreenParam>{'step': ScreenParamText('done')},
   ),
   ScreenState(
     key: 'activity',
@@ -2206,9 +2053,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Send to my other devices · nothing waiting',
     screen: 'transfer',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'empty': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'empty': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'transfer-stopped',
@@ -2216,9 +2061,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Send to my other devices · stopped, and declined',
     screen: 'transfer',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'stopped': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'stopped': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'transfer-only-device',
@@ -2237,9 +2080,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Recovery backup · create',
     screen: 'recovery',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'tab': ScreenParamText('create'),
-    },
+    params: <String, ScreenParam>{'tab': ScreenParamText('create')},
   ),
   ScreenState(
     key: 'recovery-restore',
@@ -2247,9 +2088,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Recovery backup · restore',
     screen: 'recovery',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'tab': ScreenParamText('restore'),
-    },
+    params: <String, ScreenParam>{'tab': ScreenParamText('restore')},
   ),
   ScreenState(
     key: 'recovery-made',
@@ -2269,9 +2108,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'You · checkup needs attention',
     screen: 'settings-page',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'checkup': ScreenParamText('attention'),
-    },
+    params: <String, ScreenParam>{'checkup': ScreenParamText('attention')},
   ),
   ScreenState(
     key: 'you-allgood',
@@ -2279,9 +2116,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'You · all checks pass',
     screen: 'settings-page',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'allGood': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'allGood': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'you-share',
@@ -2289,9 +2124,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'You · share your Orbit code',
     screen: 'settings-page',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'share': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'share': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'settings-search',
@@ -2299,9 +2132,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'You · search settings',
     screen: 'settings-page',
     placement: 'list',
-    params: <String, ScreenParam>{
-      'setQuery': ScreenParamText('pass'),
-    },
+    params: <String, ScreenParam>{'setQuery': ScreenParamText('pass')},
   ),
   ScreenState(
     key: 'profile',
@@ -2327,9 +2158,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Edit profile · new account (empty)',
     screen: 'profile',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'blank': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'blank': ScreenParamFlag(isOn: true)},
   ),
   // Settings
   ScreenState(
@@ -2345,9 +2174,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Privacy · app lock on',
     screen: 'privacy',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'lock': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'lock': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'privacy-number-needed',
@@ -2355,9 +2182,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Privacy · your number is needed (linked device)',
     screen: 'privacy',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'numberNeeded': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'numberNeeded': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'notifications',
@@ -2372,9 +2197,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Notifications · off in phone settings',
     screen: 'notifications',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'osOff': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'osOff': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'chats-settings',
@@ -2410,9 +2233,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Backup · backing up',
     screen: 'backup',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'running': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'running': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'backup-failed',
@@ -2420,9 +2241,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Backup · last backup failed',
     screen: 'backup',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'failed': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'failed': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'backup-never',
@@ -2430,9 +2249,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Backup · not backed up yet',
     screen: 'backup',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'never': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'never': ScreenParamFlag(isOn: true)},
   ),
   ScreenState(
     key: 'account',
@@ -2447,9 +2264,7 @@ const List<ScreenState> orbitScreens = <ScreenState>[
     label: 'Account · no password set',
     screen: 'account',
     placement: 'inherit',
-    params: <String, ScreenParam>{
-      'noPassword': ScreenParamFlag(isOn: true),
-    },
+    params: <String, ScreenParam>{'noPassword': ScreenParamFlag(isOn: true)},
   ),
   // You (settings and profile)
   ScreenState(
@@ -2717,8 +2532,7 @@ List<ScreenState> orbitScreensInGroup(String group) => orbitScreens
 ///
 /// A `final` and not a `const`, because a const map literal cannot name the
 /// entries of another const collection without repeating every one of them.
-final Map<String, ScreenState> orbitScreensByKey = Map<String, ScreenState>.unmodifiable(
-  <String, ScreenState>{
-    for (final ScreenState screen in orbitScreens) screen.key: screen,
-  },
-);
+final Map<String, ScreenState> orbitScreensByKey =
+    Map<String, ScreenState>.unmodifiable(<String, ScreenState>{
+      for (final ScreenState screen in orbitScreens) screen.key: screen,
+    });
