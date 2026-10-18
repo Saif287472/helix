@@ -232,7 +232,9 @@ them, so the prototype draws them first:
   - Only the built-in themes' fonts are bundled (Geist and Geist Mono).
   - The preview app loads the other themes' fonts from local files, the way
     a downloaded pack will.
-  - Icons come from `phosphor_flutter` (light, regular, duotone, bold, fill).
+  - Icons come from the Phosphor font files bundled directly
+    (see `orbit/DEVIATIONS.md`, "Icons"). `phosphor_flutter` was the plan; it
+    does not compile on Flutter 3.44 because `IconData` is now `final`.
 - **Motion tokens** in every theme: durations, curves, and "reduce motion"
   following the system setting.
 - **Theme effects** as a fixed, named registry of painters. A theme turns
@@ -250,11 +252,47 @@ them, so the prototype draws them first:
     page and wait until the app reports it is ready: a plain `--screenshot`
     sometimes captures the page before every script has loaded (seen in
     Phase 1b).
-  - A Flutter test renders each key at 412×866 with the real fonts loaded.
+  - The preview app renders each key at 412×866 with the real fonts, in a
+    shoot mode (a widget test could not: see `tools/compare/README.md`).
   - The compare page shows both sides with an overlay slider, a difference
     heat map and a score per screen, worst first.
   - Text renders slightly differently in Chrome and Flutter, so the score
     flags screens for your eye rather than demanding zero.
+
+Progress (2026-10-18, Review 2 approved):
+- [x] The Flutter workspace at `orbit/flutter/`: same Flutter/Dart versions
+  and the same lint rules as `helix_remote/`. `flutter analyze` clean.
+- [x] Themes are data: `tools/themes.py` writes one JSON per theme (8 files),
+  `OrbitTokens` loads it. CSS and JSON come from one table. 0 contrast
+  failures.
+- [x] Fonts and icons: Geist and Geist Mono bundled with their italic
+  faces; the other six themes' fonts ship as local files the way a pack
+  will. Phosphor icons bundled as font files (see `orbit/DEVIATIONS.md`,
+  "Icons").
+- [x] Motion tokens: durations, curve and reduce-motion, as a per-theme
+  `motion` entry in the JSON plus `OrbitMotion`.
+- [x] Theme effects, the registry: a fixed named list of 14 kinds, each
+  theme switching them on by name with parameters, and an unknown name
+  refused at load. The `extra` CSS is now generated from the records; the
+  prototype's output is byte-identical. **Not done: the painters.** Nothing
+  draws a pattern, scanlines, a cursor, rules or stripes yet (glow works,
+  because it is a shadow token); the gallery lists them by name. They move
+  to Phase 3, where the components they paint on exist.
+- [x] The preview app shell (`apps/orbit_preview`), built for Windows: the
+  screen index with the prototype's keys, the theme picker, and the device
+  frame with the prototype's status bar and gesture bar. A ported key draws
+  its screen; any other says "Not ported yet".
+- [x] The theme gallery in all eight themes, rendered by the app
+  (`orbit_preview.exe --gallery`), each theme in its own fonts.
+- [x] The compare tool end to end on a first screen, `startup`: the
+  prototype's shot (`shoot_html.py`), the Flutter shot from the app's shoot
+  mode (`orbit_preview.exe --shoot`), and the report page with both side by
+  side, a wipe slider, the heat map and the score. Every element is within
+  1px of the prototype; the score is 5.5% of pixels, all of it text
+  anti-aliasing and the soft shadow.
+- [x] Tests: `orbit_ui` 61 passing, none skipped. The render test that hung
+  is replaced: rendering happens in the app's shoot mode, and the tests
+  cover the shot writer, the diff, the PNG codec, the report and the gallery.
 
 **Review 2:** the theme gallery in all eight themes, plus the compare tool
 working on a first screen.
@@ -322,8 +360,8 @@ to merge. Production is never stopped or redeployed.
    - `orbit_ui` goes to `helix_remote/packages/orbit_ui` and is added to
      `v2PackageDependencies`.
    - The presentation import rule allows `orbit_ui`.
-   - The dependency documents get entries for `phosphor_flutter` and the
-     fonts.
+   - The dependency documents get entries for the Phosphor font files and the
+     fonts. fonts.
    - The view models move as described in "Reusing the app's view models".
 2. **Switch one feature at a time**, in the Phase 4 order. For each feature:
    - Rewrite `features/<x>/presentation/` as connectors.

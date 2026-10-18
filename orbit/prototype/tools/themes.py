@@ -11,6 +11,7 @@ rose, Cotton candy skies, Golden taupe, Technicolor dream, Neon noir, Mossy
 hollow) and keep to one accent plus at most one secondary per theme.
 """
 import os
+import re
 import urllib.parse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -80,9 +81,336 @@ def svg_url(svg):
     return "url(\"data:image/svg+xml," + urllib.parse.quote(svg, safe=" =:/'#,.()-") + "\")"
 
 
-NOISE = lambda r, g, b, a: svg_url(
-    f"<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/>"
-    f"<feColorMatrix values='0 0 0 0 {r} 0 0 0 0 {g} 0 0 0 0 {b} 0 0 0 {a} 0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>")
+# ------------------------------------------------------------- chat patterns
+# A pattern is a NAME plus PARAMETERS, never a finished CSS string. The same
+# record generates `--chat-pattern` here and the JSON the Flutter port reads,
+# so a theme turns a pattern on by name and a downloaded theme pack (Part C)
+# can ask for one it has never seen. Only the numbers are theme data; the
+# artwork below is the app's, and its tile size is part of the drawing, not a
+# free parameter.
+#
+#   none       no pattern: the chat background is --chat-bg.
+#   grain      tiled fractal noise (bloom's, papyrus's).
+#   hearts     tiled marks (mochi's).
+#   neon-grid  one 1px rule each way per cell (arcade's).
+#   scanlines  a repeating line, period built in, no tile (terminal's).
+#   contours   five stroked curves (field's).
+#
+# The viewer's own "Dot grid" and "Orbit lines" (body.bg-dots) are NOT here:
+# they are preview affordances, not theme data, so no theme can select them.
+
+GRAIN_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>"
+    "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/>"
+    "<feColorMatrix values='0 0 0 0 {r} 0 0 0 0 {g} 0 0 0 0 {b} 0 0 0 {a} 0'/></filter>"
+    "<rect width='100%' height='100%' filter='url(#n)'/></svg>")
+
+HEARTS_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>"
+    "<path d='M16 20c-2-3-7-2-7 2 0 3 4 5 7 8 3-3 7-5 7-8 0-4-5-5-7-2z' fill='#FFB3D1' fill-opacity='.4'/>"
+    "<path d='M46 40l1.6 3.4 3.4 1.6-3.4 1.6L46 50l-1.6-3.4L41 45l3.4-1.6z' fill='#B9A2FF' fill-opacity='.45'/>"
+    "<circle cx='50' cy='14' r='1.6' fill='#7FD0F5' fill-opacity='.5'/></svg>")
+
+CONTOUR_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'>"
+    "<g fill='none' stroke='{stroke}' stroke-width='{width}'>"
+    "<path d='M-10 110c25-45 65-55 100-32s70 12 80-22 40-30 60-10'/>"
+    "<path d='M-10 150c35-32 78-38 112-16s62 6 88-26 30-22 40-14'/>"
+    "<path d='M-10 70c28-28 60-33 88-12s56 2 78-32 40-20 70-8'/>"
+    "<path d='M-10 195c38-22 82-28 115-6s66 10 104-16'/>"
+    "<path d='M-10 30c30-20 66-24 96-4s60 0 80-26'/></g></svg>")
+
+
+def pattern_css(p):
+    """`(kind, params)` -> the CSS value for `--chat-pattern`."""
+    kind, q = p
+    if kind == 'none':
+        return 'none'
+    if kind == 'grain':
+        return svg_url(GRAIN_SVG.format(r=q['r'], g=q['g'], b=q['b'], a=q['a']))
+    if kind == 'hearts':
+        return svg_url(HEARTS_SVG)
+    if kind == 'neonGrid':
+        return (f'linear-gradient({rgba(q["h"], q["ha"])} 1px, transparent 1px), '
+                f'linear-gradient(90deg, {rgba(q["v"], q["va"])} 1px, transparent 1px)')
+    if kind == 'scanlines':
+        return (f'repeating-linear-gradient(0deg, {rgba(q["colour"], q["a"])} 0 {q["thickness"]}px, '
+                f'transparent {q["thickness"]}px {q["period"]}px)')
+    if kind == 'contours':
+        return svg_url(CONTOUR_SVG.format(stroke=q['stroke'], width=q['width']))
+    raise ValueError(f'unknown chat pattern {kind!r}: a theme would draw nothing')
+
+
+def pattern_size_css(p):
+    """`(kind, params)` -> the CSS value for `--chat-pattern-size`."""
+    size = p[1].get('size')
+    if size is None:
+        return 'auto'
+    return '%dpx %dpx' % (size[0], size[1])
+
+
+# ---------------------------------------------------------- theme effects
+# Decorative behaviour, as data. Six of the eight themes switch on effects the
+# token table cannot express: a blinking cursor, ornaments beside a date, a
+# stripe down the edge of a bubble, a glow, a notched corner. Until now all of
+# that lived in a raw CSS string per theme, which meant the Flutter port had to
+# hand-copy it into Dart and a downloadable theme pack (Part C) could not ask
+# for any of it.
+#
+# So a theme names its effects, each with parameters, and `effect_css` renders
+# the record back to the exact CSS the prototype had. The app ships the effect
+# *types*; a pack carries only their settings.
+#
+#   wordmarkGlow   a drop shadow on the wordmark          arcade, terminal
+#   bubbleGlow     a shadow on each kind of bubble        arcade
+#   bubbleStripe   a coloured stripe down a bubble edge   field
+#   cursor         a blinking glyph after the wordmark    terminal
+#   ornament       a glyph beside a date or a group       mochi, papyrus, terminal, field
+#   cardRing       an inset double rule on a card         papyrus
+#   cornerClip     a notched corner, square radii         arcade
+#   wordmarkItalic italic wordmark                        bloom
+#   dayLabel       a different face and size for dates    bloom
+#   bubbleWeight   a bolder bubble                        mochi
+#   dockBorder     a border on the dock                   mochi
+#   pagePattern    the chat pattern behind a page         papyrus
+#   baseFontSize   the theme's own root size              papyrus
+#   eyebrowColour  the colour of eyebrows and dates       arcade
+#
+# A colour is either what the CSS says today (`lit`) or a token it reads
+# (`tok`). Nothing is re-tinted here: a colour that ought to become a token is a
+# design change for the owner, not something a refactor may decide.
+
+EFFECT_KINDS = frozenset((
+    'wordmarkGlow', 'bubbleGlow', 'bubbleStripe', 'cursor', 'ornament',
+    'cardRing', 'cornerClip', 'wordmarkItalic', 'dayLabel', 'bubbleWeight',
+    'dockBorder', 'pagePattern', 'baseFontSize', 'eyebrowColour',
+))
+
+
+def lit(colour, alpha=None):
+    """A literal colour, exactly as the CSS writes it today."""
+    return {'kind': 'literal', 'colour': colour, 'alpha': alpha}
+
+
+def tok(name):
+    """A token the CSS reads, without its `var(--...)` wrapper."""
+    return {'kind': 'token', 'name': name}
+
+
+def paint(c, theme_id):
+    """The CSS value for an effect colour."""
+    if c['kind'] == 'token':
+        return 'var(--%s)' % c['name']
+    if c.get('alpha') is None:
+        return c['colour']
+    return rgba(c['colour'], c['alpha'])
+
+
+def sel(theme_id, selectors):
+    """`[data-theme="x"] .a, [data-theme="x"] .b` - the theme's own rules."""
+    return ', '.join('[data-theme="%s"] %s' % (theme_id, s) for s in selectors)
+
+
+def rule(selector, body):
+    return '%s { %s }' % (selector, body)
+
+
+def shadow_css(dx, dy, blur, colour, theme_id):
+    return '%d %d %dpx %s' % (dx, dy, blur, paint(colour, theme_id))
+
+
+def effect_css(e):
+    """One effect record -> the CSS line(s) the prototype emits for it."""
+    kind, theme_id = e['kind'], e['theme']
+    q = e['params']
+
+    if kind == 'wordmarkGlow':
+        return rule(sel(theme_id, ['.wordmark']),
+                    'filter: drop-shadow(%s);'
+                    % shadow_css(q['dx'], q['dy'], q['blur'], q['colour'], theme_id))
+
+    if kind == 'bubbleGlow':
+        return '\n'.join(
+            rule(sel(theme_id, ['.msg.%s .bubble' % side]),
+                 'box-shadow: %s;' % shadow_css(q[side]['dx'], q[side]['dy'],
+                                                q[side]['blur'], q[side]['colour'],
+                                                theme_id))
+            for side in ('in', 'out'))
+
+    if kind == 'bubbleStripe':
+        return '\n'.join(
+            rule(sel(theme_id, ['.msg.%s .bubble' % side]),
+                 'border-%s: %dpx solid %s;'
+                 % (q[side]['edge'], q[side]['width'], paint(q[side]['colour'], theme_id)))
+            for side in ('in', 'out'))
+
+    if kind == 'cursor':
+        return rule(sel(theme_id, ['.wordmark::after']),
+                    'content: "%s"; -webkit-text-fill-color: %s; '
+                    'animation: blink %s infinite;'
+                    % (q['glyph'], paint(q['colour'], theme_id), q['period']))
+
+    if kind == 'ornament':
+        target = q['target']
+        if target == 'group':
+            selectors = ['.group-title.eyebrow::%s' % q['pseudo']]
+        else:
+            selectors = ['.day span::%s' % q['pseudo']] \
+                if q['target'] == 'day' else ['.wordmark::%s' % q['pseudo']]
+        body = 'content: "%s";' % q['glyph']
+        if q.get('colour') is not None:
+            prop = '-webkit-text-fill-color' if q.get('fill') else 'color'
+            body += ' %s: %s;' % (prop, paint(q['colour'], theme_id))
+        if q.get('size') is not None:
+            body += ' font-size: %s;' % q['size']
+        return rule(sel(theme_id, selectors), body)
+
+    if kind == 'cardRing':
+        rings = ', '.join('inset 0 0 0 %dpx var(--%s)' % (r['width'], r['token'])
+                          for r in q['rings'])
+        return rule(sel(theme_id, q['targets']), 'box-shadow: %s;' % rings)
+
+    if kind == 'cornerClip':
+        n = q['notch']
+        poly = ('polygon(%dpx 0, 100%% 0, 100%% calc(100%% - %dpx), '
+                'calc(100%% - %dpx) 100%%, 0 100%%, 0 %dpx)' % (n, n, n, n))
+        body = 'clip-path: %s; border-radius: %s; box-shadow: %s;' % (
+            poly, q['radius'], q['shadow'])
+        return rule(sel(theme_id, q['targets']), body)
+
+    if kind == 'wordmarkItalic':
+        return rule(sel(theme_id, ['.wordmark']), 'font-style: italic;')
+
+    if kind == 'dayLabel':
+        return rule(sel(theme_id, ['.day span']),
+                    'font-family: var(--font-display); font-style: italic; '
+                    'text-transform: none; letter-spacing: 0; font-size: %s;'
+                    % q['size'])
+
+    if kind == 'bubbleWeight':
+        return rule(sel(theme_id, ['.bubble']), 'font-weight: %d;' % q['weight'])
+
+    if kind == 'dockBorder':
+        return rule(sel(theme_id, ['.dock']),
+                    'border: %dpx solid %s;' % (q['width'], paint(q['colour'], theme_id)))
+
+    if kind == 'pagePattern':
+        return rule(sel(theme_id, ['.page']),
+                    'background-image: var(--chat-pattern); '
+                    'background-size: var(--chat-pattern-size);')
+
+    if kind == 'baseFontSize':
+        return rule(sel(theme_id, ['.phone-screen']) + ', [data-theme="%s"]' % theme_id,
+                    'font-size: %s;' % q['size'])
+
+    if kind == 'eyebrowColour':
+        return rule(sel(theme_id, q['targets']),
+                    'color: var(--%s);' % q['token'])
+
+    raise ValueError('unknown effect %r: a downloaded pack would draw nothing'
+                     % kind)
+
+
+def effects_css(t):
+    """Every effect of a theme, as the CSS the prototype emits today."""
+    out = []
+    for e in t['effects']:
+        if e['kind'] not in EFFECT_KINDS:
+            raise ValueError('%s: unknown effect %r' % (t['id'], e['kind']))
+        out.append(effect_css(e))
+    return '\n'.join(out)
+
+
+# ------------------------------------------------------------ theme motion
+# Durations and the easing curve, as theme data.
+#
+# The prototype keeps these three in `css/tokens.css` as one global set:
+# `--dur: 180ms`, `--dur-page: 260ms` and
+# `--ease: cubic-bezier(0.2, 0.7, 0.2, 1)`. All eight themes share them,
+# because that is the design as it stands: eight themes, one timing. They are
+# theme data here so that a pack (Part C) can ship its own, and nothing in the
+# prototype may change to make room.
+#
+# So `tokens()` does not carry them and `main()` writes nothing new: the
+# `--dur`, `--dur-page` and `--ease` custom properties are defined once, in
+# `tokens.css`, for every theme, and `css/themes.css` stays byte for byte what
+# it is. A motion record is therefore not a CSS token, and it does not join
+# `GROUP_OF` below - that classifies the custom properties written into
+# `css/themes.css`, and motion is not one of them.
+#
+# That is also why it is a top-level key of the theme JSON beside `effects`,
+# rather than a group inside `tokens`: inside `tokens` it would be a token
+# with no Dart getter and no prototype rule behind it. Like effects, it is a
+# record with its own Dart type (`OrbitMotion`).
+
+# Seconds, not milliseconds: that is the CSS time unit, so the number a pack
+# author writes is the number they already know, and `OrbitMotion` converts
+# once, in one place, when it reads the file.
+MOTION = {
+    'duration': {'short': 0.18, 'page': 0.26},
+    'curve': [0.2, 0.7, 0.2, 1.0],
+}
+
+# The durations a theme must carry, and what each one is in the prototype.
+# Everything is classified, exactly as `GROUP_OF` does for tokens: an
+# unrecognised key is an error, never a value quietly dropped on the way to
+# Flutter.
+MOTION_DURATIONS = {
+    'short': '--dur',
+    'page': '--dur-page',
+}
+
+# `cubic-bezier()` takes four control points and its own first and third, the
+# x coordinates, must lie within 0..1 or the function is not a function. CSS
+# rejects it and so does Flutter's `Cubic`, so it is checked here where the
+# message can say which theme and which number.
+MOTION_CURVE_KEY = 'curve'
+
+
+def json_motion(t):
+    """A theme's motion record, as the JSON the Flutter port reads.
+
+    A theme overrides the shared `MOTION` with a `motion=` key. None of the
+    eight do, and that is deliberate: inventing a timing difference between
+    themes would be a design change, and the plan approves none.
+    """
+    m = t.get('motion', MOTION)
+    if not isinstance(m, dict):
+        raise ValueError('%s: motion is not a record: %r' % (t['id'], m))
+
+    durations = m.get('duration')
+    if not isinstance(durations, dict) or set(durations) != set(MOTION_DURATIONS):
+        raise ValueError('%s: motion needs a duration of exactly %s'
+                         % (t['id'], ', '.join(sorted(MOTION_DURATIONS))))
+    out = {}
+    for name, css_name in MOTION_DURATIONS.items():
+        v = durations[name]
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError('%s: motion duration %s (%s) is not a number of '
+                             'seconds: %r'
+                             % (t['id'], name, css_name, v))
+        if v < 0:
+            raise ValueError('%s: motion duration %s (%s) is negative: %r'
+                             % (t['id'], name, css_name, v))
+        out[name] = float(v)
+
+    curve = m.get(MOTION_CURVE_KEY)
+    if not isinstance(curve, (list, tuple)) or len(curve) != 4:
+        raise ValueError('%s: motion curve is not a cubic-bezier: %r'
+                         % (t['id'], curve))
+    points = []
+    for i, v in enumerate(curve):
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError('%s: motion curve point %d is not a number: %r'
+                             % (t['id'], i, v))
+        points.append(float(v))
+    for i in (0, 2):
+        if not 0.0 <= points[i] <= 1.0:
+            raise ValueError('%s: motion curve point %d (%.3f) is outside 0..1, '
+                             'so it is not a cubic-bezier'
+                             % (t['id'], i, points[i]))
+    return {'duration': out, MOTION_CURVE_KEY: points}
+
 
 # ------------------------------------------------------------------ themes
 THEMES = [
@@ -96,7 +424,7 @@ THEMES = [
          font='"Geist", ui-sans-serif, system-ui, sans-serif', display='"Geist", ui-sans-serif, system-ui, sans-serif', mono='"Geist Mono", ui-monospace, monospace',
          display_weight=650, display_tracking='-0.02em', wordmark_tracking='-0.045em', transform='none',
          radii=dict(xs=6, sm=10, md=14, lg=18, xl=24, pill=999), avatar='25%', bubble=9, cut=5,
-         pattern='none', pattern_size='auto', glow='0 0 0 transparent', extra='',
+         pattern=('none', {}), glow='0 0 0 transparent', effects=(),
          over={'line': '#E2E6ED', 'line-2': '#ECEFF3', 'pressed': '#E8EBF0', 'chat-dot': '#D6DCE5', 'accent-soft': '#E8F0FE', 'accent-line': '#C4D6FB',
                'control-line': '#B8C0CD', 'switch-off': '#D3D8E1', 'media-ph': '#DCE1E8', 'map-bg': '#E8EEF3', 'map-line': '#D7DFE7',
                'wave-idle': '#C2C9D5', 'wave-out-idle': '#9FCFDA', 'danger-zone-bg': '#FFFCFC', 'danger-zone-line': '#F6DCDC',
@@ -117,7 +445,7 @@ THEMES = [
          font='"Geist", ui-sans-serif, system-ui, sans-serif', display='"Geist", ui-sans-serif, system-ui, sans-serif', mono='"Geist Mono", ui-monospace, monospace',
          display_weight=650, display_tracking='-0.02em', wordmark_tracking='-0.045em', transform='none',
          radii=dict(xs=6, sm=10, md=14, lg=18, xl=24, pill=999), avatar='25%', bubble=9, cut=5,
-         pattern='none', pattern_size='auto', glow='0 0 0 transparent', extra=''),
+         pattern=('none', {}), glow='0 0 0 transparent', effects=()),
 
     dict(id='bloom', name='Bloom', vibe='Aesthetic', dark=False, icon='light',
          bg='#F7F1EC', surface='#FFFDFB', field='#F1E7E0', ink='#3B2F2F', ink2='#574542', ink3='#75605B', ink4='#A8958F', chat_bg='#F4ECE6',
@@ -129,11 +457,11 @@ THEMES = [
          font='"DM Sans", ui-sans-serif, system-ui, sans-serif', display='"Fraunces", Georgia, serif', mono='"DM Mono", ui-monospace, monospace',
          display_weight=560, display_tracking='-0.01em', wordmark_tracking='-0.02em', transform='none',
          radii=dict(xs=8, sm=12, md=16, lg=22, xl=28, pill=999), avatar='50%', bubble=18, cut=6,
-         pattern=NOISE(0.55, 0.35, 0.3, 0.06), pattern_size='160px 160px', glow='0 0 0 transparent',
-         extra='''
-[data-theme="bloom"] .wordmark { font-style: italic; }
-[data-theme="bloom"] .day span { font-family: var(--font-display); font-style: italic; text-transform: none; letter-spacing: 0; font-size: 13px; }
-'''),
+         pattern=('grain', dict(r=0.55, g=0.35, b=0.3, a=0.06, size=(160, 160))), glow='0 0 0 transparent',
+         effects=(
+    {'kind': 'wordmarkItalic', 'theme': 'bloom', 'params': {}},
+             {'kind': 'dayLabel', 'theme': 'bloom', 'params': dict(size='13px')},
+         ),),
 
     dict(id='mochi', name='Mochi', vibe='Cute', dark=False, icon='duotone',
          bg='#FFF4F9', surface='#FFFFFF', field='#FFE9F3', ink='#4A3550', ink2='#5E4766', ink3='#755F7E', ink4='#B39DBA', chat_bg='#FFF7FB',
@@ -145,15 +473,17 @@ THEMES = [
          font='"Nunito", ui-rounded, system-ui, sans-serif', display='"Nunito", ui-rounded, system-ui, sans-serif', mono='"Nunito", ui-rounded, system-ui, sans-serif',
          display_weight=800, display_tracking='-0.01em', wordmark_tracking='-0.02em', transform='none',
          radii=dict(xs=10, sm=14, md=18, lg=24, xl=30, pill=999), avatar='50%', bubble=22, cut=22,
-         pattern=svg_url("<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><path d='M16 20c-2-3-7-2-7 2 0 3 4 5 7 8 3-3 7-5 7-8 0-4-5-5-7-2z' fill='#FFB3D1' fill-opacity='.4'/>"
-                         "<path d='M46 40l1.6 3.4 3.4 1.6-3.4 1.6L46 50l-1.6-3.4L41 45l3.4-1.6z' fill='#B9A2FF' fill-opacity='.45'/><circle cx='50' cy='14' r='1.6' fill='#7FD0F5' fill-opacity='.5'/></svg>"),
-         pattern_size='64px 64px', glow='0 0 0 transparent',
-         extra='''
-[data-theme="mochi"] .wordmark::after { content: " ♡"; -webkit-text-fill-color: #FF8FC0; font-size: 0.62em; }
-[data-theme="mochi"] .bubble { font-weight: 600; }
-[data-theme="mochi"] .dock { border: 2px solid #FFD1E6; }
-[data-theme="mochi"] .day span::before { content: "✦ "; color: #FF8FC0; }
-'''),
+         pattern=('hearts', dict(size=(64, 64))), glow='0 0 0 transparent',
+         effects=(
+    {'kind': 'ornament', 'theme': 'mochi', 'params': dict(
+                 target='wordmark', pseudo='after', glyph=' ♡', fill=True,
+                 colour=lit('#FF8FC0'), size='0.62em')},
+             {'kind': 'bubbleWeight', 'theme': 'mochi', 'params': dict(weight=600)},
+             {'kind': 'dockBorder', 'theme': 'mochi', 'params': dict(
+                 width=2, colour=lit('#FFD1E6'))},
+             {'kind': 'ornament', 'theme': 'mochi', 'params': dict(
+                 target='day', pseudo='before', glyph='✦ ', colour=lit('#FF8FC0'))},
+         ),),
 
     dict(id='papyrus', name='Papyrus', vibe='Ancient', dark=False, icon='light',
          bg='#F2E8D5', surface='#FBF5E9', field='#EADFC8', ink='#3E2C1C', ink2='#54402B', ink3='#6A5640', ink4='#9C8A70', chat_bg='#EFE3CB',
@@ -165,14 +495,19 @@ THEMES = [
          font='"EB Garamond", Garamond, Georgia, serif', display='"Cinzel", "Trajan Pro", Georgia, serif', mono='"EB Garamond", Garamond, Georgia, serif',
          display_weight=600, display_tracking='0.05em', wordmark_tracking='0.08em', transform='none',
          radii=dict(xs=2, sm=3, md=4, lg=6, xl=8, pill=4), avatar='8%', bubble=4, cut=1,
-         pattern=NOISE(0.24, 0.17, 0.1, 0.10), pattern_size='160px 160px', glow='0 0 0 transparent',
-         extra='''
-[data-theme="papyrus"] .page { background-image: var(--chat-pattern); background-size: var(--chat-pattern-size); }
-[data-theme="papyrus"] .phone-screen, [data-theme="papyrus"] { font-size: 16px; }
-[data-theme="papyrus"] .day span::before { content: "❦ "; }
-[data-theme="papyrus"] .day span::after { content: " ❦"; }
-[data-theme="papyrus"] .card, [data-theme="papyrus"] .hero-card { box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px var(--line); }
-'''),
+         pattern=('grain', dict(r=0.24, g=0.17, b=0.1, a=0.10, size=(160, 160))), glow='0 0 0 transparent',
+         effects=(
+    {'kind': 'pagePattern', 'theme': 'papyrus', 'params': {}},
+             {'kind': 'baseFontSize', 'theme': 'papyrus', 'params': dict(size='16px')},
+             {'kind': 'ornament', 'theme': 'papyrus', 'params': dict(
+                 target='day', pseudo='before', glyph='❦ ')},
+             {'kind': 'ornament', 'theme': 'papyrus', 'params': dict(
+                 target='day', pseudo='after', glyph=' ❦')},
+             {'kind': 'cardRing', 'theme': 'papyrus', 'params': dict(
+                 targets=['.card', '.hero-card'],
+                 rings=[dict(width=3, token='surface'),
+                        dict(width=4, token='line')])},
+         ),),
 
     dict(id='arcade', name='Arcade', vibe='Gaming · neon', dark=True, icon='bold',
          bg='#0B0A14', surface='#141228', field='#1F1C3A', ink='#EDEBFF', ink2='#CFCBEF', ink3='#A7A3C9', ink4='#6E6A92', chat_bg='#0D0B1A',
@@ -184,15 +519,20 @@ THEMES = [
          font='"Exo 2", ui-sans-serif, system-ui, sans-serif', display='"Rajdhani", "Exo 2", sans-serif', mono='"Share Tech Mono", ui-monospace, monospace',
          display_weight=700, display_tracking='0.04em', wordmark_tracking='0.06em', transform='uppercase',
          radii=dict(xs=2, sm=4, md=6, lg=8, xl=10, pill=6), avatar='12%', bubble=6, cut=0,
-         pattern='linear-gradient(rgba(255, 46, 136, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 229, 255, 0.06) 1px, transparent 1px)', pattern_size='28px 28px',
+         pattern=('neonGrid', dict(h='#FF2E88', ha=0.07, v='#00E5FF', va=0.06, size=(28, 28))),
          glow='0 0 18px rgba(0, 229, 255, 0.45)',
-         extra='''
-[data-theme="arcade"] .msg.in .bubble { box-shadow: 0 0 14px rgba(0, 229, 255, 0.16); }
-[data-theme="arcade"] .msg.out .bubble { box-shadow: 0 0 14px rgba(255, 46, 136, 0.24); }
-[data-theme="arcade"] .wordmark { filter: drop-shadow(0 0 10px rgba(122, 92, 255, 0.6)); }
-[data-theme="arcade"] .btn.primary, [data-theme="arcade"] .xfab { clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); border-radius: 0; box-shadow: none; }
-[data-theme="arcade"] .eyebrow, [data-theme="arcade"] .day span { color: var(--accent-ink); }
-'''),
+         effects=(
+    {'kind': 'bubbleGlow', 'theme': 'arcade', 'params': {
+                 'in': dict(dx=0, dy=0, blur=14, colour=lit('#00E5FF', 0.16)),
+                 'out': dict(dx=0, dy=0, blur=14, colour=lit('#FF2E88', 0.24))}},
+             {'kind': 'wordmarkGlow', 'theme': 'arcade', 'params': dict(
+                 dx=0, dy=0, blur=10, colour=lit('#7A5CFF', 0.6))},
+             {'kind': 'cornerClip', 'theme': 'arcade', 'params': dict(
+                 notch=10, radius='0', shadow='none',
+                 targets=['.btn.primary', '.xfab'])},
+             {'kind': 'eyebrowColour', 'theme': 'arcade', 'params': dict(
+                 targets=['.eyebrow', '.day span'], token='accent-ink')},
+         ),),
 
     dict(id='terminal', name='Terminal', vibe='Tech', dark=True, icon='light',
          bg='#050805', surface='#0B120C', field='#121D13', ink='#C8F7C5', ink2='#A8E6A5', ink3='#86BC85', ink4='#4E7A4D', chat_bg='#060A06',
@@ -204,15 +544,20 @@ THEMES = [
          font='"JetBrains Mono", ui-monospace, monospace', display='"JetBrains Mono", ui-monospace, monospace', mono='"JetBrains Mono", ui-monospace, monospace',
          display_weight=700, display_tracking='0', wordmark_tracking='-0.02em', transform='none',
          radii=dict(xs=2, sm=2, md=2, lg=2, xl=4, pill=2), avatar='4%', bubble=2, cut=0,
-         pattern='repeating-linear-gradient(0deg, rgba(57, 255, 136, 0.045) 0 1px, transparent 1px 3px)', pattern_size='auto',
+         pattern=('scanlines', dict(colour='#39FF88', a=0.045, thickness=1, period=3)),
          glow='0 0 14px rgba(57, 255, 136, 0.35)',
-         extra='''
-[data-theme="terminal"] .wordmark { filter: drop-shadow(0 0 8px rgba(57, 255, 136, 0.45)); }
-[data-theme="terminal"] .wordmark::after { content: "_"; -webkit-text-fill-color: var(--accent); animation: blink 1s infinite; }
-[data-theme="terminal"] .day span::before { content: "[ "; }
-[data-theme="terminal"] .day span::after { content: " ]"; }
-[data-theme="terminal"] .group-title.eyebrow::before { content: "# "; }
-'''),
+         effects=(
+    {'kind': 'wordmarkGlow', 'theme': 'terminal', 'params': dict(
+                 dx=0, dy=0, blur=8, colour=lit('#39FF88', 0.45))},
+             {'kind': 'cursor', 'theme': 'terminal', 'params': dict(
+                 glyph='_', colour=tok('accent'), period='1s')},
+             {'kind': 'ornament', 'theme': 'terminal', 'params': dict(
+                 target='day', pseudo='before', glyph='[ ')},
+             {'kind': 'ornament', 'theme': 'terminal', 'params': dict(
+                 target='day', pseudo='after', glyph=' ]')},
+             {'kind': 'ornament', 'theme': 'terminal', 'params': dict(
+                 target='group', pseudo='before', glyph='# ')},
+         ),),
 
     dict(id='field', name='Field', vibe='Army', dark=True, icon='bold',
          bg='#1C2118', surface='#252C1F', field='#2F3727', ink='#E4E0CC', ink2='#CFCAB2', ink3='#B0AB93', ink4='#7D7A66', chat_bg='#1A1F16',
@@ -224,15 +569,14 @@ THEMES = [
          font='"Barlow", ui-sans-serif, system-ui, sans-serif', display='"Black Ops One", "Barlow", sans-serif', mono='"JetBrains Mono", ui-monospace, monospace',
          display_weight=400, display_tracking='0.04em', wordmark_tracking='0.05em', transform='uppercase',
          radii=dict(xs=2, sm=3, md=4, lg=4, xl=6, pill=3), avatar='6%', bubble=3, cut=0,
-         pattern=svg_url("<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><g fill='none' stroke='#323B29' stroke-width='1.3'>"
-                         "<path d='M-10 110c25-45 65-55 100-32s70 12 80-22 40-30 60-10'/><path d='M-10 150c35-32 78-38 112-16s62 6 88-26 30-22 40-14'/>"
-                         "<path d='M-10 70c28-28 60-33 88-12s56 2 78-32 40-20 70-8'/><path d='M-10 195c38-22 82-28 115-6s66 10 104-16'/><path d='M-10 30c30-20 66-24 96-4s60 0 80-26'/></g></svg>"),
-         pattern_size='220px 220px', glow='0 0 0 transparent',
-         extra='''
-[data-theme="field"] .msg.in .bubble { border-left: 3px solid #6B7A45; }
-[data-theme="field"] .msg.out .bubble { border-right: 3px solid var(--accent); }
-[data-theme="field"] .group-title.eyebrow::before { content: "▸ "; color: var(--accent); }
-'''),
+         pattern=('contours', dict(stroke='#323B29', width=1.3, size=(220, 220))), glow='0 0 0 transparent',
+         effects=(
+    {'kind': 'bubbleStripe', 'theme': 'field', 'params': {
+                 'in': dict(edge='left', width=3, colour=lit('#6B7A45')),
+                 'out': dict(edge='right', width=3, colour=tok('accent'))}},
+             {'kind': 'ornament', 'theme': 'field', 'params': dict(
+                 target='group', pseudo='before', glyph='▸ ', colour=tok('accent'))},
+         ),),
 ]
 
 
@@ -267,7 +611,8 @@ def tokens(t):
         'brand-gradient': 'linear-gradient(150deg, var(--call-top) 0%, var(--call-mid) 55%, var(--call-bottom) 100%)',
         'wordmark-gradient': f"linear-gradient(100deg, {t['wordmark'][0]} 0%, {t['wordmark'][1]} 48%, {t['wordmark'][2]} 100%)",
         'wordmark-tracking': t['wordmark_tracking'],
-        'chat-pattern': t['pattern'], 'chat-pattern-size': t['pattern_size'], 'glow': t['glow'],
+        'chat-pattern': pattern_css(t['pattern']),
+        'chat-pattern-size': pattern_size_css(t['pattern']), 'glow': t['glow'],
         'font': t['font'], 'font-display': t['display'], 'mono': t['mono'],
         'display-weight': str(t['display_weight']), 'display-tracking': t['display_tracking'], 'display-transform': t['transform'],
         'avatar-r': t['avatar'], 'bubble-r': f"{t['bubble']}px", 'bubble-cut': f"{t['cut']}px",
@@ -289,6 +634,260 @@ def tokens(t):
         k[f'av-{i}-bg'] = bgc
         k[f'av-{i}-ink'] = fit_ink(hue, bgc, d)
     return k
+
+
+# --------------------------------------------------------------- theme JSON
+# One JSON file per theme, for the Flutter port (Phase 2) and for a downloaded
+# theme pack (Part C). It is TYPED: colours arrive as a colour, a radius as a
+# number, a shadow as offsets and a colour. Flutter must not parse CSS, and a
+# pack that carried CSS syntax would be data the app cannot use.
+#
+# The values come from the same `tokens()` map that writes the CSS, so the two
+# cannot disagree. Every key must be classified below; anything unclassified is
+# an error, never a silently dropped token. The two records that are *not*
+# custom properties - `effects` and `motion` - sit beside `tokens` for that
+# reason: they have their own Dart types and no CSS rule behind them.
+
+COLOUR_KEYS = """
+bg surface field pressed ink ink-2 ink-3 ink-4 line line-2 chat-bg chat-dot
+scrim accent accent-ink accent-soft accent-line on-accent read cyan cyan-ink
+out out-line out-ink out-meta in in-line in-ink in-meta
+success success-soft success-line warning warning-soft warning-line
+danger danger-soft danger-line
+inverse on-inverse inverse-accent hover dock-bg notice-bg tint tint-out
+glass-bg glass-ink glass-accent on-brand
+media-ph map-bg map-line wave-idle wave-out-idle mark switch-off switch-knob
+control-line danger-zone-bg danger-zone-line gesture
+call-top call-mid call-bottom call-text call-muted call-glass call-glass-2
+call-line call-live
+""".split()
+
+AVATAR_KEYS = ['av-%d-%s' % (i, part) for i in range(8) for part in ('bg', 'ink')]
+
+SHADOW_KEYS = {'shadow-card', 'shadow-float', 'shadow-sheet', 'glow'}
+GRADIENT_KEYS = {'wordmark-gradient'}
+# A gradient over other tokens rather than over colours of its own. Flutter
+# builds it from the call colours, so only the order and the stops are data.
+GRADIENT_REF_KEYS = {'brand-gradient'}
+FONT_KEYS = {'font', 'font-display', 'mono'}
+WEIGHT_KEYS = {'display-weight'}
+EM_KEYS = {'wordmark-tracking', 'display-tracking'}
+TRANSFORM_KEYS = {'display-transform'}
+PATTERN_KEYS = {'chat-pattern'}
+PATTERN_SIZE_KEYS = {'chat-pattern-size'}
+PX_KEYS = {'bubble-r', 'bubble-cut'} | {'r-%s' % n
+                                       for n in ('xs', 'sm', 'md', 'lg', 'xl', 'pill')}
+PCT_KEYS = {'avatar-r'}
+
+KINDS = ([('colour', COLOUR_KEYS + AVATAR_KEYS),
+          ('shadow', SHADOW_KEYS),
+          ('gradient', GRADIENT_KEYS),
+          ('gradientRef', GRADIENT_REF_KEYS),
+          ('fontStack', FONT_KEYS),
+          ('weight', WEIGHT_KEYS),
+          ('em', EM_KEYS),
+          ('transform', TRANSFORM_KEYS),
+          ('pattern', PATTERN_KEYS),
+          ('patternSize', PATTERN_SIZE_KEYS),
+          ('lengthPx', PX_KEYS),
+          ('lengthPct', PCT_KEYS)])
+
+GROUP_OF = {}
+for _kind, _keys in KINDS:
+    for _key in _keys:
+        if _key in GROUP_OF:
+            raise SystemExit('%s is claimed by two groups (%s)'
+                             % (_key, GROUP_OF[_key]))
+        GROUP_OF[_key] = _kind
+
+
+def split_top(s, sep=','):
+    """Split on `sep`, ignoring any inside brackets: `rgba(1, 2, 3, .4)` is one."""
+    parts, depth, cur = [], 0, ''
+    for ch in s:
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+        if ch == sep and depth == 0:
+            parts.append(cur)
+            cur = ''
+        else:
+            cur += ch
+    parts.append(cur)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def json_colour(v):
+    """`#RRGGBB` or `rgba(r, g, b, a)` -> `{"hex": ..., "alpha": ...}`."""
+    v = v.strip()
+    if v.lower() == 'transparent':
+        return {'hex': '#000000', 'alpha': 0}
+    if v.startswith('#'):
+        return {'hex': v.upper(), 'alpha': 1}
+    if not (v.startswith('rgb(') or v.startswith('rgba(')):
+        raise ValueError('not a colour: %r' % v)
+    parts = split_top(v[v.index('(') + 1:v.rindex(')')])
+    if len(parts) == 3:
+        parts = parts + ['1']
+    if len(parts) != 4:
+        raise ValueError('not a colour: %r' % v)
+    r, g, b = (int(float(p)) for p in parts[:3])
+    return {'hex': hexc((r, g, b)), 'alpha': float(parts[3])}
+
+
+def json_shadow(v):
+    """A CSS `box-shadow` value -> a list of `{dx, dy, blur, spread, colour}`.
+
+    `glow` is the same shape: it is a box-shadow the themes pass to their
+    buttons, and `0 0 0 transparent` is a glow of nothing.
+    """
+    out = []
+    for layer in split_top(v):
+        words = layer.split()
+        nums = []
+        while words and len(nums) < 4:
+            m = re.fullmatch(r'(-?[\d.]+)(?:px)?', words[0])
+            if not m:
+                break
+            nums.append(float(m.group(1)))
+            words = words[1:]
+        if not 2 <= len(nums) <= 4:
+            raise ValueError('not a shadow: %r' % layer)
+        nums += [0.0] * (4 - len(nums))
+        colour = ' '.join(words) if words else 'transparent'
+        out.append({'dx': nums[0], 'dy': nums[1], 'blur': nums[2],
+                    'spread': nums[3], 'colour': json_colour(colour)})
+    return out
+
+
+def json_gradient(v):
+    """`linear-gradient(100deg, #AAA 0%, #BBB 48%, #CCC 100%)`."""
+    body = v[v.index('(') + 1:v.rindex(')')]
+    parts = split_top(body)
+    angle = 180.0
+    if parts and parts[0].strip().endswith('deg'):
+        angle = float(parts[0].strip()[:-3])
+        parts = parts[1:]
+    stops = []
+    for part in parts:
+        words = part.split()
+        at = 0.0 if len(words) == 1 else float(words[1].rstrip('%')) / 100
+        stops.append({'colour': json_colour(words[0]), 'at': at})
+    return {'angle': angle, 'stops': stops}
+
+
+def json_gradient_ref(v):
+    """`linear-gradient(150deg, var(--call-top) 0%, ... )`: tokens, not colours."""
+    body = v[v.index('(') + 1:v.rindex(')')]
+    parts = split_top(body)
+    angle = 180.0
+    if parts and parts[0].strip().endswith('deg'):
+        angle = float(parts[0].strip()[:-3])
+        parts = parts[1:]
+    stops = []
+    for part in parts:
+        words = part.split()
+        token = words[0].strip('var()').lstrip('-')
+        at = 0.0 if len(words) == 1 else float(words[1].rstrip('%')) / 100
+        stops.append({'token': token, 'at': at})
+    return {'angle': angle, 'stops': stops}
+
+
+def json_font_stack(v):
+    return {'families': [f.strip().strip('"\'') for f in split_top(v)]}
+
+
+def json_length(v):
+    m = re.fullmatch(r'(-?[\d.]+)px', v.strip())
+    if not m:
+        raise ValueError('not a pixel length: %r' % v)
+    return float(m.group(1))
+
+
+def json_percent(v):
+    m = re.fullmatch(r'(-?[\d.]+)%', v.strip())
+    if not m:
+        raise ValueError('not a percentage: %r' % v)
+    return float(m.group(1))
+
+
+def json_em(v):
+    v = v.strip()
+    # CSS allows a bare zero for tracking; nothing else needs one.
+    if v == '0':
+        return 0
+    m = re.fullmatch(r'(-?[\d.]+)em', v)
+    if not m:
+        raise ValueError('not an em value: %r' % v)
+    return float(m.group(1))
+
+
+CONVERTERS = {
+    'colour': json_colour,
+    'shadow': json_shadow,
+    'gradient': json_gradient,
+    'gradientRef': json_gradient_ref,
+    'fontStack': json_font_stack,
+    'weight': lambda v: int(v),
+    'em': json_em,
+    'transform': lambda v: v,
+    'pattern': lambda v: {'kind': v[0], 'params': dict(v[1])},
+    'patternSize': lambda v: ({'auto': True} if v[0] == 'none'
+                              else {'w': v[1]['size'][0], 'h': v[1]['size'][1]}),
+    'lengthPx': json_length,
+    'lengthPct': json_percent,
+}
+
+# `pattern` and `patternSize` are read from the record, not from the CSS, so a
+# theme JSON carries the name and the numbers rather than the finished value.
+FROM_RECORD = {'pattern', 'patternSize'}
+
+
+def theme_effects(t):
+    """The effect records, minus the theme they belong to (the file knows)."""
+    for e in t['effects']:
+        if e['kind'] not in EFFECT_KINDS:
+            raise ValueError('%s: unknown effect %r' % (t['id'], e['kind']))
+    return [{'kind': e['kind'], 'params': e['params']} for e in t['effects']]
+
+
+def theme_json(t, k):
+    """The one file `orbit_ui` loads for this theme, and a pack's format."""
+    unknown = sorted(set(k) - set(GROUP_OF))
+    if unknown:
+        raise SystemExit('%s: these tokens are not classified, so the Flutter '
+                         'port would never see them: %s' % (t['id'], unknown))
+    groups = {}
+    for key, value in k.items():
+        kind = GROUP_OF[key]
+        if kind == 'pattern':
+            groups.setdefault(kind, {})[key] = {'kind': t['pattern'][0],
+                                                'params': dict(t['pattern'][1])}
+        elif kind == 'patternSize':
+            size = t['pattern'][1].get('size')
+            groups.setdefault(kind, {})[key] = ({'auto': True} if size is None
+                                                else {'w': size[0], 'h': size[1]})
+        else:
+            groups.setdefault(kind, {})[key] = CONVERTERS[kind](value)
+    stale = sorted(set(GROUP_OF) - set(k))
+    if stale:
+        raise SystemExit('%s: these tokens are classified but no longer '
+                         'produced: %s' % (t['id'], stale))
+    # `motion` sits beside `tokens` and `effects`, not inside `tokens`: it
+    # carries no custom property, so `GROUP_OF` has nothing to classify and
+    # adding it there would put a `--motion` rule into a frozen file.
+    return {
+        'id': t['id'],
+        'name': t['name'],
+        'vibe': t['vibe'],
+        'dark': t['dark'],
+        'icon': t['icon'],
+        'swatches': [t['bg'], t['accent'], t['out'], t['second']],
+        'tokens': {kind: groups[kind] for kind, _ in KINDS if kind in groups},
+        'motion': json_motion(t),
+        'effects': theme_effects(t),
+    }
 
 
 # ------------------------------------------------------------ contrast check
@@ -333,8 +932,9 @@ def main():
         css.append(f'{sel} {{')
         css += [f'  --{name}: {value};' for name, value in k.items()]
         css.append('}')
-        if t['extra'].strip():
-            css.append(t['extra'].strip())
+        rules = effects_css(t)
+        if rules:
+            css.append(rules)
         fails = check(t, k)
         bad += len(fails)
         report.append(f"{t['name']:<12} {'OK' if not fails else 'FAIL'}" + ''.join(f'\n    - {f}' for f in fails))
@@ -346,6 +946,21 @@ def main():
     open(os.path.join(ROOT, 'js', 'themes.js'), 'w', encoding='utf-8').write(
         '// GENERATED by tools/themes.py: the theme list the app shows.\n'
         f'window.OrbitThemes = {json.dumps(reg, indent=2, ensure_ascii=False)};\n')
+
+    # One file per theme for the Flutter port (Phase 2) and, later, the format
+    # a downloadable theme pack carries (Part C): data only, never code.
+    import json as _json
+    import shutil
+    out_dir = os.path.join(r'J:\Projects\helix', r'orbit\flutter\packages\orbit_ui\assets\themes')
+    if os.path.isdir(out_dir):
+        shutil.rmtree(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
+    for t in THEMES:
+        with open(os.path.join(out_dir, t['id'] + '.json'), 'w', encoding='utf-8') as f:
+            _json.dump(theme_json(t, tokens(t)), f, indent=1, ensure_ascii=False,
+                       sort_keys=True)
+            f.write('\n')
+    print('%d theme files written' % len(THEMES))
     print('\n'.join(report))
     print(f'\n{len(THEMES)} themes, {bad} contrast failures')
 

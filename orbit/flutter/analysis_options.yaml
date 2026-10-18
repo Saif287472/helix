@@ -1,0 +1,20 @@
+# Orbit — Helix Remote strict mode
+#
+# The same rules as helix_remote/analysis_options.yaml, so a widget written here
+# behaves the same when the package moves into the app in Part B.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    missing_required_param: error
+    missing_return: error
+  language:
+    strict-casts: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    always_use_package_imports: true
+    avoid_dynamic_calls: true
+    prefer_const_constructors: true
+    prefer_const_literals_to_create_immutables: true

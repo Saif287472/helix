@@ -1,12 +1,13 @@
 # Workspace Lockfile Policy
 
-This repository holds **two independent pub workspaces**, not one. There is no root
+This repository holds **three independent pub workspaces**, not one. There is no root
 `pubspec.yaml`:
 
 | Workspace | Root | Lockfile |
 |---|---|---|
 | Helix Remote | `helix_remote/pubspec.yaml` (`name: helix_remote_workspace`) | `helix_remote/pubspec.lock` — **committed** |
 | Helix Local | `helix_local/pubspec.yaml` | not committed (`helix_local/.gitignore`) |
+| Orbit | `orbit/flutter/pubspec.yaml` (`name: orbit_flutter_workspace`) | `orbit/flutter/pubspec.lock` — **committed** |
 
 ## Helix Remote
 
@@ -40,6 +41,22 @@ read it off the declaring member's `pubspec.yaml`. Getting this wrong is what pr
 Helix Local is a separate product with its own workspace and its own arrangements. It does not commit
 a lockfile. That is Helix Local's decision to revisit or keep; this policy does not propose changing
 it, and nothing in the Helix Remote CI jobs depends on it.
+
+## Orbit
+
+`orbit/flutter/` is Part A of the Orbit UI port (`orbit/PORT_PLAN.md`): the design system and every
+screen live in `packages/orbit_ui`, and `apps/orbit_preview` is a Flutter twin of the HTML prototype
+that runs on fake data. It sits outside `helix_remote/` on purpose, so a redesign cannot break the
+working app; Part B moves `orbit_ui` into `helix_remote/packages/` unchanged.
+
+Its lockfile is committed for the same reason Helix Remote's is: the compare tool (`PORT_PLAN.md`,
+Phase 2) renders the same screen twice and diffs the pixels, so the resolved versions are part of
+what is being reviewed and must not move underneath the comparison. No CI job runs this workspace yet
+— CI starts covering Orbit when Part B lands.
+
+When Part B moves `orbit_ui` into the Helix Remote workspace this one goes with the rest of Part A:
+`orbit/flutter/pubspec.lock` is deleted and its packages are covered by `helix_remote/pubspec.lock`.
+Two lockfiles must never describe the same package.
 
 ## Enforcement
 

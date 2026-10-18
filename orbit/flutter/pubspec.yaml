@@ -1,0 +1,15 @@
+# Orbit Flutter workspace (Part A)
+#
+# Part A lives here, outside helix_remote/. The package is moved into
+# helix_remote/packages/ in Part B, unchanged.
+name: orbit_flutter_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+# The same versions and the same lint rules as helix_remote/ (AGENTS.md).
+# Do not upgrade Flutter or Dart.
+workspace:
+  - packages/orbit_ui
+  - apps/orbit_preview

@@ -1,0 +1,7 @@
+# Everything the compare tool writes is disposable output, never committed:
+# shots/ is the prototype half (shoot_html.py, and shots/_sample/, the
+# readiness proof the README describes), flutter/ the Flutter half (the
+# preview app's shoot mode) and report/ the comparison and its page.
+shots/
+flutter/
+report/

@@ -1,0 +1,77 @@
+name: orbit_ui
+description: The Orbit design system and every Orbit screen. Ported from the
+  HTML prototype in orbit/prototype, which is the specification.
+publish_to: none
+version: 0.1.0
+
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+# Part B moves this package to helix_remote/packages/orbit_ui unchanged, so it
+# must not depend on anything the app does not have.
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    # Theme JSON, written by prototype/tools/themes.py. One file per theme, in
+    # one format that a downloaded theme pack (Part C) also uses.
+    - assets/themes/
+  fonts:
+    # Only the two built-in themes' fonts, per PORT_PLAN.md Phase 2. The other
+    # six themes' fonts are packs, so the preview app loads those from local
+    # files instead - see orbit/flutter/apps/orbit_preview/pubspec.yaml.
+    #
+    # Both are variable fonts covering wght 100-900. The prototype asks for
+    # 300-700 and 400-600; the extra range is harmless and means a pack cannot
+    # run out of weights. To use a weight other than the file's default, a
+    # TextStyle sets `fontVariations: [FontVariation('wght', n)]` - Flutter
+    # picks a declared asset by `weight`, not by axis position.
+    #
+    # The italic faces are real files, not synthesised: the browser draws a
+    # synthetic oblique for these families and Flutter does not, so without
+    # them every italic line would differ in the compare tool. See
+    # orbit/flutter/fonts/MANIFEST.md.
+    - family: Geist
+      fonts:
+        - asset: fonts/Geist[wght].ttf
+        - asset: fonts/Geist-Italic[wght].ttf
+          style: italic
+    - family: Geist Mono
+      fonts:
+        - asset: fonts/GeistMono[wght].ttf
+        - asset: fonts/GeistMono-Italic[wght].ttf
+          style: italic
+    # Phosphor Icons, the prototype's icon font, bundled for the same reason.
+    #
+    # The plan named `phosphor_flutter` for this, but its latest release (2.1.0,
+    # which is the newest on pub.dev) declares `class PhosphorIconData extends
+    # IconData`, and IconData is `final` in Flutter 3.44 - so the package does
+    # not compile, and upgrading Flutter is not allowed. The package's value is
+    # only these six fonts and a generated name -> code-point table, both MIT
+    # licensed (fonts/phosphor/LICENSE), so they are used directly instead.
+    # `lib/src/icons/orbit_icons.dart` declares plain `IconData` against them.
+    - family: PhosphorRegular
+      fonts:
+        - asset: fonts/phosphor/Phosphor.ttf
+    - family: PhosphorLight
+      fonts:
+        - asset: fonts/phosphor/Phosphor-Light.ttf
+    - family: PhosphorBold
+      fonts:
+        - asset: fonts/phosphor/Phosphor-Bold.ttf
+    - family: PhosphorFill
+      fonts:
+        - asset: fonts/phosphor/Phosphor-Fill.ttf
+    - family: PhosphorDuotone
+      fonts:
+        - asset: fonts/phosphor/Phosphor-Duotone.ttf
