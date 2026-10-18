@@ -618,6 +618,12 @@ States: `kit-overlays`, `kit-overlays-sheet`, `kit-overlays-actions`, `kit-overl
 - [ ] **tap** A button on the sheet: Opens that overlay as the app opens it.
 - [ ] **tap** Scrim: Closes a sheet, menu or dialog.
 
+### Kit: timeline (`kit-timeline`, opens: inherit)
+
+States: `kit-timeline`
+
+- [ ] **tap** Anything on the sheet: Nothing: the sheet only shows the parts.
+
 ### Kit: rows (`kit-rows`, opens: inherit)
 
 States: `kit-rows`

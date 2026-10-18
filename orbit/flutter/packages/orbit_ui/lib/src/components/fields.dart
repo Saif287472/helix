@@ -45,6 +45,8 @@ class OrbitTextField extends StatefulWidget {
     this.onChanged,
     this.autofocus = false,
     this.bottom = 14,
+    this.big = false,
+    this.onPrefixTap,
   });
 
   final String label;
@@ -76,6 +78,14 @@ class OrbitTextField extends StatefulWidget {
   /// into a larger one below it (a dialog's buttons).
   final double bottom;
 
+  /// `.fld.big`: a one-time code, mono 26px tracked 0.5em, centred, 12px
+  /// above and below.
+  final bool big;
+
+  /// The prefix is a button (`.fld-country`: the country code with a 12px
+  /// bold caret in `--ink-3`, at least 48px tall).
+  final VoidCallback? onPrefixTap;
+
   @override
   State<OrbitTextField> createState() => _OrbitTextFieldState();
 }
@@ -106,13 +116,60 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
     super.dispose();
   }
 
+  Widget _prefix(OrbitTokens t) {
+    final w = widget;
+    final label = Text(
+      w.prefix,
+      style: t.mono.style(size: OrbitType.body, color: t.ink2),
+    );
+    final tap = w.onPrefixTap;
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.only(right: 10),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: t.line)),
+      ),
+      child: tap == null
+          ? label
+          : Semantics(
+              button: true,
+              label: 'Country code ${w.prefix}',
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: tap,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: OrbitSpace.target,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      label,
+                      const SizedBox(width: 4),
+                      OrbitIcon(
+                        OrbitIcons.caretDown,
+                        weight: OrbitIconWeight.bold,
+                        size: 12,
+                        color: t.ink3,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
     final w = widget;
     final hasError = w.error.isNotEmpty;
     final focused = _focus.hasFocus;
-    final text = w.mono
+    final text = w.big
+        ? t.mono.style(size: 26, color: t.ink, letterSpacingEm: 0.5)
+        : w.mono
         ? t.mono.style(
             size: OrbitType.body,
             color: w.enabled ? t.ink : t.ink3,
@@ -133,6 +190,7 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
         if (w.maxLength != null) LengthLimitingTextInputFormatter(w.maxLength),
       ],
       onChanged: w.onChanged,
+      textAlign: w.big ? TextAlign.center : TextAlign.start,
       style: text,
       cursorColor: t.accent,
       cursorHeight: OrbitType.body * 1.2,
@@ -164,21 +222,10 @@ class _OrbitTextFieldState extends State<OrbitTextField> {
       ),
       child: Row(
         children: [
-          if (w.prefix.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.only(right: 10),
-              decoration: BoxDecoration(
-                border: Border(right: BorderSide(color: t.line)),
-              ),
-              child: OrbitText(
-                w.prefix,
-                style: t.mono.style(size: OrbitType.body, color: t.ink2),
-              ),
-            ),
+          if (w.prefix.isNotEmpty) _prefix(t),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              padding: EdgeInsets.symmetric(vertical: w.big ? 12 : 14),
               child: input,
             ),
           ),

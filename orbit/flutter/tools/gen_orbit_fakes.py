@@ -22,7 +22,7 @@ DUMP = r"""
 const fs = require('fs');
 const src = fs.readFileSync(process.argv[1], 'utf8');
 const Data = new Function(src + '; return Data;')();
-const pick = ({ me, people, chats, archived, calls }) => ({ me, people, chats, archived, calls });
+const pick = ({ me, people, chats, archived, calls, conversations, wave }) => ({ me, people, chats, archived, calls, conversations, wave });
 process.stdout.write(JSON.stringify(pick(Data)));
 """
 
@@ -117,6 +117,155 @@ def person(p):
     return f"HelixPersonItem({', '.join(args)})"
 
 
+def camel_icon(name):
+    return 'OrbitIcons.' + camel(name)
+
+
+def colour_of(index, name):
+    return index if index is not None else colour_index(name or '')
+
+
+def utf16(text):
+    return len(text.encode('utf-16-le')) // 2
+
+
+def content(c):
+    t = c['type']
+    if t == 'text':
+        args = [s(c['text'])]
+        ms = []
+        for name in c.get('mentions', []):
+            needle = '@' + name
+            i = c['text'].find(needle)
+            while i >= 0:
+                ms.append(f'HelixTextRange({utf16(c["text"][:i])}, {utf16(needle)})')
+                i = c['text'].find(needle, i + 1)
+        if ms:
+            args.append(f"mentions: [{', '.join(ms)}]")
+        lp = c.get('linkPreview')
+        if lp:
+            url = re.search(r'https?://\S+', c['text'])
+            la = [f"url: {s(url.group(0) if url else 'https://' + lp['host'])}"]
+            if lp.get('title'):
+                la.append(f"title: {s(lp['title'])}")
+            if lp.get('description'):
+                la.append(f"description: {s(lp['description'])}")
+            args.append(f"linkPreview: HelixLinkPreview({', '.join(la)})")
+        return f"HelixTextContent({', '.join(args)})"
+    if t == 'poll':
+        return f"HelixPollContent(question: {s(c['question'])}, options: [{', '.join(s(o) for o in c['options'])}])"
+    if t == 'media':
+        items = []
+        for it in c['items']:
+            a = []
+            for k in ('width', 'height'):
+                if it.get(k):
+                    a.append(f'{k}: {it[k]}')
+            for k in ('isVideo', 'isGif'):
+                if it.get(k):
+                    a.append(f'{k}: true')
+            if it.get('durationLabel'):
+                a.append(f"durationLabel: {s(it['durationLabel'])}")
+            if it.get('transfer'):
+                a.append(f"transfer: HelixTransferState.{it['transfer']}")
+                if it['transfer'] in ('downloading', 'uploading'):
+                    a.append(f"progress: {it.get('progress', 0.3)}")
+            if it.get('sizeLabel'):
+                a.append(f"sizeLabel: {s(it['sizeLabel'])}")
+            a.append(f"swatch: {s(it.get('photo') or 'ph-a')}")
+            items.append(f"HelixMediaItem({', '.join(a)})")
+        cap = f", caption: {s(c['caption'])}" if c.get('caption') else ''
+        return f"HelixMediaContent([{', '.join(items)}]{cap})"
+    if t == 'audio':
+        a = [f"durationLabel: {s(c['durationLabel'])}"]
+        if c.get('waveform'):
+            a.append(f"waveform: Uint8List.fromList(const [{', '.join(str(v) for v in c['waveform'])}])")
+        if c.get('progress'):
+            a.append(f"progress: {c['progress']}")
+        if c.get('speed') not in (None, 1):
+            a.append(f"speed: {c['speed']}")
+        if c.get('positionLabel'):
+            a.append(f"positionLabel: {s(c['positionLabel'])}")
+        for k in ('playing', 'played'):
+            if c.get(k):
+                a.append(f'{k}: true')
+        if c.get('isVoiceNote') is False:
+            a.append('isVoiceNote: false')
+        if c.get('transfer'):
+            a.append(f"transfer: HelixTransferState.{c['transfer']}")
+        if c.get('title'):
+            a.append(f"title: {s(c['title'])}")
+        return f"HelixAudioContent({', '.join(a)})"
+    if t == 'document':
+        a = [f"name: {s(c['name'])}", f"sizeLabel: {s(c.get('sizeLabel', ''))}",
+             f"typeLabel: {s(c.get('typeLabel', ''))}"]
+        if c.get('transfer'):
+            a.append(f"transfer: HelixTransferState.{c['transfer']}")
+        if c.get('progress') is not None:
+            a.append(f"progress: {c['progress']}")
+        if c.get('caption'):
+            a.append(f"caption: {s(c['caption'])}")
+        return f"HelixDocumentContent({', '.join(a)})"
+    if t == 'location':
+        return f"HelixLocationContent(label: {s(c.get('label', ''))}, address: {s(c.get('address', ''))})"
+    if t == 'contact':
+        on = ', onHelix: true' if c.get('onHelix') else ''
+        return f"HelixContactContent(name: {s(c['name'])}, detail: {s(c.get('detail', ''))}{on})"
+    if t == 'viewOnce':
+        return (f"HelixViewOnceContent(isVideo: {str(bool(c.get('isVideo'))).lower()}, "
+                f"opened: {str(bool(c.get('opened'))).lower()})")
+    if t == 'placeholder':
+        return f"HelixPlaceholderContent(HelixPlaceholderKind.{c['kind']})"
+    raise ValueError(t)
+
+
+def message(m):
+    a = [f"id: {s(m['id'])}", f"outgoing: {str(m['outgoing']).lower()}", f"content: {content(m['content'])}",
+         f"timeLabel: {s(m['timeLabel'])}"]
+    if m.get('authorId'):
+        a.append(f"authorId: {s(m['authorId'])}")
+    if m.get('authorName'):
+        a.append(f"authorName: {s(m['authorName'])}")
+    a.append(f"authorColorIndex: {colour_of(m.get('authorColorIndex'), m.get('authorName'))}")
+    if m.get('sentAt'):
+        a.append(f"sentAtMs: {m['sentAt'] * 60000}")
+    a.append(f"status: HelixDeliveryStatus.{m.get('status', 'sent')}")
+    q = m.get('reply')
+    if q:
+        qa = [f"authorName: {s(q['authorName'])}", f"text: {s(q.get('text', ''))}",
+              f"authorColorIndex: {colour_of(q.get('authorColorIndex'), q['authorName'])}"]
+        if q.get('kind'):
+            qa.append(f"kind: HelixPreviewKind.{q['kind']}")
+        if q.get('missing'):
+            qa.append('missing: true')
+        a.append(f"reply: HelixReplyQuote({', '.join(qa)})")
+    for k in ('forwarded', 'edited'):
+        if m.get(k):
+            a.append(f'{k}: true')
+    if m.get('reactions'):
+        rs = [f"HelixReaction(emoji: {s(r['emoji'])}, count: {r['count']}{', mine: true' if r.get('mine') else ''})"
+              for r in m['reactions']]
+        a.append(f"reactions: [{', '.join(rs)}]")
+    if m.get('expiresLabel'):
+        a.append(f"expiresLabel: {s(m['expiresLabel'])}")
+    return f"HelixMessage({', '.join(a)})"
+
+
+def item(it, i):
+    k = it['kind']
+    if k == 'day':
+        return f"HelixDateSeparatorItem({s(it['label'])})"
+    if k == 'unread':
+        return f"HelixUnreadDividerItem({it['count']})"
+    if k == 'notice':
+        tone = {'warn': 'warn', 'calllog missed': 'missedCall'}.get(it.get('tone') or '', 'plain')
+        icon = f", icon: {camel_icon(it['icon'])}" if it.get('icon') else ''
+        return f"HelixSystemNoticeItem('n{i}', {s(it['text'])}{icon}, tone: HelixNoticeTone.{tone})"
+    if k == 'msg':
+        return f"HelixMessageItem({message(it['m'])})"
+    raise ValueError(k)
+
+
 def formatted(text):
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, 'orbit_fakes.dart')
@@ -133,7 +282,15 @@ def main():
     out = [
         '// GENERATED by tools/gen_orbit_fakes.py from prototype/js/data.js. Do not',
         '// edit by hand.',
+        '//',
+        '// The timelines hold waveforms, which are not const, so the analyzer is told',
+        '// not to ask for const there.',
+        '// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables',
         '',
+        "import 'dart:typed_data';",
+        '',
+        "import 'package:orbit_ui/src/fakes/timeline_runs.dart';",
+        "import 'package:orbit_ui/src/icons/orbit_icons.dart';",
         "import 'package:orbit_ui/src/models/view_models.dart';",
         '',
         "/// The prototype's sample data (`Data` in `prototype/js/data.js`) as view",
@@ -141,6 +298,9 @@ def main():
         'abstract final class OrbitFakes {',
         f"  /// `Data.me`: you.",
         f"  static const meName = {s(d['me']['name'])};",
+        '',
+        "  /// `Data.wave`: the sample waveform (0-255 per bar).",
+        f"  static const wave = <int>[{', '.join(str(v) for v in d['wave'])}];",
         '',
         '  /// `Data.people`, by id.',
     ]
@@ -152,7 +312,13 @@ def main():
     out += [f'    {chat(c)},' for c in d['archived']]
     out += ['  ];', '', '  /// `Data.calls`: the call log, in order.', '  static const calls = <HelixCallLogItem>[']
     out += [f'    {call(c)},' for c in d['calls']]
-    out += ['  ];', '}', '']
+    out += ['  ];', '', "  /// `Data.conversations`: each chat's timeline, oldest first, with the",
+            '  /// run positions the prototype works out (`UI.runPositions`).',
+            '  static final conversations = <String, List<HelixTimelineItem>>{']
+    for cid, conv in d['conversations'].items():
+        items = ', '.join(item(it, i) for i, it in enumerate(conv['items']))
+        out.append(f'    {s(cid)}: orbitWithRuns([{items}]),')
+    out += ['  };', '}', '']
     text = formatted('\n'.join(out))
     if '--check' in sys.argv:
         same = os.path.exists(OUT) and open(OUT, encoding='utf-8').read() == text

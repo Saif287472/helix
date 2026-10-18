@@ -155,6 +155,9 @@
   }
 
   // ------------------------------------------------------------------ screen
+  // The composer alone, for the kit-timeline sheet (states.js).
+  App.convoParts = { composer: (id, st = {}, params = {}) => composer(id, convo(id), { draft: '', ...st }, params) };
+
   App.register({
     id: 'chat', title: 'Conversation', group: 'Conversation', order: 20,
     interactions: [

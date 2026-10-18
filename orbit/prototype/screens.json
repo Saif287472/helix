@@ -2047,6 +2047,19 @@
     }
    ]
   },
+  "kit-timeline": {
+   "title": "Kit: timeline",
+   "group": "Design system",
+   "placement": "inherit",
+   "night": false,
+   "interactions": [
+    {
+     "gesture": "tap",
+     "on": "Anything on the sheet",
+     "does": "Nothing: the sheet only shows the parts."
+    }
+   ]
+  },
   "kit-rows": {
    "title": "Kit: rows",
    "group": "Design system",
@@ -6857,6 +6870,15 @@
    "params": {
     "open": "toast-undo"
    },
+   "base": [],
+   "placement": "inherit"
+  },
+  {
+   "key": "kit-timeline",
+   "group": "Design system",
+   "label": "Timeline · messages, separators, composer",
+   "screen": "kit-timeline",
+   "params": {},
    "base": [],
    "placement": "inherit"
   },

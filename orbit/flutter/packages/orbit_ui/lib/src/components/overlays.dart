@@ -66,11 +66,16 @@ class OrbitSheetPanel extends StatelessWidget {
     this.items = const [],
     this.body,
     this.onItem,
+    this.heightFactor,
   });
 
   final String title;
   final String text;
   final List<OrbitMenuItem> items;
+
+  /// A fixed height as a share of the screen (the legal sheet's 88%); by
+  /// default the sheet is as tall as its content, up to 86%.
+  final double? heightFactor;
 
   /// Content in place of the rows.
   final Widget? body;
@@ -87,10 +92,12 @@ class OrbitSheetPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [for (final it in items) _row(t, it)],
         );
+    final screen = MediaQuery.sizeOf(context).height;
+    final fixed = heightFactor;
     return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.86,
-      ),
+      constraints: fixed == null
+          ? BoxConstraints(maxHeight: screen * 0.86)
+          : BoxConstraints.tightFor(height: screen * fixed),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: t.surface,
@@ -100,7 +107,7 @@ class OrbitSheetPanel extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.only(top: 10, bottom: 30),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: fixed == null ? MainAxisSize.min : MainAxisSize.max,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
@@ -662,6 +669,7 @@ Future<void> showOrbitSheet(
   String text = '',
   List<OrbitMenuItem> items = const [],
   Widget? body,
+  double? heightFactor,
 }) => _open(
   context,
   _OverlayKind.sheet,
@@ -670,6 +678,7 @@ Future<void> showOrbitSheet(
     text: text,
     items: items,
     body: body,
+    heightFactor: heightFactor,
     onItem: (it) => done(it.onTap),
   ),
 );

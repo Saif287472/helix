@@ -378,6 +378,23 @@ and pending your review):
   Papyrus, Terminal and Mochi at three scrolls: 2.0% to 5.5%. The
   "archived row" (`.archived-row`) has CSS but no screen draws it, so it is
   not ported.
+- [x] Review 3.5 (pending your review): `OrbitTimeline` and its entries
+  (`OrbitMessageBubble` with every content kind, `OrbitDaySeparator` with
+  the day ornaments and Bloom's `dayLabel`, `OrbitUnreadDivider`,
+  `OrbitTimelineNotice`, `OrbitEncryptionCard`, `OrbitTypingBubble`), the
+  bubble effects (Arcade's glow, Field's stripe, Mochi's weight), the time
+  floated beside the last line as CSS floats it, links broken as Chrome
+  breaks them, reactions popping in, and `OrbitComposer` (mic, send, edit,
+  reply and edit banners, recording held and locked, and the reasons a chat
+  is closed). The sample conversations are generated from `data.js` too. A
+  new prototype sheet, `kit-timeline`, draws the four sample conversations
+  and the composer's states; compared in all eight themes at seven scrolls:
+  3% to 12% (Arcade, Bloom and Field drift a few pixels down the page with
+  their fonts). The message rising as it is sent and the page transitions
+  come with the conversation screen in Phase 4, where the list and the
+  router exist.
+
+Phase 3 is complete (Reviews 3.2 to 3.5 pending your review).
 
 ### Phase 4: the screens, batch by batch
 

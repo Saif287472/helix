@@ -183,3 +183,28 @@ The port follows the prototype, so these changed the prototype itself:
   comes after the typing rule), so the port does the same; if the accent was
   meant, both should change together.
   - **Owner:** pending (Review 3.4).
+
+## Review 3.5
+
+- **Prototype addition:** a `kit-timeline` sheet (`js/screens/states.js`):
+  the four sample conversations, the start of an empty chat, and the
+  composer in each state. `conversation.js` exposes its composer
+  (`App.convoParts`), and the sheet grows each composer's field to its draft
+  as the chat screen does on mount.
+  - **Owner:** pending (Review 3.5).
+- **Prototype fix: the link card is a block.** `.linkcard` was an inline
+  span holding block parts, so Chrome never drew its tinted card and added
+  blank lines around it. `css/screens.css` now gives it `display: block`,
+  which is what the design shows everywhere else.
+  - **Owner:** pending (Review 3.5).
+- **View models extended (the copy in `orbit_ui`).** `HelixPollContent`,
+  `HelixEncryptionNoticeItem`, `HelixTypingItem`, `HelixNoticeTone` on
+  notices, `sizeLabel` and a preview `swatch` on media items, and a notice's
+  icon is now an `OrbitGlyph` (so the theme picks its weight) instead of an
+  `IconData`. Part B reconciles this copy with `helix_remote_ui`.
+  - **Owner:** pending (Review 3.5).
+- **Placeholder bubbles take Field's stripe.** The prototype's stripe rule is
+  more specific than the dashed placeholder edge, so a deleted or
+  undecryptable message has a solid stripe on one side and dashes on the
+  rest. The port does the same.
+  - **Owner:** pending (Review 3.5).

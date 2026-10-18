@@ -23,6 +23,7 @@ class OrbitIconButton extends StatelessWidget {
     this.color,
     this.size = OrbitSpace.target,
     this.iconSize,
+    this.height,
   });
 
   final OrbitGlyph icon;
@@ -44,6 +45,9 @@ class OrbitIconButton extends StatelessWidget {
   /// The icon's size when the context sets one (19 in a text field).
   final double? iconSize;
 
+  /// A height other than [size] (the composer's 44×46 field buttons).
+  final double? height;
+
   @override
   Widget build(BuildContext context) {
     final t = OrbitTokens.of(context);
@@ -60,8 +64,9 @@ class OrbitIconButton extends StatelessWidget {
       child: Semantics(
         button: true,
         label: tooltip,
-        child: SizedBox.square(
-          dimension: size,
+        child: SizedBox(
+          width: size,
+          height: height ?? size,
           child: Material(
             type: MaterialType.transparency,
             shape: RoundedRectangleBorder(

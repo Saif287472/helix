@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:orbit_ui/src/icons/orbit_glyph.dart';
+
 // Plain value objects the components are driven by.
 //
 // The components never read an engine, a database row or a network model:
@@ -439,6 +441,8 @@ class HelixMediaItem extends HelixValue {
     this.transfer = HelixTransferState.done,
     this.progress,
     this.semanticLabel,
+    this.sizeLabel,
+    this.swatch,
   });
 
   /// A small decoded preview; the placeholder shows while it is null.
@@ -458,6 +462,13 @@ class HelixMediaItem extends HelixValue {
   final double? progress;
   final String? semanticLabel;
 
+  /// "2.4 MB", shown on the download button of a file not downloaded yet.
+  final String? sizeLabel;
+
+  /// The prototype's stand-in picture (`ph-a` to `ph-f`), used by the
+  /// preview when there is no [thumbnail]. Orbit addition (Review 3.5).
+  final String? swatch;
+
   double get aspectRatio => height <= 0 ? 1 : width / height;
 
   @override
@@ -471,6 +482,8 @@ class HelixMediaItem extends HelixValue {
     transfer,
     progress,
     semanticLabel,
+    sizeLabel,
+    swatch,
   ];
 }
 
@@ -615,6 +628,16 @@ enum HelixPlaceholderKind {
 }
 
 /// A bubble with no content: deleted, undecryptable, unsupported.
+/// A poll, which this version shows as its question and options in text
+/// (`case 'poll'` in the prototype's `js/ui.js`). Orbit addition.
+class HelixPollContent extends HelixMessageContent {
+  const HelixPollContent({required this.question, this.options = const []});
+  final String question;
+  final List<String> options;
+  @override
+  List<Object?> get props => [question, options.length, ...options];
+}
+
 class HelixPlaceholderContent extends HelixMessageContent {
   const HelixPlaceholderContent(this.kind);
   final HelixPlaceholderKind kind;
@@ -812,14 +835,47 @@ class HelixUnreadDividerItem extends HelixTimelineItem {
 /// A centred notice: group changes, timer changes, call log entries,
 /// "Messages are end-to-end encrypted".
 class HelixSystemNoticeItem extends HelixTimelineItem {
-  const HelixSystemNoticeItem(this.noticeId, this.text, {this.icon});
+  const HelixSystemNoticeItem(
+    this.noticeId,
+    this.text, {
+    this.icon,
+    this.tone = HelixNoticeTone.plain,
+  });
   final String noticeId;
   final String text;
-  final IconData? icon;
+
+  /// An Orbit glyph, so the theme picks its weight (Orbit change: it was an
+  /// `IconData`).
+  final OrbitGlyph? icon;
+  final HelixNoticeTone tone;
   @override
   String get id => 'notice:$noticeId';
   @override
-  List<Object?> get props => [noticeId, text, icon];
+  List<Object?> get props => [noticeId, text, icon, tone];
+}
+
+/// How a timeline notice is coloured (`.notice`, `.notice.warn`,
+/// `.notice.calllog.missed` in the prototype). Orbit addition (Review 3.5).
+enum HelixNoticeTone { plain, warn, missedCall }
+
+/// "Messages are end-to-end encrypted. Say hello." at the start of an empty
+/// chat (`{ kind: 'empty' }` in the prototype). Orbit addition.
+class HelixEncryptionNoticeItem extends HelixTimelineItem {
+  const HelixEncryptionNoticeItem();
+  @override
+  String get id => 'e2e';
+  @override
+  List<Object?> get props => const [];
+}
+
+/// The other person is typing: three dots in an incoming bubble. Orbit
+/// addition.
+class HelixTypingItem extends HelixTimelineItem {
+  const HelixTypingItem();
+  @override
+  String get id => 'typing';
+  @override
+  List<Object?> get props => const [];
 }
 
 // -------------------------------------------------------------- composer

@@ -13,6 +13,7 @@ final Map<String, WidgetBuilder> orbitPorted = <String, WidgetBuilder>{
   'kit-shell': (context) => const KitShellScreen(),
   'state-kit': (context) => const KitStateScreen(),
   'kit-rows': (context) => const KitRowsScreen(),
+  'kit-timeline': (context) => const KitTimelineScreen(),
   'kit-overlays': (context) => const KitOverlaysScreen(),
   for (final o in KitOverlay.values)
     o.key: (context) => KitOverlaysScreen(open: o),

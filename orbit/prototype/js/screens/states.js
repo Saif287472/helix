@@ -197,6 +197,35 @@
   });
 
   App.register({
+    id: 'kit-timeline', title: 'Kit: timeline', group: 'Design system', order: 98.8,
+    interactions: [
+      ['tap', 'Anything on the sheet', 'Nothing: the sheet only shows the parts.'],
+    ],
+    entries: [{ key: 'kit-timeline', label: 'Timeline · messages, separators, composer', params: {} }],
+    render() {
+      const L = (t) => `<div class="kit-label">${t}</div>`;
+      const C = Data.conversations;
+      const tl = (items, opts = {}) => `<div class="kit-frame"><div class="timeline" style="overflow:visible">${UI.timeline(items, opts)}</div></div>`;
+      const cp = (st, params = {}, extra = '') => `<div class="kit-frame" style="margin-top:10px;${extra}">${App.convoParts.composer(params.id || 'direct:nadia', st, params)}</div>`;
+      return Kit.youPage('Timeline', `
+        <p class="sec-foot" style="margin-top:4px">Messages of every kind, the separators and notices between them, and the composer in each of its states.</p>
+        ${L('A direct chat')}${tl(C['direct:nadia'].items.concat([{ kind: 'typing' }]))}
+        ${L('A group')}${tl(C['group:family'].items, { group: true })}
+        ${L('Every kind of message')}${tl(C['direct:arif'].items)}
+        ${L('Not sent and not downloaded')}${tl(C['direct:rafiq'].items)}
+        ${L('A new chat')}${tl([{ kind: 'empty' }])}
+        ${L('Composer')}${cp({})}${cp({ draft: 'See you there' })}${cp({ reply: 'n6' })}${cp({ edit: 'n5', draft: 'Here it is. The colour pages are 14 to 22' })}
+        ${cp({ recording: 'locked' })}${cp({ recording: 'hold' }, {}, 'padding-top:84px')}
+        ${cp({}, { id: 'direct:shuvo', blocked: 'byMe' })}${cp({}, { id: 'group:family', left: true })}`, { back: false, keep: 'kit-timeline' });
+    },
+    mount(el) {
+      Kit.wire(el, null);
+      // As the chat screen does on mount: the field grows to its draft, up to 128px.
+      el.querySelectorAll('.composer textarea').forEach((d) => requestAnimationFrame(() => { d.style.height = 'auto'; d.style.height = `${Math.min(Math.max(d.scrollHeight, 46), 128)}px`; }));
+    },
+  });
+
+  App.register({
     id: 'kit-rows', title: 'Kit: rows', group: 'Design system', order: 98.6,
     interactions: [
       ['swipe-right', 'Chat row', 'Pins or unpins it.'],
